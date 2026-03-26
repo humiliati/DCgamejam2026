@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DC Jam 2026 — Dungeon Crawler</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #ddd; font-family: 'Courier New', monospace; }
+
+    #game-container {
+      display: flex; flex-direction: column;
+      width: 100vw; height: 100vh;
+    }
+
+    /* ── Viewport: first-person 3D view ── */
+    #viewport {
+      flex: 1; position: relative;
+      background: #000;
+    }
+    #viewport canvas {
+      display: block; width: 100%; height: 100%;
+    }
+
+    /* ── HUD overlay ── */
+    #hud {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 12px 16px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none;
+      font-size: 14px;
+    }
+    #hud-left, #hud-right { pointer-events: auto; }
+    .hud-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+    .hud-hp-bar { background: #e44; width: 120px; }
+    .hud-energy-bar { background: #4ae; width: 80px; }
+    .hud-bar-bg { background: #333; border-radius: 3px; }
+
+    /* ── Minimap ── */
+    #minimap {
+      position: absolute; bottom: 80px; right: 12px;
+      width: 160px; height: 160px;
+      border: 1px solid #444; background: rgba(0,0,0,0.7);
+      pointer-events: none;
+      image-rendering: pixelated;
+    }
+
+    /* ── Card tray (combat hand) ── */
+    #card-tray {
+      height: 72px;
+      background: rgba(0,0,0,0.85);
+      border-top: 1px solid #333;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 6px 16px;
+    }
+    .card-slot {
+      width: 52px; height: 60px;
+      border: 1px solid #555; border-radius: 6px;
+      background: #1a1a1a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 20px; cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .card-slot:hover { transform: translateY(-4px); border-color: #aaa; }
+    .card-slot .card-name { font-size: 7px; color: #888; margin-top: 2px; text-align: center; }
+    .card-slot.empty { opacity: 0.3; cursor: default; }
+    .card-slot.empty:hover { transform: none; border-color: #555; }
+
+    /* ── Combat overlay ── */
+    #combat-overlay {
+      display: none;
+      position: absolute; top: 0; left: 0; right: 0; bottom: 72px;
+      background: rgba(0,0,0,0.3);
+      pointer-events: none;
+    }
+    #combat-overlay.active { display: block; }
+    #combat-log {
+      position: absolute; bottom: 8px; left: 16px; right: 16px;
+      font-size: 12px; color: #ff0; text-shadow: 0 1px 2px #000;
+      text-align: center;
+    }
+
+    /* ── Floor transition ── */
+    #floor-transition {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: #000; z-index: 100;
+      justify-content: center; align-items: center;
+      font-size: 24px; color: #888;
+    }
+    #floor-transition.active { display: flex; }
+
+    /* ── Debug minimap toggle ── */
+    #debug-toggle {
+      position: absolute; bottom: 80px; right: 176px;
+      font-size: 10px; color: #666; cursor: pointer;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="viewport">
+      <canvas id="view-canvas"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div id="hud-left">
+          <div>HP: <span id="hud-hp">10/10</span></div>
+          <div class="hud-bar-bg" style="width:120px"><div class="hud-bar hud-hp-bar" id="hud-hp-fill"></div></div>
+          <div style="margin-top:4px">EN: <span id="hud-energy">5/5</span></div>
+          <div class="hud-bar-bg" style="width:80px"><div class="hud-bar hud-energy-bar" id="hud-energy-fill"></div></div>
+        </div>
+        <div id="hud-right">
+          <div>Floor <span id="hud-floor">1</span></div>
+          <div id="hud-advantage" style="font-size:12px; color:#888"></div>
+        </div>
+      </div>
+
+      <!-- Minimap -->
+      <canvas id="minimap"></canvas>
+      <div id="debug-toggle" onclick="Game.toggleMinimap()">MAP</div>
+
+      <!-- Combat overlay -->
+      <div id="combat-overlay">
+        <div id="combat-log"></div>
+      </div>
+
+      <!-- Floor transition -->
+      <div id="floor-transition">
+        <span id="floor-transition-text">Descending...</span>
+      </div>
+    </div>
+
+    <!-- Card tray -->
+    <div id="card-tray">
+      <div class="card-slot empty" id="card-0"><span>-</span><span class="card-name"></span></div>
+      <div class="card-slot empty" id="card-1"><span>-</span><span class="card-name"></span></div>
+      <div class="card-slot empty" id="card-2"><span>-</span><span class="card-name"></span></div>
+      <div class="card-slot empty" id="card-3"><span>-</span><span class="card-name"></span></div>
+      <div class="card-slot empty" id="card-4"><span>-</span><span class="card-name"></span></div>
+    </div>
+  </div>
+
+  <!-- Engine modules (order matters — no build tool) -->
+  <!-- Layer 0: Zero-dependency foundations -->
+  <script src="engine/rng.js"></script>
+  <script src="engine/tiles.js"></script>
+  <script src="engine/audio-system.js"></script>
+
+  <!-- Layer 1: Core systems (depend on foundations) -->
+  <script src="engine/grid-gen.js"></script>
+  <script src="engine/door-contracts.js"></script>
+  <script src="engine/door-contract-audio.js"></script>
+  <script src="engine/lighting.js"></script>
+  <script src="engine/enemy-ai.js"></script>
+  <script src="engine/combat-engine.js"></script>
+  <script src="engine/synergy-engine.js"></script>
+  <script src="engine/card-system.js"></script>
+  <script src="engine/loot-tables.js"></script>
+  <script src="engine/input.js"></script>
+  <script src="engine/movement.js"></script>
+  <script src="engine/pathfind.js"></script>
+  <script src="engine/spatial-contract.js"></script>
+
+  <!-- Layer 2: Rendering (depend on core systems) -->
+  <script src="engine/raycaster.js"></script>
+  <script src="engine/minimap.js"></script>
+  <script src="engine/hud.js"></script>
+  <script src="engine/game-loop.js"></script>
+
+  <!-- Layer 3: Game modules (depend on Player + core systems) -->
+  <script src="engine/player.js"></script>
+  <script src="engine/mouse-look.js"></script>
+  <script src="engine/floor-manager.js"></script>
+  <script src="engine/floor-transition.js"></script>
+  <script src="engine/input-poll.js"></script>
+  <script src="engine/combat-bridge.js"></script>
+
+  <!-- Layer 4: Orchestrator (wires everything together) -->
+  <script src="engine/game.js"></script>
+</body>
+</html>
