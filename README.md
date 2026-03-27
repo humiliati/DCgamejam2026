@@ -1,12 +1,17 @@
-# DC Jam 2026 — First-Person Dungeon Crawler
+# Dungeon Gleaner
 
-A grid-based first-person dungeon crawler built for [DC Jam 2026](https://itch.io/jam/dcjam2026) (March 27 – April 5, 2026), with a post-jam target of publishing to the LG Content Store as a Magic Remote-driven webOS TV app.
+A first-person dungeon crawler built for [DC Jam 2026](https://itch.io/jam/dcjam2026) (March 27 – April 5, 2026).
 
-## What this is
+You are a **Nez-Ha** — a scavenger-cleaner who follows in the devastating wake of a legendary Hero. He storms through dungeons, slays monsters, smashes everything in sight, and vanishes. You arrive after to pick through the wreckage, loot what's left, and deal with the twitching, gurgling remnants he didn't finish off.
 
-Pure HTML5/JavaScript. Zero build tools, zero frameworks, zero npm. Opens in a browser, runs on a TV. The engine is extracted from two prior codebases — EyesOnly (a ~155k-line production roguelike) and dcexjam2025 (a GLOV.js dungeon crawler by the Tower of Hats developer) — plus original systems written from scratch where neither source had what we needed.
+The world is a small coastal **boardwalk town** — Miami Vice meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is **retrofuturistic fantasy**: a civilization that discovered magic before technology, and their architecture shows it.
 
-The game: explore procedurally generated dungeon floors in first person. Enemies patrol with a stealth-awareness system. Combat is simultaneous-turn card-based, with synergy chains between card types. Descend deeper, get stronger cards, fight a boss. Classic dungeon crawl with a card combat twist.
+## Jam themes (all four)
+
+- **Dragons** — Ancient protectors being hunted by the Hero. The conspiracy at the core of the story.
+- **Retrofuturism** — The entire visual identity. Vaporwave sunsets, chrome-and-marble architecture, synthwave color palettes.
+- **Rock-Paper-Scissors** — Combat element triangle: FLAME > FROST > STORM > FLAME. Every card and enemy has an element.
+- **Cleaning Up the Hero's Mess** — The gameplay loop. Lootable corpses, half-dead remnants, environmental destruction.
 
 ## Running it
 
@@ -16,93 +21,69 @@ WASD moves, Q/E turns, F interacts, period/comma for stairs, M toggles the minim
 
 ## Architecture
 
-27 vanilla JavaScript modules loaded via `<script>` tags in dependency order. Every module is a self-executing IIFE that attaches to a single global variable. No imports, no exports, no bundler — the browser is the runtime.
+47 vanilla JavaScript modules loaded via `<script>` tags in dependency order. Every module is a self-executing IIFE that attaches to a single global variable. No imports, no exports, no bundler — the browser is the runtime.
 
-The load order is layered:
+**Layer 0 — Foundations** (zero deps): `SeededRNG`, `TILES`, `i18n`, `AudioSystem`
 
-**Layer 0 — Foundations** (zero dependencies): `SeededRNG`, `TILES`, `AudioSystem`
+**Layer 1 — Core systems**: `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`
 
-**Layer 1 — Core systems**: `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`
+**Layer 2 — Rendering + UI**: `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop`
 
-**Layer 2 — Rendering**: `Raycaster`, `Minimap`, `HUD`, `GameLoop`
+**Layer 3 — Game modules**: `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen`
 
-**Layer 3 — Game modules**: `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `CombatBridge`
+**Layer 4 — Orchestrator**: `Game` (thin wiring shell)
 
-**Layer 4 — Orchestrator**: `Game` (thin wiring shell — init, tick, render, callbacks)
+**Layer 5 — Data**: `data/strings/en.js` (i18n string tables)
+
+## World structure
+
+The game uses a three-tier floor ID convention:
+
+- `"N"` (depth 1) — outdoor districts (Promenade, Lantern Gardens, Frontier Gate)
+- `"N.N"` (depth 2) — building interiors (Coral Bazaar, Gleaner's Guild, Driftwood Inn, etc.)
+- `"N.N.N"` (depth 3) — dungeons beneath buildings (the Hero's mess, proc-gen)
+
+Each depth has its own spatial contract governing wall height, fog model, render distance, ceiling type, and door transition sound sequences.
 
 ## Source lineage
 
-| System | Source | Extraction |
+| System | Source | Notes |
 |---|---|---|
-| Movement controller | dcexjam2025 `crawler_controller.ts` | Queued lerp, dual-queue, easeInOut, wall bump feedback |
-| Door contracts | EyesOnly `door-contract-system.js` | Near-verbatim. Spawn protection, expanding ring search |
-| Door SFX grammar | EyesOnly `door-contract-audio.js` | Transition table keyed by floor depth pairs |
-| Enemy AI | EyesOnly `enemy-ai-system.js` | Patrol patterns, awareness states, sight cones |
-| Combat engine | EyesOnly `str-combat-engine.js` | STR-based simultaneous resolution, advantage calc |
-| Card system | EyesOnly `card-system.js` | Quality rolls, hand management, cost validation |
-| Synergy engine | EyesOnly `synergy-engine.js` | Tag-based combos, cascade resolver |
-| Floor generation | EyesOnly `floor-gen-core.js` | BSP room placement, A* corridors |
-| Spatial contracts | Original | Three-tier floor hierarchy with per-depth fog/rendering rules |
-| Raycaster | Original | DDA wall casting, fog models, parallax layers |
-| Minimap | Original + dcexjam2025 patterns | Floor cache stack, fog-of-war, breadcrumb depth indicator |
-| Pathfinding | dcexjam2025 `pathfind.ts` | BFS with wall/fog awareness |
+| Movement controller | dcexjam2025 `crawler_controller.ts` | Queued lerp, dual-queue, easeInOut |
+| Door contracts | EyesOnly `door-contract-system.js` | Near-verbatim spawn protection |
+| Door SFX grammar | EyesOnly `door-contract-audio.js` | Transition table by depth pairs |
+| Enemy AI | EyesOnly `enemy-ai-system.js` | Patrol, awareness, chase |
+| Combat engine | EyesOnly `str-combat-engine.js` | Simultaneous resolution |
+| Card system | EyesOnly `card-system.js` | Hand management, cost validation |
+| Synergy engine | EyesOnly `synergy-engine.js` | Tag-based combos |
+| Floor generation | EyesOnly `floor-gen-core.js` | BSP rooms, A* corridors |
+| Spatial contracts | Original | Three-tier fog/rendering rules |
+| Raycaster | Original | DDA casting, textures, door animation |
+| Skybox | Original | Procedural clouds, mountains, water |
+| Dialog box | Original | Dual-mode canvas dialog system |
+| Texture atlas | Original | Procedural 64×64 wall textures |
 
-## Floor hierarchy
+## Jam scope
 
-The game uses EyesOnly's three-tier floor ID convention:
+3 exterior districts, 5–6 building interiors, 3 dungeons (one per district), 1 boss encounter (the Hero). Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
 
-- `floorsN` (depth 1) — exterior/overworld
-- `floorsN.N` (depth 2) — interior contrived spaces (buildings, taverns)
-- `floorsN.N.N` (depth 3) — nested proc-gen dungeons
+## Design document
 
-Each depth has its own spatial contract governing wall height, fog model, render distance, and ceiling type. Transitions between depths trigger different door sound sequences from `DoorContractAudio`.
-
-## Jam scope vs post-jam
-
-**Jam (by April 5):** 5-floor vertical slice. Proc-gen dungeon, card combat, synergies, enemy AI, audio, and a boss fight. Playable in browser via itch.io.
-
-**Post-jam:** LG webOS TV port. Magic Remote as primary input (d-pad for movement, pointer for combat targeting, gyro gestures as stretch goal). Published to the LG Content Store as a free app.
+`docs/Biome Plan.html` is the living design doc — theme, palettes, enemy populations, spatial contracts, quest items, and module wiring are all defined there. Open it in a browser.
 
 ## Project structure
 
 ```
-dcjam2026/
-├── index.html                 Single entry point
-├── README.md                  This file
-├── CLAUDE.md                  AI contributor conventions
+DCgamejam2026/
+├── index.html          Single entry point
+├── README.md           This file
+├── CLAUDE.md           AI contributor conventions
 ├── docs/
-│   └── ROADMAP.md             10-pass extraction roadmap
-├── engine/                    27 IIFE modules
-│   ├── rng.js                 Seeded PRNG
-│   ├── tiles.js               Tile type constants
-│   ├── audio-system.js        Web Audio playback
-│   ├── grid-gen.js            BSP floor generator
-│   ├── door-contracts.js      Floor transition spawn logic
-│   ├── door-contract-audio.js Transition sound grammar
-│   ├── lighting.js            Per-tile light map
-│   ├── enemy-ai.js            Patrol, awareness, chase
-│   ├── combat-engine.js       STR card combat
-│   ├── synergy-engine.js      Card combo resolution
-│   ├── card-system.js         Deck and hand management
-│   ├── loot-tables.js         Drop table generation
-│   ├── input.js               Keyboard abstraction + edges
-│   ├── movement.js            Queued lerp grid movement
-│   ├── pathfind.js            BFS grid pathfinder
-│   ├── spatial-contract.js    Floor-type rendering rules
-│   ├── raycaster.js           DDA first-person renderer
-│   ├── minimap.js             Fog-of-war top-down map
-│   ├── hud.js                 HP/energy/floor/card display
-│   ├── game-loop.js           rAF + fixed tick loop
-│   ├── player.js              Player state and stats
-│   ├── mouse-look.js          Free-look offset
-│   ├── floor-manager.js       Floor gen, cache, biomes
-│   ├── floor-transition.js    SFX-sequenced transitions
-│   ├── input-poll.js          Per-frame input polling
-│   ├── combat-bridge.js       Combat/card/chest bridge
-│   └── game.js                Thin orchestrator
-├── data/                      JSON data files
-├── audio/                     SFX and music assets
-└── portal/                    Sound designer tool
+│   ├── Biome Plan.html Living design doc (v4 — Dungeon Gleaner)
+│   └── *.md            Subsystem roadmaps
+├── engine/             46 IIFE modules
+├── data/strings/       i18n string tables
+└── assets/ui/          UI sprite images
 ```
 
 ## License

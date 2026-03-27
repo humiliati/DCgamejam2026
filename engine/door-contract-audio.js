@@ -88,6 +88,12 @@ var DoorContractAudio = (function () {
       { key: _D + 'doorclose09', delay: 600, volume: 0.45 }
     ],
 
+    // ── Building ↔ Building (N.N ↔ N.N) ── Interior horizontal
+    '2:2': [
+      { key: _D + 'dooropen01', delay: 0, volume: 0.45 },
+      { key: _D + 'doorclose03', delay: 500, volume: 0.4 }
+    ],
+
     // ── World elevation (N → N±) ── Pure vertical, no door
     '1:1_up': [
       { key: 'ascend-3', delay: 0, volume: 0.4 }
@@ -198,7 +204,8 @@ var DoorContractAudio = (function () {
     if (tgtD > srcD) return 'Descending...';
     if (tgtD < srcD) return 'Ascending...';
 
-    // Same depth
+    // Same depth — interior rooms use "Entering...", dungeons use vertical
+    if (srcD === 2) return 'Entering...';
     var dir = opts.direction || 'down';
     if (dir === 'up' || dir === 'shallower') return 'Ascending...';
     return 'Descending...';

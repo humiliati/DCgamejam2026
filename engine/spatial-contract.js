@@ -77,6 +77,7 @@ var SpatialContract = (function () {
       fogDistance:       opts.fogDistance || 14,     // Distance where fog starts biting
       fogColor:         opts.fogColor || { r: 40, g: 50, b: 60 },  // Blueish haze
       ceilingType:      CEILING.SKY,
+      skyPreset:        opts.skyPreset || 'cedar',   // Skybox preset name
       ceilColor:        opts.ceilColor || '#2a3a4a',
       floorColor:       opts.floorColor || '#3a4a3a',
 
@@ -107,6 +108,17 @@ var SpatialContract = (function () {
       // Step fill color: rendered in the gap where offset displaces the wall.
       // Raised tiles show this below the wall; sunken tiles show it above.
       stepColor:        opts.stepColor || '#2a3a2a',
+
+      // ── Wall textures ──
+      // Keyed by TILES constant value → TextureAtlas texture ID.
+      // null = fall back to flat color.
+      textures: opts.textures || _buildTextures({
+        1:  'concrete',        // WALL — modern commercial concrete
+        2:  'door_wood',       // DOOR — wooden entrance
+        3:  'door_wood',       // DOOR_BACK
+        4:  'door_wood',       // DOOR_EXIT
+        14: 'door_iron'        // BOSS_DOOR — iron gate
+      }),
 
       // ── Transition rules ──
       canNest:          true,    // Can contain doors to floorsN.N
@@ -154,6 +166,13 @@ var SpatialContract = (function () {
         14: 0.12      // BOSS_DOOR — elevated archway
       }),
       stepColor:        opts.stepColor || '#151518',
+
+      // ── Wall textures ──
+      textures: opts.textures || _buildTextures({
+        1:  'wood_plank',      // WALL — warm wood interior
+        2:  'door_wood',       // DOOR — room-to-room door
+        14: 'door_iron'        // BOSS_DOOR — iron archway
+      }),
 
       // ── Transition rules ──
       canNest:          true,    // Can contain doors to floorsN.N.N
@@ -212,6 +231,12 @@ var SpatialContract = (function () {
         14: 0.15      // BOSS_DOOR — chamber entrance
       }),
       stepColor:        opts.stepColor || '#111',
+
+      // ── Wall textures ──
+      textures: opts.textures || _buildTextures({
+        1:  'stone_rough',     // WALL — rough dungeon stone
+        14: 'door_iron'        // BOSS_DOOR — iron chamber door
+      }),
 
       // ── Transition rules ──
       canNest:          false,   // Bottom of the hierarchy
@@ -459,6 +484,19 @@ var SpatialContract = (function () {
     return contract.tileHeightOffsets[tileType] || 0;
   }
 
+  /**
+   * Get the texture ID assigned to a tile type on a given contract.
+   * Returns null if no texture is assigned (raycaster falls back to flat color).
+   *
+   * @param {Object} contract
+   * @param {number} tileType - TILES constant value
+   * @returns {string|null} TextureAtlas texture ID
+   */
+  function getTexture(contract, tileType) {
+    if (!contract || !contract.textures) return null;
+    return contract.textures[tileType] || null;
+  }
+
   // ── Helpers ──
 
   /**
@@ -466,6 +504,14 @@ var SpatialContract = (function () {
    * Keys are TILES constant values (numbers), values are float offsets.
    */
   function _buildOffsets(obj) {
+    return Object.freeze(obj);
+  }
+
+  /**
+   * Build a frozen texture assignment table from a plain object.
+   * Keys are TILES constant values (numbers), values are texture ID strings.
+   */
+  function _buildTextures(obj) {
     return Object.freeze(obj);
   }
 
@@ -482,6 +528,7 @@ var SpatialContract = (function () {
     // Runtime queries (called by raycaster)
     getWallHeight: getWallHeight,
     getTileHeightOffset: getTileHeightOffset,
+    getTexture: getTexture,
     resolveDistantWall: resolveDistantWall,
     getFogFactor: getFogFactor,
     getGradients: getGradients,

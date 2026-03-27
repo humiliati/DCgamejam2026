@@ -103,8 +103,8 @@
     <div id="viewport">
       <canvas id="view-canvas"></canvas>
 
-      <!-- HUD -->
-      <div id="hud">
+      <!-- HUD (hidden until gameplay starts) -->
+      <div id="hud" style="display:none">
         <div id="hud-left">
           <div>HP: <span id="hud-hp">10/10</span></div>
           <div class="hud-bar-bg" style="width:120px"><div class="hud-bar hud-hp-bar" id="hud-hp-fill"></div></div>
@@ -117,9 +117,9 @@
         </div>
       </div>
 
-      <!-- Minimap -->
-      <canvas id="minimap"></canvas>
-      <div id="debug-toggle" onclick="Game.toggleMinimap()">MAP</div>
+      <!-- Minimap (hidden until gameplay starts) -->
+      <canvas id="minimap" style="display:none"></canvas>
+      <div id="debug-toggle" onclick="Game.toggleMinimap()" style="display:none">MAP</div>
 
       <!-- Combat overlay -->
       <div id="combat-overlay">
@@ -132,8 +132,8 @@
       </div>
     </div>
 
-    <!-- Card tray -->
-    <div id="card-tray">
+    <!-- Card tray (hidden until gameplay starts) -->
+    <div id="card-tray" style="display:none">
       <div class="card-slot empty" id="card-0"><span>-</span><span class="card-name"></span></div>
       <div class="card-slot empty" id="card-1"><span>-</span><span class="card-name"></span></div>
       <div class="card-slot empty" id="card-2"><span>-</span><span class="card-name"></span></div>
@@ -146,6 +146,7 @@
   <!-- Layer 0: Zero-dependency foundations -->
   <script src="engine/rng.js"></script>
   <script src="engine/tiles.js"></script>
+  <script src="engine/i18n.js"></script>
   <script src="engine/audio-system.js"></script>
 
   <!-- Layer 1: Core systems (depend on foundations) -->
@@ -162,11 +163,24 @@
   <script src="engine/movement.js"></script>
   <script src="engine/pathfind.js"></script>
   <script src="engine/spatial-contract.js"></script>
+  <script src="engine/texture-atlas.js"></script>
+  <script src="engine/session-stats.js"></script>
+  <script src="engine/salvage.js"></script>
 
-  <!-- Layer 2: Rendering (depend on core systems) -->
+  <!-- Layer 2: Rendering + UI (depend on core systems) -->
+  <script src="engine/ui-sprites.js"></script>
+  <script src="engine/door-animator.js"></script>
+  <script src="engine/skybox.js"></script>
   <script src="engine/raycaster.js"></script>
   <script src="engine/minimap.js"></script>
   <script src="engine/hud.js"></script>
+  <script src="engine/dialog-box.js"></script>
+  <script src="engine/toast.js"></script>
+  <script src="engine/transition-fx.js"></script>
+  <script src="engine/card-fan.js"></script>
+  <script src="engine/screen-manager.js"></script>
+  <script src="engine/menu-box.js"></script>
+  <script src="engine/splash-screen.js"></script>
   <script src="engine/game-loop.js"></script>
 
   <!-- Layer 3: Game modules (depend on Player + core systems) -->
@@ -175,9 +189,18 @@
   <script src="engine/floor-manager.js"></script>
   <script src="engine/floor-transition.js"></script>
   <script src="engine/input-poll.js"></script>
+  <script src="engine/interact-prompt.js"></script>
   <script src="engine/combat-bridge.js"></script>
+  <script src="engine/hazard-system.js"></script>
+  <script src="engine/menu-faces.js"></script>
+  <script src="engine/title-screen.js"></script>
+  <script src="engine/game-over-screen.js"></script>
+  <script src="engine/victory-screen.js"></script>
 
   <!-- Layer 4: Orchestrator (wires everything together) -->
   <script src="engine/game.js"></script>
+
+  <!-- Layer 5: Data (loaded after all engine modules) -->
+  <script src="data/strings/en.js"></script>
 </body>
 </html>

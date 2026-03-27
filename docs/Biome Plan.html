@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dungeon Gleaner &mdash; Biome Plan (Day 1 Designer Guide)</title>
+<style>
+  :root {
+    --bg: #0c0810; --surface: #14101a; --border: #2a2535;
+    --text: #c8c8d0; --heading: #e8e8f0; --accent: #6ad8d0;
+    --accent2: #d86aaa; --green: #6ad88a; --red: #d86a6a;
+    --dim: #666680; --code-bg: #1a1424;
+    --flame: #e8834a; --frost: #4aa8e8; --storm: #c84ae8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:2rem; max-width:1200px; margin:0 auto; }
+  h1 { color:var(--heading); font-size:1.8rem; margin-bottom:.25rem; }
+  h2 { color:var(--accent); font-size:1.4rem; margin-top:2.5rem; margin-bottom:.75rem; border-bottom:1px solid var(--border); padding-bottom:.25rem; }
+  h3 { color:var(--accent2); font-size:1.1rem; margin-top:1.5rem; margin-bottom:.5rem; }
+  h4 { color:var(--green); font-size:.95rem; margin-top:1rem; margin-bottom:.3rem; }
+  p { margin-bottom:.75rem; }
+  .subtitle { color:var(--dim); font-size:.9rem; margin-bottom:2rem; }
+  code { background:var(--code-bg); padding:.15rem .4rem; border-radius:3px; font-family:'Cascadia Code','Fira Code',monospace; font-size:.85em; color:var(--green); }
+  .file-ref { background:var(--code-bg); border-left:3px solid var(--accent); padding:.5rem .75rem; margin:.5rem 0 1rem 0; font-family:monospace; font-size:.85em; color:var(--accent); border-radius:0 4px 4px 0; }
+  table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.9em; }
+  th { background:var(--surface); color:var(--accent); text-align:left; padding:.5rem .75rem; border:1px solid var(--border); font-weight:600; }
+  td { padding:.5rem .75rem; border:1px solid var(--border); vertical-align:top; }
+  tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+  .biome-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:1.25rem; margin:1rem 0; }
+  .biome-card .emoji-label { font-size:1.5rem; margin-right:.5rem; }
+  .biome-card .biome-title { color:var(--heading); font-size:1.1rem; font-weight:600; }
+  .biome-card .narrative { color:var(--dim); font-style:italic; margin:.5rem 0; }
+  .tag { display:inline-block; background:var(--code-bg); color:var(--dim); border:1px solid var(--border); border-radius:3px; padding:.1rem .4rem; font-size:.8em; margin:.1rem; }
+  .tag.reuse { border-color:var(--green); color:var(--green); }
+  .tag.new { border-color:var(--accent2); color:var(--accent2); }
+  .tag.modify { border-color:var(--accent); color:var(--accent); }
+  .note { background:rgba(106,216,208,.08); border:1px solid rgba(106,216,208,.2); border-radius:4px; padding:.75rem 1rem; margin:1rem 0; font-size:.9em; }
+  .warn { background:rgba(216,106,106,.08); border:1px solid rgba(216,106,106,.2); border-radius:4px; padding:.75rem 1rem; margin:1rem 0; font-size:.9em; }
+  .rule { background:rgba(106,216,138,.08); border:1px solid rgba(106,216,138,.2); border-radius:4px; padding:.75rem 1rem; margin:1rem 0; font-size:.9em; }
+  .rps { background:rgba(200,74,232,.08); border:1px solid rgba(200,74,232,.2); border-radius:4px; padding:.75rem 1rem; margin:1rem 0; font-size:.9em; }
+  .flame { color:var(--flame); font-weight:600; }
+  .frost { color:var(--frost); font-weight:600; }
+  .storm { color:var(--storm); font-weight:600; }
+  ul { margin:.5rem 0 .75rem 1.5rem; } li { margin-bottom:.25rem; }
+  .toc { margin:1.5rem 0; } .toc a { color:var(--accent); text-decoration:none; } .toc a:hover { text-decoration:underline; } .toc li { margin-bottom:.35rem; }
+  hr { border:none; border-top:1px solid var(--border); margin:2rem 0; }
+  pre { background:var(--code-bg); padding:1rem; border-radius:6px; overflow-x:auto; font-size:.8em; line-height:1.5; color:var(--text); }
+  .swatch { display:inline-block; width:1.2em; height:1.2em; border-radius:3px; vertical-align:middle; margin-right:.3em; border:1px solid rgba(255,255,255,.15); }
+</style>
+</head>
+<body>
+
+<h1>Dungeon Gleaner &mdash; Biome Plan</h1>
+<p class="subtitle">
+  Day 1 Designer Guide &mdash; DC Jam 2026 (Themes: Dragons &middot; Retrofuturism &middot; Rock-Paper-Scissors &middot; Cleaning Up the Hero's Mess)
+  <br>Repo: <code>github.com/humiliati/DCgamejam2026</code> &middot; Last updated: 2026-03-27 &middot; v4.0
+</p>
+
+<div class="rule">
+  <strong>Read CLAUDE.md and README.md first.</strong> This document assumes you understand the repo's IIFE module pattern, 5-layer load order, <code>SpatialContract</code> system, floor ID hierarchy (<code>"N"</code> / <code>"N.N"</code> / <code>"N.N.N"</code>), and the Doom-rule tile height offsets. If any of that is unfamiliar, those two files are the source of truth.
+</div>
+
+<nav class="toc">
+<h3>Contents</h3>
+<ul>
+  <li><a href="#premise">&sect;1 &mdash; Premise: Dungeon Gleaner</a></li>
+  <li><a href="#themes">&sect;2 &mdash; Theme Integration (All Four)</a></li>
+  <li><a href="#renderer">&sect;3 &mdash; Renderer Fidelity &amp; Retrofuturism Visual Philosophy</a></li>
+  <li><a href="#floor-id">&sect;4 &mdash; Floor ID Convention &amp; Spatial Contracts</a></li>
+  <li><a href="#overworld">&sect;5 &mdash; The Boardwalk Town (Depth 1: 3 Exterior Floors)</a></li>
+  <li><a href="#interiors">&sect;6 &mdash; Building Interiors (Depth 2)</a></li>
+  <li><a href="#dungeons">&sect;7 &mdash; Dungeons: The Hero's Mess (Depth 3)</a></li>
+  <li><a href="#opening">&sect;8 &mdash; Opening Scene &amp; First Dungeon Scripted Sequence</a></li>
+  <li><a href="#bosses">&sect;9 &mdash; Boss Encounters &amp; The Hero</a></li>
+  <li><a href="#rps">&sect;10 &mdash; Rock-Paper-Scissors Combat Triangle</a></li>
+  <li><a href="#biome-palette">&sect;11 &mdash; Biome Palettes &amp; Raycaster Wall Colors</a></li>
+  <li><a href="#enemies">&sect;12 &mdash; Enemy Populations by Biome</a></li>
+  <li><a href="#quest-items">&sect;13 &mdash; Quest Items &amp; Narrative Gating</a></li>
+  <li><a href="#asset-map">&sect;14 &mdash; EyesOnly Asset Map (What We Reuse)</a></li>
+  <li><a href="#new-work">&sect;15 &mdash; New Work for the Jam</a></li>
+  <li><a href="#wiring">&sect;16 &mdash; Module Wiring &amp; Data Flow</a></li>
+</ul>
+</nav>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="premise">&sect;1 &mdash; Premise: Dungeon Gleaner</h2>
+
+<p>You are a <strong>Nez-Ha</strong> &mdash; a sleek, modern scavenger-cleaner who follows in the devastating wake of a legendary Hero. The Hero storms through dungeons, slays monsters, smashes everything in sight, and vanishes before anyone can thank (or stop) him. You arrive after to pick through the wreckage, loot what's left, and deal with the twitching, gurgling remnants he didn't finish off.</p>
+
+<p>The world is a small coastal <strong>boardwalk town</strong> &mdash; think Miami Vice meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is <strong>retrofuturistic fantasy</strong>: a civilization that discovered magic before technology, and their architecture shows it.</p>
+
+<p>Three outdoor districts form the town. Buildings along each district are shops, inns, and guild halls. Beneath certain buildings, dungeons descend &mdash; already torn through by the Hero. Every dungeon is littered with defeated enemies (lootable corpses with serious fantasy names), environmental destruction, and the comedic living remnants the Hero didn't quite finish off (slime blobs, severed appendages, half-dead creatures).</p>
+
+<div class="note">
+  <strong>Jam scope:</strong> 3 exterior districts, 5&ndash;6 building interiors, 3 dungeons (one per district with dungeon access), 1 boss encounter (the Hero, end of Act 1). Post-jam: Act 2 (dragon alliance), Act 3 (world map).
+</div>
+
+<div class="rule">
+  <strong>Nez-Ha universe connection:</strong> Dragons are ancient allies and protectors of the world. The Hero hunts them, believing they are monsters. The Nez-Ha (player) discovers through environmental clues and NPC dialogue that the Hero is wrong &mdash; the dragons were guardians. The conspiracy reveal at the end of Act 1: the Hero is either corrupted, misguided, or working for the true villain. End-of-jam climax: confront the Hero.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="themes">&sect;2 &mdash; Theme Integration (All Four)</h2>
+
+<p>All four DC Jam 2026 themes are integrated. Only one is required; we use all four.</p>
+
+<table>
+  <tr><th>Theme</th><th>Integration</th><th>Where It Shows</th></tr>
+  <tr>
+    <td><strong>Dragons</strong></td>
+    <td>Core lore. Dragons are ancient protectors being hunted by the Hero. The player gradually discovers this through environmental storytelling (dragon murals, grateful NPC memories, dragon-scale artifacts). The Hero's "heroism" is the conspiracy. Post-jam: the player allies with a dragon for Act 2.</td>
+    <td>Dungeon environmental art (claw marks, scales on walls), lore items, NPC dialogue, final boss motivation, dragon-themed biome palettes in deeper dungeons</td>
+  </tr>
+  <tr>
+    <td><strong>Retrofuturism</strong></td>
+    <td>The entire visual identity. The boardwalk town is a fantasy civilization that feels simultaneously ancient and futuristic &mdash; vaporwave sunsets, chrome-and-marble architecture, neon sigils, synthwave color palettes. Not pixel-art retro; <em>conceptually</em> retro &mdash; a future imagined by a magical past.</td>
+    <td>Biome palettes (teal, magenta, sunset orange, chrome pink), wall color choices, fog tinting, parallax backgrounds, floor/ceiling gradients</td>
+  </tr>
+  <tr>
+    <td><strong>Rock-Paper-Scissors Elements</strong></td>
+    <td>Core combat mechanic. Three elements: <span class="flame">FLAME</span>, <span class="frost">FROST</span>, <span class="storm">STORM</span>. Every combat card and enemy has an element. Advantage = 2x damage, disadvantage = 0.5x. <span class="flame">FLAME</span> &gt; <span class="frost">FROST</span> &gt; <span class="storm">STORM</span> &gt; <span class="flame">FLAME</span>. Simple, readable, satisfies the jam requirement cleanly.</td>
+    <td>Card UI (element icon + color border), enemy nameplate element badge, HUD element indicator, combat damage multiplier popup. See <a href="#rps">&sect;10</a>.</td>
+  </tr>
+  <tr>
+    <td><strong>Cleaning Up the Hero's Mess</strong></td>
+    <td>The entire gameplay loop. You never fight fresh enemies &mdash; everything in the dungeons has already been mangled by the Hero. Corpses are lootable (serious names: Fallen Wyrm Knight, Shattered Golem). Living remnants are comedic (Disembodied Claw, Angry Torso, Indignant Slime Puddle). The narrative is cleanup, salvage, and discovery &mdash; not conquest.</td>
+    <td>Dungeon layouts (rubble, broken doors, scattered loot), enemy design (half-creatures), opening sequence (Hero's back visible), environmental destruction as level design</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="renderer">&sect;3 &mdash; Renderer Fidelity &amp; Retrofuturism Visual Philosophy</h2>
+
+<p>The raycaster renders <strong>flat-colored wall strips</strong> in the Wolfenstein 3D tradition. Each biome provides 6 colors (<code>wallLight</code>, <code>wallDark</code>, <code>door</code>, <code>doorDark</code>, <code>ceil</code>, <code>floor</code>) and the raycaster shades them by distance and facing. There are no texture maps, no sprite billboards, no per-wall-tile art.</p>
+
+<div class="warn">
+  <strong>What we CANNOT do:</strong> Photorealistic storefronts, neon sign rendering, or individual shop art. A potion shop and an armory are both just wall columns in a specific color. Buildings are communicated through <code>DOOR</code> tile placement and the dramatic palette shift when you enter a depth-2 interior.
+</div>
+
+<h3>What We CAN Do &mdash; Retrofuturism Through Color</h3>
+
+<ul>
+  <li><strong>Saturated palettes:</strong> The retrofuturism aesthetic lives in the <em>color choices</em>. Instead of muted realism, we lean into teal-and-magenta sunsets, chrome pinks, electric purples, and warm sunset oranges. Every biome palette should feel like a vaporwave album cover translated to Wolfenstein walls.</li>
+  <li><strong>Fog as atmosphere:</strong> Exterior fog colors are sunset-tinted (warm peach, cool lavender). Interior fog is warmer (amber, rose). Dungeon fog goes deep (indigo, void purple). The fog gradient IS the retrofuturism.</li>
+  <li><strong>Parallax as skyline:</strong> Background bands create the boardwalk horizon &mdash; distant water shimmer, sunset gradient bands, silhouetted palm trees (as color blocks). These set the Miami-Vice-meets-fantasy tone before the player sees a single wall.</li>
+  <li><strong>Ceiling/floor as mood:</strong> Sunset-pink sky above the Promenade. Deep teal sky above the Frontier Gate. Polished marble floors in the Market. Rough stone in dungeons. These two colors carry enormous tonal weight.</li>
+  <li><strong>The Hero's destruction as identity:</strong> Dungeons look different from pristine interiors because the Hero wrecked them. Dungeon palettes are desaturated, cracked, chaotic versions of their parent interior's palette &mdash; the same hues but darker, more broken. The player reads "this was beautiful before the Hero came through."</li>
+</ul>
+
+<div class="rule">
+  <strong>Design principle:</strong> Each district must be identifiable within 3 seconds of spawning by color + fog + parallax alone. The Promenade is warm sunset coral. The Lantern Gardens are cool teal-green. The Frontier Gate is deep magenta-purple. If a playtester can't tell them apart without reading a label, the palettes aren't different enough.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="floor-id">&sect;4 &mdash; Floor ID Convention &amp; Spatial Contracts</h2>
+
+<p>Every floor has a string ID that encodes its depth. The ID drives which <code>SpatialContract</code> constructor is used, which in turn controls the raycaster's fog model, wall height, ceiling type, render distance, and tile height offsets.</p>
+
+<table>
+  <tr><th>Depth</th><th>ID Pattern</th><th>Example</th><th>Contract</th><th>Description</th></tr>
+  <tr>
+    <td>1</td><td><code>"N"</code></td><td><code>"1"</code></td>
+    <td><code>SpatialContract.exterior()</code></td>
+    <td>Outdoor district. Sky ceiling. Fog FADE. 16&ndash;20 tile render distance. +0.15 door offset.</td>
+  </tr>
+  <tr>
+    <td>2</td><td><code>"N.N"</code></td><td><code>"1.1"</code></td>
+    <td><code>SpatialContract.interior()</code></td>
+    <td>Building interior (shop, inn, guild). 2x wall height. Fog CLAMP. Solid ceiling. Template-based layout.</td>
+  </tr>
+  <tr>
+    <td>3</td><td><code>"N.N.N"</code></td><td><code>"1.1.1"</code></td>
+    <td><code>SpatialContract.nestedDungeon()</code></td>
+    <td>Dungeon (the Hero's mess). Proc-gen. Fog DARKNESS. Void ceiling. 1x wall height (with chamber overrides for boss rooms).</td>
+  </tr>
+</table>
+
+<h3>Tile Height Offsets (Doom Rule) &mdash; by Depth</h3>
+
+<p>Transition tiles render vertically displaced. The player reads elevation semantically before interacting. These values come from <code>spatial-contract.js</code>:</p>
+
+<table>
+  <tr><th>Tile</th><th>Exterior (depth 1)</th><th>Interior (depth 2)</th><th>Dungeon (depth 3)</th></tr>
+  <tr><td><code>DOOR</code> (2)</td><td>+0.15 raised</td><td>+0.05 subtle step</td><td>&mdash;</td></tr>
+  <tr><td><code>DOOR_BACK</code> (3)</td><td>+0.15 raised</td><td>&mdash;</td><td>&mdash;</td></tr>
+  <tr><td><code>DOOR_EXIT</code> (4)</td><td>+0.15 raised</td><td>&mdash;</td><td>&mdash;</td></tr>
+  <tr><td><code>STAIRS_DN</code> (5)</td><td>-0.12 sunken</td><td>-0.08 trap door</td><td>-0.10 hole in floor</td></tr>
+  <tr><td><code>STAIRS_UP</code> (6)</td><td>+0.06 slight rise</td><td>+0.06 slight rise</td><td>+0.05 rough steps</td></tr>
+  <tr><td><code>BOSS_DOOR</code> (14)</td><td>+0.25 prominent</td><td>+0.12 elevated archway</td><td>+0.15 chamber entrance</td></tr>
+</table>
+
+<div class="note">
+  <strong>Door sound grammar:</strong> <code>DoorContractAudio</code> uses the <code>"srcDepth:tgtDepth"</code> pair to select the correct sound sequence. Moving from <code>"1"</code> to <code>"1.1"</code> plays a different creak than <code>"1.1"</code> to <code>"1.1.1"</code>. This is already wired &mdash; just set the floor IDs correctly.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="overworld">&sect;5 &mdash; The Boardwalk Town (Depth 1)</h2>
+
+<p>Three exterior floors form the town of <strong>Coralshore</strong> &mdash; a small coastal boardwalk settlement built on ancient foundations. The retrofuturism aesthetic is strongest here: chrome-trimmed marble, sunset-gradient skies, neon sigil shop signs, palm shadows on polished stone. The player transitions between districts via <code>DOOR</code> tiles at grid edges.</p>
+
+<div class="warn">
+  <strong>Exterior layout is contrived, not proc-gen.</strong> Each district is a hand-authored grid (30&times;30). <code>GridGen.generate()</code> is NOT called for depth-1 floors. Instead, <code>FloorManager</code> loads a template from <code>data/streets/</code>. This is jam work.
+</div>
+
+<!-- PROMENADE -->
+<div class="biome-card">
+  <h3><span class="emoji-label">🌅</span> <span class="biome-title">Floor "1" &mdash; The Promenade</span></h3>
+  <p class="narrative">Sunset-washed marble walkways lined with chrome railings. Shop awnings ripple in a warm ocean breeze. A fountain at the center square catches the last light, scattering coral and gold reflections across polished stone. Somewhere ahead, a notice board flutters with bounties and job postings &mdash; one in particular asks for a "Gleaner" to investigate the old cellars beneath the Coral Bazaar.</p>
+
+  <table>
+    <tr><th>Attribute</th><th>Value</th></tr>
+    <tr><td>Floor ID</td><td><code>"1"</code></td></tr>
+    <tr><td>Biome key</td><td><code>'promenade'</code></td></tr>
+    <tr><td>Grid shape</td><td>Central plaza with radiating corridors. 30&times;30. The fountain square is an open 8&times;8 clearing at center. Shop-lined corridors extend N, S, E. DOORs to buildings on both sides. Open and bright &mdash; longest render distance of any area.</td></tr>
+    <tr><td>Contract</td><td><code>exterior({ label: 'The Promenade', fogColor: {r:45,g:28,b:22}, fogDistance: 18, renderDistance: 20, floorColor: '#d4a878', ceilColor: '#e8a070', parallax: [{ depth: 0.95, color: '#c06848', height: 0.08 }, { depth: 0.85, color: '#4a2838', height: 0.15 }] })</code></td></tr>
+    <tr><td>Palette feel</td><td><strong>Warm sunset coral &amp; polished marble.</strong> Walls are peach-tinted white stone with warm shadows. Floor is golden sandstone. Sky is a sunset gradient &mdash; peach to deep rose at the horizon. Two parallax bands: distant ocean shimmer + sunset cloud line. Reads as "warm, safe, welcoming, beautiful."</td></tr>
+    <tr><td>Narrative role</td><td><strong>Tutorial &amp; opening area.</strong> The player arrives here first. Notice board directs them to the Coral Bazaar (<code>"1.1"</code>) and its cellar dungeon. This is where the opening scripted sequence begins. See <a href="#opening">&sect;8</a>.</td></tr>
+    <tr><td>Exits</td><td>N &rarr; <code>"2"</code> (Lantern Gardens), E &rarr; <code>"3"</code> (Frontier Gate)</td></tr>
+    <tr><td>Building DOORs</td><td><code>"1.1"</code> Coral Bazaar (shop + dungeon access), <code>"1.2"</code> Gleaner's Guild (tutorial NPC, card deck)</td></tr>
+    <tr><td>Enemy density</td><td>0.0 (safe zone). No enemies on the Promenade. Town is peaceful &mdash; the dungeons are where the mess is.</td></tr>
+  </table>
+</div>
+
+<!-- LANTERN GARDENS -->
+<div class="biome-card">
+  <h3><span class="emoji-label">🏮</span> <span class="biome-title">Floor "2" &mdash; Lantern Gardens</span></h3>
+  <p class="narrative">Hanging lanterns cast teal and jade light through canopies of vine-wrapped trellises. A stone path winds through manicured gardens to the Driftwood Inn, where travelers rest between expeditions. A park bench overlooks a reflecting pool that mirrors the lantern glow. In the far corner, a dragon mural &mdash; old, faded, reverential &mdash; shows a winged figure sheltering the town from a storm. Someone has scratched "THEY REMEMBER" into the stone below it.</p>
+
+  <table>
+    <tr><th>Attribute</th><th>Value</th></tr>
+    <tr><td>Floor ID</td><td><code>"2"</code></td></tr>
+    <tr><td>Biome key</td><td><code>'gardens'</code></td></tr>
+    <tr><td>Grid shape</td><td>Winding path layout. 30&times;30. Not a straight corridor &mdash; paths curve around garden blocks (impassable walls that represent hedges/trellises). The Inn is at the north end, park area at south. More enclosed than Promenade but still exterior.</td></tr>
+    <tr><td>Contract</td><td><code>exterior({ label: 'Lantern Gardens', fogColor: {r:12,g:30,b:28}, fogDistance: 12, renderDistance: 16, floorColor: '#3a5a50', ceilColor: '#2a4a48', parallax: [{ depth: 0.95, color: '#1a3a2a', height: 0.1 }, { depth: 0.8, color: '#0a2a1a', height: 0.06 }] })</code></td></tr>
+    <tr><td>Palette feel</td><td><strong>Cool teal-green &amp; lantern jade.</strong> Walls are dark green stone with teal-tinted shadows. Floor is mossy flagstone. Sky is deep twilight teal. Fog has a green cast &mdash; filtered through canopy. Distinct from the Promenade's warmth. Reads as "peaceful, mysterious, evening."</td></tr>
+    <tr><td>Narrative role</td><td><strong>Rest &amp; lore hub.</strong> The Inn is the rest point (heal). Dragon mural is the first environmental lore clue. Park NPCs provide world-building dialogue. The Apothecary sells potions. Has cellar dungeon access beneath the Inn.</td></tr>
+    <tr><td>Exits</td><td>S &rarr; <code>"1"</code> (Promenade), E &rarr; <code>"3"</code> (Frontier Gate)</td></tr>
+    <tr><td>Building DOORs</td><td><code>"2.1"</code> Driftwood Inn (rest + dungeon access), <code>"2.2"</code> Moonpetal Apothecary (potions/items)</td></tr>
+    <tr><td>Enemy density</td><td>0.0 (safe zone). Town areas are peaceful.</td></tr>
+  </table>
+</div>
+
+<!-- FRONTIER GATE -->
+<div class="biome-card">
+  <h3><span class="emoji-label">🗡️</span> <span class="biome-title">Floor "3" &mdash; The Frontier Gate</span></h3>
+  <p class="narrative">The marble gives way to rougher stone here. The Frontier Gate is where the town meets the wild &mdash; a fortified archway opens onto scrubland and distant mountains. Mercenary postings line the walls. An armory and a combat training yard flank the gate. Beyond the gate itself, the road leads into territory the Hero has already "cleared" &mdash; and left in ruins. This is where the serious fighters and cleaners stage their expeditions.</p>
+
+  <table>
+    <tr><th>Attribute</th><th>Value</th></tr>
+    <tr><td>Floor ID</td><td><code>"3"</code></td></tr>
+    <tr><td>Biome key</td><td><code>'frontier'</code></td></tr>
+    <tr><td>Grid shape</td><td>Linear approach to the gate. 30&times;30. A wide avenue narrows toward the gate archway at the east end. Training yard (open area) on south side. Armory building on north. The gate DOOR at the east edge is locked until post-jam (world map access).</td></tr>
+    <tr><td>Contract</td><td><code>exterior({ label: 'Frontier Gate', fogColor: {r:25,g:12,b:30}, fogDistance: 14, renderDistance: 16, floorColor: '#3a2a3a', ceilColor: '#4a2848', parallax: [{ depth: 0.95, color: '#2a1a30', height: 0.12 }, { depth: 0.80, color: '#1a0a20', height: 0.08 }] })</code></td></tr>
+    <tr><td>Palette feel</td><td><strong>Deep magenta-purple &amp; dusk.</strong> Walls are dark violet-gray stone &mdash; fortification walls, rougher than the marble elsewhere. Floor is purple-brown packed earth. Sky is deep twilight magenta. Reads as "dangerous, martial, edge-of-civilization."</td></tr>
+    <tr><td>Narrative role</td><td><strong>Combat staging &amp; main dungeon access.</strong> The training yard teaches advanced combat mechanics. The Ironhold Armory sells combat cards. The Frontier Cellars beneath the armory are the deepest dungeon &mdash; and where the Hero was last seen. <strong>Act 1 climax dungeon.</strong></td></tr>
+    <tr><td>Exits</td><td>W &rarr; <code>"1"</code> (Promenade), W (north path) &rarr; <code>"2"</code> (Lantern Gardens), E &rarr; LOCKED (world map, post-jam)</td></tr>
+    <tr><td>Building DOORs</td><td><code>"3.1"</code> Ironhold Armory (shop + Act 1 dungeon access), <code>"3.2"</code> Training Yard <span class="tag new">OPTIONAL</span> (combat tutorial arena, post-jam stretch goal)</td></tr>
+    <tr><td>Enemy density</td><td>0.03 (minimal). 1&ndash;2 wandering remnants near the gate &mdash; creatures that escaped the dungeons. Serves as a preview of dungeon combat for players who haven't entered a dungeon yet.</td></tr>
+    <tr><td>Enemy decks</td><td><code>ESCAPED_SLIME</code> (Splatter, single card, flees &mdash; comedic tutorial enemy)</td></tr>
+  </table>
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="interiors">&sect;6 &mdash; Building Interiors (Depth 2)</h2>
+
+<p>Buildings are entered from exterior districts via <code>DOOR</code> tiles (raised +0.15 in the exterior contract). Each interior uses <code>SpatialContract.interior()</code> &mdash; 2x wall height, fog CLAMP, solid ceiling. Interiors are template-based (contrived layout, <code>useTemplate: true</code>), not proc-gen.</p>
+
+<table>
+  <tr><th>Floor ID</th><th>Interior Name</th><th>Parent District</th><th>Biome Key</th><th>Narrative Purpose</th><th><code>STAIRS_DN</code>?</th></tr>
+  <tr>
+    <td><code>"1.1"</code></td>
+    <td>Coral Bazaar</td>
+    <td>Promenade (<code>"1"</code>)</td>
+    <td><code>'bazaar'</code></td>
+    <td>Main shop. Buy/sell loot. Chrome display cases, sunset light through high windows. Warm coral-and-gold interior &mdash; the town's signature palette intensified indoors. <strong>First dungeon is accessed from here.</strong></td>
+    <td>Yes &rarr; <code>"1.1.1"</code></td>
+  </tr>
+  <tr>
+    <td><code>"1.2"</code></td>
+    <td>Gleaner's Guild</td>
+    <td>Promenade (<code>"1"</code>)</td>
+    <td><code>'guild'</code></td>
+    <td>Tutorial NPC. Receive starter card deck. Job board with dungeon intel. Teal-and-chrome interior &mdash; professional, organized. Guild master explains the Gleaner role and hints at the Hero's suspicious behavior.</td>
+    <td>No</td>
+  </tr>
+  <tr>
+    <td><code>"2.1"</code></td>
+    <td>Driftwood Inn</td>
+    <td>Lantern Gardens (<code>"2"</code>)</td>
+    <td><code>'inn'</code></td>
+    <td>Rest point (full heal). NPC dialogue about dragons, the Hero, town history. Warm amber-and-jade interior &mdash; lantern light on driftwood beams. Inn cellar leads to second dungeon.</td>
+    <td>Yes &rarr; <code>"2.1.1"</code></td>
+  </tr>
+  <tr>
+    <td><code>"2.2"</code></td>
+    <td>Moonpetal Apothecary</td>
+    <td>Lantern Gardens (<code>"2"</code>)</td>
+    <td><code>'apothecary'</code></td>
+    <td>Potions and consumable items. Element-infused potions (<span class="flame">Flame Flask</span>, <span class="frost">Frost Tonic</span>, <span class="storm">Storm Elixir</span>). Cool blue-violet interior with glowing bottles.</td>
+    <td>No</td>
+  </tr>
+  <tr>
+    <td><code>"3.1"</code></td>
+    <td>Ironhold Armory</td>
+    <td>Frontier Gate (<code>"3"</code>)</td>
+    <td><code>'armory'</code></td>
+    <td>Combat cards and equipment. Element-specific weapon cards. Dark iron-and-magenta interior &mdash; weapons on racks, forge glow. Cellar leads to Act 1 climax dungeon &mdash; the Hero's most recent rampage.</td>
+    <td>Yes &rarr; <code>"3.1.1"</code></td>
+  </tr>
+</table>
+
+<h3>Interior Contract Presets</h3>
+
+<table>
+  <tr><th>Biome Key</th><th>Contract</th><th>Feel</th></tr>
+  <tr>
+    <td><code>'bazaar'</code></td>
+    <td><code>interior({ label: 'Coral Bazaar', wallHeight: 2.0, gridSize: {w:14,h:12}, ceilColor: '#3a1a0a', floorColor: '#c89868', fogColor: {r:30,g:15,b:8} })</code></td>
+    <td>Warm coral gold. High ceilings. Market hall grandeur.</td>
+  </tr>
+  <tr>
+    <td><code>'guild'</code></td>
+    <td><code>interior({ label: "Gleaner's Guild", wallHeight: 1.8, gridSize: {w:12,h:10}, ceilColor: '#0a1a1a', floorColor: '#2a4a4a', fogColor: {r:8,g:18,b:18} })</code></td>
+    <td>Cool teal chrome. Professional. Organized.</td>
+  </tr>
+  <tr>
+    <td><code>'inn'</code></td>
+    <td><code>PRESETS.TAVERN({ label: 'Driftwood Inn', fogColor: {r:18,g:14,b:6} })</code></td>
+    <td>Warm amber driftwood. Fire-lit. Safe haven.</td>
+  </tr>
+  <tr>
+    <td><code>'apothecary'</code></td>
+    <td><code>interior({ label: 'Moonpetal Apothecary', wallHeight: 1.6, gridSize: {w:10,h:8}, ceilColor: '#0a0a1a', floorColor: '#1a1a2a', fogColor: {r:5,g:5,b:15} })</code></td>
+    <td>Cool violet glow. Bottle-lit. Mystical.</td>
+  </tr>
+  <tr>
+    <td><code>'armory'</code></td>
+    <td><code>interior({ label: 'Ironhold Armory', wallHeight: 2.0, gridSize: {w:14,h:10}, ceilColor: '#1a0a1a', floorColor: '#2a1a2a', fogColor: {r:15,g:5,b:15} })</code></td>
+    <td>Dark iron magenta. Forge embers. Martial.</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="dungeons">&sect;7 &mdash; Dungeons: The Hero's Mess (Depth 3)</h2>
+
+<p>These are the actual dungeon-crawl floors &mdash; the Hero's aftermath. Proc-gen via <code>GridGen.generate()</code>. <code>SpatialContract.nestedDungeon()</code> &mdash; 1x wall height, fog DARKNESS, void ceiling. Each dungeon is a wrecked version of what was once a beautiful or functional space. The Hero tore through, left destruction, and moved on.</p>
+
+<h3>Environmental Storytelling (every dungeon)</h3>
+<ul>
+  <li><strong>Hero's slash marks</strong> &mdash; specific wall tiles are "damaged" (dimmer palette variant). The Hero carved through walls.</li>
+  <li><strong>Lootable corpses</strong> &mdash; <code>CHEST</code> tiles representing fallen enemies. Serious fantasy names (Fallen Wyrm Knight, Shattered Golem, Slain Cavern Drake). Loot = cards, gold, element shards.</li>
+  <li><strong>Living remnants</strong> &mdash; the actual enemies the player fights. Comedic half-creatures the Hero didn't finish. They're angry, confused, and pathetic.</li>
+  <li><strong>Rubble tiles</strong> &mdash; passable but slow. The Hero smashed through without caring about structural integrity.</li>
+  <li><strong>Dragon clues</strong> &mdash; each dungeon has 1&ndash;2 environmental lore items (dragon scale, old mural fragment, grateful inscription from a past civilization) that build toward the Act 1 reveal.</li>
+</ul>
+
+<table>
+  <tr><th>Floor ID</th><th>Dungeon Name</th><th>Parent Interior</th><th>Biome</th><th>Narrative</th><th>Difficulty</th></tr>
+  <tr>
+    <td><code>"1.1.1"</code></td>
+    <td>Coral Cellars</td>
+    <td>Coral Bazaar (<code>"1.1"</code>)</td>
+    <td><code>'cellar'</code></td>
+    <td><strong>Tutorial dungeon.</strong> Old storage vaults beneath the bazaar. The Hero came through here first &mdash; the destruction is freshest. This is where the <a href="#opening">opening scripted sequence</a> plays: the player sees the Hero's back as he finishes off enemies, then he vanishes up the stairs on the far side. What's left: slime puddles, a twitching claw, scattered loot. First dragon clue: a dragon-scale mosaic on the cellar wall, untouched by the Hero (he didn't notice it).</td>
+    <td>Very Easy. 3&ndash;4 comedic remnants. Safe learning environment.</td>
+  </tr>
+  <tr>
+    <td><code>"2.1.1"</code></td>
+    <td>Lamplit Catacombs</td>
+    <td>Driftwood Inn (<code>"2.1"</code>)</td>
+    <td><code>'catacomb'</code></td>
+    <td><strong>Mid-game dungeon.</strong> Ancient burial chambers beneath the inn. The Hero fought undead here &mdash; most are re-dead, but some parts are still moving. Jade-green lantern light barely penetrates. Lootable corpses include Entombed Guardians and Shattered Bone Golems. Living remnants: Crawling Ribcage, Floating Skull (angry, chatty), Leg With Attitude. Dragon clue: an inscription praising "the Scaled Ones who guarded the dead."</td>
+    <td>Medium. 6&ndash;8 remnants. Element variety introduced.</td>
+  </tr>
+  <tr>
+    <td><code>"3.1.1"</code></td>
+    <td>Ironhold Depths</td>
+    <td>Ironhold Armory (<code>"3.1"</code>)</td>
+    <td><code>'depths'</code></td>
+    <td><strong>Act 1 climax dungeon.</strong> Deep fortified chambers. The Hero's most recent rampage &mdash; the destruction is catastrophic. Collapsed walls, scattered weapons, a trail of devastation leading to the boss chamber. This was once a dragon sanctuary &mdash; the Hero found it and attacked. Lootable corpses: Fallen Dragon Sentinels, Sundered Wyrm Knights. Living remnants are angrier and stronger here. Dragon clue: a dying dragon's final message scratched into the wall. <strong>Boss encounter at the end.</strong> See <a href="#bosses">&sect;9</a>.</td>
+    <td>Hard. 8&ndash;12 remnants. Full RPS element combat. Boss at end.</td>
+  </tr>
+</table>
+
+<h3>Dungeon Contracts</h3>
+
+<table>
+  <tr><th>Biome</th><th>Contract</th><th>Feel</th></tr>
+  <tr>
+    <td><code>'cellar'</code></td>
+    <td><code>PRESETS.CRAWLSPACE({ label: 'Coral Cellars', fogColor: {r:18,g:10,b:5} })</code></td>
+    <td>Warm amber darkness. Cracked coral stone. 0.7x wall height &mdash; cramped.</td>
+  </tr>
+  <tr>
+    <td><code>'catacomb'</code></td>
+    <td><code>PRESETS.DUNGEON({ label: 'Lamplit Catacombs', fogColor: {r:5,g:12,b:10} })</code></td>
+    <td>Jade-green gloom. Ancient burial stone. Full wall height.</td>
+  </tr>
+  <tr>
+    <td><code>'depths'</code></td>
+    <td><code>PRESETS.DUNGEON_WITH_BOSS({ label: 'Ironhold Depths', fogColor: {r:12,g:4,b:15} })</code></td>
+    <td>Deep violet void. Shattered fortification. Boss chamber at end.</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="opening">&sect;8 &mdash; Opening Scene &amp; First Dungeon Scripted Sequence</h2>
+
+<p>The opening scene is the player's introduction to the "cleaning up the hero's mess" concept. It plays when the player first enters the Coral Cellars (<code>"1.1.1"</code>).</p>
+
+<h3>Sequence</h3>
+
+<ol>
+  <li><strong>Player arrives at Coral Cellars entrance.</strong> Descends via <code>STAIRS_DN</code> from the Coral Bazaar. Normal floor transition (fade to black, SFX, fade in).</li>
+  <li><strong>Fade-in reveals the Hero's back.</strong> The player spawns facing north. 3&ndash;5 tiles ahead, the Hero (a tall silhouette, rendered as a special wall column or HUD overlay) is visible. The Hero's arm swings &mdash; an enemy in front of him flashes and vanishes (death animation). A second enemy tries to flee; the Hero cuts it down.</li>
+  <li><strong>The Hero walks away.</strong> Without turning around, the Hero walks through a <code>DOOR</code> on the far wall and vanishes. The door slams shut behind him. The sound echoes.</li>
+  <li><strong>The dungeon is now the player's.</strong> Silence. Then: a wet squelching sound. A slime puddle to the left twitches. A disembodied claw scuttles across the floor. The remnants are waking up. A HUD message appears: <em>"The Hero was here. Clean up what's left."</em></li>
+  <li><strong>Gameplay begins.</strong> The player can now explore, fight remnants, loot corpses, and find the first dragon clue.</li>
+</ol>
+
+<div class="note">
+  <strong>Implementation:</strong> The Hero sequence is a one-time scripted event triggered by <code>FloorManager</code> when <code>floorId === "1.1.1"</code> and the <code>opening_complete</code> event flag is false. After it plays, the flag is set and the sequence never replays. The Hero is NOT an enemy entity &mdash; he's a visual overlay/cutscene element. Post-jam, this system generalizes for other Hero sightings.
+</div>
+
+<div class="warn">
+  <strong>Jam scope for the opening:</strong> At minimum, a text overlay sequence ("You see the Hero ahead..." / "He cuts down the last creature..." / "He vanishes through the far door." / "Something is still moving..."). Ideal: actual visual silhouette + animation. The text version ships if time runs out.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="bosses">&sect;9 &mdash; Boss Encounters &amp; The Hero</h2>
+
+<div class="warn">
+  <strong>No frogger/skifree encounters.</strong> Gone Rogue's boss arenas are top-down mechanics that don't translate to first-person. Bosses use the repo's existing <code>chamberOverrides</code> pattern in <code>SpatialContract</code>.
+</div>
+
+<h3>How Bosses Work in This Engine</h3>
+
+<ol>
+  <li>A <code>chamberOverrides</code> entry targets the last room (<code>roomIndex: -1</code>) and raises its <code>wallHeight</code> to 1.8x</li>
+  <li><code>GridGen</code> places a <code>BOSS_DOOR</code> tile (value 14) at the entrance to that room</li>
+  <li>The raycaster renders the boss door with +0.15 tile height offset &mdash; visually prominent</li>
+  <li>When the player walks through the <code>BOSS_DOOR</code>, <code>CombatBridge</code> triggers boss combat</li>
+  <li>The boss room has taller walls, creating a cathedral-like arena in first person</li>
+</ol>
+
+<h3>The Hero as Boss (End of Act 1)</h3>
+
+<p>The Hero is encountered at the end of the Ironhold Depths (<code>"3.1.1"</code>). He's standing in the boss chamber, surrounded by the destruction he's caused. A dying dragon (environmental prop) is visible behind him. This is the first time the player sees the Hero's face.</p>
+
+<table>
+  <tr><th>Boss</th><th>Floor</th><th>Chamber Config</th><th>Encounter Design</th><th>Narrative</th></tr>
+  <tr>
+    <td>The Hero</td>
+    <td><code>"3.1.1"</code> (Ironhold Depths)</td>
+    <td><code>chamberOverrides: [{ roomIndex: -1, wallHeight: 1.8, label: 'Dragon Sanctuary' }]</code></td>
+    <td>
+      <strong>Three possible endings (player choice pre-fight or post-jam branching):</strong><br>
+      <strong>A)</strong> Fight the Hero directly. He's powerful &mdash; STR 12, 3-element deck (one of each), Shield Bash + Cleave + Dragon Slayer. Spawns no reinforcements. Pure skill check.<br>
+      <strong>B)</strong> The dying dragon lends you power. Team-up mechanic &mdash; player gets temporary Dragon Breath card (<span class="flame">FLAME</span>, massive damage). Hero has <span class="frost">FROST</span> weakness. Fight is easier but narratively heavier.<br>
+      <strong>C)</strong> Fight both &mdash; the Hero AND a corrupted dragon. Hardest ending. Post-jam stretch goal.
+    </td>
+    <td>The conspiracy reveal. The Hero has been hunting dragons &mdash; the world's ancient protectors &mdash; believing they're monsters. The player has seen the evidence in every dungeon (dragon clues). Now they confront the truth. Win condition: defeat the Hero. End of Act 1. Victory screen. Post-jam: Act 2 begins with the dragon alliance.</td>
+  </tr>
+</table>
+
+<h3>The Hero's Combat Deck</h3>
+
+<table>
+  <tr><th>Card</th><th>Element</th><th>Effect</th></tr>
+  <tr><td>Cleave</td><td><span class="flame">FLAME</span></td><td>Heavy melee. 8 base damage. "The Hero's signature move &mdash; the same swing you saw in the opening."</td></tr>
+  <tr><td>Frost Ward</td><td><span class="frost">FROST</span></td><td>Shield. Absorbs 6 damage. "A magical barrier. He's no mere swordsman."</td></tr>
+  <tr><td>Storm Step</td><td><span class="storm">STORM</span></td><td>Dodge + counter. Evades next attack, deals 4 damage. "He moves like lightning."</td></tr>
+  <tr><td>Dragon Slayer</td><td>Neutral</td><td>Ultimate. 12 base damage. Ignores element. Used once at 30% HP. "The blade glows with stolen dragon fire."</td></tr>
+</table>
+
+<div class="rule">
+  <strong>Design language:</strong> The Hero uses ALL THREE elements. The player must read his card plays and counter with the right element. This is the RPS system's final exam. The opening dungeon teaches elements gently; the mid dungeon tests them; the boss demands mastery.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="rps">&sect;10 &mdash; Rock-Paper-Scissors Combat Triangle</h2>
+
+<div class="rps">
+  <strong>Core mechanic:</strong> Every combat card and every enemy has one of three elements. Advantage deals <strong>2x damage</strong>. Disadvantage deals <strong>0.5x damage</strong>. Neutral deals 1x.
+  <br><br>
+  <span class="flame">FLAME</span> beats <span class="frost">FROST</span> &nbsp;&rarr;&nbsp; <span class="frost">FROST</span> beats <span class="storm">STORM</span> &nbsp;&rarr;&nbsp; <span class="storm">STORM</span> beats <span class="flame">FLAME</span>
+</div>
+
+<h3>Implementation</h3>
+
+<table>
+  <tr><th>Component</th><th>How It Uses Elements</th></tr>
+  <tr>
+    <td><code>CardSystem</code></td>
+    <td>Every card has an <code>element</code> field: <code>'flame'</code>, <code>'frost'</code>, <code>'storm'</code>, or <code>'neutral'</code>. Neutral cards deal 1x regardless. Element is displayed as a colored icon on the card in the HUD (5-card hand). <span class="flame">FLAME</span> = orange border, <span class="frost">FROST</span> = blue border, <span class="storm">STORM</span> = purple border.</td>
+  </tr>
+  <tr>
+    <td><code>CombatEngine</code></td>
+    <td>Damage multiplier lookup: <code>getElementMultiplier(attackerElement, defenderElement)</code>. Returns 2.0, 1.0, or 0.5. Applied after base damage calculation, before defense. The multiplier is shown as a popup: <strong style="color:var(--green)">EFFECTIVE! (2x)</strong> or <strong style="color:var(--red)">RESISTED (0.5x)</strong>.</td>
+  </tr>
+  <tr>
+    <td><code>EnemyAI</code></td>
+    <td>Each enemy deck has a primary element. The enemy's nameplate shows its element badge. Players learn to read the element before engaging and pick the right cards. Enemies in the same dungeon tend toward one element, with variety enemies as curveballs.</td>
+  </tr>
+  <tr>
+    <td><code>HUD</code></td>
+    <td>Enemy element badge: colored icon next to HP bar. Player hand: each card has element border. Damage popup: multiplier text. No complex UI &mdash; three colors tell the whole story.</td>
+  </tr>
+  <tr>
+    <td><code>SynergyEngine</code></td>
+    <td>Playing 2+ cards of the same element in one combat triggers an <strong>Elemental Surge</strong>: +25% damage on the second same-element card. This rewards deck-building around a primary element while still needing coverage cards for disadvantage matchups.</td>
+  </tr>
+</table>
+
+<h3>Element Distribution by Dungeon</h3>
+
+<table>
+  <tr><th>Dungeon</th><th>Primary Element</th><th>Variety</th><th>Rationale</th></tr>
+  <tr>
+    <td>Coral Cellars</td>
+    <td><span class="flame">FLAME</span></td>
+    <td>90% flame remnants, 10% neutral</td>
+    <td>Tutorial. Player starts with <span class="frost">FROST</span> cards. Easy advantage matchup teaches the system.</td>
+  </tr>
+  <tr>
+    <td>Lamplit Catacombs</td>
+    <td><span class="frost">FROST</span></td>
+    <td>60% frost, 25% storm, 15% neutral</td>
+    <td>Mid-game. Players need <span class="flame">FLAME</span> cards but also encounter <span class="storm">STORM</span> enemies that punish flame-heavy decks. Teaches deck diversity.</td>
+  </tr>
+  <tr>
+    <td>Ironhold Depths</td>
+    <td>Mixed</td>
+    <td>33% flame, 33% frost, 33% storm</td>
+    <td>Endgame. All elements in equal measure. Players must read enemy elements in real-time and pick cards carefully. Prepares them for the Hero (who uses all three).</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="biome-palette">&sect;11 &mdash; Biome Palettes &amp; Raycaster Wall Colors</h2>
+
+<p>The raycaster renders flat-colored walls tinted by the current biome palette. Each biome provides 6 colors: <code>wallLight</code>, <code>wallDark</code> (side vs. face), <code>door</code>, <code>doorDark</code>, <code>ceil</code>, and <code>floor</code>.</p>
+
+<p>The retrofuturism aesthetic drives all palette choices: <strong>saturated, warm-cool contrasts, sunset/neon tints, chrome accents via door colors</strong>. Every palette should feel like a vaporwave album cover translated to Wolfenstein walls.</p>
+
+<h3>District Biomes (depth 1) <span class="tag new">NEW</span></h3>
+
+<table>
+  <tr><th>Biome Key</th><th>District</th>
+    <th>wallLight</th><th>wallDark</th><th>door</th><th>ceil</th><th>floor</th><th>Design Rationale</th></tr>
+  <tr>
+    <td><code>'promenade'</code></td>
+    <td>The Promenade <code>"1"</code></td>
+    <td><span class="swatch" style="background:#d8a888"></span><code>#d8a888</code></td>
+    <td><span class="swatch" style="background:#b08060"></span><code>#b08060</code></td>
+    <td><span class="swatch" style="background:#e8c898"></span><code>#e8c898</code></td>
+    <td><span class="swatch" style="background:#e8a070"></span><code>#e8a070</code></td>
+    <td><span class="swatch" style="background:#d4a878"></span><code>#d4a878</code></td>
+    <td>Warm sunset coral. Polished marble and golden sandstone. Brightest, warmest palette. Doors are pale gold &mdash; chrome-and-pearl shopfronts. Reads as "sunset boardwalk, safe, beautiful."</td>
+  </tr>
+  <tr>
+    <td><code>'gardens'</code></td>
+    <td>Lantern Gardens <code>"2"</code></td>
+    <td><span class="swatch" style="background:#4a8a78"></span><code>#4a8a78</code></td>
+    <td><span class="swatch" style="background:#2a6a58"></span><code>#2a6a58</code></td>
+    <td><span class="swatch" style="background:#88c8a8"></span><code>#88c8a8</code></td>
+    <td><span class="swatch" style="background:#2a4a48"></span><code>#2a4a48</code></td>
+    <td><span class="swatch" style="background:#3a5a50"></span><code>#3a5a50</code></td>
+    <td>Cool teal-jade. Lantern-lit garden stone. Doors are bright jade &mdash; the lanterns reflecting off polished wood. Maximum cool/warm contrast with the Promenade. Reads as "twilight garden, peaceful, mysterious."</td>
+  </tr>
+  <tr>
+    <td><code>'frontier'</code></td>
+    <td>Frontier Gate <code>"3"</code></td>
+    <td><span class="swatch" style="background:#7a5a8a"></span><code>#7a5a8a</code></td>
+    <td><span class="swatch" style="background:#5a3a6a"></span><code>#5a3a6a</code></td>
+    <td><span class="swatch" style="background:#c888b8"></span><code>#c888b8</code></td>
+    <td><span class="swatch" style="background:#4a2848"></span><code>#4a2848</code></td>
+    <td><span class="swatch" style="background:#3a2a3a"></span><code>#3a2a3a</code></td>
+    <td>Deep magenta-purple. Rough fortification stone with violet shadows. Doors are bright magenta-pink &mdash; neon sigils on heavy gates. Reads as "dangerous, martial, edge of the world."</td>
+  </tr>
+</table>
+
+<h3>Interior Biomes (depth 2) <span class="tag new">NEW</span></h3>
+
+<table>
+  <tr><th>Biome Key</th><th>Used For</th>
+    <th>wallLight</th><th>wallDark</th><th>door</th><th>ceil</th><th>floor</th><th>Design Rationale</th></tr>
+  <tr>
+    <td><code>'bazaar'</code></td>
+    <td>Coral Bazaar</td>
+    <td><span class="swatch" style="background:#c89068"></span><code>#c89068</code></td>
+    <td><span class="swatch" style="background:#a87048"></span><code>#a87048</code></td>
+    <td><span class="swatch" style="background:#e8b878"></span><code>#e8b878</code></td>
+    <td><span class="swatch" style="background:#3a1a0a"></span><code>#3a1a0a</code></td>
+    <td><span class="swatch" style="background:#c89868"></span><code>#c89868</code></td>
+    <td>Intensified Promenade warmth. Coral-and-gold market hall. Doors are bright gold. Shopping feels luxurious.</td>
+  </tr>
+  <tr>
+    <td><code>'guild'</code></td>
+    <td>Gleaner's Guild</td>
+    <td><span class="swatch" style="background:#4a7a7a"></span><code>#4a7a7a</code></td>
+    <td><span class="swatch" style="background:#2a5a5a"></span><code>#2a5a5a</code></td>
+    <td><span class="swatch" style="background:#78b8b8"></span><code>#78b8b8</code></td>
+    <td><span class="swatch" style="background:#0a1a1a"></span><code>#0a1a1a</code></td>
+    <td><span class="swatch" style="background:#2a4a4a"></span><code>#2a4a4a</code></td>
+    <td>Cool teal chrome. Professional. Clean lines. Doors are bright teal &mdash; chrome accents.</td>
+  </tr>
+  <tr>
+    <td><code>'inn'</code></td>
+    <td>Driftwood Inn</td>
+    <td><span class="swatch" style="background:#8a6a4a"></span><code>#8a6a4a</code></td>
+    <td><span class="swatch" style="background:#6a4a2a"></span><code>#6a4a2a</code></td>
+    <td><span class="swatch" style="background:#b09060"></span><code>#b09060</code></td>
+    <td><span class="swatch" style="background:#2a1a0a"></span><code>#2a1a0a</code></td>
+    <td><span class="swatch" style="background:#3a2a1a"></span><code>#3a2a1a</code></td>
+    <td>Warm amber driftwood. Fire-lit. Safe haven. Reuses tavern warmth palette.</td>
+  </tr>
+  <tr>
+    <td><code>'apothecary'</code></td>
+    <td>Moonpetal Apothecary</td>
+    <td><span class="swatch" style="background:#5a4a7a"></span><code>#5a4a7a</code></td>
+    <td><span class="swatch" style="background:#3a2a5a"></span><code>#3a2a5a</code></td>
+    <td><span class="swatch" style="background:#8a6aaa"></span><code>#8a6aaa</code></td>
+    <td><span class="swatch" style="background:#0a0a1a"></span><code>#0a0a1a</code></td>
+    <td><span class="swatch" style="background:#1a1a2a"></span><code>#1a1a2a</code></td>
+    <td>Cool blue-violet. Bottle glow. Mystical. Doors are bright purple &mdash; alchemical sigils.</td>
+  </tr>
+  <tr>
+    <td><code>'armory'</code></td>
+    <td>Ironhold Armory</td>
+    <td><span class="swatch" style="background:#6a4a5a"></span><code>#6a4a5a</code></td>
+    <td><span class="swatch" style="background:#4a2a3a"></span><code>#4a2a3a</code></td>
+    <td><span class="swatch" style="background:#a86888"></span><code>#a86888</code></td>
+    <td><span class="swatch" style="background:#1a0a1a"></span><code>#1a0a1a</code></td>
+    <td><span class="swatch" style="background:#2a1a2a"></span><code>#2a1a2a</code></td>
+    <td>Dark iron magenta. Forge glow through purple haze. Doors are hot pink &mdash; heated metal. Martial and intense.</td>
+  </tr>
+</table>
+
+<h3>Dungeon Biomes (depth 3) <span class="tag new">NEW &mdash; replaces old crypt/sewer/fortress/abyss</span></h3>
+
+<table>
+  <tr><th>Biome Key</th><th>Used For</th>
+    <th>wallLight</th><th>wallDark</th><th>door</th><th>ceil</th><th>floor</th><th>Mood</th></tr>
+  <tr>
+    <td><code>'cellar'</code></td>
+    <td>Coral Cellars</td>
+    <td><span class="swatch" style="background:#8a7058"></span><code>#8a7058</code></td>
+    <td><span class="swatch" style="background:#6a5038"></span><code>#6a5038</code></td>
+    <td><span class="swatch" style="background:#b89060"></span><code>#b89060</code></td>
+    <td><span class="swatch" style="background:#1a1008"></span><code>#1a1008</code></td>
+    <td><span class="swatch" style="background:#3a2a18"></span><code>#3a2a18</code></td>
+    <td>Amber-brown. Cracked storage vaults. Warm but dimmed &mdash; the Bazaar's palette gone dark.</td>
+  </tr>
+  <tr>
+    <td><code>'catacomb'</code></td>
+    <td>Lamplit Catacombs</td>
+    <td><span class="swatch" style="background:#4a6a5a"></span><code>#4a6a5a</code></td>
+    <td><span class="swatch" style="background:#2a4a3a"></span><code>#2a4a3a</code></td>
+    <td><span class="swatch" style="background:#6a9a7a"></span><code>#6a9a7a</code></td>
+    <td><span class="swatch" style="background:#0a1a0a"></span><code>#0a1a0a</code></td>
+    <td><span class="swatch" style="background:#2a3a2a"></span><code>#2a3a2a</code></td>
+    <td>Jade-green gloom. Ancient burial stone. The Gardens' teal gone subterranean and dark.</td>
+  </tr>
+  <tr>
+    <td><code>'depths'</code></td>
+    <td>Ironhold Depths</td>
+    <td><span class="swatch" style="background:#5a3a6a"></span><code>#5a3a6a</code></td>
+    <td><span class="swatch" style="background:#3a1a4a"></span><code>#3a1a4a</code></td>
+    <td><span class="swatch" style="background:#8a4a8a"></span><code>#8a4a8a</code></td>
+    <td><span class="swatch" style="background:#0a0418"></span><code>#0a0418</code></td>
+    <td><span class="swatch" style="background:#2a1a2a"></span><code>#2a1a2a</code></td>
+    <td>Deep void purple. Shattered fortification. The Frontier's magenta pushed into abyssal darkness. Boss dungeon.</td>
+  </tr>
+</table>
+
+<div class="rule">
+  <strong>Palette inheritance:</strong> Each dungeon's palette is a darkened, desaturated version of its parent district's palette. This creates a visual thread &mdash; the player subconsciously connects the Coral Cellars to the Promenade, the Catacombs to the Gardens, the Depths to the Frontier. "This beautiful place was wrecked."
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="enemies">&sect;12 &mdash; Enemy Populations by Biome</h2>
+
+<p>Enemies come in two categories: <strong>lootable corpses</strong> (serious fantasy names, placed as <code>CHEST</code> tiles, not combat encounters) and <strong>living remnants</strong> (the actual enemies, comedic half-creatures the Hero didn't finish off). All living remnants have an element for the RPS combat system.</p>
+
+<h3>Lootable Corpses (CHEST tiles &mdash; not enemies)</h3>
+
+<table>
+  <tr><th>Corpse Name</th><th>Dungeon</th><th>Loot</th><th>Flavor Text</th></tr>
+  <tr><td>Fallen Cellar Rat</td><td>Coral Cellars</td><td>1&ndash;3 gold, common card</td><td><em>"A rat the size of a dog. The Hero didn't even slow down."</em></td></tr>
+  <tr><td>Shattered Stone Sentinel</td><td>Coral Cellars</td><td>Element shard (<span class="flame">FLAME</span>), gold</td><td><em>"A golem, split clean in half. The cut is surgical."</em></td></tr>
+  <tr><td>Entombed Guardian</td><td>Lamplit Catacombs</td><td>Uncommon card, gold</td><td><em>"Ancient armor, still in formation. They didn't even get to draw their weapons."</em></td></tr>
+  <tr><td>Shattered Bone Golem</td><td>Lamplit Catacombs</td><td>Element shard (<span class="frost">FROST</span>), rare card</td><td><em>"Bones scattered across three rooms. Whatever this was, it was enormous."</em></td></tr>
+  <tr><td>Fallen Dragon Sentinel</td><td>Ironhold Depths</td><td>Dragon scale (quest item), rare card</td><td><em>"Dragon-forged armor. They were protectors, not monsters. The Hero didn't care."</em></td></tr>
+  <tr><td>Sundered Wyrm Knight</td><td>Ironhold Depths</td><td>Element shard (<span class="storm">STORM</span>), epic card</td><td><em>"A knight who served the dragons. Their oath was carved into their shield."</em></td></tr>
+</table>
+
+<h3>Living Remnants (actual enemies &mdash; comedic)</h3>
+
+<table>
+  <tr><th>Enemy</th><th>Element</th><th>Cards</th><th>Behavior</th><th>Dungeon</th></tr>
+  <tr>
+    <td><strong>Indignant Slime Puddle</strong></td>
+    <td><span class="flame">FLAME</span></td>
+    <td>Splatter (2 dmg)</td>
+    <td>1-card. Barely moves. Jiggles angrily when you approach. Tutorial enemy. <em>"It was a slime. Now it's a puddle. It's furious about the demotion."</em></td>
+    <td>Coral Cellars</td>
+  </tr>
+  <tr>
+    <td><strong>Disembodied Claw</strong></td>
+    <td><span class="flame">FLAME</span></td>
+    <td>Scratch (3 dmg) + Scuttle (dodge)</td>
+    <td>Fast, low HP. Skitters across the floor. Flees at half health. <em>"Five fingers, no body, no patience."</em></td>
+    <td>Coral Cellars</td>
+  </tr>
+  <tr>
+    <td><strong>Angry Torso</strong></td>
+    <td><span class="flame">FLAME</span></td>
+    <td>Headbutt (4 dmg) + Flail (2 dmg, hits twice)</td>
+    <td>Slow, tanky for tutorial. Can't chase. <em>"The top half of something that used to be scary. Now it just... flops."</em></td>
+    <td>Coral Cellars</td>
+  </tr>
+  <tr>
+    <td><strong>Floating Skull</strong></td>
+    <td><span class="frost">FROST</span></td>
+    <td>Bite (3 dmg) + Chatter (debuff: -1 dmg next turn, "it won't stop talking")</td>
+    <td>Chatty, annoying. Hovers. Provides comedic dialogue during combat. <em>"Still talking. The Hero took everything except its opinions."</em></td>
+    <td>Lamplit Catacombs</td>
+  </tr>
+  <tr>
+    <td><strong>Crawling Ribcage</strong></td>
+    <td><span class="frost">FROST</span></td>
+    <td>Bone Snap (4 dmg) + Cage Trap (bind: skip 1 turn)</td>
+    <td>Slow approach, nasty bind. <em>"It drags itself toward you with grim determination. Respect the hustle."</em></td>
+    <td>Lamplit Catacombs</td>
+  </tr>
+  <tr>
+    <td><strong>Leg With Attitude</strong></td>
+    <td><span class="storm">STORM</span></td>
+    <td>Kick (5 dmg) + Stomp (3 dmg, stun)</td>
+    <td>Hops around aggressively. Surprisingly dangerous. <em>"Just a leg. Somehow the angriest thing in this dungeon."</em></td>
+    <td>Lamplit Catacombs</td>
+  </tr>
+  <tr>
+    <td><strong>Half-Dragon Hatchling</strong></td>
+    <td><span class="flame">FLAME</span></td>
+    <td>Ember Spit (5 dmg, <span class="flame">FLAME</span>) + Whimper (heals 2 HP)</td>
+    <td>Not funny &mdash; sad. A baby dragon, wounded by the Hero. Doesn't want to fight. Flees at 50% HP. Killing it feels bad (by design). <em>"It looks at you with one good eye. It's afraid."</em></td>
+    <td>Ironhold Depths</td>
+  </tr>
+  <tr>
+    <td><strong>Possessed Sword</strong></td>
+    <td><span class="storm">STORM</span></td>
+    <td>Lightning Slash (6 dmg, <span class="storm">STORM</span>) + Parry (block)</td>
+    <td>A weapon the Hero dropped, now animated by residual magic. Fast, aggressive. <em>"The Hero broke so many things that even his weapons are angry."</em></td>
+    <td>Ironhold Depths</td>
+  </tr>
+  <tr>
+    <td><strong>Ruined Golem Core</strong></td>
+    <td><span class="frost">FROST</span></td>
+    <td>Frost Pulse (5 dmg, <span class="frost">FROST</span>) + Reconstruct (heals 3 HP)</td>
+    <td>Stationary. The core of a destroyed golem, still pulsing. Area denial. <em>"It's trying to rebuild itself. It's been trying for a while."</em></td>
+    <td>Ironhold Depths</td>
+  </tr>
+  <tr>
+    <td><strong>Stumbling Amalgam</strong></td>
+    <td>Mixed (random per encounter)</td>
+    <td>Flail (4 dmg, random element) + Absorb (steals 2 HP)</td>
+    <td>A mass of leftover parts stuck together. Element changes each encounter. Mini-boss tier. <em>"Several things the Hero dismembered have found each other and formed a support group."</em></td>
+    <td>Ironhold Depths</td>
+  </tr>
+</table>
+
+<h3>Enemy Density by Dungeon</h3>
+
+<table>
+  <tr><th>Dungeon</th><th>Remnants</th><th>Corpse Loot</th><th>Total Density</th></tr>
+  <tr><td>Coral Cellars</td><td>3&ndash;4 (Slime, Claw, Torso)</td><td>2&ndash;3 corpses</td><td>0.08 (sparse &mdash; tutorial)</td></tr>
+  <tr><td>Lamplit Catacombs</td><td>6&ndash;8 (Skull, Ribcage, Leg)</td><td>4&ndash;5 corpses</td><td>0.15 (moderate)</td></tr>
+  <tr><td>Ironhold Depths</td><td>8&ndash;12 (Hatchling, Sword, Core, Amalgam)</td><td>5&ndash;7 corpses</td><td>0.22 (heavy, plus boss)</td></tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="quest-items">&sect;13 &mdash; Quest Items &amp; Narrative Gating</h2>
+
+<p>Quest items occupy the inventory and gate progression. They are placed as <code>CHEST</code> tiles with scripted contents (distinct from random loot corpses).</p>
+
+<table>
+  <tr><th>Item</th><th>Floor Found</th><th>Mechanic</th><th>Gates</th></tr>
+  <tr>
+    <td>Starter Deck (5 combat cards, mixed elements)</td>
+    <td><code>"1.2"</code> Gleaner's Guild</td>
+    <td>Given by Guild Master NPC. Contains 2 <span class="frost">FROST</span>, 2 <span class="storm">STORM</span>, 1 neutral. Teaches element system.</td>
+    <td>Cannot enter first dungeon without cards</td>
+  </tr>
+  <tr>
+    <td>Gleaner's Lantern</td>
+    <td><code>"1.1.1"</code> Coral Cellars</td>
+    <td><code>TORCH</code> light source (radius 6). Found near the opening sequence area &mdash; the Hero dropped it.</td>
+    <td>Required for darker dungeons</td>
+  </tr>
+  <tr>
+    <td>Dragon Scale Fragment</td>
+    <td><code>"1.1.1"</code> Coral Cellars</td>
+    <td>Lore item. Mosaic on the wall. Interacting reveals text about "the Scaled Ones."</td>
+    <td>Sets <code>dragon_clue_1</code>. NPC dialogue branches.</td>
+  </tr>
+  <tr>
+    <td>Catacomb Inscription Rubbing</td>
+    <td><code>"2.1.1"</code> Lamplit Catacombs</td>
+    <td>Lore item. Ancient text praising dragons as protectors of the dead.</td>
+    <td>Sets <code>dragon_clue_2</code>. Inn NPCs reveal more about the Hero's mission.</td>
+  </tr>
+  <tr>
+    <td>Element Prism</td>
+    <td><code>"2.2"</code> Moonpetal Apothecary</td>
+    <td>Purchased item. Allows the player to see enemy elements at longer range (QoL upgrade).</td>
+    <td>Optional. Makes Ironhold Depths easier.</td>
+  </tr>
+  <tr>
+    <td>Dragon's Last Words</td>
+    <td><code>"3.1.1"</code> Ironhold Depths</td>
+    <td>Lore item. A dying dragon's message scratched into the sanctuary wall. Reveals the full truth: dragons protected this town. The Hero was sent to destroy them by an unseen force.</td>
+    <td>Sets <code>dragon_clue_3</code> + <code>truth_revealed</code>. Unlocks dialogue option with the Hero in boss fight (post-jam: peaceful resolution path).</td>
+  </tr>
+  <tr>
+    <td>Dragon Breath Card</td>
+    <td><code>"3.1.1"</code> Ironhold Depths (boss room)</td>
+    <td>Temporary card. Given by dying dragon if <code>truth_revealed</code> is set. <span class="flame">FLAME</span>, 15 base damage. Single use. Tips the Hero fight heavily in your favor.</td>
+    <td>Enables Boss Ending B (dragon team-up). See <a href="#bosses">&sect;9</a>.</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="asset-map">&sect;14 &mdash; EyesOnly Asset Map (What We Reuse)</h2>
+
+<p>These are the EyesOnly source files that the DCgamejam2026 engine modules were extracted from, and the data files we import for content.</p>
+
+<h3>Already Extracted into Repo <span class="tag reuse">IN REPO</span></h3>
+<table>
+  <tr><th>Repo Module</th><th>EyesOnly Source</th><th>Status</th></tr>
+  <tr><td><code>engine/grid-gen.js</code></td><td><code>public/js/floor-gen-core.js</code></td><td>BSP + A*. Stripped ctx coupling.</td></tr>
+  <tr><td><code>engine/door-contracts.js</code></td><td><code>public/js/door-contract-system.js</code></td><td>Near-verbatim.</td></tr>
+  <tr><td><code>engine/door-contract-audio.js</code></td><td><code>public/js/door-contract-audio.js</code></td><td>Transition sound table.</td></tr>
+  <tr><td><code>engine/enemy-ai.js</code></td><td><code>public/js/enemy-ai-system.js</code></td><td>Patrol, awareness, sight cones.</td></tr>
+  <tr><td><code>engine/combat-engine.js</code></td><td><code>public/js/str-combat-engine.js</code></td><td>STR simultaneous resolution. <strong>Extend with element multiplier.</strong></td></tr>
+  <tr><td><code>engine/card-system.js</code></td><td><code>public/js/card-system.js</code></td><td>Deck/hand management. <strong>Add element field to cards.</strong></td></tr>
+  <tr><td><code>engine/synergy-engine.js</code></td><td><code>public/js/synergy-engine.js</code></td><td>Tag-based combo chains. <strong>Add Elemental Surge synergy.</strong></td></tr>
+  <tr><td><code>engine/loot-tables.js</code></td><td><code>public/js/loot-table-manager.js</code></td><td>Tiered drop tables.</td></tr>
+  <tr><td><code>engine/lighting.js</code></td><td><code>public/js/lighting-system.js</code></td><td>Per-tile light map.</td></tr>
+  <tr><td><code>engine/audio-system.js</code></td><td><code>public/js/audio-system.js</code></td><td>Web Audio. Manifest loader.</td></tr>
+  <tr><td><code>engine/spatial-contract.js</code></td><td>Original</td><td>Three-tier depth contracts.</td></tr>
+  <tr><td><code>engine/raycaster.js</code></td><td>Original</td><td>DDA wall casting + fog models.</td></tr>
+</table>
+
+<h3>EyesOnly Data to Import <span class="tag modify">IMPORT &amp; RETHEME</span></h3>
+<table>
+  <tr><th>Data</th><th>EyesOnly Path</th><th>Repo Destination</th><th>Transformation</th></tr>
+  <tr><td>Enemy catalog</td><td><code>public/data/gone-rogue/enemy-catalog.json</code></td><td><code>data/enemies.json</code></td><td>Retheme for fantasy remnants. Add <code>element</code> field to every enemy. Keep synergy tags + STR schema.</td></tr>
+  <tr><td>Items</td><td><code>public/data/gone-rogue/items.json</code></td><td><code>data/items.json</code></td><td>Retheme for fantasy. Potions, element shards, dragon lore items. Keep rarity/synergy schema.</td></tr>
+  <tr><td>Cards</td><td><code>public/data/gone-rogue/gr_cards.schema.json</code></td><td><code>data/cards.json</code></td><td>Retheme ~15 core cards. Add <code>element</code> field (<code>'flame'</code>/<code>'frost'</code>/<code>'storm'</code>/<code>'neutral'</code>). Balance for RPS system.</td></tr>
+  <tr><td>Lighting config</td><td><code>public/data/gone-rogue/lighting-config.json</code></td><td><code>data/lighting.json</code></td><td>Retheme: FLASHLIGHT&rarr;GLEANER_LANTERN, LIGHTER&rarr;CANDLE, NV&rarr;DRAGON_SIGHT.</td></tr>
+</table>
+
+<h3>NOT Reused</h3>
+<ul>
+  <li><code>public/data/gone-rogue/boss-biomes.json</code> &mdash; frogger/skifree mechanics are top-down only</li>
+  <li><code>public/data/gone-rogue/biomes.json</code> outdoor biome definitions &mdash; replaced by district-specific palettes above</li>
+  <li><code>public/data/gone-rogue/interior-biomes.json</code> &mdash; props/tiles are 2D top-down; the raycaster uses wall colors not emoji scatter</li>
+  <li><code>public/data/streets.json</code> &mdash; Sandpoint narrative replaced by Coralshore</li>
+  <li><code>public/data/businesses.json</code> &mdash; real-world businesses replaced by fantasy shops</li>
+  <li><code>public/data/events.json</code> &mdash; espionage quest flags replaced by dragon-discovery flags</li>
+</ul>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="new-work">&sect;15 &mdash; New Work for the Jam</h2>
+
+<table>
+  <tr><th>Module</th><th>Layer</th><th>Purpose</th><th>Priority</th></tr>
+  <tr>
+    <td><code>engine/district-templates.js</code></td>
+    <td>1</td>
+    <td>Hand-authored grid templates for 3 exterior districts. Loads from <code>data/districts/</code>. Returns grid arrays with <code>DOOR</code> tiles at district exits and building entrances.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>engine/interior-templates.js</code></td>
+    <td>1</td>
+    <td>Hand-authored grid templates for 5 building interiors. NPC placement. <code>STAIRS_DN</code> placement for buildings with dungeons beneath.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>engine/element-system.js</code></td>
+    <td>0</td>
+    <td>RPS element logic. <code>getElementMultiplier(atk, def)</code> returns 2.0/1.0/0.5. Element constants. Elemental Surge detection. <strong>Zero dependencies &mdash; Layer 0.</strong></td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>engine/quest-tracker.js</code></td>
+    <td>1</td>
+    <td>Boolean flags for quest events: <code>opening_complete</code>, <code>dragon_clue_1</code>, <code>dragon_clue_2</code>, <code>dragon_clue_3</code>, <code>truth_revealed</code>, <code>hero_defeated</code>. Checked by <code>FloorManager</code> and NPC dialogue.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>engine/npc-system.js</code></td>
+    <td>1</td>
+    <td>NPC entities in interior templates. Dialogue trees gated by quest flags. Guild Master, Innkeeper, Apothecary, Armorer.</td>
+    <td>Day 2</td>
+  </tr>
+  <tr>
+    <td><code>engine/opening-sequence.js</code></td>
+    <td>3</td>
+    <td>Scripted Hero silhouette sequence for first entry to Coral Cellars. Text overlay minimum, visual overlay stretch goal. Sets <code>opening_complete</code> flag.</td>
+    <td>Day 2</td>
+  </tr>
+  <tr>
+    <td>Extend <code>CombatEngine</code></td>
+    <td>&mdash;</td>
+    <td>Integrate <code>ElementSystem.getElementMultiplier()</code> into damage calculation. Add multiplier popup to HUD. Wire enemy element from <code>enemies.json</code>.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td>Extend <code>CardSystem</code></td>
+    <td>&mdash;</td>
+    <td>Add <code>element</code> field to card schema. Render element icon + colored border in HUD hand display.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td>Extend <code>FloorManager</code></td>
+    <td>&mdash;</td>
+    <td>Add depth-aware floor ID parsing. Route depth-1 to <code>district-templates.js</code>, depth-2 to <code>interior-templates.js</code>, depth-3 to <code>GridGen</code>. Add all new biome palette entries from <a href="#biome-palette">&sect;11</a>.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td>Extend <code>FloorTransition</code></td>
+    <td>&mdash;</td>
+    <td>Handle <code>DOOR</code> tiles (horizontal transition between depth-1 floors) in addition to <code>STAIRS_DN</code>/<code>STAIRS_UP</code> (vertical).</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>data/districts/*.json</code></td>
+    <td>&mdash;</td>
+    <td>3 grid template files. Each: <code>{ grid[][], doors: [{x,y,targetFloorId}], npcs: [{x,y,id}], enemySpawns: [{x,y,deck}] }</code></td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>data/enemies.json</code></td>
+    <td>&mdash;</td>
+    <td>All remnant enemy definitions with element fields. ~10 enemies total.</td>
+    <td>Day 1</td>
+  </tr>
+  <tr>
+    <td><code>data/cards.json</code></td>
+    <td>&mdash;</td>
+    <td>~15 combat cards with element fields. Starter deck + dungeon drops + shop purchases.</td>
+    <td>Day 1</td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="wiring">&sect;16 &mdash; Module Wiring &amp; Data Flow</h2>
+
+<pre>
+Player presses F on DOOR tile (exterior)
+  |
+  v
+FloorTransition.tryInteractDoor(fx, fy)       &lt;-- extend existing module
+  |-- reads door.targetFloorId from template
+  |-- calls DoorContracts.setContract(exitPos, 'advance')
+  |-- calls DoorContractAudio.getTransitionSounds("1", "2")
+  |-- calls FloorManager.setFloorNum() with parsed floor ID
+  |-- FloorManager routes by depth:
+  |     depth 1 --&gt; DistrictTemplates.load(floorId)
+  |     depth 2 --&gt; InteriorTemplates.load(floorId)
+  |     depth 3 --&gt; GridGen.generate(contract params)
+  |-- SpatialContract selected by depth:
+  |     depth 1 --&gt; exterior()
+  |     depth 2 --&gt; interior()
+  |     depth 3 --&gt; nestedDungeon()
+  |-- BiomeColors selected by biome key:
+  |     "1" --&gt; 'promenade', "2" --&gt; 'gardens', "3" --&gt; 'frontier'
+  |     "1.1" --&gt; 'bazaar', "1.2" --&gt; 'guild',
+  |     "2.1" --&gt; 'inn', "2.2" --&gt; 'apothecary',
+  |     "3.1" --&gt; 'armory'
+  |     "1.1.1" --&gt; 'cellar', "2.1.1" --&gt; 'catacomb', "3.1.1" --&gt; 'depths'
+  |-- Raycaster.setContract(contract, rooms)
+  |-- Raycaster.setBiomeColors(palette)
+  v
+Player spawns near target door on new floor
+  (DoorContracts.applyContract handles placement)
+
+
+Player enters Coral Cellars for first time (floorId "1.1.1")
+  |
+  v
+FloorManager checks QuestTracker.get('opening_complete')
+  |-- false: OpeningSequence.play()
+  |     |-- text overlay / silhouette cutscene
+  |     |-- Hero visible ahead, slashes enemies
+  |     |-- Hero exits through far door
+  |     |-- QuestTracker.set('opening_complete', true)
+  |     |-- return control to player
+  |-- true: normal spawn, no cutscene
+
+
+Combat with element system:
+  |
+  v
+CombatBridge.startCombat(enemy)
+  |-- reads enemy.element from enemies.json
+  |-- CombatEngine.start(enemy, player, { onEnd })
+  |-- CardSystem.drawHand()
+  |-- Player plays card:
+  |     |-- attackerElement = card.element
+  |     |-- defenderElement = enemy.element
+  |     |-- multiplier = ElementSystem.getMultiplier(atk, def)
+  |     |-- damage = baseDamage * multiplier
+  |     |-- HUD shows "EFFECTIVE! (2x)" or "RESISTED (0.5x)"
+  |-- SynergyEngine checks for Elemental Surge:
+  |     |-- 2+ same-element cards played this combat?
+  |     |-- yes: +25% damage on second same-element card
+  v
+Normal STR card combat in first person
+
+
+Player walks through BOSS_DOOR tile (depth 3)
+  |
+  v
+CombatBridge.startCombat(heroEnemy)
+  |-- CombatEngine.start(hero, player, { onEnd })
+  |-- CardSystem.drawHand()
+  |-- HUD renders boss chamber: taller walls (1.8x)
+  |-- Raycaster reads chamberOverrides for wallHeight
+  |-- Hero uses ALL THREE elements across his deck
+  |-- Player must read + counter each card's element
+  |-- If QuestTracker.get('truth_revealed'):
+  |     |-- Dragon Breath card added to hand (single use, 15 dmg)
+  v
+Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
+</pre>
+
+<div class="warn">
+  <strong>Ctx Snapshot Pattern Warning.</strong> If extracting more modules from EyesOnly's monolith, beware the stale-snapshot bug: <code>grid: _grid</code> captures by value. Use ES5 getters (<code>get grid() { return _grid; }</code>) for mutable state. This caused 6+ runtime crashes during the EyesOnly Phase 23&ndash;26 extraction.
+</div>
+
+<hr>
+
+<p style="color:var(--dim); font-size:.8em; text-align:center; margin-top:2rem;">
+  Dungeon Gleaner &middot; DC Jam 2026 &middot; Biome Plan v4.0 (Day 1 Designer Guide) &middot; Repo: humiliati/DCgamejam2026
+  <br>Themes: Dragons &middot; Retrofuturism &middot; Rock-Paper-Scissors &middot; Cleaning Up the Hero's Mess
+</p>
+
+</body>
+</html>

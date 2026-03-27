@@ -99,14 +99,70 @@ var GridGen = (function () {
       }
     }
 
+    // ── Place hazards ──
+    // Hazard density scales with floor depth. Biome determines type mix.
+    // Adapted from EyesOnly's ground-effects placement logic.
+    var floor = opts.floor || 1;
+    var hazardBudget = Math.min(8, Math.floor(floor * 1.5) + SeededRNG.randInt(0, 2));
+    var biome = opts.biome || 'cellar';
+    var hazardPool = _getHazardPool(biome);
+
+    for (var hz = 0; hz < hazardBudget; hz++) {
+      var hzRoom = rooms[SeededRNG.randInt(1, rooms.length - 1)];
+      if (!hzRoom) continue;
+      var hx = hzRoom.x + SeededRNG.randInt(1, hzRoom.w - 2);
+      var hy = hzRoom.y + SeededRNG.randInt(1, hzRoom.h - 2);
+      if (hx > 0 && hx < W - 1 && hy > 0 && hy < H - 1 && grid[hy][hx] === TILES.EMPTY) {
+        grid[hy][hx] = SeededRNG.pick(hazardPool);
+      }
+    }
+
+    // ── Place bonfire ──
+    // One bonfire per floor, in a mid-range room (not first, not last).
+    // Gives the player a rest/respawn point before deeper hazards.
+    if (rooms.length >= 3) {
+      var bfIdx = Math.floor(rooms.length / 2);
+      var bfRoom = rooms[bfIdx];
+      var bfx = bfRoom.cx;
+      var bfy = bfRoom.cy;
+      if (grid[bfy][bfx] === TILES.EMPTY) {
+        grid[bfy][bfx] = TILES.BONFIRE;
+      }
+    }
+
+    // ── Place corpses (Hero's mess — pre-placed salvage) ──
+    if (typeof Salvage !== 'undefined') {
+      Salvage.placeCorpses(grid, rooms, W, H, floor);
+    }
+
     return {
       grid: grid,
       rooms: rooms,
       doors: doors,
       gridW: W,
       gridH: H,
-      biome: opts.biome || 'crypt'
+      biome: opts.biome || 'cellar'
     };
+  }
+
+  // ── Hazard pool by biome ──
+  // Each biome favors different hazard types, matching the environment.
+  // Adapted from EyesOnly's per-floor ground effect distributions.
+
+  function _getHazardPool(biome) {
+    switch (biome) {
+      case 'cellar':
+        // Old cellars: traps and spikes in damp stone tunnels
+        return [TILES.TRAP, TILES.TRAP, TILES.SPIKES];
+      case 'foundry':
+        // Foundry works: fire and spikes among rusted machinery
+        return [TILES.FIRE, TILES.FIRE, TILES.SPIKES];
+      case 'sealab':
+        // Sealab: poison (chemical spills) and traps (security)
+        return [TILES.POISON, TILES.POISON, TILES.TRAP, TILES.SPIKES];
+      default:
+        return [TILES.TRAP];
+    }
   }
 
   // ── BSP tree room generation ──

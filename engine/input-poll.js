@@ -26,6 +26,7 @@ var InputPoll = (function () {
   var _onAscend = null;
   var _onMapToggle = null;
   var _onCard = null;
+  var _onFlee = null;
 
   // ── Blocked predicate ──────────────────────────────────────────────
   // Returns true if input should be ignored (combat, transition, etc.)
@@ -42,6 +43,7 @@ var InputPoll = (function () {
     _onAscend = cbs.onAscend || null;
     _onMapToggle = cbs.onMapToggle || null;
     _onCard = cbs.onCard || null;
+    _onFlee = cbs.onFlee || null;
     _isBlocked = cbs.isBlocked || function () { return false; };
   }
 
@@ -55,8 +57,23 @@ var InputPoll = (function () {
 
   /**
    * Poll all input. Call once per frame from render loop.
+   *
+   * Combat actions (cards, flee) are polled regardless of isBlocked,
+   * because combat blocks movement but cards/flee are combat inputs.
+   * Each callback is responsible for its own phase gating.
    */
   function poll() {
+    // ── Combat actions — always polled (gated internally by phase) ──
+    if (_onCard) {
+      for (var c = 0; c < 5; c++) {
+        if (InputManager.downEdge('card_' + c)) {
+          _onCard(c);
+        }
+      }
+    }
+    if (InputManager.downEdge('flee') && _onFlee) _onFlee();
+
+    // ── Movement + exploration — blocked during combat/transition ──
     if (_isBlocked && _isBlocked()) return;
 
     var now = performance.now();
@@ -92,15 +109,6 @@ var InputPoll = (function () {
     if (InputManager.downEdge('descend')  && _onDescend)    _onDescend();
     if (InputManager.downEdge('ascend')   && _onAscend)     _onAscend();
     if (InputManager.downEdge('map_toggle') && _onMapToggle) _onMapToggle();
-
-    // ── Card keys ──
-    if (_onCard) {
-      for (var c = 0; c < 5; c++) {
-        if (InputManager.downEdge('card_' + c)) {
-          _onCard(c);
-        }
-      }
-    }
   }
 
   // ── Public API ─────────────────────────────────────────────────────

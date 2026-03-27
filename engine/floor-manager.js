@@ -51,24 +51,42 @@ var FloorManager = (function () {
   function getEnemies()        { return _enemies; }
   function setEnemies(e)       { _enemies = e; }
 
+  /**
+   * Get the depth level of the current floor ID.
+   *
+   * EyesOnly hierarchy:
+   *   "N"     → depth 1 (exterior / overworld)
+   *   "N.N"   → depth 2 (interior / building)
+   *   "N.N.N" → depth 3 (nested proc-gen dungeon)
+   *
+   * Environmental death rules:
+   *   Depth 1-2 → non-lethal (bonfire respawn + penalties)
+   *   Depth 3   → permadeath (lethal, game over)
+   *
+   * @returns {number} 1, 2, or 3
+   */
+  function getFloorDepth() {
+    var id = _currentFloorId || floorId(_floorNum);
+    return id.split('.').length;
+  }
+
   // ── Biome resolution ───────────────────────────────────────────────
 
   function getBiome(floor) {
     floor = floor || _floorNum;
-    if (floor <= 2) return 'crypt';
-    if (floor <= 5) return 'sewer';
-    if (floor <= 8) return 'fortress';
-    return 'abyss';
+    if (floor <= 2) return 'cellar';    // Old Cellars — damp stone, amber lanterns
+    if (floor <= 5) return 'foundry';   // Foundry Works — rusted iron, furnace glow
+    if (floor <= 8) return 'sealab';    // Sealab — clean tile, fluorescent
+    return 'sealab';                    // Deep sealab for floors 9+
   }
 
   function getBiomeColors(floor) {
     var biomes = {
-      crypt:    { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#b08040', doorDark: '#906830', ceil: '#1a1a22', floor: '#3a3a3a' },
-      sewer:    { wallLight: '#5a7a5a', wallDark: '#3a5a3a', door: '#8a8a4a', doorDark: '#6a6a3a', ceil: '#1a2a1a', floor: '#2a3a2a' },
-      fortress: { wallLight: '#7a7a8a', wallDark: '#5a5a6a', door: '#aa6a3a', doorDark: '#8a5a2a', ceil: '#1a1a2a', floor: '#3a3a4a' },
-      abyss:    { wallLight: '#5a4a6a', wallDark: '#3a2a4a', door: '#8a4a8a', doorDark: '#6a3a6a', ceil: '#0a0a1a', floor: '#2a1a2a' }
+      cellar:   { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#b08040', doorDark: '#906830', ceil: '#1a1a22', floor: '#3a3a3a' },
+      foundry:  { wallLight: '#7a5a4a', wallDark: '#5a3a2a', door: '#aa6a3a', doorDark: '#8a5a2a', ceil: '#1a1210', floor: '#3a2a2a' },
+      sealab:   { wallLight: '#6a7a8a', wallDark: '#4a5a6a', door: '#6a8aaa', doorDark: '#4a6a8a', ceil: '#0a1a2a', floor: '#2a3a4a' }
     };
-    return biomes[getBiome(floor)] || biomes.crypt;
+    return biomes[getBiome(floor)] || biomes.cellar;
   }
 
   // ── Spatial contract per floor ─────────────────────────────────────
@@ -261,6 +279,7 @@ var FloorManager = (function () {
     getBiomeColors: getBiomeColors,
     getFloorContract: getFloorContract,
     getFloorLabel: getFloorLabel,
+    getFloorDepth: getFloorDepth,
 
     // Cache
     clearCache: clearCache

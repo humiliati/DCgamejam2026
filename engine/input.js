@@ -7,7 +7,7 @@
  *   - Magic Remote (post-jam webOS port)
  *
  * Actions: step_forward, step_back, turn_left, turn_right, strafe_left, strafe_right,
- *          interact, inventory, card_0..card_4, map_toggle, pause
+ *          interact, inventory, card_0..card_4, map_toggle, pause, flee
  */
 var InputManager = (function () {
   'use strict';
@@ -41,7 +41,8 @@ var InputManager = (function () {
     'Digit4':     'card_3',
     'Digit5':     'card_4',
     'Period':     'descend',
-    'Comma':      'ascend'
+    'Comma':      'ascend',
+    'KeyF':       'flee'
   };
 
   function init(customKeyMap) {

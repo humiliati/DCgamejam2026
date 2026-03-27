@@ -3,15 +3,24 @@
  * Extracted from EyesOnly's DoorContractSystem (nearly verbatim).
  *
  * Canonical contracts:
- *   advance  → spawn near STAIRS_UP on new floor, guardrails ~5 steps
- *   retreat  → spawn near STAIRS_DN on previous floor, guardrails ~5 steps
+ *   advance  → spawn near STAIRS_UP (or DOOR_BACK/DOOR_EXIT) on new floor
+ *   retreat  → spawn near STAIRS_DN (or DOOR/BOSS_DOOR) on previous floor
+ *
+ * When the exit tile is a DOOR type, applyContract() first scans the
+ * target floor grid for the complementary door tile before falling
+ * back to stairs. This allows building-style transitions (DOOR →
+ * DOOR_EXIT) to spawn the player near the correct exit.
+ *
+ * Guardrail protection (~5 steps) prevents re-triggering the door
+ * the player just arrived through.
  */
 var DoorContracts = (function () {
   'use strict';
 
   var _lastExitPos = null;
-  var _spawnDir = null; // 'advance' | 'retreat' | null
-  var _protect = null;  // { x, y, stepsRemaining }
+  var _spawnDir = null;  // 'advance' | 'retreat' | null
+  var _exitTile = null;  // TILES constant of the door/stair used to exit
+  var _protect = null;   // { x, y, stepsRemaining }
 
   var GUARDRAIL_STEPS = 5;
 
@@ -20,14 +29,16 @@ var DoorContracts = (function () {
   function getProtect()       { return _protect; }
   function clearProtect()     { _protect = null; }
 
-  function setContract(exitPos, direction) {
+  function setContract(exitPos, direction, exitTile) {
     _lastExitPos = exitPos;
     _spawnDir = direction;
+    _exitTile = exitTile || null;
   }
 
   function resetAll() {
     _lastExitPos = null;
     _spawnDir = null;
+    _exitTile = null;
     _protect = null;
   }
 
@@ -57,8 +68,48 @@ var DoorContracts = (function () {
   }
 
   /**
+   * Resolve door-based spawn target on the target floor.
+   * When the player exits through a DOOR tile, look for the complementary
+   * door tile on the new floor (DOOR_BACK/DOOR_EXIT for advance, DOOR for retreat).
+   *
+   * Also checks doors.doorEntry / doors.doorExit if GridGen provides them.
+   *
+   * @returns {{ x: number, y: number } | null}
+   */
+  function _resolveDoorTarget(grid, W, H, doors) {
+    if (!_exitTile) return null;
+
+    // Determine which tile types to search for on the target floor
+    var searchTiles;
+    if (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR) {
+      // Entered through door: look for exit / back door to spawn near
+      if (doors.doorExit) return doors.doorExit;
+      if (doors.doorBack) return doors.doorBack;
+      searchTiles = [TILES.DOOR_BACK, TILES.DOOR_EXIT];
+    } else if (_exitTile === TILES.DOOR_BACK || _exitTile === TILES.DOOR_EXIT) {
+      // Exited through back/exit door: look for entry door to spawn near
+      if (doors.doorEntry) return doors.doorEntry;
+      searchTiles = [TILES.DOOR, TILES.BOSS_DOOR];
+    } else {
+      return null; // Not a door tile
+    }
+
+    // Grid scan for matching door tile
+    for (var y = 1; y < H - 1; y++) {
+      for (var x = 1; x < W - 1; x++) {
+        var t = grid[y][x];
+        for (var s = 0; s < searchTiles.length; s++) {
+          if (t === searchTiles[s]) return { x: x, y: y };
+        }
+      }
+    }
+
+    return null; // No matching door found — caller falls back to stairs
+  }
+
+  /**
    * Apply the current contract to a generated floor.
-   * Places the player near the appropriate staircase.
+   * Places the player near the appropriate staircase or door.
    *
    * @param {Object} floorData - from GridGen.generate()
    * @returns {Object} { x, y, dir } player spawn position and facing
@@ -71,7 +122,15 @@ var DoorContracts = (function () {
 
     var targetDoor, avoidDoor;
 
-    if (_spawnDir === 'advance') {
+    // If exited through a door tile, look for the complementary door
+    // on the target floor before falling back to stairs.
+    var doorTarget = _resolveDoorTarget(grid, W, H, doors);
+
+    if (doorTarget) {
+      targetDoor = doorTarget;
+      // Avoid the opposite transition point
+      avoidDoor = _spawnDir === 'advance' ? doors.stairsDn : doors.stairsUp;
+    } else if (_spawnDir === 'advance') {
       // Going deeper: spawn near stairs up (the way back)
       targetDoor = doors.stairsUp;
       avoidDoor = doors.stairsDn;
@@ -115,6 +174,7 @@ var DoorContracts = (function () {
     // Clear contract (one-shot)
     _lastExitPos = null;
     _spawnDir = null;
+    _exitTile = null;
 
     return { x: spawn.x, y: spawn.y, dir: dir };
   }

@@ -4,9 +4,13 @@ This file tells Claude (and future contributors) how to work in this codebase.
 
 ## Project identity
 
-First-person grid-based dungeon crawler. Jam entry for DC Jam 2026 (March 27 – April 5, 2026). Post-jam target: LG Content Store webOS TV app driven by Magic Remote.
+**Dungeon Gleaner** — first-person dungeon crawler. You're a Nez-Ha (scavenger-cleaner) following in a legendary Hero's destructive wake through a retrofuturistic fantasy boardwalk town. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (Flame/Frost/Storm combat triangle), Cleaning Up the Hero's Mess.
 
-Deadline: vertical slice playable by April 5. Post-jam polish and webOS packaging are separate passes.
+Jam entry for DC Jam 2026 (March 27 – April 5, 2026). Post-jam target: LG Content Store webOS TV app driven by Magic Remote.
+
+Deadline: playable by April 5. Post-jam polish and webOS packaging are separate passes.
+
+The living design document is `docs/Biome Plan.html` (v4). It defines the world structure, biome palettes, enemy populations, quest items, and module wiring.
 
 ## Hard rules
 
@@ -42,15 +46,16 @@ Depth determines: fog model (FADE/CLAMP/DARKNESS), wall height, render distance,
 
 ## Module architecture
 
-27 modules in `engine/`, organized in 5 load layers:
+47 modules in `engine/`, organized in 6 load layers:
 
 | Layer | Purpose | Modules |
 |---|---|---|
-| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `AudioSystem` |
-| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract` |
-| 2 | Rendering | `Raycaster`, `Minimap`, `HUD`, `GameLoop` |
-| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `CombatBridge` |
+| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem` |
+| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage` |
+| 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
+| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
 | 4 | Orchestrator | `Game` |
+| 5 | Data | `data/strings/en.js` |
 
 `Game` (Layer 4) is a thin orchestrator. It owns init/tick/render and wires callbacks between modules. It contains no game logic.
 
@@ -71,6 +76,8 @@ Depth determines: fog model (FADE/CLAMP/DARKNESS), wall height, render distance,
 **DoorContractAudio** — Pure data module. Transition table keyed by `"srcDepth:tgtDepth"` returns a sound sequence array. Three-phase timing: DoorOpen (delay 0), Ascend/Descend (delay 250ms), DoorClose (delay 600ms). The pre-fade delay (350ms) ensures the player hears the door creak before the screen fades.
 
 **FloorTransition** — State machine that orchestrates: cancel movement → play door SFX → pre-fade delay → show overlay → generate floor → fade in. Manages the Minimap floor cache stack (push on descend, pop on ascend).
+
+**TextureAtlas** — Procedural texture generation and caching for wall rendering. Generates 64×64 pixel textures at init (brick, stone, wood, concrete, iron, pillar patterns). Each texture is an offscreen canvas + raw pixel data. SpatialContract maps tile types to texture IDs; the raycaster samples 1px-wide columns via `ctx.drawImage()`. When `getTexture()` returns null, the raycaster falls back to flat color (backward compatible). See `docs/TEXTURE_ROADMAP.md` for the 3-layer visual upgrade plan.
 
 **Minimap** — 160x160 canvas with per-floor fog-of-war caching. `_floorCache` maps floor IDs to explored tile hashes. `_floorStack` tracks the breadcrumb path from surface to current depth. Stairs render as colored tiles with directional chevrons.
 

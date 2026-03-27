@@ -28,6 +28,9 @@ var EnemyAI = (function () {
   /**
    * Create an enemy entity.
    */
+  // Flee immunity — ms before a fled enemy can re-engage the player
+  var FLEE_IMMUNITY_MS = 3000;
+
   function createEnemy(opts) {
     return {
       id: opts.id || ('enemy_' + Math.floor(Math.random() * 99999)),
@@ -47,6 +50,8 @@ var EnemyAI = (function () {
       pathTimer: 0,
       loot: opts.loot || null,
       isElite: opts.isElite || false,
+      nonLethal: opts.nonLethal || false,   // Training NPC — defeat won't kill
+      fleeImmunity: 0,                      // ms remaining before can re-engage
       color: opts.color || '#c44'
     };
   }
@@ -71,6 +76,11 @@ var EnemyAI = (function () {
    * @param {number} deltaMs
    */
   function updateEnemy(enemy, player, grid, gridW, gridH, deltaMs) {
+    // Tick flee immunity
+    if (enemy.fleeImmunity > 0) {
+      enemy.fleeImmunity = Math.max(0, enemy.fleeImmunity - deltaMs);
+    }
+
     var state = getAwarenessState(enemy.awareness);
 
     if (state === AWARENESS.ENGAGED) {
@@ -327,13 +337,36 @@ var EnemyAI = (function () {
     };
   }
 
+  /** Apply flee immunity to an enemy (blocks re-engagement). */
+  function applyFleeImmunity(enemy) {
+    enemy.fleeImmunity = FLEE_IMMUNITY_MS;
+    enemy.awareness = 50; // Drop to SUSPICIOUS — they know you were here
+  }
+
+  /** Can this enemy engage the player right now? */
+  function canEngage(enemy) {
+    return enemy.hp > 0 && enemy.fleeImmunity <= 0;
+  }
+
+  /**
+   * Public wrapper for _faceToward — make enemy face a target position.
+   * Used by CombatBridge when an ambushed enemy must turn to face the player.
+   */
+  function faceToward(enemy, target) {
+    _faceToward(enemy, target);
+  }
+
   return {
     createEnemy: createEnemy,
     updateEnemy: updateEnemy,
     spawnEnemies: spawnEnemies,
     getAwarenessState: getAwarenessState,
+    applyFleeImmunity: applyFleeImmunity,
+    canEngage: canEngage,
+    faceToward: faceToward,
     AWARENESS: AWARENESS,
     PATH_TYPES: PATH_TYPES,
-    SIGHT_RANGE: SIGHT_RANGE
+    SIGHT_RANGE: SIGHT_RANGE,
+    FLEE_IMMUNITY_MS: FLEE_IMMUNITY_MS
   };
 })();

@@ -14,13 +14,18 @@ var TILES = (function () {
     STAIRS_DN: 5,   // Stairs down
     STAIRS_UP: 6,   // Stairs up
     CHEST:     7,
-    TRAP:      8,
+    TRAP:      8,   // Generic trap (pressure plate, pit cover)
     WATER:     9,
     PILLAR:    10,
     BREAKABLE: 11,
     SHOP:      12,
     SPAWN:     13,  // Player spawn marker (removed after placement)
-    BOSS_DOOR: 14
+    BOSS_DOOR: 14,
+    FIRE:      15,  // Environmental hazard — burning ground
+    SPIKES:    16,  // Environmental hazard — spike pit
+    POISON:    17,  // Environmental hazard — toxic pool
+    BONFIRE:   18,  // Checkpoint — respawn point, rest & heal
+    CORPSE:    19   // Harvestable remains — necro-salvage loot
   };
 
   /** Check if a tile blocks movement */
@@ -28,7 +33,15 @@ var TILES = (function () {
     return tile === T.EMPTY || tile === T.DOOR || tile === T.DOOR_BACK ||
            tile === T.DOOR_EXIT || tile === T.STAIRS_DN || tile === T.STAIRS_UP ||
            tile === T.CHEST || tile === T.TRAP || tile === T.WATER ||
-           tile === T.SHOP || tile === T.SPAWN || tile === T.BOSS_DOOR;
+           tile === T.SHOP || tile === T.SPAWN || tile === T.BOSS_DOOR ||
+           tile === T.FIRE || tile === T.SPIKES || tile === T.POISON ||
+           tile === T.BONFIRE || tile === T.CORPSE;
+  };
+
+  /** Check if a tile is an environmental hazard */
+  T.isHazard = function (tile) {
+    return tile === T.TRAP || tile === T.FIRE ||
+           tile === T.SPIKES || tile === T.POISON;
   };
 
   /** Check if a tile blocks light / line of sight */

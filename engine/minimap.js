@@ -52,6 +52,9 @@ var Minimap = (function () {
     enemy:      '#f44',
     enemySus:   '#ff0',
     chest:      '#ff0',
+    hazard:     '#c33',       // Red tint for fire/spikes/poison/trap
+    bonfire:    '#f80',       // Orange for bonfire checkpoints
+    corpse:     '#8a6',       // Muted green for harvestable corpses
     unexplored: '#000',
     label:      'rgba(255,255,255,0.6)',
     labelBg:    'rgba(0,0,0,0.5)'
@@ -230,6 +233,12 @@ var Minimap = (function () {
           ctx.fillStyle = COLORS.door;
         } else if (tile === TILES.CHEST) {
           ctx.fillStyle = COLORS.chest;
+        } else if (TILES.isHazard && TILES.isHazard(tile)) {
+          ctx.fillStyle = COLORS.hazard;
+        } else if (tile === TILES.BONFIRE) {
+          ctx.fillStyle = COLORS.bonfire;
+        } else if (tile === TILES.CORPSE) {
+          ctx.fillStyle = COLORS.corpse;
         } else if (tile === TILES.EMPTY || (TILES.isWalkable && TILES.isWalkable(tile))) {
           ctx.fillStyle = COLORS.floor;
         } else {

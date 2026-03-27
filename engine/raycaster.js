@@ -83,18 +83,27 @@ var Raycaster = (function () {
     var baseWallH  = _contract ? _contract.wallHeight : 1.0;
 
     // ── Background: ceiling + floor gradients from contract ──
-    var grads = _contract ? SpatialContract.getGradients(_contract)
-      : { ceilTop: '#111', ceilBottom: '#222', floorTop: '#444', floorBottom: '#111' };
+    // Use Skybox for exterior contracts (ceilingType === SKY)
+    var useSkybox = _contract && _contract.ceilingType === 'sky' &&
+                    typeof Skybox !== 'undefined' && _contract.skyPreset;
 
-    var cGrad = ctx.createLinearGradient(0, 0, 0, halfH);
-    cGrad.addColorStop(0, grads.ceilTop);
-    cGrad.addColorStop(1, grads.ceilBottom);
-    ctx.fillStyle = cGrad;
-    ctx.fillRect(0, 0, w, halfH);
+    if (useSkybox) {
+      Skybox.render(ctx, w, halfH, player.dir, _contract.skyPreset, 16);
+    } else {
+      var grads = _contract ? SpatialContract.getGradients(_contract)
+        : { ceilTop: '#111', ceilBottom: '#222', floorTop: '#444', floorBottom: '#111' };
+      var cGrad = ctx.createLinearGradient(0, 0, 0, halfH);
+      cGrad.addColorStop(0, grads.ceilTop);
+      cGrad.addColorStop(1, grads.ceilBottom);
+      ctx.fillStyle = cGrad;
+      ctx.fillRect(0, 0, w, halfH);
+    }
 
+    var floorGrads = _contract ? SpatialContract.getGradients(_contract)
+      : { floorTop: '#444', floorBottom: '#111' };
     var fGrad = ctx.createLinearGradient(0, halfH, 0, h);
-    fGrad.addColorStop(0, grads.floorTop);
-    fGrad.addColorStop(1, grads.floorBottom);
+    fGrad.addColorStop(0, floorGrads.floorTop);
+    fGrad.addColorStop(1, floorGrads.floorBottom);
     ctx.fillStyle = fGrad;
     ctx.fillRect(0, halfH, w, halfH);
 
@@ -181,7 +190,12 @@ var Raycaster = (function () {
         perpDist = (mapY - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
       }
       perpDist = Math.abs(perpDist);
-      if (perpDist < 0.01) perpDist = 0.01;
+
+      // Minimum perpDist clamp — prevents absurdly tall walls when
+      // peripheral rays graze very close surfaces. 0.2 = player can't
+      // get closer than ~0.2 tiles to a wall in the grid system (they
+      // stand at tile center = 0.5 units from the adjacent wall face).
+      if (perpDist < 0.2) perpDist = 0.2;
       _zBuffer[col] = perpDist;
 
       // ── Wall height: contract base × chamber override ──
@@ -190,7 +204,9 @@ var Raycaster = (function () {
         wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms);
       }
 
-      var lineHeight = Math.floor((h * wallHeightMult) / perpDist);
+      // Cap lineHeight to 3× viewport height — prevents distorted
+      // peripheral strips when idle against a wall face
+      var lineHeight = Math.min(h * 3, Math.floor((h * wallHeightMult) / perpDist));
 
       // ── Tile height offset (Doom rule) ──────────────────────────
       // Transition tiles are vertically displaced from the floor plane.
@@ -222,18 +238,79 @@ var Raycaster = (function () {
         brightness = lightMap[mapY][mapX];
       }
 
-      // Wall color
-      var isDoor = TILES.isDoor(hitTile);
-      var baseColor;
-      if (isDoor) {
-        baseColor = (side === 1) ? _wallColors.doorDark : _wallColors.door;
+      // ── Texture or flat-color wall rendering ──────────────────
+      var texId = _contract ? SpatialContract.getTexture(_contract, hitTile) : null;
+      var tex = texId ? TextureAtlas.get(texId) : null;
+      var stripH = drawEnd - drawStart + 1;
+
+      // Compute wall-hit UV (0..1 along the face) — needed by both
+      // the normal texture path and DoorAnimator
+      var wallX;
+      if (side === 0) {
+        wallX = py + perpDist * rayDirY;
       } else {
-        baseColor = (side === 1) ? _wallColors.dark : _wallColors.light;
+        wallX = px + perpDist * rayDirX;
+      }
+      wallX = wallX - Math.floor(wallX);
+
+      // Flip for consistent left-to-right on both face orientations
+      if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+        wallX = 1 - wallX;
       }
 
-      var finalColor = _applyFogAndBrightness(baseColor, fogFactor, brightness, fogColor);
-      ctx.fillStyle = finalColor;
-      ctx.fillRect(col, drawStart, 1, drawEnd - drawStart + 1);
+      // ── Door-open animation override ──────────────────────────
+      // If this tile is the one currently animating open, delegate
+      // rendering to DoorAnimator which draws the split/portcullis
+      // reveal instead of the static door texture.
+      if (typeof DoorAnimator !== 'undefined' &&
+          DoorAnimator.isAnimatingTile(mapX, mapY) && stripH > 0) {
+        DoorAnimator.renderColumn(
+          ctx, col, drawStart, drawEnd, wallX, side,
+          fogFactor, brightness, fogColor
+        );
+      } else if (tex && stripH > 0) {
+        // Texture column index
+        var texX = Math.floor(wallX * tex.width);
+        if (texX >= tex.width) texX = tex.width - 1;
+
+        // Draw the texture column via drawImage (1px source slice → strip)
+        ctx.drawImage(
+          tex.canvas,
+          texX, 0, 1, tex.height,           // source: 1px column, full height
+          col, drawStart, 1, stripH          // dest: screen column
+        );
+
+        // Side shading (side=1 faces are darker, matching flat-color convention)
+        if (side === 1) {
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          ctx.fillRect(col, drawStart, 1, stripH);
+        }
+
+        // Fog overlay
+        if (fogFactor > 0.01) {
+          ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+          ctx.fillRect(col, drawStart, 1, stripH);
+        }
+
+        // Brightness / lighting overlay
+        if (brightness < 0.95) {
+          ctx.fillStyle = 'rgba(0,0,0,' + (1 - brightness) + ')';
+          ctx.fillRect(col, drawStart, 1, stripH);
+        }
+      } else {
+        // Flat-color fallback (original path — no texture assigned)
+        var isDoor = TILES.isDoor(hitTile);
+        var baseColor;
+        if (isDoor) {
+          baseColor = (side === 1) ? _wallColors.doorDark : _wallColors.door;
+        } else {
+          baseColor = (side === 1) ? _wallColors.dark : _wallColors.light;
+        }
+
+        var finalColor = _applyFogAndBrightness(baseColor, fogFactor, brightness, fogColor);
+        ctx.fillStyle = finalColor;
+        ctx.fillRect(col, drawStart, 1, stripH);
+      }
 
       // ── Step fill (Doom rule) ───────────────────────────────────
       // The gap between the displaced wall and the floor/ceiling plane
