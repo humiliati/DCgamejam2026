@@ -22,7 +22,8 @@ var TransitionFX = (function () {
       phases: [
         { t: 0.00, vignette: 0.0, fade: 0.0 },
         { t: 0.30, vignette: 0.6, fade: 0.2 },
-        { t: 0.50, vignette: 1.0, fade: 1.0 },
+        { t: 0.45, vignette: 1.0, fade: 1.0 },  // Reach peak early...
+        { t: 0.55, vignette: 1.0, fade: 1.0 },  // ...hold peak for ~90ms (multiple frames)
         { t: 0.70, vignette: 0.8, fade: 0.6 },
         { t: 1.00, vignette: 0.0, fade: 0.0 }
       ]
@@ -33,8 +34,9 @@ var TransitionFX = (function () {
       phases: [
         { t: 0.00, vignette: 0.0, fade: 0.0 },
         { t: 0.20, vignette: 0.3, fade: 0.0 },
-        { t: 0.40, vignette: 0.8, fade: 0.5 },
-        { t: 0.50, vignette: 1.0, fade: 1.0 },
+        { t: 0.38, vignette: 0.8, fade: 0.5 },
+        { t: 0.45, vignette: 1.0, fade: 1.0 },
+        { t: 0.55, vignette: 1.0, fade: 1.0 },
         { t: 0.80, vignette: 0.6, fade: 0.4 },
         { t: 1.00, vignette: 0.0, fade: 0.0 }
       ]
@@ -45,7 +47,8 @@ var TransitionFX = (function () {
       phases: [
         { t: 0.00, vignette: 0.0, fade: 0.0 },
         { t: 0.30, vignette: 0.4, fade: 0.3 },
-        { t: 0.50, vignette: 0.2, fade: 1.0 },
+        { t: 0.45, vignette: 0.2, fade: 1.0 },
+        { t: 0.55, vignette: 0.2, fade: 1.0 },
         { t: 0.70, vignette: 0.1, fade: 0.5 },
         { t: 1.00, vignette: 0.0, fade: 0.0 }
       ]
@@ -55,9 +58,10 @@ var TransitionFX = (function () {
       duration: 600,
       phases: [
         { t: 0.00, vignette: 0.0, fade: 0.0 },
-        { t: 0.40, vignette: 0.3, fade: 0.8 },
-        { t: 0.50, vignette: 0.3, fade: 1.0 },
-        { t: 0.60, vignette: 0.2, fade: 0.6 },
+        { t: 0.35, vignette: 0.3, fade: 0.8 },
+        { t: 0.45, vignette: 0.3, fade: 1.0 },
+        { t: 0.55, vignette: 0.3, fade: 1.0 },
+        { t: 0.65, vignette: 0.2, fade: 0.6 },
         { t: 1.00, vignette: 0.0, fade: 0.0 }
       ]
     }
@@ -154,8 +158,12 @@ var TransitionFX = (function () {
     _vignette = _lerp(phases, t, 'vignette');
     _fade     = _lerp(phases, t, 'fade');
 
-    // Fire midpoint callback once when fade hits 1.0
-    if (!_midpointFired && _fade >= 0.99 && _onMidpoint) {
+    // Fire midpoint callback once when fade reaches peak darkness.
+    // Threshold is 0.90 (not 0.99) because preset phases can have a
+    // narrow 1-frame peak at exactly one t value. With discrete frame
+    // steps (~16ms), the interpolated fade can skip from e.g. 0.96 to
+    // 0.98 without ever hitting 0.99, permanently missing the callback.
+    if (!_midpointFired && _fade >= 0.90 && _onMidpoint) {
       _midpointFired = true;
       try { _onMidpoint(); } catch (e) {
         console.error('[TransitionFX] onMidpoint error:', e);

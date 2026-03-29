@@ -3,10 +3,325 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DC Jam 2026 — Dungeon Crawler</title>
+  <title>Dungeon Gleaner — DC Jam 2026</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #ddd; font-family: 'Courier New', monospace; }
+
+    /* ── Splash Overlay (DOM 3D cube reveal) ─────────────────────── */
+    #splash-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 200;
+      background: #080812;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      opacity: 1;
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+      pointer-events: auto;
+    }
+    #splash-overlay.hidden { display: none; }
+    #splash-overlay.fade-out {
+      opacity: 0;
+      transform: scale(0.85);
+      pointer-events: none;
+    }
+
+    /* Title text above cube */
+    .splash-title {
+      font-family: 'Courier New', monospace;
+      font-size: 28px; font-weight: bold;
+      color: #c8c8ff;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px rgba(96,96,232,0.6), 0 0 60px rgba(96,96,232,0.3);
+      margin-bottom: 30px;
+      opacity: 0;
+      animation: splash-text-in 0.8s ease-out 0.3s forwards;
+    }
+
+    /* Subtitle below cube */
+    .splash-subtitle {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #556;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 30px;
+      opacity: 0;
+      animation: splash-text-in 0.6s ease-out 0.6s forwards;
+    }
+
+    /* "Press any key" prompt */
+    .splash-prompt {
+      position: absolute;
+      bottom: 40px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #445;
+      letter-spacing: 2px;
+      opacity: 0;
+      animation: splash-blink 2s ease-in-out 1.2s infinite;
+    }
+
+    @keyframes splash-text-in {
+      0%   { opacity: 0; transform: translateY(12px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes splash-blink {
+      0%, 100% { opacity: 0; }
+      40%, 60% { opacity: 0.7; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       Modular 3D Box Animation System (.box3d)
+       Reusable for: splash, chest, door, button variants.
+       Each variant overrides --box-size, --box-hue, --bevel-width.
+       ═══════════════════════════════════════════════════════════════ */
+
+    .box3d-wrap {
+      perspective: 800px;
+      width: var(--box-size, 120px);
+      height: var(--box-size, 120px);
+      cursor: pointer;
+    }
+    .box3d-scene {
+      position: relative;
+      width: 100%; height: 100%;
+      transform-style: preserve-3d;
+      transform: rotateX(-25deg) rotateY(20deg);
+    }
+    .box3d-spin {
+      transform-style: preserve-3d;
+      position: absolute;
+      width: 100%; height: 100%;
+    }
+
+    /* ── Ground glow beneath box ── */
+    .box3d-spin::after {
+      content: "";
+      position: absolute;
+      width: 100%; height: 100%;
+      filter: blur(20px);
+      box-shadow: 0 0 160px 12px var(--box-glow, rgba(140,140,255,0.5));
+      transform: rotateX(90deg) scale(1.1) translateZ(calc(var(--box-half, -60px)));
+      transition: box-shadow 0.4s ease;
+    }
+
+    /* ── Shared face styles ── */
+    .box3d-face {
+      position: absolute; width: 100%; height: 100%;
+      /* Beveled inset edge */
+      box-shadow: inset 0 0 0 var(--bevel-w, 3px) rgba(255,255,255,0.08),
+                  inset 0 0 8px 1px rgba(100,100,240,0.15);
+      border: 1px solid rgba(120,120,255,0.12);
+    }
+
+    /* ── Interior glow (visible through open face) ── */
+    .box3d-glow {
+      position: absolute;
+      width: 80%; height: 80%;
+      top: 10%; left: 10%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(140,140,255,0.6) 0%, rgba(96,96,232,0.2) 50%, transparent 80%);
+      transform: translateZ(0px);
+      opacity: 0.5;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      pointer-events: none;
+    }
+
+    /* ── 5 solid faces (back, left, right, top, bottom) ── */
+    .bf-back   { border-radius: 14px; filter: blur(1.5px);
+                  transform: translateZ(calc(var(--box-d, 60px) * -1));
+                  background: linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8)); }
+    .bf-left   { transform: translateX(calc(var(--box-d, 60px) * -1)) rotateY(90deg);
+                  background: linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8)); }
+    .bf-right  { transform: translateX(var(--box-d, 60px)) rotateY(90deg);
+                  background: linear-gradient(to top, var(--box-dark2, #0a0a4e), var(--box-light, #6060e8)); }
+    .bf-bottom { background: var(--box-floor, #0a0a4f);
+                  transform: rotateX(90deg) translateZ(calc(var(--box-d, 60px) * -1)); }
+    .bf-top    { background: var(--box-ceil, #2e2e2e);
+                  transform: rotateX(90deg) translateZ(var(--box-d, 60px)); }
+
+    /* ── Lid (front face — hinged at bottom edge) ── */
+    .box3d-lid {
+      position: absolute; width: 100%; height: 100%;
+      transform-style: preserve-3d;
+      transform-origin: bottom center;
+      transform: translateZ(var(--box-d, 60px)) rotateX(0deg);
+      transition: transform 0.6s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    .box3d-lid .box3d-face {
+      width: 100%; height: 100%;
+      background: linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8));
+    }
+
+    /* ── Hover: lid swings open ── */
+    .box3d-wrap:hover .box3d-lid {
+      transform: translateZ(var(--box-d, 60px)) rotateX(-110deg);
+    }
+    .box3d-wrap:hover .box3d-glow {
+      opacity: 1;
+    }
+
+    /* ── Opened state (via JS class) ── */
+    .box3d-wrap.opened .box3d-lid {
+      transform: translateZ(var(--box-d, 60px)) rotateX(-135deg);
+      transition: transform 0.3s ease-out;
+    }
+    .box3d-wrap.opened .box3d-glow {
+      opacity: 1;
+      transform: translateZ(40px) scale(1.2);
+    }
+
+    /* ── Envelop state: glow fills the screen ── */
+    .box3d-wrap.envelop .box3d-glow {
+      opacity: 1;
+      transform: translateZ(200px) scale(30);
+      transition: transform 1.0s cubic-bezier(0.22, 1, 0.36, 1),
+                  opacity 0.8s ease;
+    }
+    .box3d-wrap.envelop .box3d-lid {
+      transform: translateZ(var(--box-d, 60px)) rotateX(-160deg);
+    }
+    #splash-overlay.envelop-bg {
+      background: radial-gradient(circle at center, rgba(96,96,232,0.9) 0%, rgba(8,8,18,1) 70%);
+      transition: background 0.8s ease;
+    }
+
+    /* ── Spin animation ── */
+    .box3d-spin.spinning {
+      animation: box3d-rotate 3.5s infinite linear;
+    }
+    @keyframes box3d-rotate {
+      0%   { transform: rotate3d(0,1,0,0deg);   }
+      100% { transform: rotate3d(0,1,0,360deg); }
+    }
+
+    /* ═══ Variant: Splash (default blue, 120px) ═══ */
+    .box3d-wrap.splash-variant {
+      --box-size: 120px;
+      --box-d: 60px;
+      --box-half: -70px;
+      --bevel-w: 3px;
+      --box-dark: #0b0b66;
+      --box-dark2: #0a0a4e;
+      --box-light: #6060e8;
+      --box-floor: #0a0a4f;
+      --box-ceil: #2e2e2e;
+      --box-glow: rgba(140,140,255,0.5);
+    }
+
+    /* ═══ Variant: Treasure Chest (gold/amber, 80px) ═══ */
+    .box3d-wrap.chest-variant {
+      --box-size: 80px;
+      --box-d: 40px;
+      --box-half: -46px;
+      --bevel-w: 2px;
+      --box-dark: #3d2b08;
+      --box-dark2: #2a1e06;
+      --box-light: #a87830;
+      --box-floor: #1a1206;
+      --box-ceil: #5a4020;
+      --box-glow: rgba(255,200,80,0.6);
+    }
+    .box3d-wrap.chest-variant .box3d-face {
+      box-shadow: inset 0 0 0 2px rgba(255,200,80,0.12),
+                  inset 0 0 6px 1px rgba(200,150,40,0.15);
+      border-color: rgba(200,160,60,0.15);
+    }
+    .box3d-wrap.chest-variant .box3d-glow {
+      background: radial-gradient(circle, rgba(255,200,80,0.7) 0%, rgba(200,150,40,0.2) 50%, transparent 80%);
+    }
+
+    /* ═══ Variant: Door (steel/grey, 100×140 tall) ═══ */
+    .box3d-wrap.door-variant {
+      --box-size: 120px;
+      --box-d: 35px;
+      --box-half: -35px;
+      --bevel-w: 3px;
+      --box-dark: #0a0a08;
+      --box-dark2: #080806;
+      --box-light: #3a4030;
+      --box-floor: #1a1812;
+      --box-ceil: #2a3020;
+      --box-glow: rgba(220,200,160,0.5);
+      height: 168px;
+    }
+    /* Gentler angle for door — more frontal, less hashtag */
+    .box3d-wrap.door-variant .box3d-scene {
+      transform: rotateX(-10deg) rotateY(12deg);
+    }
+    /* Grass-stone frame on side/top/bottom faces */
+    .box3d-wrap.door-variant .bf-left,
+    .box3d-wrap.door-variant .bf-right {
+      background: linear-gradient(to top, #2a3020, #44503a 40%, #384030 70%, #2a3020);
+    }
+    .box3d-wrap.door-variant .bf-top {
+      background: linear-gradient(135deg, #3a4030, #4a5540 50%, #384030);
+    }
+    .box3d-wrap.door-variant .bf-bottom {
+      background: #1a1812;
+    }
+    /* Dark porthole void on back face */
+    .box3d-wrap.door-variant .bf-back {
+      background: radial-gradient(ellipse at center, #12100c 30%, #060504 100%);
+      filter: none;
+      border-radius: 6px;
+    }
+    /* Wooden door panel on the lid */
+    .box3d-wrap.door-variant .box3d-lid .box3d-face {
+      background: linear-gradient(180deg,
+        #6e4828 0%, #5a3c22 20%, #7a5230 40%,
+        #5e4026 60%, #644428 80%, #503620 100%);
+      box-shadow: inset 3px 0 6px rgba(0,0,0,0.3),
+                  inset -2px 0 4px rgba(0,0,0,0.2);
+    }
+    /* Door swings open on left Y-axis hinge */
+    .box3d-wrap.door-variant .box3d-lid {
+      transform-origin: left center;
+      transform: translateZ(var(--box-d, 35px)) rotateY(0deg);
+      transition: transform 0.5s ease-in-out;
+    }
+    .box3d-wrap.door-variant:hover .box3d-lid,
+    .box3d-wrap.door-variant.opened .box3d-lid {
+      transform: translateZ(var(--box-d, 35px)) rotateY(-80deg);
+    }
+    /* Warm parchment glow from inside */
+    .box3d-wrap.door-variant .box3d-glow {
+      background: radial-gradient(circle,
+        rgba(220,200,160,0.6) 0%, rgba(180,160,120,0.2) 50%, transparent 80%);
+    }
+
+    /* ═══ Variant: Button (small, green glow, 50px) ═══ */
+    .box3d-wrap.button-variant {
+      --box-size: 50px;
+      --box-d: 25px;
+      --box-half: -30px;
+      --bevel-w: 2px;
+      --box-dark: #0a3318;
+      --box-dark2: #082a12;
+      --box-light: #28a050;
+      --box-floor: #061a0c;
+      --box-ceil: #1a5030;
+      --box-glow: rgba(80,255,120,0.6);
+    }
+    .box3d-wrap.button-variant .box3d-face {
+      box-shadow: inset 0 0 0 2px rgba(80,255,120,0.1),
+                  inset 0 0 6px 1px rgba(40,200,80,0.15);
+      border-color: rgba(80,200,100,0.12);
+    }
+    .box3d-wrap.button-variant .box3d-glow {
+      background: radial-gradient(circle, rgba(80,255,120,0.7) 0%, rgba(40,200,80,0.2) 50%, transparent 80%);
+    }
+    .box3d-wrap.button-variant .box3d-lid {
+      transform-origin: top center;
+      transform: translateZ(var(--box-d, 25px)) rotateX(0deg);
+      transition: transform 0.3s ease-out;
+    }
+    .box3d-wrap.button-variant:hover .box3d-lid,
+    .box3d-wrap.button-variant.opened .box3d-lid {
+      transform: translateZ(var(--box-d, 25px)) rotateX(40deg);
+    }
 
     #game-container {
       display: flex; flex-direction: column;
@@ -22,47 +337,88 @@
       display: block; width: 100%; height: 100%;
     }
 
-    /* ── HUD overlay ── */
+    /* ── HUD overlay (combat-only info — HP/EN live in DebriefFeed) ── */
     #hud {
-      position: absolute; top: 0; left: 0; right: 0;
-      padding: 12px 16px;
+      position: absolute; top: 0; left: var(--debrief-w, 0px); right: 0;
+      padding: 20px 28px;
       display: flex; justify-content: space-between; align-items: flex-start;
       pointer-events: none;
-      font-size: 14px;
+      font-family: var(--font-terminal);
+      font-size: 32px;
+      color: var(--phosphor);
+      text-shadow: 0 0 6px var(--phosphor-glow);
     }
     #hud-left, #hud-right { pointer-events: auto; }
-    .hud-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
-    .hud-hp-bar { background: #e44; width: 120px; }
-    .hud-energy-bar { background: #4ae; width: 80px; }
-    .hud-bar-bg { background: #333; border-radius: 3px; }
+    /* HP/EN bars hidden — resource display lives in DebriefFeed now */
+    #hud-left .hud-bar-bg { display: none; }
+    #hud-left .hud-resource-text { display: none; }
+    .hud-bar { height: 16px; border-radius: 8px; margin-top: 4px; }
+    .hud-hp-bar { background: #FF6B9D; width: 280px; }
+    .hud-energy-bar { background: #00D4FF; width: 200px; }
+    .hud-bar-bg { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+    /* ── Battery pip row ── */
+    .hud-battery-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px;
+      font-size: 28px; letter-spacing: 4px;
+    }
+    .hud-bat-label {
+      color: #00FFA6;
+      font-size: 24px; letter-spacing: 0;
+      text-shadow: 0 0 6px rgba(0,255,166,0.5);
+    }
+    .hud-bat-pip {
+      display: inline-block; width: 20px; height: 24px;
+      margin-right: 2px;
+      border: 2px solid rgba(0,255,166,0.4);
+      border-radius: 4px;
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+    .hud-bat-pip.full {
+      background: #00FFA6;
+      box-shadow: 0 0 4px rgba(0,255,166,0.6);
+    }
+    .hud-bat-pip.empty {
+      background: rgba(0,255,166,0.08);
+    }
+    .hud-bat-pip.spent {
+      animation: bat-spent 0.4s ease-out;
+    }
+    @keyframes bat-spent {
+      0% { background: #00FFA6; transform: scale(1.2); }
+      100% { background: rgba(0,255,166,0.08); transform: scale(1); }
+    }
 
     /* ── Minimap ── */
     #minimap {
-      position: absolute; bottom: 80px; right: 12px;
-      width: 160px; height: 160px;
-      border: 1px solid #444; background: rgba(0,0,0,0.7);
+      position: absolute; bottom: calc(var(--status-bar-h, 56px) + 16px); right: 24px;
+      width: 320px; height: 320px;
+      border: var(--border-terminal, 2px solid #444);
+      background: rgba(0,0,0,0.7);
       pointer-events: none;
       image-rendering: pixelated;
     }
 
     /* ── Card tray (combat hand) ── */
     #card-tray {
-      height: 72px;
-      background: rgba(0,0,0,0.85);
-      border-top: 1px solid #333;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      padding: 6px 16px;
+      height: 144px;
+      background: var(--bg-panel, rgba(0,0,0,0.85));
+      border-top: var(--border-terminal, 2px solid #333);
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      padding: 12px 32px;
+      margin-left: var(--debrief-w, 0px);
     }
     .card-slot {
-      width: 52px; height: 60px;
-      border: 1px solid #555; border-radius: 6px;
+      width: 104px; height: 120px;
+      border: 2px solid #555; border-radius: 12px;
       background: #1a1a1a;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 20px; cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+      font-size: 40px; cursor: pointer; transition: transform 0.15s, border-color 0.15s;
       user-select: none;
     }
-    .card-slot:hover { transform: translateY(-4px); border-color: #aaa; }
-    .card-slot .card-name { font-size: 7px; color: #888; margin-top: 2px; text-align: center; }
+    .card-slot:hover { transform: translateY(-8px); border-color: #aaa; }
+    .card-slot .card-name { font-size: 14px; color: #888; margin-top: 4px; text-align: center; }
     .card-slot.empty { opacity: 0.3; cursor: default; }
     .card-slot.empty:hover { transform: none; border-color: #555; }
 
@@ -75,9 +431,12 @@
     }
     #combat-overlay.active { display: block; }
     #combat-log {
-      position: absolute; bottom: 8px; left: 16px; right: 16px;
-      font-size: 12px; color: #ff0; text-shadow: 0 1px 2px #000;
+      position: absolute; bottom: 24px; left: 32px; right: 32px;
+      font-family: var(--font-terminal);
+      font-size: 28px; color: var(--phosphor-bright);
+      text-shadow: 0 0 8px var(--phosphor-glow), 0 1px 2px #000;
       text-align: center;
+      letter-spacing: 0.03em;
     }
 
     /* ── Floor transition ── */
@@ -86,19 +445,391 @@
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: #000; z-index: 100;
       justify-content: center; align-items: center;
-      font-size: 24px; color: #888;
+      font-size: 48px; color: #888;
     }
     #floor-transition.active { display: flex; }
 
     /* ── Debug minimap toggle ── */
     #debug-toggle {
-      position: absolute; bottom: 80px; right: 176px;
-      font-size: 10px; color: #666; cursor: pointer;
+      position: absolute; bottom: 160px; right: 352px;
+      font-size: 20px; color: #666; cursor: pointer;
       pointer-events: auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CRT TERMINAL THEME — Retro-futuristic phosphor aesthetic
+       Adapted from EyesOnly crt.css + terminal-polish.css
+       ═══════════════════════════════════════════════════════════════ */
+
+    :root {
+      --phosphor:        #33ff88;
+      --phosphor-dim:    #1a8844;
+      --phosphor-bright: #66ffaa;
+      --phosphor-glow:   rgba(51,255,136,0.15);
+      --bg-terminal:     #080c08;
+      --bg-panel:        rgba(8,12,8,0.88);
+      --scanline-opacity: 0.06;
+      --scanline-speed:  8s;
+      --font-terminal:   'Courier New', monospace;
+      --border-terminal: 1px solid var(--phosphor-dim);
+      --status-bar-h:    56px;
+      --debrief-w:       240px;
+    }
+
+    /* ── Scanline overlay (covers viewport only, not splash) ───── */
+    #crt-scanlines {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 50;
+      overflow: hidden;
+    }
+    #crt-scanlines::before {
+      content: '';
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 1px,
+        rgba(0,0,0,var(--scanline-opacity)) 1px,
+        rgba(0,0,0,var(--scanline-opacity)) 2px
+      );
+      animation: scanline-flicker 0.05s infinite;
+    }
+    #crt-scanlines::after {
+      content: '';
+      position: absolute; top: -100%; left: 0; width: 100%; height: 200%;
+      background: linear-gradient(
+        to bottom,
+        transparent 0%, transparent 45%,
+        rgba(51,255,136,0.03) 48%, rgba(51,255,136,0.06) 50%,
+        rgba(51,255,136,0.03) 52%,
+        transparent 55%, transparent 100%
+      );
+      animation: scanline-roll var(--scanline-speed) linear infinite;
+    }
+    @keyframes scanline-flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.97; }
+    }
+    @keyframes scanline-roll {
+      0%   { transform: translateY(0); }
+      100% { transform: translateY(50%); }
+    }
+
+    /* ── Vignette (CRT edge darkening) ─────────────────────────── */
+    #crt-vignette {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      box-shadow: inset 0 0 100px 30px rgba(0,0,0,0.4);
+      pointer-events: none; z-index: 51;
+    }
+
+    /* ── Debrief Feed (left column) ────────────────────────────── */
+    #debrief-feed {
+      position: absolute; top: 0; left: 0;
+      width: var(--debrief-w);
+      bottom: calc(var(--status-bar-h) + 160px); /* clear quick bar (~3 slots) */
+      background: var(--bg-panel);
+      border-right: var(--border-terminal);
+      font-family: var(--font-terminal);
+      font-size: 20px;
+      color: var(--phosphor);
+      text-shadow: 0 0 4px var(--phosphor-glow);
+      overflow: hidden;
+      cursor: pointer;
+      z-index: 10;
+      display: flex; flex-direction: column;
+    }
+    #debrief-feed .df-header {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--phosphor-dim);
+      font-size: 16px; letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--phosphor-dim);
+      flex-shrink: 0;
+    }
+    #debrief-feed .df-content {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 8px 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--phosphor-dim) transparent;
+    }
+    #debrief-feed .df-content::-webkit-scrollbar { width: 3px; }
+    #debrief-feed .df-content::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border-radius: 2px; }
+    #debrief-feed .df-content::-webkit-scrollbar-track { background: transparent; }
+
+    /* Debrief: MOK avatar mode */
+    .df-avatar { text-align: center; padding: 12px 0; }
+    .df-avatar .df-emoji { font-size: 56px; display: block; margin-bottom: 8px; }
+    .df-avatar .df-callsign { font-size: 20px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
+    .df-avatar .df-class { font-size: 16px; color: var(--phosphor-dim); }
+    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 8px 0; opacity: 0.4; }
+    .df-gauge-row { display: flex; align-items: center; gap: 6px; font-size: 18px; line-height: 1.4; }
+    .df-gauge-row .df-label { width: 36px; color: var(--phosphor-dim); }
+    .df-gauge-row .df-bar { flex: 1; letter-spacing: -1px; }
+    .df-stat-row { font-size: 18px; color: var(--phosphor-dim); line-height: 1.5; }
+    .df-stat-row span { color: var(--phosphor); }
+
+    /* Debrief: Feed/log mode */
+    .df-feed-line { font-size: 16px; line-height: 1.4; color: var(--phosphor-dim); word-break: break-all; }
+    .df-feed-line.df-loot { color: var(--phosphor-bright); }
+    .df-feed-line.df-dmg { color: #ff6b6b; }
+    .df-feed-line.df-heal { color: #66ffaa; }
+    .df-cursor-blink { animation: cursor-blink 1s step-end infinite; }
+    @keyframes cursor-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* ── Quick Bar (below debrief, left column) ────────────────── */
+    #quick-bar {
+      position: absolute; left: 0;
+      bottom: var(--status-bar-h);
+      width: var(--debrief-w);
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 8px 12px;
+      background: var(--bg-panel);
+      border-right: var(--border-terminal);
+      border-top: 1px solid var(--phosphor-dim);
+      z-index: 11;
+    }
+    .qb-slot {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px;
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.2);
+      cursor: pointer;
+      font-family: var(--font-terminal);
+      font-size: 18px;
+      color: var(--phosphor-dim);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .qb-slot:hover {
+      border-color: var(--phosphor);
+      background: rgba(51,255,136,0.06);
+      box-shadow: 0 0 6px var(--phosphor-glow);
+    }
+    .qb-slot .qb-icon { font-size: 28px; width: 40px; text-align: center; }
+    .qb-slot .qb-label { flex: 1; color: var(--phosphor); font-size: 16px; }
+    .qb-slot.qb-empty {
+      border-style: dashed;
+      border-color: rgba(255,255,255,0.06);
+      opacity: 0.4;
+      cursor: default;
+    }
+    .qb-slot.qb-empty:hover { border-color: rgba(255,255,255,0.06); background: rgba(0,0,0,0.2); box-shadow: none; }
+
+    /* ── Status Bar (bottom strip) ─────────────────────────────── */
+    #status-bar {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: var(--status-bar-h);
+      background: var(--bg-panel);
+      border-top: var(--border-terminal);
+      display: flex; align-items: center;
+      padding: 0 16px;
+      font-family: var(--font-terminal);
+      font-size: 20px;
+      color: var(--phosphor);
+      text-shadow: 0 0 3px var(--phosphor-glow);
+      z-index: 12;
+      gap: 6px;
+    }
+    .sb-btn {
+      background: none; border: 1px solid var(--phosphor-dim);
+      border-radius: 6px; padding: 4px 12px;
+      color: var(--phosphor); font-family: var(--font-terminal);
+      font-size: 18px; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .sb-btn:hover {
+      border-color: var(--phosphor-bright);
+      box-shadow: 0 0 6px var(--phosphor-glow);
+    }
+    .sb-btn.sb-active { border-color: var(--phosphor); background: rgba(51,255,136,0.08); }
+    .sb-spacer { flex: 1; }
+    .sb-info { color: var(--phosphor-dim); font-size: 18px; }
+    .sb-info span { color: var(--phosphor); }
+
+    /* ── NCH Widget (draggable card-stack capsule — EyesOnly pattern) ── */
+    #nch-widget {
+      position: absolute;
+      display: none; /* shown by JS */
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px 4px 6px;
+      border-radius: 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--phosphor-dim);
+      cursor: grab;
+      z-index: 15;
+      font-family: var(--font-terminal);
+      color: var(--phosphor);
+      text-shadow: 0 0 4px var(--phosphor-glow);
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, width 0.25s ease;
+      user-select: none;
+      touch-action: none;
+      white-space: nowrap;
+    }
+    #nch-widget:hover {
+      border-color: var(--phosphor-bright);
+      box-shadow: 0 0 10px var(--phosphor-glow);
+      transform: scale(1.06);
+    }
+    #nch-widget:active { cursor: grabbing; }
+
+    /* Card stack (overlapping joker emojis — EyesOnly diagonal cascade) */
+    .nch-stack {
+      position: relative;
+      height: 44px;
+      min-width: 32px;
+      transition: width 0.25s ease;
+    }
+    .nch-joker {
+      position: absolute;
+      font-size: 32px;
+      line-height: 1;
+      top: 0;
+      transition: left 0.25s ease, top 0.2s ease, opacity 0.2s;
+      filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.6));
+    }
+    /* Diagonal cascade: 5px right + alternating 1px up/down wave */
+    .nch-joker.j-0 { left: 0;   top: 0; }
+    .nch-joker.j-1 { left: 5px; top: 1px; }
+    .nch-joker.j-2 { left: 10px; top: 2px; }
+    .nch-joker.j-3 { left: 15px; top: 1px; }
+    .nch-joker.j-4 { left: 20px; top: 0; }
+    /* Hover: fan out (more space between cards) */
+    #nch-widget:hover .nch-joker.j-0 { left: 0; }
+    #nch-widget:hover .nch-joker.j-1 { left: 7px; }
+    #nch-widget:hover .nch-joker.j-2 { left: 14px; }
+    #nch-widget:hover .nch-joker.j-3 { left: 21px; }
+    #nch-widget:hover .nch-joker.j-4 { left: 28px; }
+
+    /* Info badges (bag count, deck count) */
+    .nch-badges {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .nch-badge {
+      font-size: 14px;
+      line-height: 1.2;
+      color: var(--phosphor-dim);
+      letter-spacing: 0.04em;
+    }
+    .nch-badge span { color: var(--phosphor); }
+
+    /* Widget states */
+    #nch-widget.nch-open {
+      border-color: var(--phosphor-bright);
+      background: rgba(51,255,136,0.1);
+      box-shadow: 0 0 12px var(--phosphor-glow);
+    }
+    #nch-widget.nch-combat {
+      opacity: 0.3;
+      transform: scale(0.7);
+      pointer-events: none;
+    }
+    #nch-widget.nch-empty {
+      border-style: dashed;
+      border-color: rgba(255,255,255,0.08);
+      opacity: 0.5;
+    }
+    .nch-joker-greyed {
+      filter: grayscale(1) brightness(0.5) drop-shadow(1px 1px 1px rgba(0,0,0,0.6));
+      opacity: 0.55;
+    }
+
+    /* ── Combat Report Overlay ───────────────────────────────────── */
+    #combat-report {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 60;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    #cr-content {
+      background: var(--bg-panel);
+      border: 2px solid var(--phosphor-dim);
+      border-radius: 16px;
+      padding: 32px 40px;
+      min-width: 440px;
+      max-width: 640px;
+      font-family: var(--font-terminal);
+      font-size: 22px;
+      color: var(--phosphor);
+      text-shadow: 0 0 4px var(--phosphor-glow);
+      text-align: center;
+    }
+    .cr-header {
+      font-size: 32px; font-weight: bold;
+      letter-spacing: 0.15em;
+      margin-bottom: 16px;
+    }
+    .cr-victory { color: #66ffaa; text-shadow: 0 0 8px rgba(102,255,170,0.4); }
+    .cr-defeat  { color: #ff6b6b; text-shadow: 0 0 8px rgba(255,107,107,0.4); }
+    .cr-fled    { color: #ffcc44; text-shadow: 0 0 8px rgba(255,204,68,0.4); }
+    .cr-enemy { font-size: 26px; margin-bottom: 8px; }
+    .cr-emoji { font-size: 40px; }
+    .cr-name  { color: var(--phosphor-bright); }
+    .cr-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 16px 0; opacity: 0.4; }
+    .cr-stats { text-align: left; }
+    .cr-stat-row {
+      display: flex; justify-content: space-between;
+      font-size: 20px; line-height: 1.6;
+    }
+    .cr-stat-label { color: var(--phosphor-dim); }
+    .cr-stat-value { color: var(--phosphor); }
+    .cr-xp {
+      font-size: 28px; color: #ffcc44;
+      text-shadow: 0 0 6px rgba(255,204,68,0.4);
+      letter-spacing: 0.1em;
+    }
+    .cr-loot {
+      font-size: 22px; color: var(--phosphor-bright);
+    }
+    .cr-cards-header { font-size: 16px; color: var(--phosphor-dim); letter-spacing: 0.1em; margin-bottom: 8px; }
+    .cr-cards-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .cr-card-tag {
+      font-size: 16px; padding: 2px 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.03);
+      color: var(--phosphor-dim);
+    }
+    .cr-prompt {
+      margin-top: 24px; font-size: 18px;
+      color: var(--phosphor-dim);
+      animation: cursor-blink 2s ease-in-out infinite;
     }
   </style>
 </head>
 <body>
+  <!-- Splash overlay — 3D box reveal, click envelops screen → title -->
+  <div id="splash-overlay" class="hidden">
+    <div class="splash-title" id="splash-title-text">DUNGEON GLEANER</div>
+    <div class="box3d-wrap splash-variant" id="splash-box">
+      <div class="box3d-scene">
+        <div class="box3d-spin spinning">
+          <!-- Interior glow (visible through open face) -->
+          <div class="box3d-glow"></div>
+          <!-- 5 solid faces -->
+          <div class="box3d-face bf-back"></div>
+          <div class="box3d-face bf-left"></div>
+          <div class="box3d-face bf-right"></div>
+          <div class="box3d-face bf-bottom"></div>
+          <div class="box3d-face bf-top"></div>
+          <!-- Lid (front face, hinged at bottom) -->
+          <div class="box3d-lid">
+            <div class="box3d-face"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="splash-subtitle" id="splash-subtitle-text">DC JAM 2026</div>
+    <div class="splash-prompt" id="splash-prompt-text">PRESS ANY KEY</div>
+  </div>
+
   <div id="game-container">
     <div id="viewport">
       <canvas id="view-canvas"></canvas>
@@ -106,14 +837,21 @@
       <!-- HUD (hidden until gameplay starts) -->
       <div id="hud" style="display:none">
         <div id="hud-left">
-          <div>HP: <span id="hud-hp">10/10</span></div>
-          <div class="hud-bar-bg" style="width:120px"><div class="hud-bar hud-hp-bar" id="hud-hp-fill"></div></div>
-          <div style="margin-top:4px">EN: <span id="hud-energy">5/5</span></div>
-          <div class="hud-bar-bg" style="width:80px"><div class="hud-bar hud-energy-bar" id="hud-energy-fill"></div></div>
+          <!-- HP/EN bars removed — DebriefFeed handles resource display -->
+          <span id="hud-hp" style="display:none"></span>
+          <span id="hud-energy" style="display:none"></span>
+          <div id="hud-hp-fill" style="display:none"></div>
+          <div id="hud-energy-fill" style="display:none"></div>
+          <div id="hud-combat-label" style="font-size:28px;color:var(--phosphor-bright);letter-spacing:0.1em;display:none">COMBAT</div>
+          <!-- Battery pip row — always visible during gameplay -->
+          <div id="hud-battery" class="hud-battery-row">
+            <span class="hud-bat-label">◈</span>
+            <span id="hud-battery-pips"></span>
+          </div>
         </div>
         <div id="hud-right">
-          <div>Floor <span id="hud-floor">1</span></div>
-          <div id="hud-advantage" style="font-size:12px; color:#888"></div>
+          <div style="font-size:28px">Floor <span id="hud-floor">1</span></div>
+          <div id="hud-advantage" style="font-size:26px; color:#ff6b6b; letter-spacing:0.05em"></div>
         </div>
       </div>
 
@@ -129,6 +867,54 @@
       <!-- Floor transition -->
       <div id="floor-transition">
         <span id="floor-transition-text">Descending...</span>
+      </div>
+
+      <!-- CRT overlays (scanlines + vignette) -->
+      <div id="crt-scanlines"></div>
+      <div id="crt-vignette"></div>
+
+      <!-- Debrief Feed (left column, hidden until gameplay) -->
+      <div id="debrief-feed" style="display:none">
+        <div class="df-header" id="df-header">MOK</div>
+        <div class="df-content" id="df-content"></div>
+      </div>
+
+      <!-- Quick Bar (below debrief, hidden until gameplay) -->
+      <div id="quick-bar" style="display:none">
+        <div class="qb-slot qb-empty" id="qb-0" data-slot="0">
+          <span class="qb-icon">—</span><span class="qb-label">EMPTY</span>
+        </div>
+        <div class="qb-slot qb-empty" id="qb-1" data-slot="1">
+          <span class="qb-icon">—</span><span class="qb-label">EMPTY</span>
+        </div>
+        <div class="qb-slot qb-empty" id="qb-2" data-slot="2">
+          <span class="qb-icon">—</span><span class="qb-label">EMPTY</span>
+        </div>
+      </div>
+
+      <!-- NCH Widget (draggable card-stack capsule, hidden until gameplay) -->
+      <div id="nch-widget" class="nch-idle">
+        <div class="nch-stack" id="nch-stack"></div>
+        <div class="nch-badges" id="nch-badges">
+          <div class="nch-badge" id="nch-badge-bag">BAG <span>0/12</span></div>
+          <div class="nch-badge" id="nch-badge-deck">DECK <span>0</span></div>
+        </div>
+      </div>
+
+      <!-- Combat Report Overlay (hidden until post-combat) -->
+      <div id="combat-report">
+        <div id="cr-content"></div>
+      </div>
+
+      <!-- Status Bar (bottom strip, hidden until gameplay) -->
+      <div id="status-bar" style="display:none">
+        <button class="sb-btn" id="sb-debrief">DEBRIEF</button>
+        <button class="sb-btn" id="sb-map">MAP</button>
+        <button class="sb-btn" id="sb-bag">BAG 0/12</button>
+        <span class="sb-spacer"></span>
+        <span class="sb-info" id="sb-floor">Floor <span>1</span></span>
+        <span class="sb-info" id="sb-biome"></span>
+        <span class="sb-info" id="sb-heading">▸ N</span>
       </div>
     </div>
 
@@ -148,17 +934,21 @@
   <script src="engine/tiles.js"></script>
   <script src="engine/i18n.js"></script>
   <script src="engine/audio-system.js"></script>
+  <script src="engine/awareness-config.js"></script>
 
   <!-- Layer 1: Core systems (depend on foundations) -->
   <script src="engine/grid-gen.js"></script>
   <script src="engine/door-contracts.js"></script>
   <script src="engine/door-contract-audio.js"></script>
   <script src="engine/lighting.js"></script>
+  <script src="engine/stealth.js"></script>
   <script src="engine/enemy-ai.js"></script>
   <script src="engine/combat-engine.js"></script>
   <script src="engine/synergy-engine.js"></script>
+  <script src="engine/card-stack.js"></script>
   <script src="engine/card-system.js"></script>
   <script src="engine/loot-tables.js"></script>
+  <script src="engine/world-items.js"></script>
   <script src="engine/input.js"></script>
   <script src="engine/movement.js"></script>
   <script src="engine/pathfind.js"></script>
@@ -166,6 +956,11 @@
   <script src="engine/texture-atlas.js"></script>
   <script src="engine/session-stats.js"></script>
   <script src="engine/salvage.js"></script>
+  <script src="engine/breakable-spawner.js"></script>
+  <script src="engine/enemy-sprites.js"></script>
+  <script src="engine/corpse-registry.js"></script>
+  <script src="engine/enemy-intent.js"></script>
+  <script src="engine/death-anim.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>
@@ -174,12 +969,18 @@
   <script src="engine/raycaster.js"></script>
   <script src="engine/minimap.js"></script>
   <script src="engine/hud.js"></script>
+  <script src="engine/debrief-feed.js"></script>
+  <script src="engine/status-bar.js"></script>
+  <script src="engine/quick-bar.js"></script>
   <script src="engine/dialog-box.js"></script>
   <script src="engine/toast.js"></script>
   <script src="engine/transition-fx.js"></script>
   <script src="engine/card-fan.js"></script>
+  <script src="engine/nch-widget.js"></script>
+  <script src="engine/combat-report.js"></script>
   <script src="engine/screen-manager.js"></script>
   <script src="engine/menu-box.js"></script>
+  <script src="engine/box-anim.js"></script>
   <script src="engine/splash-screen.js"></script>
   <script src="engine/game-loop.js"></script>
 
@@ -187,11 +988,15 @@
   <script src="engine/player.js"></script>
   <script src="engine/mouse-look.js"></script>
   <script src="engine/floor-manager.js"></script>
+  <script src="engine/intro-walk.js"></script>
   <script src="engine/floor-transition.js"></script>
   <script src="engine/input-poll.js"></script>
   <script src="engine/interact-prompt.js"></script>
+  <script src="engine/door-peek.js"></script>
+  <script src="engine/combat-fx.js"></script>
   <script src="engine/combat-bridge.js"></script>
   <script src="engine/hazard-system.js"></script>
+  <script src="engine/shop.js"></script>
   <script src="engine/menu-faces.js"></script>
   <script src="engine/title-screen.js"></script>
   <script src="engine/game-over-screen.js"></script>

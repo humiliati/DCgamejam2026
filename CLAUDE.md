@@ -34,26 +34,60 @@ Turn left = `(dir + 3) % 4` (CCW). Turn right = `(dir + 1) % 4` (CW). The raycas
 
 ## Floor hierarchy
 
-EyesOnly three-tier floor ID convention:
+String floor IDs are the primary identifier throughout the codebase. There is NO integer `floorNum` — the string IS the identity.
 
-- `"N"` = depth 1, exterior/overworld
-- `"N.N"` = depth 2, interior contrived (buildings, taverns)
-- `"N.N.N"` = depth 3, nested proc-gen dungeon
+- `"N"` = depth 1, **exterior** — skybox (no ceiling), 2× tall walls, FADE fog
+- `"N.N"` = depth 2, **interior** — solid ceiling, 2× tall walls, CLAMP fog
+- `"N.N.N"` = depth 3, **nested dungeon** — void ceiling, 1× tall walls, DARKNESS fog
 
-Currently all playable floors use depth 3 IDs (`"1.1.1"`, `"1.1.2"`, etc.) until the world designer portal adds overworld and building layers.
+Current world map:
 
-Depth determines: fog model (FADE/CLAMP/DARKNESS), wall height, render distance, ceiling type, and door transition sound sequences.
+```
+"0"       The Approach       (exterior — tutorial courtyard)
+"1"       The Promenade      (exterior — sunset boardwalk town)
+"1.1"     Coral Bazaar       (interior — market hall)
+"1.1.1"   Coral Cellars      (dungeon — first proc-gen level)
+"1.1.2+"  deeper dungeon     (dungeon — proc-gen)
+```
+
+Future floors: `"2"` Lantern Gardens (ext), `"2.1"` Inn (int), `"3"` Frontier Gate (ext), `"3.1"` Armory (int).
+
+### Floor ID navigation
+
+FloorManager exposes tree-traversal helpers:
+
+- `parentId("1.1")` → `"1"` (ascend)
+- `childId("1", "1")` → `"1.1"` (descend)
+- `nextSiblingId("1.1.1")` → `"1.1.2"` (deeper dungeon level)
+- `prevSiblingId("1.1.2")` → `"1.1.1"` (shallower dungeon level)
+
+### Door target resolution
+
+Doors use explicit `doorTargets` map in floor data first, then fall back to convention:
+
+- **DOOR** → `doorTargets[key]` or `childId(currentId, '1')`
+- **DOOR_EXIT / DOOR_BACK** → `doorTargets[key]` or `parentId(currentId)`
+- **STAIRS_DN** → depth ≥3: `nextSiblingId`, else `childId`
+- **STAIRS_UP** → depth ≥3: `prevSiblingId`, else `parentId`
+
+Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenade DOOR_EXIT → The Approach, both depth 1).
+
+### Depth determines rendering
+
+- **Depth 1 (exterior)**: `SpatialContract.exterior()` — skybox, FADE fog, parallax layers, no ceiling
+- **Depth 2 (interior)**: `SpatialContract.interior()` — solid ceiling, CLAMP fog, wallHeight 2.0
+- **Depth 3+ (dungeon)**: `SpatialContract.nestedDungeon()` — void ceiling, DARKNESS fog, wallHeight 1.0–1.2
 
 ## Module architecture
 
-47 modules in `engine/`, organized in 6 load layers:
+50 modules in `engine/`, organized in 6 load layers:
 
 | Layer | Purpose | Modules |
 |---|---|---|
 | 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem` |
-| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage` |
+| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
 | 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
-| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
+| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
 | 4 | Orchestrator | `Game` |
 | 5 | Data | `data/strings/en.js` |
 

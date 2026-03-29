@@ -19,6 +19,11 @@ var Raycaster = (function () {
   var _height = 0;
   var _zBuffer = [];
 
+  // Floor casting buffer (reused across frames to avoid GC)
+  var _floorImgData = null;
+  var _floorBufW = 0;
+  var _floorBufH = 0;
+
   // Wall colors per biome
   var _wallColors = {
     light: '#8a7a6a', dark: '#6a5a4a',
@@ -27,7 +32,21 @@ var Raycaster = (function () {
 
   // Active spatial contract (set per floor)
   var _contract = null;
-  var _rooms = null; // Room list for chamber height lookups
+  var _rooms = null;        // Room list for chamber height lookups
+  var _cellHeights = null;  // Per-cell height overrides (door entrance caps)
+
+  // ── N-layer compositing ──────────────────────────────────────────
+  // Pre-allocated buffer for multi-hit DDA results. Avoids per-frame
+  // allocation. Each layer stores the grid hit info; geometry (perpDist,
+  // drawStart, etc.) is computed on-demand during back-to-front render.
+  var _MAX_LAYERS = 4; // shrub → pillar → tree → building
+  var _MAX_BG_STEPS = 16; // max DDA steps past first hit
+  var _layerBuf = [
+    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0 }
+  ];
 
   function init(canvas) {
     _canvas = canvas;
@@ -53,10 +72,11 @@ var Raycaster = (function () {
     _wallColors.doorDark = biome.doorDark || '#906830';
   }
 
-  /** Set the active spatial contract and room list for this floor */
-  function setContract(contract, rooms) {
+  /** Set the active spatial contract, room list, and cell height overrides */
+  function setContract(contract, rooms, cellHeights) {
     _contract = contract;
     _rooms = rooms || null;
+    _cellHeights = cellHeights || null;
   }
 
   /**
@@ -99,13 +119,23 @@ var Raycaster = (function () {
       ctx.fillRect(0, 0, w, halfH);
     }
 
-    var floorGrads = _contract ? SpatialContract.getGradients(_contract)
-      : { floorTop: '#444', floorBottom: '#111' };
-    var fGrad = ctx.createLinearGradient(0, halfH, 0, h);
-    fGrad.addColorStop(0, floorGrads.floorTop);
-    fGrad.addColorStop(1, floorGrads.floorBottom);
-    ctx.fillStyle = fGrad;
-    ctx.fillRect(0, halfH, w, halfH);
+    // ── Floor: textured floor casting or gradient fallback ──
+    var floorTexId = _contract ? SpatialContract.getFloorTexture(_contract) : null;
+    var floorTex = floorTexId && typeof TextureAtlas !== 'undefined'
+      ? TextureAtlas.get(floorTexId) : null;
+
+    if (floorTex) {
+      _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex,
+                   fogDist, fogColor);
+    } else {
+      var floorGrads = _contract ? SpatialContract.getGradients(_contract)
+        : { floorTop: '#444', floorBottom: '#111' };
+      var fGrad = ctx.createLinearGradient(0, halfH, 0, h);
+      fGrad.addColorStop(0, floorGrads.floorTop);
+      fGrad.addColorStop(1, floorGrads.floorBottom);
+      ctx.fillStyle = fGrad;
+      ctx.fillRect(0, halfH, w, halfH);
+    }
 
     // ── Parallax layers (behind walls, above floor gradient) ──
     if (_contract) {
@@ -156,10 +186,65 @@ var Raycaster = (function () {
           hit = true; hitTile = TILES.WALL;
         } else {
           var tile = grid[mapY][mapX];
-          if (tile === TILES.WALL || tile === TILES.PILLAR || tile === TILES.BREAKABLE) {
+          if (tile === TILES.WALL || tile === TILES.PILLAR || tile === TILES.BREAKABLE || tile === TILES.TREE || tile === TILES.SHRUB) {
             hit = true; hitTile = tile;
           } else if (TILES.isDoor(tile)) {
             hit = true; hitTile = tile;
+          }
+        }
+      }
+
+      // ── N-layer hit collection ────────────────────────────────
+      // Continue the DDA past the first hit to collect all solid wall
+      // layers along this ray. Enables back-to-front compositing where
+      // short foreground tiles (shrubs, pillars) reveal taller walls
+      // behind them. The floor pre-pass already painted correct floor
+      // texture everywhere below the horizon — wall layers just
+      // overdraw on top. Zero overhead on floors without tileWallHeights.
+      var _lc = 0; // layer count for this column
+      if (hit && _contract && _contract.tileWallHeights) {
+        // Record first hit as layer 0
+        _layerBuf[0].mx = mapX;
+        _layerBuf[0].my = mapY;
+        _layerBuf[0].sd = side;
+        _layerBuf[0].tile = hitTile;
+        _lc = 1;
+
+        // Track tallest layer seen — only collect hits that add visible
+        // area above the current stack. Same-height walls (e.g. shrub
+        // behind shrub) are fully occluded by the closer one, so skip
+        // them and keep searching for something taller.
+        var _maxH = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
+
+        // Continue DDA to collect up to MAX_LAYERS total hits
+        var _cSdX = sideDistX, _cSdY = sideDistY;
+        var _cMX = mapX, _cMY = mapY, _cSd = 0;
+        var _cDep = depth;
+        while (_lc < _MAX_LAYERS && _cDep < renderDist && (_cDep - depth) < _MAX_BG_STEPS) {
+          if (_cSdX < _cSdY) {
+            _cSdX += deltaDistX; _cMX += stepX; _cSd = 0;
+          } else {
+            _cSdY += deltaDistY; _cMY += stepY; _cSd = 1;
+          }
+          _cDep++;
+          if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
+          var _cT = grid[_cMY][_cMX];
+          if (_cT === TILES.WALL || _cT === TILES.TREE || _cT === TILES.PILLAR ||
+              _cT === TILES.BREAKABLE || _cT === TILES.SHRUB || TILES.isDoor(_cT)) {
+            var _cH = SpatialContract.getWallHeight(_contract, _cMX, _cMY, _rooms, _cT, _cellHeights);
+            // Only record if taller than everything in front — shorter or
+            // equal hits are fully occluded and waste a layer slot
+            if (_cH > _maxH) {
+              _layerBuf[_lc].mx = _cMX;
+              _layerBuf[_lc].my = _cMY;
+              _layerBuf[_lc].sd = _cSd;
+              _layerBuf[_lc].tile = _cT;
+              _lc++;
+              _maxH = _cH;
+              // Stop at max-height tiles — nothing visible behind them
+              if (_cH >= 3.0) break;
+            }
+            // Same or shorter height: skip, keep searching
           }
         }
       }
@@ -191,22 +276,25 @@ var Raycaster = (function () {
       }
       perpDist = Math.abs(perpDist);
 
-      // Minimum perpDist clamp — prevents absurdly tall walls when
-      // peripheral rays graze very close surfaces. 0.2 = player can't
-      // get closer than ~0.2 tiles to a wall in the grid system (they
-      // stand at tile center = 0.5 units from the adjacent wall face).
-      if (perpDist < 0.2) perpDist = 0.2;
+      // Minimum perpDist clamp — prevents division-by-near-zero when
+      // peripheral rays graze very close surfaces. With ±32° free-look
+      // the effective viewport spans up to ±62° total, so peripheral
+      // rays can get very shallow. The UV clipping below handles
+      // arbitrarily large lineHeight correctly; this clamp is only
+      // needed to prevent numeric instability in 1/perpDist.
+      if (perpDist < 0.12) perpDist = 0.12;
       _zBuffer[col] = perpDist;
 
-      // ── Wall height: contract base × chamber override ──
+      // ── Wall height: contract tileWallHeights → chamber override → base ──
       var wallHeightMult = baseWallH;
-      if (_contract && _rooms) {
-        wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms);
+      if (_contract) {
+        wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
       }
-
-      // Cap lineHeight to 3× viewport height — prevents distorted
-      // peripheral strips when idle against a wall face
-      var lineHeight = Math.min(h * 3, Math.floor((h * wallHeightMult) / perpDist));
+      // No cap on lineHeight — proper texture UV clipping handles
+      // close-range walls. Removing the cap fixes the stretch bug where
+      // nearby walls widen (more columns) without getting proportionally
+      // taller, because the old h*3 cap limited height but not width.
+      var lineHeight = Math.floor((h * wallHeightMult) / perpDist);
 
       // ── Tile height offset (Doom rule) ──────────────────────────
       // Transition tiles are vertically displaced from the floor plane.
@@ -220,8 +308,13 @@ var Raycaster = (function () {
       var vertShift = Math.floor((h * heightOffset) / perpDist);
 
       // Unshifted positions (where the wall would draw at floor level)
-      var flatTop    = Math.floor(halfH - lineHeight / 2);
-      var flatBottom = Math.floor(halfH + lineHeight / 2);
+      // For tiles with tileWallHeights override (e.g. TREE at 2×), anchor
+      // the bottom at normal floor level and extend upward only. Without
+      // this, centered positioning makes tall walls grow symmetrically
+      // above and below the horizon, clipping into the floor.
+      var baseLineH = Math.floor((h * baseWallH) / perpDist);
+      var flatBottom = Math.floor(halfH + baseLineH / 2);
+      var flatTop    = flatBottom - lineHeight;
 
       // Shifted positions (where the wall actually draws)
       var drawStart = Math.max(0, flatTop - vertShift);
@@ -238,8 +331,33 @@ var Raycaster = (function () {
         brightness = lightMap[mapY][mapX];
       }
 
-      // ── Texture or flat-color wall rendering ──────────────────
+      // ── Back-to-front N-layer wall rendering ────────────────
+      // Render background layers (farthest first, skipping layer 0
+      // which is the foreground — rendered by the existing code below).
+      // Each layer draws its full textured strip; closer layers
+      // overdraw farther layers naturally (painter's algorithm).
+      // Floor pre-pass shows through any column region no layer covers.
+      if (_lc > 1) {
+        for (var _li = _lc - 1; _li >= 1; _li--) {
+          _renderBackLayer(
+            ctx, col, _layerBuf[_li], h, halfH, baseWallH,
+            px, py, rayDirX, rayDirY, stepX, stepY,
+            fogDist, fogColor, lightMap
+          );
+        }
+      }
+
+      // ── Foreground wall (layer 0) — texture or flat-color ─────
       var texId = _contract ? SpatialContract.getTexture(_contract, hitTile) : null;
+
+      // Locked BOSS_DOOR override: show chain/padlock texture until unlocked
+      if (hitTile === TILES.BOSS_DOOR && texId &&
+          typeof FloorTransition !== 'undefined' &&
+          typeof FloorManager !== 'undefined' &&
+          !FloorTransition.isDoorUnlocked(FloorManager.getFloor(), mapX, mapY)) {
+        texId = 'door_locked';
+      }
+
       var tex = texId ? TextureAtlas.get(texId) : null;
       var stripH = drawEnd - drawStart + 1;
 
@@ -273,12 +391,11 @@ var Raycaster = (function () {
         var texX = Math.floor(wallX * tex.width);
         if (texX >= tex.width) texX = tex.width - 1;
 
-        // Draw the texture column via drawImage (1px source slice → strip)
-        ctx.drawImage(
-          tex.canvas,
-          texX, 0, 1, tex.height,           // source: 1px column, full height
-          col, drawStart, 1, stripH          // dest: screen column
-        );
+        // Draw textured wall column — WALL tiles (brick) get vertical tiling
+        // so patterns repeat on tall facades. All other tiles stretch.
+        var shiftedTop = flatTop - vertShift;
+        _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
+                         drawStart, drawEnd, col, wallHeightMult, hitTile);
 
         // Side shading (side=1 faces are darker, matching flat-color convention)
         if (side === 1) {
@@ -316,9 +433,24 @@ var Raycaster = (function () {
       // The gap between the displaced wall and the floor/ceiling plane
       // fills with a darkened step color to read as a physical platform
       // or recessed lip. This is what makes doors "look" raised/sunken.
-      if (vertShift !== 0 && _contract && _contract.stepColor) {
+      //
+      // Step color is sampled from the tile's texture edge pixel when
+      // available, so each biome's door/stair texture automatically gets
+      // a matching step color. Falls back to contract.stepColor.
+      if (vertShift !== 0 && _contract) {
+        var rawStepColor = _contract.stepColor || '#222';
+
+        // Sample texture edge for per-tile step color
+        if (tex && tex.data) {
+          var sTexX = Math.floor(wallX * tex.width);
+          if (sTexX >= tex.width) sTexX = tex.width - 1;
+          var sTexY = (heightOffset > 0) ? tex.height - 1 : 0;
+          var sIdx = (sTexY * tex.width + sTexX) * 4;
+          rawStepColor = 'rgb(' + tex.data[sIdx] + ',' + tex.data[sIdx + 1] + ',' + tex.data[sIdx + 2] + ')';
+        }
+
         var stepColor = _applyFogAndBrightness(
-          _contract.stepColor, fogFactor, brightness * 0.7, fogColor
+          rawStepColor, fogFactor, brightness * 0.7, fogColor
         );
         ctx.fillStyle = stepColor;
 
@@ -353,7 +485,19 @@ var Raycaster = (function () {
     if (sprites && sprites.length > 0) {
       _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor);
     }
+
+    // ── Render particles (above sprites, below HUD) ──
+    // dt is estimated from frame timing since render() doesn't receive it.
+    // CombatFX or game.js calls updateParticles() separately if precision matters.
+    var now = Date.now();
+    var pDt = now - (_lastParticleTime || now);
+    _lastParticleTime = now;
+    if (pDt > 0 && pDt < 100) {
+      _updateAndRenderParticles(ctx, pDt);
+    }
   }
+
+  var _lastParticleTime = 0;
 
   // ── Parallax background layers ──
   function _renderParallax(ctx, w, h, halfH, layers, playerDir) {
@@ -367,6 +511,370 @@ var Raycaster = (function () {
       // This makes layers feel "behind" the geometry
       ctx.fillStyle = layer.color;
       ctx.fillRect(0, bandY, w, bandH);
+    }
+  }
+
+  // ── Tiled texture column renderer ──────────────────────────────
+  // Draws a single textured wall column with vertical tiling for WALL
+  // tiles only (bricks). Doors, trees, concrete, and all other tile
+  // types use stretch mapping — their textures are designed for their
+  // specific height multiplier.
+  //
+  // Parameters:
+  //   ctx       - canvas 2D context
+  //   tex       - texture object {canvas, width, height}
+  //   texX      - source column index in texture
+  //   wallTop   - unshifted top pixel of the full wall strip
+  //   lineH     - total wall height in pixels
+  //   drawStart - visible top pixel (clamped to screen)
+  //   drawEnd   - visible bottom pixel (clamped to screen)
+  //   col       - screen column X
+  //   whMult    - wall height multiplier (from tileWallHeights)
+  //   tileType  - TILES constant (only WALL tiles get tiled)
+  function _drawTiledColumn(ctx, tex, texX, wallTop, lineH, drawStart, drawEnd, col, whMult, tileType) {
+    var stripH = drawEnd - drawStart + 1;
+    if (stripH <= 0 || lineH <= 0) return;
+
+    // Only WALL tiles tile their texture (bricks repeat on tall facades).
+    // Doors, trees, pillars, concrete etc. stretch — their textures are
+    // authored for the full height. Also stretch at or below 1.0×.
+    var shouldTile = (tileType === TILES.WALL) && (whMult > 1.001);
+
+    if (!shouldTile) {
+      var srcY = (drawStart - wallTop) / lineH * tex.height;
+      var srcH = stripH / lineH * tex.height;
+      if (srcY < 0) { srcH += srcY; srcY = 0; }
+      if (srcY + srcH > tex.height) srcH = tex.height - srcY;
+      if (srcH < 0.5) srcH = 0.5;
+      ctx.drawImage(tex.canvas, texX, srcY, 1, srcH, col, drawStart, 1, stripH);
+      return;
+    }
+
+    // Above 1.0×: tile the texture vertically. Each repeat occupies
+    // (lineH / whMult) screen pixels — the height of a 1.0× wall at
+    // this distance. The wall contains ceil(whMult) full or partial tiles.
+    var tilePixH = lineH / whMult;          // screen pixels per texture repeat
+    var numTiles = Math.ceil(whMult);        // number of tile segments
+
+    for (var t = 0; t < numTiles; t++) {
+      var segWallTop = wallTop + t * tilePixH;
+      var segWallBot = wallTop + (t + 1) * tilePixH;
+
+      // Last tile may be partial (e.g. 0.5 of a tile for 3.5×)
+      if (t === numTiles - 1 && whMult % 1 > 0.001) {
+        segWallBot = wallTop + lineH;  // align to actual wall bottom
+      }
+
+      // Clamp to visible region
+      var segStart = Math.max(drawStart, Math.floor(segWallTop));
+      var segEnd   = Math.min(drawEnd,   Math.ceil(segWallBot) - 1);
+      if (segStart > segEnd) continue;
+
+      var segH = segEnd - segStart + 1;
+      var localTileH = segWallBot - segWallTop;
+      if (localTileH < 1) localTileH = 1;
+
+      // Source UV within this single texture tile
+      var sY = (segStart - segWallTop) / localTileH * tex.height;
+      var sH = segH / localTileH * tex.height;
+      if (sY < 0) { sH += sY; sY = 0; }
+      if (sY + sH > tex.height) sH = tex.height - sY;
+      if (sH < 0.5) sH = 0.5;
+
+      ctx.drawImage(tex.canvas, texX, sY, 1, sH, col, segStart, 1, segH);
+    }
+  }
+
+  // ── N-layer back-wall renderer ──────────────────────────────────
+  // Renders a single background wall layer for the N-layer compositing
+  // system. Called for each layer behind the foreground, farthest first
+  // (painter's algorithm). Draws the full textured wall strip — closer
+  // layers overdraw farther ones, and the floor pre-pass shows through
+  // any uncovered column region.
+  //
+  // Simpler than the foreground renderer: no DoorAnimator, no BOSS_DOOR
+  // lock check, no Doom-rule step fill. Back layers are static scenery.
+  function _renderBackLayer(ctx, col, L, h, halfH, baseWallH,
+                            px, py, rayDirX, rayDirY, stepX, stepY,
+                            fogDist, fogColor, lightMap) {
+    // Perpendicular distance
+    var pd;
+    if (L.sd === 0) {
+      pd = (L.mx - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
+    } else {
+      pd = (L.my - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
+    }
+    pd = Math.abs(pd);
+    if (pd < 0.12) pd = 0.12;
+
+    // Wall height from contract
+    var wh = SpatialContract.getWallHeight(_contract, L.mx, L.my, _rooms, L.tile, _cellHeights);
+    var lineH = Math.floor((h * wh) / pd);
+    var baseLH = Math.floor((h * baseWallH) / pd);
+
+    // Bottom-anchored positioning (same as foreground)
+    var flatBot = Math.floor(halfH + baseLH / 2);
+    var flatTop = flatBot - lineH;
+    var drStart = Math.max(0, flatTop);
+    var drEnd   = Math.min(h - 1, flatBot);
+    var stripH  = drEnd - drStart + 1;
+    if (stripH <= 0) return;
+
+    // Fog — skip fully fogged layers (invisible, saves draw calls)
+    var fog = _contract
+      ? SpatialContract.getFogFactor(_contract, pd)
+      : Math.min(1, pd / fogDist);
+    if (fog > 0.98) return;
+
+    // Brightness from lightmap
+    var bri = 1.0;
+    if (lightMap && lightMap[L.my] && lightMap[L.my][L.mx] !== undefined) {
+      bri = lightMap[L.my][L.mx];
+    }
+
+    // Wall UV
+    var wx;
+    if (L.sd === 0) {
+      wx = py + pd * rayDirY;
+    } else {
+      wx = px + pd * rayDirX;
+    }
+    wx -= Math.floor(wx);
+    if ((L.sd === 0 && rayDirX > 0) || (L.sd === 1 && rayDirY < 0)) {
+      wx = 1 - wx;
+    }
+
+    // Texture lookup
+    var texId = SpatialContract.getTexture(_contract, L.tile);
+    var tex = texId ? TextureAtlas.get(texId) : null;
+
+    if (tex) {
+      var texX = Math.floor(wx * tex.width);
+      if (texX >= tex.width) texX = tex.width - 1;
+
+      // Draw textured wall column — only WALL tiles tile their texture
+      _drawTiledColumn(ctx, tex, texX, flatTop, lineH, drStart, drEnd, col, wh, L.tile);
+
+      // Side shading
+      if (L.sd === 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(col, drStart, 1, stripH);
+      }
+    } else {
+      // Flat-color fallback
+      var base = (L.sd === 1) ? _wallColors.dark : _wallColors.light;
+      ctx.fillStyle = _applyFogAndBrightness(base, fog, bri, fogColor);
+      ctx.fillRect(col, drStart, 1, stripH);
+    }
+
+    // Fog overlay
+    if (fog > 0.01) {
+      ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fog + ')';
+      ctx.fillRect(col, drStart, 1, stripH);
+    }
+
+    // Brightness overlay
+    if (tex && bri < 0.95) {
+      ctx.fillStyle = 'rgba(0,0,0,' + (1 - bri) + ')';
+      ctx.fillRect(col, drStart, 1, stripH);
+    }
+
+    // Edge line (top border only — bottom is at floor level)
+    if (lineH > 20) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(col, drStart, 1, 1);
+    }
+  }
+
+  // ── Floor casting — textured floor via ImageData ──
+  // For each pixel below the horizon, computes the world floor position
+  // and samples the floor texture. Uses a reusable ImageData buffer.
+  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor) {
+    var floorH = h - Math.floor(halfH);
+    if (floorH <= 0) return;
+
+    // Allocate / reuse ImageData buffer for floor region
+    if (_floorBufW !== w || _floorBufH !== floorH || !_floorImgData) {
+      _floorImgData = ctx.createImageData(w, floorH);
+      _floorBufW = w;
+      _floorBufH = floorH;
+    }
+
+    var buf = _floorImgData.data;
+    var px = player.x + 0.5;
+    var py = player.y + 0.5;
+    var pDir = player.dir;
+    var halfFov = fov / 2;
+
+    // Precompute direction vectors for left and right screen edges
+    var dirX = Math.cos(pDir);
+    var dirY = Math.sin(pDir);
+    var planeX = -Math.sin(pDir) * Math.tan(halfFov);
+    var planeY =  Math.cos(pDir) * Math.tan(halfFov);
+
+    var texW = floorTex.width;
+    var texH = floorTex.height;
+    var texData = floorTex.data;
+
+    var fr = fogColor ? fogColor.r : 0;
+    var fg = fogColor ? fogColor.g : 0;
+    var fb = fogColor ? fogColor.b : 0;
+    var fogStart = fogDist * 0.5;
+    var fogRange = (fogDist * 1.5) - fogStart;
+
+    var halfHFloor = Math.floor(halfH);
+
+    for (var row = 0; row < floorH; row++) {
+      // Screen Y (actual pixel row on screen)
+      var screenY = halfHFloor + row;
+      // Distance from horizon
+      var rowFromCenter = screenY - halfH;
+      if (rowFromCenter <= 0) rowFromCenter = 0.5;
+
+      // Floor distance for this scanline
+      var rowDist = (halfH * baseWallH) / rowFromCenter;
+
+      // World position of left and right edges of this scanline
+      var floorStepX = (2 * rowDist * planeX) / w;
+      var floorStepY = (2 * rowDist * planeY) / w;
+
+      // Start position (leftmost pixel)
+      var floorX = px + rowDist * (dirX - planeX);
+      var floorY = py + rowDist * (dirY - planeY);
+
+      // Fog for this row
+      var rowFog = 0;
+      if (rowDist > fogStart) {
+        rowFog = Math.min(1, (rowDist - fogStart) / fogRange);
+      }
+      var invFog = 1 - rowFog;
+
+      // Distance-based darkening (simulate lighting falloff)
+      var bright = Math.max(0.25, 1 - rowDist * 0.04);
+
+      var rowOffset = row * w * 4;
+
+      for (var col = 0; col < w; col++) {
+        // Texture coordinates — wrap to tile boundaries
+        var tx = ((Math.floor(floorX * texW) % texW) + texW) % texW;
+        var ty = ((Math.floor(floorY * texH) % texH) + texH) % texH;
+
+        // Sample texel
+        var texIdx = (ty * texW + tx) * 4;
+        var r = texData[texIdx]     * bright;
+        var g = texData[texIdx + 1] * bright;
+        var b = texData[texIdx + 2] * bright;
+
+        // Apply fog
+        if (rowFog > 0.01) {
+          r = r * invFog + fr * rowFog;
+          g = g * invFog + fg * rowFog;
+          b = b * invFog + fb * rowFog;
+        }
+
+        var pIdx = rowOffset + col * 4;
+        buf[pIdx]     = r | 0;
+        buf[pIdx + 1] = g | 0;
+        buf[pIdx + 2] = b | 0;
+        buf[pIdx + 3] = 255;
+
+        floorX += floorStepX;
+        floorY += floorStepY;
+      }
+    }
+
+    ctx.putImageData(_floorImgData, 0, halfHFloor);
+  }
+
+  // ── Facing direction lookup for sprite directional shading ──
+  // Maps enemy.facing string → [dx, dy] unit vector.
+  var _FACE_VEC = {
+    east:  [ 1,  0],
+    south: [ 0,  1],
+    west:  [-1,  0],
+    north: [ 0, -1]
+  };
+
+  // Max darkness when enemy faces directly away from player.
+  // 0.45 = heavy shadow, enough to read as "their back" without
+  // fully obscuring the emoji.
+  var FACING_DARK_MAX = 0.45;
+
+  // ── Overhead awareness expressions (MGS-style indicators) ────────
+  // Maps EnemyAI awareness state labels → overhead glyph + color.
+  // Rendered above enemy sprites in world-space (canvas coordinates).
+  var _AWARENESS_GLYPHS = {
+    Unaware:    { glyph: '💤', color: '#aaa' },
+    Suspicious: { glyph: '❓', color: '#cc4' },
+    Alerted:    { glyph: '❗', color: '#c44' },
+    Engaged:    { glyph: '⚔️',  color: '#c4c' }
+  };
+
+  // Overhead expression bob amplitude (px at distance 1)
+  var OVERHEAD_BOB_AMP = 3;
+  // Overhead expression bob frequency (cycles per second)
+  var OVERHEAD_BOB_FREQ = 2.5;
+
+  // ── Lightweight particle pool for status FX ──────────────────────
+  // Fixed pool, no allocation per frame. Each particle has:
+  //   emoji, x, y, vx, vy, life, maxLife, size, alpha
+  var _PARTICLE_MAX = 48;
+  var _particles = [];
+  var _particleThrottle = {};  // Keyed by screenX bucket, limits spawn rate
+
+  function _emitParticle(emoji, sx, sy, spriteH, dist, baseAlpha) {
+    // Throttle: max 1 particle per sprite-bucket every 200ms
+    var bucket = Math.floor(sx / 20);
+    var now = Date.now();
+    if (_particleThrottle[bucket] && now - _particleThrottle[bucket] < 200) return;
+    _particleThrottle[bucket] = now;
+
+    // Find a dead slot or overwrite oldest
+    var slot = null;
+    for (var pi = 0; pi < _particles.length; pi++) {
+      if (_particles[pi].life <= 0) { slot = _particles[pi]; break; }
+    }
+    if (!slot) {
+      if (_particles.length < _PARTICLE_MAX) {
+        slot = { emoji: '', x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 10, alpha: 1 };
+        _particles.push(slot);
+      } else {
+        slot = _particles[0];
+        for (var pi = 1; pi < _particles.length; pi++) {
+          if (_particles[pi].life < slot.life) slot = _particles[pi];
+        }
+      }
+    }
+
+    var pSize = Math.max(8, Math.floor(spriteH * 0.25));
+    slot.emoji = emoji;
+    slot.x = sx + (Math.random() - 0.5) * spriteH * 0.4;
+    slot.y = sy - spriteH * 0.2;
+    slot.vx = (Math.random() - 0.5) * 0.3;
+    slot.vy = -0.4 - Math.random() * 0.3;  // Float upward
+    slot.life = 800 + Math.random() * 400;  // 800-1200ms
+    slot.maxLife = slot.life;
+    slot.size = pSize;
+    slot.alpha = baseAlpha;
+  }
+
+  function _updateAndRenderParticles(ctx, dt) {
+    for (var pi = 0; pi < _particles.length; pi++) {
+      var p = _particles[pi];
+      if (p.life <= 0) continue;
+
+      p.life -= dt;
+      p.x += p.vx * dt * 0.06;
+      p.y += p.vy * dt * 0.06;
+
+      var t = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = p.alpha * t * 0.7;
+      ctx.font = Math.floor(p.size * t) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.emoji, p.x, p.y);
+      ctx.restore();
     }
   }
 
@@ -384,7 +892,7 @@ var Raycaster = (function () {
       while (angle < -Math.PI) angle += 2 * Math.PI;
       if (Math.abs(angle) > halfFov + 0.3) continue;
 
-      sorted.push({ sprite: s, dist: dist, angle: angle });
+      sorted.push({ sprite: s, dist: dist, angle: angle, dx: dx, dy: dy });
     }
 
     sorted.sort(function (a, b) { return b.dist - a.dist; });
@@ -396,9 +904,34 @@ var Raycaster = (function () {
       var angle = item.angle;
 
       var screenX = Math.floor(w / 2 + (angle / halfFov) * (w / 2));
-      var scale = (s.scale || 0.6) / dist;
+      var baseScale = (s.scale || 0.6) / dist;
+      // Pulse effect: scaleAdd oscillates 0..max, adds to base scale
+      var pulseAdd = s.scaleAdd || 0;
+      var scale = baseScale + pulseAdd / dist;
       var spriteH = Math.floor(h * scale);
       var spriteW = spriteH;
+      // Bob effect: vertical oscillation (world-space px scaled by distance)
+      var bobOffset = s.bobY ? Math.floor(s.bobY * h / dist * 0.15) : 0;
+
+      // ── Euler flattening: narrow sprites at perpendicular facing ──
+      // Dot product of facing vs enemy→player gives front/back (|1|)
+      // vs side (0). Side-facing sprites appear narrower, like turning
+      // a paper cutout. Uses cos²-shaped curve for smooth roll-off.
+      if (s.facing) {
+        var fv = _FACE_VEC[s.facing];
+        if (fv && dist > 0.01) {
+          var invD = 1 / dist;
+          var ex = -item.dx * invD;
+          var ey = -item.dy * invD;
+          var faceDot = fv[0] * ex + fv[1] * ey;
+          // |dot|=1 → front/back (full width), 0 → perpendicular (narrow)
+          // flatScale: 0.55 at perpendicular, 1.0 at front/back
+          var absDot = Math.abs(faceDot);
+          var flatScale = 0.55 + 0.45 * absDot * absDot; // cos²-ish
+          spriteW = Math.floor(spriteW * flatScale);
+        }
+      }
+
       var drawX = screenX - spriteW / 2;
 
       // Z-buffer check
@@ -418,14 +951,202 @@ var Raycaster = (function () {
       ctx.save();
       ctx.globalAlpha = alpha;
 
+      // Sprite center Y with bob displacement
+      // Ground-level sprites (corpses, items) render at floor plane
+      var groundShift = s.groundLevel ? Math.floor(spriteH * 0.35) : 0;
+      var spriteCenterY = halfH + bobOffset + groundShift;
+
+      // Billboard tilt for ground sprites (origami corpse / Paper Mario style)
+      // Y-scale compresses to ~40% so they look like flat objects on the floor,
+      // with a slight tilt toward the player for visibility from distance.
+      // Closer corpses appear flatter; distant ones tilt more upward.
+      var ySquish = 1;
+      if (s.groundTilt) {
+        var tiltBase = 0.35;  // Minimum Y scale (very flat)
+        var tiltLift = Math.min(0.25, 0.8 / (dist + 0.5)); // Lift more when close
+        ySquish = tiltBase + tiltLift;
+      }
+
+      // ── Glow halo (drawn behind sprite) ─────────────────────────
+      if (s.glow && s.glowRadius && spriteH > 4) {
+        var glowR = Math.floor(spriteH * 0.5 + s.glowRadius / dist * 8);
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.beginPath();
+        ctx.arc(screenX, spriteCenterY, glowR, 0, Math.PI * 2);
+        ctx.fillStyle = s.glow;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Horizontal squish ratio for perpendicular flattening
+      var hSquish = spriteH > 0 ? spriteW / spriteH : 1;
+
       if (s.emoji) {
+        ctx.save();
+        ctx.translate(screenX, spriteCenterY);
+        var sx = hSquish < 0.98 ? hSquish : 1;
+        if (sx !== 1 || ySquish !== 1) ctx.scale(sx, ySquish);
         ctx.font = Math.floor(spriteH * 0.8) + 'px serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(s.emoji, screenX, halfH);
+        ctx.fillText(s.emoji, 0, 0);
+        ctx.restore();
       } else if (s.color) {
         ctx.fillStyle = s.color;
-        ctx.fillRect(drawX, halfH - spriteH / 2, spriteW, spriteH);
+        ctx.fillRect(drawX, spriteCenterY - spriteH / 2, spriteW, spriteH * ySquish);
+      }
+
+      // ── Tint overlay ───────────────────────────────────────────
+      if (s.tint && spriteH > 4) {
+        ctx.fillStyle = s.tint;
+        ctx.fillRect(
+          screenX - spriteW * 0.45,
+          spriteCenterY - spriteH * 0.45,
+          spriteW * 0.9,
+          spriteH * 0.9
+        );
+      }
+
+      // ── Directional facing shade ──────────────────────────────
+      // Darken sprites facing away from the player. The dot product
+      // of the enemy's facing vector and the enemy→player vector
+      // gives -1 (back) to +1 (front). We map that to a 0→max
+      // darkness overlay, giving implied depth and pathing.
+      if (s.facing && spriteH > 0) {
+        var fv = _FACE_VEC[s.facing];
+        if (fv) {
+          var invDist = 1 / dist;
+          var etpX = -item.dx * invDist;
+          var etpY = -item.dy * invDist;
+          var dot = fv[0] * etpX + fv[1] * etpY;
+          var darkness = (1 - dot) * 0.5 * FACING_DARK_MAX;
+
+          if (darkness > 0.01) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = 'rgba(0,0,0,' + darkness.toFixed(3) + ')';
+            ctx.fillRect(
+              screenX - spriteW * 0.45,
+              spriteCenterY - spriteH * 0.45,
+              spriteW * 0.9,
+              spriteH * 0.9
+            );
+          }
+        }
+      }
+
+      // ── Particle FX (status emoji floating upward) ──────────────
+      // Lightweight: spawn particles into a shared pool, render with
+      // the sprite's screen coordinates. Pool lives on the module.
+      if (s.particleEmoji && spriteH > 10) {
+        _emitParticle(s.particleEmoji, screenX, spriteCenterY, spriteH, dist, alpha);
+      }
+
+      // ── Status overlay text (BURN, PARA, ATK+, etc.) ────────────
+      if (s.overlayText && spriteH > 12) {
+        var olSize = Math.max(8, Math.floor(spriteH * 0.22));
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.font = 'bold ' + olSize + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // Dark outline for readability
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 2;
+        ctx.strokeText(s.overlayText, screenX, spriteCenterY - spriteH * 0.45);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(s.overlayText, screenX, spriteCenterY - spriteH * 0.45);
+      }
+
+      // ── Overhead awareness / intent expression (above enemy head) ──
+      // During combat: show EnemyIntent telegraph (face + card stack).
+      // Exploration: show awareness glyph (MGS-style 💤/❓/❗/⚔️).
+      var _intentRendered = false;
+      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive() && spriteH > 12) {
+        var intentData = EnemyIntent.getRenderData();
+        // Match this sprite to the combat enemy by id
+        if (intentData && s.id !== undefined && intentData.enemyId === s.id) {
+          _intentRendered = true;
+          var now = Date.now();
+          var ibobPhase = (now * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
+          var ibob = Math.sin(ibobPhase) * OVERHEAD_BOB_AMP / dist;
+          var iOverheadY = spriteCenterY - spriteH * 0.58;
+
+          // ── Expression glyph (face emoji) ──
+          var iGlyphSize = Math.max(12, Math.floor(spriteH * 0.32));
+          ctx.globalAlpha = alpha * 0.95;
+          ctx.font = iGlyphSize + 'px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(intentData.glyph, screenX, iOverheadY + ibob);
+
+          // ── Card stack telegraph (row of committed cards + empty slots) ──
+          if (intentData.greed > 0 && spriteH > 18) {
+            var slotSize = Math.max(8, Math.floor(spriteH * 0.18));
+            var slotGap = Math.max(2, Math.floor(slotSize * 0.25));
+            var totalW = intentData.greed * slotSize + (intentData.greed - 1) * slotGap;
+            var stackY = iOverheadY + ibob - iGlyphSize * 0.9;
+            var stackStartX = screenX - totalW * 0.5;
+
+            ctx.font = slotSize + 'px serif';
+            ctx.textBaseline = 'bottom';
+            ctx.textAlign = 'center';
+
+            for (var si = 0; si < intentData.greed; si++) {
+              var slotCX = stackStartX + si * (slotSize + slotGap) + slotSize * 0.5;
+
+              if (si < intentData.cardEmojis.length) {
+                // Filled slot — committed card emoji
+                ctx.globalAlpha = alpha * 0.9;
+                ctx.fillText(intentData.cardEmojis[si], slotCX, stackY);
+              } else {
+                // Empty slot — dim placeholder square
+                ctx.globalAlpha = alpha * 0.3;
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillRect(
+                  slotCX - slotSize * 0.35,
+                  stackY - slotSize * 0.8,
+                  slotSize * 0.7,
+                  slotSize * 0.7
+                );
+              }
+            }
+
+            // ── Ready pulse (stack full — flashing warning) ──
+            if (intentData.ready) {
+              var pulse = (Math.sin(now * 0.008) * 0.5 + 0.5);
+              ctx.globalAlpha = alpha * 0.25 * pulse;
+              ctx.fillStyle = '#ff4040';
+              ctx.fillRect(
+                stackStartX - slotGap,
+                stackY - slotSize,
+                totalW + slotGap * 2,
+                slotSize * 1.1
+              );
+            }
+          }
+        }
+      }
+
+      // Exploration awareness glyph (only when intent telegraph is NOT shown)
+      if (!_intentRendered && s.awareness !== undefined && spriteH > 8) {
+        var awarenessState = typeof EnemyAI !== 'undefined'
+          ? EnemyAI.getAwarenessState(s.awareness)
+          : null;
+        if (awarenessState && awarenessState.label !== 'Unaware') {
+          var glyphInfo = _AWARENESS_GLYPHS[awarenessState.label];
+          if (glyphInfo) {
+            var overheadY = spriteCenterY - spriteH * 0.55;
+            var bobPhase = (Date.now() * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
+            var bob = Math.sin(bobPhase) * OVERHEAD_BOB_AMP / dist;
+
+            var glyphSize = Math.max(10, Math.floor(spriteH * 0.35));
+            ctx.globalAlpha = alpha * 0.9;
+            ctx.font = glyphSize + 'px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(glyphInfo.glyph, screenX, overheadY + bob);
+          }
+        }
       }
 
       ctx.restore();

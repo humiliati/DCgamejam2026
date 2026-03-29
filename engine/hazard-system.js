@@ -71,10 +71,10 @@ var HazardSystem = (function () {
    * @param {number} by - Bonfire tile Y
    */
   function restAtBonfire(bx, by) {
-    var floorNum = FloorManager.getFloorNum();
+    var floorId = FloorManager.getFloor();
 
     // Save this bonfire as the respawn point for this floor
-    _bonfirePositions[floorNum] = { x: bx, y: by };
+    _bonfirePositions[floorId] = { x: bx, y: by };
 
     // Full restore
     Player.fullRestore();
@@ -82,11 +82,11 @@ var HazardSystem = (function () {
 
     // Feedback
     HUD.showCombatLog(i18n.t('hazard.bonfire_rest', '🔥 Rested at bonfire — HP & energy restored'));
-    AudioSystem.play('bonfire_rest');
+    AudioSystem.play('ui-confirm', { volume: 0.5 });
 
     SessionStats.inc('bonfiresUsed');
 
-    console.log('[HazardSystem] Rested at bonfire (' + bx + ',' + by + ') on floor ' + floorNum);
+    console.log('[HazardSystem] Rested at bonfire (' + bx + ',' + by + ') on floor ' + floorId);
   }
 
   /**
@@ -96,11 +96,11 @@ var HazardSystem = (function () {
    * @returns {{ x: number, y: number }}
    */
   function _getRespawnPos() {
-    var floorNum = FloorManager.getFloorNum();
+    var floorId = FloorManager.getFloor();
 
     // Prefer last bonfire rested at on this floor
-    if (_bonfirePositions[floorNum]) {
-      return _bonfirePositions[floorNum];
+    if (_bonfirePositions[floorId]) {
+      return _bonfirePositions[floorId];
     }
 
     // Fallback: stairs-up position (entry point)
@@ -159,7 +159,7 @@ var HazardSystem = (function () {
     HUD.showCombatLog(msg);
     HUD.updatePlayer(Player.state());
 
-    AudioSystem.play('hazard_' + info.reason);
+    AudioSystem.play('zap', { volume: 0.4 });
 
     // ── Death check ──
     if (!Player.isAlive()) {
@@ -226,7 +226,7 @@ var HazardSystem = (function () {
     var penaltyStr = penalty > 0
       ? ' (-' + penalty + ' ' + i18n.t('hazard.currency_lost', 'gold lost') + ')'
       : '';
-    var bonfireStr = _bonfirePositions[FloorManager.getFloorNum()]
+    var bonfireStr = _bonfirePositions[FloorManager.getFloor()]
       ? i18n.t('hazard.respawn_bonfire', 'Respawned at bonfire.')
       : i18n.t('hazard.respawn_entrance', 'Returned to entrance.');
 
@@ -235,7 +235,7 @@ var HazardSystem = (function () {
     );
 
     SessionStats.inc('environmentalDeaths');
-    AudioSystem.play('env_death_soft');
+    AudioSystem.play('enemy-death', { volume: 0.5 });
 
     console.log('[HazardSystem] Non-lethal respawn at (' +
                 respawn.x + ',' + respawn.y + '), penalty: ' + penalty);
@@ -259,7 +259,7 @@ var HazardSystem = (function () {
         'Killed by ' + reason + ' in the deep dungeon')
     );
 
-    AudioSystem.play('env_death_hard');
+    AudioSystem.play('explosion-big', { volume: 0.6 });
 
     if (_onGameOver) _onGameOver();
   }

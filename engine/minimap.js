@@ -19,8 +19,8 @@ var Minimap = (function () {
 
   var _canvas = null;
   var _ctx = null;
-  var _size = 160;
-  var _visible = true;
+  var _size = 320;  // Doubled from 160 for HUD 2× scale
+  var _visible = false;   // Start hidden — player toggles via M key or map button
 
   // ── Floor cache & stack ──────────────────────────────────────────
   // _floorCache: floorId → { explored, lastPlayerPos }
@@ -51,10 +51,17 @@ var Minimap = (function () {
     player:     '#0f0',
     enemy:      '#f44',
     enemySus:   '#ff0',
+    // Sight cone fill per awareness state
+    coneUnaware:   'rgba(0,255,0,0.10)',     // green — safe
+    coneSuspicious:'rgba(255,255,0,0.15)',    // yellow — caution
+    coneAlerted:   'rgba(255,68,68,0.20)',    // red — danger
+    coneEngaged:   'rgba(218,70,214,0.25)',   // magenta — combat
     chest:      '#ff0',
     hazard:     '#c33',       // Red tint for fire/spikes/poison/trap
     bonfire:    '#f80',       // Orange for bonfire checkpoints
     corpse:     '#8a6',       // Muted green for harvestable corpses
+    collectible:'#fa4',       // Amber for walk-over pickups (gold/battery/food)
+    breakable:  '#876',       // Tan-brown for destructible props
     unexplored: '#000',
     label:      'rgba(255,255,255,0.6)',
     labelBg:    'rgba(0,0,0,0.5)'
@@ -223,7 +230,7 @@ var Minimap = (function () {
         var px2 = offsetX + x * tileSize;
         var py2 = offsetY + y * tileSize;
 
-        if (tile === TILES.WALL || tile === TILES.PILLAR) {
+        if (tile === TILES.WALL || tile === TILES.PILLAR || tile === TILES.TREE) {
           ctx.fillStyle = COLORS.wall;
         } else if (tile === TILES.STAIRS_UP) {
           ctx.fillStyle = COLORS.stairsUp;
@@ -239,6 +246,10 @@ var Minimap = (function () {
           ctx.fillStyle = COLORS.bonfire;
         } else if (tile === TILES.CORPSE) {
           ctx.fillStyle = COLORS.corpse;
+        } else if (tile === TILES.COLLECTIBLE) {
+          ctx.fillStyle = COLORS.collectible;
+        } else if (tile === TILES.BREAKABLE) {
+          ctx.fillStyle = COLORS.breakable;
         } else if (tile === TILES.EMPTY || (TILES.isWalkable && TILES.isWalkable(tile))) {
           ctx.fillStyle = COLORS.floor;
         } else {
@@ -258,7 +269,35 @@ var Minimap = (function () {
       }
     }
 
-    // Draw enemies
+    // Draw enemy sight cones (behind dots so dots stay visible)
+    if (enemies) {
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        var ek = e.x + ',' + e.y;
+        if (!_explored[ek]) continue;
+        // Only draw cones for enemies that have a facing direction
+        if (e.dir === undefined && e.orientation === undefined) continue;
+
+        var ex = offsetX + e.x * tileSize + tileSize / 2;
+        var ey = offsetY + e.y * tileSize + tileSize / 2;
+        var facing = _enemyFacingAngle(e);
+        var aw = e.awareness || 0;
+        // Use AwarenessConfig for canonical cone colors when available
+        var coneColor;
+        if (typeof AwarenessConfig !== 'undefined') {
+          coneColor = AwarenessConfig.getConeColor(aw);
+        } else {
+          coneColor = (aw > 100) ? COLORS.coneEngaged
+                    : (aw > 70)  ? COLORS.coneAlerted
+                    : (aw > 30)  ? COLORS.coneSuspicious
+                    :               COLORS.coneUnaware;
+        }
+        var sightRange = (e.sightRange || 5) * tileSize;
+        _drawSightCone(ctx, ex, ey, facing, sightRange, coneColor);
+      }
+    }
+
+    // Draw enemy dots (on top of cones)
     if (enemies) {
       for (var i = 0; i < enemies.length; i++) {
         var e = enemies[i];
@@ -294,18 +333,59 @@ var Minimap = (function () {
 
     // Draw floor label overlay (bottom-left corner)
     if (_floorLabel) {
-      ctx.font = '9px monospace';
-      var labelW = ctx.measureText(_floorLabel).width + 6;
+      ctx.font = '18px monospace';
+      var labelW = ctx.measureText(_floorLabel).width + 12;
       ctx.fillStyle = COLORS.labelBg;
-      ctx.fillRect(1, _size - 13, labelW, 12);
+      ctx.fillRect(2, _size - 26, labelW, 24);
       ctx.fillStyle = COLORS.label;
-      ctx.fillText(_floorLabel, 4, _size - 3);
+      ctx.fillText(_floorLabel, 8, _size - 6);
     }
 
     // Draw depth indicator (breadcrumb dots, top-right)
     if (_floorStack.length > 1) {
       _drawBreadcrumbs(ctx);
     }
+  }
+
+  // ── Sight cone helpers ────────────────────────────────────────────
+
+  /**
+   * Convert enemy orientation string to radians.
+   * Supports both cardinal ('north','south','east','west') from patrol AI
+   * and numeric `dir` (radians) from movement interpolation.
+   */
+  var _ORIENTATION_ANGLES = {
+    'east':  0,
+    'south': Math.PI / 2,
+    'west':  Math.PI,
+    'north': -Math.PI / 2
+  };
+
+  function _enemyFacingAngle(enemy) {
+    if (typeof enemy.dir === 'number') return enemy.dir;
+    return _ORIENTATION_ANGLES[enemy.orientation] || 0;
+  }
+
+  /**
+   * Draw a 60° sight cone wedge on the minimap canvas.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} cx       - Center X (pixel)
+   * @param {number} cy       - Center Y (pixel)
+   * @param {number} facing   - Direction in radians
+   * @param {number} range    - Sight range in pixels
+   * @param {string} color    - Fill color (rgba string)
+   */
+  var _CONE_HALF_ANGLE = Math.PI / 6; // 30° each side = 60° total
+
+  function _drawSightCone(ctx, cx, cy, facing, range, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, range, facing - _CONE_HALF_ANGLE, facing + _CONE_HALF_ANGLE, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /**
@@ -339,10 +419,10 @@ var Minimap = (function () {
     var currentIdx = _floorStack.indexOf(_currentFloorId);
     if (currentIdx < 0) currentIdx = count - 1;
 
-    var dotR = 2;
-    var gap = 7;
-    var startX = _size - (count * gap) - 2;
-    var y = 8;
+    var dotR = 4;
+    var gap = 14;
+    var startX = _size - (count * gap) - 4;
+    var y = 16;
 
     for (var i = 0; i < count; i++) {
       ctx.beginPath();

@@ -69,6 +69,18 @@ var InputManager = (function () {
       }
     });
 
+    // Scroll wheel → scroll_up / scroll_down actions.
+    // Used by: Face 3 volume sliders (fine-grained), Face 2 inventory scroll,
+    // Magic Remote scroll wheel (webOS). Not edge-triggered — fires on each tick.
+    window.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        _fire('scroll_up', 'press');
+      } else if (e.deltaY > 0) {
+        _fire('scroll_down', 'press');
+      }
+    }, { passive: false });
+
     // Clear all held keys when window loses focus.
     // Without this, a key held during alt-tab or mouse-leave stays
     // "stuck" in _keysDown because the keyup event fires in the

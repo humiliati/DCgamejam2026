@@ -29,11 +29,14 @@
 var DoorContractAudio = (function () {
   'use strict';
 
-  // ── Manifest key prefix for door sounds ──────────────────────────
-  var _D = 'doorset-ogg-qubodup-';
-
   // ── Transition table ─────────────────────────────────────────────
   // Keyed by "srcDepth:tgtDepth" where depth = floorId.split('.').length
+  //
+  // Keys match audio-manifest.json entries:
+  //   door-open / door-open2  — creak variants
+  //   door-close / door-close2 — thud variants
+  //   ascend / ascend-heavy   — vertical rise (1 / 2 layers)
+  //   descend / descend-heavy — vertical drop (1 / 2 layers)
   //
   // Special keys:
   //   "1:1"           = world elevation (N → N±), no door
@@ -46,60 +49,60 @@ var DoorContractAudio = (function () {
   var TRANSITION_TABLE = {
     // ── World ↔ Building (N ↔ N.N) ── Horizontal, door only
     '1:2': [
-      { key: _D + 'dooropen01', delay: 0, volume: 0.5 },
-      { key: _D + 'doorclose03', delay: 600, volume: 0.45 }
+      { key: 'door-open', delay: 0, volume: 0.5 },
+      { key: 'door-close', delay: 600, volume: 0.45 }
     ],
     '2:1': [
-      { key: _D + 'dooropen06', delay: 0, volume: 0.5 },
-      { key: _D + 'doorclose06', delay: 600, volume: 0.45 }
+      { key: 'door-open2', delay: 0, volume: 0.5 },
+      { key: 'door-close2', delay: 600, volume: 0.45 }
     ],
 
     // ── Building ↔ Basement (N.N ↔ N.N.N) ── Door + vertical
     '2:3': [
-      { key: _D + 'dooropen02', delay: 0, volume: 0.5 },
-      { key: 'descend-2', delay: 250, volume: 0.4 },
-      { key: _D + 'doorclose05', delay: 600, volume: 0.45 }
+      { key: 'door-open2', delay: 0, volume: 0.5 },
+      { key: 'descend', delay: 250, volume: 0.4 },
+      { key: 'door-close2', delay: 600, volume: 0.45 }
     ],
     '3:2': [
-      { key: _D + 'dooropen01', delay: 0, volume: 0.5 },
-      { key: 'ascend-2', delay: 250, volume: 0.4 },
-      { key: _D + 'doorclose05', delay: 600, volume: 0.45 }
+      { key: 'door-open', delay: 0, volume: 0.5 },
+      { key: 'ascend', delay: 250, volume: 0.4 },
+      { key: 'door-close2', delay: 600, volume: 0.45 }
     ],
 
     // ── Basement ↔ World (N.N.N ↔ N) ── Door + long vertical, no close
     '3:1': [
-      { key: _D + 'dooropen03', delay: 0, volume: 0.5 },
-      { key: 'ascend-3', delay: 250, volume: 0.4 }
+      { key: 'door-open', delay: 0, volume: 0.5 },
+      { key: 'ascend-heavy', delay: 250, volume: 0.4 }
     ],
     '1:3': [
-      { key: _D + 'dooropen04', delay: 0, volume: 0.5 },
-      { key: 'descend-3', delay: 250, volume: 0.4 }
+      { key: 'door-open2', delay: 0, volume: 0.5 },
+      { key: 'descend-heavy', delay: 250, volume: 0.4 }
     ],
 
     // ── Nested ↔ Deeper Nested (N.N.N ↔ N.N.N+) ── Heavy door + vertical
     '3:3_deeper': [
-      { key: _D + 'dooropen05', delay: 0, volume: 0.5 },
-      { key: 'descend-2', delay: 250, volume: 0.4 },
-      { key: _D + 'doorclose09', delay: 600, volume: 0.45 }
+      { key: 'door-open2', delay: 0, volume: 0.5 },
+      { key: 'descend', delay: 250, volume: 0.4 },
+      { key: 'door-close2', delay: 600, volume: 0.45 }
     ],
     '3:3_shallower': [
-      { key: _D + 'dooropen05', delay: 0, volume: 0.5 },
-      { key: 'ascend-2', delay: 250, volume: 0.4 },
-      { key: _D + 'doorclose09', delay: 600, volume: 0.45 }
+      { key: 'door-open2', delay: 0, volume: 0.5 },
+      { key: 'ascend', delay: 250, volume: 0.4 },
+      { key: 'door-close2', delay: 600, volume: 0.45 }
     ],
 
     // ── Building ↔ Building (N.N ↔ N.N) ── Interior horizontal
     '2:2': [
-      { key: _D + 'dooropen01', delay: 0, volume: 0.45 },
-      { key: _D + 'doorclose03', delay: 500, volume: 0.4 }
+      { key: 'door-open', delay: 0, volume: 0.45 },
+      { key: 'door-close', delay: 500, volume: 0.4 }
     ],
 
     // ── World elevation (N → N±) ── Pure vertical, no door
     '1:1_up': [
-      { key: 'ascend-3', delay: 0, volume: 0.4 }
+      { key: 'ascend-heavy', delay: 0, volume: 0.4 }
     ],
     '1:1_down': [
-      { key: 'descend-3', delay: 0, volume: 0.4 }
+      { key: 'descend-heavy', delay: 0, volume: 0.4 }
     ]
   };
 
@@ -159,9 +162,9 @@ var DoorContractAudio = (function () {
 
     // Fallback: generic ascend or descend based on depth change
     if (tgtD > srcD) {
-      return [{ key: 'descend-2', delay: 0, volume: 0.4 }];
+      return [{ key: 'descend', delay: 0, volume: 0.4 }];
     }
-    return [{ key: 'ascend-2', delay: 0, volume: 0.4 }];
+    return [{ key: 'ascend', delay: 0, volume: 0.4 }];
   }
 
   /**
@@ -175,7 +178,7 @@ var DoorContractAudio = (function () {
   function getPreFadeDelay(sounds) {
     if (!sounds || sounds.length === 0) return 0;
     for (var i = 0; i < sounds.length; i++) {
-      if (sounds[i].delay === 0 && sounds[i].key.indexOf('doorset') !== -1) {
+      if (sounds[i].delay === 0 && sounds[i].key.indexOf('door-') === 0) {
         return 350; // Door creak needs ~350ms before fade
       }
     }

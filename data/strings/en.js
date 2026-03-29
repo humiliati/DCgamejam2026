@@ -10,14 +10,14 @@
  */
 i18n.register('en', {
   // ── Splash ──────────────────────────────────────────────────────
-  'splash.studio':      'PLACEHOLDER STUDIO',
-  'splash.title':       'PLACEHOLDER TITLE',
-  'splash.jam':         'DC Jam 2026',
-  'splash.skip':        'Press any key',
+  'splash.studio':      'DC JAM 2026',
+  'splash.title':       'DUNGEON GLEANER',
+  'splash.jam':         'DC JAM 2026',
+  'splash.skip':        'PRESS ANY KEY',
 
   // ── Title Screen ────────────────────────────────────────────────
-  'title.game_name':    'PLACEHOLDER TITLE',
-  'title.subtitle':     'A Dungeon Crawler',
+  'title.game_name':    'DUNGEON GLEANER',
+  'title.subtitle':     'A Gleaning Dungeon Crawler',
   'title.new_game':     'New Game',
   'title.continue':     'Continue',
   'title.settings':     'Settings',
@@ -151,6 +151,31 @@ i18n.register('en', {
   'shop.admiralty_name':    'THE ADMIRALTY',
   'shop.admiralty_desc':    'Naval research — specimens & data wanted',
 
+  // Faction short labels (used by menu-faces.js rep panel)
+  'faction.tide':          'Tide',
+  'faction.foundry':       'Foundry',
+  'faction.admiralty':     'Admiralty',
+
+  // Reputation tier names (0-3)
+  'shop.rep0':             'Stranger',
+  'shop.rep1':             'Associate',
+  'shop.rep2':             'Ally',
+  'shop.rep3':             'Trusted',
+
+  // Shop buy/sell result toasts
+  'shop.bought':           'Bought',
+  'shop.need_gold':        'Need',
+  'shop.more':             'more gold',
+  'shop.sold_out':         'Sold out',
+  'shop.sold':             'Sold',
+  'shop.sell_fail':        'Cannot sell',
+
+  // Updated buy/sell pane titles & hints
+  'shop.buy_title':        'BUY CARDS',
+  'shop.sell_title':       'SELL CARDS',
+  'shop.buy_hint':         '[1-5] Buy   [Q/E] Switch pane   [ESC] Leave',
+  'shop.sell_hint':        '[1-5] Sell   [Q/E] Switch pane   [ESC] Leave',
+
   // ── Dialog Box ──────────────────────────────────────────────────
   'dialog.continue':    '[ Enter / Click to continue ]',
   'dialog.farewell':    'Farewell.',
@@ -174,6 +199,9 @@ i18n.register('en', {
   'toast.stash_full':     'Stash is full!',
   'toast.harvest':        'Harvested:',
   'toast.harvest_empty':  'Nothing left to harvest.',
+  'toast.smashed':        'smashed!',
+  'toast.food_hot':       'Eating...',
+  'toast.food_instant':   'Ate something.',
   'toast.faction_up':     'Reputation up:',
   'toast.sold':           'Sold:',
 
@@ -190,6 +218,7 @@ i18n.register('en', {
   'interact.use':         'Use',
   'interact.examine':     'Examine',
   'interact.harvest':     'Harvest',
+  'interact.smash':       'Smash',
 
   // ── Settings ────────────────────────────────────────────────────
   'settings.language':  'Language',

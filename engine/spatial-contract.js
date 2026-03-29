@@ -97,12 +97,12 @@ var SpatialContract = (function () {
       // Positive = raised platform, negative = sunken recess.
       // Keyed by TILES constant value.
       tileHeightOffsets: opts.tileHeightOffsets || _buildOffsets({
-        2:  0.15,     // DOOR — raised threshold, "entering a building"
-        3:  0.15,     // DOOR_BACK — matches entrance from both sides
-        4:  0.15,     // DOOR_EXIT — consistent with entrance
+        // DOOR/DOOR_BACK/DOOR_EXIT: no offset — flush with floor.
+        // The old 0.15 raise created a visible gap/band under doors
+        // that reads as transparency, especially on same-depth transitions.
         5: -0.12,     // STAIRS_DN — sunken into ground, "descending"
         6:  0.06,     // STAIRS_UP — slight rise, "ascending"
-        14: 0.25      // BOSS_DOOR — prominently elevated
+        14: 0.15      // BOSS_DOOR — prominently elevated (intentional)
       }),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
@@ -117,8 +117,20 @@ var SpatialContract = (function () {
         2:  'door_wood',       // DOOR — wooden entrance
         3:  'door_wood',       // DOOR_BACK
         4:  'door_wood',       // DOOR_EXIT
+        5:  'stairs_down',     // STAIRS_DN — directional indicator
+        6:  'stairs_up',       // STAIRS_UP — directional indicator
+        11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron'        // BOSS_DOOR — iron gate
       }),
+
+      // ── Floor texture ──
+      floorTexture:     opts.floorTexture || 'floor_cobble',
+
+      // ── Per-tile-type wall height overrides ──
+      // Keyed by TILES constant value → height multiplier.
+      // Used for tiles that should render taller/shorter than the contract default
+      // (e.g. TREE tiles at 2× in exterior, while buildings stay 1×).
+      tileWallHeights:  opts.tileWallHeights || null,
 
       // ── Transition rules ──
       canNest:          true,    // Can contain doors to floorsN.N
@@ -160,7 +172,7 @@ var SpatialContract = (function () {
 
       // ── Tile height offsets (Doom rule) ──
       tileHeightOffsets: opts.tileHeightOffsets || _buildOffsets({
-        2:  0.05,     // DOOR — slight step between rooms
+        // DOOR: no offset — flush with floor (gap artifact removed)
         5: -0.08,     // STAIRS_DN — trap door feel
         6:  0.06,     // STAIRS_UP — slight rise toward exit
         14: 0.12      // BOSS_DOOR — elevated archway
@@ -171,8 +183,19 @@ var SpatialContract = (function () {
       textures: opts.textures || _buildTextures({
         1:  'wood_plank',      // WALL — warm wood interior
         2:  'door_wood',       // DOOR — room-to-room door
+        3:  'door_wood',       // DOOR_BACK
+        4:  'door_wood',       // DOOR_EXIT
+        5:  'stairs_down',     // STAIRS_DN — directional indicator
+        6:  'stairs_up',       // STAIRS_UP — directional indicator
+        11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron'        // BOSS_DOOR — iron archway
       }),
+
+      // ── Floor texture ──
+      floorTexture:     opts.floorTexture || 'floor_wood',
+
+      // ── Per-tile-type wall height overrides ──
+      tileWallHeights:  opts.tileWallHeights || null,
 
       // ── Transition rules ──
       canNest:          true,    // Can contain doors to floorsN.N.N
@@ -235,8 +258,20 @@ var SpatialContract = (function () {
       // ── Wall textures ──
       textures: opts.textures || _buildTextures({
         1:  'stone_rough',     // WALL — rough dungeon stone
+        2:  'door_wood',       // DOOR
+        3:  'door_wood',       // DOOR_BACK
+        4:  'door_wood',       // DOOR_EXIT
+        5:  'stairs_down',     // STAIRS_DN — directional indicator
+        6:  'stairs_up',       // STAIRS_UP — directional indicator
+        11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron'        // BOSS_DOOR — iron chamber door
       }),
+
+      // ── Floor texture ──
+      floorTexture:     opts.floorTexture || 'floor_stone',
+
+      // ── Per-tile-type wall height overrides ──
+      tileWallHeights:  opts.tileWallHeights || null,
 
       // ── Transition rules ──
       canNest:          false,   // Bottom of the hierarchy
@@ -259,8 +294,24 @@ var SpatialContract = (function () {
    * @param {Array}  rooms - Room list from GridGen (with bounds)
    * @returns {number} Wall height multiplier
    */
-  function getWallHeight(contract, x, y, rooms) {
-    if (!contract.chamberOverrides || contract.chamberOverrides.length === 0) {
+  function getWallHeight(contract, x, y, rooms, tileType, cellHeights) {
+    // Per-cell height override (e.g. building entrance doors computed at
+    // floor build time). Takes priority over everything else — this is how
+    // the door height contract resolves per-instance height differences
+    // (archway vs shop entrance) that tileWallHeights can't express.
+    if (cellHeights) {
+      var cellKey = x + ',' + y;
+      if (cellHeights[cellKey] != null) {
+        return cellHeights[cellKey];
+      }
+    }
+
+    // Per-tile-type height override (e.g. TREE tiles at 2x in exterior)
+    if (tileType != null && contract.tileWallHeights && contract.tileWallHeights[tileType] != null) {
+      return contract.tileWallHeights[tileType];
+    }
+
+    if (!rooms || !contract.chamberOverrides || contract.chamberOverrides.length === 0) {
       return contract.wallHeight;
     }
 
@@ -277,6 +328,75 @@ var SpatialContract = (function () {
     }
 
     return contract.wallHeight;
+  }
+
+  /**
+   * Compute per-cell height overrides for DOOR tiles based on spatial
+   * context. Building entrance doors get capped to a sensible height
+   * while archway/gate doors stay at full wall height.
+   *
+   * Rule:
+   *   DOOR (type 2) leading DEEPER (target depth > current depth):
+   *     height = max(1.0, wallHeight * 0.5)  — building entrance
+   *   DOOR (type 2) leading SAME or SHALLOWER:
+   *     height = tileWallHeights[DOOR]  — archway/gate
+   *   DOOR_EXIT/DOOR_BACK/BOSS_DOOR:
+   *     always use tileWallHeights (gates stay full height)
+   *
+   * @param {Array[]} grid      - 2D tile grid
+   * @param {number}  gridW     - grid width
+   * @param {number}  gridH     - grid height
+   * @param {Object}  tileWallHeights - per-tile-type height map from contract
+   * @param {number}  baseWallH - contract default wall height
+   * @param {Object}  doorTargets - 'x,y' → target floor ID
+   * @param {string}  currentFloorId - current floor ID string
+   * @returns {Object|null} cellHeights map ('x,y' → height) or null if empty
+   */
+  function computeDoorHeights(grid, gridW, gridH, tileWallHeights, baseWallH, doorTargets, currentFloorId) {
+    if (!tileWallHeights || !grid) return null;
+
+    var wallH = tileWallHeights[1] || baseWallH;  // WALL tile height
+    // Only apply entrance-cap rule when buildings are tall
+    if (wallH <= 2.0) return null;
+
+    var currentDepth = currentFloorId ? String(currentFloorId).split('.').length : 1;
+    var doorH = tileWallHeights[2];  // DOOR tileWallHeight (may be null)
+    if (doorH == null) return null;   // No explicit door height → nothing to cap
+
+    var entranceH = Math.max(1.0, wallH * 0.5);  // Capped entrance height
+    if (entranceH >= doorH) return null;          // Cap doesn't change anything
+
+    var cellHeights = {};
+    var found = false;
+
+    for (var y = 0; y < gridH; y++) {
+      for (var x = 0; x < gridW; x++) {
+        var tile = grid[y][x];
+        // Only DOOR tiles (type 2) get the entrance-cap rule.
+        // DOOR_BACK (3), DOOR_EXIT (4), BOSS_DOOR (14) stay full height.
+        if (tile !== 2) continue;  // TILES.DOOR = 2
+
+        var key = x + ',' + y;
+        var isArchway = false;
+
+        // Check if this door leads to same-depth or shallower = archway
+        if (doorTargets && doorTargets[key]) {
+          var targetId = doorTargets[key];
+          var targetDepth = String(targetId).split('.').length;
+          if (targetDepth <= currentDepth) {
+            isArchway = true;
+          }
+        }
+
+        if (!isArchway) {
+          // Building entrance — cap to half building height
+          cellHeights[key] = entranceH;
+          found = true;
+        }
+      }
+    }
+
+    return found ? cellHeights : null;
   }
 
   /**
@@ -354,9 +474,11 @@ var SpatialContract = (function () {
           floorBottom: '#111'
         };
       case CEILING.SOLID:
+        // Slight gradient: darker at top (farther from torchlight),
+        // lighter near horizon (reflected light). Gives enclosed depth cue.
         return {
-          ceilTop: contract.ceilColor,    // Uniform ceiling
-          ceilBottom: contract.ceilColor,
+          ceilTop: _darken(contract.ceilColor, 0.6),  // Darker overhead
+          ceilBottom: contract.ceilColor,              // Lit near eye level
           floorTop: contract.floorColor,
           floorBottom: '#0a0a0a'
         };
@@ -460,7 +582,8 @@ var SpatialContract = (function () {
         renderDistance: 8,
         fogDistance: 6,
         gridSize: { w: 20, h: 20 },
-        roomSizeRange: { min: 3, max: 5 }
+        roomSizeRange: { min: 3, max: 5 },
+        floorTexture: 'floor_dirt'
       }, opts || {}));
     }
   };
@@ -497,6 +620,18 @@ var SpatialContract = (function () {
     return contract.textures[tileType] || null;
   }
 
+  /**
+   * Get the floor texture ID for a contract.
+   * Used by the raycaster's floor casting pass.
+   *
+   * @param {Object} contract
+   * @returns {string|null} TextureAtlas texture ID for floor
+   */
+  function getFloorTexture(contract) {
+    if (!contract) return null;
+    return contract.floorTexture || null;
+  }
+
   // ── Helpers ──
 
   /**
@@ -515,6 +650,25 @@ var SpatialContract = (function () {
     return Object.freeze(obj);
   }
 
+  /**
+   * Darken a hex color string by a factor (0–1).
+   * @param {string} hex - '#rrggbb' or '#rgb'
+   * @param {number} factor - 0 = black, 1 = unchanged
+   * @returns {string} '#rrggbb'
+   */
+  function _darken(hex, factor) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    var r = Math.round(parseInt(hex.substring(0, 2), 16) * factor);
+    var g = Math.round(parseInt(hex.substring(2, 4), 16) * factor);
+    var b = Math.round(parseInt(hex.substring(4, 6), 16) * factor);
+    return '#' + ('0' + r.toString(16)).slice(-2) +
+                 ('0' + g.toString(16)).slice(-2) +
+                 ('0' + b.toString(16)).slice(-2);
+  }
+
   function _fogToCSS(fog) {
     return 'rgb(' + fog.r + ',' + fog.g + ',' + fog.b + ')';
   }
@@ -525,10 +679,14 @@ var SpatialContract = (function () {
     interior: interior,
     nestedDungeon: nestedDungeon,
 
+    // Build-time computation
+    computeDoorHeights: computeDoorHeights,
+
     // Runtime queries (called by raycaster)
     getWallHeight: getWallHeight,
     getTileHeightOffset: getTileHeightOffset,
     getTexture: getTexture,
+    getFloorTexture: getFloorTexture,
     resolveDistantWall: resolveDistantWall,
     getFogFactor: getFogFactor,
     getGradients: getGradients,

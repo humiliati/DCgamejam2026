@@ -5,255 +5,163 @@
 
 ---
 
-## Pass 1 — Foundation (Scaffold + Grid + Raycaster)
+## Pass 1 — Foundation (Scaffold + Grid + Raycaster) ✅ DONE
 
 **Goal:** Walk around a hardcoded dungeon in first-person.
 
 **Extract from EyesOnly:**
-- `GameLoop` → `engine/game-loop.js` (already clean IIFE, copy direct)
-- `TILES` constants → `engine/tiles.js` ✅ done
-- `SeededRNG` → `engine/rng.js` ✅ done
+- `GameLoop` → `engine/game-loop.js` ✅
+- `TILES` constants → `engine/tiles.js` ✅
+- `SeededRNG` → `engine/rng.js` ✅
 
 **Build new:**
-- `engine/raycaster.js` — Wolfenstein-style raycaster reading from `grid[y][x]`
-  - Wall casting with textured or flat-colored walls
-  - Floor/ceiling gradient
-  - Camera at player position, 90° FOV
-- `engine/input.js` — Input abstraction layer
-  - `InputManager.onAction(name, callback)` pattern
-  - Keyboard backend: WASD/arrows → `step_forward`, `step_back`, `turn_left`, `turn_right`, `interact`
-  - Stub for future Magic Remote backend
-- `engine/minimap.js` — Top-down 160×160 canvas overlay showing explored tiles
-- `engine/game.js` — Thin orchestrator: init grid, init player, wire loop → raycaster render
-- `index.html` ✅ done (shell with canvas, HUD, card tray, minimap)
-
-**Test state:** Open in browser. WASD moves through a hand-authored 16×16 dungeon. First-person walls render. Minimap shows position.
-
-**Source files to read:**
-- `/public/js/game-loop.js` (107 lines — copy almost verbatim)
-- `/public/js/gone-rogue-canvas.js` (understand camera transform for minimap)
+- `engine/raycaster.js` ✅ — Wolfenstein-style raycaster with textured walls, per-tile height offsets (Doom rule), DoorAnimator integration
+- `engine/input.js` ✅ — InputManager + InputPoll (pointer events for Magic Remote)
+- `engine/minimap.js` ✅ — Canvas minimap with fog-of-war, floor stack
+- `engine/game.js` ✅ — Full orchestrator (900+ lines)
+- `engine/player.js` ✅ — State authority with inventory containers
+- `engine/movement.js` ✅ — Grid-locked movement controller
+- `engine/mouse-look.js` ✅ — Free-look for pointer/Magic Remote
+- `engine/hud.js` ✅ — HP/energy/battery pip display
+- `index.html` ✅ — Full CRT terminal theme with all overlay layers
 
 ---
 
-## Pass 2 — Procedural Dungeons (Floor Gen + Biomes)
+## Pass 2 — Procedural Dungeons (Floor Gen + Biomes) ✅ DONE
 
 **Goal:** Generate a new random dungeon each floor with themed visuals.
 
 **Extract from EyesOnly:**
-- `FloorGenCore.generateFloor()` → `engine/grid-gen.js`
-  - Strip: tutorial floor logic, projectile reset, NPC/shop/breakable spawning, ARG refs
-  - Keep: BSP room placement, A* corridor carving, room connectivity validation
-  - Adapt: output a clean `{ grid[][], rooms[], doors[] }` object instead of mutating monolith ctx
-- `BiomeConfig.getFloorType()` / `getBiome()` → `engine/biomes.js`
-  - Retheme: FOREST→CRYPT, MALL→SEWER, INDUSTRIAL→FORTRESS, AEROSPACE→ABYSS, GREY_CAVE→CAVERN
-  - Keep: weighted selection by floor depth, boss floor overrides
-- `BiomeVisuals.buildVisualGrid()` → adapt for wall texture selection per biome
-  - Map biome color palettes to raycaster wall tint colors
+- `FloorGenCore` → `engine/grid-gen.js` ✅ — BSP + A* corridor carving
+- `BiomeConfig` → integrated into `engine/floor-manager.js` ✅
+- `BiomeVisuals` → `engine/spatial-contract.js` ✅ — depth-aware rendering contracts (street/interior/dungeon)
 
 **Build new:**
-- Floor transition UI (fade to black → "Descending to Floor N" → fade in)
-- Stairs placement logic (STAIRS_DN placed in a dead-end room, STAIRS_UP at player spawn)
-
-**Test state:** Press `>` to descend. New floor generates with different room layouts. Biome colors shift as you go deeper. Minimap updates.
-
-**Source files to read:**
-- `/public/js/floor-gen-core.js` (~300 lines, core BSP + A*)
-- `/public/js/floor-generator.js` (~500 lines, spawning orchestration)
-- `/public/js/biome-config.js` (~150 lines, floor type + biome weights)
-- `/public/js/biome-visuals.js` (visual grid generation)
+- `engine/floor-manager.js` ✅ — Floor stack, biome management, generation orchestration
+- `engine/texture-atlas.js` ✅ — 15+ procedural textures (brick, stone, wood, doors, stairs, locked)
+- `engine/spatial-contract.js` ✅ — Per-depth raycaster rules (wall height, fog, textures, tile height offsets)
+- `engine/skybox.js` ✅ — Parallax sky rendering for exterior floors
 
 ---
 
-## Pass 3 — Door Contracts + Multi-Floor Navigation
+## Pass 3 — Door Contracts + Multi-Floor Navigation ✅ DONE
 
 **Goal:** Stairs work correctly with spawn protection and seamless transitions.
 
 **Extract from EyesOnly:**
-- `DoorContractSystem` → `engine/door-contracts.js` (copy near-verbatim)
-  - `findSpawnNearDoor()` — expanding ring search for spawn tile
-  - `tickDoorSpawnProtect()` — guardrail countdown
-  - Contract patterns: advance (stairs down), retreat (stairs up)
-- `FloorTransitionSystem.applyDoorContract()` logic
-  - Wire into floor gen: after grid generated, apply contract to place player near correct staircase
+- `DoorContractSystem` → `engine/door-contracts.js` ✅
+- `DoorContractAudio` → `engine/door-contract-audio.js` ✅ — Depth-specific door SFX sequences
 
 **Build new:**
-- Floor stack (array of previously visited floors for backtracking)
-  - Store `{ grid, rooms, doors, enemies, items, biome }` per visited floor
-  - Regenerate or cache — cache is simpler for jam scope
-- "You feel a draft..." proximity hint near stairs
-
-**Test state:** Descend via stairs, arrive near the up-staircase on the new floor. Ascend back, arrive near the down-staircase. 5-step guardrail prevents accidental re-entry.
-
-**Source files to read:**
-- `/public/js/door-contract-system.js` (~250 lines — nearly standalone)
-- `/public/js/floor-transition-system.js` (transition orchestration)
+- `engine/floor-transition.js` ✅ — Full transition orchestrator with TransitionFX integration + locked door system
+- `engine/transition-fx.js` ✅ — Canvas-overlay vignette/fade with depth-specific presets (enter_building, descend, ascend, walk_through)
+- `engine/door-animator.js` ✅ — Raycaster-level door-open animation with directional reveal textures (steps up/down through opening door)
+- Directional stair/door textures ✅ — `stairs_down` (chevron ▼), `stairs_up` (chevron ▲), `door_locked` (chain + padlock)
+- Locked BOSS_DOOR system ✅ — Key-item requirement, inventory consumption, visual state change in viewport
+- `engine/interact-prompt.js` ✅ — Context-sensitive interaction hints near interactable tiles
 
 ---
 
-## Pass 4 — Enemies + Stealth
+## Pass 4 — Enemies + Stealth ✅ DONE
 
 **Goal:** Enemies patrol the dungeon. Player can sneak or be detected.
 
 **Extract from EyesOnly:**
-- `EnemyAISystem` → `engine/enemy-ai.js`
-  - `updateEnemyPath()` — patrol (back-and-forth), circular, stationary rotation
-  - `_moveEnemyToPoint()` — grid movement with collision
-  - Sight cone + LOS raycasting
-  - Awareness states: UNAWARE (0-30) → SUSPICIOUS (31-70) → ALERTED (71-100) → ENGAGED
-  - Awareness decay (5 pts/sec)
-  - Strip: ARG-specific enemy types, monolith ctx coupling
-  - Adapt: enemies need `facing` direction for first-person encounter rendering
+- `EnemyAISystem` → `engine/enemy-ai.js` ✅ — Patrol, awareness states, LOS
+- Enemy sprites → `engine/enemy-sprites.js` ✅ — Procedural emoji-based sprite rendering with state variations
 
 **Build new:**
-- Enemy spawner (place 2-5 enemies per floor based on floor type)
-- First-person enemy rendering in raycaster (sprite billboarding or simple scaled quads)
-- Awareness indicator in HUD (eye icon: green → yellow → red)
-- Stealth modifier from player stats
-
-**Test state:** Enemies wander on patrol paths visible on minimap. Walk into sight cone → awareness rises → "!" appears in viewport. Sneak behind them = no detection.
-
-**Source files to read:**
-- `/public/js/enemy-ai-system.js` (~400 lines)
-- `/public/js/enemy-intent-system.js` (chase behavior)
-- `/public/js/gone-rogue-movement.js` (A* for enemy chase pathing)
+- `engine/pathfind.js` ✅ — A* pathfinding for enemy chase
+- First-person enemy rendering in raycaster ✅ — Billboard sprites with distance scaling
+- Awareness-based combat engagement ✅
 
 ---
 
-## Pass 5 — Combat Engine (STR + Cards)
+## Pass 5 — Combat Engine (STR + Cards) ✅ DONE
 
 **Goal:** Engage enemies in simultaneous-turn-resolution card combat.
 
 **Extract from EyesOnly:**
-- `StrCombatEngine` → `engine/combat-engine.js`
-  - State machine: idle → countdown → selecting → resolving → post_resolve
-  - `calculateAdvantage()` — ambush/neutral/disadvantaged/flanked
-  - `calculateHit()` — 70% base + DEX delta ± advantage ± distance
-  - `calculateDamage()` — 2 + STR delta + card bonus + advantage modifiers
-  - `checkFlanking()` — directional attack logic
-  - Strip: terminal output formatting, emoji rendering
-  - Adapt: output combat events as structured objects for HUD rendering
-- `CardSystem` → `engine/card-system.js`
-  - Card definition loading from `data/cards.json`
-  - Quality rolls (Cracked → Perfect)
-  - Hand management (draw 5, play 1 per round)
-  - Card cost validation (ammo, energy, focus)
-- Card data → `data/cards.json`
-  - Retheme ~15 core cards for dungeon fantasy (sword slash, shield block, fireball, heal, etc.)
-  - Keep the JSON schema and effect system identical
+- `StrCombatEngine` → `engine/combat-engine.js` ✅
+- `CardSystem` → `engine/card-system.js` ✅ — Registry, collection, deck, hand management
 
 **Build new:**
-- Combat viewport overlay (enemy portrait, health bar, advantage indicator)
-- Card tray activation (click card to play during selection phase)
-- Combat log (scrolling text at bottom of viewport)
-- Victory/defeat flow
-
-**Test state:** Walk into an alerted enemy → combat begins. 3-beat countdown. Select a card from tray. Both resolve simultaneously. Damage numbers appear. Enemy dies → loot drop. Player dies → game over screen.
-
-**Source files to read:**
-- `/public/js/str-combat-engine.js` (~500 lines)
-- `/public/js/card-system.js` (~400 lines)
-- `/public/js/card-play-system.js` (card cost/play validation)
-- `/public/js/card-action-system.js` (effect resolution)
-- `/public/data/gone-rogue/cards.json` (card definitions)
-- `/public/data/gone-rogue/gr_cards.schema.json` (schema reference)
+- `engine/combat-bridge.js` ✅ — Combat orchestrator (init, playCard, flee, victory/defeat, loot awards)
+- `engine/card-fan.js` ✅ — Canvas-rendered card tray for combat selection
+- `engine/combat-report.js` ✅ — Post-combat XP/loot summary overlay
+- `engine/death-anim.js` ✅ — Enemy death animations (origami fold / poof)
+- Card data → `data/cards.json` ✅
 
 ---
 
-## Pass 6 — Synergies + Loot
+## Pass 6 — Synergies + Loot + Economy ✅ DONE
 
-**Goal:** Cards have combo synergies. Enemies drop loot. Chests contain items.
+**Goal:** Cards have combo synergies. Enemies drop loot. Full faction economy.
 
 **Extract from EyesOnly:**
-- `SynergyEngine` → `engine/synergy-engine.js`
-  - Synergy tags (FIRE, EXPLOSIVE, MELEE, RANGED, etc.)
-  - Synergy definitions (enabler → payoff)
-  - Cascade resolver (chain combos)
-  - Retheme tags for fantasy: FIRE, ICE, HOLY, DARK, PHYSICAL, ARCANE
-- `LootTableManager` → `engine/loot-tables.js`
-  - Tier-based drop tables (standard, elite, boss)
-  - Weighted rolls with floor-depth scaling
-  - Card quality generation
-- `ItemSpawner` → integrated into grid-gen
-  - Place chests with loot on floor gen
-  - Breakable containers (barrels, crates)
-- Loot data → `data/loot-tables.json`
-  - Retheme for fantasy items (potions, scrolls, weapons)
+- `SynergyEngine` → `engine/synergy-engine.js` ✅
+- `LootTableManager` → `engine/loot-tables.js` ✅ — Breakable, combat, and chest drop tables
 
 **Build new:**
-- Synergy visual feedback (combo text flash in viewport: "FIRE CHAIN! 2x damage")
-- Loot pickup interaction (walk over → auto-collect currency, prompt for cards/items)
-- Inventory screen (press I — grid of collected cards and items)
-
-**Test state:** Play a Fire card then an Explosive card → cascade triggers bonus damage. Kill enemy → card drops on ground → walk over to collect. Open chest → get item. Inventory shows collection.
-
-**Source files to read:**
-- `/public/js/synergy-engine.js` (~300 lines)
-- `/public/js/cascade-resolver.js` (chain resolution)
-- `/public/js/loot-table-manager.js` (~250 lines)
-- `/public/js/item-spawner.js` (floor item placement)
-- `/public/js/world-items.js` (item pickup logic)
+- `engine/world-items.js` ✅ — Walk-over pickups (gold, battery, food)
+- `engine/breakable-spawner.js` ✅ — Destructible props with HP + loot spill
+- `engine/salvage.js` ✅ — Corpse harvesting, faction-tagged parts, sell economy
+- `engine/shop.js` ✅ — Faction card shop with buy/sell/sellPart, rep tiers
+- `engine/menu-box.js` ✅ — OoT-style rotating 4-face menu box (canvas-rendered)
+- `engine/menu-faces.js` ✅ — Face content renderers (minimap, journal, inventory, shop)
+- `engine/nch-widget.js` ✅ — NCH capsule sidebar widget
+- `engine/quick-bar.js` ✅ — Equipped item quick-bar
+- Inventory UI ✅ — Equip/unequip, bag grid, equipped quick-slots with hit zones
+- Sell Parts UI ✅ — Salvage part selling through shop with faction-adjusted prices
 
 ---
 
-## Pass 7 — Audio + Lighting
+## Pass 7 — Audio + Lighting ✅ DONE
 
 **Goal:** Dynamic audio and lighting bring the dungeon to life.
 
 **Extract from EyesOnly:**
-- `AudioSystem` → `engine/audio-system.js`
-  - Web Audio API setup (AudioContext, gain buses: master/music/sfx)
-  - Manifest-based asset loading (`data/audio-manifest.json`)
-  - `play(name)` fire-and-forget SFX
-  - `playMusic(name)` with crossfade
-  - Volume controls, mute toggle
-  - SFX rate limiter (prevent spam)
-  - WebM/Opus + MP3 fallback codec detection
-  - Strip: onboarding music guard, interior dim multiplier, localStorage persistence keys (use generic)
-- `LightingSystem` → `engine/lighting.js`
-  - Tile opacity model (wall=1.0, floor=0.0, breakable=0.7)
-  - Light source definitions (torch=radial warm, magic=radial cool)
-  - Retheme: FLASHLIGHT→TORCH, LIGHTER→CANDLE, NIGHT_VISION→DARKVISION
-  - Per-tile light map calculation
-  - Apply light map to raycaster wall brightness
-- Audio manifest → `data/audio-manifest.json`
-  - Port subset of 167 assets (footsteps, combat hits, door opens, ambient, music)
-  - Use EyesOnly's sound designer portal for assignment
-- Sound designer portal → `portal/sound-designer.html`
-  - Copy from EyesOnly, update paths to point at jam project's audio directory
+- `AudioSystem` → `engine/audio-system.js` ✅ — Web Audio API, manifest loading, SFX + music playback
+- `LightingSystem` → `engine/lighting.js` ✅ — Tile-based light map with raycaster integration
 
 **Build new:**
-- Biome-specific ambient loops (dripping water in sewer, wind in crypt)
-- Footstep SFX on movement (vary by biome floor type)
-- Combat SFX hooks (hit, miss, crit, card play, death)
-- Torch flicker effect in raycaster (light intensity oscillation)
-
-**Test state:** Footsteps echo as you walk. Torch flicker visible on walls. Music shifts per biome. Combat has impact sounds. Ambient fills silence between actions.
-
-**Source files to read:**
-- `/public/js/audio-system.js` (~500 lines)
-- `/public/js/lighting-system.js` (~400 lines)
-- `/public/audio/audio-manifest.json` (asset registry)
-- `/public/portal/sound-designer.html` (designer tool)
+- `engine/hazard-system.js` ✅ — Environmental hazards (fire, spikes, poison) + bonfire rest
+- Audio sequences for door transitions (DoorContractAudio) ✅
+- Biome-specific ambient + footsteps ✅
 
 ---
 
-## Pass 8 — Polish + Jam Submission
+## Pass 8 — Polish + Jam Submission 🔧 IN PROGRESS
 
 **Goal:** Complete game with win/lose conditions, theme integration, and polish.
 
-**Build new:**
-- Character creation (pick name, allocate 3 stat points across STR/DEX/stealth)
-- Win condition (reach Floor 5 boss, defeat it)
-- Lose condition (HP hits 0 → game over with stats summary)
-- Title screen with "New Game" button
-- Theme integration (DC Jam theme TBA — weave into dungeon narrative/visual flavor)
-- Stat modification (level up on floor transition: +1 to chosen stat)
-- 5-floor dungeon with boss on floor 5 (jam scope)
-- Wall textures or colored walls per biome (even flat colors + edge lines work)
-- Performance pass (ensure 60fps on modest hardware)
-- itch.io build (zip the project folder, upload)
+**Done:**
+- `engine/title-screen.js` ✅ — CRT terminal-style title screen
+- `engine/splash-screen.js` ✅ — Splash/intro screen
+- `engine/screen-manager.js` ✅ — State machine (title → playing → paused → game over → victory)
+- `engine/game-over-screen.js` ✅ — Death screen with stats
+- `engine/victory-screen.js` ✅ — Win screen
+- `engine/session-stats.js` ✅ — Per-run stat tracking
+- `engine/debrief-feed.js` ✅ — CRT sidebar with event log + resource display
+- `engine/status-bar.js` ✅ — Bottom status bar
+- `engine/dialog-box.js` ✅ — Canvas-rendered dialog with typewriter, portraits, Morrowind-style branching choices
+- `engine/toast.js` ✅ — Transient toast notifications
+- `engine/i18n.js` ✅ — Internationalization for LG store
+- `engine/ui-sprites.js` ✅ — Procedural UI sprite rendering
+- `engine/box-anim.js` ✅ — Box rotation animation for MenuBox
+- Vendor NPC greeting dialogs ✅ — Per-faction NPCs (Kai/Renko/Vasca) with first-visit + return-visit lines
+- Battery pip row in HUD ✅ — Always-visible discrete pips with spent animation
+- Inventory pipeline complete ✅ — See GAP_COVERAGE_TO_DEPLOYABILITY.md (Tier 0: 8/8 ✅)
+- Floor texture casting ✅ — ImageData-based floor rendering (cobble/wood/stone/dirt)
+- Wall stretch fix ✅ — Proper texture UV clipping, no lineHeight cap, free-look compatible
+- Biome-specific textures ✅ — cellar=stone, foundry=metal, sealab=concrete wall + floor
+- `engine/door-peek.js` ✅ — BoxAnim door reveal when facing transition tiles
 
-**Test state:** Full playthrough: title → create character → explore 5 floors → fight boss → win screen. Death → game over → retry. Audio throughout. Card synergies matter for boss fight.
+**Remaining (see GAP_COVERAGE_TO_DEPLOYABILITY.md):**
+- Tier 1: Combat polish (particle FX, synergy toast, card play anim, telegraph, corpse render)
+- Tier 2: Economy loop closure (stash transfer, rep feedback, deck reshuffle, victory stats)
+- Playtesting + balance tuning
+- itch.io build
 
 ---
 
@@ -279,43 +187,86 @@
 
 ---
 
-## File Map (Jam Scope)
+## File Map (Current — 58 engine files)
 
 ```
 dcjam2026/
-├── index.html              ✅ done
-├── ROADMAP.md              ✅ this file
+├── index.html                  ✅ Full CRT terminal theme
+├── docs/
+│   ├── ROADMAP.md              ✅ This file
+│   ├── GAP_COVERAGE_TO_DEPLOYABILITY.md  ✅ Sprint tracker
+│   ├── DOOR_EFFECTS_ROADMAP.md ✅ Door visual/lock specs
+│   ├── GAME_FLOW_ROADMAP.md    Screen flow documentation
+│   ├── HUD_ROADMAP.md          HUD layout specs
+│   ├── UI_ROADMAP.md           UI component specs
+│   └── UNIFIED_INVENTORY_METADATA_CONTRACT.md  Item/card/enemy schemas
 ├── engine/
-│   ├── rng.js              ✅ done
-│   ├── tiles.js            ✅ done
-│   ├── game-loop.js        Pass 1 — extract from EyesOnly
-│   ├── input.js            Pass 1 — new
-│   ├── raycaster.js        Pass 1 — new (core new engineering)
-│   ├── minimap.js          Pass 1 — new
-│   ├── hud.js              Pass 1 — new
-│   ├── game.js             Pass 1 — new (orchestrator)
-│   ├── grid-gen.js         Pass 2 — extract BSP + A* from FloorGenCore
-│   ├── biomes.js           Pass 2 — extract + retheme from BiomeConfig
-│   ├── door-contracts.js   Pass 3 — extract from DoorContractSystem
-│   ├── enemy-ai.js         Pass 4 — extract from EnemyAISystem
-│   ├── combat-engine.js    Pass 5 — extract from StrCombatEngine
-│   ├── card-system.js      Pass 5 — extract from CardSystem
-│   ├── synergy-engine.js   Pass 6 — extract from SynergyEngine
-│   ├── loot-tables.js      Pass 6 — extract from LootTableManager
-│   ├── lighting.js         Pass 7 — extract from LightingSystem
-│   └── audio-system.js     Pass 7 — extract from AudioSystem
+│   ├── rng.js                  Layer 0 — SeededRNG
+│   ├── tiles.js                Layer 0 — Tile type constants
+│   ├── game-loop.js            Layer 0 — Fixed-timestep game loop
+│   ├── i18n.js                 Layer 0 — i18n for LG webOS store
+│   ├── input.js                Layer 1 — InputManager (keyboard + pointer events)
+│   ├── input-poll.js           Layer 1 — InputPoll (per-frame state queries)
+│   ├── movement.js             Layer 1 — MovementController (grid-locked)
+│   ├── mouse-look.js           Layer 1 — Free-look for pointer/Magic Remote
+│   ├── player.js               Layer 1 — Player state authority (HP/energy/battery/inventory)
+│   ├── texture-atlas.js        Layer 1 — 15+ procedural wall/door/stair textures
+│   ├── spatial-contract.js     Layer 1 — Depth-aware raycaster rendering rules
+│   ├── raycaster.js            Layer 1 — Wolfenstein-style raycaster + DoorAnimator integration
+│   ├── skybox.js               Layer 1 — Parallax sky for exterior floors
+│   ├── lighting.js             Layer 1 — Tile-based light map
+│   ├── grid-gen.js             Layer 2 — BSP + A* floor generation
+│   ├── floor-manager.js        Layer 2 — Floor stack + biome management
+│   ├── floor-transition.js     Layer 2 — SFX-sequenced transitions + locked door system
+│   ├── transition-fx.js        Layer 2 — Canvas-overlay vignette/fade
+│   ├── door-contracts.js       Layer 2 — Spawn protection contracts
+│   ├── door-contract-audio.js  Layer 2 — Depth-pair SFX sequences
+│   ├── door-animator.js        Layer 2 — Door-open animation with reveal textures
+│   ├── pathfind.js             Layer 2 — A* for enemy pathfinding
+│   ├── enemy-ai.js             Layer 2 — Patrol, awareness, LOS
+│   ├── enemy-sprites.js        Layer 2 — Procedural enemy billboard sprites
+│   ├── combat-engine.js        Layer 2 — STR combat state machine
+│   ├── card-system.js          Layer 2 — Card registry, deck, hand management
+│   ├── synergy-engine.js       Layer 2 — Tag-based cascade combos
+│   ├── loot-tables.js          Layer 2 — Drop tables + combat rewards
+│   ├── world-items.js          Layer 2 — Walk-over pickups
+│   ├── breakable-spawner.js    Layer 2 — Destructible props
+│   ├── salvage.js              Layer 2 — Corpse harvesting + faction economy
+│   ├── hazard-system.js        Layer 2 — Environmental hazards + bonfire
+│   ├── hud.js                  Layer 3 — HP/energy/battery pip display
+│   ├── minimap.js              Layer 3 — Canvas minimap with fog-of-war
+│   ├── dialog-box.js           Layer 3 — Canvas dialog + branching conversations
+│   ├── toast.js                Layer 3 — Transient notifications
+│   ├── interact-prompt.js      Layer 3 — Context-sensitive interaction hints
+│   ├── card-fan.js             Layer 3 — Combat card selection tray
+│   ├── combat-bridge.js        Layer 3 — Combat orchestrator
+│   ├── combat-report.js        Layer 3 — Post-combat summary
+│   ├── death-anim.js           Layer 3 — Enemy death FX
+│   ├── shop.js                 Layer 3 — Faction card shop
+│   ├── menu-box.js             Layer 3 — OoT rotating 4-face menu
+│   ├── menu-faces.js           Layer 3 — Face content renderers
+│   ├── box-anim.js             Layer 3 — Menu box rotation animation
+│   ├── debrief-feed.js         Layer 3 — CRT sidebar event log
+│   ├── status-bar.js           Layer 3 — Bottom status bar
+│   ├── nch-widget.js           Layer 3 — NCH capsule sidebar
+│   ├── quick-bar.js            Layer 3 — Equipped item quick-bar
+│   ├── ui-sprites.js           Layer 3 — Procedural UI sprites
+│   ├── door-peek.js            Layer 3 — BoxAnim door proximity reveal
+│   ├── screen-manager.js       Layer 4 — State machine
+│   ├── title-screen.js         Layer 4 — CRT title screen
+│   ├── splash-screen.js        Layer 4 — Intro splash
+│   ├── game-over-screen.js     Layer 4 — Death screen
+│   ├── victory-screen.js       Layer 4 — Win screen
+│   ├── session-stats.js        Layer 4 — Per-run stat tracking
+│   ├── audio-system.js         Layer 4 — Web Audio API
+│   └── game.js                 Layer 5 — Main orchestrator
 ├── data/
-│   ├── cards.json          Pass 5 — rethemed from EyesOnly cards
-│   ├── items.json          Pass 6 — rethemed from EyesOnly items
-│   ├── loot-tables.json    Pass 6 — adapted drop tables
-│   └── audio-manifest.json Pass 7 — subset of EyesOnly audio
-├── audio/
-│   ├── sfx/                Pass 7 — ported from EyesOnly
-│   └── music/              Pass 7 — ported from EyesOnly
-├── portal/
-│   └── sound-designer.html Pass 7 — copy from EyesOnly
-└── assets/
-    └── (wall textures, sprites — Pass 8)
+│   ├── cards.json              Card definitions
+│   ├── strings.json            i18n string table
+│   └── audio-manifest.json     Audio asset registry
+└── audio/
+    ├── sfx/                    Sound effects
+    └── music/                  Ambient + biome tracks
 ```
 
 ## EyesOnly Source Reference

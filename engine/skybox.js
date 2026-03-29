@@ -89,16 +89,38 @@ var Skybox = (function () {
       water: false,
       stars: true
     },
+    // Deep ocean view — rendered inside sealab porthole windows.
+    // "Clouds" are ghostly sea creature silhouettes; "mountains" are
+    // the seabed ridge. Light comes from above (caustic flicker).
+    ocean: {
+      zenith:  { r: 2, g: 8, b: 18 },    // Deep abyss above
+      horizon: { r: 8, g: 28, b: 48 },    // Mid-water column
+      clouds: [
+        // Whale silhouettes — large, slow, sparse (high threshold = few shapes)
+        { y: 0.35, h: 0.22, depth: 0.5, speed: 0.00008, scale: 150, threshold: 0.55, opacity: 0.25, r: 20, g: 40, b: 60, seed: 700 },
+        // Jellyfish band — smaller, numerous, faster drift
+        { y: 0.55, h: 0.16, depth: 0.35, speed: 0.00018, scale: 40, threshold: 0.48, opacity: 0.2, r: 60, g: 80, b: 120, seed: 750 },
+        // Jellyfish tentacle trails — thin, low opacity, below main band
+        { y: 0.65, h: 0.10, depth: 0.35, speed: 0.00018, scale: 40, threshold: 0.58, opacity: 0.12, r: 40, g: 55, b: 90, seed: 755 },
+        // Caustic light ripples — fast, subtle, near top
+        { y: 0.10, h: 0.30, depth: 0.15, speed: 0.0006, scale: 25, threshold: 0.52, opacity: 0.15, r: 80, g: 140, b: 160, seed: 780 }
+      ],
+      // Seabed ridge at horizon — organic, low, dark
+      mountains: { depth: 0.9, scale: 80, maxHeight: 0.15, color: 'rgba(4,10,20,0.95)', seed: 800 },
+      water: false,
+      stars: false
+    },
     title: {
       zenith:  { r: 10, g: 21, b: 48 },
       horizon: { r: 90, g: 64, b: 48 },
       clouds: [
-        { y: 0.10, h: 0.12, depth: 0.2, speed: 0.0004, scale: 100, threshold: 0.40, opacity: 0.4, r: 200, g: 180, b: 160, seed: 100 },
-        { y: 0.25, h: 0.15, depth: 0.35, speed: 0.0006, scale: 70, threshold: 0.38, opacity: 0.35, r: 170, g: 150, b: 140, seed: 110 },
-        { y: 0.45, h: 0.10, depth: 0.5, speed: 0.0008, scale: 50, threshold: 0.42, opacity: 0.3, r: 140, g: 120, b: 110, seed: 120 }
+        { y: 0.10, h: 0.12, depth: 0.2, speed: 0.00008, scale: 100, threshold: 0.40, opacity: 0.4, r: 200, g: 180, b: 160, seed: 100 },
+        { y: 0.25, h: 0.15, depth: 0.35, speed: 0.00012, scale: 70, threshold: 0.38, opacity: 0.35, r: 170, g: 150, b: 140, seed: 110 },
+        { y: 0.45, h: 0.10, depth: 0.5, speed: 0.00016, scale: 50, threshold: 0.42, opacity: 0.3, r: 140, g: 120, b: 110, seed: 120 }
       ],
-      mountains: { depth: 0.9, scale: 100, maxHeight: 0.2, color: 'rgba(20,24,30,0.95)', seed: 600 },
-      water: true,
+      mountains: { depth: 0.9, scale: 100, maxHeight: 0.22, color: 'rgba(20,24,30,0.95)', seed: 600, shaped: true },
+      water: false,
+      oceanFloor: true,   // Bottom half: ocean floor view (looking down through glass)
       stars: true
     }
   };
@@ -162,17 +184,20 @@ var Skybox = (function () {
     _time = time;
     var halfH = Math.floor(h / 2);
 
-    // ── Sky (top half) ──
-    render(ctx, w, halfH, time * 0.0005, presetName, 0);
+    // ── Sky (top half) ── (slow drift — stately panorama)
+    render(ctx, w, halfH, time * 0.00008, presetName, 0);
 
-    // ── Floor gradient (bottom half fallback if no water) ──
-    if (!preset.water) {
+    // ── Bottom half ──
+    if (preset.oceanFloor) {
+      // Ocean floor porthole view — looking down through glass into the deep
+      _renderOceanFloor(ctx, w, h, halfH, time);
+    } else if (preset.water) {
+      // Water reflection (mirrored sky)
+      _renderWaterReflection(ctx, w, h, halfH, time, preset);
+    } else {
+      // Plain floor gradient fallback
       _renderGradient(ctx, w, halfH, h - halfH, preset.horizon, { r: 10, g: 10, b: 10 });
-      return;
     }
-
-    // ── Water reflection (bottom half) ──
-    _renderWaterReflection(ctx, w, h, halfH, time, preset);
   }
 
   // ── Sky gradient ────────────────────────────────────────────────
@@ -236,17 +261,76 @@ var Skybox = (function () {
 
   // ── Mountain silhouette ─────────────────────────────────────────
 
+  /**
+   * Zone-based mountain shapes. When params.shaped is true, the strip
+   * alternates: industrial → forest → industrial across world-X,
+   * each zone ~2.5 scale-widths. Industrial: angular flat-tops,
+   * chimneys, crane-like spikes. Forest: organic peaks, undulating
+   * canopy. The zone blend is smooth so there's no hard seam.
+   */
+
+  /** Industrial shape modifier — quantizes noise into flat-top steps + spikes. */
+  function _industrialShape(base, worldX, seed) {
+    // Flat-top plateaus via step quantization
+    var step = Math.floor(base * 5) / 5;
+    // Chimney spikes — thin tall features
+    var spike = _noise1D(worldX * 8 + seed + 300);
+    if (spike > 0.78) step += (spike - 0.78) * 3.0;
+    // Crane arm — occasional horizontal jut
+    var crane = _noise1D(worldX * 12 + seed + 400);
+    if (crane > 0.85) step += 0.08;
+    return step;
+  }
+
+  /** Forest shape modifier — organic peaks with pine-tree spikes. */
+  function _forestShape(base, worldX, seed) {
+    // Smooth rolling hills
+    var hill = base * 0.7;
+    // Pine tree canopy — high-frequency triangle wave peaks
+    var pine = _noise1D(worldX * 6 + seed + 500);
+    var pineSharp = Math.abs((pine * 2 - 1)); // triangle wave 0–1
+    hill += pineSharp * 0.35 * base;
+    // Gentle undulation
+    hill += Math.sin(worldX * 0.4 + seed) * 0.06;
+    return hill;
+  }
+
   function _renderMountains(ctx, w, h, angle, params) {
     var scrollX = (angle / (2 * Math.PI)) * w * 2 * params.depth;
     ctx.fillStyle = params.color;
     ctx.beginPath();
     ctx.moveTo(0, h);
+
+    // Zone period in world-X units (how wide each zone is)
+    var zonePeriod = 2.5;
+
     for (var x = 0; x <= w; x++) {
       var worldX = (x + scrollX) / params.scale;
-      var mh = _noise1D(worldX + params.seed) * params.maxHeight * h;
-      mh += _noise1D(worldX * 3 + params.seed + 50) * params.maxHeight * h * 0.3;
+
+      // Base elevation from layered noise
+      var base = _noise1D(worldX + params.seed) * 0.7
+               + _noise1D(worldX * 3 + params.seed + 50) * 0.3;
+
+      var mh;
+
+      if (params.shaped) {
+        // Determine zone: repeating industrial(0)–forest(1)–industrial(2)
+        // Zone modulator: sin wave gives smooth 0→1→0 blend
+        var zoneT = (Math.sin(worldX / zonePeriod * Math.PI) + 1) * 0.5; // 0=industrial, 1=forest
+
+        var indust = _industrialShape(base, worldX, params.seed);
+        var forest = _forestShape(base, worldX, params.seed);
+
+        // Smooth blend between zones
+        mh = (indust * (1 - zoneT) + forest * zoneT) * params.maxHeight * h;
+      } else {
+        // Original pure-noise mountains for non-shaped presets
+        mh = base * params.maxHeight * h;
+      }
+
       ctx.lineTo(x, h - mh);
     }
+
     ctx.lineTo(w, h);
     ctx.closePath();
     ctx.fill();
@@ -290,6 +374,91 @@ var Skybox = (function () {
 
       ctx.fillStyle = 'rgba(' + r2 + ',' + g2 + ',' + b2 + ',' + a2.toFixed(2) + ')';
       ctx.fillRect(Math.floor(ripple2), horizonY + y2, w, 1);
+    }
+  }
+
+  // ── Ocean floor view (looking down through glass into the deep) ─
+
+  function _renderOceanFloor(ctx, w, h, horizonY, time) {
+    var floorH = h - horizonY;
+    var ocean = PRESETS.ocean;
+
+    // Base: dark abyss gradient (horizon → deep)
+    _renderGradient(ctx, w, horizonY, floorH, ocean.horizon, ocean.zenith);
+
+    // Glass floor divider line — a bright caustic shimmer at the horizon
+    var shimmer = 0.3 + 0.15 * Math.sin(time * 0.003);
+    ctx.fillStyle = 'rgba(80,160,200,' + shimmer.toFixed(2) + ')';
+    ctx.fillRect(0, horizonY, w, 2);
+
+    // Porthole frame lines (riveted steel border around the glass floor)
+    ctx.fillStyle = 'rgba(50,55,65,0.8)';
+    ctx.fillRect(0, horizonY + 2, w, 3);
+    ctx.fillRect(0, h - 5, w, 5);
+    // Rivet dots along the frame
+    for (var rx = 12; rx < w; rx += 24) {
+      ctx.fillStyle = 'rgba(80,85,95,0.7)';
+      ctx.fillRect(rx, horizonY + 3, 3, 2);
+      ctx.fillRect(rx, h - 4, 3, 2);
+    }
+
+    // Ocean creature silhouettes rendered as cloud bands (ocean preset)
+    // Shift Y coordinates to render into the bottom half
+    var oceanAngle = time * 0.00004;  // Very slow ocean current drift
+    for (var i = 0; i < ocean.clouds.length; i++) {
+      var band = ocean.clouds[i];
+      // Remap band Y into the floor region (horizonY to h)
+      var bandY = Math.floor(horizonY + floorH * band.y);
+      var bandH = Math.floor(floorH * band.h);
+      var scrollX = (oceanAngle / (2 * Math.PI)) * w * 2 * band.depth + _time * band.speed;
+
+      for (var x = 0; x < w; x++) {
+        var worldX = (x + scrollX) / band.scale;
+        var n1 = _noise1D(worldX * 0.3 + band.seed) * 0.6;
+        var n2 = _noise1D(worldX * 1.2 + band.seed + 100) * 0.3;
+        var n3 = _noise1D(worldX * 3.0 + band.seed + 200) * 0.1;
+        var density = n1 + n2 + n3;
+
+        if (density > band.threshold) {
+          var alpha = (density - band.threshold) / (1 - band.threshold);
+          alpha *= band.opacity;
+          var cy = bandY + bandH * 0.5;
+          var cloudH = Math.floor(bandH * alpha * 0.8);
+          ctx.fillStyle = 'rgba(' + band.r + ',' + band.g + ',' + band.b + ',' + (alpha * 0.6).toFixed(2) + ')';
+          ctx.fillRect(x, Math.floor(cy - cloudH / 2), 1, cloudH);
+        }
+      }
+    }
+
+    // Seabed ridge at bottom
+    if (ocean.mountains) {
+      var mParams = ocean.mountains;
+      var seabedScrollX = (oceanAngle / (2 * Math.PI)) * w * 2 * mParams.depth;
+      ctx.fillStyle = mParams.color;
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      for (var mx = 0; mx <= w; mx++) {
+        var mWorldX = (mx + seabedScrollX) / mParams.scale;
+        var mBase = _noise1D(mWorldX + mParams.seed) * 0.7 +
+                    _noise1D(mWorldX * 3 + mParams.seed + 50) * 0.3;
+        var mh = mBase * mParams.maxHeight * floorH;
+        ctx.lineTo(mx, h - mh);
+      }
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Caustic light overlay (bright ripple pattern from above)
+    for (var cy2 = horizonY + 6; cy2 < horizonY + floorH * 0.5; cy2 += 2) {
+      var causticX = Math.sin(cy2 * 0.08 + time * 0.0015) * 30;
+      var causticW = 20 + Math.sin(cy2 * 0.05 + time * 0.001) * 15;
+      var causticA = 0.04 * (1 - (cy2 - horizonY) / (floorH * 0.5));
+      if (causticA > 0.005) {
+        ctx.fillStyle = 'rgba(100,180,200,' + causticA.toFixed(3) + ')';
+        ctx.fillRect(Math.floor(w * 0.3 + causticX), cy2, Math.floor(causticW), 2);
+        ctx.fillRect(Math.floor(w * 0.6 - causticX * 0.7), cy2, Math.floor(causticW * 0.7), 2);
+      }
     }
   }
 

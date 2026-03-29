@@ -6,6 +6,8 @@ var HUD = (function () {
 
   var _els = {};
 
+  var _prevBattery = -1;  // Track previous battery for spent animation
+
   function init() {
     _els.hp = document.getElementById('hud-hp');
     _els.hpFill = document.getElementById('hud-hp-fill');
@@ -17,6 +19,7 @@ var HUD = (function () {
     _els.combatLog = document.getElementById('combat-log');
     _els.floorTransition = document.getElementById('floor-transition');
     _els.floorTransitionText = document.getElementById('floor-transition-text');
+    _els.batteryPips = document.getElementById('hud-battery-pips');
     _els.cardSlots = [];
     for (var i = 0; i < 5; i++) {
       _els.cardSlots.push(document.getElementById('card-' + i));
@@ -34,6 +37,44 @@ var HUD = (function () {
       _els.energy.textContent = player.energy + '/' + player.maxEnergy;
       _els.energyFill.style.width = (player.energy / player.maxEnergy * 100) + '%';
     }
+    // Battery pips — always-visible compact row
+    _updateBatteryPips(player);
+  }
+
+  /**
+   * Render battery as discrete pip elements.
+   * Detects spent pips (decrease from previous) and applies brief animation.
+   * Uses signature check to skip DOM rebuild when nothing changed.
+   */
+  function _updateBatteryPips(player) {
+    if (!_els.batteryPips) return;
+    var cur = (typeof player.battery === 'number') ? player.battery : 0;
+    var max = player.maxBattery || 10;
+
+    // Signature check — skip rebuild if nothing changed
+    var sig = cur + '/' + max;
+    if (_els.batteryPips.dataset && _els.batteryPips.dataset.sig === sig) return;
+    _els.batteryPips.dataset.sig = sig;
+
+    // Detect which pips were just spent (for animation)
+    var oldBat = _prevBattery;
+    var spentFrom = (oldBat > cur && oldBat <= max) ? cur : -1;
+    var spentCount = (spentFrom >= 0) ? (oldBat - cur) : 0;
+    _prevBattery = cur;
+
+    var html = '';
+    for (var i = 0; i < max; i++) {
+      var cls = 'hud-bat-pip';
+      if (i < cur) {
+        cls += ' full';
+      } else if (spentFrom >= 0 && i >= spentFrom && i < spentFrom + spentCount) {
+        cls += ' empty spent';
+      } else {
+        cls += ' empty';
+      }
+      html += '<span class="' + cls + '"></span>';
+    }
+    _els.batteryPips.innerHTML = html;
   }
 
   function updateFloor(floorNum, label) {
@@ -83,9 +124,15 @@ var HUD = (function () {
     if (_els.advantage) _els.advantage.textContent = text || '';
   }
 
+  /** Update only the battery pip row (lightweight, for mid-combat use). */
+  function updateBattery(player) {
+    _updateBatteryPips(player || ((typeof Player !== 'undefined') ? Player.state() : {}));
+  }
+
   return {
     init: init,
     updatePlayer: updatePlayer,
+    updateBattery: updateBattery,
     updateFloor: updateFloor,
     updateCards: updateCards,
     showCombatLog: showCombatLog,

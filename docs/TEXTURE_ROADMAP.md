@@ -284,16 +284,221 @@ pass in Raycaster (~40) + emitter registration in FloorManager (~20).
 
 ---
 
-## Implementation Order
+## Layer 1.5 — Floor Textures (Priority: JAM) ✅ IMPLEMENTED
+
+### What It Does
+
+Replaces the flat gradient floor with a textured ground plane using
+classic floor casting. For each pixel below the horizon, the raycaster
+computes the world floor position and samples a floor texture, giving
+the dungeon a physical ground surface instead of a flat color ramp.
+
+### Floor Casting Math
+
+For each scanline `y` below the horizon (`halfH`):
+```
+rowDist = (halfH * wallHeightMult) / (y - halfH)
+```
+
+The camera plane vectors give left-to-right interpolation:
+```
+planeX = -sin(pDir) * tan(halfFov)
+planeY =  cos(pDir) * tan(halfFov)
+```
+
+For each column, world floor position:
+```
+floorX = px + rowDist * (dirX - planeX) + col * floorStepX
+floorY = py + rowDist * (dirY - planeY) + col * floorStepY
+```
+
+Texture coordinates wrap to tile boundaries:
+```
+tx = floor(floorX * texW) % texW
+ty = floor(floorY * texH) % texH
+```
+
+### Performance
+
+Uses an ImageData buffer (allocated once, reused across frames) for
+the entire floor region. At 480×135 pixels, this is ~64,800 texel
+lookups per frame — well within Canvas 2D budget. The buffer is written
+with bitwise-OR for fast integer conversion, then putImageData once.
+
+Distance-based fog and brightness darkening are applied per-scanline
+(not per-pixel) since all pixels in a row share the same distance.
+
+### Free-Look Compatibility
+
+The `player.dir` passed to the raycaster already includes the ±32°
+MouseLook offset (baked in by game.js). Floor casting uses the same
+`pDir` for its direction and camera plane vectors, so free-look
+rotates the floor texture correctly with no special handling.
+
+### New Floor Textures
+
+| Texture ID          | Pattern                                | Biome Use       |
+|---------------------|----------------------------------------|-----------------|
+| `floor_cobble`      | Irregular cobblestone grid             | (fallback)      |
+| `floor_wood`        | Horizontal plank grain                 | Interior default |
+| `floor_stone`       | Large irregular stone flags            | Dungeon default  |
+| `floor_dirt`        | Organic noise, dark patches            | Cellar, Foundry  |
+| `floor_brick_red`   | Warm terracotta brick courtyard        | Exterior         |
+| `floor_grass_stone` | Grey-Scott reaction-diffusion grass veins through flagstone | Lobby |
+| `floor_tile`        | Cool blue-white clinical tile          | Sealab           |
+
+### SpatialContract Integration
+
+Each contract now has a `floorTexture` field:
+```javascript
+floorTexture: 'floor_cobble'    // exterior
+floorTexture: 'floor_wood'      // interior
+floorTexture: 'floor_stone'     // nested dungeon (default)
+floorTexture: 'floor_dirt'      // crawlspace preset
+```
+
+New query: `SpatialContract.getFloorTexture(contract)` returns the
+texture ID. When null, the raycaster falls back to the gradient.
+
+### Wall Textures Added
+
+| Texture ID       | Pattern                                        | Biome Use       |
+|------------------|------------------------------------------------|-----------------|
+| `tree_trunk`     | Brown bark bottom (45%), green canopy top (55%) | Exterior perimeter |
+| `door_wood`      | Archway entrance with dark void interior        | All door tiles   |
+
+### Per-Tile Wall Height (`tileWallHeights`)
+
+New spatial contract property added for tiles that render taller/shorter than
+the contract default. Currently used for exterior TREE tiles (2× height) so
+the courtyard perimeter looks like a dense tree line surrounding a brick
+building at normal height.
+
+---
+
+## Future — Campfire / Bonfire Sprite with Glow
+
+The bonfire tile (TILES.BONFIRE) currently renders as a flat emoji sprite.
+The target is a campfire billboard sprite with per-frame glow emission,
+similar to the EyesOnly `gone-rogue` campfire:
+
+Reference: `EyesOnly/` campfire emoji with animated glow per Lighting system.
+Breakable spawner pattern shows how to composite emoji + glow radius.
+
+Implementation: register bonfire position as a point light emitter (Layer 3
+light system) with `flicker: 'torch'` and warm orange color
+`{ r: 255, g: 160, b: 60 }`. The sprite itself cycles between campfire
+emoji frames or uses a procedural flame column texture.
+
+Blocked on: Layer 3 (Sprite Light Emitters) implementation.
+
+---
+
+## Wall Texture Stretch Fix ✅ IMPLEMENTED
+
+### The Bug
+
+When facing an adjacent wall, the texture widened (more screen columns
+hit the wall) but didn't get proportionally taller, causing a horizontal
+stretch effect at close range.
+
+### Root Cause
+
+`lineHeight` was capped at `h * 3` to prevent "distorted peripheral
+strips." This limited wall height but not width — as the player
+approached a wall, more columns showed the wall texture (correct) but
+the height stopped increasing at h×3 (wrong).
+
+### The Fix
+
+1. Removed the `Math.min(h * 3, ...)` cap on `lineHeight`
+2. Added proper texture UV clipping: when the wall extends beyond screen
+   bounds, compute the visible fraction of the texture:
+   ```javascript
+   texSrcY = (drawStart - shiftedTop) / lineHeight * tex.height;
+   texSrcH = stripH / lineHeight * tex.height;
+   ```
+3. Reduced `perpDist` minimum clamp from 0.2 to 0.12 (enough to prevent
+   numeric instability, allows natural close-range rendering)
+
+With ±32° free-look, effective viewport spans ±62° total. The UV
+clipping handles arbitrarily large lineHeight values correctly.
+
+---
+
+## Biome-Specific Texture Alignment ✅ IMPLEMENTED
+
+### The Problem
+
+All nested dungeon floors used `stone_rough` walls regardless of biome.
+Foundry (rusted iron, furnace glow) and Sealab (clean tile, fluorescent)
+shared the same dungeon stone texture, undermining biome identity.
+
+### The Fix
+
+`FloorManager.getFloorContract()` now passes biome-specific texture
+overrides into SpatialContract constructors:
+
+| Biome    | Wall Texture    | Floor Texture   | Fog Tint            |
+|----------|-----------------|-----------------|---------------------|
+| Cellar   | `stone_rough`   | `floor_stone`   | Default dark        |
+| Foundry  | `metal_plate`   | `floor_stone`   | Warm furnace (12,6,3) |
+| Sealab   | `concrete_dark` | `floor_cobble`  | Cold blue (2,5,12)  |
+
+Breakable props from `data/loot-tables.json` already have biome-specific
+entries (barrels for cellar, furnace drums for foundry, lab cabinets for
+sealab) that thematically match these wall textures.
+
+---
+
+## Door Peek (BoxAnim Proximity Reveal) ✅ IMPLEMENTED
+
+### What It Does
+
+When the player faces a door or stair tile, a small 3D box (BoxAnim
+door variant, left-hinged lid) appears in the viewport and swings open
+to reveal a direction indicator: "▼ Descend" / "▲ Ascend" / "► Enter".
+
+The glow color inside the box matches the direction: green for descend,
+amber for ascend, red for boss doors. This gives the player a physical
+preview of what's behind the door without committing to a transition.
+
+### New Module
+
+```
+engine/door-peek.js  (Layer 3, after InteractPrompt + BoxAnim)
+```
+
+Uses BoxAnim.create('door') to instantiate a door-variant box in a
+container div above the interact prompt. show/hide lifecycle is debounced
+(300ms delay) to prevent jitter when turning between tiles.
+
+---
+
+## Implementation Order (Updated)
 
 ```
 JAM DEADLINE (April 5)
 │
-├─ Layer 1: Wall Textures ← START HERE
-│   ├─ TextureAtlas module (procedural textures)
+├─ Layer 1: Wall Textures ✅ DONE
+│   ├─ TextureAtlas module (19 procedural textures)
 │   ├─ SpatialContract texture table
 │   ├─ Raycaster UV sampling + drawImage
-│   └─ Biome texture assignments
+│   ├─ Directional stair textures (stairs_down, stairs_up)
+│   ├─ Locked door texture (door_locked)
+│   └─ Biome-specific texture overrides
+│
+├─ Layer 1.5: Floor Textures ✅ DONE
+│   ├─ Floor casting in Raycaster (ImageData buffer)
+│   ├─ 4 floor textures (cobble, wood, stone, dirt)
+│   ├─ SpatialContract floorTexture field
+│   └─ Wall stretch fix (UV clipping, no lineHeight cap)
+│
+├─ Layer 1.6: Animated Textures ✅ DONE
+│   ├─ TextureAtlas.tick(dt) per-frame compositing
+│   ├─ Porthole wall texture (deep ocean + sea creatures)
+│   ├─ Porthole ceiling texture (surface caustics from below)
+│   └─ Sealab biome wiring (PILLAR tiles → porthole_wall)
 │
 ├─ Layer 2: Wall Decor (if time permits)
 │   ├─ Wall decor data model
@@ -315,6 +520,95 @@ POST-JAM
 
 ---
 
+## Animated Texture System ✅ IMPLEMENTED
+
+### What It Does
+
+TextureAtlas now supports per-frame animation for specific textures.
+The `tick(dt)` method is called once per frame from the game loop and
+composites time-varying pixel data into registered animated textures.
+
+This was built for sealab porthole windows but the system is general:
+any texture can register as animated by pushing an entry onto the
+internal `_portholes` array during generation.
+
+### Architecture
+
+Each animated texture stores:
+
+- `frameData` — the original static frame pixels (metal ring, rivets,
+  outer wall), captured once at generation time
+- `mask` — a boolean array (`Uint8Array`) marking which pixels are the
+  animated region (the glass window area)
+- `lookUp` — whether the view is horizontal (wall porthole) or upward
+  (ceiling porthole), affecting which ocean scene is composited
+
+Each frame, `tick(dt)` iterates all registered animated textures. For
+each masked pixel, it computes an ocean color from time-based noise
+(caustic ripples, creature silhouettes, depth gradient) and writes it
+directly into the texture's `data` array. A single `putImageData` call
+per texture updates the canvas. The raycaster draws the texture normally
+— no special animated-texture code path needed.
+
+### Cost
+
+2 animated textures × 64×64 pixels × ~4096 masked pixels ≈ 8192
+pixel writes per frame. Negligible at 60fps.
+
+### Game Loop Wiring
+
+```javascript
+// In Game._renderGameplay(), before raycaster render:
+TextureAtlas.tick(frameDt);
+```
+
+---
+
+## Texture Inventory (Current — 26 textures)
+
+| Texture ID        | Type     | Pattern                          | Size   | Animated |
+|-------------------|----------|----------------------------------|--------|----------|
+| `brick_light`     | Wall     | Brick rows with mortar lines     | 64×64  | No       |
+| `brick_dark`      | Wall     | Same pattern, darker palette     | 64×64  | No       |
+| `brick_red`       | Wall     | Red-toned brick                  | 64×64  | No       |
+| `stone_rough`     | Wall     | Irregular stone blocks           | 64×64  | No       |
+| `stone_cathedral` | Wall     | Purple-toned stone               | 64×64  | No       |
+| `wood_plank`      | Wall     | Vertical plank grain             | 64×64  | No       |
+| `wood_dark`       | Wall     | Dark wood planks                 | 64×64  | No       |
+| `door_wood`       | Door     | Wood with horizontal bands       | 64×64  | No       |
+| `door_iron`       | Door     | Riveted iron plate               | 64×64  | No       |
+| `door_locked`     | Door     | Wood + chain X + padlock         | 64×64  | No       |
+| `concrete`        | Wall     | Smooth concrete with seams       | 64×64  | No       |
+| `concrete_dark`   | Wall     | Dark concrete                    | 64×64  | No       |
+| `metal_plate`     | Wall     | Brushed metal with bolt holes    | 64×64  | No       |
+| `pillar_stone`    | Wall     | Rounded stone column             | 64×64  | No       |
+| `stairs_down`     | Stair    | Dark stone + 3 down chevrons (▼) | 64×64  | No       |
+| `stairs_up`       | Stair    | Light stone + 3 up chevrons (▲)  | 64×64  | No       |
+| `porthole_wall`   | Porthole | Riveted metal ring, ocean window | 64×64  | Yes      |
+| `porthole_ceil`   | Porthole | Same ring, upward ocean view     | 64×64  | Yes      |
+| `floor_cobble`    | Floor    | Irregular cobblestone grid       | 64×64  | No       |
+| `floor_wood`      | Floor    | Horizontal plank grain           | 64×64  | No       |
+| `floor_stone`     | Floor    | Large irregular stone flags      | 64×64  | No       |
+| `floor_dirt`      | Floor    | Organic noise, dark patches      | 64×64  | No       |
+| `crate_wood`      | Prop     | 3px border, X cross-braces, slat lines, nail heads | 64×64  | No       |
+
+Plus 3 reveal textures in DoorAnimator (descend, ascend, boss).
+
+### Porthole Textures Detail
+
+**`porthole_wall`** — Metal frame with riveted ring surrounding a
+circular glass window. Each frame, window pixels are composited with
+an animated deep-ocean scene: dark water gradient, caustic light
+ripples, whale shadow silhouettes drifting horizontally, jellyfish
+with bioluminescent glow. Used on PILLAR tiles in sealab biome.
+
+**`porthole_ceil`** — Same riveted frame but the interior shows an
+upward view at the ocean surface: bright caustic light pools from
+surface refraction, jellyfish silhouettes from below, lighter
+blue-green palette. Available for future ceiling casting in sealab.
+
+---
+
 ## Module Load Order Impact
 
 TextureAtlas loads in Layer 1 (after TILES, before Raycaster):
@@ -322,45 +616,29 @@ TextureAtlas loads in Layer 1 (after TILES, before Raycaster):
 ```html
 <!-- Layer 1: Core systems -->
 <script src="engine/spatial-contract.js"></script>
-<script src="engine/texture-atlas.js"></script>   <!-- NEW -->
+<script src="engine/texture-atlas.js"></script>
 
 <!-- Layer 2: Rendering -->
 <script src="engine/raycaster.js"></script>
 ```
 
-TextureAtlas depends on nothing except TILES constants (for texture ID
-conventions). Raycaster reads TextureAtlas during wall rendering. No
-circular dependencies.
+DoorPeek loads in Layer 3 (after InteractPrompt, BoxAnim):
 
----
-
-## Biome Plan Section 2 Update
-
-With Layer 1 implemented, Section 2's "What we CANNOT do" warning changes
-from "all buildings are the same colored columns" to:
-
-> Buildings are distinguished by wall texture (brick vs. concrete vs.
-> weathered wood), door texture (aged oak vs. iron plate vs. glass panel),
-> and the biome palette that tints them. You won't see "Baker's Brew"
-> written on the wall, but the warm wood-plank texture with a raised
-> oak door next to cool concrete walls makes the bakery entrance visually
-> distinct from the bank's iron door.
-
-With Layer 2 added:
-
-> A lantern bracket flanks the tavern door. A grate sits above the
-> dungeon stairwell. A painted sign hangs on the shop face. Non-gamers
-> can read the environment.
+```html
+<script src="engine/interact-prompt.js"></script>
+<script src="engine/door-peek.js"></script>
+```
 
 ---
 
 ## What This Does NOT Include
 
-- Floor textures (textured ground plane). This requires a different
-  rendering technique (floor casting or mode 7). Deferred to WebGL pass.
+- Ceiling textures (textured ceiling plane). Similar to floor casting
+  but less impactful — gradients + skybox handle ceiling identity well.
 - Skybox textures. Parallax bands + gradient already handle sky identity.
   Photorealistic sky is a WebGL concern.
-- Animated wall textures (waterfalls, fire walls). Possible with texture
-  atlas frame cycling but deferred to post-jam.
+- Animated wall textures beyond portholes (waterfalls, fire walls).
+  The porthole animation system (`tick(dt)` + mask) could be extended
+  to other animated surfaces post-jam.
 - 3D model rendering. This is a raycaster, not a polygon engine. The
   Octopath feel comes from texture + lighting + atmosphere, not geometry.

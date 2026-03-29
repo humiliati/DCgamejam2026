@@ -2,22 +2,28 @@
  * EnemyAI — patrol movement, awareness, sight cones, LOS.
  * Adapted from EyesOnly's EnemyAISystem.
  *
- * Awareness states: UNAWARE (0-30) → SUSPICIOUS (31-70) → ALERTED (71-100) → ENGAGED (100+)
+ * Awareness thresholds and detection tuning now live in AwarenessConfig (Layer 0).
+ * Stealth modifiers applied via StealthSystem (Layer 1).
  */
 var EnemyAI = (function () {
   'use strict';
 
-  var AWARENESS = {
+  // ── Delegate to AwarenessConfig if available, else inline fallback ──
+  var _AC = (typeof AwarenessConfig !== 'undefined') ? AwarenessConfig : null;
+  var _DET = _AC ? _AC.DETECTION : null;
+
+  var AWARENESS = _AC ? _AC.STATES : {
     UNAWARE:    { min: 0,   max: 30,  color: '#4a4', label: 'Unaware' },
     SUSPICIOUS: { min: 31,  max: 70,  color: '#cc4', label: 'Suspicious' },
     ALERTED:    { min: 71,  max: 100, color: '#c44', label: 'Alerted' },
     ENGAGED:    { min: 101, max: 999, color: '#c4c', label: 'Engaged' }
   };
 
-  var SIGHT_RANGE = 6;
-  var AWARENESS_DECAY = 3;       // pts per tick (100ms)
-  var AWARENESS_GAIN_SIGHT = 15; // pts per tick when in sight
-  var AWARENESS_GAIN_CLOSE = 25; // pts per tick when adjacent
+  var SIGHT_RANGE        = _DET ? _DET.SIGHT_RANGE         : 6;
+  var AWARENESS_DECAY    = _DET ? _DET.AWARENESS_DECAY     : 3;
+  var AWARENESS_GAIN_SIGHT = _DET ? _DET.AWARENESS_GAIN_SIGHT : 15;
+  var AWARENESS_GAIN_CLOSE = _DET ? _DET.AWARENESS_GAIN_CLOSE : 25;
+  var ALERTED_DECAY_MULT = _DET ? _DET.ALERTED_DECAY_MULT : 0.3;
 
   var PATH_TYPES = {
     PATROL:     'patrol',
@@ -60,6 +66,7 @@ var EnemyAI = (function () {
    * Get awareness state from value.
    */
   function getAwarenessState(awareness) {
+    if (_AC) return _AC.resolve(awareness);
     if (awareness > 100) return AWARENESS.ENGAGED;
     if (awareness > 70)  return AWARENESS.ALERTED;
     if (awareness > 30)  return AWARENESS.SUSPICIOUS;
@@ -81,15 +88,15 @@ var EnemyAI = (function () {
       enemy.fleeImmunity = Math.max(0, enemy.fleeImmunity - deltaMs);
     }
 
+    var prevAwareness = enemy.awareness;
     var state = getAwarenessState(enemy.awareness);
-
     if (state === AWARENESS.ENGAGED) {
       // Chase player
       _chasePlayer(enemy, player, grid, gridW, gridH, deltaMs);
     } else if (state === AWARENESS.ALERTED) {
       // Move toward last known position
       _chasePlayer(enemy, player, grid, gridW, gridH, deltaMs);
-      enemy.awareness -= AWARENESS_DECAY * 0.3; // Slow decay while alerted
+      enemy.awareness -= AWARENESS_DECAY * ALERTED_DECAY_MULT; // Slow decay while alerted
     } else {
       // Patrol
       _updatePatrol(enemy, grid, gridW, gridH, deltaMs);
@@ -97,19 +104,38 @@ var EnemyAI = (function () {
       enemy.awareness = Math.max(0, enemy.awareness - AWARENESS_DECAY);
     }
 
-    // Check sight
+    // Check sight — apply stealth modifier to awareness gain
     if (_canSee(enemy, player, grid, gridW, gridH)) {
       var dist = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y);
-      if (dist <= 1) {
-        enemy.awareness += AWARENESS_GAIN_CLOSE;
-      } else {
-        enemy.awareness += AWARENESS_GAIN_SIGHT;
+      var baseGain = (dist <= 1) ? AWARENESS_GAIN_CLOSE : AWARENESS_GAIN_SIGHT;
+
+      // Reduce gain by player's stealth bonus
+      if (typeof StealthSystem !== 'undefined') {
+        var stealthBonus = StealthSystem.getPlayerStealthBonus(
+          player.x, player.y, grid, gridW, gridH, player.floorId || ''
+        );
+        baseGain = StealthSystem.applyBonus(baseGain, stealthBonus);
       }
+
+      enemy.awareness += baseGain;
       // Face player
       _faceToward(enemy, player);
     }
 
     enemy.awareness = Math.max(0, Math.min(200, enemy.awareness));
+
+    // ── Awareness escalation SFX ──
+    // Play a spatial cue when an enemy first becomes ALERTED (heard you)
+    // or SUSPICIOUS (noticed something). Conservative: one-shot per transition.
+    if (typeof AudioSystem !== 'undefined') {
+      var newState = getAwarenessState(enemy.awareness);
+      var prevS = getAwarenessState(prevAwareness);
+      if (newState === AWARENESS.ALERTED && prevS !== AWARENESS.ALERTED && prevS !== AWARENESS.ENGAGED) {
+        AudioSystem.play('enemy-alert', { volume: 0.35 });
+      } else if (newState === AWARENESS.SUSPICIOUS && prevS === AWARENESS.UNAWARE) {
+        AudioSystem.play('ui-signal', { volume: 0.2 });
+      }
+    }
   }
 
   /**
@@ -254,17 +280,22 @@ var EnemyAI = (function () {
   /**
    * Spawn enemies for a floor.
    * @param {Object} floorData - from GridGen
-   * @param {number} floorNum
+   * @param {string} floorId - floor ID string
    * @param {Object} playerSpawn - { x, y } to avoid spawning on top of player
    * @returns {Array} Array of enemy objects
    */
-  function spawnEnemies(floorData, floorNum, playerSpawn) {
+  function spawnEnemies(floorData, floorId, playerSpawn) {
     var grid = floorData.grid;
     var rooms = floorData.rooms;
     var W = floorData.gridW;
     var H = floorData.gridH;
 
-    var count = Math.min(rooms.length - 1, SeededRNG.randInt(2, 3 + Math.floor(floorNum / 2)));
+    // Calculate depth and dungeon level for scaling
+    var parts = String(floorId).split('.');
+    var depth = parts.length;
+    var dungeonLevel = depth >= 3 ? (parseInt(parts[parts.length - 1], 10) || 1) : 0;
+
+    var count = Math.min(rooms.length - 1, SeededRNG.randInt(2, 3 + Math.floor(dungeonLevel / 2)));
     var enemies = [];
 
     var ENEMY_TYPES = [
@@ -276,8 +307,8 @@ var EnemyAI = (function () {
       { name: 'Mimic',     emoji: '📦', hp: 5,  str: 3, dex: 2 }
     ];
 
-    // Scale enemies with floor
-    var tierBonus = Math.floor(floorNum / 3);
+    // Scale enemies with dungeon level
+    var tierBonus = Math.floor(dungeonLevel / 3);
 
     for (var i = 0; i < count; i++) {
       // Pick a room (skip first room, which has stairs up / player spawn)

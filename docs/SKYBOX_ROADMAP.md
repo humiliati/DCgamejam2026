@@ -353,20 +353,86 @@ randomness, just hash-based. Same seed = same sky every time.
 
 ---
 
+## Ocean Skybox & Sealab Portholes ✅ IMPLEMENTED
+
+### Ocean Preset
+
+A deep underwater ocean scene designed to be viewed through sealab
+porthole windows. Uses the existing cloud band system where "clouds"
+are ghostly sea creature silhouettes:
+
+| Band | Role | Speed | Scale | Threshold |
+|------|------|-------|-------|-----------|
+| Whale silhouettes | Large, slow, sparse shapes at mid-depth | 0.00008 | 150 | 0.55 |
+| Jellyfish band | Smaller, numerous, faster drift | 0.00018 | 40 | 0.48 |
+| Jellyfish tentacle trails | Thin trailing lines below main band | 0.00018 | 40 | 0.58 |
+| Caustic light ripples | Fast, subtle, near top | 0.0006 | 25 | 0.52 |
+
+Seabed ridge at the horizon (mountain layer with organic shape, low
+maxHeight). Deep blue-green zenith-to-horizon gradient. No stars,
+no water reflection.
+
+### Porthole Textures (Animated)
+
+Two new TextureAtlas textures with per-frame animation:
+
+**`porthole_wall`** — Metal frame with riveted ring surrounding a
+circular glass window. Each frame, the window pixels are composited
+with an animated ocean scene: deep water gradient, caustic light
+patterns, whale shadows drifting horizontally, jellyfish with
+bioluminescent glow.
+
+**`porthole_ceil`** — Same frame structure but the interior shows
+looking up at the ocean surface: bright caustic light pools from
+surface refraction, jellyfish silhouettes from below, lighter
+blue-green palette.
+
+### Animation Architecture
+
+TextureAtlas gained a `tick(dt)` method called once per frame from
+the game loop. Porthole textures maintain:
+
+- `frameData` — original metal frame pixel data (generated once)
+- `mask` — boolean array marking which pixels are window (glass)
+- `lookUp` flag — wall (horizontal view) vs ceiling (upward view)
+
+Each frame, for each masked pixel, the ocean color is computed
+procedurally from time-based noise (caustics, creature silhouettes)
+and written directly into the texture's `data` array. The canvas is
+then updated via `putImageData`. The raycaster draws the texture
+normally — no special porthole handling needed.
+
+Cost: 2 × 64×64 × ~4096 pixel writes per frame ≈ 8192 operations.
+Negligible at 60fps.
+
+### Sealab Integration
+
+In FloorManager's biome texture overrides, sealab assigns
+`porthole_wall` to PILLAR tiles (TILES constant 10). Only pillar
+walls in sealab become portholes — regular WALL tiles stay
+`concrete_dark`. This creates visual variety: long corridors of
+concrete with occasional riveted porthole windows showing the deep
+ocean.
+
+---
+
 ## Jam Scope vs Post-Jam
 
 ### Jam (April 5)
-- Sky gradient + 1-2 cloud layers per biome preset
-- Mountain silhouette for alpine biome only
-- Water reflection for title screen only (harbors use dark band)
-- Title screen animated sky (cloud drift + slow color cycle)
-- 6 biome presets + title preset
+- Sky gradient + 1-2 cloud layers per biome preset ✅
+- Mountain silhouette for alpine + title presets ✅
+- Water reflection for title screen ✅
+- Title screen animated sky (cloud drift + slow color cycle) ✅
+- 7 biome presets + title + ocean preset ✅
+- Sealab porthole textures with animated ocean composite ✅
 
 ### Post-Jam
 - Full cloud stack (3 layers per biome)
 - Water reflections on harbor/waterfront during gameplay
-- Star field for night biomes
 - Time-of-day cycle (sky changes as player explores)
 - Weather system (rain overlay, fog density, lightning flash)
 - Dynamic cloud shadows on floor plane
 - Per-biome ambient sound tied to sky state (wind intensity, rain)
+- Animated porthole ceiling casting (ocean through ceiling glass)
+- Porthole as standalone skybox viewport (render full Skybox.render
+  into porthole window for parallax-correct ocean view)

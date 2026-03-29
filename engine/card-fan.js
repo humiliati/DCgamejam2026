@@ -1,31 +1,84 @@
 /**
- * CardFan — canvas-rendered combat card arc.
+ * CardFan — canvas-rendered combat card arc with drag-to-reorder
+ * and drag-drop-to-stack interaction.
  *
  * Displays the player's hand as a fan of cards arcing upward from the
  * bottom of the viewport. Cards spread around a pivot point below the
- * screen edge. Pointer hover lifts and highlights cards. OK plays the
- * selected card.
+ * screen edge. Pointer hover lifts and highlights cards.
  *
- * Adapted from EyesOnly's hand-fan-component.js (~1800 lines) — distilled
- * to core interaction: fan geometry, hover detection, play animation.
+ * Drag interaction (adapted from EyesOnly splash-screen.js):
+ *   - pointerdown on a card → begin drag (after 3px dead-zone)
+ *   - pointermove → ghost follows pointer, placeholder marks drop gap
+ *   - drop on another card in combat → stack (if shared synergy tags)
+ *   - drop in gap → reorder
+ *   - swipe up on a stack → fire (thrust from gesture velocity)
+ *   - tap a stacked card → un-stack
+ *
+ * Stack rules (combat only):
+ *   - Cards need ≥1 shared synergyTag to stack (CardStack.canStack)
+ *   - Stacked cards render as overlapping group with glow border
+ *   - Only one stack can be active at a time
+ *   - Selecting or swiping up fires the stack
+ *
+ * Audio hooks (AudioSystem.play — stubs until Pass 7 assets):
+ *   'card-pickup'   — pointerdown begins drag
+ *   'card-snap'     — card dropped into new position (reorder)
+ *   'card-stack'    — card stacked onto another
+ *   'card-unstack'  — card removed from stack
+ *   'card-fire'     — stack fired (swipe up or confirm)
+ *   'card-reject'   — attempted stack with no shared tags
  *
  * Layer 2 (after HUD, before MenuBox)
- * Depends on: InputManager (pointer), CardSystem (hand data)
+ * Depends on: InputManager (pointer), CardSystem (hand data),
+ *             CardStack (stack ops), CombatEngine (phase),
+ *             CombatFX (slide offset), AudioSystem (sfx)
  */
 var CardFan = (function () {
   'use strict';
 
-  // ── Layout ──────────────────────────────────────────────────────
-  var CARD_W       = 56;        // Card width
-  var CARD_H       = 80;        // Card height
+  // ── Layout (base dimensions — scaled by mode multiplier) ────────
+  var BASE_CARD_W  = 56;        // Card width at 1x
+  var BASE_CARD_H  = 80;        // Card height at 1x
   var ARC_ANGLE    = Math.PI / 3;  // Total fan arc (~60°)
-  var PIVOT_Y_OFF  = 160;      // Pivot point below viewport bottom
+  var BASE_PIVOT_Y = 160;      // Pivot point below viewport bottom at 1x
   var LIFT_PX      = 20;       // Hover lift amount
   var LIFT_SCALE   = 1.12;     // Hover scale-up
   var DEAL_STAGGER = 60;       // ms stagger per card on open
   var PLAY_DURATION = 200;     // ms card-fly-forward animation
 
+  // Mode-aware sizing:
+  //   Combat:     2.0x base (100% larger), 30px higher
+  //   Non-combat: 2.5x base (150% larger) for easy inspection
+  var COMBAT_SCALE     = 2.0;
+  var EXPLORE_SCALE    = 2.5;
+  var COMBAT_LIFT      = 30;   // px additional upward shift in combat
+
+  // ── Derived (recalculated on open) ──────────────────────────────
+  var CARD_W       = BASE_CARD_W;
+  var CARD_H       = BASE_CARD_H;
+  var PIVOT_Y_OFF  = BASE_PIVOT_Y;
+
+  // ── Drag thresholds ─────────────────────────────────────────────
+  var DRAG_DEAD_ZONE = 4;       // px before drag starts
+  var FIRE_SWIPE_VEL = 0.3;     // px/ms upward velocity to trigger fire
+  var FIRE_SWIPE_MIN_DY = 30;   // px minimum upward distance for fire gesture
+
+  // ── Stack visual offsets ────────────────────────────────────────
+  var STACK_CARD_OFFSET = 6;    // px overlap between stacked cards
+  var STACK_GLOW_COLOR  = 'rgba(255,200,60,0.35)';
+  var STACK_GLOW_RADIUS = 8;
+
   // ── Colors ──────────────────────────────────────────────────────
+  // Suit-based border colors (from EyesOnly RESOURCE_COLOR_SYSTEM)
+  // Maps suit → resource color: ♠=free(warm grey), ♣=energy(blue),
+  // ♦=battery(green), ♥=HP(pink)
+  var SUIT_BORDER_COLORS = {
+    spade:   'rgba(180,170,150,0.7)',  // Warm grey — free/earth (no resource glow)
+    club:    '#00D4FF',                // Electric Blue — energy
+    diamond: '#00FFA6',                // Toxic Green — battery
+    heart:   '#FF6B9D'                 // Vibrant Pink — HP
+  };
+  // Fallback for old type-based coloring (legacy compat)
   var BORDER_COLORS = {
     attack:  '#c44',
     defense: '#48c',
@@ -40,17 +93,26 @@ var CardFan = (function () {
   // ── State ───────────────────────────────────────────────────────
   var _open       = false;
   var _hand       = [];       // Card objects from CardSystem
-  var _cards      = [];       // Fan state per card: { card, angle, x, y, dealTimer, playing, playTimer }
+  var _cards      = [];       // Fan state per card: { card, angle, dealTimer, playing, playTimer, handIndex }
   var _hoverIdx   = -1;       // Currently hovered card index
   var _selectedIdx = -1;      // Selected (about to play) card index
   var _onPlay     = null;     // Callback fn(cardIndex) when a card is played
   var _canvas     = null;
   var _openTimer  = 0;        // ms since fan opened
 
+  // ── Drag state (mirrors EyesOnly _dragState pattern) ────────────
+  var _drag = null;  // { cardIdx, startX, startY, curX, curY, started, pointerId }
+
   // ── Init ────────────────────────────────────────────────────────
 
   function init(canvas) {
     _canvas = canvas;
+    if (_canvas) {
+      _canvas.addEventListener('pointerdown', _onPointerDown, false);
+      _canvas.addEventListener('pointermove', _onPointerMove, false);
+      _canvas.addEventListener('pointerup', _onPointerUp, false);
+      _canvas.addEventListener('pointercancel', _onPointerCancel, false);
+    }
   }
 
   // ── Open / Close ────────────────────────────────────────────────
@@ -70,6 +132,15 @@ var CardFan = (function () {
     _openTimer = 0;
     _hoverIdx = -1;
     _selectedIdx = -1;
+    _drag = null;
+
+    // Apply mode-aware sizing
+    var inCombat = _inCombat();
+    var modeScale = inCombat ? COMBAT_SCALE : EXPLORE_SCALE;
+    CARD_W = Math.floor(BASE_CARD_W * modeScale);
+    CARD_H = Math.floor(BASE_CARD_H * modeScale);
+    PIVOT_Y_OFF = Math.floor(BASE_PIVOT_Y * modeScale) - (inCombat ? COMBAT_LIFT : 0);
+
     _buildFan();
   }
 
@@ -79,6 +150,7 @@ var CardFan = (function () {
     _cards = [];
     _hoverIdx = -1;
     _selectedIdx = -1;
+    _drag = null;
   }
 
   function isOpen() { return _open; }
@@ -87,6 +159,18 @@ var CardFan = (function () {
   function setHand(hand) {
     _hand = hand || [];
     _buildFan();
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  function _inCombat() {
+    return (typeof CombatEngine !== 'undefined' && CombatEngine.isActive());
+  }
+
+  function _playAudio(name, opts) {
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play(name, opts);
+    }
   }
 
   // ── Build card positions ────────────────────────────────────────
@@ -103,9 +187,10 @@ var CardFan = (function () {
       _cards.push({
         card:      _hand[i],
         angle:     n > 1 ? startAngle + angleStep * i : 0,
-        dealTimer: i * DEAL_STAGGER,  // Staggered deal-in
+        dealTimer: i * DEAL_STAGGER,
         playing:   false,
-        playTimer: 0
+        playTimer: 0,
+        handIndex: i  // Tracks original hand slot for CardStack
       });
     }
   }
@@ -154,7 +239,13 @@ var CardFan = (function () {
     if (!_open || !_canvas) return -1;
     var h = _canvas.height;
     var cx = _canvas.width / 2;
-    var pivotY = h + PIVOT_Y_OFF;
+
+    // Fan slide choreography offset
+    var slideOffset = 0;
+    if (typeof CombatFX !== 'undefined') {
+      slideOffset = CombatFX.getFanSlideOffset() * (CARD_H + 60);
+    }
+    var pivotY = h + PIVOT_Y_OFF + slideOffset;
 
     // Test from top (front) card to back for correct overlap order
     for (var i = _cards.length - 1; i >= 0; i--) {
@@ -162,6 +253,11 @@ var CardFan = (function () {
       if (c.playing) continue;
 
       var pos = _getCardPos(c, cx, pivotY, h);
+      // Account for stacked card offsets
+      var stackOff = _getStackOffset(i);
+      pos.x += stackOff.dx;
+      pos.y += stackOff.dy;
+
       // Simple AABB hit test (rotated cards are approximate)
       var hw = CARD_W / 2;
       var hh = CARD_H / 2;
@@ -180,6 +276,312 @@ var CardFan = (function () {
     var x = cx + Math.sin(c.angle) * radius;
     var y = pivotY - Math.cos(c.angle) * radius;
     return { x: x, y: y };
+  }
+
+  /**
+   * Get visual offset for stacked cards — stacked cards cluster together
+   * with slight overlap offsets to show the stack depth.
+   *
+   * @param {number} fanIdx - Index in _cards array
+   * @returns {{ dx: number, dy: number, inStack: boolean, stackPos: number }}
+   */
+  function _getStackOffset(fanIdx) {
+    if (typeof CardStack === 'undefined' || !_inCombat()) {
+      return { dx: 0, dy: 0, inStack: false, stackPos: -1 };
+    }
+
+    var c = _cards[fanIdx];
+    if (!c) return { dx: 0, dy: 0, inStack: false, stackPos: -1 };
+
+    var stack = CardStack.getStack();
+    for (var s = 0; s < stack.length; s++) {
+      if (stack[s].handIndex === c.handIndex) {
+        // This card is in the stack — offset it based on stack position
+        // First card in stack stays put; subsequent cards offset upward + right
+        return {
+          dx: s * STACK_CARD_OFFSET * 0.5,
+          dy: -s * STACK_CARD_OFFSET,
+          inStack: true,
+          stackPos: s
+        };
+      }
+    }
+    return { dx: 0, dy: 0, inStack: false, stackPos: -1 };
+  }
+
+  // ── Pointer events (drag system) ────────────────────────────────
+
+  function _onPointerDown(e) {
+    if (!_open || _drag) return;
+
+    var rect = _canvas.getBoundingClientRect();
+    var px = e.clientX - rect.left;
+    var py = e.clientY - rect.top;
+
+    // Scale to canvas coordinates
+    px = px * (_canvas.width / rect.width);
+    py = py * (_canvas.height / rect.height);
+
+    var idx = hitTest(px, py);
+    if (idx < 0) return;
+
+    // Capture pointer for reliable tracking
+    try { _canvas.setPointerCapture(e.pointerId); } catch (_ex) {}
+
+    _drag = {
+      cardIdx:   idx,
+      startX:    px,
+      startY:    py,
+      curX:      px,
+      curY:      py,
+      started:   false,   // True after passing dead zone
+      pointerId: e.pointerId,
+      startTime: Date.now()
+    };
+
+    _hoverIdx = idx;
+    e.preventDefault();
+  }
+
+  function _onPointerMove(e) {
+    if (!_open) return;
+
+    var rect = _canvas.getBoundingClientRect();
+    var px = e.clientX - rect.left;
+    var py = e.clientY - rect.top;
+    px = px * (_canvas.width / rect.width);
+    py = py * (_canvas.height / rect.height);
+
+    if (!_drag) {
+      // No drag in progress — just update hover
+      _hoverIdx = hitTest(px, py);
+      return;
+    }
+
+    if (_drag.pointerId !== e.pointerId) return;
+
+    _drag.curX = px;
+    _drag.curY = py;
+
+    // Check dead zone
+    if (!_drag.started) {
+      var dx = px - _drag.startX;
+      var dy = py - _drag.startY;
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_DEAD_ZONE) return;
+
+      _drag.started = true;
+      _playAudio('card-pickup', { volume: 0.4 });
+    }
+
+    // During drag: update hover to the card under pointer (for drop target)
+    _hoverIdx = hitTest(px, py);
+    e.preventDefault();
+  }
+
+  function _onPointerUp(e) {
+    if (!_drag || _drag.pointerId !== e.pointerId) return;
+
+    try { _canvas.releasePointerCapture(e.pointerId); } catch (_ex) {}
+
+    var rect = _canvas.getBoundingClientRect();
+    var px = e.clientX - rect.left;
+    var py = e.clientY - rect.top;
+    px = px * (_canvas.width / rect.width);
+    py = py * (_canvas.height / rect.height);
+
+    if (!_drag.started) {
+      // Didn't pass dead zone — treat as tap/click
+      _handleTap(_drag.cardIdx);
+      _drag = null;
+      return;
+    }
+
+    // Drag completed — determine action
+    var dragIdx = _drag.cardIdx;
+    var dropIdx = hitTest(px, py);
+
+    // Check for swipe-up-to-fire gesture
+    var dy = _drag.startY - py;  // Positive = upward
+    var elapsed = Math.max(1, Date.now() - _drag.startTime);
+    var velY = dy / elapsed;  // px/ms upward
+
+    if (_inCombat() && dy > FIRE_SWIPE_MIN_DY && velY > FIRE_SWIPE_VEL) {
+      // Swipe up detected — fire the stack (or fire single card if no stack)
+      _handleSwipeFire(px, py, velY);
+      _drag = null;
+      return;
+    }
+
+    // Drop on a different card in combat → attempt stack
+    if (_inCombat() && dropIdx >= 0 && dropIdx !== dragIdx) {
+      _handleDragToStack(dragIdx, dropIdx);
+      _drag = null;
+      return;
+    }
+
+    // Drop on same card or empty space → reorder
+    if (dropIdx >= 0 && dropIdx !== dragIdx) {
+      _handleReorder(dragIdx, dropIdx);
+    }
+
+    _drag = null;
+  }
+
+  function _onPointerCancel(e) {
+    if (_drag && _drag.pointerId === e.pointerId) {
+      try { _canvas.releasePointerCapture(e.pointerId); } catch (_ex) {}
+      _drag = null;
+    }
+  }
+
+  // ── Tap handler ─────────────────────────────────────────────────
+
+  function _handleTap(idx) {
+    if (idx < 0 || idx >= _cards.length) return;
+
+    if (_inCombat() && typeof CardStack !== 'undefined') {
+      var c = _cards[idx];
+      var hand = CardSystem.getHand();
+
+      if (CardStack.isInStack(c.handIndex)) {
+        // Tap stacked card → un-stack
+        CardStack.removeByIndex(c.handIndex);
+        _playAudio('card-unstack', { volume: 0.35 });
+        CombatEngine.resetEnemyBeat();
+        _notifyStackChange();
+        return;
+      }
+
+      // Tap a non-stacked card → try to add to current stack
+      if (CardStack.canStack(c.card)) {
+        CardStack.pushCard(c.card, c.handIndex);
+        _playAudio('card-stack', { volume: 0.4 });
+        CombatEngine.resetEnemyBeat();
+        _notifyStackChange();
+        return;
+      }
+
+      // Can't stack with current → start new stack (clears old one)
+      CardStack.clear();
+      CardStack.pushCard(c.card, c.handIndex);
+      _playAudio('card-snap', { volume: 0.35 });
+      CombatEngine.resetEnemyBeat();
+      _notifyStackChange();
+      return;
+    }
+
+    // Non-combat or no CardStack — play card directly
+    if (_onPlay) _onPlay(idx);
+  }
+
+  // ── Drag-to-stack ───────────────────────────────────────────────
+
+  function _handleDragToStack(dragIdx, dropIdx) {
+    if (typeof CardStack === 'undefined') {
+      // No stack module — just reorder
+      _handleReorder(dragIdx, dropIdx);
+      return;
+    }
+
+    var dragCard = _cards[dragIdx];
+    var dropCard = _cards[dropIdx];
+    if (!dragCard || !dropCard) return;
+
+    // If drop target is already in a stack, try to add drag card to that stack
+    if (CardStack.isInStack(dropCard.handIndex)) {
+      if (CardStack.canStack(dragCard.card)) {
+        CardStack.pushCard(dragCard.card, dragCard.handIndex);
+        _playAudio('card-stack', { volume: 0.45 });
+        CombatEngine.resetEnemyBeat();
+        _notifyStackChange();
+        return;
+      }
+      // Can't stack — reject with feedback
+      _playAudio('card-reject', { volume: 0.3 });
+      return;
+    }
+
+    // Neither is in a stack — try to create a new 2-card stack
+    // Start with the drop target, then push the drag card
+    CardStack.clear();
+    CardStack.pushCard(dropCard.card, dropCard.handIndex);
+
+    if (CardStack.canStack(dragCard.card)) {
+      CardStack.pushCard(dragCard.card, dragCard.handIndex);
+      _playAudio('card-stack', { volume: 0.45 });
+      CombatEngine.resetEnemyBeat();
+      _notifyStackChange();
+    } else {
+      // Incompatible tags — undo the stack start, reject
+      CardStack.clear();
+      _playAudio('card-reject', { volume: 0.3 });
+    }
+  }
+
+  // ── Swipe-up-to-fire ────────────────────────────────────────────
+
+  function _handleSwipeFire(px, py, velY) {
+    if (typeof CardStack === 'undefined') return;
+
+    if (CardStack.isEmpty()) {
+      // No stack — check if swiped a single card (fire as 1-card stack)
+      var idx = _drag ? _drag.cardIdx : -1;
+      if (idx >= 0 && idx < _cards.length) {
+        var c = _cards[idx];
+        CardStack.clear();
+        CardStack.pushCard(c.card, c.handIndex);
+      }
+    }
+
+    if (CardStack.isEmpty()) return;
+
+    // Use gesture velocity for thrust multiplier
+    // Map velY (px/ms) to CardStack's thrust gesture
+    CardStack.gestureStart(_drag.startX, _drag.startY);
+    var thrust = CardStack.gestureEnd(px, py);
+
+    _playAudio('card-fire', { volume: 0.55 });
+
+    // Fire via CombatBridge
+    if (typeof CombatBridge !== 'undefined') {
+      CombatBridge.fireStack(thrust);
+    }
+  }
+
+  // ── Reorder ─────────────────────────────────────────────────────
+
+  function _handleReorder(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    if (fromIdx < 0 || fromIdx >= _hand.length) return;
+    if (toIdx < 0 || toIdx >= _hand.length) return;
+
+    // Move card in _hand array
+    var card = _hand.splice(fromIdx, 1)[0];
+    _hand.splice(toIdx, 0, card);
+
+    _playAudio('card-snap', { volume: 0.3 });
+    _buildFan();
+  }
+
+  // ── Stack change notification ───────────────────────────────────
+
+  function _notifyStackChange() {
+    if (typeof CardStack === 'undefined') return;
+
+    var stackCards = CardStack.getCards();
+    var tags = CardStack.getSharedTags();
+
+    if (stackCards.length > 1 && typeof HUD !== 'undefined') {
+      var emojis = '';
+      for (var i = 0; i < stackCards.length; i++) emojis += stackCards[i].emoji;
+      HUD.showCombatLog(
+        emojis + ' ' +
+        (typeof i18n !== 'undefined' ? i18n.t('combat.stack_preview', 'Combo') : 'Combo') +
+        (tags.length > 0 ? ' [' + tags.join('+') + ']' : '') +
+        ' — ' +
+        (typeof i18n !== 'undefined' ? i18n.t('combat.swipe_to_fire', 'swipe up to fire!') : 'swipe up to fire!')
+      );
+    }
   }
 
   // ── Update ──────────────────────────────────────────────────────
@@ -204,8 +606,8 @@ var CardFan = (function () {
       }
     }
 
-    // Update hover from pointer
-    if (typeof InputManager !== 'undefined') {
+    // Update hover from pointer (only when not dragging)
+    if (!_drag && typeof InputManager !== 'undefined') {
       var ptr = InputManager.getPointer();
       if (ptr && ptr.active) {
         _hoverIdx = hitTest(ptr.x, ptr.y);
@@ -225,123 +627,323 @@ var CardFan = (function () {
   function render(ctx, w, h) {
     if (!_open || _cards.length === 0) return;
 
+    // ── Fan slide choreography: displace downward during resolution ──
+    var slideOffset = 0;
+    if (typeof CombatFX !== 'undefined') {
+      slideOffset = CombatFX.getFanSlideOffset() * (CARD_H + 60);
+    }
+
     var cx = w / 2;
-    var pivotY = h + PIVOT_Y_OFF;
+    var pivotY = h + PIVOT_Y_OFF + slideOffset;
 
     ctx.save();
 
+    // ── First pass: render stack glow behind stacked cards ──
+    if (_inCombat() && typeof CardStack !== 'undefined' && CardStack.getSize() > 1) {
+      _renderStackGlow(ctx, cx, pivotY, h);
+    }
+
+    // ── Second pass: render cards ──
     for (var i = 0; i < _cards.length; i++) {
       var c = _cards[i];
 
       // Deal-in stagger: don't show until openTimer passes this card's deal time
       if (_openTimer < c.dealTimer) continue;
 
-      var pos = _getCardPos(c, cx, pivotY, h);
-      var isHover = (i === _hoverIdx);
-      var isPlaying = c.playing;
-
-      // Play animation: card flies upward toward center
-      var playProgress = 0;
-      if (isPlaying) {
-        playProgress = Math.min(1, c.playTimer / PLAY_DURATION);
-        var ease = 1 - (1 - playProgress) * (1 - playProgress); // ease-out
-        pos.x += (cx - pos.x) * ease;
-        pos.y += (h * 0.3 - pos.y) * ease;
+      // Skip dragged card in normal pass (render ghost separately)
+      if (_drag && _drag.started && _drag.cardIdx === i) {
+        continue;
       }
 
-      // Hover: lift card
-      var lift = 0;
-      var scale = 1;
-      if (isHover && !isPlaying) {
-        lift = LIFT_PX;
-        scale = LIFT_SCALE;
-      }
+      _renderCard(ctx, c, i, cx, pivotY, h, false);
+    }
 
-      ctx.save();
-      ctx.translate(pos.x, pos.y - lift);
-      ctx.rotate(c.angle * 0.6);  // Slight tilt following arc
-      ctx.scale(scale, scale);
-
-      // Fade out playing card
-      if (isPlaying) {
-        ctx.globalAlpha = 1 - playProgress;
-      }
-
-      // ── Card body ──
-      var hw = CARD_W / 2;
-      var hh = CARD_H / 2;
-      var borderColor = BORDER_COLORS[c.card.type] || COL_BORDER;
-
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      _roundRect(ctx, -hw + 2, -hh + 2, CARD_W, CARD_H, 5);
-      ctx.fill();
-
-      // Background
-      _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
-      ctx.fillStyle = COL_BG;
-      ctx.fill();
-
-      // Border (color-coded by type)
-      ctx.strokeStyle = isHover ? '#fff' : borderColor;
-      ctx.lineWidth = isHover ? 2 : 1.5;
-      _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
-      ctx.stroke();
-
-      // Emoji icon (large, centered)
-      if (c.card.emoji) {
-        ctx.font = '24px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(c.card.emoji, 0, -8);
-      }
-
-      // Card name (small, bottom)
-      if (c.card.name) {
-        ctx.font = '9px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillStyle = COL_NAME;
-        ctx.fillText(c.card.name, 0, hh - 6);
-      }
-
-      ctx.restore();
+    // ── Third pass: render dragged ghost card on top ──
+    if (_drag && _drag.started && _drag.cardIdx >= 0 && _drag.cardIdx < _cards.length) {
+      _renderDragGhost(ctx, w, h);
     }
 
     // ── Tooltip for hovered card ──
-    if (_hoverIdx >= 0 && _hoverIdx < _cards.length && !_cards[_hoverIdx].playing) {
-      var hc = _cards[_hoverIdx];
-      var hPos = _getCardPos(hc, cx, pivotY, h);
-      var desc = hc.card.description || hc.card.name || '';
+    if (!_drag || !_drag.started) {
+      _renderTooltip(ctx, cx, pivotY, h);
+    }
 
-      if (desc) {
-        ctx.font = '11px monospace';
-        var tw = ctx.measureText(desc).width + 12;
-        var tx = hPos.x - tw / 2;
-        var ty = hPos.y - CARD_H / 2 - LIFT_PX - 28;
+    ctx.restore();
+  }
 
-        // Tooltip bg
-        _roundRect(ctx, tx, ty, tw, 22, 4);
-        ctx.fillStyle = 'rgba(10,8,16,0.9)';
-        ctx.fill();
-        ctx.strokeStyle = COL_BORDER;
-        ctx.lineWidth = 1;
-        _roundRect(ctx, tx, ty, tw, 22, 4);
-        ctx.stroke();
+  /**
+   * Render a single card at its fan position.
+   */
+  function _renderCard(ctx, c, i, cx, pivotY, h, isGhost) {
+    var pos = _getCardPos(c, cx, pivotY, h);
+    var stackOff = _getStackOffset(i);
 
-        // Tooltip text
-        ctx.fillStyle = COL_TEXT;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(desc, hPos.x, ty + 11);
+    var isHover = (i === _hoverIdx) && !isGhost;
+    var isPlaying = c.playing;
+    var isStacked = stackOff.inStack;
+
+    // Play animation: card flies upward toward center
+    var playProgress = 0;
+    if (isPlaying) {
+      playProgress = Math.min(1, c.playTimer / PLAY_DURATION);
+      var ease = 1 - (1 - playProgress) * (1 - playProgress);
+      pos.x += (cx - pos.x) * ease;
+      pos.y += (h * 0.3 - pos.y) * ease;
+    }
+
+    // Apply stack offset
+    pos.x += stackOff.dx;
+    pos.y += stackOff.dy;
+
+    // Hover: lift card
+    var lift = 0;
+    var scale = 1;
+    if (isHover && !isPlaying) {
+      lift = LIFT_PX;
+      scale = LIFT_SCALE;
+    }
+    // Stacked cards get a slight lift to show grouping
+    if (isStacked && !isHover) {
+      lift = 6;
+    }
+
+    ctx.save();
+    ctx.translate(pos.x, pos.y - lift);
+    ctx.rotate(c.angle * 0.6);  // Slight tilt following arc
+    ctx.scale(scale, scale);
+
+    // Fade out playing card
+    if (isPlaying) {
+      ctx.globalAlpha = 1 - playProgress;
+    }
+
+    _drawCardBody(ctx, c, isHover, isStacked);
+    ctx.restore();
+  }
+
+  /**
+   * Render the dragged card as a floating ghost at pointer position.
+   */
+  function _renderDragGhost(ctx, w, h) {
+    if (!_drag || !_drag.started) return;
+    var idx = _drag.cardIdx;
+    if (idx < 0 || idx >= _cards.length) return;
+    var c = _cards[idx];
+
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+
+    // Ghost follows pointer with slight tilt based on drag velocity
+    var dx = _drag.curX - _drag.startX;
+    var tilt = Math.max(-0.15, Math.min(0.15, dx * 0.001));
+
+    ctx.translate(_drag.curX, _drag.curY);
+    ctx.rotate(tilt);
+    ctx.scale(1.08, 1.08);  // Slight scale-up while dragging
+
+    _drawCardBody(ctx, c, true, false);
+
+    // Drop target indicator: if hovering over a different card, show
+    // a small glow to indicate stackability
+    if (_hoverIdx >= 0 && _hoverIdx !== idx && _inCombat()) {
+      var targetCard = _cards[_hoverIdx];
+      if (targetCard && typeof CardStack !== 'undefined') {
+        // Quick check: would these cards be compatible?
+        var canCombine = _checkCanCombine(c.card, targetCard.card);
+        if (canCombine) {
+          // Draw green glow at bottom
+          ctx.fillStyle = 'rgba(80,255,120,0.25)';
+          var hw = CARD_W / 2;
+          ctx.fillRect(-hw, CARD_H / 2 - 8, CARD_W, 8);
+        } else {
+          // Draw red indicator
+          ctx.fillStyle = 'rgba(255,60,60,0.2)';
+          var hw2 = CARD_W / 2;
+          ctx.fillRect(-hw2, CARD_H / 2 - 8, CARD_W, 8);
+        }
       }
     }
 
     ctx.restore();
   }
 
-  // ── Handle pointer click on fan ─────────────────────────────────
+  /**
+   * Check if two cards share at least one synergy tag.
+   */
+  function _checkCanCombine(cardA, cardB) {
+    if (!cardA || !cardB) return false;
+    var tagsA = cardA.synergyTags || [];
+    var tagsB = cardB.synergyTags || [];
+    for (var i = 0; i < tagsA.length; i++) {
+      for (var j = 0; j < tagsB.length; j++) {
+        if (tagsA[i] === tagsB[j]) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Render stack glow behind all stacked cards.
+   */
+  function _renderStackGlow(ctx, cx, pivotY, h) {
+    var stack = CardStack.getStack();
+    if (stack.length < 2) return;
+
+    // Find the average position of stacked cards
+    var sumX = 0;
+    var sumY = 0;
+    var count = 0;
+
+    for (var i = 0; i < _cards.length; i++) {
+      var sOff = _getStackOffset(i);
+      if (!sOff.inStack) continue;
+      var pos = _getCardPos(_cards[i], cx, pivotY, h);
+      sumX += pos.x + sOff.dx;
+      sumY += pos.y + sOff.dy;
+      count++;
+    }
+
+    if (count === 0) return;
+    var avgX = sumX / count;
+    var avgY = sumY / count;
+
+    // Draw radial glow centered on stack
+    var glowSize = CARD_W * 0.8 + stack.length * 4;
+    var grad = ctx.createRadialGradient(avgX, avgY - 10, 0, avgX, avgY - 10, glowSize);
+    grad.addColorStop(0, STACK_GLOW_COLOR);
+    grad.addColorStop(1, 'rgba(255,200,60,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(avgX - glowSize, avgY - 10 - glowSize, glowSize * 2, glowSize * 2);
+  }
+
+  /**
+   * Draw a card body (shared between normal render and ghost).
+   */
+  function _drawCardBody(ctx, c, isHover, isStacked) {
+    var hw = CARD_W / 2;
+    var hh = CARD_H / 2;
+    // Primary border: suit color (resource-keyed), fallback to type color
+    var borderColor = (c.card.suit && SUIT_BORDER_COLORS[c.card.suit])
+      ? SUIT_BORDER_COLORS[c.card.suit]
+      : (BORDER_COLORS[c.card.type] || COL_BORDER);
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    _roundRect(ctx, -hw + 2, -hh + 2, CARD_W, CARD_H, 5);
+    ctx.fill();
+
+    // Background
+    _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
+    ctx.fillStyle = COL_BG;
+    ctx.fill();
+
+    // Border (color-coded by type)
+    // Stacked cards get a golden border
+    if (isStacked) {
+      ctx.strokeStyle = '#f0d070';
+      ctx.lineWidth = 2.5;
+    } else if (isHover) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+    } else {
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.5;
+    }
+    _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
+    ctx.stroke();
+
+    // Stack position indicator (small number badge)
+    if (isStacked) {
+      var stack = CardStack.getStack();
+      for (var s = 0; s < stack.length; s++) {
+        if (stack[s].handIndex === c.handIndex) {
+          var badge = String(s + 1);
+          var badgeSize = Math.max(8, Math.floor(CARD_H * 0.09));
+          ctx.font = 'bold ' + badgeSize + 'px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          // Badge circle
+          ctx.fillStyle = 'rgba(240,208,112,0.9)';
+          ctx.beginPath();
+          ctx.arc(hw - badgeSize, -hh + badgeSize, badgeSize * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+          // Badge number
+          ctx.fillStyle = '#1a1520';
+          ctx.fillText(badge, hw - badgeSize, -hh + badgeSize);
+          break;
+        }
+      }
+    }
+
+    // Emoji icon (large, centered)
+    if (c.card.emoji) {
+      var emojiSize = Math.floor(CARD_H * 0.3);
+      ctx.font = emojiSize + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(c.card.emoji, 0, -hh * 0.1);
+    }
+
+    // Suit symbol (top-left corner)
+    if (c.card.suit && typeof SynergyEngine !== 'undefined') {
+      var suitSym = SynergyEngine.getSymbol(c.card.suit);
+      var suitSize = Math.max(9, Math.floor(CARD_H * 0.13));
+      ctx.font = 'bold ' + suitSize + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = borderColor;
+      ctx.fillText(suitSym, -hw + 4, -hh + 3);
+    }
+
+    // Card name (small, bottom)
+    if (c.card.name) {
+      var nameSize = Math.max(8, Math.floor(CARD_H * 0.11));
+      ctx.font = nameSize + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = COL_NAME;
+      ctx.fillText(c.card.name, 0, hh - Math.floor(hh * 0.08));
+    }
+  }
+
+  /**
+   * Render tooltip for hovered card.
+   */
+  function _renderTooltip(ctx, cx, pivotY, h) {
+    if (_hoverIdx < 0 || _hoverIdx >= _cards.length) return;
+    if (_cards[_hoverIdx].playing) return;
+
+    var hc = _cards[_hoverIdx];
+    var hPos = _getCardPos(hc, cx, pivotY, h);
+    var desc = hc.card.description || hc.card.name || '';
+
+    if (!desc) return;
+
+    var tipSize = Math.max(10, Math.floor(CARD_H * 0.14));
+    var tipH = tipSize + 10;
+    ctx.font = tipSize + 'px monospace';
+    var tw = ctx.measureText(desc).width + 16;
+    var tx = hPos.x - tw / 2;
+    var ty = hPos.y - CARD_H / 2 - LIFT_PX - tipH - 8;
+
+    // Tooltip bg
+    _roundRect(ctx, tx, ty, tw, tipH, 4);
+    ctx.fillStyle = 'rgba(10,8,16,0.9)';
+    ctx.fill();
+    ctx.strokeStyle = COL_BORDER;
+    ctx.lineWidth = 1;
+    _roundRect(ctx, tx, ty, tw, tipH, 4);
+    ctx.stroke();
+
+    // Tooltip text
+    ctx.fillStyle = COL_TEXT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(desc, hPos.x, ty + tipH / 2);
+  }
+
+  // ── Handle pointer click on fan (legacy — kept for keyboard/dpad) ──
 
   /**
    * Handle a pointer click. Returns true if consumed.
@@ -349,7 +951,7 @@ var CardFan = (function () {
   function handlePointerClick() {
     if (!_open) return false;
     if (_hoverIdx >= 0) {
-      playCard(_hoverIdx);
+      _handleTap(_hoverIdx);
       return true;
     }
     return false;

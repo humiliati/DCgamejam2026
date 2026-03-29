@@ -28,6 +28,9 @@ var CombatBridge = (function () {
 
   var MC = MovementController;
 
+  // Lunge peak fraction — when the zoom hits max (matches CombatFX curve)
+  var ENEMY_LUNGE_PEAK_PCT = 0.35;
+
   // ── Callbacks (wired by Game orchestrator) ─────────────────────────
   var _onGameOver = null;
 
@@ -102,6 +105,7 @@ var CombatBridge = (function () {
     _entryPos = { x: p.x, y: p.y };
 
     MC.cancelAll();
+    MC.resetRepeat();
 
     var dirToEnemy = _directionToEnemy(enemy);
     var wasAlreadyFacing = _isAlreadyFacing(dirToEnemy);
@@ -163,9 +167,22 @@ var CombatBridge = (function () {
    * Actually initialize combat after the player is facing the enemy.
    */
   function _beginCombat(enemy) {
+    // ── Combat start audio (Pass 7) ──
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('enemy-alert', { volume: 0.6 });
+      AudioSystem.preloadCategory('combat');
+      AudioSystem.preloadCategory('card');
+    }
+
     // Draw a fresh hand
     CardSystem.drawHand();
     HUD.updateCards(CardSystem.getHand());
+
+    // NCH widget → combat mode (shrink capsule)
+    if (typeof NchWidget !== 'undefined') NchWidget.enterCombat();
+
+    // Start combat tracking for end-of-combat report
+    if (typeof CombatReport !== 'undefined') CombatReport.beginTracking(enemy);
 
     var player = Player.state();
 
@@ -178,11 +195,40 @@ var CombatBridge = (function () {
     // Start the engine — pass ambush hint so advantage is set correctly
     // (awareness alone can't tell us who was facing whom at the moment
     // of engagement because we've already turned the player)
+    // Set enemy stack greed (how many cards they accumulate before firing)
+    var greed = 2; // Default: 2-card combos
+    if (enemy.isBoss) greed = 4;
+    else if (enemy.isElite) greed = 3;
+    else if (enemy.dex >= 5) greed = 1; // Quick enemies fire immediately
+    if (enemy.stackGreed) greed = enemy.stackGreed; // Explicit override
+    if (typeof CardStack !== 'undefined') {
+      CardStack.setEnemyGreed(greed);
+    }
+
+    // Set enemy type for CombatFX timing overrides
+    // Map enemy properties to timing category: boss > elite > quick > standard
+    if (typeof CombatFX !== 'undefined') {
+      var fxType = 'standard';
+      if (enemy.isBoss) fxType = 'boss';
+      else if (enemy.isElite) fxType = 'elite';
+      else if (enemy.dex >= 5) fxType = 'quick'; // High-dex enemies feel snappy
+      CombatFX.setEnemyType(fxType);
+    }
+
     CombatEngine.start(enemy, player, {
       onEnd: _onCombatEnd,
       onPhaseChange: _onPhaseChange,
       ambushHint: _pendingAmbushHint
     });
+
+    // ── Enemy intent telegraph (Pass 8) ──
+    if (typeof EnemyIntent !== 'undefined') {
+      EnemyIntent.beginCombat(enemy, greed);
+      // If ambushed, fire initial expression event
+      if (_pendingAmbushHint === 'enemy_ambushed') {
+        EnemyIntent.onCombatEvent('ambushed');
+      }
+    }
 
     // Clear the hint after use
     _pendingAmbushHint = null;
@@ -207,24 +253,88 @@ var CombatBridge = (function () {
       if (msg) HUD.showCombatLog(msg);
     }
 
-    if (newPhase === 'selecting') {
-      // Countdown complete — show "pick a card" prompt
+    if (newPhase === 'stacking') {
+      // Stacking phase — player builds card stacks, enemy accumulates
+      var enemy = CombatEngine.getEnemy();
+
+      // ── Intent telegraph: reset for new round (Pass 8) ──
+      if (typeof EnemyIntent !== 'undefined') {
+        EnemyIntent.onCombatEvent('round_end');
+      }
+
+      // Per-turn draw from backup deck (Gone Rogue pattern)
+      if (CombatEngine.canDraw()) {
+        var drawn = CardSystem.drawToHand(1);
+        CombatEngine.useDraw();
+        if (drawn.length > 0) {
+          HUD.showCombatLog('📥 Drew ' + drawn[0].emoji + ' ' + drawn[0].name);
+        }
+      }
+
+      HUD.updateCards(CardSystem.getHand());
       HUD.showCombatLog(
-        CombatEngine.getEnemy().emoji + ' ' +
-        CombatEngine.getEnemy().name +
-        ' — ' + i18n.t('combat.pick_card', 'Pick a card (1-5)')
+        enemy.emoji + ' ' + enemy.name +
+        ' — ' + i18n.t('combat.stack_cards', 'Stack cards, then fire!')
       );
 
-      // Open the card fan for pointer-based card selection
+      // Open the card fan for stacking interaction
       if (typeof CardFan !== 'undefined') {
         CardFan.open(CardSystem.getHand(), {
-          onPlay: function (idx) { playCard(idx); }
+          onPlay: function (idx) { _onCardStackOrPlay(idx); }
         });
+      }
+
+      // Reset CardStack for this round
+      if (typeof CardStack !== 'undefined') CardStack.clear();
+    }
+
+    // Legacy compat: treat 'selecting' same as 'stacking'
+    if (newPhase === 'selecting') {
+      // Should not normally reach here in new flow, but safety
+      if (typeof CardFan !== 'undefined' && !CardFan.isOpen()) {
+        CardFan.open(CardSystem.getHand(), {
+          onPlay: function (idx) { _onCardStackOrPlay(idx); }
+        });
+      }
+    }
+
+    // Enemy committed another card to their stack
+    if (newPhase === 'enemy_commit') {
+      var eStack = (typeof CardStack !== 'undefined') ? CardStack.getEnemyStack() : [];
+      var enemy = CombatEngine.getEnemy();
+      HUD.showCombatLog(
+        enemy.emoji + ' ' +
+        i18n.t('combat.enemy_stacking', 'building combo...') +
+        ' (' + eStack.length + '/' +
+        ((typeof CardStack !== 'undefined') ? CardStack.getEnemyGreed() : '?') + ')'
+      );
+
+      // ── Intent telegraph update (Pass 8) ──
+      if (typeof EnemyIntent !== 'undefined') {
+        EnemyIntent.onEnemyCommit(eStack);
+      }
+    }
+
+    // Enemy stack is full — they're about to fire
+    if (newPhase === 'enemy_ready') {
+      var enemy = CombatEngine.getEnemy();
+      HUD.showCombatLog(
+        '⚠️ ' + enemy.emoji + ' ' +
+        i18n.t('combat.enemy_ready', 'ready to attack!')
+      );
+
+      // ── Intent telegraph: charged state (Pass 8) ──
+      if (typeof EnemyIntent !== 'undefined') {
+        EnemyIntent.onEnemyReady();
       }
     }
 
     if (newPhase === 'post_resolve') {
       // Brief pause after damage — log already updated by playCard
+      // ── Intent telegraph: damage event + round end (Pass 8) ──
+      if (typeof EnemyIntent !== 'undefined') {
+        EnemyIntent.onCombatEvent('took_damage');
+      }
     }
 
     if (newPhase === 'victory' || newPhase === 'defeat') {
@@ -241,25 +351,105 @@ var CombatBridge = (function () {
     HUD.setAdvantage('');
     HUD.updatePlayer(Player.state());
 
+    // ── Clear intent telegraph (Pass 8) ──
+    if (typeof EnemyIntent !== 'undefined') EnemyIntent.endCombat();
+
+    // End combat tracking
+    if (typeof CombatReport !== 'undefined') CombatReport.endTracking(result);
+
+    // NCH widget → exploration mode (restore capsule)
+    if (typeof NchWidget !== 'undefined') NchWidget.exitCombat();
+
     if (result === 'victory') {
-      // ── Victory: remove enemy, drop corpse tile, award loot ──
+      // ── Victory: remove enemy, start death anim, drop corpse tile, award loot ──
       var corpseX = enemy.x;
       var corpseY = enemy.y;
       FloorManager.removeEnemy(enemy);
       SessionStats.inc('enemiesDefeated');
 
-      // Place a CORPSE tile where the enemy fell (if tile is empty)
-      var fd = FloorManager.getFloorData();
-      if (fd && fd.grid[corpseY] &&
-          fd.grid[corpseY][corpseX] === TILES.EMPTY) {
-        fd.grid[corpseY][corpseX] = TILES.CORPSE;
+      // Start death animation (origami fold or poof)
+      if (typeof DeathAnim !== 'undefined') {
+        // Project enemy grid position → screen coordinates
+        // Uses camera math matching the raycaster's sprite projection.
+        var canvas = document.getElementById('view-canvas');
+        var cw = canvas ? canvas.width : 640;
+        var ch = canvas ? canvas.height : 400;
+        var sx = cw / 2;  // fallback: screen center
+        var sy = ch * 0.45;
+        var renderPos = MC.getRenderPos ? MC.getRenderPos() : null;
+        if (renderPos) {
+          var edx = (corpseX + 0.5) - renderPos.x;
+          var edy = (corpseY + 0.5) - renderPos.y;
+          var eDist = Math.sqrt(edx * edx + edy * edy);
+          if (eDist > 0.3) {
+            var pAngle = renderPos.angle + (Player.state().lookOffset || 0);
+            var eAngle = Math.atan2(edy, edx) - pAngle;
+            while (eAngle > Math.PI) eAngle -= 2 * Math.PI;
+            while (eAngle < -Math.PI) eAngle += 2 * Math.PI;
+            var fov = Math.PI / 3;
+            var halfFov = fov / 2;
+            sx = Math.floor(cw / 2 + (eAngle / halfFov) * (cw / 2));
+            sy = ch / 2;  // eye-level center
+          }
+        }
+        var deathEnemy = { emoji: enemy.emoji, type: enemy.type || '', tags: enemy.tags || [] };
+
+        DeathAnim.start(deathEnemy, sx, sy, 0.6, function (e, deathType) {
+          // Place corpse tile after fold animation completes
+          if (deathType === 'fold') {
+            var fd = FloorManager.getFloorData();
+            if (fd && fd.grid[corpseY] &&
+                fd.grid[corpseY][corpseX] === TILES.EMPTY) {
+              fd.grid[corpseY][corpseX] = TILES.CORPSE;
+            }
+            // Register in CorpseRegistry with full enemy data
+            var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+            if (typeof CorpseRegistry !== 'undefined') {
+              CorpseRegistry.register(corpseX, corpseY, flId, enemy);
+            }
+          }
+          // Poof enemies leave no corpse tile (and no registry entry)
+        });
+      } else {
+        // Fallback: place corpse immediately if no DeathAnim
+        var fd = FloorManager.getFloorData();
+        if (fd && fd.grid[corpseY] &&
+            fd.grid[corpseY][corpseX] === TILES.EMPTY) {
+          fd.grid[corpseY][corpseX] = TILES.CORPSE;
+        }
+        var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+        if (typeof CorpseRegistry !== 'undefined') {
+          CorpseRegistry.register(corpseX, corpseY, flId, enemy);
+        }
       }
+
+      // Set enemy sprite state to dead (for any remaining render frames)
+      enemy.spriteState = 'dead';
 
       HUD.showCombatLog(
         enemy.emoji + ' ' + enemy.name + ' ' +
         i18n.t('combat.victory', 'defeated!')
       );
-      setTimeout(function () { HUD.hideCombat(); }, 1500);
+
+      // Calculate XP reward (simple formula: base 5 + depth * 2 + elite bonus)
+      var depth = (typeof FloorManager !== 'undefined') ? FloorManager.getFloorDepth() : 1;
+      var xpEarned = 5 + depth * 2 + (enemy.isElite ? 10 : 0);
+
+      // Show combat report after brief delay
+      setTimeout(function () {
+        HUD.hideCombat();
+        if (typeof CombatReport !== 'undefined') {
+          CombatReport.show({
+            xpEarned: xpEarned,
+            onDismiss: function () {
+              // Feed log the victory
+              if (typeof DebriefFeed !== 'undefined') {
+                DebriefFeed.logEvent(enemy.emoji + ' defeated! +' + xpEarned + 'XP', 'loot');
+              }
+            }
+          });
+        }
+      }, 800);
 
     } else if (result === 'defeat') {
       // ── Defeat: branch on nonLethal flag ──
@@ -305,20 +495,197 @@ var CombatBridge = (function () {
 
       SessionStats.inc('timesFled');
       HUD.showCombatLog(i18n.t('combat.fled', 'Escaped!'));
-      setTimeout(function () { HUD.hideCombat(); }, 1000);
+      setTimeout(function () {
+        HUD.hideCombat();
+        if (typeof CombatReport !== 'undefined') {
+          CombatReport.show({ xpEarned: 0 });
+        }
+      }, 1000);
     }
 
     _entryPos = null;
   }
 
-  // ── Play card ─────────────────────────────────────────────────────
+  // ── Stack-based card interaction ──────────────────────────────────
+
+  /**
+   * Handle a card tap/drop during stacking phase.
+   * If CardStack is available:
+   *   - If stack is empty, push card as first stack entry
+   *   - If card can stack (shared tags), add to stack
+   *   - If card can't stack, start a new stack with just this card
+   * Then reset the enemy beat timer (player is active).
+   *
+   * @param {number} index - Hand slot index
+   */
+  function _onCardStackOrPlay(index) {
+    var hand = CardSystem.getHand();
+    if (index < 0 || index >= hand.length) return;
+    var card = hand[index];
+
+    if (typeof CardStack !== 'undefined') {
+      if (CardStack.isInStack(index)) {
+        // Tapping a stacked card un-stacks it
+        CardStack.removeByIndex(index);
+      } else if (CardStack.canStack(card)) {
+        CardStack.pushCard(card, index);
+      } else {
+        // Doesn't match current stack — start fresh with this card
+        CardStack.clear();
+        CardStack.pushCard(card, index);
+      }
+      // Reset enemy pressure timer (player is doing things)
+      CombatEngine.resetEnemyBeat();
+
+      // Update HUD with stack preview
+      var stackCards = CardStack.getCards();
+      var tags = CardStack.getSharedTags();
+      if (stackCards.length > 1) {
+        var emojis = '';
+        for (var i = 0; i < stackCards.length; i++) emojis += stackCards[i].emoji;
+        HUD.showCombatLog(
+          emojis + ' ' +
+          i18n.t('combat.stack_preview', 'Combo') +
+          (tags.length > 0 ? ' [' + tags.join('+') + ']' : '') +
+          ' — ' + i18n.t('combat.thrust_to_fire', 'thrust to fire!')
+        );
+      }
+    } else {
+      // No CardStack module — fall through to legacy single-card play
+      playCard(index);
+    }
+  }
+
+  /**
+   * Fire the current player stack (called by thrust gesture or confirm button).
+   * Resolves both player and enemy stacks simultaneously.
+   *
+   * @param {number} [thrustMultiplier=1.0] - From CardStack.gestureEnd()
+   */
+  function fireStack(thrustMultiplier) {
+    if (!CombatEngine.isActive()) return;
+    var phase = CombatEngine.getPhase();
+    if (phase !== 'stacking' && phase !== 'selecting') return;
+
+    if (typeof CardStack === 'undefined' || CardStack.isEmpty()) return;
+
+    // Compute thrust (default to baseline if not provided)
+    if (thrustMultiplier === undefined) {
+      thrustMultiplier = (typeof CardStack !== 'undefined') ? CardStack.getThrust() : 1.0;
+    }
+
+    // Compute aggregated stack effects
+    var stackEffects = CardStack.computeStackEffects();
+
+    var player = Player.state();
+    var result = CombatEngine.fireStack(stackEffects, player);
+    if (!result) return;
+
+    // Resolve card persistence — remove expendable, keep persistent
+    var partition = CardStack.partitionAfterFire();
+    CardSystem.playStack(CardStack.getStack());
+
+    // Close fan during resolution
+    if (typeof CardFan !== 'undefined' && CardFan.isOpen()) {
+      CardFan.close();
+    }
+
+    HUD.updateCards(CardSystem.getHand());
+    HUD.updatePlayer(player);
+
+    // Build log message
+    var stackEmojis = '';
+    for (var si = 0; si < stackEffects.cards.length; si++) {
+      stackEmojis += stackEffects.cards[si].emoji;
+    }
+    var thrustLabel = result.thrust > 1.1 ? ' (' + result.thrust.toFixed(1) + 'x thrust!)' : '';
+    var suitLabel = result.suitLabel ? ' ' + result.suitLabel : '';
+    HUD.showCombatLog(
+      stackEmojis + ' → ' + result.playerDmg + ' dmg!' + thrustLabel + suitLabel + ' ' +
+      CombatEngine.getEnemy().emoji + ' hits for ' + result.enemyDmg + '. ' +
+      'Enemy HP: ' + Math.max(0, result.enemyHp)
+    );
+
+    // ── Suit advantage toast overlay (Pass 6) ──
+    if (typeof SuitToast !== 'undefined') {
+      SuitToast.show(result, stackEffects.cards || []);
+    }
+
+    // ── Combat resolution choreography ──
+    if (typeof CombatFX !== 'undefined') {
+      var timing = CombatFX.getResolutionTiming();
+      var _result = result;
+
+      CombatFX.fanSlideAway();
+
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.playerPulse();
+      }, timing.slideAwayMs);
+
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.enemyLunge();
+      }, timing.slideAwayMs + timing.lungeStaggerMs);
+
+      var impactTime = timing.slideAwayMs + timing.lungeStaggerMs +
+                       Math.floor(timing.lungeMs * ENEMY_LUNGE_PEAK_PCT);
+      setTimeout(function () {
+        if (typeof CombatFX === 'undefined') return;
+        if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
+        if (_result.playerDmg > 0) CombatFX.flashFrame('energy');
+
+        // ── Suit-keyed hit sounds (Pass 7) ──
+        if (typeof AudioSystem !== 'undefined') {
+          // Player's attack sound — keyed to stack's dominant suit
+          if (_result.playerDmg > 0) {
+            var aSuit = (typeof SynergyEngine !== 'undefined' && stackEffects.cards)
+              ? SynergyEngine.getDominantSuit(stackEffects.cards) : 'spade';
+            AudioSystem.playRandom('hit-' + (aSuit || 'spade'), { volume: 0.55 });
+          }
+          // Enemy hit on player — parry sound if defense absorbs, hit otherwise
+          if (_result.enemyDmg > 0) {
+            if (stackEffects.defense > 0 && stackEffects.defense >= _result.enemyDmg) {
+              AudioSystem.playRandom('parry', { volume: 0.5 });
+            } else {
+              AudioSystem.playRandom('hit-spade', { volume: 0.45 });
+            }
+          }
+        }
+      }, impactTime);
+
+      var slideBackTime = timing.slideAwayMs + timing.lungeMs + timing.impactPauseMs;
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.fanSlideBack();
+      }, slideBackTime);
+    }
+
+    // Clear stacks after resolution
+    if (typeof CardStack !== 'undefined') {
+      CardStack.clear();
+      CardStack.clearEnemyStack();
+    }
+
+    // Track for combat report
+    if (typeof CombatReport !== 'undefined') {
+      var primaryCard = stackEffects.cards[0] || {};
+      CombatReport.trackCardPlayed(primaryCard, result.playerDmg, result.enemyDmg);
+    }
+
+    // Update NCH widget
+    if (typeof NchWidget !== 'undefined') {
+      NchWidget.updateCombat({ cards: CardSystem.getHand(), selectedIdx: -1 });
+    }
+  }
+
+  // ── Play card (legacy single-card path) ─────────────────────────
 
   /**
    * Play a card from hand during combat.
    * @param {number} index - Hand slot (0-4)
    */
   function playCard(index) {
-    if (!CombatEngine.isActive() || CombatEngine.getPhase() !== 'selecting') return;
+    if (!CombatEngine.isActive()) return;
+    var phase = CombatEngine.getPhase();
+    if (phase !== 'selecting' && phase !== 'stacking') return;
 
     var card = CardSystem.playFromHand(index);
     if (!card) return;
@@ -334,6 +701,60 @@ var CombatBridge = (function () {
       CombatEngine.getEnemy().emoji + ' hits for ' + result.enemyDmg + '. ' +
       'Enemy HP: ' + Math.max(0, result.enemyHp)
     );
+
+    // ── Combat resolution choreography (STR-HUD-DESIGNER-ROADMAP) ──
+    // Full 2.2s sequence: fan slide away → player pulse → stagger →
+    // enemy lunge → impact pause → HUD flash → fan slide back
+    if (typeof CombatFX !== 'undefined') {
+      var timing = CombatFX.getResolutionTiming();
+      var _result = result;
+      var _card = card;
+
+      // Step 1: Fan slides away
+      CombatFX.fanSlideAway();
+
+      // Step 2: Player attack pulse (after fan clears)
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.playerPulse();
+      }, timing.slideAwayMs);
+
+      // Step 3: Enemy lunge (staggered after player pulse)
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.enemyLunge();
+      }, timing.slideAwayMs + timing.lungeStaggerMs);
+
+      // Step 4: HUD frame flash at impact (after lunge peaks)
+      var impactTime = timing.slideAwayMs + timing.lungeStaggerMs +
+                       Math.floor(timing.lungeMs * ENEMY_LUNGE_PEAK_PCT);
+      setTimeout(function () {
+        if (typeof CombatFX === 'undefined') return;
+        if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
+        if (_card.effects) {
+          for (var ei = 0; ei < _card.effects.length; ei++) {
+            if (_card.effects[ei].type === 'hp' && _card.effects[ei].value > 0) {
+              CombatFX.flashFrame('heal');
+              break;
+            }
+          }
+        }
+      }, impactTime);
+
+      // Step 5: Fan slides back (after lunges + impact pause)
+      var slideBackTime = timing.slideAwayMs + timing.lungeMs + timing.impactPauseMs;
+      setTimeout(function () {
+        if (typeof CombatFX !== 'undefined') CombatFX.fanSlideBack();
+      }, slideBackTime);
+    }
+
+    // Track for combat report
+    if (typeof CombatReport !== 'undefined') {
+      CombatReport.trackCardPlayed(card, result.playerDmg, result.enemyDmg);
+    }
+
+    // Update NCH widget (hand shrank by one card)
+    if (typeof NchWidget !== 'undefined') {
+      NchWidget.updateCombat({ cards: CardSystem.getHand(), selectedIdx: -1 });
+    }
   }
 
   // ── Flee ─────────────────────────────────────────────────────────
@@ -359,12 +780,12 @@ var CombatBridge = (function () {
 
   function openChest(cx, cy) {
     var floorData = FloorManager.getFloorData();
-    var floorNum = FloorManager.getFloorNum();
+    var floorId = FloorManager.getFloor();
 
     floorData.grid[cy][cx] = TILES.EMPTY;
     SessionStats.inc('chestsOpened');
 
-    var loot = LootTables.generateDrop('standard', floorNum);
+    var loot = LootTables.generateDrop('standard', floorId);
     if (loot.type === 'card' && loot.card) {
       CardSystem.addCard(loot.card);
       HUD.showCombatLog('Found card: ' + loot.card.emoji + ' ' + loot.card.name);
@@ -425,11 +846,21 @@ var CombatBridge = (function () {
 
   // ── Public API ────────────────────────────────────────────────────
 
+  /**
+   * True while the facing-turn animation is playing before combat
+   * actually starts. Input should be blocked during this window.
+   */
+  function isPending() {
+    return !!_pendingEnemy;
+  }
+
   return {
     init: init,
     update: update,
     startCombat: startCombat,
+    isPending: isPending,
     playCard: playCard,
+    fireStack: fireStack,
     flee: flee,
     openChest: openChest,
     checkEnemyProximity: checkEnemyProximity,

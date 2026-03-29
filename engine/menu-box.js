@@ -281,7 +281,12 @@ var MenuBox = (function () {
     ctx.fillStyle = 'rgba(0,0,0,' + (0.4 * _foldProgress) + ')';
     ctx.fillRect(0, 0, vpW, vpH);
 
-    // 3. Draw visible faces (max 2 during rotation)
+    // 3. Clear face content hit zones before rendering
+    if (typeof MenuFaces !== 'undefined' && MenuFaces.clearHitZones) {
+      MenuFaces.clearHitZones();
+    }
+
+    // 4. Draw visible faces (max 2 during rotation)
     var faceAngle0 = -(_rotAngle % 360);
     for (var f = 0; f < FACE_COUNT; f++) {
       var angle = faceAngle0 + f * 90;
@@ -298,12 +303,17 @@ var MenuBox = (function () {
       _renderFace(ctx, f, proj.x, foldY, proj.w, foldH, proj.alpha * _foldProgress);
     }
 
-    // 4. Face indicator dots
+    // 5. Update face content hover state (hit zones are now populated)
+    if (typeof MenuFaces !== 'undefined' && MenuFaces.updateHover) {
+      MenuFaces.updateHover();
+    }
+
+    // 6. Face indicator dots
     if (_foldProgress > 0.8) {
       _renderFaceIndicator(ctx, vpW, vpH);
     }
 
-    // 5. Context label
+    // 7. Context label
     if (_foldProgress > 0.5) {
       _renderContextLabel(ctx, vpW, vpH);
     }
@@ -570,6 +580,7 @@ var MenuBox = (function () {
   function handlePointerClick() {
     if (_state !== 'open') return false;
 
+    // Nav arrow buttons take priority
     if (_navHitLeft && _isPointerInRect(_navHitLeft)) {
       rotateLeft();
       // Brief rotation pulse — stop after ~90° snap
@@ -581,6 +592,15 @@ var MenuBox = (function () {
       rotateRight();
       setTimeout(function () { stopRotation(); }, 200);
       return true;
+    }
+
+    // Delegate to face content hit zones (harvest/shop slot clicks)
+    if (typeof MenuFaces !== 'undefined' && MenuFaces.handlePointerClick) {
+      var hit = MenuFaces.handlePointerClick();
+      if (hit) {
+        // Return the hit info so game.js can dispatch the action
+        return hit;
+      }
     }
 
     return false;
@@ -628,6 +648,15 @@ var MenuBox = (function () {
     update: update,
     render: render,
     handlePointerClick: handlePointerClick,
+
+    /**
+     * Set which face to show when the box next opens.
+     * Called before ScreenManager.toPause() to open directly to
+     * a specific face (e.g. Face 2 for inventory from BAG button).
+     */
+    setStartFace: function (faceIdx) {
+      _startFace = Math.max(0, Math.min(FACE_COUNT - 1, faceIdx));
+    },
 
     // Constants
     FACE_COUNT: FACE_COUNT,

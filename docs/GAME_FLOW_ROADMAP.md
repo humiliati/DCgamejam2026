@@ -8,10 +8,95 @@
 
 ## Current State
 
-The game boots directly into gameplay on `DOMContentLoaded`. There is no
-title screen, no game-over screen, no victory screen, no pause menu. When
-the player dies, `GameLoop.stop()` is called and the browser tab goes
-silent. There is no way to retry or return to a menu.
+_(Updated 2026-03-27 — reflects implemented engine state)_
+
+**MenuBox (pause overlay) — ✅ fully functional**
+The 4-face rotating box is live. ESC opens/closes it via `ScreenManager`
+(`GAMEPLAY → PAUSE → GAMEPLAY`). The fold-up/fold-down CSS animation plays.
+All four faces are registered and rendering.
+
+**Face 0 — Minimap** ✅ Scaled minimap with fog-of-war, player position,
+floor label.
+
+**Face 1 — Items / Shop Info** ✅ In shop context shows live faction rep
+panel (all 3 factions, tier badges, colour-coded). Outside shop shows
+card deck view.
+
+**Face 2 — Gear / Shop Buy + Sell** ✅ Buy face reads `Shop.getInventory()`
+with rarity colour dots, element tags, affordability dimming. Sell face shows
+hand cards with rarity-based sell values. `[1–5]` hotkeys route to buy/sell
+depending on active face.
+
+**Face 3 — System/Settings** ✅ Three live volume sliders (Master/SFX/BGM)
+backed by `AudioSystem.getVolumes()` / setters. Row selection (`▶` cursor),
+gradient fill bar, thumb pip, nudge hints. Defaults: Master 80 %, SFX 100 %,
+BGM 60 %.
+
+**Input mapping — ✅ complete**
+- `ESC` — open/close box
+- `Q` / `E` — rotate box left/right (always, including escape from Face 3)
+- `←` / `→` (`turn_left/right`) — adjust selected slider on Face 3; rotate
+  box on all other faces
+- `W` / `S` (`step_forward/back`) — navigate slider rows on Face 3 while
+  paused (no movement during pause)
+- Mouse wheel / scroll — fine ±5 adjustment on active Face 3 slider
+- `[1–5]` — buy slot (Face 2 buy) or sell slot (Face 2 sell) or card play
+  (gameplay)
+
+**AudioSystem** ✅ Real volume state (`_volumes.master/sfx/bgm`), clamped
+setters, `getVolumes()` returning 0–100 integers. Playback remains stubbed
+until Pass 7 (asset port).
+
+**Shop system** ✅ `Shop.open/close/buy/sell/reset`, weighted inventory
+generation per faction+rep tier, `RARITY_BASE` pricing, REP_DISCOUNT tiers.
+Wired to grid-gen shop placements (one per floor, penultimate room).
+`CardSystem` loads from `data/cards.json` via sync XHR; `getByPool()`,
+`getBiomeDrops()`, `removeCard()`, `getCollection()` all live.
+
+**Splash → Title → Gameplay flow — ✅ implemented**
+DOM-driven 3D box splash (`SplashScreen` + `BoxAnim`) with hover-to-open
+lid, click-to-envelop glow transition, then `ScreenManager.toTitle()`.
+`BoxAnim` is a modular CSS 3D animation controller with four variants
+(splash/chest/door/button), reusable for in-game interactions.
+
+**Skybox — ✅ implemented**
+`skybox.js` renders parallax cloud layers + zone-based mountain silhouettes
+(industrial ↔ forest sine-blend). Title preset uses slow drift. Gameplay
+presets per-biome (post-jam: animated time-of-day cycle).
+
+**Minimap default state — ✅ fixed**
+Minimap starts hidden (`_visible = false`); toggled via M key or HUD button.
+`_showHUD` respects `Minimap.isVisible()` instead of force-showing.
+
+**Phase 1 — Click Targets — ✅ implemented**
+All interactables clickable for LG Magic Remote: harvest loot grid tiles,
+shop buy/sell tiles, MenuBox nav arrows, InteractPrompt, DialogBox advance,
+CardFan card selection. Three-layer click cascade: game.js → MenuBox → MenuFaces.
+
+**Phase 2 — CRT Theme + Debrief Feed — ✅ implemented**
+Retro-futuristic CRT terminal aesthetic. `DebriefFeed` (3 modes: MOK avatar,
+resources, event feed), `StatusBar` (bottom strip: DEBRIEF/MAP/BAG buttons +
+floor/heading + combat mode swap), `QuickBar` (3 equipped-item slots).
+Scanline overlay, phosphor glow, vignette effects.
+
+**Phase 3 — Enemy Sprites + Death Animation + NCH Widget — ✅ implemented**
+`EnemySprites` — 16 status states, 3 primary poses (idle/attack/corpse),
+visual FX map (tint, glow, particles, pulse, overlay text), pose registry.
+`DeathAnim` — Paper Mario origami fold (squash → flatten to corpse tile)
+and poof (shrink + particle burst for ethereal/swarm enemies).
+`NchWidget` — Draggable capsule from EyesOnly NCH overlay pattern. Opens
+CardFan in browse mode during exploration, shrinks during combat, restores
+after. `CombatReport` — post-combat XP/actions click-through overlay.
+HUD streamlined: HP/EN bars removed (live in DebriefFeed), combat log
+upgraded to CRT theme.
+
+**Still outstanding (pre-jam):**
+- `ScreenManager` formal state machine (currently ad-hoc in `game.js`)
+- `DialogBox` (vendor greetings, P6 UI_ROADMAP)
+- HUD battery pip row + typed collectible toasts (HUD_ROADMAP)
+- Phase 4–5 click/drag interaction polish (HUD_ROADMAP)
+- Enemy sprite particle effects CSS rendering
+- NCH widget drag-to-reorder cards (Phase 4)
 
 ---
 
@@ -545,13 +630,19 @@ ScreenManager.onStateChange(function (oldState, newState) {
 
 ---
 
-## Splash Screen
+## Splash Screen — ✅ Implemented
 
-Simple — not part of the rotating box. A full-viewport canvas draw:
-- DC Jam 2026 logo + game title text
-- Auto-advance to TITLE after 1.5 seconds
-- Click/keypress skips immediately
-- Fade-out transition into the title skybox scene
+DOM overlay (`#splash-overlay`) with CSS 3D rotating box (`BoxAnim`
+splash variant). Canvas draws matching dark background behind the overlay
+to prevent flicker.
+
+- Title text "DUNGEON GLEANER" + subtitle "DC JAM 2026" + "PRESS ANY KEY"
+- Hover on box → lid swings open (CSS `:hover`, hinged at bottom)
+- Click box or press any key → `BoxAnim.envelop()`: interior glow scales
+  to fill screen, overlay fades out over 500ms, `ScreenManager.toTitle()`
+- Min display time 800ms before input accepted; auto-envelop at 4000ms
+- Separate handlers: click on `#splash-box` only (no accidental hover
+  triggers), keydown on `window`
 
 ---
 

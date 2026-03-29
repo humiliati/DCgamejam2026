@@ -1,0 +1,2783 @@
+[
+  {
+    "_comment": "=== STARTER DECK (ACT-001 to ACT-010) — all free-cost, ♠ basics + one per suit ==="
+  },
+  {
+    "id": "ACT-001",
+    "name": "Slash",
+    "emoji": "⚔️",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "spade"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "A basic sword strike. Everyone knows this one.",
+    "_designNote": "Starter. ♠ damage. Teaches the combat loop.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-002",
+    "name": "Block",
+    "emoji": "🛡️",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 2,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "spade"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "2 temp HP. Absorbs the next hit.",
+    "_designNote": "Starter. Defensive baseline.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-003",
+    "name": "Mend",
+    "emoji": "💚",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "medical",
+      "heart"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "Restore 3 HP. Good in a pinch.",
+    "_designNote": "Starter heal. Teaches HP resource.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-004",
+    "name": "Cinder Strike",
+    "emoji": "🔥",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "diamond"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "A burning strike. ♠ enemies take ×1.5.",
+    "_designNote": "Starter ♦. Introduces suit RPS advantage.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-005",
+    "name": "Frost Shard",
+    "emoji": "❄️",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "spade"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "A shard of ice. ♣ enemies take ×1.5.",
+    "_designNote": "Starter ♠. Completes the suit trio.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-006",
+    "name": "Arc Bolt",
+    "emoji": "⚡",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "club"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "A bolt of lightning. ♦ enemies take ×1.5.",
+    "_designNote": "Starter ♣. Closes the suit RPS loop.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-007",
+    "name": "Embers",
+    "emoji": "✨",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "status"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "2 damage + burn (1 DOT). The damage keeps giving.",
+    "_designNote": "Starter status card. Introduces burn DOT.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-008",
+    "name": "Glacial Guard",
+    "emoji": "🧊",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "defensive"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "3 temp HP. Solid frost defense.",
+    "_designNote": "Starter ♠ defense. Shows suit cards can also be defensive.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-009",
+    "name": "Thunder Clap",
+    "emoji": "🌩️",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "melee"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "4 ♣ damage. Loud. Effective.",
+    "_designNote": "Starter ♣ heavy. Shows ♣ as raw damage suit.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-010",
+    "name": "Rummage",
+    "emoji": "📦",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "spade"
+    ],
+    "shopPool": [],
+    "biomeDrops": [],
+    "starterDeck": true,
+    "description": "Draw 1 extra card this combat.",
+    "_designNote": "Starter utility. Introduces card draw as a resource.",
+    "suit": "spade"
+  },
+  {
+    "_comment": "=== CELLAR POOL (ACT-020 to ACT-034) — undead/organic, ♠/♣ theme ==="
+  },
+  {
+    "id": "ACT-020",
+    "name": "Bonepick",
+    "emoji": "🦴",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "spade",
+      "salvage"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "A harvested bone used as a weapon. Biologically efficient.",
+    "_designNote": "Cellar common. Thematic — connects to necro-salvage loop.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-021",
+    "name": "Grave Chill",
+    "emoji": "☁️",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "stun",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "status"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "3 ♠ damage + stun (1 turn). The cold settles in.",
+    "_designNote": "Cellar ♠ control. Tide/Admiralty shops carry this.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-022",
+    "name": "Corpse Gas",
+    "emoji": "💨",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "poison",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "status",
+      "aoe"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "2 ♣ damage + poison. Smells awful. Works great.",
+    "_designNote": "Cellar ♣ common. Poison DOT from undead environment.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-023",
+    "name": "Mold Web",
+    "emoji": "🕸️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "root",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "control",
+      "defensive"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "4 def + root enemy (skip action). Good for emergencies.",
+    "_designNote": "Cellar ♠ control uncommon. Costs 1 energy.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-024",
+    "name": "Rat Swarm",
+    "emoji": "🐀",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 1,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 1,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "swarm",
+      "club",
+      "multi-hit"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "3 hits of 1 damage. Each hit triggers on-hit effects separately.",
+    "_designNote": "Multi-hit card. Synergizes with DOT effects. Cellar thematic.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-025",
+    "name": "Amber Lock",
+    "emoji": "🫙",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "status",
+        "status": "freeze",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "control"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "Freeze enemy for 2 turns. Zero damage. Pure control.",
+    "_designNote": "Pure CC ♠ card. Tide Council specialty.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-026",
+    "name": "Dead Weight",
+    "emoji": "💀",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "heavy",
+      "spade"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "starterDeck": false,
+    "description": "6 damage. Slow swing, huge impact.",
+    "_designNote": "Cellar high-damage ♠. Costs 1 energy.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-027",
+    "name": "Bone Shard",
+    "emoji": "🦷",
+    "rarity": "rare",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "bleed",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "piercing",
+      "spade",
+      "status"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "4 damage + bleed (1 DOT). Pierces light armor.",
+    "_designNote": "Cellar rare. dropTier 1 = requires Trusted rep to appear in shops.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-028",
+    "name": "Undying Will",
+    "emoji": "❤️‍🔥",
+    "rarity": "rare",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 5,
+        "target": "self",
+        "condition": "below_half"
+      }
+    ],
+    "synergyTags": [
+      "medical",
+      "desperate",
+      "heart"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+5 HP (only if below half health). The will to survive.",
+    "_designNote": "Conditional heal — only triggers at <50% HP. Powerful but situational.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-029",
+    "name": "Crypt Shroud",
+    "emoji": "👻",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "regen",
+        "value": 2,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "defensive"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "5 def + regen (2 HP/turn × 2). Frost armor that heals.",
+    "_designNote": "Cellar ♠ rare. Tide Council tier-1 unlock.",
+    "suit": "spade"
+  },
+  {
+    "_comment": "=== FOUNDRY POOL (ACT-040 to ACT-053) — ♦/construct, high damage ==="
+  },
+  {
+    "id": "ACT-040",
+    "name": "Slag Toss",
+    "emoji": "🌋",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "diamond"
+    ],
+    "shopPool": [
+      "foundry",
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "Hurl molten slag. 3 ♦ damage.",
+    "_designNote": "Foundry ♦ common. Wide shop distribution.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-041",
+    "name": "Furnace Breath",
+    "emoji": "🔥",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "diamond",
+      "status"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "4 ♦ damage + burn. The furnace doesn't stop.",
+    "_designNote": "Foundry ♦ common. Burns on top of damage.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-042",
+    "name": "Iron Wall",
+    "emoji": "🔩",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "construct",
+      "spade"
+    ],
+    "shopPool": [
+      "foundry",
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "4 temp HP. Riveted steel. Simple.",
+    "_designNote": "Foundry common defense. ♠ suit.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-043",
+    "name": "Pressure Burst",
+    "emoji": "💥",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "explosive",
+      "club"
+    ],
+    "shopPool": [
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "5 ♣ damage. Pressurized steam explosion.",
+    "_designNote": "Foundry ♣ uncommon. ♣ card in ♦ biome — the boiler surprise.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-044",
+    "name": "Scrap Shield",
+    "emoji": "🛡️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 6,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "reflect",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "construct",
+      "reflect"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "6 def + reflect (1 dmg returned on hit). Forged from enemy scrap.",
+    "_designNote": "Foundry uncommon. Reflect 1 means attacker takes 1 dmg on hit.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-045",
+    "name": "Forge Strike",
+    "emoji": "🔨",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "diamond",
+      "construct"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "6 ♦ damage. Heavy hammer, hotter flame.",
+    "_designNote": "Foundry ♦ uncommon. Pure damage.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-046",
+    "name": "Overclock",
+    "emoji": "⚙️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "energy",
+        "value": 2,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "club",
+      "construct"
+    ],
+    "shopPool": [
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "Restore 2 energy immediately. Then do something else.",
+    "_designNote": "Energy ramp card. ♣ thematic — electric charge-up.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-047",
+    "name": "Meltdown",
+    "emoji": "🌊",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 8,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "aoe",
+      "diamond",
+      "status"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "8 ♦ damage + burn (2 stacks). The foundry goes critical.",
+    "_designNote": "Foundry rare. 2 burn stacks = 2 dmg/turn DOT. High cost, huge payoff.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-048",
+    "name": "Rivet Shot",
+    "emoji": "🔧",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "stun",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "diamond",
+      "control"
+    ],
+    "shopPool": [
+      "foundry",
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "5 damage + stun (1 turn). A rivet, fired at high speed.",
+    "_designNote": "Foundry rare control. Wide shop availability at tier 1.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-049",
+    "name": "Ember Ward",
+    "emoji": "🛡️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "burn_reflect",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "diamond",
+      "reflect"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "starterDeck": false,
+    "description": "3 def + burn reflect (attackers take burn on hit).",
+    "_designNote": "♦ defense. Burn_reflect = attacker gets burn status when they hit you.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-050",
+    "name": "Cinder Bloom",
+    "emoji": "🌸",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 1,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "status",
+      "double"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "3 dmg + burn, twice. Two applications of everything.",
+    "_designNote": "Foundry rare double-proc. Applies burn twice = stacks to 2.",
+    "suit": "diamond"
+  },
+  {
+    "_comment": "=== SEALAB POOL (ACT-060 to ACT-073) — ♠/♣, marine/construct ==="
+  },
+  {
+    "id": "ACT-060",
+    "name": "Cryo Bolt",
+    "emoji": "🔵",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "stun",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "spade",
+      "control"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "starterDeck": false,
+    "description": "6 ♠ damage + stun. Deep-water cold.",
+    "_designNote": "Sealab ♠ uncommon. Solid control option.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-061",
+    "name": "Shock Net",
+    "emoji": "🕸️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "shock",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "aoe",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "starterDeck": false,
+    "description": "4 storm + shock (drain 1 enemy energy). Electric fishing.",
+    "_designNote": "Sealab ♣ uncommon. Shock = drain enemy energy.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-062",
+    "name": "Deep Freeze",
+    "emoji": "🧊",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "freeze",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "spade",
+      "control"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "starterDeck": false,
+    "description": "5 def + freeze enemy (1 turn). Both offensive and defensive.",
+    "_designNote": "Sealab ♠ uncommon. Defense + CC combo.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-063",
+    "name": "Bio Surge",
+    "emoji": "🫧",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "shock",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "status",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "starterDeck": false,
+    "description": "3 storm + drain 1 energy. Bioluminescent discharge.",
+    "_designNote": "Sealab ♣ free. Free shock applicator.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-064",
+    "name": "Pressure Wave",
+    "emoji": "💫",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "club",
+      "marine"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "starterDeck": false,
+    "description": "5 damage. Concussive burst from depth charges.",
+    "_designNote": "Sealab ♠ uncommon. Pure damage. All shops carry it.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-065",
+    "name": "Brine Hex",
+    "emoji": "🌊",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "freeze",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "control"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "3 frost + freeze for 2 turns. Salt and ice.",
+    "_designNote": "Sealab ♠ rare. Extended freeze. Tier 1 shop unlock.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-066",
+    "name": "Current Charge",
+    "emoji": "⚡",
+    "rarity": "rare",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "ranged"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "6 ♣ damage. Costs 1 battery instead of energy. Lab equipment.",
+    "_designNote": "Battery-cost card. Introduces alternative resource for combat.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-067",
+    "name": "Archivist's Copy",
+    "emoji": "📋",
+    "rarity": "rare",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "copy_last",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "club",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Repeat the last card played, targeting this enemy.",
+    "_designNote": "Copy mechanic. Powerful with any card. Admiralty tier 2.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-068",
+    "name": "Cryo Cocoon",
+    "emoji": "🫁",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 10,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "regen",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "defensive"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "10 def + regen (3 HP/turn × 2). Encased in ice. Protected.",
+    "_designNote": "Sealab ♠ rare. Massive def + sustained healing. Expensive.",
+    "suit": "spade"
+  },
+  {
+    "_comment": "=== TIDE COUNCIL FACTION EXCLUSIVES (ACT-080 to ACT-084) ==="
+  },
+  {
+    "id": "ACT-080",
+    "name": "Scale Coat",
+    "emoji": "🐉",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "status": "regen",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "dragon",
+      "defensive",
+      "spade"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [],
+    "dropTier": 0,
+    "starterDeck": false,
+    "description": "4 def + regen. Dragon scale armor. Tide Council standard issue.",
+    "_designNote": "Tide exclusive tier 0. Dragon tag synergizes with Tide rep bonus.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-081",
+    "name": "Tidal Surge",
+    "emoji": "🌊",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 7,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "stun",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "ranged",
+      "dragon"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "7 ♠ damage + stun. The tide doesn't ask permission.",
+    "_designNote": "Tide exclusive tier 1. High-damage ♠ with CC.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-082",
+    "name": "Dragon's Roar",
+    "emoji": "🔥",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 9,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "dragon",
+      "diamond",
+      "melee"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "9 ♦ damage. A frost faction card that uses fire. Dragons make their own rules.",
+    "_designNote": "Tide tier 2 rare. ♦ card in ♠ faction — the unexpected option.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-083",
+    "name": "Sea Witch's Hex",
+    "emoji": "🔮",
+    "rarity": "epic",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "status",
+        "status": "shock",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "arcane",
+      "club",
+      "dragon"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "Drain 3 enemy energy + 5 ♣ damage. The hex compounds.",
+    "_designNote": "Tide epic. Tier 3 (Exalted) required. Massive energy denial.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-084",
+    "name": "Tide's Blessing",
+    "emoji": "💧",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "medical",
+      "utility",
+      "dragon"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+4 HP + draw 1 card. The council looks after its own.",
+    "_designNote": "Tide heal+draw uncommon. Reputation reward feel.",
+    "suit": "spade"
+  },
+  {
+    "_comment": "=== THE FOUNDRY FACTION EXCLUSIVES (ACT-085 to ACT-089) ==="
+  },
+  {
+    "id": "ACT-085",
+    "name": "Forge Mastery",
+    "emoji": "⚒️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      },
+      {
+        "type": "defense",
+        "value": 2,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "construct",
+      "diamond"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [],
+    "dropTier": 0,
+    "starterDeck": false,
+    "description": "5 ♦ damage + 2 armor. Attack and defend simultaneously.",
+    "_designNote": "Foundry tier 0 exclusive. Efficient dual-effect card.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-086",
+    "name": "Smelter's Fury",
+    "emoji": "🔥",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "double",
+      "diamond",
+      "construct"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "4 damage twice. Two swings from the forge hammer.",
+    "_designNote": "Foundry double-hit rare. Two separate damage applications.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-087",
+    "name": "Iron Resolve",
+    "emoji": "🛡️",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 7,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "defensive",
+      "construct",
+      "spade"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "7 temp HP. The foundry doesn't bend.",
+    "_designNote": "Foundry tier 2 high-defense rare. Pure tanking.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-088",
+    "name": "Magma Core",
+    "emoji": "🌋",
+    "rarity": "epic",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 10,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "aoe",
+      "diamond",
+      "construct"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "10 flame + burn (3 stacks). The core breaches containment.",
+    "_designNote": "Foundry epic. Tier 3. Huge damage + sustained burn DOT.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-089",
+    "name": "Scrap Salvo",
+    "emoji": "🔩",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "ranged",
+      "construct",
+      "multi-hit"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [],
+    "dropTier": 0,
+    "starterDeck": false,
+    "description": "Fire 3 chunks of scrap. 2 damage each.",
+    "_designNote": "Foundry multi-hit uncommon. Construct theme.",
+    "suit": "diamond"
+  },
+  {
+    "_comment": "=== THE ADMIRALTY FACTION EXCLUSIVES (ACT-090 to ACT-094) ==="
+  },
+  {
+    "id": "ACT-090",
+    "name": "Signal Flare",
+    "emoji": "🚨",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "energy",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "club",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [],
+    "dropTier": 0,
+    "starterDeck": false,
+    "description": "3 ♣ damage + restore 1 energy. Efficient use of resources.",
+    "_designNote": "Admiralty tier 0. ♣ damage + energy regen = self-sustaining.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-091",
+    "name": "Court Order",
+    "emoji": "📜",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "energy_discount",
+        "value": 1,
+        "target": "self",
+        "duration": 3
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "club",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "All card costs reduced by 1 energy for 3 turns. The order is law.",
+    "_designNote": "Admiralty tier 2 utility. Tempo card that enables energy cost cards for free.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-092",
+    "name": "Thunder Protocol",
+    "emoji": "⚡",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 8,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "stun",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "control",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "8 ♣ damage + stun. The protocol authorizes lethal force.",
+    "_designNote": "Admiralty tier 1 rare. High-damage ♣ + CC.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-093",
+    "name": "Brine Blade",
+    "emoji": "🗡️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "bleed",
+        "value": 1,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "melee",
+      "spade",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [],
+    "dropTier": 0,
+    "starterDeck": false,
+    "description": "4 ♠ damage + bleed. Salt in the wound is still water.",
+    "_designNote": "Admiralty tier 0 uncommon. ♠ melee + bleed DOT.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-094",
+    "name": "Final Decree",
+    "emoji": "🌊",
+    "rarity": "epic",
+    "cost": {
+      "type": "energy",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 14,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "marine"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "14 ♣ damage. No appeal process.",
+    "_designNote": "Admiralty epic tier 3. Raw ♣ power. Big finisher.",
+    "suit": "club"
+  },
+  {
+    "_comment": "=== CROSS-BIOME RARE / EPIC (ACT-100 to ACT-107) ==="
+  },
+  {
+    "id": "ACT-100",
+    "name": "Elemental Echo",
+    "emoji": "🌀",
+    "rarity": "epic",
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "echo_last_element",
+        "value": 5,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "heart"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "5 damage matching the element of the last card played.",
+    "_designNote": "Element-copying epic. Rewards mono-suit decks maximally.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-101",
+    "name": "Blood Price",
+    "emoji": "🩸",
+    "rarity": "epic",
+    "cost": {
+      "type": "hp",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 9,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "sacrifice",
+      "melee",
+      "heart"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "9 damage. Costs 3 HP instead of energy. Pay with what you have.",
+    "_designNote": "HP-cost card. High-damage, always playable regardless of energy state.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-102",
+    "name": "Gleaner's Gambit",
+    "emoji": "🎲",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage_multiplier",
+        "value": 2,
+        "target": "self",
+        "duration": 1
+      }
+    ],
+    "synergyTags": [
+      "utility",
+      "heart"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Next card played deals double damage.",
+    "_designNote": "Damage multiplier setup card. Named for the Gleaner identity.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-103",
+    "name": "Chain Fire",
+    "emoji": "🔥",
+    "rarity": "epic",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "burn",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "aoe",
+      "chain"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "4 damage + burn ×2, chaining to adjacent targets if present.",
+    "_designNote": "Chain epic. Against single target = 4 dmg + 2 burn stacks.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-104",
+    "name": "Frost Nova",
+    "emoji": "❄️",
+    "rarity": "epic",
+    "cost": {
+      "type": "energy",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "freeze",
+        "value": 3,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "aoe",
+      "control"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "6 frost + freeze for 3 turns. Time stops for them.",
+    "_designNote": "♠ epic. Long freeze = 3 free turns to deal damage or heal.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-105",
+    "name": "Arc Storm",
+    "emoji": "🌩️",
+    "rarity": "epic",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "status": "shock",
+        "value": 2,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "aoe",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "6 storm + drain 2 enemy energy. The storm has a memory.",
+    "_designNote": "♣ epic. Massive energy denial via double shock.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-106",
+    "name": "Second Wind",
+    "emoji": "🌬️",
+    "rarity": "rare",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 6,
+        "target": "self"
+      },
+      {
+        "type": "energy",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "medical",
+      "utility",
+      "heart"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+6 HP + restore 1 energy. One more round.",
+    "_designNote": "Cross-biome rare heal. Wide availability. No suit cost.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-107",
+    "name": "Void Strike",
+    "emoji": "🌑",
+    "rarity": "epic",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 12,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "melee",
+      "sacrifice"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "12 damage. Costs 2 battery. No suit — ignores RPS.",
+    "_designNote": "Battery-cost epic. High floor-8 prize. True ♠ — no suit RPS modifier.",
+    "suit": "diamond"
+  },
+
+  {
+    "_comment": "=== ♥ HEART — DEFENSIVE / SUPPORT (ACT-110 to ACT-117) — HP-sacrifice synergies ==="
+  },
+  {
+    "id": "ACT-110",
+    "name": "Life Ward",
+    "emoji": "💗",
+    "rarity": "common",
+    "cost": { "type": "free", "value": 0 },
+    "effects": [
+      { "type": "defense", "value": 3, "target": "self" }
+    ],
+    "synergyTags": ["defensive", "heart", "medical"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "3 defense. A gentle ward of living energy.",
+    "_designNote": "♥ baseline defense. Fills the zero-defense heart gap. Common cellar drop.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-111",
+    "name": "Blood Barrier",
+    "emoji": "🩸",
+    "rarity": "uncommon",
+    "cost": { "type": "hp", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 6, "target": "self" },
+      { "type": "status", "value": 1, "target": "self", "status": "regen" }
+    ],
+    "synergyTags": ["defensive", "heart", "sacrifice"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Pay 2 HP → 6 defense + regen 1. Your blood hardens into a shield.",
+    "_designNote": "♥ brace pattern: HP sacrifice → defense + sustain. Net-positive if hit lands.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-112",
+    "name": "Vital Surge",
+    "emoji": "💓",
+    "rarity": "uncommon",
+    "cost": { "type": "hp", "value": 1 },
+    "effects": [
+      { "type": "hp", "value": 4, "target": "self" },
+      { "type": "draw", "value": 1, "target": "self" }
+    ],
+    "synergyTags": ["medical", "heart", "utility"],
+    "shopPool": ["tide", "admiralty"],
+    "biomeDrops": ["cellar", "sealab"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Pay 1 HP → restore 4 HP and draw 1. Adrenaline focus.",
+    "_designNote": "♥ cycle card. Net +3 HP + card advantage. Enables sacrifice combos.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-113",
+    "name": "Heartblood Thorns",
+    "emoji": "🌹",
+    "rarity": "rare",
+    "cost": { "type": "hp", "value": 3 },
+    "effects": [
+      { "type": "defense", "value": 5, "target": "self" },
+      { "type": "status", "value": 2, "target": "self", "status": "reflect" }
+    ],
+    "synergyTags": ["defensive", "heart", "sacrifice", "reflect"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Pay 3 HP → 5 defense + reflect 2. Thorns grow from your wounds.",
+    "_designNote": "♥ brace+counter. Reflect punishes the enemy for attacking into your shield.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-114",
+    "name": "Martyr's Embrace",
+    "emoji": "🕊️",
+    "rarity": "rare",
+    "cost": { "type": "hp", "value": 4 },
+    "effects": [
+      { "type": "defense", "value": 10, "target": "self" },
+      { "type": "status", "value": 2, "target": "self", "status": "regen" }
+    ],
+    "synergyTags": ["defensive", "heart", "sacrifice", "medical"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Pay 4 HP → 10 defense + regen 2. Embrace the pain, outlast.",
+    "_designNote": "♥ big brace. Wall + sustain. The payoff card for sacrifice decks.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-115",
+    "name": "Crimson Counter",
+    "emoji": "⚔️",
+    "rarity": "rare",
+    "cost": { "type": "hp", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 4, "target": "self" },
+      { "type": "damage", "value": 4, "target": "enemy" }
+    ],
+    "synergyTags": ["defensive", "heart", "sacrifice", "melee"],
+    "shopPool": ["tide", "foundry"],
+    "biomeDrops": ["cellar", "foundry"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Pay 2 HP → 4 defense + 4 damage. Brace and strike.",
+    "_designNote": "♥ brace card: simultaneous defense + offense. The core 'brace' concept.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-116",
+    "name": "Transfusion",
+    "emoji": "💉",
+    "rarity": "uncommon",
+    "cost": { "type": "free", "value": 0 },
+    "effects": [
+      { "type": "hp", "value": 2, "target": "self" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "bleed" }
+    ],
+    "synergyTags": ["medical", "heart", "status"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Heal 2 HP. Enemy bleeds 1. Take theirs, keep yours.",
+    "_designNote": "♥ sustain + status. Pairs with bleed stack builds. Fills heart status gap.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-117",
+    "name": "Final Stand",
+    "emoji": "🫀",
+    "rarity": "epic",
+    "cost": { "type": "hp", "value": 5 },
+    "effects": [
+      { "type": "defense", "value": 15, "target": "self" },
+      { "type": "status", "value": 3, "target": "self", "status": "regen" },
+      { "type": "status", "value": 2, "target": "self", "status": "reflect" }
+    ],
+    "synergyTags": ["defensive", "heart", "sacrifice", "desperate"],
+    "shopPool": ["tide"],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "Pay 5 HP → 15 defense + regen 3 + reflect 2. Your last heartbeat is a fortress.",
+    "_designNote": "♥ epic brace. Massive wall when you're desperate. The 'oh god' button.",
+    "suit": "heart"
+  },
+
+  {
+    "_comment": "=== ♣ CLUB — DEFENSIVE / CONTROL (ACT-120 to ACT-126) — Energy-cost barriers ==="
+  },
+  {
+    "id": "ACT-120",
+    "name": "Static Field",
+    "emoji": "⚡",
+    "rarity": "common",
+    "cost": { "type": "energy", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 3, "target": "self" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "shock" }
+    ],
+    "synergyTags": ["defensive", "club", "status"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "1 energy → 3 defense + shock 1. Zap anything that gets close.",
+    "_designNote": "♣ baseline defense. Dual-purpose: shield + minor CC. Fills club defense gap.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-121",
+    "name": "Energy Shield",
+    "emoji": "🔷",
+    "rarity": "uncommon",
+    "cost": { "type": "energy", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 7, "target": "self" }
+    ],
+    "synergyTags": ["defensive", "club", "construct"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "2 energy → 7 defense. Pure energy barrier, no frills.",
+    "_designNote": "♣ efficient defense. Higher cost than ♠ Block but much better value.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-122",
+    "name": "Pulse Guard",
+    "emoji": "📡",
+    "rarity": "uncommon",
+    "cost": { "type": "energy", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 4, "target": "self" },
+      { "type": "draw", "value": 1, "target": "self" }
+    ],
+    "synergyTags": ["defensive", "club", "utility"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "1 energy → 4 defense + draw 1. Scan, guard, adapt.",
+    "_designNote": "♣ cycle defense. Shield + cantrip. Keeps control decks flowing.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-123",
+    "name": "Neural Brace",
+    "emoji": "🧠",
+    "rarity": "rare",
+    "cost": { "type": "energy", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 5, "target": "self" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "stun" }
+    ],
+    "synergyTags": ["defensive", "club", "control", "status"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 5 defense + stun 2. Lock their brain, lock their attack.",
+    "_designNote": "♣ brace+CC. Defense that also disrupts the enemy's next action. Control core.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-124",
+    "name": "Feedback Loop",
+    "emoji": "🔄",
+    "rarity": "rare",
+    "cost": { "type": "energy", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 6, "target": "self" },
+      { "type": "status", "value": 2, "target": "self", "status": "reflect" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "shock" }
+    ],
+    "synergyTags": ["defensive", "club", "reflect", "status"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 6 defense + reflect 2 + shock 1. Attack me? Feel it twice.",
+    "_designNote": "♣ brace+counter. Full defensive package. Punishes aggro enemies.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-125",
+    "name": "EMP Dome",
+    "emoji": "💠",
+    "rarity": "epic",
+    "cost": { "type": "energy", "value": 3 },
+    "effects": [
+      { "type": "defense", "value": 12, "target": "self" },
+      { "type": "status", "value": 3, "target": "enemy", "status": "shock" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "stun" }
+    ],
+    "synergyTags": ["defensive", "club", "control", "status"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "3 energy → 12 defense + shock 3 + stun 1. Everything stops.",
+    "_designNote": "♣ epic brace. The club's answer to ♥ Final Stand. Total lockdown.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-126",
+    "name": "Countershock",
+    "emoji": "🫲",
+    "rarity": "uncommon",
+    "cost": { "type": "energy", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 3, "target": "self" },
+      { "type": "damage", "value": 3, "target": "enemy" }
+    ],
+    "synergyTags": ["defensive", "club", "melee"],
+    "shopPool": ["admiralty", "foundry"],
+    "biomeDrops": ["sealab", "foundry"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "1 energy → 3 defense + 3 damage. Block and counterpunch.",
+    "_designNote": "♣ brace card. Simultaneous offense+defense. Mirror of ♥ Crimson Counter.",
+    "suit": "club"
+  },
+
+  {
+    "_comment": "=== ♦ DIAMOND — DEFENSIVE (ACT-130 to ACT-133) — Battery-cost forge armor ==="
+  },
+  {
+    "id": "ACT-130",
+    "name": "Tempered Plate",
+    "emoji": "🪖",
+    "rarity": "uncommon",
+    "cost": { "type": "battery", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 8, "target": "self" }
+    ],
+    "synergyTags": ["defensive", "diamond", "construct"],
+    "shopPool": ["foundry"],
+    "biomeDrops": ["foundry"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "1 battery → 8 defense. Forge-hardened plating.",
+    "_designNote": "♦ efficient wall. Battery is scarce so the defense value is high.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-131",
+    "name": "Slag Armor",
+    "emoji": "🔶",
+    "rarity": "rare",
+    "cost": { "type": "battery", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 6, "target": "self" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "burn" }
+    ],
+    "synergyTags": ["defensive", "diamond", "construct", "status"],
+    "shopPool": ["foundry"],
+    "biomeDrops": ["foundry"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "1 battery → 6 defense + burn 2. Molten metal clings to whoever strikes you.",
+    "_designNote": "♦ brace+counter. Defense that punishes attackers with burn. Forge flavor.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-132",
+    "name": "Forge Brace",
+    "emoji": "🔨",
+    "rarity": "uncommon",
+    "cost": { "type": "battery", "value": 1 },
+    "effects": [
+      { "type": "defense", "value": 4, "target": "self" },
+      { "type": "damage", "value": 3, "target": "enemy" }
+    ],
+    "synergyTags": ["defensive", "diamond", "melee"],
+    "shopPool": ["foundry"],
+    "biomeDrops": ["foundry"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "1 battery → 4 defense + 3 damage. Hammer meets shield.",
+    "_designNote": "♦ brace card. Battery-cost defense+offense. Completes the brace trifecta ♥/♣/♦.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-133",
+    "name": "Crucible Shell",
+    "emoji": "🛡️",
+    "rarity": "epic",
+    "cost": { "type": "battery", "value": 2 },
+    "effects": [
+      { "type": "defense", "value": 14, "target": "self" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "burn" },
+      { "type": "status", "value": 1, "target": "self", "status": "regen" }
+    ],
+    "synergyTags": ["defensive", "diamond", "construct", "status"],
+    "shopPool": ["foundry"],
+    "biomeDrops": [],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "2 battery → 14 defense + burn 2 + regen 1. The furnace protects its master.",
+    "_designNote": "♦ epic brace. Battery-premium fortress. Forge-themed answer to Final Stand.",
+    "suit": "diamond"
+  },
+
+  {
+    "_comment": "=== STATUS DIVERSITY (ACT-135 to ACT-142) — Fill poison, root, bleed gaps ==="
+  },
+  {
+    "id": "ACT-135",
+    "name": "Venom Drip",
+    "emoji": "🐍",
+    "rarity": "uncommon",
+    "cost": { "type": "energy", "value": 1 },
+    "effects": [
+      { "type": "damage", "value": 2, "target": "enemy" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "poison" }
+    ],
+    "synergyTags": ["club", "status", "ranged"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "2 damage + poison 2. Slow death, guaranteed.",
+    "_designNote": "♣ poison card. Only 1 poison card existed (Corpse Gas). This opens poison builds.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-136",
+    "name": "Tangle Root",
+    "emoji": "🌿",
+    "rarity": "uncommon",
+    "cost": { "type": "free", "value": 0 },
+    "effects": [
+      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
+      { "type": "defense", "value": 2, "target": "self" }
+    ],
+    "synergyTags": ["spade", "control", "defensive", "status"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Root 2 + 2 defense. Vines snare and shield.",
+    "_designNote": "♠ root card. Only 1 root card existed (Mold Web). Free-cost utility.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-137",
+    "name": "Serrated Edge",
+    "emoji": "🗡️",
+    "rarity": "uncommon",
+    "cost": { "type": "free", "value": 0 },
+    "effects": [
+      { "type": "damage", "value": 3, "target": "enemy" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "bleed" }
+    ],
+    "synergyTags": ["spade", "melee", "status"],
+    "shopPool": ["foundry", "tide"],
+    "biomeDrops": ["cellar", "foundry"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "3 damage + bleed 2. Jagged wounds don't close.",
+    "_designNote": "♠ bleed card. Only 2 bleed cards existed. This enables bleed stacking builds.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-138",
+    "name": "Corrosive Splash",
+    "emoji": "🧪",
+    "rarity": "rare",
+    "cost": { "type": "energy", "value": 2 },
+    "effects": [
+      { "type": "damage", "value": 3, "target": "enemy" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "poison" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "burn" }
+    ],
+    "synergyTags": ["club", "status", "ranged", "aoe"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "3 damage + poison 2 + burn 1. Acid eats through everything.",
+    "_designNote": "♣ multi-status. Poison + burn combo. High energy cost for double-DoT payoff.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-139",
+    "name": "Briar Trap",
+    "emoji": "🪤",
+    "rarity": "rare",
+    "cost": { "type": "free", "value": 0 },
+    "effects": [
+      { "type": "defense", "value": 4, "target": "self" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "bleed" }
+    ],
+    "synergyTags": ["defensive", "spade", "control", "status"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "4 defense + root 2 + bleed 1. Step on this. I dare you.",
+    "_designNote": "♠ brace+CC. Defense + root + bleed. The ultimate trap card. Free-cost rare.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-140",
+    "name": "Toxic Cloud",
+    "emoji": "☁️",
+    "rarity": "rare",
+    "cost": { "type": "energy", "value": 2 },
+    "effects": [
+      { "type": "status", "value": 3, "target": "enemy", "status": "poison" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "root" }
+    ],
+    "synergyTags": ["club", "status", "control", "aoe"],
+    "shopPool": ["tide", "admiralty"],
+    "biomeDrops": ["cellar", "sealab"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Poison 3 + root 1. Choking fumes pin them in place.",
+    "_designNote": "♣ heavy DoT. No direct damage — pure status. Pairs with poison stacking.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-141",
+    "name": "Hemorrhage",
+    "emoji": "🩻",
+    "rarity": "rare",
+    "cost": { "type": "hp", "value": 2 },
+    "effects": [
+      { "type": "damage", "value": 5, "target": "enemy" },
+      { "type": "status", "value": 3, "target": "enemy", "status": "bleed" }
+    ],
+    "synergyTags": ["heart", "sacrifice", "melee", "status"],
+    "shopPool": ["tide"],
+    "biomeDrops": ["cellar"],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Pay 2 HP → 5 damage + bleed 3. Spill your blood to spill theirs.",
+    "_designNote": "♥ bleed enabler. HP-sacrifice + heavy bleed. Cross-pollinates ♥ sacrifice + status builds.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-142",
+    "name": "Constrict",
+    "emoji": "🐙",
+    "rarity": "uncommon",
+    "cost": { "type": "energy", "value": 1 },
+    "effects": [
+      { "type": "damage", "value": 2, "target": "enemy" },
+      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
+      { "type": "status", "value": 1, "target": "enemy", "status": "stun" }
+    ],
+    "synergyTags": ["club", "marine", "control", "status"],
+    "shopPool": ["admiralty"],
+    "biomeDrops": ["sealab"],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "2 damage + root 2 + stun 1. Tentacles hold. You don't.",
+    "_designNote": "♣ sealab CC card. Root + stun combo. Fills marine+control tag intersection.",
+    "suit": "club"
+  }
+]

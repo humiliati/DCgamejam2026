@@ -30,6 +30,7 @@ var Player = (function () {
     lookOffset: 0,              // Mouse free-look offset (radians)
     hp: 10, maxHp: 10,
     energy: 5, maxEnergy: 5,
+    battery: 3, maxBattery: 10,  // ◈ Battery — powers card abilities (RPS trinity)
     str: 2, dex: 2, stealth: 1,
     currency: 0,
     lastMoveDirection: 'north',
@@ -120,19 +121,76 @@ var Player = (function () {
     _state.currency += amount;
   }
 
+  /**
+   * Deduct currency from the player. Returns false if insufficient funds.
+   * @param {number} amount
+   * @returns {boolean}
+   */
+  function spendCurrency(amount) {
+    if (_state.currency < amount) return false;
+    _state.currency -= amount;
+    return true;
+  }
+
   function isAlive() { return _state.hp > 0; }
 
-  // ── Inventory: Hand (cards) ────────────────────────────────────────
+  function addBattery(amount) {
+    _state.battery = Math.min(_state.maxBattery, _state.battery + (amount || 1));
+  }
 
-  function getHand()  { return _state.hand; }
+  function spendBattery(amount) {
+    if (_state.battery < amount) return false;
+    _state.battery -= amount;
+    return true;
+  }
+
+  // ── HOT (Heal-Over-Time) — from health-system.js §HOT ─────────────
+  // Food items with HOT effect call applyHOT(amount, ticks).
+  // Each player move ticks down; restores 1 HP per tick until exhausted.
+
+  var _hotAmount = 0;  // HP per tick
+  var _hotTicks  = 0;  // Ticks remaining
+
+  function applyHOT(amount, ticks) {
+    // Stack with existing HOT (take whichever is larger)
+    _hotAmount = Math.max(_hotAmount, amount || 1);
+    _hotTicks  = Math.max(_hotTicks, ticks || 3);
+  }
+
+  function tickHOT() {
+    if (_hotTicks <= 0) return 0;
+    var restored = Math.min(_hotAmount, _state.maxHp - _state.hp);
+    _state.hp = Math.min(_state.maxHp, _state.hp + _hotAmount);
+    _hotTicks--;
+    if (_hotTicks === 0) _hotAmount = 0;
+    return restored;
+  }
+
+  // ── Inventory: Hand (cards) ────────────────────────────────────────
+  // CANONICAL HAND lives in CardSystem._hand.
+  // Player proxies to CardSystem so NchWidget / HUD have one source of truth
+  // (matches EyesOnly CardStateAuthority → GAMESTATE pattern).
+
+  function getHand() {
+    if (typeof CardSystem !== 'undefined' && CardSystem.getHand) {
+      return CardSystem.getHand();
+    }
+    return _state.hand; // fallback if CardSystem not loaded yet
+  }
 
   function addToHand(card) {
+    if (typeof CardSystem !== 'undefined' && CardSystem.addCard) {
+      return CardSystem.addCard(card);
+    }
     if (_state.hand.length >= MAX_HAND) return false;
     _state.hand.push(card);
     return true;
   }
 
   function removeFromHand(index) {
+    if (typeof CardSystem !== 'undefined' && CardSystem.playFromHand) {
+      return CardSystem.playFromHand(index);
+    }
     if (index < 0 || index >= _state.hand.length) return null;
     return _state.hand.splice(index, 1)[0];
   }
@@ -256,6 +314,45 @@ var Player = (function () {
     return false;
   }
 
+  /**
+   * Check if the player has any item matching a type (any container).
+   * @param {string} type - Item type to match (e.g. 'key')
+   * @returns {Object|null} First matching item, or null
+   */
+  function hasItemType(type) {
+    for (var j = 0; j < _state.bag.length; j++) {
+      if (_state.bag[j] && _state.bag[j].type === type) return _state.bag[j];
+    }
+    for (var k = 0; k < EQUIP_SLOTS; k++) {
+      if (_state.equipped[k] && _state.equipped[k].type === type) return _state.equipped[k];
+    }
+    return null;
+  }
+
+  /**
+   * Consume (remove) an item by ID from bag or equipped slots.
+   * Used for key items that are spent on use (e.g., boss door key).
+   * @param {string} id - Item ID to consume
+   * @returns {Object|null} The consumed item, or null if not found
+   */
+  function consumeItem(id) {
+    // Check bag first
+    for (var j = 0; j < _state.bag.length; j++) {
+      if (_state.bag[j] && _state.bag[j].id === id) {
+        return _state.bag.splice(j, 1)[0];
+      }
+    }
+    // Check equipped slots
+    for (var k = 0; k < EQUIP_SLOTS; k++) {
+      if (_state.equipped[k] && _state.equipped[k].id === id) {
+        var item = _state.equipped[k];
+        _state.equipped[k] = null;
+        return item;
+      }
+    }
+    return null;
+  }
+
   // ── Flags (quest/dialogue state) ───────────────────────────────────
 
   function setFlag(key, value) { _state.flags[key] = value; }
@@ -287,11 +384,16 @@ var Player = (function () {
     dropped.currency = penalty;
     _state.currency -= penalty;
 
-    // Scatter hand cards
-    for (var c = 0; c < _state.hand.length; c++) {
-      dropped.cards.push(_state.hand[c]);
+    // Scatter hand cards (canonical hand is in CardSystem)
+    var hand = getHand();
+    for (var c = 0; c < hand.length; c++) {
+      dropped.cards.push(hand[c]);
     }
     _state.hand = [];
+    // Clear CardSystem hand too (resetDeck will rebuild on respawn)
+    if (typeof CardSystem !== 'undefined' && CardSystem.resetDeck) {
+      CardSystem.resetDeck();
+    }
 
     // Scatter bag items
     for (var b = 0; b < _state.bag.length; b++) {
@@ -352,7 +454,12 @@ var Player = (function () {
     spendEnergy: spendEnergy,
     restoreEnergy: restoreEnergy,
     addCurrency: addCurrency,
+    spendCurrency: spendCurrency,
+    addBattery: addBattery,
+    spendBattery: spendBattery,
     isAlive: isAlive,
+    applyHOT: applyHOT,
+    tickHOT: tickHOT,
 
     // Inventory: hand (cards)
     getHand: getHand,
@@ -375,6 +482,8 @@ var Player = (function () {
     unequip: unequip,
     useItem: useItem,
     hasItem: hasItem,
+    hasItemType: hasItemType,
+    consumeItem: consumeItem,
 
     // Flags
     setFlag: setFlag,

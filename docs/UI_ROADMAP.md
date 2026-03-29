@@ -135,11 +135,241 @@ npcs: [
 
 ---
 
-### P5: Shop/Trade UI (post-jam stretch)
+### P5: Shop Core ✅ (COMPLETE)
 
-Grid display of purchasable items. Currency check. Buy/sell flow.
-Reuses inventory grid layout with a "Buy" column and "Sell" column.
-Not needed for jam — can use DialogBox + item grant for shops.
+Three-face shop MenuBox driven by `engine/shop.js` and real
+`engine/card-system.js` JSON loading. Fully wired as of the Phase 2
+shop implementation pass. See `engine/shop.js` for the public API.
+
+- Face 0: Faction rep panel (all 3 factions, tier badge, gold)
+- Face 1: Buy — 5 live inventory slots from `Shop.getInventory()`
+- Face 2: Sell — 5 hand cards with 40% rarity-based return value
+- `[1-5]` keys buy/sell; `Shop.close()` fires on MenuBox dismiss
+- `Shop.reset()` on every floor transition (inventory cache cleared)
+
+---
+
+### P6: Vendor NPC Dialogue & Bulk Sale Flow
+
+The gleaning loop depends on the shop visit feeling rewarding and
+reactive — the vendor must *respond* to what you haul in. This phase
+adds a scripted dialogue layer that fires around shop transactions.
+
+#### 6a: Vendor Greeting Dialogue (on shop enter)
+
+When the player approaches a TILES.SHOP and presses interact, before
+the MenuBox opens, a short DialogBox sequence plays. Content is keyed
+on current faction rep tier and visit count:
+
+```
+Tier 0 (Stranger):   "Hmm. You're not a usual face around here."
+Tier 1 (Associate):  "Ah, the scavenger. Let's see what you've got."
+Tier 2 (Ally):       "Back already? The good stuff's not cheap, you know."
+Tier 3 (Trusted):    "The hero made a mess upstairs again — I assume."
+```
+
+Each faction has distinct flavour (Tide = nautical-mystical; Foundry
+= industrial-brusque; Admiralty = coldly academic). Dialogue scripts
+live in `data/strings/en.js` under `shop.greet.*` keys. The greeting
+fires once per shop visit; re-entering the same shop before a floor
+transition skips the greeting.
+
+**Implementation notes:**
+- `Shop.open()` sets `_visitCount++` per faction per floor
+- `game.js` SHOP handler: if `Shop.getVisitCount() === 1`, play greeting
+  DialogBox, then `onClose` opens the MenuBox
+- Greeting line selected by `Shop.getRepTier()` at time of entry
+- One `DialogBox.show()` call before `ScreenManager.toPause()`
+
+Estimated: ~40 lines dialogue strings in en.js, ~15 lines game.js change.
+
+#### 6b: Bulk-Sell Flow (Sell All / Multi-Select)
+
+The 5-slot Face 2 sell pane is a bottleneck for players with a full bag
+of salvage parts. Bulk-sell bypasses the slot-by-slot flow for items
+below a rarity threshold.
+
+**"Sell Common" quick action:**
+- In Face 2 (sell pane), pressing `[X]` (or a dedicated key) triggers
+  a confirmation: "Sell all common & uncommon cards? (+NNg)"
+- Confirmation uses a DialogBox.show() with `pages: 1` and yes/no
+  handled via key press (Enter = confirm, ESC = cancel)
+- On confirm: `Shop.sellBulk(['common','uncommon'])` is called, which
+  iterates `CardSystem.getCollection()`, removes all cards at those
+  rarities, sums their 40% sell values, adds gold, returns summary
+
+**Summary toast:**
+After bulk-sell completes: `"Sold 7 cards for 184g 💰"` toast in loot
+color. Followed by a 1-line vendor reaction DialogBox (no typewriter,
+instant display, auto-dismiss after 1.5s via `duration` parameter):
+```
+"Not bad. Come back when you have the rare stuff."  [Foundry, Tier 1]
+"The Council values your contribution."             [Tide, Tier 2]
+```
+
+**New `Shop.sellBulk(rarities)` method** (add to shop.js):
+```javascript
+function sellBulk(rarities) {
+  // Iterate collection, sell all cards matching rarity array
+  // Returns { count, total, cards[] }
+}
+```
+
+Estimated: ~40 lines shop.js, ~30 lines game.js, ~20 strings, ~10 CSS.
+
+#### 6c: Reputation Tier-Up Ceremony
+
+When a sale (single or bulk) pushes the player's faction rep over a
+tier threshold, a moment of ceremony happens before the post-sale
+toast:
+
+1. `Salvage.recordSale()` detects `tierChanged: true`
+2. A dedicated "rep up" DialogBox fires (faction-specific congratulation)
+3. HUD updates (if battery/resource strip ever shows faction badges)
+4. Toast: `"🐉 Tide Council — Ally (Tier 2) unlocked!"`
+5. Shop inventory rebuilds immediately (higher tier = more cards unlock)
+
+The tier-up dialogue is more elaborate than a greeting — two pages:
+```
+Page 1: "You've earned it. The Tide Council recognizes you as an Ally."
+Page 2: "Our reserves are open to you. Don't squander it."
+```
+
+New string keys: `shop.tier_up.tide.1` through `shop.tier_up.admiralty.3`
+(3 factions × 3 tier thresholds = 9 dialogue entries × 2 pages = 18 strings).
+
+Estimated: ~18 string entries, ~25 lines game.js glue.
+
+---
+
+### P7: Shop-as-Hub Polish (Gleaner Pacing Loop)
+
+The core rhythm of DG is **dungeon → haul → sell → upgrade → repeat**.
+Between biome runs, the shop is the primary beat of the pacing loop.
+It should feel like returning to a home base — slightly different each
+time, reactive to what the player has done.
+
+#### 7a: Bag-Fullness HUD Badge
+
+A small numeric badge on the quick-bar or status strip showing how many
+sellable items the player is carrying vs. max bag capacity. Designed to
+create urgency: "I need to go sell soon."
+
+```
+  Bag: ██████░░░░░░  7 / 12
+```
+
+- Only appears when `Player.getBag().length > 6` (above half capacity)
+- Pulses amber when at 10+ items ("almost full")
+- Pulses red when at 12/12 ("full — can't pick up more")
+- Lives in `HUD.updateBag(count, max)` (new method)
+- DOM element: a small badge under the quick-bar, bottom-left
+
+See HUD_ROADMAP.md for the DOM/CSS spec.
+
+#### 7b: Sell-All Toast with Haul Commentary
+
+After a successful sell (single or bulk), the vendor has a reactive
+comment based on what the player is selling. This is not a DialogBox —
+it's a single-line toast with a different color from the currency toast,
+and a short vendor attribution line:
+
+```
+"Quite a haul." — The Foundry  [+148g]
+```
+
+The commentary pool is a small weighted array per faction per category:
+- **Undead parts** (cellar biome): 3 lines per faction per tier (36 total)
+- **Construct parts** (foundry biome): 3 lines
+- **Marine specimens** (sealab biome): 3 lines
+- **Cross-category mix** (when selling multiple types): 3 generic lines
+
+These live in `data/strings/en.js` under `shop.haul_comment.*` keys.
+Selection is random (use `SeededRNG.pick()`) from the tier-appropriate
+pool for the current faction.
+
+**Implementation:** `Shop.getHaulComment(factionId, repTier, profile)`
+returns a string from the pool. Called by `_shopBuy` / `_shopSellBulk`
+after the transaction resolves.
+
+Estimated: ~50 string entries, ~20 lines shop.js, ~10 lines game.js.
+
+#### 7c: Per-Floor Shop State & Restock Ticker
+
+When the player re-enters the shop on the same floor (without a floor
+transition), the sold-out slots stay sold-out. But when they return
+on a *new* floor, inventory is rebuilt fresh.
+
+A visual "RESTOCKED" banner flashes briefly on Face 1 when the player
+opens the shop for the first time on a new floor (i.e., after a floor
+transition), signaling that inventory has refreshed. Rendered as a
+canvas-drawn badge in `_renderShopBuy()` that fades over 1.5s.
+
+Additionally, Face 0 (faction overview) shows a `↻ RESTOCKED` badge
+next to the faction emoji on floors after a transition.
+
+**State tracking:** Add `_lastOpenFloor` to shop.js; compare with
+`FloorManager.getFloorNum()` on `open()`. If different, set a
+`_restocked` flag that Face 0 and Face 1 can read.
+
+Estimated: ~15 lines shop.js, ~20 lines menu-faces.js.
+
+#### 7d: Wandering Vendor (ENM-091)
+
+ENM-091 (Wandering Vendor) is defined in `data/enemies.json` as a
+cross-biome, non-lethal NPC that triggers a shop interaction. On
+interaction:
+
+1. `EnemyAI` detects the entity as `nonLethal` — no combat
+2. `game.js` `_interact()` detects the Vendor NPC flag instead of
+   `TILES.SHOP` tile, but falls through to the same shop flow
+3. Faction is randomly assigned at spawn (SeededRNG.pick of all three)
+4. Inventory is a 3-slot reduced version (not 5) at the player's current
+   floor rep tier
+5. Greeting uses a unique dialogue script (`shop.wanderer.greet.*`)
+   that acknowledges the dungeon context: "Rough down here, isn't it?
+   I've got a few things — not asking questions about where they're from."
+
+The Wandering Vendor carries cross-biome rare/epic cards from
+`shopPool: ["tide","foundry","admiralty"]` regardless of floor biome.
+
+**Implementation path:**
+- `EnemyAI` needs `nonLethal: true` handling that triggers dialogue
+  instead of combat (add `onNonLethalContact` callback in enemy-ai-system.js)
+- `game.js` wires the callback to `Shop.open()` with a 'wanderer'
+  faction mode flag
+- `Shop.open()` extended: `open(factionId, floor, opts)` where
+  `opts.inventorySize = 3` and `opts.mode = 'wanderer'`
+
+Estimated: ~30 lines enemy-ai, ~20 lines game.js, ~10 strings.
+
+---
+
+### P8: Post-Jam Shop Systems (Stretch)
+
+These require act-structure work that's out of jam scope but the hooks
+should be designed for from day one.
+
+**Faction rivalry pricing:** If the player's Foundry rep is Tier 2+
+but Tide rep is Tier 0, the Foundry vendor occasionally offers a
+"loyalty discount" on a random item (price × 0.85). Implemented as a
+per-inventory-slot modifier flag `{ ..., rivalDiscount: true }`.
+
+**Trade route mechanic:** Carrying a specific part type to the "wrong"
+faction (e.g., marine specimens to The Foundry) unlocks a bonus sell
+price (×1.4) once per floor, with a unique comment: "We don't usually
+deal in scales, but these are… curious." Adds depth to the gleaning
+decision: who do I sell *this* to?
+
+**Shop restocking mid-run:** After completing a biome boss fight, the
+faction shop for that biome's affiliation gets a special one-time
+"champion's stock" — 3 rare/epic cards added above the normal 5 slots.
+Requires `Shop.addBonusSlots(cards)` method.
+
+**Black market access:** At Tier 3 with any faction, a hidden 6th slot
+appears in Face 1 — cards with `shopPool: ["black_market"]` that have
+unusual cost types (hp, battery) or cross-faction effects. Visual
+treatment: slot has a dark background, no key label shown until hovered.
 
 ---
 

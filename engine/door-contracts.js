@@ -108,6 +108,93 @@ var DoorContracts = (function () {
   }
 
   /**
+   * Determine the best cardinal facing direction from a spawn point.
+   * Casts a 4-tile ray in each cardinal direction and counts open tiles.
+   * Prefers directions away from targetDoor as a tiebreaker.
+   *
+   * @returns {number} Radian angle (EAST=0, SOUTH=π/2, WEST=π, NORTH=-π/2)
+   */
+  function _bestFacingDir(grid, W, H, sx, sy, targetDoor) {
+    var CARDINALS = [
+      { dx:  1, dy:  0, angle: 0 },             // EAST
+      { dx:  0, dy:  1, angle: Math.PI / 2 },   // SOUTH (+Y = south)
+      { dx: -1, dy:  0, angle: Math.PI },        // WEST
+      { dx:  0, dy: -1, angle: -Math.PI / 2 }   // NORTH
+    ];
+
+    // ── Primary strategy: face directly away from the arrival door ──
+    // Find the cardinal direction most opposite to the door-to-spawn vector.
+    // This ensures a clean 180° turn from the door the player just exited.
+    if (targetDoor) {
+      var ddx = targetDoor.x - sx;
+      var ddy = targetDoor.y - sy;
+
+      // Pick the cardinal axis with the larger component of the door offset.
+      // If the door is primarily south (ddy > 0), face north.
+      // If the door is primarily east (ddx > 0), face west. Etc.
+      // Ties (diagonal) break toward the Y-axis (north/south feels more
+      // natural for door-wall orientations in grid-based levels).
+      var bestAngle = -Math.PI / 2; // default NORTH
+      if (Math.abs(ddy) >= Math.abs(ddx)) {
+        // Door is primarily above or below → face opposite on Y axis
+        bestAngle = (ddy > 0) ? -Math.PI / 2 : Math.PI / 2;  // door south → face north, vice versa
+      } else {
+        // Door is primarily left or right → face opposite on X axis
+        bestAngle = (ddx > 0) ? Math.PI : 0;  // door east → face west, vice versa
+      }
+
+      // Verify the chosen direction has at least 1 open tile ahead.
+      // If blocked, fall through to the open-count heuristic below.
+      for (var c = 0; c < CARDINALS.length; c++) {
+        if (CARDINALS[c].angle === bestAngle) {
+          var checkX = sx + CARDINALS[c].dx;
+          var checkY = sy + CARDINALS[c].dy;
+          if (checkX >= 0 && checkX < W && checkY >= 0 && checkY < H) {
+            var ct = grid[checkY][checkX];
+            if (ct !== TILES.WALL && ct !== TILES.PILLAR && ct !== TILES.TREE) {
+              return bestAngle;
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    // ── Fallback: pick direction with most open tiles ahead ──
+    var fallbackAngle = -Math.PI / 2;
+    var fallbackScore = -1;
+
+    for (var c2 = 0; c2 < CARDINALS.length; c2++) {
+      var card = CARDINALS[c2];
+      var openCount = 0;
+
+      for (var step = 1; step <= 4; step++) {
+        var nx = sx + card.dx * step;
+        var ny = sy + card.dy * step;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) break;
+        var t = grid[ny][nx];
+        if (t === TILES.WALL || t === TILES.PILLAR || t === TILES.TREE) break;
+        openCount++;
+      }
+
+      // Small away-from-door bonus to break ties
+      var awayBonus = 0;
+      if (targetDoor) {
+        var toward = (card.dx * (targetDoor.x - sx) + card.dy * (targetDoor.y - sy));
+        if (toward < 0) awayBonus = 0.5;
+      }
+
+      var score = openCount + awayBonus;
+      if (score > fallbackScore) {
+        fallbackScore = score;
+        fallbackAngle = card.angle;
+      }
+    }
+
+    return fallbackAngle;
+  }
+
+  /**
    * Apply the current contract to a generated floor.
    * Places the player near the appropriate staircase or door.
    *
@@ -161,14 +248,12 @@ var DoorContracts = (function () {
       };
     }
 
-    // Face away from the target door
+    // Face into the room — pick the cardinal direction with the most open
+    // floor tiles ahead. This prevents the "face the wall" bug when spawn
+    // is between the arrival stairs and a wall.
     var dir = -Math.PI / 2; // default: face north
-    if (spawn && targetDoor) {
-      var dx = spawn.x - targetDoor.x;
-      var dy = spawn.y - targetDoor.y;
-      if (Math.abs(dx) + Math.abs(dy) > 0) {
-        dir = Math.atan2(dy, dx);
-      }
+    if (spawn) {
+      dir = _bestFacingDir(grid, W, H, spawn.x, spawn.y, targetDoor);
     }
 
     // Clear contract (one-shot)
@@ -186,7 +271,7 @@ var DoorContracts = (function () {
   function findSpawnNearDoor(grid, W, H, targetDoor, avoidDoor, radius) {
     radius = radius || GUARDRAIL_STEPS;
     var best = null;
-    var bestAvoidDist = -1;
+    var bestScore = -1;
 
     for (var r = 1; r <= radius; r++) {
       for (var dy = -r; dy <= r; dy++) {
@@ -199,14 +284,27 @@ var DoorContracts = (function () {
           if (tx <= 0 || tx >= W - 1 || ty <= 0 || ty >= H - 1) continue;
           if (!grid[ty] || grid[ty][tx] !== TILES.EMPTY) continue;
 
+          // Score = distance from avoidDoor + open neighbor count
+          // Prefer tiles in room interiors (more open neighbors) over
+          // tiles wedged against walls, to avoid face-the-wall spawns.
           var avoidDist = 0;
           if (avoidDoor) {
             avoidDist = Math.abs(tx - avoidDoor.x) + Math.abs(ty - avoidDoor.y);
           }
 
-          if (!best || avoidDist > bestAvoidDist) {
+          var openNeighbors = 0;
+          var DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+          for (var d = 0; d < 4; d++) {
+            var nx = tx + DIRS[d][0], ny = ty + DIRS[d][1];
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && grid[ny][nx] === TILES.EMPTY) {
+              openNeighbors++;
+            }
+          }
+
+          var score = avoidDist * 4 + openNeighbors; // avoidDist dominant, open tiebreaker
+          if (!best || score > bestScore) {
             best = { x: tx, y: ty };
-            bestAvoidDist = avoidDist;
+            bestScore = score;
           }
         }
       }

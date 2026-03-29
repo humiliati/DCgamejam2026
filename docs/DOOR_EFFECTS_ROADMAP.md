@@ -277,3 +277,109 @@ function _resolvePreset(srcId, tgtId, direction) {
 - `HUD.hideFloorTransition()` → handled by TransitionFX.onComplete
 - The `#floor-transition` div in index.html becomes unused (can keep as
   fallback for browsers with canvas issues, or remove)
+
+---
+
+## Directional Door/Stair Textures — ✅ IMPLEMENTED
+
+Stair and door tiles now render distinct procedural textures in the 3D
+viewport so the player can read direction at a glance — no interaction
+needed.
+
+### Texture Inventory
+
+| Texture ID     | Tile Type   | Visual Description |
+|----------------|-------------|-------------------|
+| `stairs_down`  | STAIRS_DN   | Dark stone with 3 down-pointing chevrons (▼), step-line horizon bands, dim green arrow tint |
+| `stairs_up`    | STAIRS_UP   | Lighter stone with 3 up-pointing chevrons (▲), warm amber tint, vertical brightness gradient (lighter at top = "light above") |
+| `door_wood`    | DOOR / DOOR_BACK / DOOR_EXIT | Wooden planks with iron bands — neutral (no direction cue needed, handled by DoorAnimator on open) |
+| `door_iron`    | BOSS_DOOR (unlocked) | Iron plate with rivet grid — imposing but passable |
+| `door_locked`  | BOSS_DOOR (locked) | Wood + iron bands with diagonal chain X-pattern and centered brass padlock. Keyhole detail at lock center. |
+
+### Rendering Path
+
+```
+Raycaster hits wall tile
+  → SpatialContract.getTexture(contract, tileType) → texId
+  → BOSS_DOOR override: if !FloorTransition.isDoorUnlocked() → texId = 'door_locked'
+  → TextureAtlas.get(texId) → tex canvas + ImageData
+  → Column sampling + fog + brightness
+```
+
+All three spatial contract depths (street, interior, nested dungeon) now
+map STAIRS_DN→`stairs_down` and STAIRS_UP→`stairs_up` in their texture tables.
+
+### Design Principle
+
+Follows the Doom spatial-contract philosophy already in SpatialContract:
+- **Height offset** communicates vertical direction physically (sunken = down, raised = up)
+- **Texture pattern** communicates direction symbolically (chevron arrows, color temperature)
+- **Both cues together** make direction readable in <0.5s of looking at a tile
+
+---
+
+## Locked Door System — ✅ IMPLEMENTED
+
+BOSS_DOOR tiles now require a key item from the player's inventory to
+unlock. This is the first system that imposes a visible change on the 3D
+viewport based on inventory state, proving the T0 inventory pipeline
+works end-to-end.
+
+### Lock Flow
+
+```
+Player faces BOSS_DOOR → presses Interact
+  → FloorTransition.tryInteractDoor()
+    → _tryUnlockDoor(fx, fy, floorNum)
+      ┌─ Already unlocked (flag/cache)? → true (proceed to transition)
+      ├─ Player has key-type item?
+      │   → Player.consumeItem(key.id)
+      │   → Mark unlocked (session cache + Player flag)
+      │   → Toast: "🔑 Door unlocked!"
+      │   → Audio: 'door_unlock'
+      │   → return true (proceed)
+      └─ No key?
+          → DialogBox.show("The door is locked. You need a key.")
+          → Audio: 'bump'
+          → return false (interaction consumed, no transition)
+```
+
+### Persistence
+
+- **Session cache:** `_unlockedDoors` map in FloorTransition (fast lookup)
+- **Player flag:** `boss_door_{floor}_{x}_{y}` persisted in Player.flags
+  (survives floor transitions, used to restore unlock state on revisit)
+
+### Viewport Integration
+
+The raycaster checks `FloorTransition.isDoorUnlocked()` per frame for
+BOSS_DOOR tiles. Locked doors render the `door_locked` texture (chains +
+padlock). Once unlocked, they revert to `door_iron` — the visual change
+is immediate and dramatic, confirming the inventory interaction worked.
+
+### Player API Additions
+
+- `Player.hasItemType(type)` — finds first item matching a type across
+  bag + equipped slots (used for "do you have ANY key?")
+- `Player.consumeItem(id)` — removes and returns an item by ID from bag
+  or equipped slots (used for key consumption)
+
+### Key Item Schema
+
+Key items follow the UNIFIED_INVENTORY_METADATA_CONTRACT:
+```javascript
+{
+  id: 'KEY-001',
+  type: 'key',
+  subtype: 'boss',
+  name: 'Iron Key',
+  emoji: '🔑',
+  description: 'Opens a heavy iron door.',
+  rarity: 'uncommon',
+  stackable: false
+}
+```
+
+Keys equip to slot 2 (the key quick-slot) and are consumed on use.
+Future: specific doors could require specific key IDs rather than any
+key-type item.

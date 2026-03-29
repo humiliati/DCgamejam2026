@@ -36,6 +36,8 @@ var InteractPrompt = (function () {
   var _alpha      = 0;       // Current opacity (0–1)
   var _actionText = '';      // Current action label
   var _iconText   = '';      // Optional emoji prefix
+  var _hitBox     = null;    // { x, y, w, h } — screen-space click zone
+  var _hovered    = false;   // Pointer is over the prompt
 
   function init() {
     ACTION_MAP[TILES.CHEST]     = { action: 'interact.open',   icon: '' };
@@ -48,6 +50,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.DOOR_BACK] = { action: 'interact.enter',  icon: '' };
     ACTION_MAP[TILES.DOOR_EXIT] = { action: 'interact.exit',   icon: '' };
     ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '' };
+    ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨' };
   }
 
   /**
@@ -77,6 +80,18 @@ var InteractPrompt = (function () {
       _visible = true;
       _actionText = i18n.t(entry.action, entry.action.split('.')[1]);
       _iconText = entry.icon;
+
+      // Append destination floor ID for door tiles so the player
+      // knows where they're going: "[OK] Enter → 1.1"
+      if (TILES.isDoor(tile) && floorData.doorTargets) {
+        var doorKey = fx + ',' + fy;
+        var targetId = floorData.doorTargets[doorKey];
+        if (targetId) {
+          var label = (typeof FloorManager.getFloorLabel === 'function')
+            ? FloorManager.getFloorLabel(targetId) : null;
+          _actionText += ' → ' + (label || targetId);
+        }
+      }
       return;
     }
 
@@ -114,7 +129,7 @@ var InteractPrompt = (function () {
    * @param {number} vpH
    */
   function render(ctx, vpW, vpH) {
-    if (_alpha <= 0) return;
+    if (_alpha <= 0) { _hitBox = null; return; }
 
     var keyLabel = i18n.t('interact.key', '[OK]');
     var fullText = _iconText ? _iconText + ' ' + _actionText : _actionText;
@@ -129,12 +144,26 @@ var InteractPrompt = (function () {
     var boxX = (vpW - boxW) / 2;
     var boxY = vpH - BOX_Y_OFF;
 
-    // Background
+    // Store hit zone for pointer click
+    _hitBox = { x: boxX, y: boxY, w: boxW, h: BOX_H };
+
+    // Check hover state for visual feedback
+    _hovered = false;
+    if (typeof InputManager !== 'undefined') {
+      var ptr = InputManager.getPointer();
+      if (ptr && ptr.active &&
+          ptr.x >= boxX && ptr.x <= boxX + boxW &&
+          ptr.y >= boxY && ptr.y <= boxY + BOX_H) {
+        _hovered = true;
+      }
+    }
+
+    // Background — brighter when hovered
     _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
-    ctx.fillStyle = COL_BG;
+    ctx.fillStyle = _hovered ? 'rgba(30,25,40,0.92)' : COL_BG;
     ctx.fill();
-    ctx.strokeStyle = COL_BORDER;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = _hovered ? '#f0d070' : COL_BORDER;
+    ctx.lineWidth = _hovered ? 1.5 : 1;
     _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
     ctx.stroke();
 
@@ -145,13 +174,35 @@ var InteractPrompt = (function () {
     ctx.fillText(keyLabel, boxX + BOX_PAD, boxY + BOX_H / 2);
 
     // Action text
-    ctx.fillStyle = COL_ACTION;
+    ctx.fillStyle = _hovered ? '#fff' : COL_ACTION;
     ctx.fillText(' ' + fullText, boxX + BOX_PAD + keyW, boxY + BOX_H / 2);
+
+    // Pointer cursor hint (clickable affordance)
+    if (_hovered) {
+      ctx.fillStyle = 'rgba(240,208,112,0.5)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('▶ click', boxX + boxW / 2, boxY + BOX_H + 10);
+    }
 
     ctx.restore();
   }
 
   function isVisible() { return _alpha > 0; }
+
+  /**
+   * Test if the pointer click hit the prompt box.
+   * Returns true if the click was inside the prompt — game.js
+   * then calls _interact() to execute the action.
+   */
+  function handlePointerClick() {
+    if (!_hitBox || _alpha < 0.5) return false;
+    if (typeof InputManager === 'undefined') return false;
+    var ptr = InputManager.getPointer();
+    if (!ptr || !ptr.active) return false;
+    return ptr.x >= _hitBox.x && ptr.x <= _hitBox.x + _hitBox.w &&
+           ptr.y >= _hitBox.y && ptr.y <= _hitBox.y + _hitBox.h;
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────
 
@@ -174,6 +225,7 @@ var InteractPrompt = (function () {
     check: check,
     update: update,
     render: render,
-    isVisible: isVisible
+    isVisible: isVisible,
+    handlePointerClick: handlePointerClick
   };
 })();

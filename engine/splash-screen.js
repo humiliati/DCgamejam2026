@@ -1,74 +1,164 @@
 /**
- * SplashScreen — simple logo/title canvas overlay.
+ * SplashScreen — DOM-driven 3D box splash with click-to-envelop.
  *
- * Layer 2. Renders the jam/studio logo on the main canvas, then
- * auto-advances to the title screen after a short delay. Click or
- * keypress skips immediately. Not part of the rotating box menu —
- * this is a flat full-viewport draw.
+ * Layer 2 (depends on BoxAnim, ScreenManager, i18n).
+ *
+ * Shows a CSS 3D rotating box (via the modular BoxAnim system) with
+ * the game title on a full-viewport DOM overlay (#splash-overlay).
+ *
+ * Interaction flow:
+ *   1. Box spins with lid open face visible. Title text fades in.
+ *   2. On hover — lid swings open, interior glow brightens.
+ *   3. On click (or any key) — BoxAnim.envelop() fires: the interior
+ *      glow expands to fill the screen, the overlay background shifts
+ *      to a radial gradient, then after ~1s the overlay fades out and
+ *      ScreenManager transitions to TITLE.
+ *
+ * The canvas still renders a solid dark background behind the overlay
+ * to prevent flicker.
  */
 var SplashScreen = (function () {
   'use strict';
 
   var _canvas = null;
   var _ctx = null;
-  var _timer = 0;
   var _active = false;
-  var _fadeOut = 0;       // 0–1 fade-out progress
-  var _fading = false;
+  var _enveloping = false;     // glow envelop in progress
+  var _fadeOut = false;         // final overlay fade after envelop
+  var _fadeTimer = 0;
+  var _minDisplayTimer = 0;    // enforce minimum display before interaction
 
-  var DISPLAY_TIME = 1500;   // ms before auto-advance
-  var FADE_TIME = 400;       // ms fade-out duration
+  var MIN_DISPLAY = 800;       // ms before click/key is accepted
+  var FADE_TIME = 500;         // ms final overlay fade
+
+  // DOM overlay references
+  var _overlay = null;
+  var _titleEl = null;
+  var _subtitleEl = null;
+  var _promptEl = null;
+
+  var _keyHandler = null;
+  var _boxClickHandler = null;
+  var _splashBoxEl = null;
 
   // ── Init ──────────────────────────────────────────────────────────
 
   function init(canvas) {
     _canvas = canvas;
     _ctx = canvas.getContext('2d');
+
+    _overlay = document.getElementById('splash-overlay');
+    _titleEl = document.getElementById('splash-title-text');
+    _subtitleEl = document.getElementById('splash-subtitle-text');
+    _promptEl = document.getElementById('splash-prompt-text');
+    _splashBoxEl = document.getElementById('splash-box');
+
+    // Register the splash box with BoxAnim
+    if (typeof BoxAnim !== 'undefined') BoxAnim.register('splash-box');
+  }
+
+  function _unbindAll() {
+    if (_keyHandler) {
+      window.removeEventListener('keydown', _keyHandler);
+      _keyHandler = null;
+    }
+    if (_boxClickHandler && _splashBoxEl) {
+      _splashBoxEl.removeEventListener('click', _boxClickHandler);
+      _boxClickHandler = null;
+    }
   }
 
   function start() {
     _active = true;
-    _timer = 0;
-    _fadeOut = 0;
-    _fading = false;
+    _enveloping = false;
+    _fadeOut = false;
+    _fadeTimer = 0;
+    _minDisplayTimer = 0;
 
-    // Skip on any interaction
-    var _skipHandler = function () {
-      _beginFadeOut();
-      window.removeEventListener('click', _skipHandler);
-      window.removeEventListener('keydown', _skipHandler);
+    // Apply i18n strings
+    if (_titleEl) _titleEl.textContent = i18n.t('splash.title', 'DUNGEON GLEANER');
+    if (_subtitleEl) _subtitleEl.textContent = i18n.t('splash.jam', 'DC JAM 2026');
+    if (_promptEl) _promptEl.textContent = i18n.t('splash.skip', 'PRESS ANY KEY');
+
+    // Show overlay (remove any stale state classes)
+    if (_overlay) {
+      _overlay.classList.remove('hidden', 'fade-out', 'envelop-bg');
+    }
+
+    // Reset box state
+    if (typeof BoxAnim !== 'undefined') BoxAnim.close('splash-box');
+
+    // ── Separate handlers: click on BOX ONLY, keydown on window ──
+    // This lets the user hover in/out to open/close the lid freely
+    // without accidentally triggering the envelop transition.
+
+    _keyHandler = function (e) {
+      if (_minDisplayTimer < MIN_DISPLAY) return;
+      _triggerEnvelop();
+      _unbindAll();
     };
-    window.addEventListener('click', _skipHandler);
-    window.addEventListener('keydown', _skipHandler);
+
+    _boxClickHandler = function (e) {
+      e.stopPropagation(); // don't bubble to window
+      if (_minDisplayTimer < MIN_DISPLAY) return;
+      _triggerEnvelop();
+      _unbindAll();
+    };
+
+    window.addEventListener('keydown', _keyHandler);
+    if (_splashBoxEl) {
+      _splashBoxEl.addEventListener('click', _boxClickHandler);
+    }
   }
 
   function isActive() { return _active; }
+
+  // ── Envelop trigger ───────────────────────────────────────────────
+
+  function _triggerEnvelop() {
+    if (_enveloping) return;
+    _enveloping = true;
+
+    if (typeof BoxAnim !== 'undefined') {
+      BoxAnim.envelop('splash-box', function () {
+        // Glow has filled the screen — now fade out the overlay
+        _fadeOut = true;
+        _fadeTimer = 0;
+      });
+    } else {
+      // Fallback: go straight to fade
+      _fadeOut = true;
+      _fadeTimer = 0;
+    }
+  }
 
   // ── Update ────────────────────────────────────────────────────────
 
   function update(dt) {
     if (!_active) return;
 
-    if (_fading) {
-      _fadeOut += dt / FADE_TIME;
-      if (_fadeOut >= 1) {
-        _fadeOut = 1;
+    _minDisplayTimer += dt;
+
+    if (_fadeOut) {
+      _fadeTimer += dt;
+      // Apply CSS fade-out
+      if (_overlay && !_overlay.classList.contains('fade-out')) {
+        _overlay.classList.add('fade-out');
+      }
+      if (_fadeTimer >= FADE_TIME) {
         _active = false;
+        if (_overlay) _overlay.classList.add('hidden');
+        _unbindAll();
         ScreenManager.toTitle();
       }
       return;
     }
 
-    _timer += dt;
-    if (_timer >= DISPLAY_TIME) {
-      _beginFadeOut();
+    // Auto-trigger envelop after a generous display period
+    // (player can skip earlier by clicking)
+    if (!_enveloping && _minDisplayTimer >= 4000) {
+      _triggerEnvelop();
     }
-  }
-
-  function _beginFadeOut() {
-    if (_fading) return;
-    _fading = true;
-    _fadeOut = 0;
   }
 
   // ── Render ────────────────────────────────────────────────────────
@@ -79,41 +169,9 @@ var SplashScreen = (function () {
     var w = _canvas.width;
     var h = _canvas.height;
 
-    // Black background
-    _ctx.fillStyle = '#000';
+    // Canvas draws matching dark background behind the DOM overlay
+    _ctx.fillStyle = '#080812';
     _ctx.fillRect(0, 0, w, h);
-
-    // Global alpha for fade-out
-    var alpha = 1 - _fadeOut;
-    _ctx.globalAlpha = alpha;
-
-    // Studio / jam branding (placeholder)
-    _ctx.fillStyle = '#666';
-    _ctx.font = '14px "Courier New", monospace';
-    _ctx.textAlign = 'center';
-    _ctx.textBaseline = 'middle';
-    _ctx.fillText(i18n.t('splash.studio', 'PLACEHOLDER STUDIO'), w / 2, h / 2 - 40);
-
-    // Game title
-    _ctx.fillStyle = '#ddd';
-    _ctx.font = 'bold 28px "Courier New", monospace';
-    _ctx.fillText(i18n.t('splash.title', 'PLACEHOLDER TITLE'), w / 2, h / 2);
-
-    // Jam badge
-    _ctx.fillStyle = '#555';
-    _ctx.font = '12px "Courier New", monospace';
-    _ctx.fillText(i18n.t('splash.jam', 'DC Jam 2026'), w / 2, h / 2 + 36);
-
-    // Subtle prompt
-    if (!_fading && _timer > 500) {
-      var blink = Math.sin(_timer / 300) * 0.3 + 0.5;
-      _ctx.globalAlpha = alpha * blink;
-      _ctx.fillStyle = '#888';
-      _ctx.font = '11px "Courier New", monospace';
-      _ctx.fillText(i18n.t('splash.skip', 'Press any key'), w / 2, h - 40);
-    }
-
-    _ctx.globalAlpha = 1;
   }
 
   // ── Public API ───────────────────────────────────────────────────

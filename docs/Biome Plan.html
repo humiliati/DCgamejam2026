@@ -11,6 +11,7 @@
     --accent2: #d86aaa; --green: #6ad88a; --red: #d86a6a;
     --dim: #666680; --code-bg: #1a1424;
     --flame: #e8834a; --frost: #4aa8e8; --storm: #c84ae8;
+    --spade: #b4aa96; --club: #00D4FF; --diamond: #00FFA6; --heart: #FF6B9D;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:2rem; max-width:1200px; margin:0 auto; }
@@ -41,6 +42,10 @@
   .flame { color:var(--flame); font-weight:600; }
   .frost { color:var(--frost); font-weight:600; }
   .storm { color:var(--storm); font-weight:600; }
+  .spade { color:var(--spade); font-weight:600; }
+  .club { color:var(--club); font-weight:600; }
+  .diamond { color:var(--diamond); font-weight:600; }
+  .heart { color:var(--heart); font-weight:600; }
   ul { margin:.5rem 0 .75rem 1.5rem; } li { margin-bottom:.25rem; }
   .toc { margin:1.5rem 0; } .toc a { color:var(--accent); text-decoration:none; } .toc a:hover { text-decoration:underline; } .toc li { margin-bottom:.35rem; }
   hr { border:none; border-top:1px solid var(--border); margin:2rem 0; }
@@ -53,7 +58,7 @@
 <h1>Dungeon Gleaner &mdash; Biome Plan</h1>
 <p class="subtitle">
   Day 1 Designer Guide &mdash; DC Jam 2026 (Themes: Dragons &middot; Retrofuturism &middot; Rock-Paper-Scissors &middot; Cleaning Up the Hero's Mess)
-  <br>Repo: <code>github.com/humiliati/DCgamejam2026</code> &middot; Last updated: 2026-03-27 &middot; v4.0
+  <br>Repo: <code>github.com/humiliati/DCgamejam2026</code> &middot; Last updated: 2026-03-28 &middot; v5.0 (Gleaner Pivot + Suit System)
 </p>
 
 <div class="rule">
@@ -79,6 +84,10 @@
   <li><a href="#asset-map">&sect;14 &mdash; EyesOnly Asset Map (What We Reuse)</a></li>
   <li><a href="#new-work">&sect;15 &mdash; New Work for the Jam</a></li>
   <li><a href="#wiring">&sect;16 &mdash; Module Wiring &amp; Data Flow</a></li>
+  <li><a href="#gleaner-systems">&sect;17 &mdash; Gleaner Maintenance Systems (Pivot)</a></li>
+  <li><a href="#hero-paths">&sect;18 &mdash; Hero Path System &amp; Stealth</a></li>
+  <li><a href="#faction-economy">&sect;19 &mdash; Faction Economy &amp; Narrative Depth</a></li>
+  <li><a href="#s20">&sect;20 &mdash; Cross-References</a> <em style="color:var(--dim)">(master doc index &amp; phase mapping)</em></li>
 </ul>
 </nav>
 
@@ -87,14 +96,14 @@
 <!-- ================================================================ -->
 <h2 id="premise">&sect;1 &mdash; Premise: Dungeon Gleaner</h2>
 
-<p>You are a <strong>Nez-Ha</strong> &mdash; a sleek, modern scavenger-cleaner who follows in the devastating wake of a legendary Hero. The Hero storms through dungeons, slays monsters, smashes everything in sight, and vanishes before anyone can thank (or stop) him. You arrive after to pick through the wreckage, loot what's left, and deal with the twitching, gurgling remnants he didn't finish off.</p>
+<p>You are a <strong>Nez-Ha</strong> &mdash; a dungeon janitor working for a Necromancer on the wrong side of a fantasy economy. Legendary Heroes storm through dungeons, slaughter monsters, smash everything, loot the place, and vanish. You arrive after to clean up the mess &mdash; scrubbing walls, restocking crates with potions and food, re-arming traps, reassembling dead monsters so the Necromancer can revive them, and scrambling puzzles back to their unsolved state. All so the dungeon can be reset and the next batch of adventurers can "discover" it. Think <strong>Power Wash Simulator</strong> meets <strong>Dungeon Keeper</strong> from a minimum-wage perspective.</p>
 
 <p>The world is a small coastal <strong>boardwalk town</strong> &mdash; think Miami Vice meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is <strong>retrofuturistic fantasy</strong>: a civilization that discovered magic before technology, and their architecture shows it.</p>
 
 <p>Three outdoor districts form the town. Buildings along each district are shops, inns, and guild halls. Beneath certain buildings, dungeons descend &mdash; already torn through by the Hero. Every dungeon is littered with defeated enemies (lootable corpses with serious fantasy names), environmental destruction, and the comedic living remnants the Hero didn't quite finish off (slime blobs, severed appendages, half-dead creatures).</p>
 
 <div class="note">
-  <strong>Jam scope:</strong> 3 exterior districts, 5&ndash;6 building interiors, 3 dungeons (one per district with dungeon access), 1 boss encounter (the Hero, end of Act 1). Post-jam: Act 2 (dragon alliance), Act 3 (world map).
+  <strong>Jam scope:</strong> 3 exterior districts, 5&ndash;6 building interiors, 3 dungeons (one per district). Core loops: grid-by-grid tile cleaning, crate slot restocking (Kingdom Two Crowns coin economy), and dungeon reset work orders. Heroes patrol as environmental hazards. Late-game Hero boss encounters using combat decks earned through labor. Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
 </div>
 
 <div class="rule">
@@ -121,14 +130,14 @@
     <td>Biome palettes (teal, magenta, sunset orange, chrome pink), wall color choices, fog tinting, parallax backgrounds, floor/ceiling gradients</td>
   </tr>
   <tr>
-    <td><strong>Rock-Paper-Scissors Elements</strong></td>
-    <td>Core combat mechanic. Three elements: <span class="flame">FLAME</span>, <span class="frost">FROST</span>, <span class="storm">STORM</span>. Every combat card and enemy has an element. Advantage = 2x damage, disadvantage = 0.5x. <span class="flame">FLAME</span> &gt; <span class="frost">FROST</span> &gt; <span class="storm">STORM</span> &gt; <span class="flame">FLAME</span>. Simple, readable, satisfies the jam requirement cleanly.</td>
-    <td>Card UI (element icon + color border), enemy nameplate element badge, HUD element indicator, combat damage multiplier popup. See <a href="#rps">&sect;10</a>.</td>
+    <td><strong>Rock-Paper-Scissors Combat Suits</strong></td>
+    <td>Core combat mechanic. Playing card suits replace elemental naming: <span class="club">♣&nbsp;Clubs (Wild/Force)</span> beats <span class="diamond">♦&nbsp;Diamonds (Crystal/Precision)</span> beats <span class="spade">♠&nbsp;Spades (Earth/Steel)</span> beats <span class="club">♣&nbsp;Clubs</span>. <span class="heart">♥&nbsp;Hearts (Life/Blood)</span> are neutral rule-breakers. Advantage = &times;1.5 damage, disadvantage = &times;0.75 damage. Each suit correlates to a resource color: <span class="spade">♠&nbsp;free</span>, <span class="club">♣&nbsp;energy</span>, <span class="diamond">♦&nbsp;battery</span>, <span class="heart">♥&nbsp;HP</span>. Combat is readable at a glance: suit color = cost color = advantage color.</td>
+    <td>Card UI (suit glyph + resource-color border), enemy nameplate suit badge, HUD suit indicator, damage multiplier popup. Biome alignment: Cellar = ♠, Foundry = ♦, Sealab = ♣, cross-biome rare = ♥. See <a href="#rps">&sect;10</a>.</td>
   </tr>
   <tr>
     <td><strong>Cleaning Up the Hero's Mess</strong></td>
-    <td>The entire gameplay loop. You never fight fresh enemies &mdash; everything in the dungeons has already been mangled by the Hero. Corpses are lootable (serious names: Fallen Wyrm Knight, Shattered Golem). Living remnants are comedic (Disembodied Claw, Angry Torso, Indignant Slime Puddle). The narrative is cleanup, salvage, and discovery &mdash; not conquest.</td>
-    <td>Dungeon layouts (rubble, broken doors, scattered loot), enemy design (half-creatures), opening sequence (Hero's back visible), environmental destruction as level design</td>
+    <td>The entire game &mdash; three interlocking loops. <strong>Cleaning:</strong> scrub dirty/damaged tiles grid-by-grid for coin rewards, progressive cleaning tools from Rag to Pressure Washer. <strong>Restocking:</strong> fill crate slots with matching items from shops, earn coins and rare combat cards on seal. <strong>Dungeon Reset:</strong> complete work orders (re-arm traps, scramble puzzles, reassemble monsters, restore secrets) to reach readiness thresholds. Combat cards are earned through labor, not combat &mdash; your deck is built crate by crate. The Skyrim dungeon keeper who refills the ancient crates with fresh cabbages? That's you.</td>
+    <td>Dungeon layouts (dirty tiles, half-empty crates, disarmed traps, solved puzzles), Hero patrol routes (environmental hazard that undoes your work), crate slot UI (color-coded frames matching resource colors), work order board at Gleaner's Guild, cleaning texture variants (dirty/damaged/clean per tile)</td>
   </tr>
 </table>
 
@@ -308,7 +317,7 @@
     <td>Moonpetal Apothecary</td>
     <td>Lantern Gardens (<code>"2"</code>)</td>
     <td><code>'apothecary'</code></td>
-    <td>Potions and consumable items. Element-infused potions (<span class="flame">Flame Flask</span>, <span class="frost">Frost Tonic</span>, <span class="storm">Storm Elixir</span>). Cool blue-violet interior with glowing bottles.</td>
+    <td>Potions and consumable items. Suit-infused potions (<span class="spade">♠ Steel Tonic</span>, <span class="club">♣ Wild Elixir</span>, <span class="diamond">♦ Crystal Flask</span>). Also sells restock supplies for crate slot filling. Cool blue-violet interior with glowing bottles.</td>
     <td>No</td>
   </tr>
   <tr>
@@ -316,7 +325,7 @@
     <td>Ironhold Armory</td>
     <td>Frontier Gate (<code>"3"</code>)</td>
     <td><code>'armory'</code></td>
-    <td>Combat cards and equipment. Element-specific weapon cards. Dark iron-and-magenta interior &mdash; weapons on racks, forge glow. Cellar leads to Act 1 climax dungeon &mdash; the Hero's most recent rampage.</td>
+    <td>Combat cards and equipment. Suit-aligned weapon cards. Dark iron-and-magenta interior &mdash; weapons on racks, forge glow. Cellar leads to Act 1 climax dungeon &mdash; the Hero's most recent rampage.</td>
     <td>Yes &rarr; <code>"3.1.1"</code></td>
   </tr>
 </table>
@@ -362,7 +371,7 @@
 <h3>Environmental Storytelling (every dungeon)</h3>
 <ul>
   <li><strong>Hero's slash marks</strong> &mdash; specific wall tiles are "damaged" (dimmer palette variant). The Hero carved through walls.</li>
-  <li><strong>Lootable corpses</strong> &mdash; <code>CHEST</code> tiles representing fallen enemies. Serious fantasy names (Fallen Wyrm Knight, Shattered Golem, Slain Cavern Drake). Loot = cards, gold, element shards.</li>
+  <li><strong>Lootable corpses</strong> &mdash; <code>CHEST</code> tiles representing fallen enemies. Serious fantasy names (Fallen Wyrm Knight, Shattered Golem, Slain Cavern Drake). Loot = cards, gold, suit crystals.</li>
   <li><strong>Living remnants</strong> &mdash; the actual enemies the player fights. Comedic half-creatures the Hero didn't finish. They're angry, confused, and pathetic.</li>
   <li><strong>Rubble tiles</strong> &mdash; passable but slow. The Hero smashed through without caring about structural integrity.</li>
   <li><strong>Dragon clues</strong> &mdash; each dungeon has 1&ndash;2 environmental lore items (dragon scale, old mural fragment, grateful inscription from a past civilization) that build toward the Act 1 reveal.</li>
@@ -384,7 +393,7 @@
     <td>Driftwood Inn (<code>"2.1"</code>)</td>
     <td><code>'catacomb'</code></td>
     <td><strong>Mid-game dungeon.</strong> Ancient burial chambers beneath the inn. The Hero fought undead here &mdash; most are re-dead, but some parts are still moving. Jade-green lantern light barely penetrates. Lootable corpses include Entombed Guardians and Shattered Bone Golems. Living remnants: Crawling Ribcage, Floating Skull (angry, chatty), Leg With Attitude. Dragon clue: an inscription praising "the Scaled Ones who guarded the dead."</td>
-    <td>Medium. 6&ndash;8 remnants. Element variety introduced.</td>
+    <td>Medium. 6&ndash;8 remnants. Suit variety introduced.</td>
   </tr>
   <tr>
     <td><code>"3.1.1"</code></td>
@@ -392,7 +401,7 @@
     <td>Ironhold Armory (<code>"3.1"</code>)</td>
     <td><code>'depths'</code></td>
     <td><strong>Act 1 climax dungeon.</strong> Deep fortified chambers. The Hero's most recent rampage &mdash; the destruction is catastrophic. Collapsed walls, scattered weapons, a trail of devastation leading to the boss chamber. This was once a dragon sanctuary &mdash; the Hero found it and attacked. Lootable corpses: Fallen Dragon Sentinels, Sundered Wyrm Knights. Living remnants are angrier and stronger here. Dragon clue: a dying dragon's final message scratched into the wall. <strong>Boss encounter at the end.</strong> See <a href="#bosses">&sect;9</a>.</td>
-    <td>Hard. 8&ndash;12 remnants. Full RPS element combat. Boss at end.</td>
+    <td>Hard. 8&ndash;12 remnants. Full RPS suit combat. Boss at end.</td>
   </tr>
 </table>
 
@@ -422,20 +431,22 @@
 <!-- ================================================================ -->
 <h2 id="opening">&sect;8 &mdash; Opening Scene &amp; First Dungeon Scripted Sequence</h2>
 
-<p>The opening scene is the player's introduction to the "cleaning up the hero's mess" concept. It plays when the player first enters the Coral Cellars (<code>"1.1.1"</code>).</p>
+<p>The opening scene introduces both the narrative hook and the janitor role. It plays when the player first enters Cellar B1 (<code>"0.1.1"</code>). The Hero's wake &mdash; CORPSE tiles, DEBRIS, scattered COLLECTIBLE pickups, blood spatter on floor textures &mdash; is pre-placed during floor generation. This is the player's first encounter with the mess they'll spend the rest of the game cleaning.</p>
 
 <h3>Sequence</h3>
 
 <ol>
-  <li><strong>Player arrives at Coral Cellars entrance.</strong> Descends via <code>STAIRS_DN</code> from the Coral Bazaar. Normal floor transition (fade to black, SFX, fade in).</li>
-  <li><strong>Fade-in reveals the Hero's back.</strong> The player spawns facing north. 3&ndash;5 tiles ahead, the Hero (a tall silhouette, rendered as a special wall column or HUD overlay) is visible. The Hero's arm swings &mdash; an enemy in front of him flashes and vanishes (death animation). A second enemy tries to flee; the Hero cuts it down.</li>
-  <li><strong>The Hero walks away.</strong> Without turning around, the Hero walks through a <code>DOOR</code> on the far wall and vanishes. The door slams shut behind him. The sound echoes.</li>
-  <li><strong>The dungeon is now the player's.</strong> Silence. Then: a wet squelching sound. A slime puddle to the left twitches. A disembodied claw scuttles across the floor. The remnants are waking up. A HUD message appears: <em>"The Hero was here. Clean up what's left."</em></li>
-  <li><strong>Gameplay begins.</strong> The player can now explore, fight remnants, loot corpses, and find the first dragon clue.</li>
+  <li><strong>Descent transition.</strong> <code>TransitionFX</code> plays the <code>descend</code> preset. Label: "Cellar B1".</li>
+  <li><strong>Spawn &amp; Hero reveal.</strong> Player appears at STAIRS_UP, facing into the corridor. The Hero sprite is visible ~8 tiles ahead &mdash; a towering figure (scale 1.5, gold glow, particle trail) walking away through a corridor littered with corpses and debris. Dialog auto-triggers after 1.5s: <em>"Something massive came through here. The walls are gouged, the floor is littered with&hellip; remains. A figure moves in the darkness ahead."</em></li>
+  <li><strong>Player gains control.</strong> Can loot corpses (3&ndash;5 CORPSE tiles yield gold + chance of a common card), collect walk-over pickups (gold, food), or chase the Hero.</li>
+  <li><strong>Hero movement.</strong> Hero walks at 800ms/tile along a pre-scripted path. When player closes to within 4 tiles, Hero speeds up to 500ms/tile. When Hero reaches the corner room, it despawns. A faint <code>ascend-3</code> SFX plays (the Hero went deeper).</li>
+  <li><strong>Interceptor triggers.</strong> When player passes a side room (y-coordinate check), the Wounded Shambler (HP 4, STR 2, pre-set high awareness) steps out. <code>CombatBridge.startCombat()</code> fires. First combat with 5-card starter deck. Tight but winnable (player ends at 6&ndash;8 HP).</li>
+  <li><strong>Post-combat dialog.</strong> <em>"That thing was already half-dead. Whatever came through here&hellip; you don't want to catch up to it."</em></li>
+  <li><strong>First cleaning opportunity.</strong> The dungeon is dirty. Scrub a wall tile &mdash; coin pops out. Find a half-empty crate &mdash; fill its slots or smash it. The maintenance loop begins here, interwoven with the scavenge loop from the original design.</li>
 </ol>
 
 <div class="note">
-  <strong>Implementation:</strong> The Hero sequence is a one-time scripted event triggered by <code>FloorManager</code> when <code>floorId === "1.1.1"</code> and the <code>opening_complete</code> event flag is false. After it plays, the flag is set and the sequence never replays. The Hero is NOT an enemy entity &mdash; he's a visual overlay/cutscene element. Post-jam, this system generalizes for other Hero sightings.
+  <strong>Implementation:</strong> The Hero sequence is a one-time scripted event triggered by <code>FloorManager</code> when <code>floorId === "0.1.1"</code> and the <code>opening_complete</code> event flag is false.
 </div>
 
 <div class="warn">
@@ -473,8 +484,8 @@
     <td><code>chamberOverrides: [{ roomIndex: -1, wallHeight: 1.8, label: 'Dragon Sanctuary' }]</code></td>
     <td>
       <strong>Three possible endings (player choice pre-fight or post-jam branching):</strong><br>
-      <strong>A)</strong> Fight the Hero directly. He's powerful &mdash; STR 12, 3-element deck (one of each), Shield Bash + Cleave + Dragon Slayer. Spawns no reinforcements. Pure skill check.<br>
-      <strong>B)</strong> The dying dragon lends you power. Team-up mechanic &mdash; player gets temporary Dragon Breath card (<span class="flame">FLAME</span>, massive damage). Hero has <span class="frost">FROST</span> weakness. Fight is easier but narratively heavier.<br>
+      <strong>A)</strong> Fight the Hero directly. He's powerful &mdash; STR 12, 4-suit deck (one of each), Shield Bash + Cleave + Dragon Slayer. Spawns no reinforcements. Pure skill check.<br>
+      <strong>B)</strong> The dying dragon lends you power. Team-up mechanic &mdash; player gets temporary Dragon Breath card (<span class="spade">♠ Spade</span>, massive damage). Hero has <span class="diamond">♦ Diamond</span> weakness. Fight is easier but narratively heavier.<br>
       <strong>C)</strong> Fight both &mdash; the Hero AND a corrupted dragon. Hardest ending. Post-jam stretch goal.
     </td>
     <td>The conspiracy reveal. The Hero has been hunting dragons &mdash; the world's ancient protectors &mdash; believing they're monsters. The player has seen the evidence in every dungeon (dragon clues). Now they confront the truth. Win condition: defeat the Hero. End of Act 1. Victory screen. Post-jam: Act 2 begins with the dragon alliance.</td>
@@ -484,75 +495,113 @@
 <h3>The Hero's Combat Deck</h3>
 
 <table>
-  <tr><th>Card</th><th>Element</th><th>Effect</th></tr>
-  <tr><td>Cleave</td><td><span class="flame">FLAME</span></td><td>Heavy melee. 8 base damage. "The Hero's signature move &mdash; the same swing you saw in the opening."</td></tr>
-  <tr><td>Frost Ward</td><td><span class="frost">FROST</span></td><td>Shield. Absorbs 6 damage. "A magical barrier. He's no mere swordsman."</td></tr>
-  <tr><td>Storm Step</td><td><span class="storm">STORM</span></td><td>Dodge + counter. Evades next attack, deals 4 damage. "He moves like lightning."</td></tr>
-  <tr><td>Dragon Slayer</td><td>Neutral</td><td>Ultimate. 12 base damage. Ignores element. Used once at 30% HP. "The blade glows with stolen dragon fire."</td></tr>
+  <tr><th>Card</th><th>Suit</th><th>Effect</th></tr>
+  <tr><td>Cleave</td><td><span class="spade">♠ Spade</span></td><td>Heavy melee. 8 base damage. Free cost. "The Hero's signature move &mdash; the same swing you saw in the opening."</td></tr>
+  <tr><td>Force Ward</td><td><span class="club">♣ Club</span></td><td>Shield. Absorbs 6 damage. Energy cost. "A barrier of wild force. He's no mere swordsman."</td></tr>
+  <tr><td>Precision Strike</td><td><span class="diamond">♦ Diamond</span></td><td>Dodge + counter. Evades next attack, deals 4 damage. Battery cost. "He reads your move before you make it."</td></tr>
+  <tr><td>Dragon Slayer</td><td><span class="heart">♥ Heart</span></td><td>Ultimate. 12 base damage. HP cost (sacrifices 4 HP). Ignores suit advantage. Used once at 30% HP. "The blade glows with stolen dragon fire."</td></tr>
 </table>
 
 <div class="rule">
-  <strong>Design language:</strong> The Hero uses ALL THREE elements. The player must read his card plays and counter with the right element. This is the RPS system's final exam. The opening dungeon teaches elements gently; the mid dungeon tests them; the boss demands mastery.
+  <strong>Design language:</strong> The Hero uses ALL FOUR suits. The player must read his card plays and counter with the right suit. This is the RPS system's final exam. Cellar teaches ♠ basics, Foundry introduces ♦/♣ tension, Sealab demands full-triangle awareness &mdash; and the Hero demands mastery of all four.
 </div>
 
 <hr>
 
 <!-- ================================================================ -->
-<h2 id="rps">&sect;10 &mdash; Rock-Paper-Scissors Combat Triangle</h2>
+<h2 id="rps">&sect;10 &mdash; Rock-Paper-Scissors Combat Suits</h2>
 
 <div class="rps">
-  <strong>Core mechanic:</strong> Every combat card and every enemy has one of three elements. Advantage deals <strong>2x damage</strong>. Disadvantage deals <strong>0.5x damage</strong>. Neutral deals 1x.
+  <strong>Core mechanic:</strong> Playing card suits drive the RPS advantage triangle. Every combat card and every enemy has a suit. Advantage deals <strong>&times;1.5 damage</strong>. Disadvantage deals <strong>&times;0.75 damage</strong>. Neutral (same suit or ♥) deals &times;1.0.
   <br><br>
-  <span class="flame">FLAME</span> beats <span class="frost">FROST</span> &nbsp;&rarr;&nbsp; <span class="frost">FROST</span> beats <span class="storm">STORM</span> &nbsp;&rarr;&nbsp; <span class="storm">STORM</span> beats <span class="flame">FLAME</span>
+  <span class="club">♣&nbsp;Clubs (Wild/Force)</span> beats <span class="diamond">♦&nbsp;Diamonds (Crystal/Precision)</span>
+  &nbsp;&rarr;&nbsp;
+  <span class="diamond">♦&nbsp;Diamonds</span> beats <span class="spade">♠&nbsp;Spades (Earth/Steel)</span>
+  &nbsp;&rarr;&nbsp;
+  <span class="spade">♠&nbsp;Spades</span> beats <span class="club">♣&nbsp;Clubs</span>
+  <br><br>
+  <span class="heart">♥&nbsp;Hearts (Life/Blood)</span> &mdash; outside the triangle. No direct advantage. Rule-breaker suit: strong vs status effects, weak vs burst damage.
 </div>
+
+<h3>Suit &harr; Resource Color &harr; Cost Type</h3>
+
+<table>
+  <tr><th>Suit</th><th>Resource</th><th>Color</th><th>Hex</th><th>Default Cost</th><th>Glyph</th></tr>
+  <tr>
+    <td><span class="spade">♠ Spade</span></td><td>&mdash; (free)</td><td>Warm Grey</td>
+    <td><span class="swatch" style="background:#b4aa96"></span><code>#b4aa96</code></td>
+    <td>Free</td><td>&mdash;</td>
+  </tr>
+  <tr>
+    <td><span class="club">♣ Club</span></td><td>Energy</td><td>Electric Blue</td>
+    <td><span class="swatch" style="background:#00D4FF"></span><code>#00D4FF</code></td>
+    <td>Energy</td><td>△</td>
+  </tr>
+  <tr>
+    <td><span class="diamond">♦ Diamond</span></td><td>Battery</td><td>Toxic Green</td>
+    <td><span class="swatch" style="background:#00FFA6"></span><code>#00FFA6</code></td>
+    <td>Battery</td><td>◈</td>
+  </tr>
+  <tr>
+    <td><span class="heart">♥ Heart</span></td><td>HP</td><td>Vibrant Pink</td>
+    <td><span class="swatch" style="background:#FF6B9D"></span><code>#FF6B9D</code></td>
+    <td>HP</td><td>♥</td>
+  </tr>
+</table>
 
 <h3>Implementation</h3>
 
 <table>
-  <tr><th>Component</th><th>How It Uses Elements</th></tr>
+  <tr><th>Component</th><th>How It Uses Suits</th></tr>
   <tr>
     <td><code>CardSystem</code></td>
-    <td>Every card has an <code>element</code> field: <code>'flame'</code>, <code>'frost'</code>, <code>'storm'</code>, or <code>'neutral'</code>. Neutral cards deal 1x regardless. Element is displayed as a colored icon on the card in the HUD (5-card hand). <span class="flame">FLAME</span> = orange border, <span class="frost">FROST</span> = blue border, <span class="storm">STORM</span> = purple border.</td>
-  </tr>
-  <tr>
-    <td><code>CombatEngine</code></td>
-    <td>Damage multiplier lookup: <code>getElementMultiplier(attackerElement, defenderElement)</code>. Returns 2.0, 1.0, or 0.5. Applied after base damage calculation, before defense. The multiplier is shown as a popup: <strong style="color:var(--green)">EFFECTIVE! (2x)</strong> or <strong style="color:var(--red)">RESISTED (0.5x)</strong>.</td>
-  </tr>
-  <tr>
-    <td><code>EnemyAI</code></td>
-    <td>Each enemy deck has a primary element. The enemy's nameplate shows its element badge. Players learn to read the element before engaging and pick the right cards. Enemies in the same dungeon tend toward one element, with variety enemies as curveballs.</td>
-  </tr>
-  <tr>
-    <td><code>HUD</code></td>
-    <td>Enemy element badge: colored icon next to HP bar. Player hand: each card has element border. Damage popup: multiplier text. No complex UI &mdash; three colors tell the whole story.</td>
+    <td>Every card has a <code>suit</code> field: <code>'spade'</code>, <code>'club'</code>, <code>'diamond'</code>, or <code>'heart'</code>. Suit is displayed as a colored glyph on the card in the HUD hand. <span class="spade">♠ grey</span> border, <span class="club">♣ blue</span> border, <span class="diamond">♦ green</span> border, <span class="heart">♥ pink</span> border. 90 cards total: 27♠ / 28♣ / 20♦ / 15♥.</td>
   </tr>
   <tr>
     <td><code>SynergyEngine</code></td>
-    <td>Playing 2+ cards of the same element in one combat triggers an <strong>Elemental Surge</strong>: +25% damage on the second same-element card. This rewards deck-building around a primary element while still needing coverage cards for disadvantage matchups.</td>
+    <td>Advantage multiplier lookup: <code>SynergyEngine.getAdvantage(attackerSuit, defenderSuit)</code>. Returns 1.5, 1.0, or 0.75. Applied after base damage calculation, before defense. The multiplier is shown as a popup: <strong style="color:var(--green)">EFFECTIVE! (&times;1.5)</strong> or <strong style="color:var(--red)">RESISTED (&times;0.75)</strong>.</td>
+  </tr>
+  <tr>
+    <td><code>EnemyAI</code></td>
+    <td>Each enemy has a primary suit. The enemy's nameplate shows its suit glyph. Players learn to read the suit before engaging and pick counter-suit cards. Enemies in the same biome tend toward one suit, with variety enemies as curveballs.</td>
+  </tr>
+  <tr>
+    <td><code>HUD</code></td>
+    <td>Enemy suit glyph: colored icon next to HP bar. Player hand: each card has suit-color border. Damage popup: multiplier text. Four colors tell the whole story.</td>
+  </tr>
+  <tr>
+    <td><code>SynergyEngine</code> (cascades)</td>
+    <td>Playing 2+ cards of the same suit in one combat triggers a <strong>Suit Surge</strong>: +25% damage on the second same-suit card. This rewards deck-building around a primary suit while still needing coverage cards for disadvantage matchups.</td>
   </tr>
 </table>
 
-<h3>Element Distribution by Dungeon</h3>
+<h3>Suit Distribution by Biome</h3>
 
 <table>
-  <tr><th>Dungeon</th><th>Primary Element</th><th>Variety</th><th>Rationale</th></tr>
+  <tr><th>Biome</th><th>Floors</th><th>Dominant Suit</th><th>Variety</th><th>Rationale</th></tr>
   <tr>
-    <td>Coral Cellars</td>
-    <td><span class="flame">FLAME</span></td>
-    <td>90% flame remnants, 10% neutral</td>
-    <td>Tutorial. Player starts with <span class="frost">FROST</span> cards. Easy advantage matchup teaches the system.</td>
+    <td>Cellar</td><td>1&ndash;2</td>
+    <td><span class="spade">♠ Spade (Earth/Burial)</span></td>
+    <td>70% ♠, 20% ♦, 10% ♥</td>
+    <td>Tutorial biome. <span class="spade">♠ free-cost</span> basics dominate. Player finds <span class="diamond">♦ Diamond</span> cards that have advantage vs the local ♠ enemies.</td>
   </tr>
   <tr>
-    <td>Lamplit Catacombs</td>
-    <td><span class="frost">FROST</span></td>
-    <td>60% frost, 25% storm, 15% neutral</td>
-    <td>Mid-game. Players need <span class="flame">FLAME</span> cards but also encounter <span class="storm">STORM</span> enemies that punish flame-heavy decks. Teaches deck diversity.</td>
+    <td>Foundry</td><td>3&ndash;5</td>
+    <td><span class="diamond">♦ Diamond (Crystal/Construct)</span></td>
+    <td>55% ♦, 30% ♣, 15% ♠</td>
+    <td>Mid-game. Players need <span class="club">♣ Club</span> cards for advantage. <span class="spade">♠</span> enemies punish Club-heavy decks. Teaches deck diversity.</td>
   </tr>
   <tr>
-    <td>Ironhold Depths</td>
-    <td>Mixed</td>
-    <td>33% flame, 33% frost, 33% storm</td>
-    <td>Endgame. All elements in equal measure. Players must read enemy elements in real-time and pick cards carefully. Prepares them for the Hero (who uses all three).</td>
+    <td>Sealab</td><td>6&ndash;8</td>
+    <td><span class="club">♣ Club (Wild/Marine)</span></td>
+    <td>50% ♣, 30% ♠, 20% ♦</td>
+    <td>Late-game. Need <span class="spade">♠ Spade</span> for advantage but those are free-cost basics &mdash; must play many for volume, not one-hit power.</td>
+  </tr>
+  <tr>
+    <td>Cross-biome</td><td>Any</td>
+    <td><span class="heart">♥ Heart (Life/Blood)</span></td>
+    <td>Rare drops everywhere</td>
+    <td><span class="heart">♥ Hearts</span> appear as rare finds in any biome. Rule-breaker cards with HP-cost sacrifice mechanics.</td>
   </tr>
 </table>
 
@@ -705,92 +754,92 @@
 <!-- ================================================================ -->
 <h2 id="enemies">&sect;12 &mdash; Enemy Populations by Biome</h2>
 
-<p>Enemies come in two categories: <strong>lootable corpses</strong> (serious fantasy names, placed as <code>CHEST</code> tiles, not combat encounters) and <strong>living remnants</strong> (the actual enemies, comedic half-creatures the Hero didn't finish off). All living remnants have an element for the RPS combat system.</p>
+<p>Enemies come in two categories: <strong>lootable corpses</strong> (serious fantasy names, placed as <code>CHEST</code> tiles, not combat encounters) and <strong>living remnants</strong> (the actual enemies, comedic half-creatures the Hero didn't finish off). All living remnants have a <strong>suit</strong> for the RPS combat system. In the Gleaner pivot, enemies also serve as <strong>reassembly targets</strong> &mdash; their corpse parts can be collected and deposited at Reassembly Altars so the Necromancer can revive them for the next Hero cycle.</p>
 
 <h3>Lootable Corpses (CHEST tiles &mdash; not enemies)</h3>
 
 <table>
   <tr><th>Corpse Name</th><th>Dungeon</th><th>Loot</th><th>Flavor Text</th></tr>
   <tr><td>Fallen Cellar Rat</td><td>Coral Cellars</td><td>1&ndash;3 gold, common card</td><td><em>"A rat the size of a dog. The Hero didn't even slow down."</em></td></tr>
-  <tr><td>Shattered Stone Sentinel</td><td>Coral Cellars</td><td>Element shard (<span class="flame">FLAME</span>), gold</td><td><em>"A golem, split clean in half. The cut is surgical."</em></td></tr>
+  <tr><td>Shattered Stone Sentinel</td><td>Coral Cellars</td><td>Suit crystal (<span class="spade">♠ Spade</span>), gold</td><td><em>"A golem, split clean in half. The cut is surgical."</em></td></tr>
   <tr><td>Entombed Guardian</td><td>Lamplit Catacombs</td><td>Uncommon card, gold</td><td><em>"Ancient armor, still in formation. They didn't even get to draw their weapons."</em></td></tr>
-  <tr><td>Shattered Bone Golem</td><td>Lamplit Catacombs</td><td>Element shard (<span class="frost">FROST</span>), rare card</td><td><em>"Bones scattered across three rooms. Whatever this was, it was enormous."</em></td></tr>
+  <tr><td>Shattered Bone Golem</td><td>Lamplit Catacombs</td><td>Suit crystal (<span class="club">♣ Club</span>), rare card</td><td><em>"Bones scattered across three rooms. Whatever this was, it was enormous."</em></td></tr>
   <tr><td>Fallen Dragon Sentinel</td><td>Ironhold Depths</td><td>Dragon scale (quest item), rare card</td><td><em>"Dragon-forged armor. They were protectors, not monsters. The Hero didn't care."</em></td></tr>
-  <tr><td>Sundered Wyrm Knight</td><td>Ironhold Depths</td><td>Element shard (<span class="storm">STORM</span>), epic card</td><td><em>"A knight who served the dragons. Their oath was carved into their shield."</em></td></tr>
+  <tr><td>Sundered Wyrm Knight</td><td>Ironhold Depths</td><td>Suit crystal (<span class="diamond">♦ Diamond</span>), epic card</td><td><em>"A knight who served the dragons. Their oath was carved into their shield."</em></td></tr>
 </table>
 
 <h3>Living Remnants (actual enemies &mdash; comedic)</h3>
 
 <table>
-  <tr><th>Enemy</th><th>Element</th><th>Cards</th><th>Behavior</th><th>Dungeon</th></tr>
+  <tr><th>Enemy</th><th>Suit</th><th>Cards</th><th>Behavior</th><th>Dungeon</th></tr>
   <tr>
     <td><strong>Indignant Slime Puddle</strong></td>
-    <td><span class="flame">FLAME</span></td>
+    <td><span class="spade">♠ Spade</span></td>
     <td>Splatter (2 dmg)</td>
     <td>1-card. Barely moves. Jiggles angrily when you approach. Tutorial enemy. <em>"It was a slime. Now it's a puddle. It's furious about the demotion."</em></td>
     <td>Coral Cellars</td>
   </tr>
   <tr>
     <td><strong>Disembodied Claw</strong></td>
-    <td><span class="flame">FLAME</span></td>
+    <td><span class="spade">♠ Spade</span></td>
     <td>Scratch (3 dmg) + Scuttle (dodge)</td>
     <td>Fast, low HP. Skitters across the floor. Flees at half health. <em>"Five fingers, no body, no patience."</em></td>
     <td>Coral Cellars</td>
   </tr>
   <tr>
     <td><strong>Angry Torso</strong></td>
-    <td><span class="flame">FLAME</span></td>
+    <td><span class="spade">♠ Spade</span></td>
     <td>Headbutt (4 dmg) + Flail (2 dmg, hits twice)</td>
     <td>Slow, tanky for tutorial. Can't chase. <em>"The top half of something that used to be scary. Now it just... flops."</em></td>
     <td>Coral Cellars</td>
   </tr>
   <tr>
     <td><strong>Floating Skull</strong></td>
-    <td><span class="frost">FROST</span></td>
+    <td><span class="club">♣ Club</span></td>
     <td>Bite (3 dmg) + Chatter (debuff: -1 dmg next turn, "it won't stop talking")</td>
     <td>Chatty, annoying. Hovers. Provides comedic dialogue during combat. <em>"Still talking. The Hero took everything except its opinions."</em></td>
     <td>Lamplit Catacombs</td>
   </tr>
   <tr>
     <td><strong>Crawling Ribcage</strong></td>
-    <td><span class="frost">FROST</span></td>
+    <td><span class="club">♣ Club</span></td>
     <td>Bone Snap (4 dmg) + Cage Trap (bind: skip 1 turn)</td>
     <td>Slow approach, nasty bind. <em>"It drags itself toward you with grim determination. Respect the hustle."</em></td>
     <td>Lamplit Catacombs</td>
   </tr>
   <tr>
     <td><strong>Leg With Attitude</strong></td>
-    <td><span class="storm">STORM</span></td>
+    <td><span class="diamond">♦ Diamond</span></td>
     <td>Kick (5 dmg) + Stomp (3 dmg, stun)</td>
     <td>Hops around aggressively. Surprisingly dangerous. <em>"Just a leg. Somehow the angriest thing in this dungeon."</em></td>
     <td>Lamplit Catacombs</td>
   </tr>
   <tr>
     <td><strong>Half-Dragon Hatchling</strong></td>
-    <td><span class="flame">FLAME</span></td>
-    <td>Ember Spit (5 dmg, <span class="flame">FLAME</span>) + Whimper (heals 2 HP)</td>
+    <td><span class="spade">♠ Spade</span></td>
+    <td>Ember Spit (5 dmg, <span class="spade">♠</span>) + Whimper (heals 2 HP)</td>
     <td>Not funny &mdash; sad. A baby dragon, wounded by the Hero. Doesn't want to fight. Flees at 50% HP. Killing it feels bad (by design). <em>"It looks at you with one good eye. It's afraid."</em></td>
     <td>Ironhold Depths</td>
   </tr>
   <tr>
     <td><strong>Possessed Sword</strong></td>
-    <td><span class="storm">STORM</span></td>
-    <td>Lightning Slash (6 dmg, <span class="storm">STORM</span>) + Parry (block)</td>
+    <td><span class="diamond">♦ Diamond</span></td>
+    <td>Lightning Slash (6 dmg, <span class="diamond">♦</span>) + Parry (block)</td>
     <td>A weapon the Hero dropped, now animated by residual magic. Fast, aggressive. <em>"The Hero broke so many things that even his weapons are angry."</em></td>
     <td>Ironhold Depths</td>
   </tr>
   <tr>
     <td><strong>Ruined Golem Core</strong></td>
-    <td><span class="frost">FROST</span></td>
-    <td>Frost Pulse (5 dmg, <span class="frost">FROST</span>) + Reconstruct (heals 3 HP)</td>
+    <td><span class="club">♣ Club</span></td>
+    <td>Frost Pulse (5 dmg, <span class="club">♣</span>) + Reconstruct (heals 3 HP)</td>
     <td>Stationary. The core of a destroyed golem, still pulsing. Area denial. <em>"It's trying to rebuild itself. It's been trying for a while."</em></td>
     <td>Ironhold Depths</td>
   </tr>
   <tr>
     <td><strong>Stumbling Amalgam</strong></td>
-    <td>Mixed (random per encounter)</td>
-    <td>Flail (4 dmg, random element) + Absorb (steals 2 HP)</td>
-    <td>A mass of leftover parts stuck together. Element changes each encounter. Mini-boss tier. <em>"Several things the Hero dismembered have found each other and formed a support group."</em></td>
+    <td>Mixed suits (random per encounter)</td>
+    <td>Flail (4 dmg, random suit) + Absorb (steals 2 HP)</td>
+    <td>A mass of leftover parts stuck together. Suit changes each encounter. Mini-boss tier. <em>"Several things the Hero dismembered have found each other and formed a support group."</em></td>
     <td>Ironhold Depths</td>
   </tr>
 </table>
@@ -814,9 +863,9 @@
 <table>
   <tr><th>Item</th><th>Floor Found</th><th>Mechanic</th><th>Gates</th></tr>
   <tr>
-    <td>Starter Deck (5 combat cards, mixed elements)</td>
+    <td>Starter Deck (5 combat cards)</td>
     <td><code>"1.2"</code> Gleaner's Guild</td>
-    <td>Given by Guild Master NPC. Contains 2 <span class="frost">FROST</span>, 2 <span class="storm">STORM</span>, 1 neutral. Teaches element system.</td>
+    <td>Given by Guild Master NPC. Contains 2 <span class="diamond">♦ Diamond</span>, 2 <span class="spade">♠ Spade</span>, 1 <span class="heart">♥ Heart</span>. Teaches suit system.</td>
     <td>Cannot enter first dungeon without cards</td>
   </tr>
   <tr>
@@ -838,9 +887,9 @@
     <td>Sets <code>dragon_clue_2</code>. Inn NPCs reveal more about the Hero's mission.</td>
   </tr>
   <tr>
-    <td>Element Prism</td>
+    <td>Suit Prism</td>
     <td><code>"2.2"</code> Moonpetal Apothecary</td>
-    <td>Purchased item. Allows the player to see enemy elements at longer range (QoL upgrade).</td>
+    <td>Purchased item. Allows the player to see enemy suits at longer range (QoL upgrade).</td>
     <td>Optional. Makes Ironhold Depths easier.</td>
   </tr>
   <tr>
@@ -852,7 +901,7 @@
   <tr>
     <td>Dragon Breath Card</td>
     <td><code>"3.1.1"</code> Ironhold Depths (boss room)</td>
-    <td>Temporary card. Given by dying dragon if <code>truth_revealed</code> is set. <span class="flame">FLAME</span>, 15 base damage. Single use. Tips the Hero fight heavily in your favor.</td>
+    <td>Temporary card. Given by dying dragon if <code>truth_revealed</code> is set. <span class="spade">♠ Spade</span>, 15 base damage, free cost. Single use. Tips the Hero fight heavily in your favor.</td>
     <td>Enables Boss Ending B (dragon team-up). See <a href="#bosses">&sect;9</a>.</td>
   </tr>
 </table>
@@ -871,9 +920,9 @@
   <tr><td><code>engine/door-contracts.js</code></td><td><code>public/js/door-contract-system.js</code></td><td>Near-verbatim.</td></tr>
   <tr><td><code>engine/door-contract-audio.js</code></td><td><code>public/js/door-contract-audio.js</code></td><td>Transition sound table.</td></tr>
   <tr><td><code>engine/enemy-ai.js</code></td><td><code>public/js/enemy-ai-system.js</code></td><td>Patrol, awareness, sight cones.</td></tr>
-  <tr><td><code>engine/combat-engine.js</code></td><td><code>public/js/str-combat-engine.js</code></td><td>STR simultaneous resolution. <strong>Extend with element multiplier.</strong></td></tr>
-  <tr><td><code>engine/card-system.js</code></td><td><code>public/js/card-system.js</code></td><td>Deck/hand management. <strong>Add element field to cards.</strong></td></tr>
-  <tr><td><code>engine/synergy-engine.js</code></td><td><code>public/js/synergy-engine.js</code></td><td>Tag-based combo chains. <strong>Add Elemental Surge synergy.</strong></td></tr>
+  <tr><td><code>engine/combat-engine.js</code></td><td><code>public/js/str-combat-engine.js</code></td><td>STR simultaneous resolution. <strong>Extend with suit-advantage multiplier.</strong></td></tr>
+  <tr><td><code>engine/card-system.js</code></td><td><code>public/js/card-system.js</code></td><td>Deck/hand management. <strong>Add suit field to cards.</strong></td></tr>
+  <tr><td><code>engine/synergy-engine.js</code></td><td><code>public/js/synergy-engine.js</code></td><td>Tag-based combo chains. <strong>Add Suit Surge synergy.</strong></td></tr>
   <tr><td><code>engine/loot-tables.js</code></td><td><code>public/js/loot-table-manager.js</code></td><td>Tiered drop tables.</td></tr>
   <tr><td><code>engine/lighting.js</code></td><td><code>public/js/lighting-system.js</code></td><td>Per-tile light map.</td></tr>
   <tr><td><code>engine/audio-system.js</code></td><td><code>public/js/audio-system.js</code></td><td>Web Audio. Manifest loader.</td></tr>
@@ -884,9 +933,9 @@
 <h3>EyesOnly Data to Import <span class="tag modify">IMPORT &amp; RETHEME</span></h3>
 <table>
   <tr><th>Data</th><th>EyesOnly Path</th><th>Repo Destination</th><th>Transformation</th></tr>
-  <tr><td>Enemy catalog</td><td><code>public/data/gone-rogue/enemy-catalog.json</code></td><td><code>data/enemies.json</code></td><td>Retheme for fantasy remnants. Add <code>element</code> field to every enemy. Keep synergy tags + STR schema.</td></tr>
-  <tr><td>Items</td><td><code>public/data/gone-rogue/items.json</code></td><td><code>data/items.json</code></td><td>Retheme for fantasy. Potions, element shards, dragon lore items. Keep rarity/synergy schema.</td></tr>
-  <tr><td>Cards</td><td><code>public/data/gone-rogue/gr_cards.schema.json</code></td><td><code>data/cards.json</code></td><td>Retheme ~15 core cards. Add <code>element</code> field (<code>'flame'</code>/<code>'frost'</code>/<code>'storm'</code>/<code>'neutral'</code>). Balance for RPS system.</td></tr>
+  <tr><td>Enemy catalog</td><td><code>public/data/gone-rogue/enemy-catalog.json</code></td><td><code>data/enemies.json</code></td><td>Retheme for fantasy remnants. Add <code>suit</code> field to every enemy. Keep synergy tags + STR schema.</td></tr>
+  <tr><td>Items</td><td><code>public/data/gone-rogue/items.json</code></td><td><code>data/items.json</code></td><td>Retheme for fantasy. Potions, suit crystals, dragon lore items. Keep rarity/synergy schema.</td></tr>
+  <tr><td>Cards</td><td><code>public/data/gone-rogue/gr_cards.schema.json</code></td><td><code>data/cards.json</code></td><td>Retheme ~15 core cards. Add <code>suit</code> field (<code>'spade'</code>/<code>'club'</code>/<code>'diamond'</code>/<code>'heart'</code>). Balance for RPS system.</td></tr>
   <tr><td>Lighting config</td><td><code>public/data/gone-rogue/lighting-config.json</code></td><td><code>data/lighting.json</code></td><td>Retheme: FLASHLIGHT&rarr;GLEANER_LANTERN, LIGHTER&rarr;CANDLE, NV&rarr;DRAGON_SIGHT.</td></tr>
 </table>
 
@@ -920,9 +969,9 @@
     <td>Day 1</td>
   </tr>
   <tr>
-    <td><code>engine/element-system.js</code></td>
+    <td><code>engine/synergy-engine.js</code></td>
     <td>0</td>
-    <td>RPS element logic. <code>getElementMultiplier(atk, def)</code> returns 2.0/1.0/0.5. Element constants. Elemental Surge detection. <strong>Zero dependencies &mdash; Layer 0.</strong></td>
+    <td>RPS suit-advantage logic. <code>SynergyEngine.getAdvantage(atk, def)</code> returns 1.5/1.0/0.75. Suit constants. Suit Surge detection. <strong>Zero dependencies &mdash; Layer 0.</strong></td>
     <td>Day 1</td>
   </tr>
   <tr>
@@ -946,13 +995,13 @@
   <tr>
     <td>Extend <code>CombatEngine</code></td>
     <td>&mdash;</td>
-    <td>Integrate <code>ElementSystem.getElementMultiplier()</code> into damage calculation. Add multiplier popup to HUD. Wire enemy element from <code>enemies.json</code>.</td>
+    <td>Integrate <code>SynergyEngine.getAdvantage()</code> into damage calculation. Add multiplier popup to HUD. Wire enemy suit from <code>enemies.json</code>.</td>
     <td>Day 1</td>
   </tr>
   <tr>
     <td>Extend <code>CardSystem</code></td>
     <td>&mdash;</td>
-    <td>Add <code>element</code> field to card schema. Render element icon + colored border in HUD hand display.</td>
+    <td>Add <code>suit</code> field to card schema. Render suit glyph + resource-color border in HUD hand display.</td>
     <td>Day 1</td>
   </tr>
   <tr>
@@ -976,13 +1025,13 @@
   <tr>
     <td><code>data/enemies.json</code></td>
     <td>&mdash;</td>
-    <td>All remnant enemy definitions with element fields. ~10 enemies total.</td>
+    <td>All remnant enemy definitions with suit fields. ~10 enemies total.</td>
     <td>Day 1</td>
   </tr>
   <tr>
     <td><code>data/cards.json</code></td>
     <td>&mdash;</td>
-    <td>~15 combat cards with element fields. Starter deck + dungeon drops + shop purchases.</td>
+    <td>~15 combat cards with suit fields. Starter deck + dungeon drops + shop purchases.</td>
     <td>Day 1</td>
   </tr>
 </table>
@@ -1035,22 +1084,22 @@ FloorManager checks QuestTracker.get('opening_complete')
   |-- true: normal spawn, no cutscene
 
 
-Combat with element system:
+Combat with suit system:
   |
   v
 CombatBridge.startCombat(enemy)
-  |-- reads enemy.element from enemies.json
+  |-- reads enemy.suit from enemies.json
   |-- CombatEngine.start(enemy, player, { onEnd })
   |-- CardSystem.drawHand()
   |-- Player plays card:
-  |     |-- attackerElement = card.element
-  |     |-- defenderElement = enemy.element
-  |     |-- multiplier = ElementSystem.getMultiplier(atk, def)
+  |     |-- attackerSuit = card.suit
+  |     |-- defenderSuit = enemy.suit
+  |     |-- multiplier = SynergyEngine.getAdvantage(atk, def)
   |     |-- damage = baseDamage * multiplier
-  |     |-- HUD shows "EFFECTIVE! (2x)" or "RESISTED (0.5x)"
-  |-- SynergyEngine checks for Elemental Surge:
-  |     |-- 2+ same-element cards played this combat?
-  |     |-- yes: +25% damage on second same-element card
+  |     |-- HUD shows "EFFECTIVE! (×1.5)" or "RESISTED (×0.75)"
+  |-- SynergyEngine checks for Suit Surge:
+  |     |-- 2+ same-suit cards played this combat?
+  |     |-- yes: +25% damage on second same-suit card
   v
 Normal STR card combat in first person
 
@@ -1063,8 +1112,8 @@ CombatBridge.startCombat(heroEnemy)
   |-- CardSystem.drawHand()
   |-- HUD renders boss chamber: taller walls (1.8x)
   |-- Raycaster reads chamberOverrides for wallHeight
-  |-- Hero uses ALL THREE elements across his deck
-  |-- Player must read + counter each card's element
+  |-- Hero uses ALL FOUR suits across his deck
+  |-- Player must read + counter each card's suit
   |-- If QuestTracker.get('truth_revealed'):
   |     |-- Dragon Breath card added to hand (single use, 15 dmg)
   v
@@ -1077,8 +1126,415 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 
 <hr>
 
+<!-- ================================================================ -->
+<h2 id="gleaner-systems">&sect;17 &mdash; Gleaner Maintenance Systems (Pivot)</h2>
+
+<p>The Gleaner pivot expands the Act 1 scavenging period into the <strong>core game loop</strong>. Three interlocking systems drive the experience. All three yield coins (the universal currency, Kingdom Two Crowns style) and occasional combat cards (the endgame payoff). The player builds their combat deck entirely through labor.</p>
+
+<h3>17.1 &mdash; The Cleaning Loop (Grid-by-Grid)</h3>
+
+<p>Every wall and floor tile has a <strong>condition state</strong>: <code>pristine</code>, <code>dirty</code>, <code>damaged</code>, <code>destroyed</code>. Heroes leave the dungeon in dirty/damaged state. The Gleaner scrubs tiles grid-by-grid.</p>
+
+<table>
+  <tr><th>Interaction</th><th>Input</th><th>Duration</th><th>Coin Yield</th><th>Noise</th></tr>
+  <tr><td>Scrub (dirty &rarr; clean)</td><td>[F] or pointer</td><td>~400ms</td><td>1 coin</td><td>0.3</td></tr>
+  <tr><td>Repair (damaged &rarr; dirty)</td><td>[F] or pointer</td><td>~400ms</td><td>0 (must then scrub)</td><td>0.5</td></tr>
+</table>
+
+<p><strong>Texture system:</strong> <code>texture-atlas.js</code> generates 64&times;64 wall textures. Each base texture gets 3 variants via procedural noise overlay: <code>_clean</code> (default, vibrant retrowave palette), <code>_dirty</code> (desaturated, grime noise), <code>_damaged</code> (cracked, rubble overlay). The clean&rarr;dirty shift is a saturation drop &mdash; the vaporwave colors literally fade until you scrub them back.</p>
+
+<p><strong>Floor cleanliness:</strong> <code>FloorStateTracker</code> tracks <code>(clean + pristine) / total</code> per floor. Reaching 80% triggers a bonus coin burst (10&ndash;20 coins) and contributes to the floor's readiness score.</p>
+
+<h4>Cleaning Tools (Progressive)</h4>
+
+<table>
+  <tr><th>Tool</th><th>Unlock</th><th>Speed</th><th>Range</th><th>Noise</th><th>Notes</th></tr>
+  <tr><td>Rag</td><td>Start</td><td>1&times;</td><td>1 tile</td><td>0.1</td><td>Baseline. Quiet but slow.</td></tr>
+  <tr><td>Mop</td><td>Guild rank 2</td><td>1.5&times;</td><td>1 tile</td><td>0.3</td><td>First upgrade. Moderate noise.</td></tr>
+  <tr><td>Scrub Brush</td><td>Guild rank 3</td><td>2&times;</td><td>1 tile</td><td>0.5</td><td>Good speed/noise balance.</td></tr>
+  <tr><td>Pressure Washer</td><td>Guild rank 5</td><td>3&times;</td><td>2 tiles (cone)</td><td>2.0</td><td>Magic Remote pointer aim. Fast but LOUD.</td></tr>
+  <tr><td>Enchanted Broom</td><td>Legendary drop</td><td>4&times;</td><td>3 tiles (AoE)</td><td>0.5</td><td>Endgame dream tool. Fast AND quiet.</td></tr>
+</table>
+
+<div class="note">
+  <strong>Pressure Washer + Magic Remote:</strong> The LG Magic Remote's gyroscope tracking lets the player aim the pressure washer nozzle at specific dirty spots on walls. This is the moment where the Power Wash Simulator influence is most direct. Point, hold, clean.
+</div>
+
+<h3>17.2 &mdash; The Restocking Loop (Crate Slots)</h3>
+
+<p>Crates and other containers have <strong>item slots</strong> that the player fills. Two interaction states toggled via the <strong>Gleaner's Apron</strong> equip:</p>
+
+<table>
+  <tr><th>State</th><th>Verb</th><th>Action</th><th>Result</th></tr>
+  <tr><td><strong>Scavenger</strong> (default)</td><td>Smash</td><td>Destroy container</td><td>Spills hydrated items as walk-over loot</td></tr>
+  <tr><td><strong>Gleaner</strong> (apron)</td><td>Open</td><td>Opens slot UI</td><td>Fill empty slots &rarr; seal &rarr; reward</td></tr>
+</table>
+
+<h4>Slot Anatomy</h4>
+
+<ul>
+  <li>Each crate: 2&ndash;5 slots (avg 3). Rolled at floor generation.</li>
+  <li>Each slot: a <strong>frame tag</strong> (visual hint for ideal item category). Frame border uses canonical RESOURCE_COLORs:
+    <span class="heart">♥ hp_food</span>,
+    <span class="club">△ energy_food</span>,
+    <span class="diamond">◈ battery</span>,
+    <span style="color:#800080">🂠 scroll</span>,
+    <span style="color:#FFFF00">¢ gem</span>,
+    <span style="color:#fff">wildcard</span>.
+  </li>
+  <li><strong>Natural hydration:</strong> <code>filledSlots = floor(totalSlots &times; random(0.3, 0.7))</code>. A 4-slot crate might spawn 1&ndash;2 pre-filled, 2&ndash;3 empty.</li>
+  <li>ANY item fills ANY slot. Frame match is a bonus, not a gate.</li>
+</ul>
+
+<h4>Reward Math</h4>
+
+<table>
+  <tr><th>Action</th><th>Coin Yield</th><th>Notes</th></tr>
+  <tr><td>Fill slot (mismatched frame)</td><td>1 coin</td><td>Bone in a potion frame &mdash; still works</td></tr>
+  <tr><td>Fill slot (matched frame)</td><td>2&ndash;3 coins</td><td>Proper potion in potion frame</td></tr>
+  <tr><td>Fill slot (rare+ matched)</td><td>3&ndash;5 coins</td><td>Uncommon/rare item in matching frame</td></tr>
+  <tr><td>Seal crate (all slots filled)</td><td>+5 flat bonus</td><td>Always awarded</td></tr>
+</table>
+
+<h4>Seal Reward Roll (per crate)</h4>
+
+<table>
+  <tr><th>d100</th><th>Reward</th><th>Frequency</th></tr>
+  <tr><td>01&ndash;50</td><td>Nothing extra</td><td>Common</td></tr>
+  <tr><td>51&ndash;75</td><td>+5 bonus coins</td><td>Uncommon</td></tr>
+  <tr><td>76&ndash;88</td><td>Common combat card</td><td>Rare</td></tr>
+  <tr><td>89&ndash;95</td><td>Uncommon combat card</td><td>Very rare</td></tr>
+  <tr><td>96&ndash;99</td><td>Rare combat card</td><td>Ultra rare</td></tr>
+  <tr><td>00</td><td><strong>Legendary combat card</strong></td><td>Mythic (~1%)</td></tr>
+</table>
+
+<div class="rule">
+  <strong>Legendary card rumors:</strong> NPCs occasionally mention legendary cards by name: <em>"Old Marrek swears he got a Dragon Scale from a perfectly restocked crate in the Ironhold. Could be rum talking."</em> These rumors are the soft motivation that keeps the restocking grind feeling aspirational. The gacha pull wears a work-sim costume.
+</div>
+
+<h3>17.3 &mdash; The Dungeon Reset Loop (Readiness Score)</h3>
+
+<p>Each dungeon floor has a <strong>readiness score</strong> (0&ndash;100%). The Gleaner's Guild issues <strong>work orders</strong> with minimum readiness thresholds. Readiness is a weighted sum:</p>
+
+<table>
+  <tr><th>Task</th><th>Weight</th><th>Interaction</th></tr>
+  <tr><td>Tile cleanliness</td><td>25%</td><td>Scrub dirty/damaged tiles</td></tr>
+  <tr><td>Crates restocked</td><td>25%</td><td>Seal all crate slots</td></tr>
+  <tr><td>Traps re-armed</td><td>15%</td><td>Place trap component from bag into disarmed mechanism</td></tr>
+  <tr><td>Puzzles scrambled</td><td>15%</td><td>Interact with solved puzzle &rarr; "Scramble" &rarr; new unsolved state</td></tr>
+  <tr><td>Monsters reassembled</td><td>10%</td><td>Collect corpse parts (via salvage) &rarr; deposit at Reassembly Altar</td></tr>
+  <tr><td>Secrets restored</td><td>10%</td><td>Interact with exposed secret &rarr; "Conceal" &rarr; wall texture restored</td></tr>
+</table>
+
+<div class="note">
+  <strong>The comedy of maintenance:</strong> You're literally re-hiding secrets that adventurers will "discover" again. You're scrambling puzzles that were supposed to be ancient riddles. You're putting fresh cabbages in crates that are supposed to be untouched for centuries. The entire job is maintaining the illusion of a pristine, ancient dungeon &mdash; and the Heroes keep wrecking it.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="hero-paths">&sect;18 &mdash; Hero Path System &amp; Stealth</h2>
+
+<p>Heroes are the dungeon's environmental hazard. They roam on scripted patrol routes, smashing crates, solving puzzles, killing monsters, and looting everything. The Gleaner must avoid them or hide.</p>
+
+<h3>18.1 &mdash; Hero Types</h3>
+
+<table>
+  <tr><th>Hero</th><th>Class</th><th>Behavior</th><th>Threat</th><th>Trail Signature</th></tr>
+  <tr>
+    <td><strong>The Seeker</strong></td><td>Fighter</td>
+    <td>Charges straight through, smashes everything in path</td>
+    <td>High</td>
+    <td>Debris + corpses everywhere, dirty tiles, broken crates</td>
+  </tr>
+  <tr>
+    <td><strong>The Scholar</strong></td><td>Mage</td>
+    <td>Methodical, solves puzzles, opens secrets, reads inscriptions</td>
+    <td>Medium</td>
+    <td>Solved puzzles, exposed secrets, triggered magic traps</td>
+  </tr>
+  <tr>
+    <td><strong>The Shadow</strong></td><td>Rogue</td>
+    <td>Stealthy, loots chests/crates without smashing, avoids traps</td>
+    <td>Low (damage)</td>
+    <td>Empty crates (contents gone but structure intact), missing items</td>
+  </tr>
+  <tr>
+    <td><strong>The Crusader</strong></td><td>Paladin</td>
+    <td>Hunts undead specifically, ignores traps, blesses tiles</td>
+    <td>High (to undead)</td>
+    <td>Destroyed undead, "blessed" tiles (glow effect), untouched traps</td>
+  </tr>
+</table>
+
+<h3>18.2 &mdash; Patrol Routes &amp; Timing</h3>
+
+<p>Heroes arrive on a <strong>cycle timer</strong> (configurable per floor, default: every 10 minutes of play time on that floor). Routes are generated from the floor's room graph &mdash; largest rooms first (the Hero wants fights).</p>
+
+<table>
+  <tr><th>Phase</th><th>Timing</th><th>Player Signal</th></tr>
+  <tr><td>Warning</td><td>T &minus; 30s</td><td>Distant footstep SFX + screen edge pulse + Toast: <em>"Footsteps echo from above&hellip;"</em></td></tr>
+  <tr><td>Entry</td><td>T + 0s</td><td>Hero spawns at STAIRS_DN. Visible on minimap as a gold dot.</td></tr>
+  <tr><td>Patrol</td><td>3&ndash;5 min</td><td>Hero walks at 800ms/tile, interacting with every tile on path. Trail appears on minimap as faded gold line.</td></tr>
+  <tr><td>Exit</td><td>After patrol</td><td>Hero exits via STAIRS_UP. <code>ascend-3</code> SFX. Damage left behind for the Gleaner to fix.</td></tr>
+</table>
+
+<h4>Hero &harr; Dungeon Tile Interactions</h4>
+
+<table>
+  <tr><th>Tile</th><th>Hero Action</th><th>Gleaner Consequence</th></tr>
+  <tr><td>BREAKABLE (crate/barrel)</td><td>Smash</td><td>Container destroyed. Must be rebuilt (or restocked from scratch next cycle).</td></tr>
+  <tr><td>CHEST</td><td>Loot all</td><td>Chest emptied. Must be restocked.</td></tr>
+  <tr><td>TRAP (armed)</td><td>Trigger / dodge</td><td>Trap disarmed. Must re-arm with component from bag.</td></tr>
+  <tr><td>PUZZLE (unsolved)</td><td>Solve</td><td>Puzzle solved. Must re-scramble.</td></tr>
+  <tr><td>SECRET (hidden)</td><td>Discover</td><td>Secret exposed. Must re-conceal.</td></tr>
+  <tr><td>ENEMY (monster)</td><td>Fight &amp; kill</td><td>Corpse tile. Must collect parts and reassemble.</td></tr>
+  <tr><td>Clean tiles</td><td>Walk through</td><td>Tiles dirtied by foot traffic. Must re-clean.</td></tr>
+</table>
+
+<h3>18.3 &mdash; Stealth &amp; Sight Cones</h3>
+
+<p>The player must hide from Heroes. Heroes use an enhanced version of the existing <code>enemy-ai.js</code> sight/awareness system:</p>
+
+<table>
+  <tr><th>Parameter</th><th>Standard Enemy</th><th>Hero</th></tr>
+  <tr><td>Sight cone angle</td><td>60&deg;</td><td><strong>90&deg;</strong></td></tr>
+  <tr><td>Sight cone range</td><td>4&ndash;6 tiles</td><td><strong>12 tiles</strong></td></tr>
+  <tr><td>Awareness decay</td><td>Yes (returns to patrol)</td><td><strong>None</strong> (always alert)</td></tr>
+  <tr><td>LOS blocking</td><td>Walls, closed doors</td><td>Walls, closed doors, <strong>unbroken breakables</strong></td></tr>
+</table>
+
+<h4>Detection States</h4>
+
+<table>
+  <tr><th>State</th><th>Trigger</th><th>Hero Behavior</th></tr>
+  <tr><td><strong>Unaware</strong></td><td>Player outside cone</td><td>Follows patrol route normally</td></tr>
+  <tr><td><strong>Suspicious</strong></td><td>Player at cone edge (10&ndash;12 tiles) or heard noise</td><td>Pauses, looks toward noise, resumes after 3s</td></tr>
+  <tr><td><strong>Spotted</strong></td><td>Player in cone within 8 tiles, clear LOS</td><td>Shouts, charges toward player position</td></tr>
+  <tr><td><strong>Engaged</strong></td><td>Player adjacent</td><td>Forced interaction (see 18.4)</td></tr>
+</table>
+
+<h4>Hiding Mechanics</h4>
+
+<ul>
+  <li><strong>Side corridors:</strong> Step into a perpendicular corridor to break LOS. Hero passes by.</li>
+  <li><strong>Behind breakables:</strong> Unbroken crate/barrel blocks LOS. Crouch behind it (hold crouch key). Hero can't see you, but if he smashes the crate&hellip;</li>
+  <li><strong>Dark tiles:</strong> Tiles with low light value (from <code>lighting.js</code>) reduce detection range by 50%.</li>
+  <li><strong>Clean vs dirty rooms:</strong> Heroes move <em>faster</em> through clean areas (don't stop to investigate). Dirty rooms slow Heroes down (they search for loot). <strong>Strategic tension:</strong> cleaning makes your job easier but makes Heroes faster on patrol.</li>
+  <li><strong>Noise:</strong> Cleaning generates low noise (0.3). Restocking generates medium noise (0.8). Pressure Washer = 2.0. Hero responds to noise within 8 tiles: turns, pauses 2s.</li>
+</ul>
+
+<h3>18.4 &mdash; Hero Encounters (Three Stages)</h3>
+
+<table>
+  <tr><th>Stage</th><th>Deck Size</th><th>Hero Reaction</th><th>Consequence</th></tr>
+  <tr>
+    <td><strong>Early game</strong></td><td>&lt; 10 cards</td>
+    <td>Dismissive. <em>"Out of my way, rat."</em></td>
+    <td>Shove (forced movement, &minus;1 HP, knockback 2 tiles, 2s stun). Non-lethal humiliation.</td>
+  </tr>
+  <tr>
+    <td><strong>Mid game</strong></td><td>10&ndash;19 cards</td>
+    <td>Suspicious. <em>"You? Fighting? With those cards?"</em></td>
+    <td>Confiscates 1 random common card from deck. Non-lethal but punishing.</td>
+  </tr>
+  <tr>
+    <td><strong>Late game</strong></td><td>20+ cards</td>
+    <td>Confrontational. Boss fight at Reassembly Altar.</td>
+    <td>Full combat using the card system. Each Hero type has a unique suit-aligned deck. Defeating a Hero drops legendary equipment + unlocks a new dungeon tier.</td>
+  </tr>
+</table>
+
+<div class="rule">
+  <strong>The power inversion:</strong> Early game, the Hero is an unstoppable force and you're invisible. Mid game, you're an annoyance. Late game, the janitor has become the dungeon's true defender &mdash; and the Hero discovers that every crate he smashes, every puzzle he solves, was restocked by someone who's been building a deck this whole time.
+</div>
+
+<hr>
+
+<!-- ================================================================ -->
+<h2 id="faction-economy">&sect;19 &mdash; Faction Economy &amp; Narrative Depth</h2>
+
+<p>The original <code>STREET_CHRONICLES_NARRATIVE_OUTLINE.md</code> described a multi-faction conspiracy with competing agendas. The Gleaner pivot amplifies this: the player is a minimum-wage worker navigating faction politics while trying to earn a living. Every shop, every NPC, and every dungeon reset benefits a faction &mdash; and no faction is clean.</p>
+
+<h3>19.1 &mdash; The Three Factions</h3>
+
+<p>Adapted from the Street Chronicles outline's faction structure. Each faction operates a shop chain, controls dungeon territory, and has an agenda the player gradually uncovers.</p>
+
+<table>
+  <tr><th>Faction</th><th>Shop</th><th>Territory</th><th>Suit Alignment</th><th>Public Agenda</th><th>Hidden Agenda</th></tr>
+  <tr>
+    <td><strong>Tide Council</strong></td>
+    <td>Coral Bazaar (<code>"1.1"</code>)</td>
+    <td>Coral Cellars</td>
+    <td><span class="spade">♠ Spade</span></td>
+    <td>Coastal trade, dungeon economy, adventurer supplies</td>
+    <td>Harvesting dragon artifacts from the dungeons. Selling to an unseen buyer. They know the dragons were protectors &mdash; they don't care.</td>
+  </tr>
+  <tr>
+    <td><strong>Foundry Collective</strong></td>
+    <td>Ironhold Armory (<code>"3.1"</code>)</td>
+    <td>Ironhold Depths</td>
+    <td><span class="diamond">♦ Diamond</span></td>
+    <td>Weapons, armor, combat training, mercenary contracts</td>
+    <td>Arming the Hero deliberately. They profit from dungeon destruction &mdash; more wreckage = more demand for weapons and rebuild contracts. They don't want the dungeons to stay clean.</td>
+  </tr>
+  <tr>
+    <td><strong>Admiralty</strong></td>
+    <td>Moonpetal Apothecary (<code>"2.2"</code>)</td>
+    <td>Lamplit Catacombs</td>
+    <td><span class="club">♣ Club</span></td>
+    <td>Potions, medicines, scholarly research, historical preservation</td>
+    <td>Studying dragon remains for forbidden research. The catacombs are a laboratory, not a cemetery. They need the Gleaner to keep bringing them "samples."</td>
+  </tr>
+</table>
+
+<h3>19.2 &mdash; Reputation Economy</h3>
+
+<p>The existing <code>shop.js</code> faction reputation system drives prices. The Gleaner pivot adds <strong>faction-specific work orders</strong> and <strong>crate frame biases</strong>:</p>
+
+<table>
+  <tr><th>Mechanic</th><th>Effect</th></tr>
+  <tr><td>Sell to matching faction</td><td>&times;1.10 price bonus (existing <code>faction_sell_bonus</code> in loot-tables.json)</td></tr>
+  <tr><td>Complete faction work order</td><td>+reputation, unlock deeper shop inventory tiers</td></tr>
+  <tr><td>Restock crates in faction territory</td><td>Slow reputation gain with the controlling faction</td></tr>
+  <tr><td>Restock with faction-sold items</td><td>Higher coin yields (frame matching uses faction items as ideal matches)</td></tr>
+  <tr><td>High reputation (tier 3+)</td><td>Faction NPCs reveal hidden agenda dialogue. Conspiracy unravels.</td></tr>
+</table>
+
+<div class="note">
+  <strong>The economy trap:</strong> The player naturally gravitates toward one faction's shop for restock supplies (it's convenient, the items match crate frames in that faction's dungeon). But raising one faction's reputation reveals their crimes. The player realizes they've been complicit. This is the Street Chronicles moral weight translated to a work sim: <em>every paycheck comes from someone dirty</em>.
+</div>
+
+<h3>19.3 &mdash; The Necromancer (Your Employer)</h3>
+
+<p>The Necromancer is the player's employer &mdash; the one who pays for dungeon resets. They are never seen directly (voice through work order notes, occasional dialog at Reassembly Altars). Their agenda:</p>
+
+<ul>
+  <li>They <strong>need</strong> the dungeons reset because the Hero cycle generates profit. Adventurers pay to enter "ancient" dungeons.</li>
+  <li>They <strong>know</strong> the dragons were protectors. The Necromancer was the dragons' ally before the Hero arrived.</li>
+  <li>They <strong>revive monsters</strong> at Reassembly Altars not because they're evil &mdash; but because the dungeon ecosystem needs its inhabitants to function.</li>
+  <li>The Necromancer's eventual ask: <strong>stop the Hero</strong>. The late-game boss fights aren't just the player deciding to fight back &mdash; the Necromancer has been training you this whole time through labor. Every crate restocked was a card earned. Every monster reassembled was practice for the real fight.</li>
+</ul>
+
+<h3>19.4 &mdash; The Dragon Conspiracy (Adapted from Street Chronicles)</h3>
+
+<p>The original Street Chronicles outline featured a multi-layer conspiracy (pandas as chimeras, Jesuits covering up organ harvesting, multiple intelligence agencies at cross-purposes). The Gleaner adaptation preserves the <strong>structural complexity</strong> while rethemeing to fantasy:</p>
+
+<table>
+  <tr><th>Street Chronicles</th><th>Dungeon Gleaner</th><th>Narrative Function</th></tr>
+  <tr>
+    <td>Chinese MSS (The Seeker)</td>
+    <td>The Hero (The Seeker)</td>
+    <td>Antagonist who believes they're the protagonist. Hunts dragons thinking they're evil. Discovers truth late (or never).</td>
+  </tr>
+  <tr>
+    <td>Pinkertons (ancient grudge)</td>
+    <td>Foundry Collective (war profiteers)</td>
+    <td>Saboteurs who benefit from chaos. Arm the Hero to keep the cycle going. "Accidentally" expose the truth through their greed.</td>
+  </tr>
+  <tr>
+    <td>Jesuits (chimera creators)</td>
+    <td>Admiralty (forbidden researchers)</td>
+    <td>Keepers of the original secret. Created the dungeon ecosystem. Study dragon remains. Need the cover-up to continue.</td>
+  </tr>
+  <tr>
+    <td>Homeland Security (player's employer)</td>
+    <td>The Necromancer (player's employer)</td>
+    <td>Assigns the player. Has their own agenda. Eventually asks player to choose sides.</td>
+  </tr>
+  <tr>
+    <td>Panda chimeras (MacGuffin)</td>
+    <td>Dragons (ancient protectors)</td>
+    <td>The truth everyone is hiding or hunting. Not monsters. Not weapons. Guardians.</td>
+  </tr>
+</table>
+
+<h3>19.5 &mdash; Story Arcs (Economy-Gated)</h3>
+
+<p>Progression is gated by economic milestones, not combat gates. The player advances by earning enough to unlock deeper work orders and faction reputation tiers.</p>
+
+<table>
+  <tr><th>Arc</th><th>Gate</th><th>Narrative Beat</th><th>Faction Reveal</th></tr>
+  <tr>
+    <td><strong>Act 1: The Job</strong></td>
+    <td>First 3 work orders complete</td>
+    <td>Learn the cleaning/restocking loops. First Hero encounter (humiliation). Build first 10 cards.</td>
+    <td>Tide Council seems helpful. Foundry is aggressive. Admiralty is mysterious.</td>
+  </tr>
+  <tr>
+    <td><strong>Act 2: The Routine</strong></td>
+    <td>Faction rep tier 2 with any faction</td>
+    <td>Master the dungeon reset loop. Handle Hero patrols. Access deeper dungeons. Dragon clues accumulate.</td>
+    <td>Chosen faction reveals first hint of hidden agenda. Other factions grow suspicious of player.</td>
+  </tr>
+  <tr>
+    <td><strong>Act 3: The Truth</strong></td>
+    <td>Faction rep tier 3 + 20 cards</td>
+    <td>Dragon conspiracy fully revealed. Necromancer asks player to stop the Hero. All factions converge.</td>
+    <td>Player must choose: comply with employer, defect to a faction, or expose everyone.</td>
+  </tr>
+</table>
+
+<div class="warn">
+  <strong>Jam scope:</strong> Act 1 only. The faction economy and conspiracy reveals are post-jam content. For the jam, factions are shops with flavor text. The depth comes after.
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     §20 — Cross-References (DOC-4 linkage to sibling docs)
+     ═══════════════════════════════════════════════════════════════ -->
+
+<h2 id="s20">&sect;20 &mdash; Cross-References</h2>
+
+<div class="info-box" style="font-size:.85em;">
+<p><strong>Master index:</strong> <a href="CROSS_ROADMAP.md">CROSS_ROADMAP.md</a> &mdash; dependency-ordered execution for playable prototype</p>
+
+<table style="width:100%; border-collapse:collapse; margin:1rem 0;">
+<thead>
+<tr style="border-bottom:2px solid var(--dim);">
+  <th style="text-align:left; padding:4px 8px;">This Section</th>
+  <th style="text-align:left; padding:4px 8px;">Links To</th>
+  <th style="text-align:left; padding:4px 8px;">Relationship</th>
+</tr>
+</thead>
+<tbody style="font-size:.9em;">
+<tr><td>&sect;1 Premise</td><td>&rarr; DOC-2 &sect;13 Gleaner Pivot</td><td>Tutorial Roadmap defines three gameplay loops</td></tr>
+<tr><td>&sect;4 Floor ID &amp; Spatial Contracts</td><td>&rarr; DOC-2 &sect;3 Floor Registry</td><td>Tutorial Roadmap has canonical floor table + connections</td></tr>
+<tr><td>&sect;5&ndash;7 Floors &amp; Dungeons</td><td>&rarr; DOC-2 &sect;5 Floor Designs</td><td>Tutorial Roadmap has gameplay specs per floor</td></tr>
+<tr><td>&sect;8 Opening Scene</td><td>&rarr; DOC-2 &sect;6 Hero Reveal</td><td>Tutorial Roadmap has scripted sequence detail</td></tr>
+<tr><td>&sect;9 Boss Encounters</td><td>&rarr; DOC-1 GAP T1 Combat Polish</td><td>Telegraph + corpse render needed for boss readability</td></tr>
+<tr><td>&sect;10 RPS Suits</td><td>&rarr; DOC-3 GONE_ROGUE: synergy-engine.js</td><td>getAdvantage() already ported; drives suit combat</td></tr>
+<tr><td>&sect;10 Suit Distribution</td><td>&rarr; DOC-3 Data: cards.json</td><td>63 cards: &spades;24/&diams;16/&clubs;17/&hearts;6</td></tr>
+<tr><td>&sect;11 Biome Palettes</td><td>&rarr; DOC-5 AUDIT &sect;1.4 Rendering</td><td>Base engine has sprite atlas + shader pipeline</td></tr>
+<tr><td>&sect;12 Enemy Populations</td><td>&rarr; DOC-3 Data: enemies.json</td><td>ENM-001&ndash;091 with suit assignments</td></tr>
+<tr><td>&sect;14 EyesOnly Asset Map</td><td>&rarr; DOC-3 GONE_ROGUE (full inventory)</td><td>Canonical source for extraction status</td></tr>
+<tr><td>&sect;17.1 Cleaning Loop</td><td>&rarr; DOC-2 &sect;15 Pressure Wash</td><td>Tutorial Roadmap has tools table + contracts</td></tr>
+<tr><td>&sect;17.2 Restocking Loop</td><td>&rarr; UNIFIED_INVENTORY &sect;Crate Slot Schema</td><td>Inventory contract has canonical slot JSON</td></tr>
+<tr><td>&sect;17.3 Readiness Score</td><td>&rarr; DOC-1 GAP T2.5 Victory Stats</td><td>Readiness % feeds end-of-run summary</td></tr>
+<tr><td>&sect;18 Hero Path &amp; Stealth</td><td>&rarr; DOC-3 GONE_ROGUE Pass 3 (stealth)</td><td>stealth-system.js + awareness-config.js extraction</td></tr>
+<tr><td>&sect;18.3 Sight Cones</td><td>&rarr; DOC-3 GONE_ROGUE Pass 3.11</td><td>Minimap cone rendering &mdash; &check; DONE</td></tr>
+<tr><td>&sect;19 Faction Economy</td><td>&rarr; DOC-1 GAP T2.3 Rep Feedback</td><td>GAP doc has the UI task for faction tier unlock</td></tr>
+<tr><td>&sect;19.4 Dragon Conspiracy</td><td>&rarr; STREET_CHRONICLES_NARRATIVE_OUTLINE.md</td><td>Original multi-faction spy conspiracy adapted</td></tr>
+</tbody>
+</table>
+
+<p><strong>&oplus; Cross-Roadmap Phase mapping:</strong></p>
+<ul style="font-size:.85em; line-height:1.6;">
+  <li>&sect;9 Boss encounters &rarr; <strong>Phase E.1&ndash;E.2</strong></li>
+  <li>&sect;10 RPS Suits &rarr; already live (synergy-engine.js)</li>
+  <li>&sect;17.1 Cleaning &rarr; <strong>Phase C.1&ndash;C.3</strong></li>
+  <li>&sect;17.2 Restocking &rarr; <strong>Phase B.1&ndash;B.5</strong></li>
+  <li>&sect;17.3 Readiness &rarr; <strong>Phase C.4&ndash;C.5</strong></li>
+  <li>&sect;18 Hero Path &rarr; <strong>Phase D.1&ndash;D.6</strong></li>
+  <li>&sect;19 Factions &rarr; <strong>Phase E.3&ndash;E.4</strong></li>
+</ul>
+</div>
+
+<hr>
+
 <p style="color:var(--dim); font-size:.8em; text-align:center; margin-top:2rem;">
-  Dungeon Gleaner &middot; DC Jam 2026 &middot; Biome Plan v4.0 (Day 1 Designer Guide) &middot; Repo: humiliati/DCgamejam2026
+  Dungeon Gleaner &middot; DC Jam 2026 &middot; Biome Plan v5.1 (Cross-References Added) &middot; Repo: humiliati/DCgamejam2026
   <br>Themes: Dragons &middot; Retrofuturism &middot; Rock-Paper-Scissors &middot; Cleaning Up the Hero's Mess
 </p>
 

@@ -1,0 +1,558 @@
+[
+  {
+    "_comment": "=== CELLAR BIOME (Floors 1-2) — ♠ Earth/Burial, Low tier ==="
+  },
+  {
+    "id": "ENM-001",
+    "name": "Cobweb Crawler",
+    "emoji": "🕷️",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 3,
+    "str": 1,
+    "dex": 2,
+    "stealth": 2,
+    "awarenessRange": 3,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Webs the corridor walls. It's been here longer than the dungeon.",
+    "_designNote": "Fast and sneaky opener. ♠ suit teaches players ♣ advantage early.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-002",
+    "name": "Shambling Corpse",
+    "emoji": "🧟",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "undead",
+    "hp": 5,
+    "str": 2,
+    "dex": 0,
+    "stealth": 0,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Slow but sturdy. Drops bones and sometimes keys — it used to be someone.",
+    "_designNote": "Tank intro. ♠ suit, teaches players that undead = key fragments.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-003",
+    "name": "Dungeon Rat",
+    "emoji": "🐀",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 2,
+    "str": 1,
+    "dex": 3,
+    "stealth": 3,
+    "awarenessRange": 2,
+    "isElite": false,
+    "nonLethal": true,
+    "flavor": "Skitters out of nowhere. Annoys more than it threatens.",
+    "_designNote": "Non-lethal filler. Provides food drops. Teaches players organic = food.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-004",
+    "name": "Bone Guard",
+    "emoji": "💀",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "undead",
+    "hp": 4,
+    "str": 2,
+    "dex": 1,
+    "stealth": 1,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Armed in life, armed in death. The cellar guards keep their post.",
+    "_designNote": "Standard combat challenge. ♠ suit — ♣ cards for advantage.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-005",
+    "name": "Mold Wraith",
+    "emoji": "👻",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "undead",
+    "hp": 4,
+    "str": 1,
+    "dex": 2,
+    "stealth": 2,
+    "awarenessRange": 5,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Damp walls gave it a body. The spores gave it a grudge.",
+    "_designNote": "♣ suit. Teaches ♦ advantage. High awareness makes it a detector.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-006",
+    "name": "Cave Toad",
+    "emoji": "🐸",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 4,
+    "str": 2,
+    "dex": 1,
+    "stealth": 1,
+    "awarenessRange": 3,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Bioluminescent sacs full of something flammable. Don't poke them.",
+    "_designNote": "♦ suit intro. ♠ cards for advantage. Organic = food drops.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ENM-007",
+    "name": "Rot Hound",
+    "emoji": "🐕",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "elite",
+    "lootProfile": "undead",
+    "hp": 8,
+    "str": 3,
+    "dex": 2,
+    "stealth": 1,
+    "awarenessRange": 6,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "Used to guard the lord's estate. Still does, technically.",
+    "_designNote": "Elite intro. High awareness range — it finds players who thought they were safe.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-008",
+    "name": "Bone Sovereign",
+    "emoji": "👑",
+    "biomes": [
+      "cellar"
+    ],
+    "tier": "boss",
+    "lootProfile": "undead",
+    "hp": 16,
+    "str": 3,
+    "dex": 1,
+    "stealth": 0,
+    "awarenessRange": 8,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "The cellar remembers a king. The king does not remember being dead.",
+    "_designNote": "Cellar boss. ♠ suit. Drops guaranteed legendary key fragment + rare card.",
+    "suit": "spade"
+  },
+  {
+    "_comment": "=== FOUNDRY BIOME (Floors 3-5) — ♦ Crystal/Construct, Mid tier ==="
+  },
+  {
+    "id": "ENM-010",
+    "name": "Soot Imp",
+    "emoji": "👺",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 4,
+    "str": 2,
+    "dex": 2,
+    "stealth": 1,
+    "awarenessRange": 3,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Lives in the furnace vents. Gets annoyed when someone opens a cold room.",
+    "_designNote": "♦ suit. ♠ cards for advantage. Organic drops = food.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ENM-011",
+    "name": "Iron Golem",
+    "emoji": "🤖",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "standard",
+    "lootProfile": "construct",
+    "hp": 7,
+    "str": 3,
+    "dex": 0,
+    "stealth": 0,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Built to haul slag. Still hauling slag. Does not care about you.",
+    "_designNote": "High HP tank. ♠ suit. Construct = battery drops (high). Slow dex=0.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-012",
+    "name": "Slag Hound",
+    "emoji": "🐺",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 5,
+    "str": 2,
+    "dex": 3,
+    "stealth": 2,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Bred in the forges. The heat got into their blood and stayed there.",
+    "_designNote": "Fast ♦ enemy. ♠ advantage. High stealth for a dog-sized hazard.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ENM-013",
+    "name": "Clockwork Guard",
+    "emoji": "⚙️",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "standard",
+    "lootProfile": "construct",
+    "hp": 6,
+    "str": 2,
+    "dex": 1,
+    "stealth": 0,
+    "awarenessRange": 5,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Wind-up security. The key in its back is not a vulnerability. Probably.",
+    "_designNote": "♣ suit construct. ♦ cards for advantage. Battery drops.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-014",
+    "name": "Ember Sprite",
+    "emoji": "✨",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 3,
+    "str": 1,
+    "dex": 3,
+    "stealth": 2,
+    "awarenessRange": 3,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Born where sparks land. Dies when you sneeze on it.",
+    "_designNote": "Glass cannon. Easy to kill with ♠. Fast — dex 3 means it gets there first.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ENM-015",
+    "name": "Scrap Brute",
+    "emoji": "🦾",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "elite",
+    "lootProfile": "construct",
+    "hp": 11,
+    "str": 4,
+    "dex": 0,
+    "stealth": 0,
+    "awarenessRange": 5,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "Welded together from three failed golems. Angrier than any of them alone.",
+    "_designNote": "Elite tank. High battery drop rate. No suit — cards deal 1x regardless.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-016",
+    "name": "Smelt Master",
+    "emoji": "🔨",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "elite",
+    "lootProfile": "organic",
+    "hp": 9,
+    "str": 3,
+    "dex": 2,
+    "stealth": 0,
+    "awarenessRange": 6,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "The foundry's foreman survived its automation. It's very bitter about this.",
+    "_designNote": "Elite ♦. ♠ cards devastating. Higher awareness — shouts bring others.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ENM-017",
+    "name": "The Amalgam",
+    "emoji": "🏭",
+    "biomes": [
+      "foundry"
+    ],
+    "tier": "boss",
+    "lootProfile": "construct",
+    "hp": 20,
+    "str": 4,
+    "dex": 1,
+    "stealth": 0,
+    "awarenessRange": 10,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "The foundry itself rose up. It wanted to be finished. It always was.",
+    "_designNote": "Foundry boss. ♦ suit. ♠ decks excel here. High battery + scrap drops.",
+    "suit": "diamond"
+  },
+  {
+    "_comment": "=== SEALAB BIOME (Floors 6-8) — ♣ Wild/Marine, High tier ==="
+  },
+  {
+    "id": "ENM-020",
+    "name": "Tide Stalker",
+    "emoji": "🦈",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "marine",
+    "hp": 7,
+    "str": 2,
+    "dex": 3,
+    "stealth": 2,
+    "awarenessRange": 5,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Swam in from a flooded corridor. It prefers it flooded.",
+    "_designNote": "Fast ♠ marine. ♣ for advantage. Marine drops = relics + currency.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-021",
+    "name": "Shock Eel",
+    "emoji": "🐍",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "marine",
+    "hp": 5,
+    "str": 2,
+    "dex": 3,
+    "stealth": 3,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Coils in the cable conduits. The engineers thought it was wiring.",
+    "_designNote": "Stealthy ♣ marine. ♦ cards for advantage. High dex + stealth = surprise.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-022",
+    "name": "Lab Drone",
+    "emoji": "🔬",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "construct",
+    "hp": 6,
+    "str": 2,
+    "dex": 1,
+    "stealth": 0,
+    "awarenessRange": 6,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Research unit repurposed for security. The research was classified.",
+    "_designNote": "♣ construct. ♦ advantage. Battery drops. High awareness = early detection.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-023",
+    "name": "Deep Crawler",
+    "emoji": "🦀",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "marine",
+    "hp": 9,
+    "str": 3,
+    "dex": 1,
+    "stealth": 1,
+    "awarenessRange": 4,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Pulled up from depth. Shell still adjusting to the pressure difference.",
+    "_designNote": "High HP ♠ brute. ♣ for advantage. Good relic drop source.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-024",
+    "name": "Brine Wraith",
+    "emoji": "👻",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "undead",
+    "hp": 7,
+    "str": 2,
+    "dex": 2,
+    "stealth": 3,
+    "awarenessRange": 5,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "A researcher who knew too much. The lab sealed the section before anyone noticed.",
+    "_designNote": "Stealthy ♠ undead. Rare mix — drops key frags. ♣ for advantage.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-025",
+    "name": "Bio-Hazard Slime",
+    "emoji": "🫧",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "organic",
+    "hp": 5,
+    "str": 1,
+    "dex": 1,
+    "stealth": 0,
+    "awarenessRange": 2,
+    "isElite": false,
+    "nonLethal": true,
+    "flavor": "Lab experiment 7-G. Escaped containment in 2019. Mostly harmless.",
+    "_designNote": "nonLethal organic. ♦ cards for advantage. Food drops in sealab = rare.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-026",
+    "name": "Admiralty Enforcer",
+    "emoji": "⚓",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "elite",
+    "lootProfile": "marine",
+    "hp": 13,
+    "str": 3,
+    "dex": 2,
+    "stealth": 0,
+    "awarenessRange": 7,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "The Admiralty's last line. Armored. Loyal. Not asking questions.",
+    "_designNote": "Elite ♣ marine. ♦ cards. High relic + crystal drop rate.",
+    "suit": "club"
+  },
+  {
+    "id": "ENM-027",
+    "name": "Cryo-Brute",
+    "emoji": "🧊",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "elite",
+    "lootProfile": "construct",
+    "hp": 14,
+    "str": 4,
+    "dex": 0,
+    "stealth": 0,
+    "awarenessRange": 5,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "Cryogenic containment suit filled with something that doesn't like being warm.",
+    "_designNote": "Elite ♠ construct. ♣ for advantage. Battery + relic drops.",
+    "suit": "spade"
+  },
+  {
+    "id": "ENM-028",
+    "name": "The Archivist",
+    "emoji": "🌊",
+    "biomes": [
+      "sealab"
+    ],
+    "tier": "boss",
+    "lootProfile": "marine",
+    "hp": 24,
+    "str": 3,
+    "dex": 3,
+    "stealth": 0,
+    "awarenessRange": 12,
+    "isElite": false,
+    "nonLethal": false,
+    "flavor": "Knows everything the sealab ever logged. Including exactly what you are.",
+    "_designNote": "Final boss. ♣ suit. ♦ decks excel. Drops unique relic + Admiralty rep bonus.",
+    "suit": "club"
+  },
+  {
+    "_comment": "=== CROSS-BIOME / SPECIAL ==="
+  },
+  {
+    "id": "ENM-090",
+    "name": "Hero's Shadow",
+    "emoji": "👤",
+    "biomes": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "tier": "elite",
+    "lootProfile": "undead",
+    "hp": 10,
+    "str": 3,
+    "dex": 3,
+    "stealth": 3,
+    "awarenessRange": 6,
+    "isElite": true,
+    "nonLethal": false,
+    "flavor": "The Hero left an impression. The dungeon filled it in.",
+    "_designNote": "Rare random-floor elite. References the Hero's Mess lore. Drops Hero's Dogtag (ITM-063).",
+    "suit": "heart"
+  },
+  {
+    "id": "ENM-091",
+    "name": "Wandering Vendor",
+    "emoji": "🛒",
+    "biomes": [
+      "cellar",
+      "foundry",
+      "sealab"
+    ],
+    "tier": "standard",
+    "lootProfile": "construct",
+    "hp": 4,
+    "str": 0,
+    "dex": 2,
+    "stealth": 1,
+    "awarenessRange": 3,
+    "isElite": false,
+    "nonLethal": true,
+    "flavor": "Not sure how it got down here. Not sure it knows either. Good prices though.",
+    "_designNote": "nonLethal. Triggers shop interaction instead of combat. Rare floor spawn.",
+    "suit": "spade"
+  }
+]

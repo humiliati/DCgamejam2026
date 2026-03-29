@@ -2,7 +2,7 @@
  * GridGen — Procedural dungeon floor generator.
  * Adapted from EyesOnly's FloorGenCore (BSP room placement + A* corridors).
  *
- * Output: { grid[][], rooms[], doors: { stairsUp, stairsDn }, gridW, gridH, biome }
+ * Output: { grid[][], rooms[], doors: { stairsUp, stairsDn }, gridW, gridH, biome, shops[] }
  * Grid uses TILES constants.
  */
 var GridGen = (function () {
@@ -135,13 +135,45 @@ var GridGen = (function () {
       Salvage.placeCorpses(grid, rooms, W, H, floor);
     }
 
+    // ── Place breakable props (barrels, crates, etc.) ──
+    if (typeof BreakableSpawner !== 'undefined') {
+      var biomeStr = opts.biome || 'cellar';
+      BreakableSpawner.spawnBreakables(grid, rooms, W, H, biomeStr, floor);
+    }
+
+    // ── Place faction shop ──
+    // One shop per floor, in the penultimate room (close to the exit but
+    // not the spawn room). Faction is determined by biome:
+    //   cellar → tide, foundry → foundry, sealab → admiralty
+    var shops = [];
+    var BIOME_FACTION = { cellar: 'tide', foundry: 'foundry', sealab: 'admiralty' };
+    var shopFaction = BIOME_FACTION[biome] || 'tide';
+
+    if (rooms.length >= 2) {
+      var shopRoomIdx = Math.max(1, rooms.length - 2);
+      var shopRoom = rooms[shopRoomIdx];
+      var attempts = 0;
+      var shopPlaced = false;
+      while (!shopPlaced && attempts < 30) {
+        attempts++;
+        var sx = shopRoom.x + 1 + Math.floor(SeededRNG.random() * Math.max(1, shopRoom.w - 2));
+        var sy = shopRoom.y + 1 + Math.floor(SeededRNG.random() * Math.max(1, shopRoom.h - 2));
+        if (sx > 0 && sx < W - 1 && sy > 0 && sy < H - 1 && grid[sy][sx] === TILES.EMPTY) {
+          grid[sy][sx] = TILES.SHOP;
+          shops.push({ x: sx, y: sy, factionId: shopFaction });
+          shopPlaced = true;
+        }
+      }
+    }
+
     return {
       grid: grid,
       rooms: rooms,
       doors: doors,
       gridW: W,
       gridH: H,
-      biome: opts.biome || 'cellar'
+      biome: opts.biome || 'cellar',
+      shops: shops
     };
   }
 

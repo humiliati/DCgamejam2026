@@ -113,9 +113,9 @@ var MovementController = (function () {
 
   // ── Init ──
   function init(opts) {
-    _gridX = opts.x || 0;
-    _gridY = opts.y || 0;
-    _gridDir = opts.dir || 1;  // default NORTH
+    _gridX = (opts.x != null) ? opts.x : 0;
+    _gridY = (opts.y != null) ? opts.y : 0;
+    _gridDir = (opts.dir != null) ? opts.dir : 3;  // default NORTH (dir index 3)
     _renderX = _gridX;
     _renderY = _gridY;
     _renderAngle = dirToAngle(_gridDir);

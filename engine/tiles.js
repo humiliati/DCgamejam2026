@@ -24,8 +24,11 @@ var TILES = (function () {
     FIRE:      15,  // Environmental hazard — burning ground
     SPIKES:    16,  // Environmental hazard — spike pit
     POISON:    17,  // Environmental hazard — toxic pool
-    BONFIRE:   18,  // Checkpoint — respawn point, rest & heal
-    CORPSE:    19   // Harvestable remains — necro-salvage loot
+    BONFIRE:     18,  // Checkpoint — respawn point, rest & heal
+    CORPSE:      19,  // Harvestable remains — necro-salvage loot
+    COLLECTIBLE: 20,  // Walk-over pickup (gold, battery, food) — placed by WorldItems
+    TREE:        21,  // Exterior tree — solid, 2x tall, brown trunk + green canopy
+    SHRUB:       22   // Half-height hedge — blocks movement, player sees over
   };
 
   /** Check if a tile blocks movement */
@@ -35,7 +38,7 @@ var TILES = (function () {
            tile === T.CHEST || tile === T.TRAP || tile === T.WATER ||
            tile === T.SHOP || tile === T.SPAWN || tile === T.BOSS_DOOR ||
            tile === T.FIRE || tile === T.SPIKES || tile === T.POISON ||
-           tile === T.BONFIRE || tile === T.CORPSE;
+           tile === T.BONFIRE || tile === T.CORPSE || tile === T.COLLECTIBLE;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -46,7 +49,7 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB;
   };
 
   /** Check if tile is a door of any kind */

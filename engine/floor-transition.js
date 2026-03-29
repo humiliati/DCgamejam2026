@@ -49,18 +49,19 @@ var FloorTransition = (function () {
   /**
    * Execute a floor transition with proper audio sequencing.
    *
-   * @param {number} targetFloorNum - Destination floor number
+   * @param {string} targetFloorId - Destination floor ID string
    * @param {string} direction      - 'advance' (descending) or 'retreat' (ascending)
    */
-  function go(targetFloorNum, direction) {
+  function go(targetFloorId, direction) {
+    targetFloorId = String(targetFloorId);
+    console.log('[FloorTransition] go(' + targetFloorId + ', ' + direction + ') — _transitioning=' + _transitioning);
     if (_transitioning) return;
     _transitioning = true;
 
     // Cancel any queued movement
     MC.cancelAll();
 
-    var sourceFloorId = FloorManager.getCurrentFloorId();
-    var targetFloorId = FloorManager.floorId(targetFloorNum);
+    var sourceFloorId = FloorManager.getFloor();
     var audioDir = direction === 'advance' ? 'down' : 'up';
 
     // Resolve door contract sounds from the transition table
@@ -71,7 +72,7 @@ var FloorTransition = (function () {
     var transitionLabel = DoorContractAudio.getTransitionLabel(
       sourceFloorId, targetFloorId, { direction: audioDir }
     );
-    var floorLabel = FloorManager.getFloorLabel(targetFloorNum);
+    var floorLabel = FloorManager.getFloorLabel(targetFloorId);
 
     // Play door open sound immediately (delay=0 entries fire now)
     AudioSystem.playSequence(sounds);
@@ -94,7 +95,7 @@ var FloorTransition = (function () {
         duration: Math.max(800, preFadeDelay + 500),
         label: transitionLabel + ' ' + floorLabel,
         onMidpoint: function () {
-          _doFloorSwitch(targetFloorNum, targetFloorId, direction);
+          _doFloorSwitch(targetFloorId, direction);
         },
         onComplete: function () {
           _transitioning = false;
@@ -105,7 +106,7 @@ var FloorTransition = (function () {
       // Legacy fallback: HUD overlay with setTimeout
       setTimeout(function () {
         HUD.showFloorTransition(transitionLabel + ' ' + floorLabel);
-        _doFloorSwitch(targetFloorNum, targetFloorId, direction);
+        _doFloorSwitch(targetFloorId, direction);
         setTimeout(function () {
           HUD.hideFloorTransition();
           _transitioning = false;
@@ -118,14 +119,16 @@ var FloorTransition = (function () {
   /**
    * Perform the actual floor switch (shared by TransitionFX and legacy paths).
    */
-  function _doFloorSwitch(targetFloorNum, targetFloorId, direction) {
+  function _doFloorSwitch(targetFloorId, direction) {
+    console.log('[FloorTransition] _doFloorSwitch: floor ' + targetFloorId + ' dir=' + direction);
+
     // Stop door-open animation (floor is about to change)
     if (typeof DoorAnimator !== 'undefined' && DoorAnimator.isAnimating()) {
       DoorAnimator.stop();
     }
 
     // Update floor state in FloorManager
-    FloorManager.setFloorNum(targetFloorNum);
+    FloorManager.setFloor(targetFloorId);
 
     // Update minimap floor stack
     if (direction === 'advance') {
@@ -135,22 +138,43 @@ var FloorTransition = (function () {
     }
 
     // Enter floor on minimap (restores cached explored or starts fresh)
-    var contract = FloorManager.getFloorContract(targetFloorNum);
-    Minimap.enterFloor(targetFloorId, contract.label || ('Floor ' + targetFloorNum));
+    var contract = FloorManager.getFloorContract(targetFloorId);
+    Minimap.enterFloor(targetFloorId, contract.label || ('Floor ' + targetFloorId));
 
     // Generate the floor (sync)
-    FloorManager.generateCurrentFloor();
+    var spawn = FloorManager.generateCurrentFloor();
+    console.log('[FloorTransition] Floor generated — spawn at (' +
+                spawn.x + ',' + spawn.y + ') dir=' + spawn.dir);
 
     // Reveal starting tiles on minimap
     var p = Player.state();
     Minimap.reveal(p.x, p.y);
 
     // Update HUD
-    HUD.updateFloor(targetFloorNum);
+    HUD.updateFloor(targetFloorId);
     HUD.updatePlayer(p);
+
+    console.log('[FloorTransition] _doFloorSwitch complete — HUD updated to floor ' + targetFloorId);
   }
 
   // ── Stair interaction ──────────────────────────────────────────────
+
+  /**
+   * Resolve the target floor ID for a stair transition.
+   * Down: descend to next level (child or next sibling)
+   * Up: ascend to parent level
+   */
+  function _resolveStairTarget(currentId, direction) {
+    var depth = currentId.split('.').length;
+    if (direction === 'down') {
+      if (depth >= 3) return FloorManager.nextSiblingId(currentId);
+      return FloorManager.childId(currentId, '1');
+    } else {
+      if (depth <= 1) return null;  // Can't ascend from depth 1
+      if (depth >= 3) return FloorManager.prevSiblingId(currentId);
+      return FloorManager.parentId(currentId);
+    }
+  }
 
   /**
    * Attempt to use stairs at player position or facing tile.
@@ -163,15 +187,18 @@ var FloorTransition = (function () {
     var floorData = FloorManager.getFloorData();
     var grid = floorData.grid;
     var tile = grid[pos.y][pos.x];
-    var floorNum = FloorManager.getFloorNum();
+    var currentId = FloorManager.getFloor();
 
     if (direction === 'down' && tile === TILES.STAIRS_DN) {
+      var target = _resolveStairTarget(currentId, 'down');
+      if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'advance');
-      go(floorNum + 1, 'advance');
+      go(target, 'advance');
     } else if (direction === 'up' && tile === TILES.STAIRS_UP) {
-      if (floorNum <= 1) return;
+      var target = _resolveStairTarget(currentId, 'up');
+      if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'retreat');
-      go(floorNum - 1, 'retreat');
+      go(target, 'retreat');
     }
   }
 
@@ -187,18 +214,21 @@ var FloorTransition = (function () {
     var floorData = FloorManager.getFloorData();
     var grid = floorData.grid;
     var tile = grid[fy][fx];
-    var floorNum = FloorManager.getFloorNum();
+    var currentId = FloorManager.getFloor();
 
     if (tile === TILES.STAIRS_DN) {
+      var target = _resolveStairTarget(currentId, 'down');
+      if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'advance');
       DoorContracts.setContract({ x: fx, y: fy }, 'advance');
-      go(floorNum + 1, 'advance');
+      go(target, 'advance');
       return true;
     } else if (tile === TILES.STAIRS_UP) {
-      if (floorNum <= 1) return false;
+      var target = _resolveStairTarget(currentId, 'up');
+      if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'retreat');
       DoorContracts.setContract({ x: fx, y: fy }, 'retreat');
-      go(floorNum - 1, 'retreat');
+      go(target, 'retreat');
       return true;
     }
     return false;
@@ -218,42 +248,149 @@ var FloorTransition = (function () {
    * @returns {boolean} true if a transition was triggered
    */
   function tryInteractDoor(fx, fy) {
+    console.log('[FloorTransition] tryInteractDoor(' + fx + ',' + fy + ') transitioning=' + _transitioning);
     if (_transitioning) return false;
 
     var floorData = FloorManager.getFloorData();
     var grid = floorData.grid;
     var tile = grid[fy][fx];
-    var floorNum = FloorManager.getFloorNum();
+    var currentId = FloorManager.getFloor();
+    console.log('[FloorTransition] tryInteractDoor tile=' + tile + ' floorId=' + currentId);
 
     var direction = null;
+    var targetId = null;
 
-    if (tile === TILES.DOOR) {
-      // Standard door: advance into building / next zone
+    if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR) {
+      if (tile === TILES.BOSS_DOOR && !_tryUnlockDoor(fx, fy, currentId)) {
+        return true;  // Consumed the interaction (showed locked dialog)
+      }
       direction = 'advance';
-    } else if (tile === TILES.BOSS_DOOR) {
-      // Boss door: advance into boss chamber
-      // TODO: check for boss key in Player.hasItem() / Player.hasFlag()
-      direction = 'advance';
-    } else if (tile === TILES.DOOR_BACK) {
-      // Back door: retreat to previous floor
-      if (floorNum <= 1) return false;
+      // Check explicit doorTargets first
+      var key = fx + ',' + fy;
+      if (floorData.doorTargets && floorData.doorTargets[key]) {
+        targetId = floorData.doorTargets[key];
+      } else {
+        // Convention: DOOR advances one depth level
+        targetId = FloorManager.childId(currentId, '1');
+      }
+    } else if (tile === TILES.DOOR_BACK || tile === TILES.DOOR_EXIT) {
       direction = 'retreat';
-    } else if (tile === TILES.DOOR_EXIT) {
-      // Exit door: leave interior, return to parent floor
-      if (floorNum <= 1) return false;
-      direction = 'retreat';
+      // Check explicit doorTargets first (needed for sibling-depth transitions
+      // like Promenade DOOR_EXIT → The Approach, both depth 1)
+      var exitKey = fx + ',' + fy;
+      if (floorData.doorTargets && floorData.doorTargets[exitKey]) {
+        targetId = floorData.doorTargets[exitKey];
+      } else {
+        // Convention: DOOR_EXIT/DOOR_BACK ascends to parent
+        var parentId = FloorManager.parentId(currentId);
+        if (!parentId) return false;  // Can't exit from top-level without explicit target
+        targetId = parentId;
+      }
     }
 
-    if (!direction) return false;
+    if (!direction || !targetId) return false;
 
-    var targetFloorNum = direction === 'advance'
-      ? floorNum + 1
-      : floorNum - 1;
-
-    _startDoorAnimation(fx, fy, tile, direction);
+    _startDoorAnimation(fx, fy, tile, direction, currentId, targetId);
     DoorContracts.setContract({ x: fx, y: fy }, direction, tile);
-    go(targetFloorNum, direction);
+    go(targetId, direction);
     return true;
+  }
+
+  // ── Locked door system ───────────────────────────────────────────
+
+  /**
+   * Track which BOSS_DOOR tiles have been unlocked.
+   * Key: "floorId_x_y" → true
+   * Persists for the session; reset on new game.
+   */
+  var _unlockedDoors = {};
+
+  /**
+   * Generate a unique key for a door position.
+   */
+  function _doorKey(floorId, fx, fy) {
+    return floorId + '_' + fx + '_' + fy;
+  }
+
+  /**
+   * Check if a BOSS_DOOR is already unlocked.
+   */
+  function isDoorUnlocked(floorId, fx, fy) {
+    return !!_unlockedDoors[_doorKey(floorId, fx, fy)];
+  }
+
+  /**
+   * Attempt to unlock a BOSS_DOOR.
+   * Checks Player inventory for a key-type item.
+   * If key found: consumes it, marks door unlocked, returns true.
+   * If no key: shows locked-door dialog, returns false.
+   *
+   * Also checks Player flags — if 'boss_door_{floorId}_x_y' is set,
+   * the door was already opened in a previous visit to this floor.
+   *
+   * @param {number} fx - Door tile X
+   * @param {number} fy - Door tile Y
+   * @param {string} floorId - Current floor ID
+   * @returns {boolean} true if door is (now) unlocked
+   */
+  function _tryUnlockDoor(fx, fy, floorId) {
+    var dk = _doorKey(floorId, fx, fy);
+
+    // Already unlocked this session
+    if (_unlockedDoors[dk]) return true;
+
+    // Check flag from previous visit
+    var flagKey = 'boss_door_' + dk;
+    if (typeof Player !== 'undefined' && Player.hasFlag(flagKey)) {
+      _unlockedDoors[dk] = true;
+      return true;
+    }
+
+    // Look for a key item in player inventory
+    var keyItem = (typeof Player !== 'undefined') ? Player.hasItemType('key') : null;
+
+    if (keyItem) {
+      // Consume the key
+      Player.consumeItem(keyItem.id);
+      _unlockedDoors[dk] = true;
+      Player.setFlag(flagKey, true);
+
+      // Visual + audio feedback
+      if (typeof Toast !== 'undefined') {
+        Toast.show(
+          (keyItem.emoji || '\uD83D\uDD11') + ' ' +
+          i18n.t('door.unlocked', 'Door unlocked!'),
+          'loot'
+        );
+      }
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('ui-confirm', { volume: 0.7 });
+      }
+      if (typeof HUD !== 'undefined') {
+        HUD.updatePlayer(Player.state());
+      }
+
+      console.log('[FloorTransition] Boss door unlocked at (' + fx + ',' + fy +
+                  ') with ' + (keyItem.name || keyItem.id));
+      return true;
+    }
+
+    // No key — show locked dialog
+    if (typeof DialogBox !== 'undefined') {
+      DialogBox.show({
+        text: i18n.t('door.locked', 'The door is locked. You need a key.'),
+        speaker: null,
+        portrait: '\uD83D\uDD12',  // 🔒
+        transient: true,
+        transientLong: true,
+        priority: DialogBox.PRIORITY.PERSISTENT
+      });
+    }
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('ui-fail', { volume: 0.5 });
+    }
+
+    return false;
   }
 
   // ── Door animation bridge ────────────────────────────────────────
@@ -262,9 +399,9 @@ var FloorTransition = (function () {
    * Start the door-open animation in the raycaster.
    * Called before go() so the animation runs during the pre-fade delay.
    */
-  function _startDoorAnimation(fx, fy, tile, direction) {
+  function _startDoorAnimation(fx, fy, tile, direction, currentFloorId, targetFloorId) {
     if (typeof DoorAnimator !== 'undefined') {
-      DoorAnimator.start(fx, fy, tile, direction);
+      DoorAnimator.start(fx, fy, tile, direction, currentFloorId, targetFloorId);
     }
   }
 
@@ -276,6 +413,7 @@ var FloorTransition = (function () {
     tryInteractStairs: tryInteractStairs,
     tryInteractDoor: tryInteractDoor,
     isTransitioning: isTransitioning,
+    isDoorUnlocked: isDoorUnlocked,
     setCallbacks: setCallbacks
   };
 })();

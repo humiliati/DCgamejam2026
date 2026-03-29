@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Combat Test Harness — Dungeon Gleaner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #ddd; font-family: 'Courier New', monospace; }
+
+    #game-container {
+      position: relative; width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+    }
+
+    /* View canvas fills most of the screen */
+    #view-canvas { width: 100%; flex: 1; display: block; image-rendering: pixelated; }
+
+    /* ── HUD (copied minimal structure from index.html) ── */
+    #hud {
+      position: absolute; top: 8px; left: 8px; right: 8px;
+      pointer-events: none; z-index: 10;
+    }
+    #hud-bars { display: flex; gap: 8px; }
+    .hud-bar {
+      flex: 1; height: 14px; border: 1px solid #555;
+      border-radius: 3px; background: #222; position: relative; overflow: hidden;
+    }
+    .hud-fill { position: absolute; top: 0; left: 0; height: 100%; transition: width 0.3s; }
+    #hud-hp-fill { background: #c44; width: 100%; }
+    #hud-energy-fill { background: #4c4; width: 100%; }
+    .hud-bar-label {
+      position: absolute; top: 0; left: 4px; font-size: 10px; line-height: 14px;
+      color: #ddd; text-shadow: 0 0 2px #000; z-index: 1;
+    }
+
+    #hud-combat-log {
+      margin-top: 6px; padding: 4px 6px;
+      background: rgba(0,0,0,0.6); border-radius: 3px;
+      font-size: 12px; min-height: 18px;
+    }
+
+    #hud-advantage {
+      position: absolute; top: 32px; right: 8px;
+      font-size: 11px; color: #ff8; background: rgba(0,0,0,0.5);
+      padding: 2px 6px; border-radius: 3px;
+    }
+
+    #hud-floor { display: none; }
+    #hud-cards { display: none; }
+
+    /* ── Minimap (hidden in test) ── */
+    #minimap { display: none; }
+
+    /* ── Test Control Panel ── */
+    #test-panel {
+      position: absolute; bottom: 8px; left: 8px; right: 8px;
+      z-index: 50; display: flex; gap: 6px; flex-wrap: wrap;
+      pointer-events: auto;
+    }
+    .test-btn {
+      padding: 6px 12px; font-family: 'Courier New', monospace; font-size: 12px;
+      background: #333; color: #ddd; border: 1px solid #666; border-radius: 3px;
+      cursor: pointer;
+    }
+    .test-btn:hover { background: #555; }
+    .test-btn.active { background: #664; border-color: #aa8; }
+
+    #test-status {
+      position: absolute; bottom: 50px; left: 8px; right: 8px;
+      z-index: 50; font-size: 11px; color: #aaa; background: rgba(0,0,0,0.7);
+      padding: 4px 8px; border-radius: 3px; max-height: 120px; overflow-y: auto;
+    }
+
+    /* ── Card Fan (minimal) ── */
+    #card-fan {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      z-index: 40; display: flex; gap: 4px; pointer-events: auto;
+    }
+    .fan-card {
+      width: 48px; height: 64px; background: #2a2a3a; border: 1px solid #888;
+      border-radius: 4px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: pointer;
+      font-size: 20px; transition: transform 0.15s;
+    }
+    .fan-card:hover { transform: translateY(-8px); border-color: #ff8; }
+    .fan-card .fan-name { font-size: 7px; color: #aaa; margin-top: 2px; }
+
+    /* Card fan container (from real UI) */
+    #card-fan-container { display: none; }
+
+    /* NCH widget stub */
+    #nch-widget { display: none; }
+
+    /* Combat report stub */
+    #combat-report { display: none; }
+    #cr-content { display: none; }
+
+    /* Status bar stub */
+    #status-bar { display: none; }
+
+    /* Quick bar stub */
+    #quick-bar { display: none; }
+
+    /* Debrief feed stub */
+    #debrief-feed { display: none; }
+
+    /* Suit toast stub */
+    #suit-toast { display: none; }
+
+    /* Splash stub */
+    #splash-overlay { display: none; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="view-canvas"></canvas>
+    <canvas id="minimap" style="display:none"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div id="hud-bars">
+        <div class="hud-bar" id="hud-hp">
+          <div class="hud-fill" id="hud-hp-fill"></div>
+          <span class="hud-bar-label">HP</span>
+        </div>
+        <div class="hud-bar" id="hud-energy">
+          <div class="hud-fill" id="hud-energy-fill"></div>
+          <span class="hud-bar-label">EN</span>
+        </div>
+      </div>
+      <div id="hud-combat-log"></div>
+      <div id="combat-log"></div>
+      <div id="combat-overlay" style="display:none"></div>
+      <div id="hud-advantage"></div>
+      <div id="hud-floor"></div>
+      <div id="hud-cards"></div>
+    </div>
+
+    <!-- Stubs for modules that query DOM -->
+    <div id="card-fan-container"></div>
+    <div id="nch-widget"><div class="nch-stack" id="nch-stack"></div><div class="nch-badges" id="nch-badges"><div class="nch-badge" id="nch-badge-bag">BAG <span>0</span></div><div class="nch-badge" id="nch-badge-deck">DECK <span>0</span></div></div></div>
+    <div id="combat-report"><div id="cr-content"></div></div>
+    <div id="status-bar"></div>
+    <div id="quick-bar"><div class="qb-slot" id="qb-0"></div><div class="qb-slot" id="qb-1"></div><div class="qb-slot" id="qb-2"></div></div>
+    <div id="debrief-feed"><div id="debrief-content"></div></div>
+    <div id="suit-toast"></div>
+    <div id="splash-overlay" class="hidden"></div>
+
+    <!-- Card fan (test harness inline) -->
+    <div id="card-fan"></div>
+
+    <!-- Test status log -->
+    <div id="test-status"></div>
+
+    <!-- Test control panel -->
+    <div id="test-panel">
+      <button class="test-btn" onclick="TEST.restart()">⟲ Restart Combat</button>
+      <button class="test-btn" onclick="TEST.setStatus('poisoned')">☠️ Poison Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('burning')">🔥 Burn Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('frozen')">❄️ Freeze Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('paralyzed')">⚡ Paralyze Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('enraged')">😤 Enrage Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('sleeping')">💤 Sleep Enemy</button>
+      <button class="test-btn" onclick="TEST.setStatus('idle')">🔄 Clear Status</button>
+      <button class="test-btn" onclick="TEST.hurtEnemy(3)">🗡️ Hurt Enemy −3</button>
+      <button class="test-btn" onclick="TEST.hurtEnemy(999)">💀 Kill Enemy</button>
+      <button class="test-btn" onclick="TEST.nextEnemy()">👹 Next Enemy Type</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Engine scripts — same load order as index.html
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- Layer 0: Zero-dependency foundations -->
+  <script src="engine/rng.js"></script>
+  <script src="engine/tiles.js"></script>
+  <script src="engine/i18n.js"></script>
+  <script src="engine/audio-system.js"></script>
+  <script src="engine/awareness-config.js"></script>
+
+  <!-- Layer 1: Core systems -->
+  <script src="engine/grid-gen.js"></script>
+  <script src="engine/door-contracts.js"></script>
+  <script src="engine/door-contract-audio.js"></script>
+  <script src="engine/lighting.js"></script>
+  <script src="engine/stealth.js"></script>
+  <script src="engine/enemy-ai.js"></script>
+  <script src="engine/combat-engine.js"></script>
+  <script src="engine/synergy-engine.js"></script>
+  <script src="engine/card-stack.js"></script>
+  <script src="engine/card-system.js"></script>
+  <script src="engine/loot-tables.js"></script>
+  <script src="engine/world-items.js"></script>
+  <script src="engine/input.js"></script>
+  <script src="engine/movement.js"></script>
+  <script src="engine/pathfind.js"></script>
+  <script src="engine/spatial-contract.js"></script>
+  <script src="engine/texture-atlas.js"></script>
+  <script src="engine/session-stats.js"></script>
+  <script src="engine/salvage.js"></script>
+  <script src="engine/breakable-spawner.js"></script>
+  <script src="engine/enemy-sprites.js"></script>
+  <script src="engine/corpse-registry.js"></script>
+  <script src="engine/enemy-intent.js"></script>
+  <script src="engine/death-anim.js"></script>
+
+  <!-- Layer 2: Rendering + UI -->
+  <script src="engine/ui-sprites.js"></script>
+  <script src="engine/door-animator.js"></script>
+  <script src="engine/skybox.js"></script>
+  <script src="engine/raycaster.js"></script>
+  <script src="engine/minimap.js"></script>
+  <script src="engine/hud.js"></script>
+  <script src="engine/debrief-feed.js"></script>
+  <script src="engine/status-bar.js"></script>
+  <script src="engine/quick-bar.js"></script>
+  <script src="engine/dialog-box.js"></script>
+  <script src="engine/toast.js"></script>
+  <script src="engine/transition-fx.js"></script>
+  <script src="engine/card-fan.js"></script>
+  <script src="engine/nch-widget.js"></script>
+  <script src="engine/combat-report.js"></script>
+  <script src="engine/screen-manager.js"></script>
+  <script src="engine/menu-box.js"></script>
+  <script src="engine/box-anim.js"></script>
+  <script src="engine/splash-screen.js"></script>
+  <script src="engine/game-loop.js"></script>
+
+  <!-- Layer 3: Game modules -->
+  <script src="engine/player.js"></script>
+  <script src="engine/mouse-look.js"></script>
+  <script src="engine/floor-manager.js"></script>
+  <script src="engine/intro-walk.js"></script>
+  <script src="engine/floor-transition.js"></script>
+  <script src="engine/input-poll.js"></script>
+  <script src="engine/interact-prompt.js"></script>
+  <script src="engine/door-peek.js"></script>
+  <script src="engine/combat-fx.js"></script>
+  <script src="engine/combat-bridge.js"></script>
+  <script src="engine/hazard-system.js"></script>
+  <script src="engine/shop.js"></script>
+  <script src="engine/menu-faces.js"></script>
+  <script src="engine/title-screen.js"></script>
+  <script src="engine/game-over-screen.js"></script>
+  <script src="engine/victory-screen.js"></script>
+
+  <!-- Layer 4: Orchestrator -->
+  <script src="engine/game.js"></script>
+
+  <!-- Layer 5: Data -->
+  <script src="data/strings/en.js"></script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Combat Test Harness — skips splash, generates a tiny floor,
+       drops an enemy next to the player, starts combat immediately.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <script>
+  var TEST = (function () {
+    'use strict';
+
+    var _testEnemy = null;
+    var _enemyTypeIdx = 0;
+    var _logEl = null;
+    var _fanEl = null;
+    var _running = false;
+
+    var ENEMY_TYPES = [
+      { name: 'Skeleton',  emoji: '💀', hp: 8,  str: 2, dex: 1, type: 'skeleton' },
+      { name: 'Goblin',    emoji: '👺', hp: 6,  str: 2, dex: 3, type: 'goblin' },
+      { name: 'Orc',       emoji: '👹', hp: 12, str: 4, dex: 1, type: 'goblin' },
+      { name: 'Ghost',     emoji: '👻', hp: 5,  str: 2, dex: 4, type: 'ghost',  tags: ['ethereal'] },
+      { name: 'Slime',     emoji: '🟢', hp: 10, str: 1, dex: 0, type: 'slime' },
+      { name: 'Mimic',     emoji: '📦', hp: 8,  str: 3, dex: 2, type: 'mimic' },
+      { name: 'Dragon',    emoji: '🐉', hp: 20, str: 5, dex: 2, type: 'dragon', isBoss: true }
+    ];
+
+    function log(msg) {
+      if (!_logEl) _logEl = document.getElementById('test-status');
+      var time = new Date().toLocaleTimeString();
+      _logEl.innerHTML = '<div>[' + time + '] ' + msg + '</div>' + _logEl.innerHTML;
+      // Trim to 30 lines
+      var divs = _logEl.querySelectorAll('div');
+      for (var i = 30; i < divs.length; i++) divs[i].remove();
+      console.log('[TEST] ' + msg);
+    }
+
+    function buildFloor() {
+      // Tiny 7×7 room — player at center, enemy one tile east
+      var W = 7, H = 7;
+      var grid = [];
+      for (var y = 0; y < H; y++) {
+        grid[y] = [];
+        for (var x = 0; x < W; x++) {
+          if (x === 0 || x === W - 1 || y === 0 || y === H - 1) {
+            grid[y][x] = TILES.WALL;
+          } else {
+            grid[y][x] = TILES.EMPTY;
+          }
+        }
+      }
+      return {
+        grid: grid, gridW: W, gridH: H,
+        rooms: [{ x: 0, y: 0, w: W, h: H }],
+        stairsDown: null, stairsUp: null
+      };
+    }
+
+    function createTestEnemy() {
+      var type = ENEMY_TYPES[_enemyTypeIdx % ENEMY_TYPES.length];
+      var e = EnemyAI.createEnemy({
+        x: 4, y: 3,   // One tile east of player at (3,3)
+        name: type.name,
+        emoji: type.emoji,
+        hp: type.hp,
+        str: type.str,
+        dex: type.dex,
+        facing: 'west',
+        isElite: type.isElite || false
+      });
+      e.type = type.type;
+      e.tags = type.tags || [];
+      e.isBoss = type.isBoss || false;
+      e.awareness = 200; // Fully engaged
+      return e;
+    }
+
+    function initSystems() {
+      // Seed RNG
+      SeededRNG.seed(42);
+
+      // Init EnemySprites defaults (pose registry)
+      if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
+
+      // Init canvas
+      var canvas = document.getElementById('view-canvas');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
+      // Init raycaster
+      Raycaster.init(canvas);
+
+      // Set a spatial contract for the test floor
+      var contract = SpatialContract.nestedDungeon({
+        wallColor: '#556677',
+        floorColor: '#2a2a2a',
+        ceilingColor: '#1a1a1a',
+        fogColor: '#111111',
+        wallHeight: 1.0
+      });
+      Raycaster.setContract(contract);
+
+      // Init HUD
+      HUD.init();
+
+      // Init session stats
+      if (typeof SessionStats !== 'undefined') SessionStats.reset();
+
+      // Init card system with a test deck
+      CardSystem.resetDeck();
+      var testCards = [
+        { id: 'slash',  name: 'Slash',   emoji: '🗡️', effects: [{ type: 'damage', value: 3 }], synergyTags: ['melee', 'spade'] },
+        { id: 'shield', name: 'Shield',  emoji: '🛡️', effects: [{ type: 'defense', value: 2 }], synergyTags: ['defense', 'club'] },
+        { id: 'fire',   name: 'Fireball',emoji: '🔥', effects: [{ type: 'damage', value: 4 }, { type: 'status', status: 'burning', target: 'enemy', duration: 2 }], synergyTags: ['magic', 'diamond'] },
+        { id: 'heal',   name: 'Potion',  emoji: '💚', effects: [{ type: 'hp', value: 3 }], synergyTags: ['heal', 'heart'] },
+        { id: 'ice',    name: 'Ice Bolt', emoji: '❄️', effects: [{ type: 'damage', value: 2 }, { type: 'status', status: 'frozen', target: 'enemy', duration: 1 }], synergyTags: ['magic', 'club'] },
+        { id: 'toxic',  name: 'Venom',   emoji: '☠️', effects: [{ type: 'damage', value: 1 }, { type: 'status', status: 'poisoned', target: 'enemy', duration: 3 }], synergyTags: ['poison', 'spade'] },
+        { id: 'stun',   name: 'Thunder', emoji: '⚡', effects: [{ type: 'damage', value: 2 }, { type: 'status', status: 'paralyzed', target: 'enemy', duration: 1 }], synergyTags: ['magic', 'diamond'] },
+        { id: 'rage',   name: 'War Cry', emoji: '😤', effects: [{ type: 'damage', value: 5 }], synergyTags: ['melee', 'spade'] }
+      ];
+      for (var i = 0; i < testCards.length; i++) CardSystem.addCard(testCards[i]);
+      CardSystem.drawHand();
+
+      // Init CombatBridge
+      CombatBridge.init({
+        onGameOver: function () { log('GAME OVER — click Restart'); }
+      });
+
+      // Init movement controller (needs x, y, dir, collisionCheck)
+      MovementController.init({
+        x: 3, y: 3, dir: 0,
+        collisionCheck: function (fx, fy, tx, ty) {
+          return { blocked: false, entity: false };
+        }
+      });
+
+      log('Systems initialized');
+    }
+
+    function startCombat() {
+      // Build floor
+      var floorData = buildFloor();
+      FloorManager.setFloorData(floorData);
+      FloorManager.setFloorNum(1);
+
+      // Place player
+      Player.setPos(3, 3);
+      Player.setDir(0); // Facing EAST
+      MovementController.setPosition(3, 3, 0);
+
+      // Create and register enemy
+      _testEnemy = createTestEnemy();
+      FloorManager.setEnemies([_testEnemy]);
+
+      // Reset player HP
+      Player.reset();
+      HUD.updatePlayer(Player.state());
+      HUD.updateCards(CardSystem.getHand());
+
+      log('Combat starting: ' + _testEnemy.emoji + ' ' + _testEnemy.name +
+          ' (HP:' + _testEnemy.hp + ' STR:' + _testEnemy.str +
+          ' DEX:' + _testEnemy.dex + ')');
+
+      // Start combat
+      CombatBridge.startCombat(_testEnemy);
+      _running = true;
+
+      // Build inline card fan
+      _buildFan();
+    }
+
+    function _buildFan() {
+      if (!_fanEl) _fanEl = document.getElementById('card-fan');
+      var hand = CardSystem.getHand();
+      _fanEl.innerHTML = '';
+      for (var i = 0; i < hand.length; i++) {
+        var card = hand[i];
+        var div = document.createElement('div');
+        div.className = 'fan-card';
+        div.setAttribute('data-idx', i);
+        div.innerHTML = '<span>' + card.emoji + '</span><span class="fan-name">' + card.name + '</span>';
+        div.onclick = (function (idx) {
+          return function () { _playCard(idx); };
+        })(i);
+        _fanEl.appendChild(div);
+      }
+
+      // Add Fire button
+      var fireBtn = document.createElement('div');
+      fireBtn.className = 'fan-card';
+      fireBtn.style.background = '#4a2a2a';
+      fireBtn.style.borderColor = '#f84';
+      fireBtn.innerHTML = '<span>⚔️</span><span class="fan-name">FIRE!</span>';
+      fireBtn.onclick = function () {
+        if (typeof CombatBridge !== 'undefined') {
+          CombatBridge.fireStack();
+          setTimeout(_buildFan, 300);
+        }
+      };
+      _fanEl.appendChild(fireBtn);
+
+      // Add Flee button
+      var fleeBtn = document.createElement('div');
+      fleeBtn.className = 'fan-card';
+      fleeBtn.style.background = '#2a2a4a';
+      fleeBtn.style.borderColor = '#88f';
+      fleeBtn.innerHTML = '<span>🏃</span><span class="fan-name">FLEE</span>';
+      fleeBtn.onclick = function () {
+        CombatBridge.flee();
+        log('Fled combat');
+        _fanEl.innerHTML = '';
+      };
+      _fanEl.appendChild(fleeBtn);
+    }
+
+    function _playCard(index) {
+      if (!CombatEngine.isActive()) return;
+      var phase = CombatEngine.getPhase();
+      if (phase !== 'stacking' && phase !== 'selecting') return;
+
+      var hand = CardSystem.getHand();
+      if (index >= hand.length) return;
+
+      var card = hand[index];
+      log('Playing: ' + card.emoji + ' ' + card.name);
+
+      // Use the stack-based path
+      if (typeof CardStack !== 'undefined') {
+        if (CardStack.canStack(card)) {
+          CardStack.pushCard(card, index);
+        } else {
+          CardStack.clear();
+          CardStack.pushCard(card, index);
+        }
+        CombatEngine.resetEnemyBeat();
+      } else {
+        CombatBridge.playCard(index);
+      }
+
+      _buildFan();
+    }
+
+    // ── Render loop ────────────────────────────────────────────────────
+    var _lastFrame = 0;
+
+    function _render(ts) {
+      var dt = ts - _lastFrame;
+      _lastFrame = ts;
+      if (dt > 100) dt = 16; // Clamp on first frame or tab-switch
+
+      // Tick combat
+      if (CombatEngine.isActive()) {
+        CombatBridge.update(dt);
+      }
+
+      // Render the raycaster view
+      var floorData = FloorManager.getFloorData();
+      if (floorData) {
+        var pos = Player.getPos();
+        var dir = Player.getDir();
+        var angle = MovementController.dirToAngle(dir);
+        var enemies = FloorManager.getEnemies();
+
+        // Build sprite list for raycaster
+        var sprites = [];
+        for (var i = 0; i < enemies.length; i++) {
+          var e = enemies[i];
+          if (e.hp <= 0 && e.spriteState === 'dead') continue;
+
+          // Compute sprite frame if EnemySprites available
+          var spriteEmoji = e.emoji;
+          var spriteBobY = 0;
+          var spriteScaleAdd = 0;
+          var spriteTint = null;
+          var spriteGlow = null;
+          var spriteOverlay = null;
+          if (typeof EnemySprites !== 'undefined' && e.spriteState) {
+            var frame = EnemySprites.computeFrame(e, ts);
+            spriteEmoji = frame.emoji;
+            spriteBobY = frame.bobY;
+            spriteScaleAdd = frame.scaleAdd;
+            spriteTint = frame.tint;
+            spriteGlow = frame.glowColor;
+            spriteOverlay = frame.overlayText;
+          }
+
+          sprites.push({
+            x: e.x,
+            y: e.y,
+            emoji: spriteEmoji,
+            id: e.id,
+            awareness: e.awareness,
+            spriteState: e.spriteState || 'idle',
+            bobY: spriteBobY,
+            scaleAdd: spriteScaleAdd,
+            tint: spriteTint,
+            glowColor: spriteGlow,
+            overlayText: spriteOverlay
+          });
+        }
+
+        // Add corpse ground sprites (matching game.js A2 pattern)
+        var grid = floorData.grid;
+        for (var cy = 0; cy < floorData.gridH; cy++) {
+          for (var cx = 0; cx < floorData.gridW; cx++) {
+            if (grid[cy][cx] === TILES.CORPSE) {
+              sprites.push({
+                x: cx, y: cy,
+                emoji: '🦴', scale: 0.35, groundLevel: true
+              });
+            }
+          }
+        }
+
+        Raycaster.render(
+          { x: pos.x + 0.5, y: pos.y + 0.5, dir: angle + (Player.state().lookOffset || 0) },
+          floorData.grid, floorData.gridW, floorData.gridH,
+          sprites
+        );
+      }
+
+      // Update HUD bars
+      if (CombatEngine.isActive()) {
+        HUD.updatePlayer(Player.state());
+      }
+
+      requestAnimationFrame(_render);
+    }
+
+    // ── Test controls ──────────────────────────────────────────────────
+
+    function setStatus(status) {
+      if (!_testEnemy) { log('No enemy — start combat first'); return; }
+      _testEnemy.spriteState = status;
+      if (status !== 'idle') {
+        _testEnemy.statusDuration = 99; // Persist for observation
+      }
+      // Re-evaluate intent expression
+      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive()) {
+        EnemyIntent.onCombatEvent('round_end'); // Force recalc
+        // Re-feed current stack
+        if (typeof CardStack !== 'undefined') {
+          var eStack = CardStack.getEnemyStack();
+          if (eStack && eStack.length > 0) {
+            EnemyIntent.onEnemyCommit(eStack);
+          }
+        }
+      }
+      log('Set enemy spriteState → ' + status);
+    }
+
+    function hurtEnemy(dmg) {
+      if (!_testEnemy) { log('No enemy'); return; }
+      _testEnemy.hp = Math.max(0, _testEnemy.hp - dmg);
+      log('Enemy HP: ' + _testEnemy.hp + '/' + _testEnemy.maxHp);
+      if (EnemyIntent.isActive()) {
+        EnemyIntent.onCombatEvent('took_damage');
+      }
+    }
+
+    function nextEnemy() {
+      _enemyTypeIdx = (_enemyTypeIdx + 1) % ENEMY_TYPES.length;
+      log('Next restart will use: ' + ENEMY_TYPES[_enemyTypeIdx].emoji + ' ' +
+          ENEMY_TYPES[_enemyTypeIdx].name);
+    }
+
+    function restart() {
+      // Reset combat if active
+      if (CombatEngine.isActive()) CombatEngine.reset();
+      if (typeof EnemyIntent !== 'undefined') EnemyIntent.endCombat();
+
+      // Re-draw hand
+      CardSystem.resetDeck();
+      var testCards = [
+        { id: 'slash',  name: 'Slash',   emoji: '🗡️', effects: [{ type: 'damage', value: 3 }], synergyTags: ['melee', 'spade'] },
+        { id: 'shield', name: 'Shield',  emoji: '🛡️', effects: [{ type: 'defense', value: 2 }], synergyTags: ['defense', 'club'] },
+        { id: 'fire',   name: 'Fireball',emoji: '🔥', effects: [{ type: 'damage', value: 4 }, { type: 'status', status: 'burning', target: 'enemy', duration: 2 }], synergyTags: ['magic', 'diamond'] },
+        { id: 'heal',   name: 'Potion',  emoji: '💚', effects: [{ type: 'hp', value: 3 }], synergyTags: ['heal', 'heart'] },
+        { id: 'ice',    name: 'Ice Bolt', emoji: '❄️', effects: [{ type: 'damage', value: 2 }, { type: 'status', status: 'frozen', target: 'enemy', duration: 1 }], synergyTags: ['magic', 'club'] },
+        { id: 'toxic',  name: 'Venom',   emoji: '☠️', effects: [{ type: 'damage', value: 1 }, { type: 'status', status: 'poisoned', target: 'enemy', duration: 3 }], synergyTags: ['poison', 'spade'] },
+        { id: 'stun',   name: 'Thunder', emoji: '⚡', effects: [{ type: 'damage', value: 2 }, { type: 'status', status: 'paralyzed', target: 'enemy', duration: 1 }], synergyTags: ['magic', 'diamond'] },
+        { id: 'rage',   name: 'War Cry', emoji: '😤', effects: [{ type: 'damage', value: 5 }], synergyTags: ['melee', 'spade'] }
+      ];
+      for (var i = 0; i < testCards.length; i++) CardSystem.addCard(testCards[i]);
+      CardSystem.drawHand();
+
+      log('── Restarting combat ──');
+      startCombat();
+    }
+
+    // ── Boot ────────────────────────────────────────────────────────────
+
+    function boot() {
+      log('Combat Test Harness booting...');
+      initSystems();
+      startCombat();
+      requestAnimationFrame(_render);
+    }
+
+    // Auto-boot on load
+    window.addEventListener('load', boot);
+
+    return {
+      restart: restart,
+      setStatus: setStatus,
+      hurtEnemy: hurtEnemy,
+      nextEnemy: nextEnemy,
+      log: log
+    };
+  })();
+  </script>
+</body>
+</html>
