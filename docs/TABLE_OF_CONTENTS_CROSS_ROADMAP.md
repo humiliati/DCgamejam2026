@@ -110,20 +110,22 @@ All five design documents, their scope, and section inventories. Each document n
 | Modification Guide | Adding SFX, sequences, music tracks, tuning volume levels |
 
 ### DOC-7: CORE_GAME_LOOP_AND_JUICE.md
-> **Scope**: Core loop design doc — the three toyful pillars (Clean / Restock / Deploy), Kingdom Two Crowns economy model, "Send the Hero" deploy button, Stardew Valley day/night pressure cycle, and a full juice inventory for every mechanic.
+> **Scope**: Core loop design doc — the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, and a full juice inventory for every mechanic.
 
 | Section | Content |
 |---------|---------|
 | §1 One-Line Pitch | The janitor framing and central tension |
-| §2 Three Core Pillars | Clean, Restock, Deploy — one-liners and primary verbs |
+| §2 Three Core Pillars | Clean, Restock, Endure — one-liners and primary verbs |
 | §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy, "just one more crate" pull |
-| §4 "Send the Hero" Button | Bridge Simulator pattern, UX contract, per-floor vs. chain deploy, hero behavior table |
-| §5 Day/Night Cycle | Stardew Valley pressure model, clock mechanics, sleep-as-a-verb |
-| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Deploy, Day/Night, Ambient/Meta |
-| §7 Pressure Gradient | Readiness target escalation curve (Day 1–13+) |
-| §8 Sleep→Wake Loop | Session rhythm, the "one more day" pull |
-| §9 Implementation Notes | Module mapping table (readiness, deploy, day cycle, CCTV, cleaning) |
-| §10 Design Axioms | Five guiding principles for every core-loop decision |
+| §4 Hero Cycle — Narrative Deploy | 3-day cadence, Taskmaster NPC, implied deploy via mail/barks/dungeon re-entry, payout tiers |
+| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role |
+| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta |
+| §7 Pressure Gradient | Readiness target escalation per hero cycle |
+| §8 3-Day Cycle Session Rhythm | The "one more cycle" pull, daily structure |
+| §9 Implementation Notes | Module mapping table + jam-scope priority order |
+| §10 Design Axioms | Seven guiding principles (expanded: "home is heartbeat", "discovery over declaration") |
+| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts |
+| §12 Time Cycle Accommodation Inventory | Fits naturally / requires adaptation / deferred tables, time-aware peek summary |
 
 ---
 
