@@ -44,6 +44,27 @@ var Game = (function () {
   var _pendingMenuContext = null;
   var _pendingMenuFace = null;
 
+  // ── Bark / Gate NPC state ─────────────────────────────────────────
+  // Tracks whether the Day-1 Dispatcher gate encounter has been resolved.
+  // Before resolution the dungeon entrance tiles are logically locked —
+  // the Dispatcher NPC is spawned on that tile and blocks movement.
+  // After the player retrieves their work keys from home (Floor 1.6)
+  // the gate is unlocked and the Dispatcher despawns.
+
+  var _gateUnlocked = false;       // Has the player retrieved their work keys?
+  var _dispatcherSpawnId = 'npc_dispatcher_gate';  // Stable entity id
+
+  // ── Ambient bark timer (Floor 1 morning) ─────────────────────────
+  // When the player first arrives at Floor 1 (The Promenade) we fire
+  // ambient townsperson barks on a loose interval to populate the world
+  // with sound while the player navigates toward the dungeon entrance.
+
+  var _ambientBarkTimer = null;
+
+  // Ambient bark interval range (18–28 s, randomised per fire)
+  var _AMBIENT_BARK_MIN_MS   = 18000;
+  var _AMBIENT_BARK_RANGE_MS = 10000;
+
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
@@ -59,6 +80,28 @@ var Game = (function () {
     InputManager.init();
     InputManager.initPointer(_canvas);
     AudioSystem.init();
+
+    // Wire BarkLibrary display function — routes picks to Toast by default,
+    // falling back gracefully if Toast is unavailable.
+    if (typeof BarkLibrary !== 'undefined') {
+      BarkLibrary.setDisplay(function (bark, opts) {
+        var style = (opts && opts.style) || bark.style || 'info';
+        if (style === 'dialog' && typeof DialogBox !== 'undefined') {
+          // Pass speaker and text to DialogBox separately — DialogBox owns
+          // the speaker label; do NOT prepend it into the text line.
+          DialogBox.show({
+            speaker: bark.speaker || '',
+            lines:   [bark.text]
+          });
+        } else if (typeof Toast !== 'undefined') {
+          // For toast barks, prefix the speaker name inline if present.
+          var text = bark.speaker
+            ? bark.speaker + ': ' + bark.text
+            : bark.text;
+          Toast.show(text, style === 'dialog' ? 'info' : style);
+        }
+      });
+    }
 
     // ── Phase 2: Screen system ──
     ScreenManager.init();
@@ -87,6 +130,12 @@ var Game = (function () {
       // PeekSlots intercept: ESC closes slot-filling UI before pause
       if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
         PeekSlots.close();
+        return;
+      }
+
+      // BookshelfPeek intercept: ESC closes book overlay before pause
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        BookshelfPeek.handleKey('Escape');
         return;
       }
 
@@ -461,12 +510,17 @@ var Game = (function () {
     if (typeof CorpsePeek    !== 'undefined') CorpsePeek.init();
     if (typeof MerchantPeek  !== 'undefined') MerchantPeek.init();
     if (typeof PuzzlePeek    !== 'undefined') PuzzlePeek.init();
+    if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
+    if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
 
     // Load enemy population tables from enemies.json
     if (typeof EnemyAI !== 'undefined' && EnemyAI.loadPopulation) EnemyAI.loadPopulation();
+
+    // NPC system — register built-in populations (bark pools loaded at Layer 5)
+    if (typeof NpcSystem !== 'undefined') NpcSystem.init();
 
     // NCH widget (draggable card-hand capsule)
     if (typeof NchWidget !== 'undefined') NchWidget.init();
@@ -526,6 +580,9 @@ var Game = (function () {
         }
         _refreshPanels();
         console.log('[Game] Floor transition complete — MC callbacks re-wired, floor ' + FloorManager.getFloor());
+
+        // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic)
+        _onFloorArrive(FloorManager.getFloor());
       }
     });
 
@@ -671,7 +728,179 @@ var Game = (function () {
     });
   }
 
-  // ── Floor generation + MC wiring ───────────────────────────────────
+  // ── Floor arrival hooks ────────────────────────────────────────────
+  //
+  // Called by the FloorTransition onAfter callback whenever the player
+  // lands on a new floor. Responsible for:
+  //   - Starting ambient bark timers on exterior floors
+  //   - Spawning the Dispatcher gate NPC on Floor 1 (pre-gate-unlock)
+  //   - Triggering the key-retrieval flow when player arrives at Floor 1.6
+
+  function _onFloorArrive(floorId) {
+    // Cancel any running ambient bark timer from the previous floor
+    if (_ambientBarkTimer !== null) {
+      clearInterval(_ambientBarkTimer);
+      _ambientBarkTimer = null;
+    }
+
+    // Clear NpcSystem active list — previous floor's NPC refs are stale
+    if (typeof NpcSystem !== 'undefined') NpcSystem.clearActive();
+
+    // Spawn ambient NPCs for this floor (built-in populations + any
+    // registered by other modules)
+    if (typeof NpcSystem !== 'undefined') {
+      NpcSystem.spawn(
+        floorId,
+        FloorManager.getEnemies(),
+        FloorManager.getFloorData().grid
+      );
+    }
+
+    if (floorId === '1') {
+      _onArrivePromenade();
+    } else if (floorId === '1.6') {
+      _onArriveHome();
+    }
+  }
+
+  /**
+   * Player has arrived on Floor 1 (The Promenade).
+   *
+   * On Day 1 (gate not yet unlocked):
+   *   1. Start ambient morning bark timer — townspeople comment on the player
+   *      not being at work yet.
+   *   2. Spawn the Dispatcher gate NPC at the dungeon entrance tile (5, 2)
+   *      so the player encounters him when they try to enter.
+   *
+   * After gate is unlocked, ambient barks switch to the general pool.
+   */
+  function _onArrivePromenade() {
+    if (typeof BarkLibrary === 'undefined') return;
+
+    var barkKey = _gateUnlocked ? 'ambient.promenade' : 'ambient.promenade.morning';
+
+    // Fire one bark immediately on arrival (world feels alive)
+    setTimeout(function () {
+      BarkLibrary.fire(barkKey);
+    }, 2500);
+
+    // Then fire ambient barks on a loose 18–28 s interval
+    _ambientBarkTimer = setInterval(function () {
+      if (!ScreenManager.isPlaying()) return;
+      BarkLibrary.fire(barkKey);
+    }, _AMBIENT_BARK_MIN_MS + Math.random() * _AMBIENT_BARK_RANGE_MS);
+
+    // On first arrival before gate is unlocked, spawn the Dispatcher
+    if (!_gateUnlocked) {
+      _spawnDispatcherGate();
+    }
+  }
+
+  /**
+   * Spawn the Dispatcher NPC at the dungeon entrance tile (5, 2).
+   * The NPC blocks movement onto that tile and shows gate dialog
+   * when bumped or interacted with.
+   *
+   * TODO (Phase B): Convert to a NpcSystem DISPATCHER definition so this
+   * entity follows the standard spawn/despawn/interact pattern. Currently
+   * hand-rolled here because it has gate-state logic (gateUnlocked flag)
+   * that runs before NpcSystem is fully wired for conditional spawns.
+   */
+  function _spawnDispatcherGate() {
+    var enemies = FloorManager.getEnemies();
+    // Guard: don't double-spawn
+    for (var i = 0; i < enemies.length; i++) {
+      if (enemies[i].id === _dispatcherSpawnId) return;
+    }
+
+    var stack = (typeof NpcComposer !== 'undefined')
+      ? NpcComposer.getVendorPreset('dispatcher')
+      : null;
+
+    enemies.push({
+      id:          _dispatcherSpawnId,
+      x:           5,   // Dungeon entrance DOOR tile on Floor 1
+      y:           2,
+      name:        'Dispatcher',
+      emoji:       stack ? stack.head : '🐉',
+      stack:       stack,
+      type:        'dispatcher',
+      hp:          999,  // Invulnerable — can't be fought
+      maxHp:       999,
+      str:         0,
+      facing:      'south',
+      awareness:   0,
+      friendly:    true,
+      nonLethal:   true,
+      blocksMovement: true,   // Prevents the player from stepping onto tile
+      tags:        ['gate_npc', 'dispatcher']
+    });
+
+    console.log('[Game] Dispatcher gate NPC spawned at (5,2) on Floor 1');
+  }
+
+  /**
+   * Player has arrived on Floor 1.6 (Gleaner's Home).
+   *
+   * Fires the home-arrival bark and checks whether the work keys item
+   * is present in the home chest. If so, marks it for pickup — the
+   * player will interact with the DOOR tile at the chest position to
+   * collect the keys, which sets _gateUnlocked = true.
+   */
+  function _onArriveHome() {
+    if (typeof BarkLibrary !== 'undefined') {
+      setTimeout(function () {
+        BarkLibrary.fire('home.morning.wakeup');
+      }, 1000);
+    }
+
+    if (!_gateUnlocked) {
+      console.log('[Game] Floor 1.6 — work keys available for pickup');
+      // The chest at (5, 3) on the home floor contains the work keys.
+      // When the player interacts with it, _onPickupWorkKeys() is called
+      // via the chest-interact path in _interact().
+    }
+  }
+
+  /**
+   * Called when the player picks up the work keys from the home chest.
+   * Unlocks the gate, removes the Dispatcher NPC, and fires the unlock bark.
+   */
+  function _onPickupWorkKeys() {
+    if (_gateUnlocked) return;
+    _gateUnlocked = true;
+
+    if (typeof BarkLibrary !== 'undefined') {
+      BarkLibrary.fire('home.keys.pickup');
+    }
+
+    // Remove the Dispatcher NPC from Floor 1 enemy list (it may not be
+    // loaded right now — the cache will be clean when Floor 1 is visited)
+    if (FloorManager.getFloor() === '1') {
+      var enemies = FloorManager.getEnemies();
+      for (var i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i].id === _dispatcherSpawnId) {
+          enemies.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    // Invalidate Floor 1 cache so gate NPC is not re-spawned on revisit
+    FloorManager.invalidateCache('1');
+
+    console.log('[Game] Work keys collected — dungeon gate unlocked');
+  }
+
+  /**
+   * Check whether the tile at (fx, fy) on the current floor is the
+   * work-keys chest on Floor 1.6. Called from _interact().
+   */
+  function _checkWorkKeysChest(fx, fy) {
+    return !_gateUnlocked
+      && FloorManager.getFloor() === '1.6'
+      && fx === 5 && fy === 3;
+  }
 
   function _generateAndWire() {
     var spawn = FloorManager.generateCurrentFloor();
@@ -790,6 +1019,31 @@ var Game = (function () {
     AudioSystem.play('ui-blop');
     // Cancel minimap auto-path on collision
     if (typeof MinimapNav !== 'undefined') MinimapNav.onBump();
+
+    // Check whether the bumped tile is the Dispatcher gate NPC
+    if (!_gateUnlocked && typeof BarkLibrary !== 'undefined') {
+      var pos = MC.getGridPos();
+      var bumpX = pos.x + MC.DX[dir];
+      var bumpY = pos.y + MC.DY[dir];
+      var enemies = FloorManager.getEnemies();
+      for (var i = 0; i < enemies.length; i++) {
+        var e = enemies[i];
+        if (e.id === _dispatcherSpawnId && e.x === bumpX && e.y === bumpY) {
+          // First bump: play intro + direction bark. Subsequent bumps: nudge.
+          var introKey = 'npc.dispatcher.gate.intro';
+          var bark = BarkLibrary.hasPool(introKey) ? BarkLibrary.fire(introKey) : null;
+          if (!bark) {
+            // Intro spent — fire direction hint once, then nudge
+            var dirKey = 'npc.dispatcher.gate.direction';
+            bark = BarkLibrary.hasPool(dirKey) ? BarkLibrary.fire(dirKey) : null;
+          }
+          if (!bark) {
+            BarkLibrary.fire('npc.dispatcher.gate.nudge');
+          }
+          break;
+        }
+      }
+    }
   }
 
   function _onTurnFinish(dir) {
@@ -817,6 +1071,21 @@ var Game = (function () {
 
     if (FloorTransition.tryInteractStairs(fx, fy)) return;
     if (FloorTransition.tryInteractDoor(fx, fy)) return;
+
+    // Work-keys pickup on Floor 1.6 (triggers gate unlock)
+    if (_checkWorkKeysChest(fx, fy)) {
+      _onPickupWorkKeys();
+      return;
+    }
+
+    // Talkable NPC interaction — delegate to NpcSystem
+    if (typeof NpcSystem !== 'undefined') {
+      var npcAtTile = NpcSystem.findAtTile(fx, fy, FloorManager.getEnemies());
+      if (npcAtTile && npcAtTile.talkable) {
+        NpcSystem.interact(npcAtTile, FloorManager.getFloor());
+        return;
+      }
+    }
 
     var tile = floorData.grid[fy][fx];
     if (tile === TILES.CHEST) {
@@ -856,6 +1125,23 @@ var Game = (function () {
       }
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
+    }
+    // ── BOOKSHELF: Open book peek (autonomous peek handles display,
+    //    but OK interact re-shows the current page) ──
+    else if (tile === TILES.BOOKSHELF) {
+      if (typeof BookshelfPeek !== 'undefined') {
+        // If already showing, treat as "next page" action
+        if (BookshelfPeek.isActive()) {
+          BookshelfPeek.handleKey('KeyD');
+        }
+        // Otherwise the autonomous update() will show it
+      }
+    }
+    // ── BAR_COUNTER: Tap for a drink ──
+    else if (tile === TILES.BAR_COUNTER) {
+      if (typeof BarCounterPeek !== 'undefined') {
+        BarCounterPeek.tryDrink(fx, fy, floorData);
+      }
     }
   }
 
@@ -1315,10 +1601,23 @@ var Game = (function () {
     var floorData = FloorManager.getFloorData();
     var enemies = FloorManager.getEnemies();
     var p = Player.state();
+    var hasNpcSystem = typeof NpcSystem !== 'undefined';
 
     for (var i = 0; i < enemies.length; i++) {
       if (enemies[i].hp <= 0) continue;
+      // NpcSystem entities get patrol/bark tick instead of enemy AI
+      if (enemies[i].npcType && hasNpcSystem) continue;
       EnemyAI.updateEnemy(enemies[i], p, floorData.grid, floorData.gridW, floorData.gridH, deltaMs);
+    }
+
+    // NPC patrol + proximity bark tick (runs alongside enemy AI at 10fps)
+    if (hasNpcSystem) {
+      NpcSystem.tick(
+        { x: p.x, y: p.y },
+        enemies,
+        deltaMs,
+        floorData.grid
+      );
     }
 
     CombatBridge.checkEnemyAggro(p.x, p.y);
@@ -1414,6 +1713,8 @@ var Game = (function () {
       if (typeof CorpsePeek   !== 'undefined') CorpsePeek.update(frameDt);
       if (typeof MerchantPeek !== 'undefined') MerchantPeek.update(frameDt);
       if (typeof PuzzlePeek   !== 'undefined') PuzzlePeek.update(frameDt);
+      if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.update(frameDt);
+      if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.update(frameDt);
 
       // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
       if (typeof PeekSlots !== 'undefined') PeekSlots.update(frameDt);

@@ -138,6 +138,7 @@ Each floor gets a stable hierarchical ID following the EyesOnly convention. The 
 | `"1.2"` | 2 | interior | inn | 14×12 | hand | Driftwood Inn |
 | `"1.3"` | 2 | interior | guild | 16×12 | hand | Gleaner's Guild |
 | `"1.3.1"` | 3 | dungeon | cellar | 28×28 | proc-gen | Guild Cellar |
+| `"1.6"` | 2 | interior | home | 10×8 | hand | Gleaner's Home (player bunk) |
 | `"2"` | 1 | exterior | street | 28×12 | hand | Lantern Row |
 | `"2.1"` | 2 | interior | post | 10×8 | hand | Watchman's Post |
 | `"3"` | 1 | exterior | frontier | 20×16 | hand | Frontier Gate |
@@ -152,11 +153,14 @@ Each floor gets a stable hierarchical ID following the EyesOnly convention. The 
 | `"0.1"` | DOOR_EXIT (7,10) | retreat | `"0"` | DOOR | — |
 | `"0.1.1"` | STAIRS_DN | advance | `"0.1.2"` | STAIRS_UP | — |
 | `"0.1.2"` | STAIRS_DN | advance | `"0.1.3"` | STAIRS_UP | — |
-| `"1"` | DOOR | advance | `"1.1"` | DOOR_EXIT | — |
+| `"1"` | DOOR (5,2) | advance | `"1.1"` | DOOR_EXIT | — |
+| `"1"` | DOOR (14,2) | advance | `"1.1"` | DOOR_EXIT | — |
+| `"1"` | DOOR (17,7) | advance | `"1.6"` | DOOR_EXIT | — |
 | `"1"` | DOOR | advance | `"1.2"` | DOOR_EXIT | — |
 | `"1"` | DOOR | advance | `"1.3"` | DOOR_EXIT | — |
 | `"1"` | DOOR (gate wall) | advance | `"2"` | DOOR_BACK | Breakable gate |
 | `"1.3"` | STAIRS_DN | advance | `"1.3.1"` | STAIRS_UP | — |
+| `"1.6"` | DOOR_EXIT (5,7) | retreat | `"1"` | DOOR | — |
 | `"2"` | DOOR | advance | `"2.1"` | DOOR_EXIT | — |
 | `"2"` | BOSS_DOOR | advance | `"3"` | DOOR_BACK | Locked (Brass Key) |
 
@@ -1073,7 +1077,24 @@ These add replayability and challenge runs to the cleaning loop.
 
 ## 16. Revised Implementation Phases (Gleaner Pivot)
 
-The original 8-phase plan (§9) focused on world graph and gate progression. The Gleaner pivot reorders priorities to deliver the maintenance loops first, then layer in Hero AI and stealth.
+The original 8-phase plan (§9) focused on world graph and gate progression. The Gleaner pivot reorders priorities to deliver the maintenance loops first, then layer in Hero AI and stealth. **Phase 0 (below) is the new pre-phase that establishes the initial player experience before any maintenance work begins.**
+
+### Phase 0: Pre-Phase — Morning Send-Off & Key Gate (2-3 hours)
+
+Establishes the initial player experience described in §18. Scripted walk from Floor 0 → Floor 1, ambient NPC barks via BarkLibrary, Dispatcher gate NPC blocking the dungeon entrance, and the work-keys fetch quest to Floor 1.6 (Gleaner's Home).
+
+**New files:**
+- `engine/bark-library.js` — Fable-style bark system: weighted pools, cooldown anti-repeat, one-shot tracking, pluggable display hook (`setDisplay(fn)`)
+- `data/barks/en.js` — All bark text in data (never hard-coded in logic). Pools: `ambient.approach`, `ambient.promenade`, `ambient.promenade.morning`, `ambient.promenade.heroday`, `ambient.promenade.dusk`, `npc.dispatcher.gate.*`, `home.*`, `system.*`
+
+**Modified files:**
+- `engine/intro-walk.js` — Add `bark` step type (fires `BarkLibrary.fire(key)` non-blocking). Add shelved `HOME_DEPARTURE` named sequence for fail-state recovery. Step schema: `{ action: 'bark', key: 'pool.key', delay: ms }`
+- `engine/npc-composer.js` — Add `dispatcher` vendor preset: 🐉 head, 🧥 black jacket, 👖 black pants, 📋 clipboard, tintHue 0 (desaturated)
+- `engine/floor-manager.js` — Add Floor 1.6 (Gleaner's Home) hand-authored 10×8 floor. Add `home` biome (warm amber planks). Add DOOR at (17,7) on Floor 1 grid → Floor 1.6. Add `invalidateCache(floorId)` to public API
+- `engine/game.js` — Wire `BarkLibrary.setDisplay()` at init. Add `_onFloorArrive()` hook in `FloorTransition.onAfter`. Add `_onArrivePromenade()` (ambient bark timer + Dispatcher spawn), `_onArriveHome()` (keys pickup prompt), `_onPickupWorkKeys()` (gate unlock + cache invalidation), `_checkWorkKeysChest()` helper, Dispatcher bump logic in `_onBump()`
+- `index.html` — Add `<script src="engine/bark-library.js">` (Layer 1) and `<script src="data/barks/en.js">` (Layer 5)
+
+**Verification:** New game → Floor 0 auto-walk fires → arrive Floor 1 → ambient morning bark fires → walk north toward dungeon → bump Dispatcher → gate dialog fires (key pool) → direction hint fires → walk east to (17,7) door → enter Floor 1.6 → interact chest at (5,3) → key pickup bark fires → return to Floor 1 → Dispatcher despawned → dungeon entrance walkable.
 
 ### Phase 1: Crate Slot System (3-4 hours) — CRITICAL PATH
 
@@ -1179,6 +1200,17 @@ The original 8-phase plan (§9) focused on world graph and gate progression. The
 
 ## 17. Revised Player Journey (Gleaner Pivot)
 
+### Pre-Phase — The Morning Send-Off (§18 detail)
+
+0. **Character creation** → title screen → callsign selection → class selection → deploy animation.
+0. **Auto-walk** on Floor 0 (The Approach) — scripted 6-step north walk through the courtyard. IntroWalk module fires, input locked. Player sees the town gate ahead.
+0. **Floor 1 arrival** — transition to The Promenade. Ambient bark fires within 2.5s: a passerby says something pointed about the player not being at work yet.
+0. **Gentle nudges** — as the player walks north toward the dungeon shops, a second ambient morning bark fires (~18s later).
+0. **Dispatcher gate** — player walks up to the dungeon entrance door at (5,2) and bumps the Dispatcher NPC (🐉 black jacket black pants). Gate dialog sequence: intro bark → direction hint bark ("keys are at your bunk — north wall, east side").
+0. **Home fetch** — player turns east, walks to DOOR at (17,7), enters Floor 1.6 (Gleaner's Home). Bark fires on arrival. Player sees the bunk room: bed (bonfire tile), mailbox (pillar), stash chest with keys (DOOR tile at 5,3).
+0. **Key pickup** — player interacts with the keys chest (5,3). Key pickup bark fires. `_gateUnlocked` → true. Dispatcher despawns from Floor 1 cache.
+0. **Return and enter** — player exits home (DOOR_EXIT 5,7 → Floor 1), walks to (5,2), enters the dungeon normally. The pre-phase is complete.
+
 ### First session — Learning the Job
 
 1. **Spawn** on Floor 0, auto-walk. Enter lobby, descend to Cellar B1.
@@ -1227,6 +1259,116 @@ The player's first dungeon entry is carefully paced to teach the three modes (co
 
 ---
 
+## 18. Pre-Phase 0 — The Morning Send-Off
+
+### 18.1 Narrative Alignment
+
+The Morning Send-Off is the player's first two minutes of Dungeon Gleaner. Its job is to establish the world's social contract — that the player is a **blue-collar operative**, not a hero — before a single dungeon tile is ever seen.
+
+The sequence threads four jam themes into the opening in sequence:
+
+| Moment | Theme wired in |
+|--------|---------------|
+| Auto-walk through The Approach courtyard | Retrofuturism — the town feels like a 1960s coastal resort district |
+| Dispatcher gate NPC (🐉, black jacket) | Dragons — first dragon the player sees is their *boss*, not a monster |
+| "Why aren't you at work?" citizen barks | Cleaning Up the Hero's Mess — the town treats this as a regular job |
+| Key fetch quest to home | Rock-Paper-Scissors — the key item is the first *card* in the player's hand |
+
+**The Conspiracy Layer (contributor knowledge):** The Dispatcher is not a random employer. He is a handler at the detective agency that dispatched the player. The dragon emoji head is the first environmental hint that the agency has dragon representation — something the player won't understand until mid-Act 1 when NPC dialog starts mentioning the Dragon Conspiracy. The Dispatcher is cordial, professional, and firm. He is not the villain. Yet.
+
+### 18.2 Design Pillars
+
+The send-off is tuned against the three core pillars (see DOC-JUICE §2):
+
+**Clean pillar:** The player's home (Floor 1.6) is in slightly disorganized state at game start — the mailbox has a flashing flag, the floor has a minor smudge. This is a subliminal preview of the cleaning loop. The player won't clean it now (no tools yet) but they register the condition.
+
+**Restock pillar:** The keys chest at (5,3) is the first crate-like interaction. It's a simple DOOR tile (single-item container) rather than a full crate slot UI — but the act of "opening a container and taking an item" mirrors the restock loop. The player is kinesthetically primed.
+
+**Endure pillar:** The Dispatcher's dialog telegraphs time pressure. *"Hero party confirmed for day three. Move it."* The player is told — without a UI countdown — that the clock is already running. This is the Endure pillar's first heartbeat.
+
+### 18.3 Bark System — Pre-Phase Pools
+
+All bark text lives in `data/barks/en.js`. The pre-phase uses these pools:
+
+| Pool key | When fired | Mechanism |
+|----------|-----------|-----------|
+| `ambient.promenade.morning` | Floor 1 arrival (Day 1, pre-unlock) | `_onArrivePromenade()` sets a `setInterval` at 18–28s |
+| `npc.dispatcher.gate.intro` | First bump into Dispatcher | `_onBump()` checks for gate NPC at bump tile |
+| `npc.dispatcher.gate.direction` | After intro pool spent | Same bump handler, falls through key chain |
+| `npc.dispatcher.gate.nudge` | Subsequent bumps | Repeat fallback after direction hint spent |
+| `home.morning.wakeup` | Arrive Floor 1.6 | `_onArriveHome()` fires after 1s delay |
+| `home.keys.pickup` | Interact with (5,3) chest | `_onPickupWorkKeys()` |
+| `npc.dispatcher.gate.unlocked` | Gate clears | *Shelved — fires when player next approaches (5,2) after unlock.* Wired in Phase 0 polish pass. |
+
+The bark pools are Fable-style weighted random:
+- Each pool entry carries `weight` (1–3), `style` (`'toast'`/`'bubble'`/`'dialog'`), optional `speaker`, and optional `oneShot` flag.
+- `BarkLibrary.pick()` excludes cooling entries (45s default, 0s for gate dialog), prefers available entries by weighted roll.
+- `oneShot` barks retire permanently — the intro and direction hints only fire once per session.
+- After the intro pool is spent, subsequent bumps fall through to the nudge pool (no cooldown on individual entries, 8s cooldown on the pool as a whole).
+
+### 18.4 Dispatcher NPC — Entity Spec
+
+The Dispatcher is spawned into `FloorManager.getEnemies()` as a friendly NPC with `blocksMovement: true`. He is not a combatant — combat engine ignores him (friendly flag). The raycaster/enemy-sprites system renders his stack (🐉 / 🧥 / 👖 / 📋) at grid position (5, 2) on Floor 1.
+
+**Removal:** When `_onPickupWorkKeys()` fires, `FloorManager.invalidateCache('1')` is called. The next visit to Floor 1 rebuilds from scratch (no gate NPC in the fresh build). If the player is *currently on* Floor 1 when keys are picked up, the NPC is also spliced out of the live enemy list immediately.
+
+**Fail-state recovery:** On curfew collapse or death respawn, the player wakes at Floor 1.6. If the gate hasn't been unlocked yet, the Dispatcher re-spawns when Floor 1 is next generated (cache was invalidated on death). If the gate was already unlocked, no re-spawn.
+
+### 18.5 Floor 1.6 — Gleaner's Home
+
+10×8 hand-authored interior. Biome: `home` (warm amber plank walls, dark wood floor).
+
+```
+ 0  1  2  3  4  5  6  7  8  9
+┌──────────────────────────────┐
+│ W  W  W  W  W  W  W  W  W  W│  0  north wall
+│ W  .  .  .  .  .  .  .  .  W│  1  back of room
+│ W  .  🔥 .  .  .  .  .  .  W│  2  BED (bonfire) at (2,2)
+│ W  .  .  .  .  🗝️ .  .  .  W│  3  KEYS chest (DOOR tile) at (5,3)
+│ W  .  .  .  .  .  .  .  .  W│  4  open floor
+│ W  .  📬 .  .  .  .  .  .  W│  5  MAILBOX (pillar) at (2,5)
+│ W  .  .  .  .  .  .  .  .  W│  6  approach
+│ W  W  W  W  W  🚪 W  W  W  W│  7  DOOR_EXIT (5,7) → The Promenade
+└──────────────────────────────┘
+```
+
+**Objects:**
+- **Bed** (BONFIRE tile, 2,2): Peek-interact to sleep / advance day (Phase 1+ feature, currently stub).
+- **Work Keys** (DOOR tile, 5,3): Interact to pick up. Triggers `_onPickupWorkKeys()`. Tile removed from grid after pickup (becomes EMPTY). On subsequent visits the tile is gone — the Dispatcher is already appeased.
+- **Mailbox** (PILLAR tile, 2,5): Peek-interact for overnight hero-run reports (Phase 1+ feature, currently stub).
+- **DOOR_EXIT** (5,7): Leads back to Floor 1 (The Promenade). `doorTargets['5,7'] = '1'`.
+
+**Spawn point:** (5, 6) facing NORTH (into the room) — same as the respawn after curfew collapse or death.
+
+**From The Promenade:** The home DOOR is at (17, 7) on Floor 1 — behind the east pillar, partially obscured. The Dispatcher's direction hint points the player there ("north wall, east side"). The door uses the standard `TILES.DOOR` tile and is visually identical to building entrances — the player recognises it as a door rather than a wall.
+
+### 18.6 HOME_DEPARTURE — Shelved Sequence
+
+The `IntroWalk.SEQUENCES.HOME_DEPARTURE` sequence is wired but **not called in normal gameplay**. It is the fail-state recovery exit walk: when the player wakes at home after curfew collapse, this sequence plays instead of free movement, scripting a short walk from the bed to the exit door.
+
+**When active:**
+- After death/curfew, `HazardSystem` (or the day-cycle system) calls `IntroWalk.startNamed('HOME_DEPARTURE', onComplete)` where `onComplete` triggers `FloorTransition.go('1', 'advance')`.
+- The walk is 3 forward steps (bed → door, approximately). A bark fires from `home.departure` on step 1.
+- Normal flow resumes on Floor 1.
+
+**Why shelved:** The fail-state isn't implemented yet (Phase 1+). The sequence is wired so it's available when needed without touching `intro-walk.js` again.
+
+### 18.7 Narrative Pillar Juice
+
+Juice touches specific to the pre-phase (supplement to DOC-JUICE §6):
+
+| Moment | Juice |
+|--------|-------|
+| Auto-walk across Floor 0 | Camera sway from MovementController, ambient step SFX, pre-dawn sky |
+| Floor 0 → Floor 1 transition | `enter_building` TransitionFX preset, door creak SFX, sunset sky fade-in |
+| Ambient bark fires | Toast slides in from bottom-left, 2.5s display, no dismiss required |
+| Dispatcher bump | `ui-blop` SFX (existing bump sound) + speech bubble from bark |
+| Home door discovery | Door is slightly tucked — a small discovery moment. No arrow or highlight |
+| Key pickup | `pickup-success` SFX + Toast slides in (`🗝️ Work keys...`) |
+| Gate unlocks | Dispatcher sprite vanishes (no animation yet — future polish). Dungeon door is now a normal interactive tile |
+
+---
+
 ## § Cross-References
 
 > Master index: **[CROSS_ROADMAP.md](CROSS_ROADMAP.md)** — dependency-ordered execution for playable prototype
@@ -1235,6 +1377,7 @@ The player's first dungeon entry is carefully paced to teach the three modes (co
 |--------------|----------|-------------|
 | §2 World Graph | → DOC-4 §4 Floor ID Convention | Biome Plan defines spatial contracts per depth |
 | §3 Floor Registry | → DOC-4 §5–§7 | Biome Plan has detailed floor aesthetics |
+| §3 Floor 1.6 | → DOC-JUICE §5.2 Player's Home | Core game loop formalises home floor as heartbeat anchor |
 | §4 Gate-Contract System | → DOC-5 AUDIT §1.3 Level Gen | Base engine has Brogue-style procgen |
 | §5 Floor Designs | → DOC-4 §5 Boardwalk, §6 Interiors, §7 Dungeons | Biome Plan has wall colors, palettes, props |
 | §6 Hero Reveal | → DOC-4 §9 Boss Encounters, §18 Hero Path | Biome Plan has Hero combat deck + stealth system |
@@ -1247,8 +1390,12 @@ The player's first dungeon entry is carefully paced to teach the three modes (co
 | §14 Hero Path System | → DOC-4 §18 Hero Path & Stealth | Biome Plan has hero type details, encounter stages |
 | §15 Pressure Wash | → DOC-4 §17.1 Cleaning Loop | Biome Plan has per-texel grime removal spec |
 | §16 Revised Phases | → DOC-6 CROSS_ROADMAP Phases B–F | Cross-roadmap maps these 8 phases to daily schedule |
+| §18 Pre-Phase 0 | → DOC-JUICE §5.2, §6 | Core game loop has home floor spec + juice inventory |
+| §18 Bark System | → `engine/bark-library.js`, `data/barks/en.js` | Implementation in engine; text in data layer |
+| §18.5 Floor 1.6 | → DOC-JUICE §5.2 Player's Home | Home floor design spec lives in core game loop |
 
 **⊕ Cross-Roadmap Phase mapping (§16 → CROSS_ROADMAP):**
+- Phase 0 (Pre-Phase / Morning Send-Off) → **Phase A.0** *(new)*
 - Phase 1 (Crate Slots) → **Phase B.1–B.5**
 - Phase 2 (Cleaning) → **Phase C.1–C.3**
 - Phase 3 (Dungeon Reset) → **Phase C.4–C.5**

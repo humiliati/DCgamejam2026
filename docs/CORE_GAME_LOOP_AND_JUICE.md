@@ -172,16 +172,21 @@ The Day/Night cycle provides:
 
 ### 5.2 The Player's Home
 
-The Gleaner lives in a **rented room** at the Driftwood Inn (Floor 1.2) or a **bunk at the Gleaner's Guild** (Floor 1.3). This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
+The Gleaner lives in a **dedicated bunk room at Floor 1.6** — a rented room off The Promenade (Floor 1), reached via the DOOR at (17, 7) on the Promenade's east wall. This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
+
+> **Floor ID:** `"1.6"` (depth 2, interior). 10×8 hand-authored grid. Biome: `home` (warm amber plank walls, dark wood floor). See TUTORIAL_WORLD_ROADMAP §18.5 for the full grid layout.
+>
+> **Day 1 note:** On the very first session the home floor contains the player's **work keys** (DOOR tile at 5,3). The player must retrieve these before the Dispatcher NPC will clear the dungeon gate. This establishes Floor 1.6 as a destination before it's established as a *home* — the player discovers the hearth before they learn it's theirs.
 
 **Home features:**
-- **Bed** — Interact (peek-style) to sleep and advance to next day. Rest bonuses applied.
+- **Bed** (bonfire tile, 2,2) — Interact (peek-style) to sleep and advance to next day. Rest bonuses applied. BarkLibrary pool: `home.morning.wakeup`.
+- **Work Keys** (DOOR tile, 5,3, Day 1 only) — Interact to collect. Triggers `_onPickupWorkKeys()` in Game. Tile reverts to EMPTY after pickup.
 - **Stash chest** — Persistent storage. Items survive death (existing `stash` in Player state).
-- **Mailbox** — Read overnight results: hero run reports, Guild notices, NPC gossip. New mail indicated by a flag icon on the HUD.
+- **Mailbox** (pillar tile, 2,5) — Read overnight results: hero run reports, Guild notices, NPC gossip. New mail indicated by a flag icon on the HUD.
 - **Mirror** — Quick stat/loadout check (existing HUD info, presented diegetically).
 - **Wall clock** — Shows the current day number and time of day. Also shows which day in the hero cycle: `"Day 2 of 3 — Heroes arrive tomorrow."`.
 
-### 5.3 Day/Night Skybox Transitions
+**Fail-state respawn:** After curfew collapse or death in a depth 1–2 area, the player respawns at Floor 1.6 spawn point (5, 6). The `IntroWalk.SEQUENCES.HOME_DEPARTURE` named sequence scripts a short walk to the exit door before restoring free movement. BarkLibrary pool: `home.morning.curfew_wakeup` (distinct tone from normal wake-up).
 
 The existing `Skybox` module has 7 biome presets with zenith/horizon colour pairs. The day/night system interpolates between **three sky states** per biome, driven by the game clock:
 
@@ -244,6 +249,11 @@ The existing `Skybox` module has 7 biome presets with zenith/horizon colour pair
 | Night phase | 9:00–10:00 (90–100%) | Risky but legal. Enemies buffed. |
 | Curfew (forced sleep) | At 10:00 (100%) | Auto-collapse with debuffs |
 | Hero Day schedule | Dawn: heroes depart. Dusk: heroes return. | Player works topside. |
+| **Interior time-freeze** | **Depth-2 floors (N.N)** | **World clock pauses inside buildings** |
+
+> **The Time-Freeze Rule:** When the player is on any depth-2 floor (building interior — ID format `N.N`), the world clock **stops**. Time does not advance. No curfew can trigger. Shops don't close. The player can browse, read, drink, and converse at their own pace. The clock resumes instantly on exit to a depth-1 (exterior) or depth-3 (dungeon) floor. See DOC-10 §2 for full specification and edge cases.
+>
+> This creates a clean **safety contract**: every building interior is a haven where the player is free from time pressure. Dungeons and exteriors are the pressure zones. The player learns intuitively: "inside = safe, outside = clock ticking."
 
 ### 5.6 Sleep, Death & Waking at Home
 
@@ -364,6 +374,44 @@ Bonfires remain as mid-dungeon rest points. They **restore HP and energy** and *
 | **NPC reactions** | Town NPCs comment on floor readiness at specific thresholds. At 100%: *"I heard the Foundry's clean for the first time in decades."* At 0%: *"That dungeon's an absolute shambles."* |
 | **Combo Seal** | Sealing three or more crates within 10 seconds triggers a combo counter (`x2 COMBO`, `x3 COMBO`) with escalating SFX and coin multiplier. |
 | **Dungeon smell meter** | A flavour HUD element (a nose icon) that fills as grime accumulates and drains as cleaning progresses. Has no mechanical effect — pure feel. |
+
+### 6.6 Pre-Phase Juice (Morning Send-Off)
+
+Juice moments specific to the Day 1 morning sequence (TUTORIAL_WORLD_ROADMAP §18.7):
+
+| Moment | Juice |
+|--------|-------|
+| **Auto-walk across Floor 0** | Camera sway from MovementController lerp, ambient step SFX. Pre-dawn cedar sky (biome: `cedar`). |
+| **Floor 0 → 1 transition** | `enter_building` TransitionFX preset; door creak SFX; sunset sky fades in on Floor 1. |
+| **Ambient bark fires** | Toast slides in from bottom-left. 2.5s display, no dismiss needed. Font matches clipboard style. |
+| **Dispatcher first appearance** | NPC sprite renders at (5,2): 🐉 head, dark jacket, clipboard. No fanfare — environmental discovery. |
+| **Dispatcher bump** | Existing `ui-blop` bump SFX + bark fires from `npc.dispatcher.gate.intro`. |
+| **Home door discovery** | Door at (17,7) is partially obscured by east pillar — a micro-discovery. No pointer or highlight. |
+| **Entering home (Floor 1.6)** | Transition to warm amber plank room after the blue-cool Promenade. Contrast signals safety. |
+| **Key pickup** | `pickup-success` SFX + Toast: `🗝️ Work keys. The Dispatcher will want to see these.` |
+| **Gate clears** | Dispatcher sprite vanishes (immediate, no animation — Phase 0 polish adds a dismissal walk). Dungeon DOOR is now a normal interactive tile. |
+| **Bark variety** | BarkLibrary weights ensure the same player never hears the same morning bark twice in a row. Anti-repeat cooldown (25s) prevents over-firing during the ~3 minute sequence. |
+
+### 6.7 Cozy Interior Juice
+
+Interior interactions (depth-2 floors only) use a distinct juice palette — warmer, gentler, and deliberately slower than dungeon or exterior feedback. The goal is sensory contrast: after the tension of dungeon work, every interior interaction should feel like putting down a heavy bag.
+
+| Moment | Juice |
+|--------|-------|
+| **Enter building** | Door-creak SFX transitions to warm ambient hum. HUD clock shows ❄️ pause icon. Brief oneShot toast: "Time holds still here." |
+| **Exit building** | Clock digits pulse amber (1s) to signal time resumption. Exterior ambient sounds fade back in. |
+| **Face bookshelf** | Subtle warm glow on wall column. `page-turn` SFX (soft, papery). |
+| **Read book** | DialogBox opens with book icon + title. Pages are instant (no typewriter — books are not speech). Page counter at bottom. |
+| **Turn page** | `page-turn` SFX. Text swaps instantly. |
+| **Close book** | DialogBox fades out. Brief bark fires from `interior.bookshelf.<biome>` pool. |
+| **Conspiracy lore read** | oneShot bark after reading a lore book: "Something about that passage felt... important." |
+| **Face bar counter** | Toast billboard: drink name + effect + taps remaining. Ambient glass-clink SFX. |
+| **Drink** | `pickup-success` SFX + Toast with drink emoji. Subtle amber screen-edge vignette (0.3s). |
+| **Last drink** | "That's the last one." bark. Billboard shows "Empty!" on next face. |
+| **Return after exit** | Taps reset. Billboard shows full count. Bartender bark: "Refills on the house." |
+| **Long stay (60s)** | Gentle ambient bark: "No rush. The dungeons will wait." Reassurance signal. |
+
+Detailed juice specifications and per-building interaction inventories are in DOC-10 (COZY_INTERIORS_DESIGN.md).
 
 ---
 
@@ -611,6 +659,59 @@ The existing peek system (DoorPeek, CratePeek, ChestPeek, CorpsePeek, LockedDoor
 │  Time: DAY (45%) — no rush  │
 └─────────────────────────────┘
 ```
+
+### 11.6 Bookshelf Peek (New — Interior Furnishing)
+
+**Tile:** `TILES.BOOKSHELF` (25) — non-walkable, opaque wall furnishing.
+
+**Module:** `engine/bookshelf-peek.js` — autonomous peek overlay.
+
+**Behaviour:** Face bookshelf for 400ms → DialogBox opens with the book's first page. Navigate pages with A/D keys. Escape closes. Walking away auto-closes after 200ms.
+
+**Book data:** `data/books.json` — 13 books across 5 categories (tip, lore, manual, notice, letter). Each book has a `biome` field; BookshelfPeek selects the biome-appropriate book for each shelf position using a stable position-based index. Explicit assignment via `floorData.books[]` overrides random selection.
+
+```
+┌─────────────────────────────────┐
+│  📘 Gleaner's Field Manual      │
+│     — Movement                  │
+│                                 │
+│  WASD or arrow keys to move.    │
+│  Q/E to strafe left and right.  │
+│  Hold SHIFT to move faster.     │
+│                                 │
+│  — Page 1 of 2 —               │
+│  [A] ← Prev  [D] Next →        │
+│  [Esc] Close                    │
+└─────────────────────────────────┘
+```
+
+**Content purpose:** Tips (guild bookshelves teach mechanics), Lore (inn bookshelves drip Dragon Conspiracy), Notices (guild work-order forms), Letters (home has the first conspiracy hook).
+
+**Juice:** `page-turn` SFX on open/turn. Bark from `interior.bookshelf.<biome>` pool on close. oneShot conspiracy bark on lore discovery. See §6.7.
+
+### 11.7 Bar Counter Peek (New — Interior Furnishing)
+
+**Tile:** `TILES.BAR_COUNTER` (26) — non-walkable, opaque half-wall furnishing.
+
+**Module:** `engine/bar-counter-peek.js` — autonomous billboard + interact handler.
+
+**Behaviour:** Face counter for 300ms → Toast billboard shows drink name, effect, and taps remaining. Press OK to consume a drink (tiny stat boost). 3 taps per counter per visit; resets on floor re-enter.
+
+**Per-biome menus:**
+- **Inn:** ☕ Boardwalk Brew (+1 energy), 🍺 Deep Ale (+5% speed), 🧃 Coral Tonic (clear 1 debuff)
+- **Bazaar:** 🍵 Spice Tea (+1 energy), 🧃 Coral Juice (+3 HP), 🫖 Warm Brew (+3% speed)
+- **Guild:** ☕ Black Coffee (+2 energy), 🥤 Stim Drink (+8% speed), 💊 Guild Remedy (clear 1 debuff)
+- **Home:** 🥛 Glass of Water (+1 energy), 🍲 Leftover Stew (+2 HP)
+
+```
+┌───────────────────────────────────┐
+│  🍺 Deep Ale — +5% speed         │
+│     (1 floor)                     │
+│     2/3 remaining  [OK] Drink     │
+└───────────────────────────────────┘
+```
+
+**Design intent:** The bar counter is the interior equivalent of a bonfire — a micro-rest that says "you're safe here." The effects are intentionally tiny; the value is emotional, not mechanical. See DOC-10 §5 for full specification.
 
 ---
 
@@ -1230,6 +1331,13 @@ These barks replace the NPC's normal dialogue for one day only. They are never r
 | `→ DOC-1 Phase C` | Cleaning system implementation (tile conditions, cleaning tools) |
 | `→ DOC-1 Phase D` | Hero AI implementation (patrol, sight cones, wake of carnage) |
 | `→ DOC-6` | Audio Engine — SFX wiring for day/night bells, barks, peeks |
+| `→ DOC-9 §3` | Bark System Architecture — bark pool key convention for interior NPC/interaction barks |
+| `→ DOC-9 §9` | Building Interior NPC Assignment — NPC roster per building, homeFloor pattern |
+| `→ DOC-10` | Cozy Interiors Design — time-freeze rule, bookshelf/bar interactions, building inventories, juice |
+| `→ DOC-10 §2` | Time-Freeze Rule — depth-2 floors freeze world clock, edge cases, HUD indicator |
+| `→ DOC-10 §4–5` | Bookshelf + Bar Counter interaction specs |
+| `→ DOC-10 §6` | Per-building interaction inventory (tiles, positions, content) |
+| `→ DOC-10 §8` | Book data schema (`data/books.json`) |
 | `⊕ PHASE C` | Cleaning system — clean pillar foundation |
 | `⊕ PHASE D` | Hero AI — hero cycle foundation |
 | `⊕ PHASE E` | Economy wiring — Kingdom Two Crowns drip model |

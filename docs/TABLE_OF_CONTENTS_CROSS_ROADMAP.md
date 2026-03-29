@@ -31,8 +31,8 @@ All five design documents, their scope, and section inventories. Each document n
 | Section | Content |
 |---------|---------|
 | §1 Overview | Environmental teaching philosophy |
-| §2 World Graph | Floor 0 → 0.1 → 0.1.N → 1 → 1.N → 2 → 3 hierarchy |
-| §3 Floor Registry | 14 floors + connection edges |
+| §2 World Graph | Floor 0 → 0.1 → 0.1.N → 1 → 1.N → 1.6 → 2 → 3 hierarchy |
+| §3 Floor Registry | 15 floors + connection edges (includes Floor 1.6 Gleaner's Home) |
 | §4 Gate-Contract System | Gate taxonomy, full-span rule, floor state tracking |
 | §5 Floor Designs | 5.1–5.8 individual floor specs (Approach → Frontier) |
 | §6 Hero Reveal | The Moment, Hero Entity, Wake of Carnage |
@@ -45,8 +45,9 @@ All five design documents, their scope, and section inventories. Each document n
 | **§13 Gleaner Pivot** | Cleaning Loop, Restocking Loop, Dungeon Reset Loop |
 | **§14 Hero Path System** | 4 hero types, patrol routes, AI, stealth mechanics |
 | **§15 Pressure Wash Simulator** | Per-texel grime, cleaning tools, contracts |
-| **§16 Revised Phases** | Phase 1–8 reordered for Gleaner pivot |
-| **§17 Revised Player Journey** | Three-act progression |
+| **§16 Revised Phases** | Phase 0 (Pre-Phase) + Phase 1–8 reordered for Gleaner pivot |
+| **§17 Revised Player Journey** | Pre-phase send-off → three-act progression |
+| **§18 Pre-Phase 0 — Morning Send-Off** | Bark system, Dispatcher gate NPC, Floor 1.6 home, key gate mechanic, narrative alignment, pillar juice |
 
 ### DOC-3: GONE_ROGUE_ASSET_UTILIZATION_ROADMAP.md
 > **Scope**: Maps every Gone Rogue JS module to PORTED / PORT NOW / PORT LATER / OUT OF SCOPE.
@@ -118,13 +119,13 @@ All five design documents, their scope, and section inventories. Each document n
 | §2 Three Core Pillars | Clean, Restock, Endure — one-liners and primary verbs |
 | §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy (7-category readiness), "just one more crate" pull |
 | §4 Hero Cycle — Narrative Deploy | 3-day cadence, Taskmaster NPC, implied deploy via mail/barks/dungeon re-entry, payout tiers |
-| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role |
-| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta |
+| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role, **interior time-freeze rule** |
+| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta, Pre-Phase, **Cozy Interior (§6.7)** |
 | §7 Pressure Gradient | Readiness target escalation per hero cycle |
 | §8 3-Day Cycle Session Rhythm | The "one more cycle" pull, daily structure |
 | §9 Implementation Notes | Module mapping table + jam-scope priority order |
 | §10 Design Axioms | Seven guiding principles (expanded: "home is heartbeat", "discovery over declaration") |
-| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts |
+| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts, **Bookshelf Peek (§11.6)**, **Bar Counter Peek (§11.7)** |
 | §12 Time Cycle Accommodation Inventory | Fits naturally / requires adaptation / deferred tables, time-aware peek summary |
 | §13 Dungeon Persistence & Multi-Floor Maintenance | Work persists across days, dungeon difficulty tiers, hero chain penetration depth |
 | §14 Hero Run Report — Mailbox Detail Design | Dungeon thumbnail cards, report tone by readiness, activity breakdown icons |
@@ -150,6 +151,42 @@ All five design documents, their scope, and section inventories. Each document n
 | §11 Implementation Priority | Jam-scope (7.5h) vs post-jam changes, per-module estimates |
 | §12 Design Axioms | Seven visual-specific axioms (clipboard is the frame, ink on paper, bigger is funner) |
 
+### DOC-9: NPC_SYSTEM_ROADMAP.md
+> **Scope**: Full NPC type taxonomy, Fable-style bark system implementation record, and roadmaps for interactive NPCs, vendors, Dispatcher NPCs, Hero rovers, and building interior NPC assignment. Documents what is implemented (Phase A.0) and what is roadmapped (Phases B–D).
+
+| Section | Content |
+|---------|---------|
+| §1 Overview | Layered NPC architecture: bark pools → patrol bodies → interaction verbs → encounter scripting |
+| §2 NPC Type Taxonomy | Table: AMBIENT / INTERACTIVE / VENDOR / DISPATCHER / HERO movement, interaction, bark, rarity |
+| §3 Bark System Architecture | BarkLibrary API, pool key convention, firing hierarchy, how to add pools |
+| **§4 Implemented: NpcSystem.js** | API, entity field schema, built-in populations table, game.js wiring hooks |
+| §5 Roadmap: Interactive NPCs | DialogBox.startConversation() format, planned NPCs (Guild Clerk, Archivist, Old Gleaner), task table |
+| §6 Roadmap: Vendors | Current state, target state, per-faction bark pools needed, task table |
+| §7 Roadmap: Dispatcher NPCs | Current gate-encounter implementation, force-facing mechanic spec, future Dispatcher instances |
+| §8 Roadmap: Hero NPCs | Hero types (Fighter/Rogue/Mage/Paladin), movement model (Pathfind-based), sight cone, implementation tasks |
+| §9 Roadmap: Building Interior NPCs | Per-building NPC roster table, homeFloor assignment pattern, task table |
+| §10 Module & File Map | Implemented vs roadmapped file table with phases |
+| §11 Bare Minimum Deployment Checklist | What must work for April 5 jam submission |
+| §12 Cross-References | Links to other doc sections and engine files |
+
+### DOC-10: COZY_INTERIORS_DESIGN.md
+> **Scope**: Cozy interior design doc. Covers the Safety Contract (buildings as havens), the time-freeze rule for depth-2 floors, interior interaction taxonomy (bookshelf/bar counter/vendor/NPC/furniture), per-building interaction inventories, cozy minigame stubs (post-jam), book/document data schema, peek overlay module specs, interior juice palette, and implementation roadmap.
+
+| Section | Content |
+|---------|---------|
+| §1 Overview — Safety Contract | Four channels of safety (time freeze, warm aesthetics, low-stakes interactions, tonal bark shift), design axiom |
+| §2 Time-Freeze Rule | Depth-2 = frozen, depth-1/3 = normal; implementation spec (`DayCycle.setPaused`), edge cases, HUD indicator |
+| §3 Interior Interaction Taxonomy | Five categories (bookshelf/bar/vendor/NPC/furniture) with tempo diversity principle |
+| §4 Bookshelf Interactions | BOOKSHELF tile (25) properties, BookshelfPeek module, content categories, conspiracy drip strategy |
+| §5 Bar Counter Interactions | BAR_COUNTER tile (26) properties, BarCounterPeek module, per-biome drink menus, "micro-bonfire" design intent |
+| §6 Per-Building Interaction Inventory | Full tile inventories for Entry Lobby, Bazaar, Inn, Guild, Home, Watchman's Post |
+| §7 Cozy Minigame Stubs | Post-jam roadmap: card sorting table, trophy shelf, cooking pot, notice board puzzle, music box |
+| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (13 books), how to add new books |
+| §9 Peek Overlay Module Specs | BookshelfPeek API table + BarCounterPeek API table with full method signatures |
+| §10 Juice — Interiors Feel Like Home | Time-freeze juice, bookshelf juice, bar counter juice, building ambient juice |
+| §11 Implementation Status & Roadmap | Phase A.0 (complete), Phase B (day cycle + home), Phase C (interior polish), Post-jam (minigames) |
+| §12 Cross-References | Links to DOC-7/DOC-2/DOC-9 sections and engine files |
+
 ---
 
 ## Cross-Roadmap Execution Order
@@ -157,6 +194,28 @@ All five design documents, their scope, and section inventories. Each document n
 Phases are dependency-ordered. Each phase lists its source document, section reference, estimated hours, and what it unblocks. **All phases must complete for a playable prototype.**
 
 Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
+
+---
+
+### 🟢 PHASE A.0 — Pre-Phase: Morning Send-Off & Key Gate *(new)*
+> Initial player experience: scripted walk → ambient barks → Dispatcher gate → home fetch → dungeon unlocks.
+
+| # | Task | Source Doc | Section | Est. | Depends On |
+|---|------|-----------|---------|------|------------|
+| A0.1 | `engine/bark-library.js` — Fable-style bark engine | DOC-2 TUTORIAL | §18.3 | 1.5h | ✅ DONE |
+| A0.2 | `data/barks/en.js` — all bark text pools | DOC-2 TUTORIAL | §18.3 | 1h | ✅ DONE |
+| A0.3 | `intro-walk.js` — `bark` step type + `HOME_DEPARTURE` sequence | DOC-2 TUTORIAL | §18.6 | 30m | ✅ DONE |
+| A0.4 | `npc-composer.js` — `dispatcher` vendor preset | DOC-2 TUTORIAL | §18.4 | 15m | ✅ DONE |
+| A0.5 | `floor-manager.js` — Floor 1.6 + home biome + DOOR(17,7) | DOC-2 TUTORIAL | §18.5 | 1h | ✅ DONE |
+| A0.6 | `game.js` — BarkLibrary.setDisplay(), _onFloorArrive(), Dispatcher spawn, key-check | DOC-2 TUTORIAL | §18.3/18.4 | 1.5h | ✅ DONE |
+| A0.7 | Polish: Dispatcher despawn animation, `npc.dispatcher.gate.unlocked` bark | DOC-2 TUTORIAL | §18.7 | 30m | Post-jam |
+
+**New files**: `engine/bark-library.js` (Layer 1), `data/barks/en.js` (Layer 5)
+**Modified**: `engine/intro-walk.js`, `engine/npc-composer.js`, `engine/floor-manager.js`, `engine/game.js`, `index.html`
+
+**Phase A.0 total**: ~5.75h (A0.1–A0.6 complete, A0.7 post-jam polish)
+**Unblocks**: Phase A (combat system can now place enemies in a world the player can actually reach), Phase B (crate economy lands in a dungeon the player enters correctly)
+**Design refs**: DOC-2 §18, DOC-JUICE §5.2, §6.6
 
 ---
 
@@ -203,6 +262,11 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 **Phase B total**: ~9.5h (~6.5h complete, ~4h remaining for B5–B7)
 **Unblocks**: Phase C (cleaning needs working crate economy), Phase E (hero encounters need restockable dungeon)
 **Design refs**: DOC-4 §17.2 (crate slot schema), DOC-2 §13 (Gleaner pivot data structures)
+
+**Phase B NPC add-ons** (see DOC-9 §6, §9):
+- Vendor ambient barks + proximity bark trigger (DOC-9 §6.4) — 45m
+- Register Floor 1.3 (Gleaner's Guild) interior NPCs (DOC-9 §9.4) — 30m
+- Guild Clerk dialogue tree `data/dialogues/guild-clerk.js` (DOC-9 §5.3) — 1h
 
 ---
 

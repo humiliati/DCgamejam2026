@@ -24,8 +24,9 @@
  *   "1"       depth 1: exterior — The Promenade
  *   "1.1"     depth 2: interior — Coral Bazaar
  *   "1.1.N"   depth 3: nested dungeon — Coral Cellars
+ *   "1.6"     depth 2: interior — Gleaner's Home (player bunk)
  *
- * Floors "0", "1", "1.1" are hand-authored.
+ * Floors "0", "1", "1.1", "1.6" are hand-authored.
  * All depth-3+ floors are proc-gen via GridGen.
  */
 var FloorManager = (function () {
@@ -155,6 +156,7 @@ var FloorManager = (function () {
     if (_depth(floor) === 2) {
       if (floor === '1.1') return 'bazaar';      // Coral Bazaar
       if (floor === '1.2') return 'guild';       // Gleaner's Guild (future)
+      if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
       if (floor === '2.1') return 'inn';         // Inn (future)
       if (floor === '3.1') return 'armory';      // Armory (future)
       return 'bazaar';  // fallback for unknown interiors
@@ -265,6 +267,27 @@ var FloorManager = (function () {
           }),
           floorTexture: 'floor_grass_stone'
         };
+      case 'home':
+        // Gleaner's bunk room — warm planked interior. Low ceiling, lived-in.
+        // Wood plank walls with a soft amber lamp glow. Bare stone floor.
+        // Contains: bed (BONFIRE tile repurposed), stash chest (DOOR tile),
+        // mailbox (PILLAR tile), exit door to The Promenade (DOOR_EXIT).
+        return {
+          textures: Object.freeze({
+            1: 'wood_plank',       // WALL — warm plank walls
+            2: 'door_wood',        // DOOR — stash chest (reused door tile)
+            3: 'door_wood',        // DOOR_BACK
+            4: 'door_wood',        // DOOR_EXIT — out to The Promenade
+            5: 'stairs_down',      // STAIRS_DN (unused in home)
+            6: 'stairs_up',        // STAIRS_UP (unused in home)
+            10: 'stone_rough',     // PILLAR — mailbox post
+            14: 'door_iron'        // BOSS_DOOR (unused in home)
+          }),
+          tileWallHeights: Object.freeze({
+            10: 1.8                // PILLAR/mailbox — shoulder-height post
+          }),
+          floorTexture: 'floor_dirt'
+        };
       case 'cellar':
         // Stone walls ↔ brown dirt floor — dungeon contrast
         return {
@@ -312,6 +335,7 @@ var FloorManager = (function () {
       exterior:   { wallLight: '#7a8a7a', wallDark: '#5a6a5a', door: '#8a7a60', doorDark: '#6a5a40', ceil: '#2a3a4a', floor: '#6a4038' },  // cool evening
       promenade:  { wallLight: '#d4a080', wallDark: '#a07858', door: '#c89050', doorDark: '#a07040', ceil: '#e8a070', floor: '#d4a878' },  // warm sunset coral
       bazaar:     { wallLight: '#c89868', wallDark: '#a07848', door: '#b08050', doorDark: '#8a6030', ceil: '#3a1a0a', floor: '#c89868' },  // warm coral-gold interior
+      home:       { wallLight: '#b88a58', wallDark: '#8a6438', door: '#a07040', doorDark: '#7a5020', ceil: '#2a1808', floor: '#4a3018' },  // warm amber plank room
       cellar:     { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#b08040', doorDark: '#906830', ceil: '#1a1a22', floor: '#3a3028' },  // dirt-brown fallback
       foundry:    { wallLight: '#7a5a4a', wallDark: '#5a3a2a', door: '#aa6a3a', doorDark: '#8a5a2a', ceil: '#1a1210', floor: '#3a2a20' },  // warm dirt fallback
       sealab:     { wallLight: '#6a7a8a', wallDark: '#4a5a6a', door: '#6a8aaa', doorDark: '#4a6a8a', ceil: '#0a1a2a', floor: '#4a5a6a' }   // cool tile fallback
@@ -388,6 +412,19 @@ var FloorManager = (function () {
           floorColor: '#c89868',
           gridSize: { w: 16, h: 12 },
           roomCount: { min: 2, max: 3 }
+        }, biomeTextures));
+      }
+      if (floor === '1.6') {
+        return SpatialContract.interior(Object.assign({
+          label: "Gleaner's Home",
+          wallHeight: 2.0,
+          renderDistance: 8,
+          fogDistance: 6,
+          fogColor: { r: 20, g: 10, b: 5 },
+          ceilColor: '#2a1808',
+          floorColor: '#4a3018',
+          gridSize: { w: 10, h: 8 },
+          roomCount: { min: 1, max: 1 }
         }, biomeTextures));
       }
       // Generic interior fallback
@@ -524,6 +561,9 @@ var FloorManager = (function () {
   // 20×16 exterior. Sunset-washed town plaza. Player arrives from
   // the south gate (DOOR_EXIT back to The Approach). Shop facades at
   // the north with DOORs into building interiors (→ floor 2).
+  // Home door at (17,7) on the east wall — behind the east pillar,
+  // leads to Gleaner's Home (Floor 1.6). From the dungeon entrance
+  // at (5,2), home is due EAST — the Dispatcher's direction hint.
   //
   // Legend: 0=EMPTY, 1=WALL, 2=DOOR, 4=DOOR_EXIT, 10=PILLAR, 18=BONFIRE, 21=TREE
   //
@@ -542,7 +582,7 @@ var FloorManager = (function () {
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 4  corridor
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 5  pillar row
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 6  plaza
-    [21, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 7  bonfire at (9,7)
+    [21, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  bonfire (9,7) + HOME DOOR (17,7)
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 8  plaza
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 9  pillar row
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 10 open
@@ -573,7 +613,7 @@ var FloorManager = (function () {
         doorExit: { x: 9, y: 13 },  // DOOR_EXIT — back to The Approach (depth 1→1)
         doorEntry: { x: 5, y: 2 }   // DOOR — Coral Bazaar entrance (depth 1→2)
       },
-      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0' },  // DOORs → Coral Bazaar, DOOR_EXIT → The Approach
+      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0', '17,7': '1.6' },  // DOORs (5,2)+(14,2)→Coral Bazaar, DOOR_EXIT (9,13)→Approach, HOME DOOR (17,7)→Gleaner's Home
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
       biome: 'promenade',
@@ -636,7 +676,61 @@ var FloorManager = (function () {
     };
   }
 
-  // ── Floor generation ───────────────────────────────────────────────
+  // ── Hand-authored Floor 1.6: Gleaner's Home (depth 2) ─────────────
+  //
+  // 10×8 interior. The player's bunk room off The Promenade. Cosy,
+  // minimal — a single room with bed, stash chest, and mailbox post.
+  // The DOOR_EXIT at (5, 7) leads back out to The Promenade (Floor 1).
+  //
+  // Layout note: The dungeon entrance on Floor 1 is at (5, 2) facing
+  // NORTH. The player's home door is on the EAST wall of the Promenade,
+  // at (17, 7) behind a pillar. From the dungeon gate at (5, 2) the
+  // home door is due EAST — the Dispatcher gives this direction hint.
+  //
+  // Legend: 0=EMPTY, 1=WALL, 4=DOOR_EXIT, 10=PILLAR(mailbox), 18=BONFIRE(bed)
+  //
+  //   Work keys (🗝️) are represented as a DOOR (tile 2) at (5, 3).
+  //   Interacting triggers the key-pickup event in Game (_checkWorkKeysChest).
+
+  var _FLOOR16_W = 10;
+  var _FLOOR16_H = 8;
+  var _FLOOR16_GRID = [
+    // 0  1  2  3  4  5  6  7  8  9
+    [  1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  ceiling wall
+    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 1  back of room
+    [  1, 0,18, 0, 0, 0, 0, 0, 0, 1], // 2  BED (bonfire tile) at (2,2)
+    [  1, 0, 0, 0, 0, 2, 0, 0, 0, 1], // 3  KEYS (door tile) at (5,3)
+    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 4  open floor
+    [  1, 0,10, 0, 0, 0, 0, 0, 0, 1], // 5  MAILBOX (pillar) at (2,5)
+    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 6  approach
+    [  1, 1, 1, 1, 1, 4, 1, 1, 1, 1]  // 7  south wall — DOOR_EXIT (5,7) to Promenade
+  ];
+
+  var _FLOOR16_SPAWN = { x: 5, y: 6, dir: 3 }; // facing NORTH (toward room interior)
+  var _FLOOR16_ROOMS = [
+    { x: 1, y: 1, w: 8, h: 6, cx: 5, cy: 3 }
+  ];
+
+  function _buildFloor16() {
+    var grid = [];
+    for (var y = 0; y < _FLOOR16_H; y++) {
+      grid[y] = _FLOOR16_GRID[y].slice();
+    }
+    return {
+      grid: grid,
+      rooms: _FLOOR16_ROOMS.slice(),
+      doors: {
+        stairsUp: null,
+        stairsDn: null,
+        doorExit: { x: 5, y: 7 }   // DOOR_EXIT — back to The Promenade
+      },
+      doorTargets: { '5,7': '1' },  // DOOR_EXIT → The Promenade
+      gridW: _FLOOR16_W,
+      gridH: _FLOOR16_H,
+      biome: 'home',
+      shops: []
+    };
+  }
 
   /**
    * Generate (or restore from cache) the current floor.
@@ -674,6 +768,12 @@ var FloorManager = (function () {
       _floorData = _buildFloor2();
       _floorData.contract = contract;
       _enemies = [];  // No enemies in the bazaar (safe zone)
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '1.6') {
+      // Hand-authored Floor 1.6: Gleaner's Home (depth 2)
+      _floorData = _buildFloor16();
+      _floorData.contract = contract;
+      _enemies = [];  // Home is always safe
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else {
       _floorData = GridGen.generate({
@@ -781,6 +881,19 @@ var FloorManager = (function () {
     _floorCache = {};
   }
 
+  /**
+   * Invalidate the cached state for a specific floor ID.
+   * Forces full re-generation next time that floor is visited.
+   * Used when game state changes (e.g., gate unlock removes an NPC).
+   *
+   * @param {string} floorId
+   */
+  function invalidateCache(floorId) {
+    if (_floorCache[floorId]) {
+      delete _floorCache[floorId];
+    }
+  }
+
   function removeEnemy(enemy) {
     var idx = _enemies.indexOf(enemy);
     if (idx >= 0) _enemies.splice(idx, 1);
@@ -829,6 +942,7 @@ var FloorManager = (function () {
     getFloor0Spawn: function () { return { x: _FLOOR0_SPAWN.x, y: _FLOOR0_SPAWN.y, dir: _FLOOR0_SPAWN.dir }; },
 
     // Cache
-    clearCache: clearCache
+    clearCache: clearCache,
+    invalidateCache: invalidateCache
   };
 })();

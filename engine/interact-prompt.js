@@ -52,6 +52,8 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '', gleaner: 'interact.restock', gleanerIcon: '🧪' };
     ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨', gleaner: 'interact.restock', gleanerIcon: '📦' };
     ACTION_MAP[TILES.PUZZLE]    = { action: 'interact.reset',   icon: '🧩' };
+    ACTION_MAP[TILES.BOOKSHELF] = { action: 'interact.read',    icon: '📖' };
+    ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
   }
 
   /**
