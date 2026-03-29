@@ -1,7 +1,7 @@
 # Dungeon Gleaner — Core Game Loop & Juice Design
 
 **Created**: 2026-03-29  
-**Scope**: Identifies the game's three toyful pillars, defines the narrative hero cycle and day/night pressure system, expands peek interactions for the time cycle, and catalogs juice opportunities to make every action feel satisfying.  
+**Scope**: Identifies the game's three toyful pillars, defines the narrative hero cycle and day/night pressure system, expands peek interactions for the time cycle, specifies dungeon persistence across work days, details the mailbox hero-run report format, catalogs every dungeon reset element, and defines the daily vermin refresh and reanimation economy.  
 **Audience**: All team members — engineers, artists, and the designer.
 
 ---
@@ -49,10 +49,13 @@ The readiness score (0–100%) is always on screen during a maintenance run. It 
 
 | Sub-score | Weight | Quick Read |
 |-----------|--------|-----------|
-| Crates restocked | 40% | Crate fill bar |
-| Tiles cleaned | 30% | Grime overlay intensity |
-| Traps re-armed | 20% | Trap icon pulse |
+| Crates restocked | 25% | Crate fill bar |
+| Tiles cleaned | 20% | Grime overlay intensity |
+| Traps re-armed | 15% | Trap icon pulse |
 | Puzzles scrambled | 10% | Puzzle tile tint |
+| Corpses cleared / enemies restocked | 15% | Corpse glow / NPC count |
+| Doors relocked & buttons reset | 10% | Lock icon / button state |
+| Vermin repopulated (daily bonus) | 5% | Rat/bat ambient count |
 
 **Design rule:** Every action the player takes must visibly move at least one of these bars. If an action doesn't move a bar, it doesn't belong in the core loop.
 
@@ -669,6 +672,334 @@ Every peek interaction that should display or react to the current time:
 
 ---
 
+## 13. Dungeon Persistence & Multi-Floor Maintenance
+
+### 13.1 Work Persists Across Days
+
+When the player restocks Floor 1.1.1 on Day 1 and returns on Day 2, **every sealed crate, cleaned tile, re-armed trap, and scrambled puzzle is exactly where they left it**. The dungeon remembers. This is the foundation of the maintenance loop: progress is cumulative across the 2 work days before Hero Day.
+
+The only things that change between days are:
+- **Daily vermin refresh** (§16) — a fresh set of rats and bats spawns in cleared rooms.
+- **Ambient decay** (cosmetic) — cleaned tiles gain a faint dust overlay after 1 day. No mechanical effect, just visual: *"I cleaned this yesterday, it could use a touch-up."*
+
+### 13.2 Dungeon Difficulty Tiers & Expected Pace
+
+Not all dungeons restock at the same rate. The player manages a portfolio of dungeons, and the expectation is that **low-level dungeons are quick to reset while deep dungeons take the full 2-day window** — or longer.
+
+| Dungeon Tier | Example Floor | Reset Tasks | Expected Pace | Notes |
+|-------------|--------------|-------------|---------------|-------|
+| **Shallow** (1.1.1) | Coral Cellars | ~8 crates, ~20 dirty tiles, 2 traps, 1 puzzle | Fully restockable in 1 day | Bread-and-butter income. Can be perfected for bonus. |
+| **Mid** (1.1.2) | Coral Depths | ~14 crates, ~40 tiles, 4 traps, 2 puzzles, 3 corpses | Restockable in 1.5 days | Requires both work days and good time management. |
+| **Deep** (1.1.3+) | Coral Abyss | ~20 crates, ~60 tiles, 6 traps, 3 puzzles, 6 corpses, 2 formidable enemies | Barely touchable in 2 days | Partial restocking is the norm. Strategic triage required. |
+| **Surface interior** (1.1) | Coral Bazaar | ~5 crates, ~15 tiles, 0 traps, 1 puzzle | Half a day | Town-adjacent. Low payout, but reliable. |
+
+**Design implication:** The player must **triage**. They cannot fully restock everything in 2 days. They choose: *Do I perfect the Cellars for a guaranteed payout, or push into the Abyss for a risky but lucrative run?* This is the Stardew Valley crop-selection problem: time is the scarce resource, and every floor is a field that demands attention.
+
+### 13.3 Hero Exploration Across Multiple Dungeons
+
+On Hero Day, the dispatched hero doesn't just enter one floor. They follow a **dungeon chain** — descending from the entrance through every baited floor in sequence:
+
+```
+Hero enters Floor 1.1 (Coral Bazaar — baited, 72% ready)
+    ↓ clears it — smashes 2 crates, solves puzzle
+Hero descends to Floor 1.1.1 (Coral Cellars — baited, 85% ready)
+    ↓ clears it — good run, most crates survive
+Hero descends to Floor 1.1.2 (Coral Depths — baited, 41% ready)
+    ↓ struggles — 2 traps misfire, hero takes damage
+    ↓ hero retreats (readiness too low to continue)
+Floor 1.1.3 (Coral Abyss — not reached)
+```
+
+The hero's **penetration depth** depends on cumulative readiness. Well-stocked upper floors give the hero momentum. A poorly stocked mid-floor stops the chain. This means the player's restocking order matters: bottom-up restocking is risky (hero might not reach it), top-down is safe but leaves the lucrative deep floors untouched.
+
+---
+
+## 14. Hero Run Report — Mailbox Detail Design
+
+### 14.1 Report Structure
+
+The mailbox report is the primary feedback loop for the hero cycle. It must communicate **what happened to each dungeon** without walls of text. The solution: **dungeon thumbnail cards** — one per floor, arranged vertically in the mail parchment.
+
+```
+┌─────────────────────────────────────────────────┐
+│  📜  ADVENTURER'S GUILD — CYCLE 3 REPORT        │
+│  ─────────────────────────────────────────────  │
+│                                                  │
+│  ┌──────────┐  Coral Bazaar (1.1)               │
+│  │ ░░▓▓██░░ │  Readiness: 72% ✓                 │
+│  │ ░░▓▓██░░ │  Hero: The Seeker (Fighter)       │
+│  │ ░░▓▓░░░░ │  ⚔ 1 monster slain                │
+│  └──────────┘  📦 2 crates smashed               │
+│                🧩 1 puzzle solved                 │
+│                🪙 Payout: 18 coins                │
+│                                                  │
+│  ┌──────────┐  Coral Cellars (1.1.1)            │
+│  │ ██████▓▓ │  Readiness: 85% ✓ CLEAN RUN       │
+│  │ ████████ │  Hero: The Seeker (Fighter)       │
+│  │ ██████▓▓ │  ⚔ 3 monsters slain                │
+│  └──────────┘  📦 4 crates smashed               │
+│                🧩 0 puzzles (none present)        │
+│                🪤 2 traps triggered               │
+│                🪙 Payout: 42 coins (+50% bonus)   │
+│                                                  │
+│  ┌──────────┐  Coral Depths (1.1.2)             │
+│  │ ▓▓░░░░░░ │  Readiness: 41% ✗ HERO RETREATED  │
+│  │ ░░░░░░░░ │  Hero: The Seeker (Fighter)       │
+│  │ ▓▓░░░░░░ │  ⚔ 0 monsters (fled before combat)│
+│  └──────────┘  📦 1 crate smashed                │
+│                🪤 2 traps misfired (hero damaged) │
+│                🪙 Payout: 0 coins                 │
+│                ⚠ Hero retreated — low readiness   │
+│                                                  │
+│  ─────────────────────────────────────────────  │
+│  TOTAL: 60 coins deposited                      │
+│  💳 Card drop: Uncommon ♦ Riposte               │
+│  ─────────────────────────────────────────────  │
+│  Chain bonus: ✗ (Depths failed — chain broken)  │
+│                                                  │
+│  [↑/↓] Scroll   [F] Dismiss                     │
+└─────────────────────────────────────────────────┘
+```
+
+### 14.2 Dungeon Thumbnail
+
+Each floor in the report gets a **small grid thumbnail** (8×8 or 10×10 pixel block). This is a minimap-scale representation of the floor layout, colour-coded by post-hero condition:
+
+| Thumbnail Colour | Meaning |
+|------------------|---------|
+| `██` Dark green | Tile intact (crate sealed, trap armed, tile clean) |
+| `▓▓` Amber | Tile damaged (crate smashed, trap triggered, tile dirty) |
+| `░░` Red/dark | Tile destroyed or empty (corpse left, puzzle solved, blood stain) |
+| `▒▒` Blue | Tile untouched by hero (hero didn't reach this area) |
+
+The thumbnail gives an **instant visual read** of how much damage the hero did. A mostly-green thumbnail = clean run, barely any restocking needed. A mostly-red thumbnail = the hero wrecked the place.
+
+**Implementation:** The thumbnail is generated from the floor's tile grid at the moment the hero run completes. Each tile maps to a single pixel. The raycaster's existing `Minimap` module already renders per-tile colour — the thumbnail reuses that pipeline at a smaller scale.
+
+### 14.3 Report Content Scales with Readiness
+
+The quality of the report — and the *tone* — depends on the floor's readiness at hero arrival:
+
+| Readiness | Report Tone | Example Detail |
+|-----------|------------|----------------|
+| **≥ 90%** | Celebratory | *"The Seeker breezed through a perfectly stocked dungeon. Every trap fired. Every monster fought. Textbook run."* |
+| **70–89%** | Professional | *"Standard clearance. 4 crates looted, 2 traps triggered. Minor damage."* |
+| **50–69%** | Concerned | *"The Scholar struggled in the under-stocked Depths. Several empty crate frames disappointed. Puzzles were already solved — no challenge."* |
+| **< 50%** | Critical | *"The Seeker retreated from the Abyss after two traps misfired and a bare corridor offered nothing to loot. The Guild questions your commitment."* |
+
+### 14.4 Activity Breakdown Icons
+
+Each line item in the report uses a consistent icon vocabulary:
+
+| Icon | Activity | Restocking Implication |
+|------|----------|----------------------|
+| ⚔ | Monsters slain | Corpses to clear, enemies to restock/reanimate |
+| 📦 | Crates smashed | Crates to refill (slots emptied) |
+| 🧩 | Puzzles solved | Puzzles to re-scramble |
+| 🪤 | Traps triggered | Traps to re-arm |
+| 🚪 | Doors unlocked | Doors to re-lock |
+| 🔘 | Buttons pushed | Buttons to reset |
+| 🩸 | Blood tiles left | Tiles to pressure-wash |
+| 💀 | Hero died | No payout. Dungeon half-trashed. Hero's corpse is lootable (morbid bonus). |
+
+---
+
+## 15. Dungeon Reset Elements — What the Hero Leaves Behind
+
+When a hero runs through a baited floor, they leave a specific set of **reset tasks** for the Gleaner. Each element was seeded during floor generation and now needs to be restored. The readiness score (§3.2) tracks all of these.
+
+### 15.1 Element Catalog
+
+| Element | Seeded State (pre-hero) | Post-Hero State | Gleaner Reset Verb | Readiness Category |
+|---------|------------------------|-----------------|-------------------|--------------------|
+| **Crate** | Sealed, full (4/4 slots) | Smashed open, 0–1 items remain | Refill slots → Seal | Crates restocked (25%) |
+| **Corpse** | Not present | Fresh corpse with blood pool (2–4 bloody tiles) | Pressure-wash blood tiles, then harvest or reanimate corpse | Corpses cleared (15%) |
+| **Puzzle** | Scrambled (unsolved) | Solved (levers pulled, blocks placed) | Re-scramble: interact to randomize puzzle state | Puzzles scrambled (10%) |
+| **Trap** | Armed (hidden) | Triggered (visible, broken mechanism) | Re-arm: place trap component in mechanism | Traps re-armed (15%) |
+| **Door** | Locked | Unlocked (hero picked or bashed it) | Re-lock: interact with lock mechanism | Doors/buttons reset (10%) |
+| **Button** | Unpushed (raised) | Pushed (depressed, mechanism activated) | Reset: interact to raise button, deactivate mechanism | Doors/buttons reset (10%) |
+| **Enemy (formidable)** | Alive, patrolling (friendly NPC to Gleaner) | Dead (hero killed it) → corpse | Full reanimation at altar (high value) | Enemies restocked (15%) |
+| **Vermin (rats/bats)** | Alive, ambient | Dead (hero killed or Gleaner cleared) | Daily refresh (auto) or reanimate for bonus credit | Vermin repopulated (5%) |
+
+### 15.2 Corpse Cleanup — Pressure Washing
+
+Corpses are the messiest reset task. When a hero slays a monster, it leaves:
+1. A **corpse tile** at the death position (interactable).
+2. A **blood splash** on 2–4 adjacent tiles (grime variant: `TILE_BLOOD_STAIN`).
+
+**Cleanup flow:**
+1. Pressure-wash the bloody tiles first. Each tile takes 1 scrub action (same as dirty tile cleaning). Washing reveals the clean floor beneath.
+2. Once surrounding blood is cleared, the corpse tile becomes interactable.
+3. Interact with corpse → **Harvest** (scavenger mode: collect parts for coin) **or Reanimate** (Gleaner mode: begin reanimation process — see §16).
+4. Corpse removed. Tiles fully clean. Readiness contribution recorded.
+
+**Juice:** Blood tiles have a distinct glossy-red overlay. Pressure-washing plays a *hiss-splash* SFX. The clean tile sparkles briefly as the blood vanishes. A "SCRUBBED" micro-toast pops with +1 coin.
+
+### 15.3 Puzzle Re-Scrambling
+
+Solved puzzles are visually distinct: levers are all pulled to one side, pressure plates are depressed, sliding blocks are in their solved configuration. The Gleaner interacts with the puzzle to **randomize** it back to an unsolved state.
+
+**Interaction:** Face solved puzzle → peek shows the solved configuration. `[F] Scramble` → puzzle state randomizes. Animation: blocks slide to new positions (0.3s). SFX: mechanical *click-clack-clunk*.
+
+**Design note:** The Gleaner doesn't need to *solve* puzzles — they just mess them up. This is thematically satisfying: you're making the dungeon harder for the next hero. The scramble is instant because the work is in *finding* all the puzzles, not in solving them.
+
+### 15.4 Door Relocking & Button Resetting
+
+Doors the hero unlocked need to be re-locked. Buttons the hero pushed need to be reset. These are quick interactions — each takes a single `[F] Interact` and plays a *click* SFX.
+
+**Doors:** Face unlocked door → peek shows an open lock icon. `[F] Re-lock` → lock icon snaps shut. Door texture swaps to locked variant. SFX: *clank*.
+
+**Buttons:** Face pushed button (depressed into wall) → peek shows a flat button. `[F] Reset` → button pops out to raised position. SFX: *spring-click*. If the button controlled a mechanism (portcullis, bridge, rotating wall), the mechanism resets too.
+
+**Design note:** Doors and buttons are the lightest reset task — fast to do, low coin value (1 each), but they contribute to the 10% readiness weight. The player can blitz through a corridor relocking doors in seconds. This creates a satisfying speed-run micro-loop within the larger maintenance rhythm.
+
+### 15.5 Persistence Rules Summary
+
+| Element | Persists Across Days? | Reset by Hero Run? | Daily Refresh? |
+|---------|----------------------|-------------------|----------------|
+| Sealed crate | ✅ Yes — stays sealed until hero smashes it | ✅ Hero empties it | No |
+| Cleaned tile | ✅ Yes — stays clean (faint dust cosmetic only) | ✅ Hero may dirty it (combat splatter) | No |
+| Re-armed trap | ✅ Yes — stays armed until hero triggers it | ✅ Hero triggers it | No |
+| Scrambled puzzle | ✅ Yes — stays scrambled until hero solves it | ✅ Hero solves it | No |
+| Locked door | ✅ Yes — stays locked until hero unlocks it | ✅ Hero unlocks it | No |
+| Reset button | ✅ Yes — stays reset until hero pushes it | ✅ Hero pushes it | No |
+| Reanimated enemy (formidable) | ✅ Yes — patrols until hero kills it | ✅ Hero kills it | No |
+| Reanimated vermin | ❌ Cleared daily | ✅ Hero kills them too | ✅ Fresh batch each dawn |
+| Blood tiles | ✅ Yes — stays until player pressure-washes | No (hero doesn't clean) | No |
+| Player's partial crate fills | ✅ Yes — items in slots persist | ✅ Hero may smash the crate (items lost) | No |
+
+---
+
+## 16. Daily Vermin Refresh & Reanimation Economy
+
+### 16.1 The Vermin Layer
+
+Every dungeon floor has **vermin spawn nodes** — fixed positions in corridors and rooms where rats, bats, and cave spiders appear. These are the dungeon's ambient wildlife. On each work day at dawn, vermin nodes refresh:
+
+- Nodes the player cleared yesterday spawn new vermin.
+- Nodes with still-living vermin remain unchanged.
+- Vermin never spawn in rooms the player is currently occupying (no pop-in).
+
+**Vermin purpose:**
+1. **Micro-combat encounters.** Light combat that keeps the player engaged between maintenance tasks. Vermin use the existing card combat system but with trivial difficulty — 1–2 HP, predictable attack patterns.
+2. **Reanimation material.** Defeated vermin leave small corpses that can be reanimated for a minor readiness bonus.
+3. **Ambient life.** Vermin make the dungeon feel alive. Their squeaks and flutters are part of the soundscape.
+
+### 16.2 The Reanimation Mechanic
+
+Defeated enemies (vermin or formidable) leave corpses. The Gleaner can **reanimate** these corpses at a **Reassembly Altar** (existing tile type from DOC-4 §17), converting them from dead obstacle to living dungeon inhabitant — a friendly NPC that patrols the floor.
+
+**Reanimation flow:**
+1. Defeat enemy in combat (or find hero-killed corpse).
+2. Interact with corpse → `[F] Harvest` (scavenger: coins) **or** `[F] Reanimate` (Gleaner: readiness).
+3. If reanimate: carry corpse remains to the nearest Reassembly Altar.
+4. Interact with altar → deposit remains → altar animation plays (necromantic glow, 1.5s).
+5. Reanimated creature spawns at the altar and begins patrolling. It is **friendly to the Gleaner** (won't attack, responds to proximity with a nod or ambient bark). It is **hostile to heroes** on Hero Day.
+
+**Reanimated creatures are coworkers.** They patrol corridors, stand guard in rooms, and add to the dungeon's atmosphere. A well-reanimated floor looks like a living ecosystem — not a dead ruin.
+
+### 16.3 Reanimation Value Hierarchy
+
+Not all corpses are worth the same. The value hierarchy incentivizes the player to prioritize formidable enemies over vermin — but vermin restocking is still worth doing for completionists.
+
+| Creature Type | Combat Difficulty | Reanimate Effort | Readiness Value | Coin Value | Notes |
+|--------------|------------------|-----------------|----------------|-----------|-------|
+| **Rat** | Trivial (1 HP) | Instant at altar | +1% vermin score | 1 coin | Quick. Many nodes. Adds up. |
+| **Bat** | Trivial (1 HP) | Instant at altar | +1% vermin score | 1 coin | Same as rat. Flying variant. |
+| **Cave Spider** | Easy (2 HP) | Instant at altar | +2% vermin score | 2 coins | Slightly tougher, slightly better. |
+| **Skeleton** | Medium (4 HP) | 1 component + altar | +5% enemy score | 5 coins | Requires bone component (salvaged or bought). |
+| **Construct** | Hard (6 HP) | 2 components + altar | +8% enemy score | 8 coins | Requires mechanical parts. Hero-killed constructs leave usable parts. |
+| **Elemental** | Hard (8 HP) | 3 components + altar | +12% enemy score | 12 coins | Requires elemental cores (rare drop or shop). Most valuable standard reanimate. |
+| **Mini-boss** | Boss (15+ HP) | 5 components + altar + puzzle | +20% enemy score | 25 coins | Floor-specific. Only appears once per Hero cycle. Full questline to reanimate. |
+
+### 16.4 Friendly NPC Behavior (Reanimated Creatures)
+
+Reanimated creatures become part of the dungeon's cast:
+
+- **Patrol routes:** They walk fixed paths between their spawn node and 2–3 nearby waypoints. Same `Pathfind` module used by hostile enemies, but with the aggro flag disabled for the Gleaner.
+- **Ambient barks:** Reanimated skeletons might clatter their jaw. Reanimated constructs hum with mechanical resonance. These are 1–2 second ambient SFX that play when the player is within 3 tiles.
+- **Hero Day role:** On Hero Day, reanimated creatures fight the hero. Their combat effectiveness depends on the dungeon's readiness. A well-reanimated floor with strong creatures gives the hero a real challenge — and a bigger payout if the hero survives.
+- **Death on Hero Day:** Heroes kill reanimated creatures, turning them back into corpses. The cycle begins again.
+
+### 16.5 The Restocking Value Pyramid
+
+The complete restocking value hierarchy, from highest to lowest maintenance effort and reward:
+
+```
+        ┌─────────────┐
+        │  FORMIDABLE  │  Skeleton, Construct, Elemental, Mini-boss
+        │  ENEMIES     │  High value. Multi-step reanimate. 
+        │  (15% weight)│  These are the "crop" you cultivate.
+        ├─────────────┤
+        │  CRATES &    │  Refill slots, seal crates. Medium effort.
+        │  TRAPS       │  The bread-and-butter of restocking.
+        │  (40% weight)│  Kingdom Two Crowns coin drip lives here.
+        ├─────────────┤
+        │  TILES &     │  Pressure-wash blood, scrub grime.
+        │  CORPSES     │  Satisfying but time-consuming.
+        │  (20% weight)│  The "cleaning" pillar's home turf.
+        ├─────────────┤
+        │  PUZZLES,    │  Quick interactions. Low coin value.
+        │  DOORS,      │  Speed-run material. Completionist bait.
+        │  BUTTONS     │  The "last 10%" of readiness.
+        │  (20% weight)│
+        ├─────────────┤
+        │  VERMIN      │  Daily refresh. Trivial combat + reanimate.
+        │  (5% weight) │  Extra credit. "Nice to have" income.
+        └─────────────┘
+```
+
+The pyramid communicates priority: **formidable enemies are the most impactful restocking task, vermin are the least.** But a perfectionist who clears every rat node and seals every crate will hit 100% readiness — and the jackpot card that comes with it.
+
+### 16.6 Day-Over-Day Example: A Two-Day Restocking Run
+
+```
+DAY 1 (Floor 1.1.1 — Coral Cellars, post-hero state):
+  ─────────────────────────────────────────
+  Readiness: 0% (everything trashed)
+  8 crates smashed, 20 dirty tiles, 3 blood pools (6 bloody tiles),
+  2 traps triggered, 1 puzzle solved, 2 doors unlocked,
+  3 rat nodes (alive), 1 skeleton corpse, 1 construct corpse
+
+  Morning: Descend. Start at entrance.
+  → Pressure-wash 6 bloody tiles near skeleton corpse. (+3% clean)
+  → Harvest skeleton corpse for parts. (+bone component in bag)
+  → Re-arm 2 traps from bag supplies. (+15% traps)
+  → Restock 4 of 8 crates (run out of supplies). (+12% crates)
+  → Scramble puzzle. (+10% puzzles)
+  → Kill 3 rats in corridor combat. Reanimate 2 at altar. (+2% vermin)
+  → Relock 1 door on the way out. (+5% doors)
+  
+  End of Day 1: Readiness at ~47%. Head home before dusk.
+  
+DAY 2 (Floor 1.1.1 — continuing):
+  ─────────────────────────────────────────
+  Readiness: 47% (yesterday's work persists)
+  3 new rats spawned at cleared nodes. Construct corpse still there.
+  4 crates still need restocking. 14 dirty tiles remain. 1 door unlocked.
+
+  Morning: Buy restock supplies at Coral Bazaar shops.
+  → Descend. All sealed crates from yesterday still sealed. ✅
+  → Restock remaining 4 crates. (+13% crates — total 25%)
+  → Scrub 14 dirty tiles. (+14% clean — total 37%)
+  → Reanimate construct at altar (2 mechanical parts). (+8% enemies)
+  → Kill 3 new rats, reanimate all 3. (+3% vermin — total 5%)
+  → Relock final door. (+5% doors — total 10%)
+  
+  End of Day 2: Readiness at ~85%. Clean run territory!
+  Bait floor with Taskmaster for tomorrow's hero.
+  
+DAY 3 (HERO DAY):
+  ─────────────────────────────────────────
+  Hero enters at 85% readiness. Clean run bonus applies.
+  Report arrives in mailbox at dusk.
+  Payout: 42 coins + 50% bonus = 63 coins.
+  Thumbnail: mostly green with a few amber patches.
+  "The Seeker cleared the Cellars efficiently. Well maintained."
+```
+
+---
+
 ## § Cross-References
 
 | Tag | Reference |
@@ -677,6 +1008,7 @@ Every peek interaction that should display or react to the current time:
 | `→ DOC-4 §18` | Hero Path & Stealth — patrol routes, hero types, encounter flow |
 | `→ DOC-4 §19` | Faction Economy — who hires the hero, who pays the Gleaner |
 | `→ DOC-2 §13` | Gleaner Pivot — original maintenance loop specs |
+| `→ DOC-2 §13.3` | Dungeon Reset Loop — readiness score, work orders, monster reassembly, secret restoration |
 | `→ DOC-2 §14` | Hero Path System — cycle timer, route generation |
 | `→ DOC-2 §16 Phase 3` | Dungeon Reset tasks (work orders, readiness submission) |
 | `→ DOC-1 Phase C` | Cleaning system implementation (tile conditions, cleaning tools) |
@@ -685,3 +1017,4 @@ Every peek interaction that should display or react to the current time:
 | `⊕ PHASE C` | Cleaning system — clean pillar foundation |
 | `⊕ PHASE D` | Hero AI — hero cycle foundation |
 | `⊕ PHASE E` | Economy wiring — Kingdom Two Crowns drip model |
+| `⊕ PHASE F` | Dungeon persistence — per-tile state save/load across day boundaries |

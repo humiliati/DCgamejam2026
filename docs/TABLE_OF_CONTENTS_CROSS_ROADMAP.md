@@ -110,13 +110,13 @@ All five design documents, their scope, and section inventories. Each document n
 | Modification Guide | Adding SFX, sequences, music tracks, tuning volume levels |
 
 ### DOC-7: CORE_GAME_LOOP_AND_JUICE.md
-> **Scope**: Core loop design doc — the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, and a full juice inventory for every mechanic.
+> **Scope**: Core loop design doc. Covers the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, dungeon persistence & multi-floor maintenance, hero run mailbox reports with dungeon thumbnails, dungeon reset element catalog, daily vermin refresh & reanimation economy, and a full juice inventory for every mechanic.
 
 | Section | Content |
 |---------|---------|
 | §1 One-Line Pitch | The janitor framing and central tension |
 | §2 Three Core Pillars | Clean, Restock, Endure — one-liners and primary verbs |
-| §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy, "just one more crate" pull |
+| §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy (7-category readiness), "just one more crate" pull |
 | §4 Hero Cycle — Narrative Deploy | 3-day cadence, Taskmaster NPC, implied deploy via mail/barks/dungeon re-entry, payout tiers |
 | §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role |
 | §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta |
@@ -126,6 +126,10 @@ All five design documents, their scope, and section inventories. Each document n
 | §10 Design Axioms | Seven guiding principles (expanded: "home is heartbeat", "discovery over declaration") |
 | §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts |
 | §12 Time Cycle Accommodation Inventory | Fits naturally / requires adaptation / deferred tables, time-aware peek summary |
+| §13 Dungeon Persistence & Multi-Floor Maintenance | Work persists across days, dungeon difficulty tiers, hero chain penetration depth |
+| §14 Hero Run Report — Mailbox Detail Design | Dungeon thumbnail cards, report tone by readiness, activity breakdown icons |
+| §15 Dungeon Reset Elements | Corpse cleanup, puzzle re-scramble, door relock, button reset, persistence rules |
+| §16 Daily Vermin Refresh & Reanimation Economy | Vermin spawn nodes, reanimation flow, value hierarchy, friendly NPC behavior, 2-day walkthrough |
 
 ---
 
