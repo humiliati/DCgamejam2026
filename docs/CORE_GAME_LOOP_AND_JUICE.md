@@ -1,7 +1,7 @@
 # Dungeon Gleaner — Core Game Loop & Juice Design
 
 **Created**: 2026-03-29  
-**Scope**: Identifies the game's three toyful pillars, defines the narrative hero cycle and day/night pressure system, expands peek interactions for the time cycle, specifies dungeon persistence across work days, details the mailbox hero-run report format, catalogs every dungeon reset element, and defines the daily vermin refresh and reanimation economy.  
+**Scope**: Identifies the game's three toyful pillars, defines the narrative hero cycle and day/night pressure system, expands peek interactions for the time cycle, specifies dungeon persistence across work days, details the mailbox hero-run report format, catalogs every dungeon reset element, defines the daily vermin refresh and reanimation economy, and specifies fail state design (death hero-rescue with cycle shift, curfew NPC wink, humiliation gradient).  
 **Audience**: All team members — engineers, artists, and the designer.
 
 ---
@@ -247,44 +247,43 @@ The existing `Skybox` module has 7 biome presets with zenith/horizon colour pair
 
 ### 5.6 Sleep, Death & Waking at Home
 
-Sleep and death both end the current day. The difference is how the player *arrives* at the next morning — and what debuffs they carry.
+Sleep and death both end the current day. The difference is how the player *arrives* at the next morning — and what debuffs they carry. Death is tightly coupled to the hero cycle (full detail in §17).
 
 **Voluntary sleep (bed interaction):**
 - Player faces bed at home → peek shows a pillow with a clock overlay.
 - `[F] Sleep` advances to next dawn. Full HP/energy restore. No debuffs.
 - If it's a work day: normal morning. If it's the night before Hero Day: heroes run overnight.
 
-**Death at Depth 1–2 (exterior/interior):**
-- Non-lethal (existing behavior: bonfire respawn + 25% currency penalty).
-- **New:** Instead of bonfire respawn on the same floor, the Gleaner **wakes up at home** the next morning.
-- Narrative: *"You collapsed in the Coral Bazaar. A shopkeeper dragged you back to the inn."*
+**Death (any depth) — Hero Rescue:**
+- The Gleaner is found by the hero's party during their pass through the dungeon. The hero cycle **shifts forward** to the death date — Hero Day becomes *tomorrow*.
+- The Gleaner wakes up at home (bed / bonfire spawn location) the morning after death.
+- A **mailbox report** arrives that morning with halved rewards and a narrative account of the hero finding the Gleaner unconscious (see §17).
+- Narrative device: *"The Adventurer's Guild reports that The Seeker found you face-down in the Coral Cellars. They dragged you topside. How humiliating."*
 - **Debuffs** (persist until the following dawn):
   - `GROGGY` — Movement speed −20% (WALK_TIME 500ms → 625ms).
   - `SORE` — Cleaning efficiency −1 tier (dirty→clean takes 2 scrubs instead of 1).
-  - `LIGHT POCKETS` — 25% currency penalty (existing) applied before waking.
-- The rest of the current day is **lost**. The player effectively failed to return home by curfew.
+  - `HUMILIATED` — NPC dialogue references the rescue for 1 day. No mechanical effect — pure shame.
+- **Currency:** 25% penalty (depth 1–2) or 50% penalty + item scatter (depth 3).
+- The rest of the current day and the next work day are both **lost** — the hero ran early.
 
-**Death at Depth 3 (dungeon — permadeath):**
-- Unchanged: `Player.onDeath()` → 50% currency scatter, hand/bag/equipped items drop.
-- **New framing:** The game over screen reads *"The deep dungeon claimed you. Your stash at the inn survives."*
-- On continuing (if implemented): player respawns at home with stash intact but everything else gone. Fresh start for the next 3-day cycle.
-
-**Curfew collapse (passed out in the field):**
-- Triggers if the player is anywhere except home at 100% day time.
-- Same as depth 1–2 death debuffs (`GROGGY` + `SORE`) but **no currency penalty**.
-- Narrative: *"You passed out from exhaustion. A patrol found you and carried you home."*
+**Curfew failure (not home by 2 AM):**
+- Lighter consequence than death. No hero rescue, no cycle shift.
+- The Gleaner passes out and wakes at home the next morning with `GROGGY` + `SORE` debuffs but **no currency penalty**.
+- **No hero involvement.** But the next morning, when the player transitions from their home floor (Floor 1.6) to the Promenade (Floor 1), a **hero NPC** is standing outside and gives a knowing wink and a bark: *"Rough night, Gleaner? I've been there."*
 - Crates the player was filling mid-task **do not seal** — partial fills are lost.
+- The day clock is not shifted. The hero cycle continues on its normal cadence.
 
 **Debuff summary table:**
 
-| Wake Condition | Currency Penalty | HP/Energy | Debuffs | Day Lost? |
-|---------------|-----------------|-----------|---------|-----------|
-| Voluntary sleep | None | Full restore | None | No — chosen |
-| Curfew collapse | None | Full restore | GROGGY + SORE (1 day) | Yes — overworked |
-| Death (depth 1–2) | 25% | Full restore | GROGGY + SORE (1 day) | Yes — failed |
-| Death (depth 3) | 50% + item scatter | Full restore | GROGGY + SORE + SHAKEN (2 days) | Yes — catastrophic |
+| Wake Condition | Currency Penalty | HP/Energy | Debuffs | Hero Cycle Effect | Day(s) Lost? |
+|---------------|-----------------|-----------|---------|-------------------|-------------|
+| Voluntary sleep | None | Full restore | None | None | No — chosen |
+| Curfew failure | None | Full restore | GROGGY + SORE (1 day) | None — hero NPC wink | 1 day — overworked |
+| Death (depth 1–2) | 25% | Full restore | GROGGY + SORE + HUMILIATED (1 day) | Hero Day shifts forward | 2 days — rescued |
+| Death (depth 3) | 50% + item scatter | Full restore | GROGGY + SORE + HUMILIATED + SHAKEN (2 days) | Hero Day shifts forward | 2 days — catastrophic |
 
 `SHAKEN` (depth-3 death only): Max HP reduced by 20% for 2 days. The deep dungeon leaves a mark.
+`HUMILIATED` (death only): Town NPCs reference your rescue. No stat effect — narrative sting only.
 
 ### 5.7 Bonfire as Checkpoint — Not as Home
 
@@ -336,6 +335,8 @@ Bonfires remain as mid-dungeon rest points. They **restore HP and energy** and *
 | Payout arrives (via mail) | Coins animate from the mailbox icon to the player's total with stagger timing. Each coin has a *clink* SFX with slight random pitch variance. |
 | Rare card (mail reward) | The card slides out of the mail parchment, flips face-up, and lands with a card-slap SFX. A light burst plays behind it. |
 | Taskmaster clipboard interaction | Peek shows clipboard with floor list. Checking a floor: checkmark stamps down with a satisfying *thwack*. Readiness % numbers glow green (≥60%) or pulse red (<60%). |
+| Death → hero rescue mail | The mailbox report arrives with a red-bordered parchment variant. The preamble reads in italics: *"The Seeker found your operative unconscious…"*. Halved coin totals tally up with a slower, minor-key counter sound. A 😳 `HUMILIATED` icon slides onto the HUD. |
+| Hero NPC wink (curfew) | On the morning after curfew failure, a hero NPC stands outside the player's front door (Floor 1 side of the 1↔1.6 transition). On approach: speech bubble with a wink emoji and bark: *"Rough night?"*. Bubble has a jaunty bounce (0.15s). A short chuckle SFX plays. |
 
 ### 6.4 Day/Night Cycle Juice
 
@@ -346,7 +347,9 @@ Bonfires remain as mid-dungeon rest points. They **restore HP and energy** and *
 | Dusk warning bell | Single toll of the town bell (diegetic). Skybox shifts toward orange/red. HUD clock border pulses amber. Shopkeeper NPCs start walking indoors. |
 | Night falls | Star field fades in (existing Skybox star layer). Town ambient SFX shifts from "market bustle" to "crickets + distant waves". Torch-lit windows glow on building facades. |
 | Curfew collapse | Screen desaturates rapidly (0.3s). A stumble SFX plays. Fade to black faster than normal (0.4s). Dawn fade-in shows the player in bed with `GROGGY` icon on HUD. |
-| Debuff applied | Debuff icon (☁ for GROGGY, 🩹 for SORE, 💀 for SHAKEN) slides onto the HUD status bar with a dull *thud* tone. Icon pulses once, then persists. |
+| Death fade (hero rescue) | Screen goes deep red (0.4s) then black (0.6s). A low brass drone plays — ominous, not triumphant. Fade-in is slower (2.0s) and washed-out, with the player in bed. HUD shows `HUMILIATED` badge before debuff icons load. A toast: *"The heroes found you."* |
+| Post-death hero day shift | The HUD day counter jumps forward visibly: the number ticks up (like an odometer) with a *click-click* sound. `⚔️ HERO DAY` badge appears immediately. The player registers: their death cost them work time. |
+| Debuff applied | Debuff icon (☁ for GROGGY, 🩹 for SORE, 💀 for SHAKEN, 😳 for HUMILIATED) slides onto the HUD status bar with a dull *thud* tone. Icon pulses once, then persists. |
 | Debuff expires | Icon shatters with a small particle burst and a *chime* SFX. Toast: *"You feel rested."* |
 | Door peek sky glimpse | When peeking at an exit door from inside a dungeon, the door crack shows the current exterior sky gradient (dawn/day/dusk/night). A subtle wind SFX plays through the crack. |
 | Hero Day morning | Dawn palette is more dramatic (deeper orange, silhouetted mountains). A war horn SFX plays faintly in the distance. HUD badge: `⚔️ HERO DAY`. |
@@ -997,6 +1000,219 @@ DAY 3 (HERO DAY):
   Thumbnail: mostly green with a few amber patches.
   "The Seeker cleared the Cellars efficiently. Well maintained."
 ```
+
+---
+
+## 17. Fail States — Death & Curfew Narrative Design
+
+### 17.1 Design Philosophy: Failure Feeds the Loop
+
+Death and curfew failure are **not** game-overs. They are narrative beats that **accelerate the hero cycle** and create consequences the player must recover from. The player's failure becomes the hero's opportunity — and the hero's success becomes the player's humiliation.
+
+The guiding principle: *Every failure state returns the player to bed, delivers consequences through the mailbox, and makes the world react.* The player always wakes up. The question is: what did they miss?
+
+### 17.2 Death — Hero Rescue & Cycle Shift
+
+When the Gleaner dies (any depth), the hero's party stumbles upon the unconscious operative during their next pass. This **shifts the hero cycle forward** — Hero Day arrives immediately rather than on its scheduled cadence.
+
+**Sequence of events:**
+
+```
+Player dies on Day 1 (Work Day):
+  ─────────────────────────────────────────
+  1. DEATH
+     Screen goes deep red → fade to black.
+     Narrative overlay: "You fell in the Coral Cellars.
+     The darkness took you."
+  
+  2. HERO RESCUE (overnight)
+     The hero's next pass finds the Gleaner unconscious.
+     Hero Day shifts forward: the scheduled Day 3 hero run
+     now happens on Day 2 instead.
+     The hero runs through all baited dungeons — but finds
+     them at whatever readiness the player achieved before dying.
+  
+  3. WAKE AT HOME (morning of Day 2 — now Hero Day)
+     Fade in slowly (2.0s, washed-out palette).
+     Player is in bed at their home / bonfire spawn location.
+     Debuffs applied: GROGGY + SORE + HUMILIATED.
+     Mailbox flag is up — the hero run report has arrived.
+  
+  4. MAILBOX REPORT (death variant)
+     Red-bordered parchment. Preamble in italics:
+     "The Adventurer's Guild reports that The Seeker found
+      Operative [Callsign] face-down in the Coral Cellars.
+      They dragged you topside. How humiliating."
+     All payouts are HALVED (hero ran through sub-optimally
+     stocked dungeons and lost time rescuing the Gleaner).
+     Thumbnail dungeon cards show the abbreviated hero run.
+  
+  5. NEW WORK CYCLE BEGINS (Day 3)
+     The cycle resets. The player lost 1–2 work days.
+     The dungeons are trashed from the hero run AND from
+     whatever the player didn't finish before dying.
+```
+
+**Cycle shift rules:**
+
+| When Player Dies | Normal Hero Day | Shifted Hero Day | Work Days Lost |
+|-----------------|----------------|-----------------|----------------|
+| Day 1 (early cycle) | Day 3 | Day 2 | 2 work days |
+| Day 2 (late cycle) | Day 3 | Day 3 (no shift — already imminent) | 1 work day |
+| Day 3 (Hero Day) | Day 3 | Day 3 (already Hero Day) | 0 — but payout halved |
+
+**Why this works:** Death is punishing without being a brick wall. The player keeps all sealed crates and cleaned tiles from before they died. The hero still runs. The payout still arrives — just halved. The sting is emotional (humiliation narrative) and temporal (lost work days), not a total reset.
+
+### 17.3 Death Report — Mailbox Variant
+
+The mailbox report after a death-triggered hero run uses a **distinct visual treatment** to make the shame tangible:
+
+```
+┌─────────────────────────────────────────────────┐
+│  📜  ADVENTURER'S GUILD — EMERGENCY REPORT      │
+│  ─────── ⚠ OPERATIVE RESCUE ⚠ ──────────────  │
+│                                                  │
+│  The Seeker located Operative [Callsign]         │
+│  unconscious in the Coral Cellars (Floor 1.1.1). │
+│  The operative was returned to their quarters.   │
+│  The Guild has docked rescue costs from payout.  │
+│                                                  │
+│  ┌──────────┐  Coral Cellars (1.1.1)            │
+│  │ ▓▓░░░░░░ │  Readiness at rescue: 47%         │
+│  │ ░░░░▓▓░░ │  Hero: The Seeker (Fighter)       │
+│  │ ▓▓░░░░░░ │  ⚔ 2 monsters slain                │
+│  └──────────┘  📦 3 crates smashed               │
+│                🪤 1 trap triggered                │
+│                🪙 Payout: 17 coins (HALVED)       │
+│                ⚠ Rescue cost: −5 coins           │
+│                                                  │
+│  ┌──────────┐  Coral Bazaar (1.1)               │
+│  │ ░░░░░░░░ │  Readiness: 32% ✗ HERO SKIPPED    │
+│  │ ░░░░░░░░ │  (Below threshold — not attempted) │
+│  │ ░░░░░░░░ │  🪙 Payout: 0 coins                │
+│  └──────────┘                                    │
+│                                                  │
+│  ─────────────────────────────────────────────  │
+│  TOTAL: 12 coins deposited (after rescue cost)  │
+│  💳 Card drop: None (halved run — no bonus)      │
+│  ─────────────────────────────────────────────  │
+│  ⚠ "The Guild expects its operatives to stay    │
+│     conscious. Try harder, Gleaner."             │
+│                                                  │
+│  [↑/↓] Scroll   [F] Dismiss                     │
+└─────────────────────────────────────────────────┘
+```
+
+**Key differences from a normal hero report:**
+- Red border and `⚠ OPERATIVE RESCUE` header.
+- Rescue preamble narrative (italicised, humiliating).
+- All coin payouts **halved** (rounded down).
+- A flat **rescue cost** deducted (5 coins — scales with dungeon depth: 5/10/15 for depth 1/2/3).
+- No rare card drop. The halved run doesn't qualify for jackpot rewards.
+- A snide Guild closing remark. Rotating pool of barbs:
+  - *"The Guild expects its operatives to stay conscious."*
+  - *"Perhaps the Cellars are above your pay grade."*
+  - *"The Seeker asked us to remind you: the pointy end goes toward the enemy."*
+  - *"Your rescue was logged. Three more and you're on probation."*
+
+### 17.4 Curfew Failure — The Lighter Path
+
+Failing to return home before 2 AM (100% day time) is a lesser fail state. No hero involvement, no cycle shift. The Gleaner simply overworked and collapsed.
+
+**Sequence of events:**
+
+```
+Player is outside home at 2 AM:
+  ─────────────────────────────────────────
+  1. CURFEW COLLAPSE
+     Screen desaturates rapidly (0.3s). Stumble SFX.
+     Fade to black (0.4s).
+     Narrative flash: "You pushed too hard.
+     Your legs gave out on the Promenade steps."
+  
+  2. WAKE AT HOME (next morning)
+     Normal dawn fade-in (1.2s). Player is in bed.
+     Debuffs: GROGGY + SORE. No currency penalty.
+     No mailbox report — the hero cycle is unchanged.
+  
+  3. HERO NPC WINK
+     When the player exits their home floor (Floor 1.6)
+     to the Promenade (Floor 1), a hero NPC is waiting
+     just outside the door. One-time encounter:
+     
+     The NPC turns to face the player. Speech bubble pops
+     with a wink (😏 smirk emoji):
+     Bark: "Rough night, Gleaner? I've been there."
+     
+     The NPC then walks away and despawns after 5 seconds.
+     This is a one-morning-only event — if the player
+     doesn't exit home that morning, they miss it.
+  
+  4. NORMAL DAY CONTINUES
+     No cycle shift. No payout change. The only cost is
+     the lost partial day and the debuffs.
+```
+
+**Why the wink works:** It's a human moment. The hero isn't gloating — they're commiserating. It signals that heroes are *people*, not forces of nature. It softens the sting of curfew failure and foreshadows the conspiracy layer: the hero knows who you are. They're watching. But they're not unkind about it. Yet.
+
+### 17.5 The Humiliation Gradient
+
+The fail states form a gradient from mild inconvenience to devastating setback, and the narrative tone tracks accordingly:
+
+```
+                    ┌─────────────────────────────┐
+  CATASTROPHIC      │  Death at depth 3            │
+  50% currency      │  Hero cycle shifts forward   │
+  + item scatter    │  GROGGY + SORE + HUMILIATED  │
+  + SHAKEN (2 days) │  + SHAKEN. Mail: halved,     │
+                    │  rescue cost, no card drop.  │
+                    │  Guild snark: maximum.        │
+                    ├─────────────────────────────┤
+  SEVERE            │  Death at depth 1–2          │
+  25% currency      │  Hero cycle shifts forward   │
+                    │  GROGGY + SORE + HUMILIATED  │
+                    │  Mail: halved, rescue cost.  │
+                    │  Guild snark: moderate.       │
+                    ├─────────────────────────────┤
+  MILD              │  Curfew failure              │
+  No currency loss  │  No cycle shift              │
+                    │  GROGGY + SORE               │
+                    │  No mail. Hero NPC wink.     │
+                    │  Tone: sympathetic.           │
+                    ├─────────────────────────────┤
+  NONE              │  Voluntary sleep             │
+                    │  Full restore. No debuffs.   │
+                    │  "Good night, Gleaner."       │
+                    └─────────────────────────────┘
+```
+
+### 17.6 NPC Reaction Pool (HUMILIATED Debuff Active)
+
+While the `HUMILIATED` debuff is active (1 day after death), town NPCs draw from a special bark pool:
+
+| NPC Type | Bark |
+|----------|------|
+| Shopkeeper | *"Heard the hero carried you out. Need a health potion? …On credit?"* |
+| Taskmaster | *"The Guild's form for operative rescue has your name on it. Again."* |
+| Random townsfolk | *"I saw them bring you back last night. You looked peaceful, at least."* |
+| Random townsfolk | *"My kid wants to be a Gleaner. I'm reconsidering."* |
+| Inn bartender | *"On the house. You look like you need it."* (Grants a small HP restore item) |
+| Hero NPC (rare) | *"No shame in it, Gleaner. The Cellars have claimed better than you."* |
+
+These barks replace the NPC's normal dialogue for one day only. They are never repeated — each NPC delivers their HUMILIATED bark once, then returns to their standard rotation.
+
+### 17.7 Implementation Notes — Fail State Wiring
+
+| System | Change Required | Complexity |
+|--------|----------------|-----------|
+| `Player.onDeath()` | Trigger cycle shift + bed-return instead of bonfire respawn | Medium |
+| `day-cycle.js` (planned) | Accept `shiftHeroDayForward()` call from death handler | Small |
+| `mailbox-peek.js` (planned) | Add death-variant parchment template (red border, halved payouts, rescue preamble) | Medium |
+| `floor-state-tracker.js` (planned) | Snapshot readiness at death time for the hero run to use | Small |
+| `interact-prompt.js` | Spawn hero NPC at Floor 1 door on curfew-morning flag | Small |
+| `dialog-box.js` | Add `HUMILIATED` bark pool to NPC bark rotation logic | Small |
+| `HUD` | Add `HUMILIATED` debuff icon (😳) to status bar rendering | Trivial |
+| `TransitionFX` | Death fade: red→black variant (distinct from normal fade) | Small |
 
 ---
 

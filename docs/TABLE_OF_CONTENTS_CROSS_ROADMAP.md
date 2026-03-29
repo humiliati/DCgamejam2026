@@ -110,7 +110,7 @@ All five design documents, their scope, and section inventories. Each document n
 | Modification Guide | Adding SFX, sequences, music tracks, tuning volume levels |
 
 ### DOC-7: CORE_GAME_LOOP_AND_JUICE.md
-> **Scope**: Core loop design doc. Covers the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, dungeon persistence & multi-floor maintenance, hero run mailbox reports with dungeon thumbnails, dungeon reset element catalog, daily vermin refresh & reanimation economy, and a full juice inventory for every mechanic.
+> **Scope**: Core loop design doc. Covers the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, dungeon persistence & multi-floor maintenance, hero run mailbox reports with dungeon thumbnails, dungeon reset element catalog, daily vermin refresh & reanimation economy, and fail state narrative design (death hero-rescue, curfew NPC wink, humiliation gradient).
 
 | Section | Content |
 |---------|---------|
@@ -130,6 +130,7 @@ All five design documents, their scope, and section inventories. Each document n
 | §14 Hero Run Report — Mailbox Detail Design | Dungeon thumbnail cards, report tone by readiness, activity breakdown icons |
 | §15 Dungeon Reset Elements | Corpse cleanup, puzzle re-scramble, door relock, button reset, persistence rules |
 | §16 Daily Vermin Refresh & Reanimation Economy | Vermin spawn nodes, reanimation flow, value hierarchy, friendly NPC behavior, 2-day walkthrough |
+| §17 Fail States — Death & Curfew Narrative | Hero rescue on death (cycle shift, halved payout, rescue mail variant), curfew NPC wink, humiliation gradient, NPC bark pool |
 
 ---
 
