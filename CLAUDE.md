@@ -4,9 +4,9 @@ This file tells Claude (and future contributors) how to work in this codebase.
 
 ## Project identity
 
-**Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your cover job: clean up after **The Seeker**, a field operative who storms through the dungeons beneath the town. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
+**Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your job: clean up after the heroes and adventurers who storm through the dungeons beneath the town — scrub the walls, restock the crates, re-arm the traps, reset the floors. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
 
-The **conspiracy layer** (contributor knowledge — revealed to the player gradually): Dragons are ancient protectors — not monsters. The Seeker is systematically eliminating them on behalf of factions with hidden agendas (a crooked detective agency, a religious order protecting a 400-year-old secret, a handler at the agency that sent you). As Gleaner cleans deeper floors, environmental evidence and NPC dialogue expose the truth. By the end of Act 1, Gleaner must choose a side.
+The **conspiracy layer** (contributor knowledge — revealed to the player gradually): Dragons are ancient protectors — not monsters. The hero you're cleaning up after is systematically eliminating them on behalf of factions with hidden agendas (a crooked detective agency, a religious order protecting a 400-year-old secret, a handler at the agency that sent you). As Gleaner cleans deeper floors, environmental evidence and NPC dialogue expose the truth. By the end of Act 1, Gleaner must choose a side.
 
 The game opens with a **character creation flow** (title screen → callsign selection → operative class selection → deploy animation). Callsign is the player's operative codename; class sets starting stat bonuses (Blade/Ranger/Shadow/Sentinel/Seer/Wildcard).
 
@@ -144,20 +144,4 @@ The step fill (the colored strip in the gap) uses the contract's `stepColor` at 
 
 ## Source codebases
 
-**EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI, audio system, floor generation, lighting, and the sound designer portal. Extract patterns, not whole files — the monolith coupling needs stripping.
-
-**dcexjam2025** (mounted at `/mnt/dcexjam2025/`) — GLOV.js dungeon crawler. Source for movement controller (CrawlerControllerQueued), minimap patterns (per-wall rendering, pathfind-to-click), and BFS pathfinding. TypeScript + GLOV.js framework — port the algorithms, not the code structure.
-
-## Testing
-
-No test framework. Open `index.html` in browser and play. Console logs prefixed with `[ModuleName]` for each system's init. Check the minimap, walk around, descend stairs, fight enemies.
-
-## What not to do
-
-- Don't add npm, package.json, or any build step
-- Don't convert IIFEs to ES modules
-- Don't add TypeScript
-- Don't reference modules from a layer that loads after yours
-- Don't put game logic in Game.js — it's a wiring shell, delegate to the owning module
-- Don't use localStorage (webOS TV apps have unreliable storage — use in-memory state)
-- Don't assume the raycaster convention matches standard math convention (+Y is south here, not north)
+**EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy A

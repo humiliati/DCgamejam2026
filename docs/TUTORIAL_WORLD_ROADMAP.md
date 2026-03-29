@@ -1221,7 +1221,7 @@ The player's first dungeon entry is carefully paced to teach the three modes (co
 ### Late game — The Janitor Fights Back
 
 14. **Full deck** (20+ cards) built entirely through labor. Not a single card from combat yet.
-15. **Hero challenge** — confront the Seeker at a Reassembly Altar. Full RPS combat using earned deck.
+15. **Hero challenge** — confront the hero at a Reassembly Altar. Full RPS combat using earned deck.
 16. **Hero defeat** — legendary equipment drop. New dungeon tier unlocked. The janitor has become the dungeon's true defender.
 17. **Dragon alliance** (Act 2 hook) — the dragons recognize the Gleaner as the dungeon's caretaker, not an invader. Partnership against the Hero faction.
 
