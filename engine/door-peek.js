@@ -53,18 +53,18 @@ var DoorPeek = (function () {
       if (viewport) viewport.appendChild(_container);
     }
 
-    // Sub-label element for transition text (200% size = ~18px)
+    // Sub-label element for transition text (two rows, 36px, left-aligned)
     _subLabel = document.getElementById('door-peek-sublabel');
     if (!_subLabel) {
       _subLabel = document.createElement('div');
       _subLabel.id = 'door-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:10px; text-align:center;' +
-        'font:18px monospace; color:rgba(180,170,150,0);' +
+        'position:absolute; top:100%; left:0; transform:none;' +
+        'margin-top:30px; text-align:left;' +
+        'font:36px monospace; color:rgba(180,170,150,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.7);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none;';
+        'pointer-events:none; line-height:1.3;';
       _container.appendChild(_subLabel);
     }
   }
@@ -198,10 +198,12 @@ var DoorPeek = (function () {
       }
     }
 
-    // Sub-label: transition text (200% = 18px)
+    // Sub-label: two-row transition text (DOM-safe, no innerHTML with user data)
     if (_subLabel && currentLabel && targetLabel) {
-      var verb = direction === 'advance' ? 'proceed to' : 'return to';
-      _subLabel.textContent = 'Exiting ' + currentLabel + ' to ' + verb + ' ' + targetLabel;
+      _subLabel.textContent = '';
+      _subLabel.appendChild(document.createTextNode('exiting ' + currentLabel));
+      _subLabel.appendChild(document.createElement('br'));
+      _subLabel.appendChild(document.createTextNode('\u21b3' + targetLabel));
       _subLabel.style.color = 'rgba(180,170,150,0)';
     } else if (_subLabel) {
       _subLabel.textContent = '';

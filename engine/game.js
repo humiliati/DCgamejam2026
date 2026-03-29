@@ -366,9 +366,12 @@ var Game = (function () {
     });
     HazardSystem.clearBonfires();
 
-    // Interact prompt + door peek
+    // Interact prompt + door/crate/chest/puzzle peek
     InteractPrompt.init();
-    if (typeof DoorPeek !== 'undefined') DoorPeek.init();
+    if (typeof DoorPeek    !== 'undefined') DoorPeek.init();
+    if (typeof CratePeek   !== 'undefined') CratePeek.init();
+    if (typeof ChestPeek   !== 'undefined') ChestPeek.init();
+    if (typeof PuzzlePeek  !== 'undefined') PuzzlePeek.init();
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
@@ -1192,7 +1195,10 @@ var Game = (function () {
       InteractPrompt.check();
       InteractPrompt.update(frameDt);
       InteractPrompt.render(ctx, _canvas.width, _canvas.height);
-      if (typeof DoorPeek !== 'undefined') DoorPeek.update(frameDt);
+      if (typeof DoorPeek   !== 'undefined') DoorPeek.update(frameDt);
+      if (typeof CratePeek  !== 'undefined') CratePeek.update(frameDt);
+      if (typeof ChestPeek  !== 'undefined') ChestPeek.update(frameDt);
+      if (typeof PuzzlePeek !== 'undefined') PuzzlePeek.update(frameDt);
       DialogBox.update(frameDt);
       DialogBox.render(ctx, _canvas.width, _canvas.height);
       Toast.update(frameDt);
