@@ -133,6 +133,12 @@ var Game = (function () {
         return;
       }
 
+      // BookshelfPeek intercept: ESC closes book overlay before pause
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        BookshelfPeek.handleKey('Escape');
+        return;
+      }
+
       var state = ScreenManager.getState();
       if (state === ScreenManager.STATES.GAMEPLAY) {
         _pendingMenuContext = 'pause';
@@ -504,6 +510,8 @@ var Game = (function () {
     if (typeof CorpsePeek    !== 'undefined') CorpsePeek.init();
     if (typeof MerchantPeek  !== 'undefined') MerchantPeek.init();
     if (typeof PuzzlePeek    !== 'undefined') PuzzlePeek.init();
+    if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
+    if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
@@ -1118,6 +1126,23 @@ var Game = (function () {
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
     }
+    // ── BOOKSHELF: Open book peek (autonomous peek handles display,
+    //    but OK interact re-shows the current page) ──
+    else if (tile === TILES.BOOKSHELF) {
+      if (typeof BookshelfPeek !== 'undefined') {
+        // If already showing, treat as "next page" action
+        if (BookshelfPeek.isActive()) {
+          BookshelfPeek.handleKey('KeyD');
+        }
+        // Otherwise the autonomous update() will show it
+      }
+    }
+    // ── BAR_COUNTER: Tap for a drink ──
+    else if (tile === TILES.BAR_COUNTER) {
+      if (typeof BarCounterPeek !== 'undefined') {
+        BarCounterPeek.tryDrink(fx, fy, floorData);
+      }
+    }
   }
 
   // ── Breakable prop smash ──────────────────────────────────────────
@@ -1687,6 +1712,8 @@ var Game = (function () {
       if (typeof CorpsePeek   !== 'undefined') CorpsePeek.update(frameDt);
       if (typeof MerchantPeek !== 'undefined') MerchantPeek.update(frameDt);
       if (typeof PuzzlePeek   !== 'undefined') PuzzlePeek.update(frameDt);
+      if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.update(frameDt);
+      if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.update(frameDt);
 
       // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
       if (typeof PeekSlots !== 'undefined') PeekSlots.update(frameDt);

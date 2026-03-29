@@ -273,3 +273,53 @@ BarkLibrary.register('home.bed', [
   { text: '🛏️ Sleep until dawn? [OK] Rest  [Esc] Cancel',         weight: 1, style: 'dialog', oneShot: false },
 ], { cooldownMs: 0 });
 
+// ── Cozy interior interactions ─────────────────────────────────────
+// Fired when player reads a bookshelf or taps a bar counter inside
+// depth-2 building interiors. These supplement the ambient NPC barks
+// with object-specific flavour.
+
+BarkLibrary.register('interior.bookshelf.guild', [
+  { text: '📖 You pull a manual off the shelf. Might be useful.',           weight: 3, style: 'toast' },
+  { text: '📖 Field manuals, mostly. Dog-eared pages on trap mechanics.',   weight: 2, style: 'toast' },
+  { text: '📖 Someone underlined every mention of "readiness."',            weight: 1, style: 'toast' },
+  { text: '📖 A sticky note reads: "ASK ABOUT THE COMPACT."',              weight: 0.5, style: 'toast', oneShot: true }
+], { cooldownMs: 8000 });
+
+BarkLibrary.register('interior.bookshelf.inn', [
+  { text: '📜 Old journals and traveller\'s diaries. Smells like pipe tobacco.', weight: 3, style: 'toast' },
+  { text: '📜 A history book — "The Dragon Compact, Vol. 7."',                  weight: 2, style: 'toast' },
+  { text: '📜 Someone left a bookmark on a chapter about the Nesting Caves.',   weight: 1, style: 'toast' },
+  { text: '📜 A torn page reads: "...the heroes do not know what sleeps below."', weight: 0.5, style: 'toast', oneShot: true }
+], { cooldownMs: 8000 });
+
+BarkLibrary.register('interior.bookshelf.bazaar', [
+  { text: '📦 Vendor catalogs and price sheets. Mostly out of date.',       weight: 3, style: 'toast' },
+  { text: '📋 A supply manifest. Someone circled "dragon-scale polish."',  weight: 2, style: 'toast' },
+  { text: '📋 Import records from three cycles ago. Nothing unusual.',     weight: 1, style: 'toast' }
+], { cooldownMs: 10000 });
+
+BarkLibrary.register('interior.bookshelf.home', [
+  { text: '📘 Your own copy of the Gleaner\'s Manual. Well-worn.',          weight: 3, style: 'toast' },
+  { text: '✉️ Old letters from the agency. Mundane assignment details.',   weight: 2, style: 'toast' },
+  { text: '📓 A personal journal. You don\'t remember writing this entry.', weight: 0.5, style: 'toast', oneShot: true }
+], { cooldownMs: 5000 });
+
+BarkLibrary.register('interior.bar.inn', [
+  { text: '🍺 The ale is cold and tastes faintly of seaweed. Not bad.',     weight: 3, style: 'toast' },
+  { text: '☕ Strong coffee. The innkeeper nods approvingly.',               weight: 2, style: 'toast' },
+  { text: '🧃 Coral tonic — slightly fizzy, vaguely medicinal.',            weight: 2, style: 'toast' },
+  { text: '🍺 "On the house," the barkeep says. "You look like you need it."', weight: 1, style: 'toast' }
+], { cooldownMs: 5000 });
+
+BarkLibrary.register('interior.bar.guild', [
+  { text: '☕ Guild-issue black coffee. It tastes like obligation.',         weight: 3, style: 'toast' },
+  { text: '🥤 The stim drink buzzes behind your teeth.',                    weight: 2, style: 'toast' },
+  { text: '☕ "Careful with those," a guildmate warns. "Third one\'s a headache."', weight: 1, style: 'toast' }
+], { cooldownMs: 5000 });
+
+BarkLibrary.register('interior.bar.bazaar', [
+  { text: '🍵 Spice tea. Warm and surprisingly calming.',                   weight: 3, style: 'toast' },
+  { text: '🧃 Fresh-pressed coral juice. Tastes like the ocean.',           weight: 2, style: 'toast' },
+  { text: '🫖 The vendor insists on a second cup. "For luck," she says.',  weight: 1, style: 'toast' }
+], { cooldownMs: 5000 });
+

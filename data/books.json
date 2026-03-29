@@ -1,0 +1,168 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "Book and document data for bookshelf peek interactions. Each entry has a unique id, a display title, an emoji icon, and one or more pages of text. Books are assigned to bookshelves via floor data (floorData.books[]).",
+    "schema": {
+      "id": "string — unique stable identifier",
+      "title": "string — display title shown at top of peek overlay",
+      "icon": "string — emoji shown on the bookshelf tile and in peek header",
+      "category": "string — 'tip' | 'lore' | 'manual' | 'letter' | 'notice'",
+      "pages": ["array of strings — each string is one page of text"],
+      "biome": "string — which building biome this book belongs to (for random assignment)"
+    }
+  },
+  "books": [
+    {
+      "id": "tip_movement_basics",
+      "title": "Gleaner's Field Manual — Movement",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "WASD or arrow keys to move.\nQ/E to strafe left and right.\nHold SHIFT to move faster when the queue is clear.",
+        "Bump into a wall to hear a sound.\nBump into an NPC to start a conversation.\nFace a door and press OK to enter."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "tip_crate_restock",
+      "title": "Gleaner's Field Manual — Restocking",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "Approach a broken crate and press OK to open the restock interface.",
+        "Drag items from your bag into the empty slots.\nMatch the suit symbol for a bonus payout.\nFill all slots and press S to seal."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "tip_cleaning",
+      "title": "Gleaner's Field Manual — Cleaning",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "Dirty tiles have a grime overlay.\nFace the tile and press OK to scrub.",
+        "Each sweep clears one layer of grime.\nClean all tiles on a floor to reach 100% cleanliness.\nThe Guild pays per percentage point."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "tip_combat",
+      "title": "Gleaner's Field Manual — Self Defence",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "Combat is card-based. Your hand is drawn from your deck.",
+        "Each card has a suit (♣ ♦ ♠ ♥) and a power value.\n♣ beats ♦, ♦ beats ♠, ♠ beats ♣.\n♥ heals instead of attacking.",
+        "Play cards wisely — your deck is small.\nRetreat is always an option."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "tip_time_pressure",
+      "title": "Gleaner's Field Manual — Time & Curfew",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "The day cycle runs on a real-time clock.\nDawn → Day → Dusk → Night → Curfew.",
+        "If you're not home by curfew, you collapse.\nYou'll wake up groggy with debuffs.\nNo coin penalty — but a wasted day.",
+        "Building interiors are safe havens.\nTime does NOT advance while you're inside a building.\nTake your time browsing shops and reading."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "lore_dragon_history_1",
+      "title": "A Brief History of the Boardwalk Dragons",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The dragons arrived before the town.\nBefore the boardwalk, before the first pier was hammered into the cliff face.",
+        "They nested in the caves below — the same caves we now call dungeons.\nThe first settlers struck a deal: protection in exchange for territory.",
+        "That deal held for four hundred years.\nUntil the heroes came."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_dragon_history_2",
+      "title": "The Dragon Compact — Chapter 7",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The Compact was simple:\nDragons guard the deep floors. Humans maintain the upper halls.",
+        "No dragon enters the town. No human enters the nesting chambers.\nThe dungeons between are neutral ground — maintained by both sides.",
+        "The Gleaner's Guild was founded to uphold the human half.\nWe clean. We restock. We keep the traps sharp.\nThe dragons do the rest."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_hero_arrival",
+      "title": "When the Heroes Came",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "They arrived on the ferry — six of them, armoured and loud.",
+        "The Guild Master tried to explain the Compact.\nThey laughed. 'Dragons are monsters,' they said.\n'Monsters get slain.'",
+        "Three days later, the first dragon fell.\nThe caves shook. The boardwalk cracked.\nAnd the Guild's work doubled overnight."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "notice_work_order_template",
+      "title": "WORK ORDER — Template",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "GLEANER'S GUILD — WORK ORDER\n═══════════════════════════",
+        "Floor: _______________\nTarget Readiness: ___%\nDeadline: Day __ of hero cycle\n\nTasks:\n☐ Sweep all corridors\n☐ Restock crates (min 4)\n☐ Re-arm traps\n☐ Clear corpse material",
+        "Payment: ___ coins on completion\nBonus: +50% if 100% readiness\nPenalty: None (but the Guild remembers)"
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "notice_curfew_policy",
+      "title": "NOTICE — Curfew Policy",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "BY ORDER OF THE BOARDWALK COUNCIL\n\nAll operatives must return to quarters\nbefore the night bell tolls.",
+        "Failure to comply results in:\n• Involuntary rest (collapse in place)\n• Morning debuffs (GROGGY, SORE)\n• A stern look from the Dispatcher",
+        "The Council reminds all Gleaners:\nthe dungeons do not care about your schedule.\nBut the curfew does."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "letter_anonymous_tip",
+      "title": "Unsigned Letter",
+      "icon": "✉️",
+      "category": "letter",
+      "pages": [
+        "Gleaner,",
+        "The heroes are not what they seem.\nAsk yourself: who hired them?\nWho benefits when the dragons fall?",
+        "Look deeper. The answers are in the caves.\n\n— A Friend"
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "manual_bar_drinks",
+      "title": "Driftwood Inn — Drink Menu",
+      "icon": "🍺",
+      "category": "manual",
+      "pages": [
+        "☕ BOARDWALK BREW — Restores 1 energy\n🍺 DEEP ALE — +5% move speed (1 floor)\n🧃 CORAL TONIC — Clears 1 debuff",
+        "All drinks are complimentary for Guild operatives.\nLimit: 3 per visit. The barkeep is watching."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "manual_bazaar_guide",
+      "title": "Coral Bazaar — Vendor Directory",
+      "icon": "🗺️",
+      "category": "manual",
+      "pages": [
+        "TIDE FACTION — Magical supplies\n  Potions, scrolls, enchanted cleaning agents",
+        "EMBER FACTION — Combat equipment\n  Weapons, armour, combat cards",
+        "ROOT FACTION — Natural remedies\n  Food, herbs, antidotes, energy restoratives"
+      ],
+      "biome": "bazaar"
+    }
+  ]
+}
