@@ -119,13 +119,13 @@ All five design documents, their scope, and section inventories. Each document n
 | §2 Three Core Pillars | Clean, Restock, Endure — one-liners and primary verbs |
 | §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy (7-category readiness), "just one more crate" pull |
 | §4 Hero Cycle — Narrative Deploy | 3-day cadence, Taskmaster NPC, implied deploy via mail/barks/dungeon re-entry, payout tiers |
-| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role |
-| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta |
+| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role, **interior time-freeze rule** |
+| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta, Pre-Phase, **Cozy Interior (§6.7)** |
 | §7 Pressure Gradient | Readiness target escalation per hero cycle |
 | §8 3-Day Cycle Session Rhythm | The "one more cycle" pull, daily structure |
 | §9 Implementation Notes | Module mapping table + jam-scope priority order |
 | §10 Design Axioms | Seven guiding principles (expanded: "home is heartbeat", "discovery over declaration") |
-| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts |
+| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts, **Bookshelf Peek (§11.6)**, **Bar Counter Peek (§11.7)** |
 | §12 Time Cycle Accommodation Inventory | Fits naturally / requires adaptation / deferred tables, time-aware peek summary |
 | §13 Dungeon Persistence & Multi-Floor Maintenance | Work persists across days, dungeon difficulty tiers, hero chain penetration depth |
 | §14 Hero Run Report — Mailbox Detail Design | Dungeon thumbnail cards, report tone by readiness, activity breakdown icons |
@@ -168,6 +168,24 @@ All five design documents, their scope, and section inventories. Each document n
 | §10 Module & File Map | Implemented vs roadmapped file table with phases |
 | §11 Bare Minimum Deployment Checklist | What must work for April 5 jam submission |
 | §12 Cross-References | Links to other doc sections and engine files |
+
+### DOC-10: COZY_INTERIORS_DESIGN.md
+> **Scope**: Cozy interior design doc. Covers the Safety Contract (buildings as havens), the time-freeze rule for depth-2 floors, interior interaction taxonomy (bookshelf/bar counter/vendor/NPC/furniture), per-building interaction inventories, cozy minigame stubs (post-jam), book/document data schema, peek overlay module specs, interior juice palette, and implementation roadmap.
+
+| Section | Content |
+|---------|---------|
+| §1 Overview — Safety Contract | Four channels of safety (time freeze, warm aesthetics, low-stakes interactions, tonal bark shift), design axiom |
+| §2 Time-Freeze Rule | Depth-2 = frozen, depth-1/3 = normal; implementation spec (`DayCycle.setPaused`), edge cases, HUD indicator |
+| §3 Interior Interaction Taxonomy | Five categories (bookshelf/bar/vendor/NPC/furniture) with tempo diversity principle |
+| §4 Bookshelf Interactions | BOOKSHELF tile (25) properties, BookshelfPeek module, content categories, conspiracy drip strategy |
+| §5 Bar Counter Interactions | BAR_COUNTER tile (26) properties, BarCounterPeek module, per-biome drink menus, "micro-bonfire" design intent |
+| §6 Per-Building Interaction Inventory | Full tile inventories for Entry Lobby, Bazaar, Inn, Guild, Home, Watchman's Post |
+| §7 Cozy Minigame Stubs | Post-jam roadmap: card sorting table, trophy shelf, cooking pot, notice board puzzle, music box |
+| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (13 books), how to add new books |
+| §9 Peek Overlay Module Specs | BookshelfPeek API table + BarCounterPeek API table with full method signatures |
+| §10 Juice — Interiors Feel Like Home | Time-freeze juice, bookshelf juice, bar counter juice, building ambient juice |
+| §11 Implementation Status & Roadmap | Phase A.0 (complete), Phase B (day cycle + home), Phase C (interior polish), Post-jam (minigames) |
+| §12 Cross-References | Links to DOC-7/DOC-2/DOC-9 sections and engine files |
 
 ---
 

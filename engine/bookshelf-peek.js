@@ -140,18 +140,11 @@ var BookshelfPeek = (function () {
     var book = _currentBook;
     var page = book.pages[_currentPage];
     var pageLabel = '— Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' —';
-    var navHint = '';
-    if (book.pages.length > 1) {
-      if (_currentPage > 0 && _currentPage < book.pages.length - 1) {
-        navHint = '\n\n[A] ← Prev   [D] Next →   [Esc] Close';
-      } else if (_currentPage === 0) {
-        navHint = '\n\n[D] Next →   [Esc] Close';
-      } else {
-        navHint = '\n\n[A] ← Prev   [Esc] Close';
-      }
-    } else {
-      navHint = '\n\n[Esc] Close';
-    }
+    var navParts = [];
+    if (_currentPage > 0) navParts.push('[A] \u2190 Prev');
+    if (_currentPage < book.pages.length - 1) navParts.push('[D] Next \u2192');
+    navParts.push('[Esc] Close');
+    var navHint = '\n\n' + navParts.join('   ');
 
     DialogBox.show({
       speaker: book.icon + ' ' + book.title,

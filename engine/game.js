@@ -1601,16 +1601,17 @@ var Game = (function () {
     var floorData = FloorManager.getFloorData();
     var enemies = FloorManager.getEnemies();
     var p = Player.state();
+    var hasNpcSystem = typeof NpcSystem !== 'undefined';
 
     for (var i = 0; i < enemies.length; i++) {
       if (enemies[i].hp <= 0) continue;
       // NpcSystem entities get patrol/bark tick instead of enemy AI
-      if (enemies[i].npcType && typeof NpcSystem !== 'undefined') continue;
+      if (enemies[i].npcType && hasNpcSystem) continue;
       EnemyAI.updateEnemy(enemies[i], p, floorData.grid, floorData.gridW, floorData.gridH, deltaMs);
     }
 
     // NPC patrol + proximity bark tick (runs alongside enemy AI at 10fps)
-    if (typeof NpcSystem !== 'undefined') {
+    if (hasNpcSystem) {
       NpcSystem.tick(
         { x: p.x, y: p.y },
         enemies,

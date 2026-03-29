@@ -66,6 +66,7 @@ var BarCounterPeek = (function () {
   var _currentDrink = null;  // Currently highlighted drink
   var _tapCounts  = {};      // "x,y" → taps remaining (resets per floor visit)
   var _currentFloorId = null;
+  var _buffCounter = 0;      // Monotonic counter for unique buff IDs
 
   // ── Drink resolution ────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ var BarCounterPeek = (function () {
         // will read Player.getBuffs() for speed modifiers.
         if (Player.addBuff) {
           Player.addBuff({
-            id: 'bar_speed_' + Date.now(),
+            id: 'bar_speed_' + (_buffCounter++),
             type: 'speed',
             amount: drink.amount,
             floorsRemaining: BOOST_DURATION_FLOORS
