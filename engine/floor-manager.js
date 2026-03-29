@@ -613,7 +613,7 @@ var FloorManager = (function () {
         doorExit: { x: 9, y: 13 },  // DOOR_EXIT — back to The Approach (depth 1→1)
         doorEntry: { x: 5, y: 2 }   // DOOR — Coral Bazaar entrance (depth 1→2)
       },
-      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0', '17,7': '1.6' },  // DOORs → Coral Bazaar, DOOR_EXIT → Approach, HOME DOOR → Gleaner's Home
+      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0', '17,7': '1.6' },  // DOORs (5,2)+(14,2)→Coral Bazaar, DOOR_EXIT (9,13)→Approach, HOME DOOR (17,7)→Gleaner's Home
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
       biome: 'promenade',

@@ -61,6 +61,10 @@ var Game = (function () {
 
   var _ambientBarkTimer = null;
 
+  // Ambient bark interval range (18–28 s, randomised per fire)
+  var _AMBIENT_BARK_MIN_MS   = 18000;
+  var _AMBIENT_BARK_RANGE_MS = 10000;
+
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
@@ -507,6 +511,9 @@ var Game = (function () {
     // Load enemy population tables from enemies.json
     if (typeof EnemyAI !== 'undefined' && EnemyAI.loadPopulation) EnemyAI.loadPopulation();
 
+    // NPC system — register built-in populations (bark pools loaded at Layer 5)
+    if (typeof NpcSystem !== 'undefined') NpcSystem.init();
+
     // NCH widget (draggable card-hand capsule)
     if (typeof NchWidget !== 'undefined') NchWidget.init();
 
@@ -728,6 +735,19 @@ var Game = (function () {
       _ambientBarkTimer = null;
     }
 
+    // Clear NpcSystem active list — previous floor's NPC refs are stale
+    if (typeof NpcSystem !== 'undefined') NpcSystem.clearActive();
+
+    // Spawn ambient NPCs for this floor (built-in populations + any
+    // registered by other modules)
+    if (typeof NpcSystem !== 'undefined') {
+      NpcSystem.spawn(
+        floorId,
+        FloorManager.getEnemies(),
+        FloorManager.getFloorData().grid
+      );
+    }
+
     if (floorId === '1') {
       _onArrivePromenade();
     } else if (floorId === '1.6') {
@@ -760,7 +780,7 @@ var Game = (function () {
     _ambientBarkTimer = setInterval(function () {
       if (!ScreenManager.isPlaying()) return;
       BarkLibrary.fire(barkKey);
-    }, 18000 + Math.random() * 10000);
+    }, _AMBIENT_BARK_MIN_MS + Math.random() * _AMBIENT_BARK_RANGE_MS);
 
     // On first arrival before gate is unlocked, spawn the Dispatcher
     if (!_gateUnlocked) {
@@ -772,6 +792,11 @@ var Game = (function () {
    * Spawn the Dispatcher NPC at the dungeon entrance tile (5, 2).
    * The NPC blocks movement onto that tile and shows gate dialog
    * when bumped or interacted with.
+   *
+   * TODO (Phase B): Convert to a NpcSystem DISPATCHER definition so this
+   * entity follows the standard spawn/despawn/interact pattern. Currently
+   * hand-rolled here because it has gate-state logic (gateUnlocked flag)
+   * that runs before NpcSystem is fully wired for conditional spawns.
    */
   function _spawnDispatcherGate() {
     var enemies = FloorManager.getEnemies();
@@ -1043,6 +1068,15 @@ var Game = (function () {
     if (_checkWorkKeysChest(fx, fy)) {
       _onPickupWorkKeys();
       return;
+    }
+
+    // Talkable NPC interaction — delegate to NpcSystem
+    if (typeof NpcSystem !== 'undefined') {
+      var npcAtTile = NpcSystem.findAtTile(fx, fy, FloorManager.getEnemies());
+      if (npcAtTile && npcAtTile.talkable) {
+        NpcSystem.interact(npcAtTile, FloorManager.getFloor());
+        return;
+      }
     }
 
     var tile = floorData.grid[fy][fx];
@@ -1545,7 +1579,19 @@ var Game = (function () {
 
     for (var i = 0; i < enemies.length; i++) {
       if (enemies[i].hp <= 0) continue;
+      // NpcSystem entities get patrol/bark tick instead of enemy AI
+      if (enemies[i].npcType && typeof NpcSystem !== 'undefined') continue;
       EnemyAI.updateEnemy(enemies[i], p, floorData.grid, floorData.gridW, floorData.gridH, deltaMs);
+    }
+
+    // NPC patrol + proximity bark tick (runs alongside enemy AI at 10fps)
+    if (typeof NpcSystem !== 'undefined') {
+      NpcSystem.tick(
+        { x: p.x, y: p.y },
+        enemies,
+        deltaMs,
+        floorData.grid
+      );
     }
 
     CombatBridge.checkEnemyAggro(p.x, p.y);

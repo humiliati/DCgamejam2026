@@ -117,7 +117,6 @@ var BarkLibrary = (function () {
 
     // Partition into available (not cooling, not oneShot-done) and cooling
     var available = [];
-    var allCooling = [];
 
     for (var i = 0; i < pool.length; i++) {
       // Skip permanently spent oneShot barks
@@ -126,8 +125,6 @@ var BarkLibrary = (function () {
       var expiresAt = _cooling[key][i] || 0;
       if (now >= expiresAt) {
         available.push(i);
-      } else {
-        allCooling.push({ idx: i, expiresAt: expiresAt });
       }
     }
 
@@ -136,13 +133,16 @@ var BarkLibrary = (function () {
     if (available.length > 0) {
       // Weighted pick from available entries
       chosenIdx = _weightedPick(pool, available);
-    } else if (allCooling.length > 0) {
-      // All cooling — pick the oldest (soonest to expire) to avoid silence
+    } else {
+      // All cooling (or all oneShot-spent) — find oldest cooling entry
+      var allCooling = [];
+      for (var j = 0; j < pool.length; j++) {
+        if (pool[j].oneShot && _firedOnce[key][j]) continue;
+        allCooling.push({ idx: j, expiresAt: _cooling[key][j] || 0 });
+      }
+      if (allCooling.length === 0) return null; // All oneShot entries spent
       allCooling.sort(function (a, b) { return a.expiresAt - b.expiresAt; });
       chosenIdx = allCooling[0].idx;
-    } else {
-      // All oneShot entries spent
-      return null;
     }
 
     // Apply cooldown and oneShot tracking

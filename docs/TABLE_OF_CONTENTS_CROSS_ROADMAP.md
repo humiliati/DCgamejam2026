@@ -151,6 +151,24 @@ All five design documents, their scope, and section inventories. Each document n
 | §11 Implementation Priority | Jam-scope (7.5h) vs post-jam changes, per-module estimates |
 | §12 Design Axioms | Seven visual-specific axioms (clipboard is the frame, ink on paper, bigger is funner) |
 
+### DOC-9: NPC_SYSTEM_ROADMAP.md
+> **Scope**: Full NPC type taxonomy, Fable-style bark system implementation record, and roadmaps for interactive NPCs, vendors, Dispatcher NPCs, Hero rovers, and building interior NPC assignment. Documents what is implemented (Phase A.0) and what is roadmapped (Phases B–D).
+
+| Section | Content |
+|---------|---------|
+| §1 Overview | Layered NPC architecture: bark pools → patrol bodies → interaction verbs → encounter scripting |
+| §2 NPC Type Taxonomy | Table: AMBIENT / INTERACTIVE / VENDOR / DISPATCHER / HERO movement, interaction, bark, rarity |
+| §3 Bark System Architecture | BarkLibrary API, pool key convention, firing hierarchy, how to add pools |
+| **§4 Implemented: NpcSystem.js** | API, entity field schema, built-in populations table, game.js wiring hooks |
+| §5 Roadmap: Interactive NPCs | DialogBox.startConversation() format, planned NPCs (Guild Clerk, Archivist, Old Gleaner), task table |
+| §6 Roadmap: Vendors | Current state, target state, per-faction bark pools needed, task table |
+| §7 Roadmap: Dispatcher NPCs | Current gate-encounter implementation, force-facing mechanic spec, future Dispatcher instances |
+| §8 Roadmap: Hero NPCs | Hero types (Fighter/Rogue/Mage/Paladin), movement model (Pathfind-based), sight cone, implementation tasks |
+| §9 Roadmap: Building Interior NPCs | Per-building NPC roster table, homeFloor assignment pattern, task table |
+| §10 Module & File Map | Implemented vs roadmapped file table with phases |
+| §11 Bare Minimum Deployment Checklist | What must work for April 5 jam submission |
+| §12 Cross-References | Links to other doc sections and engine files |
+
 ---
 
 ## Cross-Roadmap Execution Order
@@ -226,6 +244,11 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 **Phase B total**: ~9.5h (~6.5h complete, ~4h remaining for B5–B7)
 **Unblocks**: Phase C (cleaning needs working crate economy), Phase E (hero encounters need restockable dungeon)
 **Design refs**: DOC-4 §17.2 (crate slot schema), DOC-2 §13 (Gleaner pivot data structures)
+
+**Phase B NPC add-ons** (see DOC-9 §6, §9):
+- Vendor ambient barks + proximity bark trigger (DOC-9 §6.4) — 45m
+- Register Floor 1.3 (Gleaner's Guild) interior NPCs (DOC-9 §9.4) — 30m
+- Guild Clerk dialogue tree `data/dialogues/guild-clerk.js` (DOC-9 §5.3) — 1h
 
 ---
 

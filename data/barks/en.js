@@ -58,7 +58,7 @@ BarkLibrary.register('ambient.promenade.morning', [
   { text: '🗣️ "Why aren\'t you at work?"',                                    weight: 3 },
   { text: '🗣️ "Don\'t you know the adventurers are coming in three days?"',   weight: 3 },
   { text: '🗣️ "The dungeon won\'t reset itself, you know."',                  weight: 2 },
-  { text: '🗣️ "Gleaner\'s Guild contract says dawn start. Sun\'s already up.",', weight: 2 },
+  { text: '🗣️ "Gleaner\'s Guild contract says dawn start. Sun\'s already up."', weight: 2 },
   { text: '🗣️ "My nephew works the Coral Cellars. He says they\'re a mess after last cycle."', weight: 1, style: 'bubble' }
 ], { cooldownMs: 25000 });
 
@@ -226,3 +226,50 @@ BarkLibrary.register('system.curfew_collapse', [
     oneShot: false
   }
 ], { cooldownMs: 0 });
+
+// ── Building interiors ────────────────────────────────────────────
+//
+// Each building has a bark pool keyed to its floor. These fire from
+// ambient NpcSystem patrons when the player is within barkRadius tiles.
+
+BarkLibrary.register('interior.bazaar', [
+  { text: '🗣️ "They say the Cellars below took three parties last month."',          weight: 3 },
+  { text: '🗣️ "Best haul in the Bazaar this week — restocked everything."',          weight: 3 },
+  { text: '🗣️ "The gleaning contracts are posted on the back board."',                weight: 2 },
+  { text: '🗣️ "Watch your step near the stairs — something smells off down there."', weight: 2 },
+  { text: '🗣️ "Heard the hero party this cycle is paying extra for intact crates."', weight: 1 },
+  { text: '🗣️ "The Dispatcher was here earlier. Looking for his Gleaner."',          weight: 1, style: 'bubble' },
+  { text: '🗣️ "If you\'re heading to the Cellars, take extra torches."',             weight: 0.5 }
+], { cooldownMs: 40000 });
+
+BarkLibrary.register('interior.guild', [
+  { text: '🗣️ "Work order board\'s updated — Coral Cellars is priority."',           weight: 3 },
+  { text: '🗣️ "Forty percent readiness? Heroes won\'t even bother."',                weight: 3 },
+  { text: '🗣️ "The Taskmaster wants a full crate audit before hero day."',           weight: 2 },
+  { text: '🗣️ "New recruit asked if heroes ever say thank you. We all laughed."',    weight: 2 },
+  { text: '🗣️ "Log your hours in the terminal before you leave."',                   weight: 1 },
+  { text: '🗣️ "Floor 1.6 contracts pay better than surface work. Just saying."',    weight: 1, style: 'bubble' },
+  { text: '🗣️ "The Seeker cleared an entire floor in six minutes. Unreal."',         weight: 0.5 }
+], { cooldownMs: 45000 });
+
+BarkLibrary.register('interior.inn', [
+  { text: '🗣️ "Room three is still taken. Heroes booked it a week out."',            weight: 3 },
+  { text: '🗣️ "If you need a proper rest, the beds upstairs are half-price today."', weight: 2 },
+  { text: '🗣️ "Heard someone crying in the dungeon last night. Wind, probably."',    weight: 2 },
+  { text: '🗣️ "The Gleaner who took the deep contracts didn\'t come back."',         weight: 1 },
+  { text: '🗣️ "Try the stew. It\'s got medicinal properties. Allegedly."',           weight: 1, style: 'bubble' }
+], { cooldownMs: 50000 });
+
+// ── Home object interactions ───────────────────────────────────────
+
+BarkLibrary.register('home.mailbox', [
+  { text: '📬 No new mail. Check back after the hero run.',       weight: 2, style: 'toast' },
+  { text: '📬 A letter from the Guild. Inside are work orders.',  weight: 2, style: 'toast' },
+  { text: '📬 Payout report from last cycle. Better than expected.', weight: 1, style: 'toast' },
+  { text: '📬 Anonymous note: "The dragons remember who helped."',weight: 0.5, style: 'toast', oneShot: true }
+], { cooldownMs: 5000 });
+
+BarkLibrary.register('home.bed', [
+  { text: '🛏️ Sleep until dawn? [OK] Rest  [Esc] Cancel',         weight: 1, style: 'dialog', oneShot: false },
+], { cooldownMs: 0 });
+
