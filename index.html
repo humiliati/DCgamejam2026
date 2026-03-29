@@ -256,12 +256,12 @@
     .box3d-wrap.door-variant .bf-right {
       background: linear-gradient(to top, #2a3020, #44503a 40%, #384030 70%, #2a3020);
     }
-    /* Left jam: 30% more spread (52*1.3≈68px), 15% wider face */
+    /* Left jamb: 30% more spread (52*1.3≈68px), 15% wider face */
     .box3d-wrap.door-variant .bf-left {
       transform: translateX(-68px) rotateY(90deg);
       width: calc(var(--box-size) * 1.15);
     }
-    /* Right jam: 30% more spread (52*1.3≈68px), 15% wider face */
+    /* Right jamb: 30% more spread (52*1.3≈68px), 15% wider face */
     .box3d-wrap.door-variant .bf-right {
       transform: translateX(68px) rotateY(90deg);
       width: calc(var(--box-size) * 1.15);
@@ -309,6 +309,113 @@
     .box3d-wrap.door-variant .box3d-glow {
       background: radial-gradient(circle,
         rgba(220,200,160,0.6) 0%, rgba(180,160,120,0.2) 50%, transparent 80%);
+    }
+
+    /* ═══ Variant: Crate (wood planks, squat 160×90px, top-down) ═══ */
+    .box3d-wrap.crate-variant {
+      --box-size: 160px;
+      --box-d: 28px;
+      --box-half: -28px;
+      --bevel-w: 2px;
+      --box-dark: #5a3a0a;
+      --box-dark2: #4a2e08;
+      --box-light: #c49a40;
+      --box-floor: #3a2808;
+      --box-ceil: #8a6020;
+      --box-glow: rgba(200,150,60,0.5);
+      height: 90px;
+    }
+    /* Steep top-down angle so crate interior is visible from above */
+    .box3d-wrap.crate-variant .box3d-scene {
+      transform: rotateX(-42deg) rotateY(18deg);
+    }
+    /* Wood-slat texture on side faces */
+    .box3d-wrap.crate-variant .bf-left,
+    .box3d-wrap.crate-variant .bf-right {
+      background:
+        repeating-linear-gradient(
+          0deg,
+          #6a4010 0px, #6a4010 8px,
+          #8a5820 8px, #8a5820 9px,
+          #7a4c18 9px, #7a4c18 16px,
+          #8a5820 16px, #8a5820 17px
+        );
+    }
+    /* Cross-grain planks on top/bottom */
+    .box3d-wrap.crate-variant .bf-top {
+      background:
+        repeating-linear-gradient(
+          90deg,
+          #9a6828 0px, #9a6828 16px,
+          #7a5018 16px, #7a5018 17px,
+          #8a5c20 17px, #8a5c20 32px,
+          #7a5018 32px, #7a5018 33px
+        );
+    }
+    .box3d-wrap.crate-variant .bf-bottom {
+      background:
+        repeating-linear-gradient(
+          90deg,
+          #3a2808 0px, #3a2808 14px,
+          #2a1c04 14px, #2a1c04 15px
+        );
+    }
+    /* Dark interior on back face */
+    .box3d-wrap.crate-variant .bf-back {
+      background: radial-gradient(ellipse at center, #1a1208 30%, #0a0804 100%);
+      filter: none;
+      border-radius: 3px;
+    }
+    .box3d-wrap.crate-variant .box3d-face {
+      box-shadow: inset 0 0 0 2px rgba(200,150,60,0.1),
+                  inset 0 0 6px 1px rgba(180,120,30,0.15);
+      border-color: rgba(180,130,50,0.2);
+    }
+    /* Lid slides off to the right; tilts on hover while open */
+    .box3d-wrap.crate-variant .box3d-lid {
+      transform-origin: center center;
+      transform: translateZ(var(--box-d, 28px)) translateX(0%) rotateZ(0deg);
+      transition: transform 0.4s ease-out;
+    }
+    .box3d-wrap.crate-variant:hover .box3d-lid {
+      transform: translateZ(var(--box-d, 28px)) translateX(0%) rotateZ(4deg);
+    }
+    .box3d-wrap.crate-variant.opened .box3d-lid {
+      transform: translateZ(var(--box-d, 28px)) translateX(100%) rotateZ(0deg);
+    }
+    .box3d-wrap.crate-variant.opened:hover .box3d-lid {
+      transform: translateZ(var(--box-d, 28px)) translateX(100%) rotateZ(-28deg);
+    }
+    /* Lid: cross-grain wood planks */
+    .box3d-wrap.crate-variant .box3d-lid .box3d-face {
+      background:
+        repeating-linear-gradient(
+          90deg,
+          #9a6828 0px, #9a6828 20px,
+          #7a5018 20px, #7a5018 21px,
+          #8a5c20 21px, #8a5c20 40px,
+          #7a5018 40px, #7a5018 41px
+        );
+      box-shadow: inset 2px 0 4px rgba(0,0,0,0.3),
+                  inset -2px 0 4px rgba(0,0,0,0.2);
+    }
+    .box3d-wrap.crate-variant .box3d-glow {
+      background: radial-gradient(circle,
+        rgba(220,160,50,0.5) 0%, rgba(180,120,30,0.2) 50%, transparent 80%);
+    }
+
+    /* ═══ Variant: Chest — scene angle + lid texture overrides ═══ */
+    .box3d-wrap.chest-variant .box3d-scene {
+      transform: rotateX(-22deg) rotateY(-18deg);
+    }
+    /* Chest lid: dark wood with gold-trim highlight */
+    .box3d-wrap.chest-variant .box3d-lid .box3d-face {
+      background: linear-gradient(180deg,
+        #5a3c18 0%, #4a3010 25%, #6a4820 50%,
+        #4a3010 75%, #5a3c18 100%);
+      box-shadow: inset 0 2px 6px rgba(255,200,80,0.2),
+                  inset 0 -1px 3px rgba(0,0,0,0.5),
+                  inset 2px 0 4px rgba(255,200,80,0.1);
     }
 
     /* ═══ Variant: Button (small, green glow, 50px) ═══ */
@@ -1012,6 +1119,8 @@
   <script src="engine/input-poll.js"></script>
   <script src="engine/interact-prompt.js"></script>
   <script src="engine/door-peek.js"></script>
+  <script src="engine/crate-peek.js"></script>
+  <script src="engine/chest-peek.js"></script>
   <script src="engine/combat-fx.js"></script>
   <script src="engine/combat-bridge.js"></script>
   <script src="engine/hazard-system.js"></script>

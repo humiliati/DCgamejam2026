@@ -203,7 +203,7 @@ var DoorPeek = (function () {
       _subLabel.textContent = '';
       _subLabel.appendChild(document.createTextNode('exiting ' + currentLabel));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode('\u21b3' + targetLabel + ' soon'));
+      _subLabel.appendChild(document.createTextNode('\u21b3' + targetLabel));
       _subLabel.style.color = 'rgba(180,170,150,0)';
     } else if (_subLabel) {
       _subLabel.textContent = '';
