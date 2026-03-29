@@ -72,6 +72,19 @@ var NpcComposer = (function () {
       backWeapon: '⚔️', backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
       headMods: null, torsoMods: null,
       tintHue: 280, corpse: null
+    },
+    // ── Dispatcher (player's employer) ─────────────────────────────
+    // Dragon-headed agency handler. Blocks the dungeon gate on day 1
+    // until the player retrieves their work keys from home (Floor 1.6).
+    // Visual spec: dragon head, black jacket, black trousers, clipboard.
+    dispatcher: {
+      head: '🐉', torso: '🧥', legs: '👖',
+      hat: null, hatScale: 0.5, hatBehind: false,
+      frontWeapon: '📋', frontWeaponScale: 0.55, frontWeaponOffsetX: -0.22,
+      backWeapon: null, backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
+      headMods: null, torsoMods: null,
+      tintHue: 0,     // Desaturated — monochrome black suit
+      corpse: null
     }
   };
 

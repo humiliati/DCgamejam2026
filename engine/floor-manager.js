@@ -24,8 +24,9 @@
  *   "1"       depth 1: exterior — The Promenade
  *   "1.1"     depth 2: interior — Coral Bazaar
  *   "1.1.N"   depth 3: nested dungeon — Coral Cellars
+ *   "1.6"     depth 2: interior — Gleaner's Home (player bunk)
  *
- * Floors "0", "1", "1.1" are hand-authored.
+ * Floors "0", "1", "1.1", "1.6" are hand-authored.
  * All depth-3+ floors are proc-gen via GridGen.
  */
 var FloorManager = (function () {
@@ -155,6 +156,7 @@ var FloorManager = (function () {
     if (_depth(floor) === 2) {
       if (floor === '1.1') return 'bazaar';      // Coral Bazaar
       if (floor === '1.2') return 'guild';       // Gleaner's Guild (future)
+      if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
       if (floor === '2.1') return 'inn';         // Inn (future)
       if (floor === '3.1') return 'armory';      // Armory (future)
       return 'bazaar';  // fallback for unknown interiors
@@ -264,6 +266,27 @@ var FloorManager = (function () {
             10: 2.4                // PILLAR — tall decorative columns (taller than 2.0 walls)
           }),
           floorTexture: 'floor_grass_stone'
+        };
+      case 'home':
+        // Gleaner's bunk room — warm planked interior. Low ceiling, lived-in.
+        // Wood plank walls with a soft amber lamp glow. Bare stone floor.
+        // Contains: bed (BONFIRE tile repurposed), stash chest (DOOR tile),
+        // mailbox (PILLAR tile), exit door to The Promenade (DOOR_EXIT).
+        return {
+          textures: Object.freeze({
+            1: 'wood_plank',       // WALL — warm plank walls
+            2: 'door_wood',        // DOOR — stash chest (reused door tile)
+            3: 'door_wood',        // DOOR_BACK
+            4: 'door_wood',        // DOOR_EXIT — out to The Promenade
+            5: 'stairs_down',      // STAIRS_DN (unused in home)
+            6: 'stairs_up',        // STAIRS_UP (unused in home)
+            10: 'stone_rough',     // PILLAR — mailbox post
+            14: 'door_iron'        // BOSS_DOOR (unused in home)
+          }),
+          tileWallHeights: Object.freeze({
+            10: 1.8                // PILLAR/mailbox — shoulder-height post
+          }),
+          floorTexture: 'floor_dirt'
         };
       case 'cellar':
         // Stone walls ↔ brown dirt floor — dungeon contrast
