@@ -109,6 +109,22 @@ All five design documents, their scope, and section inventories. Each document n
 | Spatial Audio | Distance attenuation proposal for enemy/hero footsteps (Phase D) |
 | Modification Guide | Adding SFX, sequences, music tracks, tuning volume levels |
 
+### DOC-7: CORE_GAME_LOOP_AND_JUICE.md
+> **Scope**: Core loop design doc — the three toyful pillars (Clean / Restock / Deploy), Kingdom Two Crowns economy model, "Send the Hero" deploy button, Stardew Valley day/night pressure cycle, and a full juice inventory for every mechanic.
+
+| Section | Content |
+|---------|---------|
+| §1 One-Line Pitch | The janitor framing and central tension |
+| §2 Three Core Pillars | Clean, Restock, Deploy — one-liners and primary verbs |
+| §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy, "just one more crate" pull |
+| §4 "Send the Hero" Button | Bridge Simulator pattern, UX contract, per-floor vs. chain deploy, hero behavior table |
+| §5 Day/Night Cycle | Stardew Valley pressure model, clock mechanics, sleep-as-a-verb |
+| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Deploy, Day/Night, Ambient/Meta |
+| §7 Pressure Gradient | Readiness target escalation curve (Day 1–13+) |
+| §8 Sleep→Wake Loop | Session rhythm, the "one more day" pull |
+| §9 Implementation Notes | Module mapping table (readiness, deploy, day cycle, CCTV, cleaning) |
+| §10 Design Axioms | Five guiding principles for every core-loop decision |
+
 ---
 
 ## Cross-Roadmap Execution Order
