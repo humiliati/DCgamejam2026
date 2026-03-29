@@ -219,6 +219,7 @@ i18n.register('en', {
   'interact.examine':     'Examine',
   'interact.harvest':     'Harvest',
   'interact.smash':       'Smash',
+  'interact.reset':       'Reset Puzzle',
 
   // ── Settings ────────────────────────────────────────────────────
   'settings.language':  'Language',

@@ -51,6 +51,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.DOOR_EXIT] = { action: 'interact.exit',   icon: '' };
     ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '' };
     ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨' };
+    ACTION_MAP[TILES.PUZZLE]    = { action: 'interact.reset',   icon: '🧩' };
   }
 
   /**
