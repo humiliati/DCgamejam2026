@@ -2,18 +2,20 @@
 
 A first-person dungeon crawler built for [DC Jam 2026](https://itch.io/jam/dcjam2026) (March 27 – April 5, 2026).
 
-You are a **Nez-Ha** — a dungeon janitor working for a Necromancer on the wrong side of a fantasy economy. Legendary Heroes storm through dungeons, slaughter monsters, smash everything, loot the place, and vanish. You arrive after to clean up the mess — scrubbing walls, restocking crates, re-arming traps, reassembling dead monsters, and scrambling puzzles back to their unsolved state. All so the Necromancer can reset the dungeon and charge the next batch of adventurers for the privilege of "discovering" it.
+You are **Operative Gleaner** — a licensed dungeon scavenger dispatched to a small coastal boardwalk town under orders from a shadowy agency. Your cover: clean up after **The Seeker**, a field operative who storms through dungeons, wipes out anything that moves, and vanishes without a debrief. Scrub the walls, restock the crates, re-arm the traps, reset the floors for the next cycle.
 
-Think **Power Wash Simulator** meets **Dungeon Keeper** from a minimum-wage perspective. The Skyrim dungeon keeper who refills the ancient crates with fresh cabbages and flowers? That's you.
+But the deeper you go, the stranger the evidence. The Seeker isn't hunting monsters — they're hunting *dragons*. Ancient protectors being systematically eliminated. Every dungeon floor hides another piece of a conspiracy running from the crooked Gleaner's Guild all the way up to the factions controlling the town: an old detective agency with a centuries-long vendetta, a hidden religious order protecting a secret they've kept for four hundred years, and a foreign intelligence operative who discovered the truth before you did.
 
-The world is a small coastal **boardwalk town** — Miami Vice meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is **retrofuturistic fantasy**: a civilization that discovered magic before technology, and their architecture shows it.
+Before deploying, you choose your **callsign** and **operative class** — the combination that defines your stat bonuses and playstyle for the run.
+
+The world is a small coastal **boardwalk town** — a retrofuturistic fantasy port where a civilization that discovered magic before electricity built chrome railings onto marble promenades and hung neon sigils over old timber shop fronts. Vaporwave sunsets on stone walls. The aesthetic is **retrofuturistic fantasy**: ancient and futuristic at the same time.
 
 ## Jam themes (all four)
 
-- **Dragons** — Ancient protectors being hunted by the Hero. The conspiracy at the core of the story.
-- **Retrofuturism** — The entire visual identity. Vaporwave sunsets, chrome-and-marble architecture, synthwave color palettes.
-- **Rock-Paper-Scissors** — Combat element triangle: FLAME > FROST > STORM > FLAME. Every card and enemy has an element.
-- **Cleaning Up the Hero's Mess** — The entire game. Three loops: scrub dungeon tiles grid-by-grid, restock looted crates for coin rewards, and complete work orders to reset floors for the next Hero cycle. Combat cards are earned through labor, not combat — your deck is built crate by crate.
+- **Dragons** — Ancient protectors being systematically hunted by The Seeker. The conspiracy at the core of the story — revealed floor by floor through environmental evidence, NPC dialogue, and faction interference.
+- **Retrofuturism** — The entire visual identity. Vaporwave sunsets, chrome-and-marble architecture, synthwave color palettes. A world that feels simultaneously ancient and futuristic.
+- **Rock-Paper-Scissors** — Combat suit triangle using playing card suits: ♣ Clubs (Wild/Force) > ♦ Diamonds (Crystal/Precision) > ♠ Spades (Earth/Steel) > ♣ Clubs (cycle). ♥ Hearts are neutral rule-breakers. Every card and enemy carries a suit alignment.
+- **Cleaning Up the Hero's Mess** — The entire game. Three loops: scrub dungeon tiles grid-by-grid, restock looted crates for coin rewards, and complete work orders to reset floors for the next Seeker cycle. Combat cards are earned through labor, not combat — your deck is built crate by crate.
 
 ## Core gameplay loops
 
@@ -21,15 +23,15 @@ The world is a small coastal **boardwalk town** — Miami Vice meets a fantasy f
 
 **The Restocking Loop** — Crates have 2–5 item slots with color-coded frames hinting at the ideal item. Fill slots with dungeon junk (1 coin each) or shop-bought matching items (2–3 coins). Sealed crates pop bonus coins + a chance at combat cards, up to legendary tier.
 
-**The Dungeon Reset Loop** — Work orders from the Gleaner's Guild: reach a readiness threshold per floor by cleaning tiles, restocking crates, re-arming traps, scrambling puzzles, reassembling monsters, and restoring secrets. Heroes arrive on patrol cycles to undo your work.
+**The Dungeon Reset Loop** — Work orders from the Gleaner's Guild: reach a readiness threshold per floor by cleaning tiles, restocking crates, re-arming traps, scrambling puzzles, reassembling fallen creatures, and restoring secrets. The Seeker arrives on patrol cycles to undo your work.
 
-**The Shop Round-Trip** — Enter dungeon with empty bags → earn coins through labor → exit to surface shops → buy matching restock ingredients → re-enter for better yields. Kingdom Two Crowns–style coin economy.
+**The Shop Round-Trip** — Enter dungeon with empty bags → earn coins through labor → exit to surface shops → buy matching restock ingredients → re-enter for better yields. Coin-drip economy built on labor, not loot.
 
 ## Running it
 
 Open `index.html` in a browser. That's it.
 
-WASD moves, Q/E turns, F interacts, period/comma for stairs, M toggles the minimap, 1-5 plays cards during combat.
+A **character creation flow** runs at startup: pick a callsign (operative codename) and a class (Blade, Ranger, Shadow, Sentinel, Seer, or Wildcard). WASD moves, Q/E turns, F interacts, period/comma for stairs, M toggles the minimap, 1-5 plays cards during combat.
 
 ## Architecture
 
@@ -77,7 +79,7 @@ Each depth has its own spatial contract governing wall height, fog model, render
 
 ## Jam scope
 
-3 exterior districts, 5–6 building interiors, 3 dungeons (one per district). Core loop: cleaning, crate restocking, and dungeon reset maintenance. Heroes patrol as environmental hazards. Late-game Hero boss encounters using combat decks earned through labor. Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
+3 exterior districts, 5–6 building interiors, 3 dungeons (one per district). Core loop: cleaning, crate restocking, and dungeon reset maintenance. The Seeker patrols as an environmental hazard. Late-game Seeker confrontations using combat decks earned through labor. Faction NPCs (BPRD handler, Gleaner's Guild, rival operatives) gate the conspiracy reveals. Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
 
 ## Design document
 
@@ -91,7 +93,7 @@ DCgamejam2026/
 ├── README.md           This file
 ├── CLAUDE.md           AI contributor conventions
 ├── docs/
-│   ├── Biome Plan.html Living design doc (v4 — Dungeon Gleaner)
+│   ├── Biome Plan.html Living design doc (v5 — Dungeon Gleaner)
 │   └── *.md            Subsystem roadmaps
 ├── engine/             50 IIFE modules
 ├── data/strings/       i18n string tables
