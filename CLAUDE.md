@@ -4,13 +4,17 @@ This file tells Claude (and future contributors) how to work in this codebase.
 
 ## Project identity
 
-**Dungeon Gleaner** — first-person dungeon crawler. You're a Nez-Ha (scavenger-cleaner) following in a legendary Hero's destructive wake through a retrofuturistic fantasy boardwalk town. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (Flame/Frost/Storm combat triangle), Cleaning Up the Hero's Mess.
+**Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your cover job: clean up after **The Seeker**, a field operative who storms through the dungeons beneath the town. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
+
+The **conspiracy layer** (contributor knowledge — revealed to the player gradually): Dragons are ancient protectors — not monsters. The Seeker is systematically eliminating them on behalf of factions with hidden agendas (a crooked detective agency, a religious order protecting a 400-year-old secret, a handler at the agency that sent you). As Gleaner cleans deeper floors, environmental evidence and NPC dialogue expose the truth. By the end of Act 1, Gleaner must choose a side.
+
+The game opens with a **character creation flow** (title screen → callsign selection → operative class selection → deploy animation). Callsign is the player's operative codename; class sets starting stat bonuses (Blade/Ranger/Shadow/Sentinel/Seer/Wildcard).
 
 Jam entry for DC Jam 2026 (March 27 – April 5, 2026). Post-jam target: LG Content Store webOS TV app driven by Magic Remote.
 
 Deadline: playable by April 5. Post-jam polish and webOS packaging are separate passes.
 
-The living design document is `docs/Biome Plan.html` (v4). It defines the world structure, biome palettes, enemy populations, quest items, and module wiring.
+The living design document is `docs/Biome Plan.html` (v5). It defines the world structure, biome palettes, enemy populations, quest items, and module wiring. `docs/STREET_CHRONICLES_NARRATIVE_OUTLINE.md` defines the faction structure, conspiracy arcs, and NPC roster.
 
 ## Hard rules
 
