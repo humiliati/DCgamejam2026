@@ -132,6 +132,24 @@ All five design documents, their scope, and section inventories. Each document n
 | §16 Daily Vermin Refresh & Reanimation Economy | Vermin spawn nodes, reanimation flow, value hierarchy, friendly NPC behavior, 2-day walkthrough |
 | §17 Fail States — Death & Curfew Narrative | Hero rescue on death (cycle shift, halved payout, rescue mail variant), curfew NPC wink, humiliation gradient, NPC bark pool |
 
+### DOC-8: VISUAL_OVERHAUL.md
+> **Scope**: Visual pivot design doc. Shifts the aesthetic from combat-operative/CRT terminal to clinical-hazmat/corporate-paperwork/powerwash style. Covers the ironic gap (operative naming for janitor work), complete UI palette swap (phosphor green → paper/ink/clipboard), HUD redesign (geriatric size, ruled-paper texture, labeled form fields, plastic tool indicators), title screen as corporate onboarding forms, card fan as laminated playing cards, exterior biome palette nudges (brighter, higher contrast), MenuBox as tabbed binder, typography scale and font stack, player archetype visual refresh (janitor descriptions), and splash screen as hazmat warning label.
+
+| Section | Content |
+|---------|---------|
+| §1 Design Philosophy | The ironic gap — operative naming for janitor work, three visual pillars, tone calibration |
+| §2 Color System Overhaul | Paper/ink/pencil palette replacing CRT phosphor, suit colours retained + brightened |
+| §3 HUD Redesign | Geriatric size, clipboard-backed form layout, ruled-paper lines, plastic tool indicators |
+| §4 Title Screen Pivot | Corporate onboarding flow — cover letter, name badge (Form 1A), assignment form (Form 1B), shift punch-in |
+| §5 Card Fan Visual Refresh | Laminated playing cards on paper, suit corner pips, stencil art style |
+| §6 Biome Palette Nudges | Per-floor hex adjustments for all 4 exterior floors — brighter, warmer, higher contrast |
+| §7 MenuBox / Pause Screen | Binder aesthetic — tabbed sections, paper on brown backing board |
+| §8 Typography | Font stack (form/label/handwrite), geriatric size scale, ruled-paper CSS effect |
+| §9 Player Archetype Visual Identity | Class emoji + description refresh — janitor-themed, ironic operative naming maintained |
+| §10 Splash Screen Pivot | Hazmat warning label — yellow background, diagonal stripes, stencil title |
+| §11 Implementation Priority | Jam-scope (7.5h) vs post-jam changes, per-module estimates |
+| §12 Design Axioms | Seven visual-specific axioms (clipboard is the frame, ink on paper, bigger is funner) |
+
 ---
 
 ## Cross-Roadmap Execution Order

@@ -4,6 +4,13 @@
 > monospace text, scanline overlays, pip-style gauges. All UI evokes
 > a Cold War briefing room terminal crossed with a dungeon field kit.
 >
+> **⚠ Visual Overhaul Pending:** `VISUAL_OVERHAUL.md` (DOC-8) defines
+> a pivot from this CRT/phosphor theme to a clinical-hazmat/corporate-
+> paperwork aesthetic. The structural layout (ASCII canon, component
+> breakdown, inventory model) in this document remains authoritative.
+> The **visual treatment** (§8 CRT Visual Theme, colour values, font
+> choices) is superseded by DOC-8 §2–§3 and §8.
+>
 > **Interaction mandate:** Every element must be clickable or
 > draggable. Keyboard shortcuts are accelerators, never requirements.
 > LG Magic Remote pointer is the primary input device.
@@ -14,6 +21,7 @@
 > - EyesOnly `card-drag-controller.js` — unified pointer drag system
 > - EyesOnly `UI-CANON.md` — ASCII layout canon
 > - EyesOnly `crt.css` — phosphor/scanline visual effects
+> - **`VISUAL_OVERHAUL.md`** — target visual direction (DOC-8)
 
 ---
 
