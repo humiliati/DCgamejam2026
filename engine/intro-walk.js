@@ -37,18 +37,23 @@ var IntroWalk = (function () {
   //
   // HOME_DEPARTURE: shelved — used only for fail-state recovery (curfew
   // collapse / respawn at home after death). Walks the player from their
-  // bed tile south to the Promenade door (Floor 1.6 DOOR_EXIT). The 3
-  // forward steps assume the standard home-floor layout: bed at (5,2),
-  // door at (5,5), player faces south (dir 1). Adjust if layout changes.
+  // bed spawn to the Promenade door (Floor 1.6 DOOR_EXIT).
+  //
+  // Floor 1.6 layout: spawn at (5,6) facing NORTH (dir 3) — the player
+  // enters from the south-wall DOOR_EXIT at (5,7) and faces into the room.
+  // On curfew respawn the player also starts at (5,6) facing NORTH (same
+  // point). The exit door is one tile SOUTH at (5,7), so the sequence
+  // turns the player 180° (two right-turns: N→E→S) then walks forward
+  // once into the DOOR_EXIT tile which auto-triggers the transition.
 
   var SEQUENCES = Object.freeze({
     HOME_DEPARTURE: {
       startDelay: 600,
       steps: [
-        { action: 'bark',    text: '🌅 Another day on the clock...', style: 'info', delay: 1200 },
-        { action: 'forward', delay: 580 },
-        { action: 'forward', delay: 580 },
-        { action: 'forward', delay: 580 }
+        { action: 'bark',        key: 'home.departure', delay: 1200 },
+        { action: 'turn_right',  delay: 280 },
+        { action: 'turn_right',  delay: 280 },
+        { action: 'forward',     delay: 580 }
         // onComplete: caller supplies FloorTransition.go('1', 'advance')
       ]
     }
@@ -64,12 +69,12 @@ var IntroWalk = (function () {
    * Begin an auto-walk sequence.
    *
    * @param {Object} opts
-   * @param {Array}  opts.steps     - Step array. Each step: { action, delay, [text], [style] }
+   * @param {Array}  opts.steps     - Step array. Each step: { action, delay, [key], [barkOpts] }
    *                                  action: 'forward'|'back'|'strafe_left'|'strafe_right'|
    *                                          'turn_left'|'turn_right'|'bark'
    *                                  delay:  ms before scheduling the next step
-   *                                  text:   (bark only) message to show via Toast
-   *                                  style:  (bark only) Toast style key (default 'info')
+   *                                  key:    (bark only) BarkLibrary pool key to fire
+   *                                  barkOpts: (bark only) optional overrides passed to BarkLibrary.fire()
    * @param {number} [opts.startDelay] - ms to wait before first step (default 800)
    * @param {Function} opts.onComplete  - Called after last step finishes animating
    */
@@ -143,10 +148,10 @@ var IntroWalk = (function () {
         MC.turnRight();
         break;
       case 'bark':
-        // Non-blocking ambient toast bark — fires and immediately moves to
-        // next step without waiting for the player to dismiss anything.
-        if (step.text && typeof Toast !== 'undefined') {
-          Toast.show(step.text, step.style || 'info');
+        // Non-blocking bark pulled from BarkLibrary by pool key.
+        // Fires and immediately schedules the next step — no blocking.
+        if (step.key && typeof BarkLibrary !== 'undefined') {
+          BarkLibrary.fire(step.key, step.barkOpts || {});
         }
         break;
       default:

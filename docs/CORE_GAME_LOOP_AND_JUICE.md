@@ -172,16 +172,21 @@ The Day/Night cycle provides:
 
 ### 5.2 The Player's Home
 
-The Gleaner lives in a **rented room** at the Driftwood Inn (Floor 1.2) or a **bunk at the Gleaner's Guild** (Floor 1.3). This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
+The Gleaner lives in a **dedicated bunk room at Floor 1.6** — a rented room off The Promenade (Floor 1), reached via the DOOR at (17, 7) on the Promenade's east wall. This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
+
+> **Floor ID:** `"1.6"` (depth 2, interior). 10×8 hand-authored grid. Biome: `home` (warm amber plank walls, dark wood floor). See TUTORIAL_WORLD_ROADMAP §18.5 for the full grid layout.
+>
+> **Day 1 note:** On the very first session the home floor contains the player's **work keys** (DOOR tile at 5,3). The player must retrieve these before the Dispatcher NPC will clear the dungeon gate. This establishes Floor 1.6 as a destination before it's established as a *home* — the player discovers the hearth before they learn it's theirs.
 
 **Home features:**
-- **Bed** — Interact (peek-style) to sleep and advance to next day. Rest bonuses applied.
+- **Bed** (bonfire tile, 2,2) — Interact (peek-style) to sleep and advance to next day. Rest bonuses applied. BarkLibrary pool: `home.morning.wakeup`.
+- **Work Keys** (DOOR tile, 5,3, Day 1 only) — Interact to collect. Triggers `_onPickupWorkKeys()` in Game. Tile reverts to EMPTY after pickup.
 - **Stash chest** — Persistent storage. Items survive death (existing `stash` in Player state).
-- **Mailbox** — Read overnight results: hero run reports, Guild notices, NPC gossip. New mail indicated by a flag icon on the HUD.
+- **Mailbox** (pillar tile, 2,5) — Read overnight results: hero run reports, Guild notices, NPC gossip. New mail indicated by a flag icon on the HUD.
 - **Mirror** — Quick stat/loadout check (existing HUD info, presented diegetically).
 - **Wall clock** — Shows the current day number and time of day. Also shows which day in the hero cycle: `"Day 2 of 3 — Heroes arrive tomorrow."`.
 
-### 5.3 Day/Night Skybox Transitions
+**Fail-state respawn:** After curfew collapse or death in a depth 1–2 area, the player respawns at Floor 1.6 spawn point (5, 6). The `IntroWalk.SEQUENCES.HOME_DEPARTURE` named sequence scripts a short walk to the exit door before restoring free movement. BarkLibrary pool: `home.morning.curfew_wakeup` (distinct tone from normal wake-up).
 
 The existing `Skybox` module has 7 biome presets with zenith/horizon colour pairs. The day/night system interpolates between **three sky states** per biome, driven by the game clock:
 
@@ -364,6 +369,23 @@ Bonfires remain as mid-dungeon rest points. They **restore HP and energy** and *
 | **NPC reactions** | Town NPCs comment on floor readiness at specific thresholds. At 100%: *"I heard the Foundry's clean for the first time in decades."* At 0%: *"That dungeon's an absolute shambles."* |
 | **Combo Seal** | Sealing three or more crates within 10 seconds triggers a combo counter (`x2 COMBO`, `x3 COMBO`) with escalating SFX and coin multiplier. |
 | **Dungeon smell meter** | A flavour HUD element (a nose icon) that fills as grime accumulates and drains as cleaning progresses. Has no mechanical effect — pure feel. |
+
+### 6.6 Pre-Phase Juice (Morning Send-Off)
+
+Juice moments specific to the Day 1 morning sequence (TUTORIAL_WORLD_ROADMAP §18.7):
+
+| Moment | Juice |
+|--------|-------|
+| **Auto-walk across Floor 0** | Camera sway from MovementController lerp, ambient step SFX. Pre-dawn cedar sky (biome: `cedar`). |
+| **Floor 0 → 1 transition** | `enter_building` TransitionFX preset; door creak SFX; sunset sky fades in on Floor 1. |
+| **Ambient bark fires** | Toast slides in from bottom-left. 2.5s display, no dismiss needed. Font matches clipboard style. |
+| **Dispatcher first appearance** | NPC sprite renders at (5,2): 🐉 head, dark jacket, clipboard. No fanfare — environmental discovery. |
+| **Dispatcher bump** | Existing `ui-blop` bump SFX + bark fires from `npc.dispatcher.gate.intro`. |
+| **Home door discovery** | Door at (17,7) is partially obscured by east pillar — a micro-discovery. No pointer or highlight. |
+| **Entering home (Floor 1.6)** | Transition to warm amber plank room after the blue-cool Promenade. Contrast signals safety. |
+| **Key pickup** | `pickup-success` SFX + Toast: `🗝️ Work keys. The Dispatcher will want to see these.` |
+| **Gate clears** | Dispatcher sprite vanishes (immediate, no animation — Phase 0 polish adds a dismissal walk). Dungeon DOOR is now a normal interactive tile. |
+| **Bark variety** | BarkLibrary weights ensure the same player never hears the same morning bark twice in a row. Anti-repeat cooldown (25s) prevents over-firing during the ~3 minute sequence. |
 
 ---
 

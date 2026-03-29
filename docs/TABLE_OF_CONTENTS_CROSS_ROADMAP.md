@@ -31,8 +31,8 @@ All five design documents, their scope, and section inventories. Each document n
 | Section | Content |
 |---------|---------|
 | §1 Overview | Environmental teaching philosophy |
-| §2 World Graph | Floor 0 → 0.1 → 0.1.N → 1 → 1.N → 2 → 3 hierarchy |
-| §3 Floor Registry | 14 floors + connection edges |
+| §2 World Graph | Floor 0 → 0.1 → 0.1.N → 1 → 1.N → 1.6 → 2 → 3 hierarchy |
+| §3 Floor Registry | 15 floors + connection edges (includes Floor 1.6 Gleaner's Home) |
 | §4 Gate-Contract System | Gate taxonomy, full-span rule, floor state tracking |
 | §5 Floor Designs | 5.1–5.8 individual floor specs (Approach → Frontier) |
 | §6 Hero Reveal | The Moment, Hero Entity, Wake of Carnage |
@@ -45,8 +45,9 @@ All five design documents, their scope, and section inventories. Each document n
 | **§13 Gleaner Pivot** | Cleaning Loop, Restocking Loop, Dungeon Reset Loop |
 | **§14 Hero Path System** | 4 hero types, patrol routes, AI, stealth mechanics |
 | **§15 Pressure Wash Simulator** | Per-texel grime, cleaning tools, contracts |
-| **§16 Revised Phases** | Phase 1–8 reordered for Gleaner pivot |
-| **§17 Revised Player Journey** | Three-act progression |
+| **§16 Revised Phases** | Phase 0 (Pre-Phase) + Phase 1–8 reordered for Gleaner pivot |
+| **§17 Revised Player Journey** | Pre-phase send-off → three-act progression |
+| **§18 Pre-Phase 0 — Morning Send-Off** | Bark system, Dispatcher gate NPC, Floor 1.6 home, key gate mechanic, narrative alignment, pillar juice |
 
 ### DOC-3: GONE_ROGUE_ASSET_UTILIZATION_ROADMAP.md
 > **Scope**: Maps every Gone Rogue JS module to PORTED / PORT NOW / PORT LATER / OUT OF SCOPE.
@@ -157,6 +158,28 @@ All five design documents, their scope, and section inventories. Each document n
 Phases are dependency-ordered. Each phase lists its source document, section reference, estimated hours, and what it unblocks. **All phases must complete for a playable prototype.**
 
 Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
+
+---
+
+### 🟢 PHASE A.0 — Pre-Phase: Morning Send-Off & Key Gate *(new)*
+> Initial player experience: scripted walk → ambient barks → Dispatcher gate → home fetch → dungeon unlocks.
+
+| # | Task | Source Doc | Section | Est. | Depends On |
+|---|------|-----------|---------|------|------------|
+| A0.1 | `engine/bark-library.js` — Fable-style bark engine | DOC-2 TUTORIAL | §18.3 | 1.5h | ✅ DONE |
+| A0.2 | `data/barks/en.js` — all bark text pools | DOC-2 TUTORIAL | §18.3 | 1h | ✅ DONE |
+| A0.3 | `intro-walk.js` — `bark` step type + `HOME_DEPARTURE` sequence | DOC-2 TUTORIAL | §18.6 | 30m | ✅ DONE |
+| A0.4 | `npc-composer.js` — `dispatcher` vendor preset | DOC-2 TUTORIAL | §18.4 | 15m | ✅ DONE |
+| A0.5 | `floor-manager.js` — Floor 1.6 + home biome + DOOR(17,7) | DOC-2 TUTORIAL | §18.5 | 1h | ✅ DONE |
+| A0.6 | `game.js` — BarkLibrary.setDisplay(), _onFloorArrive(), Dispatcher spawn, key-check | DOC-2 TUTORIAL | §18.3/18.4 | 1.5h | ✅ DONE |
+| A0.7 | Polish: Dispatcher despawn animation, `npc.dispatcher.gate.unlocked` bark | DOC-2 TUTORIAL | §18.7 | 30m | Post-jam |
+
+**New files**: `engine/bark-library.js` (Layer 1), `data/barks/en.js` (Layer 5)
+**Modified**: `engine/intro-walk.js`, `engine/npc-composer.js`, `engine/floor-manager.js`, `engine/game.js`, `index.html`
+
+**Phase A.0 total**: ~5.75h (A0.1–A0.6 complete, A0.7 post-jam polish)
+**Unblocks**: Phase A (combat system can now place enemies in a world the player can actually reach), Phase B (crate economy lands in a dungeon the player enters correctly)
+**Design refs**: DOC-2 §18, DOC-JUICE §5.2, §6.6
 
 ---
 
