@@ -42,7 +42,8 @@ var InputManager = (function () {
     'Digit5':     'card_4',
     'Period':     'descend',
     'Comma':      'ascend',
-    'KeyF':       'flee'
+    'KeyF':       'flee',
+    'Tab':        'tab_focus'
   };
 
   function init(customKeyMap) {

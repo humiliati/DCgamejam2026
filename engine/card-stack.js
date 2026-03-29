@@ -36,11 +36,13 @@ var CardStack = (function () {
 
   // ── Thrust velocity → multiplier curve ──────────────────────────
   // Measured in px/ms of pointer velocity during fire gesture.
-  // Soft floor at 1.0x (button press / slow drag), cap at 1.5x.
+  // Soft floor at 1.0x (button press / slow drag), cap at 1.05x base.
+  // Items can modify _thrustCapOverride to raise the cap (endgame → 1.5x).
   var THRUST_VEL_MIN   = 0.2;   // px/ms — below this = 1.0x baseline
   var THRUST_VEL_MAX   = 2.0;   // px/ms — above this = capped at max mult
   var THRUST_MULT_MIN  = 1.0;   // Multiplier at zero/low velocity
-  var THRUST_MULT_MAX  = 1.5;   // Multiplier at max velocity
+  var THRUST_MULT_MAX  = 1.05;  // Base max multiplier (items can raise via setThrustCap)
+  var _thrustCapOverride = 0;   // Item bonus to thrust cap (0 = use THRUST_MULT_MAX)
 
   // ── Player stack state ──────────────────────────────────────────
   var _stack      = [];    // Array of { card, handIndex } in stack order
@@ -205,7 +207,7 @@ var CardStack = (function () {
    * End the thrust gesture and compute the multiplier.
    * Velocity is measured as Euclidean distance / elapsed time.
    *
-   * @returns {number} Thrust multiplier (1.0 – 1.5)
+   * @returns {number} Thrust multiplier (1.0 – effective cap)
    */
   function gestureEnd(x, y) {
     if (!_gestureStart) {
@@ -220,19 +222,36 @@ var CardStack = (function () {
     var elapsed = Math.max(1, _gestureEnd.time - _gestureStart.time);
     var velocity = dist / elapsed;  // px/ms
 
+    // Effective cap: base + item bonuses
+    var effectiveCap = THRUST_MULT_MAX + _thrustCapOverride;
+
     // Map velocity to multiplier
     if (velocity <= THRUST_VEL_MIN) {
       _thrust = THRUST_MULT_MIN;
     } else if (velocity >= THRUST_VEL_MAX) {
-      _thrust = THRUST_MULT_MAX;
+      _thrust = effectiveCap;
     } else {
       var t = (velocity - THRUST_VEL_MIN) / (THRUST_VEL_MAX - THRUST_VEL_MIN);
       // Ease-out curve for satisfying acceleration feel
-      _thrust = THRUST_MULT_MIN + (THRUST_MULT_MAX - THRUST_MULT_MIN) * (1 - (1 - t) * (1 - t));
+      _thrust = THRUST_MULT_MIN + (effectiveCap - THRUST_MULT_MIN) * (1 - (1 - t) * (1 - t));
     }
 
     _gestureStart = null;
     return _thrust;
+  }
+
+  /**
+   * Set item-based thrust cap bonus. Stacks additively.
+   * E.g. setThrustCap(0.45) raises effective cap from 1.05 → 1.5.
+   * @param {number} bonus — additional multiplier above THRUST_MULT_MAX
+   */
+  function setThrustCap(bonus) {
+    _thrustCapOverride = Math.max(0, bonus || 0);
+  }
+
+  /** Get current effective thrust cap (base + items). */
+  function getThrustCap() {
+    return THRUST_MULT_MAX + _thrustCapOverride;
   }
 
   /** Get the last computed thrust multiplier. */
@@ -442,6 +461,10 @@ var CardStack = (function () {
     getEnemyGreed:       getEnemyGreed,
     computeEnemyStackEffects: computeEnemyStackEffects,
     clearEnemyStack:     clearEnemyStack,
+
+    // Thrust cap (item-modifiable)
+    setThrustCap:    setThrustCap,
+    getThrustCap:    getThrustCap,
 
     // Constants (for UI)
     THRUST_MULT_MAX: THRUST_MULT_MAX

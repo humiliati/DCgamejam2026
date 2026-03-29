@@ -36,6 +36,11 @@ var DebriefFeed = (function () {
   var _feedLog  = [];    // { text, type } — event log entries
   var _visible  = false;
 
+  // ── Incinerator state ──────────────────────────────────────────
+  var _incineratorActive = false;  // true when drag hovers over panel
+  var _incineratorGlow   = 0;     // 0..1 glow intensity for animation
+  var INCINERATOR_ZONE   = 'debrief-incinerator';
+
   // MOK avatar state
   var _mokEmoji     = '\uD83D\uDDE1\uFE0F';  // 🗡️ default
   var _mokCallsign  = 'ROOK';
@@ -55,6 +60,107 @@ var DebriefFeed = (function () {
         cycleMode();
       });
     }
+
+    // Register as DragDrop incinerator zone
+    _registerIncinerator();
+  }
+
+  // ── Incinerator Zone ────────────────────────────────────────────
+
+  function _registerIncinerator() {
+    if (typeof DragDrop === 'undefined' || !_el) return;
+
+    DragDrop.registerZone(INCINERATOR_ZONE, {
+      x: 0, y: 0, w: 0, h: 0,  // Updated dynamically
+      accepts: function (payload) {
+        // Accept cards and items, reject key items
+        if (!payload) return false;
+        if (payload.type === 'card' || payload.type === 'item') {
+          // Don't accept key items
+          if (payload.data && payload.data.isKey) return false;
+          return true;
+        }
+        return false;
+      },
+      onDrop: function (payload) {
+        return _handleIncineratorDrop(payload);
+      },
+      onHover: function () {
+        _incineratorActive = true;
+        if (_el) _el.style.boxShadow = '0 0 20px rgba(255,120,0,0.6), inset 0 0 15px rgba(255,60,0,0.3)';
+      },
+      onLeave: function () {
+        _incineratorActive = false;
+        if (_el) _el.style.boxShadow = '';
+      }
+    });
+  }
+
+  /**
+   * Update incinerator zone bounds (call when panel layout changes).
+   */
+  function _updateIncineratorBounds() {
+    if (typeof DragDrop === 'undefined' || !_el) return;
+    var rect = _el.getBoundingClientRect();
+    // Convert DOM rect to canvas coordinates (panels overlay the canvas)
+    var canvas = document.getElementById('view-canvas');
+    var cRect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+    DragDrop.updateZone(INCINERATOR_ZONE, {
+      x: rect.left - cRect.left,
+      y: rect.top - cRect.top,
+      w: rect.width,
+      h: rect.height
+    });
+  }
+
+  /**
+   * Handle an item/card dropped on the incinerator.
+   * Returns true if accepted.
+   */
+  function _handleIncineratorDrop(payload) {
+    if (!payload) return false;
+
+    var name = '???';
+    var refund = 0;
+
+    if (payload.type === 'card') {
+      name = (payload.data && payload.data.name) || 'Card';
+      // 10% rarity base value refund
+      var baseValue = (payload.data && payload.data.value) || 10;
+      refund = Math.max(1, Math.floor(baseValue * 0.1));
+    } else if (payload.type === 'item') {
+      name = (payload.data && payload.data.name) || 'Item';
+      // Items yield 0 coins (junk)
+      refund = 0;
+    }
+
+    // Log the disposal
+    var emoji = (payload.data && payload.data.emoji) || '\uD83D\uDCE6';
+    logEvent('\uD83D\uDD25 Disposed: ' + emoji + ' ' + name, 'damage');
+
+    // Grant refund if any
+    if (refund > 0 && typeof Player !== 'undefined') {
+      Player.addCurrency(refund);
+      logEvent('  +' + refund + 'g refund', 'loot');
+    }
+
+    // Play SFX
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('ui_close');  // placeholder burn sound
+    }
+
+    // Toast notification
+    if (typeof Toast !== 'undefined') {
+      var msg = '\uD83D\uDD25 ' + name + ' destroyed';
+      if (refund > 0) msg += ' (+' + refund + 'g)';
+      Toast.show(msg);
+    }
+
+    // Clear glow
+    _incineratorActive = false;
+    if (_el) _el.style.boxShadow = '';
+
+    return true;
   }
 
   // ── Show / Hide ─────────────────────────────────────────────────
@@ -63,6 +169,8 @@ var DebriefFeed = (function () {
     _visible = true;
     if (_el) _el.style.display = 'flex';
     render();
+    // Update incinerator bounds after layout settles
+    setTimeout(_updateIncineratorBounds, 50);
   }
 
   function hide() {
@@ -318,6 +426,9 @@ var DebriefFeed = (function () {
 
     // MOK
     setAvatar:     setAvatar,
-    setExpression: setExpression
+    setExpression: setExpression,
+
+    // Incinerator
+    updateIncineratorBounds: _updateIncineratorBounds
   };
 })();

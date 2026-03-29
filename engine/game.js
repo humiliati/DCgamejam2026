@@ -31,6 +31,9 @@ var Game = (function () {
   // Sprite list reused each frame
   var _sprites = [];
 
+  // Last NPC speech capsule target (for cleanup when dialog closes)
+  var _lastSpeechSpriteId = null;
+
   // Canvas reference (shared by screens)
   var _canvas = null;
 
@@ -68,6 +71,7 @@ var Game = (function () {
     VictoryScreen.init(_canvas);
 
     // ── Phase 2b: CRT HUD panels ──
+    if (typeof DragDrop !== 'undefined') DragDrop.init(_canvas);
     if (typeof DebriefFeed !== 'undefined') DebriefFeed.init();
     if (typeof StatusBar !== 'undefined') StatusBar.init();
     if (typeof QuickBar !== 'undefined') QuickBar.init();
@@ -79,6 +83,13 @@ var Game = (function () {
     // ── ESC toggle: pause ↔ gameplay ──
     InputManager.on('pause', function (type) {
       if (type !== 'press') return;
+
+      // PeekSlots intercept: ESC closes slot-filling UI before pause
+      if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
+        PeekSlots.close();
+        return;
+      }
+
       var state = ScreenManager.getState();
       if (state === ScreenManager.STATES.GAMEPLAY) {
         _pendingMenuContext = 'pause';
@@ -86,6 +97,29 @@ var Game = (function () {
         ScreenManager.toPause();
       } else if (state === ScreenManager.STATES.PAUSE) {
         MenuBox.close(); // onClose callback will resumeGameplay()
+      }
+    });
+
+    // ── Inventory shortcut (I key) → open pause at face 2 ──────────
+    InputManager.on('inventory', function (type) {
+      if (type !== 'press') return;
+      var state = ScreenManager.getState();
+      if (state === ScreenManager.STATES.GAMEPLAY) {
+        _pendingMenuContext = 'pause';
+        _pendingMenuFace = 2;
+        ScreenManager.toPause();
+      } else if (state === ScreenManager.STATES.PAUSE) {
+        // Already paused — toggle close
+        MenuBox.close();
+      }
+    });
+
+    // ── TAB: toggle focus between bag/deck wheels on Face 2 ─────────
+    InputManager.on('tab_focus', function (type) {
+      if (type !== 'press') return;
+      if (!ScreenManager.isPaused()) return;
+      if (MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
+        MenuFaces.toggleInvFocus();
       }
     });
 
@@ -99,14 +133,24 @@ var Game = (function () {
     // value instead of rotating the box (Q/E always rotate in all faces).
     // W / S navigate between sliders when Face 3 is active.
     //
-    // Strafe (Q/E) — primary box rotation keys; always rotate.
+    // Strafe (Q/E) — rotate box, OR scroll inventory wheel on Face 2.
     InputManager.on('strafe_left', function (type) {
       if (!ScreenManager.isPaused()) return;
+      // Face 2 (Inventory): Q scrolls focused wheel left
+      if (type === 'press' && MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
+        MenuFaces.scrollFocused(-1);
+        return;
+      }
       if (type === 'press') MenuBox.rotateLeft();
       if (type === 'release') MenuBox.stopRotation();
     });
     InputManager.on('strafe_right', function (type) {
       if (!ScreenManager.isPaused()) return;
+      // Face 2 (Inventory): E scrolls focused wheel right
+      if (type === 'press' && MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
+        MenuFaces.scrollFocused(+1);
+        return;
+      }
       if (type === 'press') MenuBox.rotateRight();
       if (type === 'release') MenuBox.stopRotation();
     });
@@ -147,6 +191,13 @@ var Game = (function () {
     });
     InputManager.on('step_back', function (type) {
       if (type !== 'press') return;
+
+      // PeekSlots intercept: S key seals container during FILLING
+      if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
+        PeekSlots.trySeal();
+        return;
+      }
+
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
         MenuFaces.handleSettingsNav(+1);
@@ -170,10 +221,20 @@ var Game = (function () {
 
     // ── Number keys during harvest MenuBox: take loot items ──
     // ── Number keys during shop MenuBox (face 1): buy card slot ──
+    // ── Number keys during PeekSlots FILLING: fill slots from bag/hand ──
     for (var _k = 0; _k < 5; _k++) {
       (function (slot) {
         InputManager.on('card_' + slot, function (type) {
           if (type !== 'press') return;
+
+          // PeekSlots intercept: number keys fill container slots during FILLING
+          if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
+            if (typeof CrateUI !== 'undefined') {
+              CrateUI.handleKey(String(slot + 1));
+            }
+            return;
+          }
+
           if (!ScreenManager.isPaused()) return;
           var ctx = MenuBox.getContext();
           if (ctx === 'harvest') {
@@ -213,6 +274,21 @@ var Game = (function () {
             _unequipSlot(hit.slot - 100);   // strip offset
           } else if (hit.action === 'stash') {
             _bagToStash(hit.slot - 300);    // strip offset
+          } else if (hit.action === 'hand_to_backup') {
+            // Skip if DragDrop just handled a pointer session (prevents click+drag overlap)
+            if (typeof DragDrop !== 'undefined' && DragDrop.wasRecentPointerSession(200)) { /* suppressed */ }
+            else _handToBackup(hit.slot - 500);
+          } else if (hit.action === 'backup_to_hand') {
+            if (typeof DragDrop !== 'undefined' && DragDrop.wasRecentPointerSession(200)) { /* suppressed */ }
+            else _backupToHand(hit.slot - 600);
+          } else if (hit.action === 'bag_scroll_left') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollBag(-1);
+          } else if (hit.action === 'bag_scroll_right') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollBag(+1);
+          } else if (hit.action === 'deck_scroll_left') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(-1);
+          } else if (hit.action === 'deck_scroll_right') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(+1);
           }
         }
         return;
@@ -310,10 +386,20 @@ var Game = (function () {
       // Reset per-face UI state that shouldn't persist between sessions
       if (typeof MenuFaces !== 'undefined') MenuFaces.resetSettings();
 
+      // Register inventory drag zones when menu opens
+      if (typeof MenuFaces !== 'undefined') MenuFaces.registerDragZones();
+      if (typeof QuickBar !== 'undefined' && QuickBar.registerDragZones) QuickBar.registerDragZones();
+      if (typeof DragDrop !== 'undefined') {
+        if (menuContext === 'bonfire') DragDrop.setZoneActive('inv-stash', true);
+        if (menuContext === 'shop') DragDrop.setZoneActive('inv-sell', true);
+      }
+
       MenuBox.open(menuContext, {
         startFace: startFace,
         onClose: function () {
           if (typeof Shop !== 'undefined') Shop.close();
+          if (typeof MenuFaces !== 'undefined') MenuFaces.unregisterDragZones();
+          if (typeof QuickBar !== 'undefined' && QuickBar.unregisterDragZones) QuickBar.unregisterDragZones();
           ScreenManager.resumeGameplay();
         }
       });
@@ -368,19 +454,41 @@ var Game = (function () {
 
     // Interact prompt + door/crate/chest/puzzle peek
     InteractPrompt.init();
-    if (typeof DoorPeek    !== 'undefined') DoorPeek.init();
-    if (typeof CratePeek   !== 'undefined') CratePeek.init();
-    if (typeof ChestPeek   !== 'undefined') ChestPeek.init();
-    if (typeof PuzzlePeek  !== 'undefined') PuzzlePeek.init();
+    if (typeof DoorPeek        !== 'undefined') DoorPeek.init();
+    if (typeof LockedDoorPeek !== 'undefined') LockedDoorPeek.init();
+    if (typeof CratePeek      !== 'undefined') CratePeek.init();
+    if (typeof ChestPeek     !== 'undefined') ChestPeek.init();
+    if (typeof CorpsePeek    !== 'undefined') CorpsePeek.init();
+    if (typeof MerchantPeek  !== 'undefined') MerchantPeek.init();
+    if (typeof PuzzlePeek    !== 'undefined') PuzzlePeek.init();
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
+
+    // Load enemy population tables from enemies.json
+    if (typeof EnemyAI !== 'undefined' && EnemyAI.loadPopulation) EnemyAI.loadPopulation();
 
     // NCH widget (draggable card-hand capsule)
     if (typeof NchWidget !== 'undefined') NchWidget.init();
 
     // Combat report overlay
     if (typeof CombatReport !== 'undefined') CombatReport.init();
+
+    // Minimap click-to-move pathfinding
+    if (typeof MinimapNav !== 'undefined') {
+      MinimapNav.init({
+        onArrived: function () {
+          if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
+            StatusBar.pushTooltip('Arrived.', 'system');
+          }
+        },
+        onCancelled: function () {
+          if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
+            StatusBar.pushTooltip('Path cancelled.', 'system');
+          }
+        }
+      });
+    }
 
     // MenuBox face renderers
     MenuFaces.registerAll();
@@ -445,7 +553,8 @@ var Game = (function () {
                CombatBridge.isPending() ||
                FloorTransition.isTransitioning() ||
                DialogBox.moveLocked() ||
-               (typeof IntroWalk !== 'undefined' && IntroWalk.isActive());
+               (typeof IntroWalk !== 'undefined' && IntroWalk.isActive()) ||
+               (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen());
       },
       onInteract: _interact,
       onDescend:  function () { FloorTransition.tryStairs('down'); },
@@ -482,16 +591,12 @@ var Game = (function () {
 
   function _showHUD(visible) {
     var display = visible ? '' : 'none';
-    var hud = document.getElementById('hud');
-    var minimap = document.getElementById('minimap');
+    var minimapFrame = document.getElementById('minimap-frame');
     var cardTray = document.getElementById('card-tray');
-    var debugToggle = document.getElementById('debug-toggle');
 
-    if (hud) hud.style.display = display;
-    // Minimap respects its own toggle state — only force-hide on HUD off
-    if (minimap) minimap.style.display = visible ? (Minimap.isVisible() ? 'block' : 'none') : 'none';
+    // Minimap frame is always visible during gameplay (embedded mode)
+    if (minimapFrame) minimapFrame.style.display = display;
     if (cardTray) cardTray.style.display = visible ? 'flex' : 'none';
-    if (debugToggle) debugToggle.style.display = display;
 
     // Phase 2 CRT panels
     if (typeof DebriefFeed !== 'undefined') {
@@ -604,6 +709,9 @@ var Game = (function () {
     Player.setDir(dir);
     Minimap.reveal(x, y);
 
+    // Advance minimap click-to-move path
+    if (typeof MinimapNav !== 'undefined') MinimapNav.onMoveFinish();
+
     var floorData = FloorManager.getFloorData();
     var tile = floorData.grid[y][x];
 
@@ -680,6 +788,8 @@ var Game = (function () {
 
   function _onBump(dir) {
     AudioSystem.play('ui-blop');
+    // Cancel minimap auto-path on collision
+    if (typeof MinimapNav !== 'undefined') MinimapNav.onBump();
   }
 
   function _onTurnFinish(dir) {
@@ -729,10 +839,22 @@ var Game = (function () {
       }
       _openVendorDialog(shopFaction);
     } else if (tile === TILES.CORPSE) {
-      // Necro-salvage: harvest parts from the Hero's mess
+      // If a CrateSystem container exists (restock slots), open slot-filling UI
+      var corpseFloorId = FloorManager.getCurrentFloorId();
+      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
+          CrateSystem.hasContainer(fx, fy, corpseFloorId)) {
+        if (PeekSlots.tryOpen(fx, fy, corpseFloorId)) return;
+      }
+      // Fallback: necro-salvage (harvest parts from the Hero's mess)
       _harvestCorpse(fx, fy);
     } else if (tile === TILES.BREAKABLE) {
-      // Smash the breakable prop — BreakableSpawner handles HP + loot spill
+      // If a CrateSystem container exists (crate slots), open slot-filling UI
+      var crateFloorId = FloorManager.getCurrentFloorId();
+      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
+          CrateSystem.hasContainer(fx, fy, crateFloorId)) {
+        if (PeekSlots.tryOpen(fx, fy, crateFloorId)) return;
+      }
+      // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
     }
   }
@@ -851,6 +973,44 @@ var Game = (function () {
 
     var floorId = FloorManager.getCurrentFloorId();
     var biome = FloorManager.getBiome();
+
+    // ── Reanimation check: fully hydrated corpse stands back up ──
+    if (typeof CorpseRegistry !== 'undefined' && CorpseRegistry.isFullyHydrated(fx, fy, floorId)) {
+      var reanimData = CorpseRegistry.reanimate(fx, fy, floorId);
+      if (reanimData) {
+        // Clear corpse tile
+        var rfd = FloorManager.getFloorData();
+        if (rfd && rfd.grid[fy]) rfd.grid[fy][fx] = TILES.EMPTY;
+
+        // Fire stand-up animation
+        if (typeof DeathAnim !== 'undefined') {
+          var canvas = document.getElementById('view-canvas');
+          var cw = canvas ? canvas.width : 640;
+          var ch = canvas ? canvas.height : 400;
+          DeathAnim.startReanimate(reanimData.type, cw / 2, ch * 0.45, 0.6, function () {
+            // Spawn friendly NPC into the enemy list
+            var npc = {
+              x: fx, y: fy,
+              id: 'reanim_' + reanimData.type + '_' + fx + '_' + fy,
+              name: reanimData.name,
+              emoji: reanimData.emoji,
+              type: reanimData.type,
+              hp: reanimData.hp,
+              maxHp: reanimData.hp,
+              str: reanimData.str,
+              facing: 'south',
+              awareness: 0,
+              friendly: true,
+              nonLethal: true,
+              tags: reanimData.tags || []
+            };
+            FloorManager.getEnemies().push(npc);
+            Toast.show(i18n.t('toast.reanimate', 'The fallen rises...'), 'loot');
+          });
+        }
+        return;
+      }
+    }
 
     // Check if anything remains
     if (!Salvage.hasHarvests(fx, fy, floorId)) {
@@ -1096,6 +1256,53 @@ var Game = (function () {
     _refreshPanels();
   }
 
+  // ── Deck management actions (B5.4) ────────────────────────────────
+
+  function _handToBackup(handIndex) {
+    var hand = CardSystem.getHand();
+    var card = hand[handIndex];
+    if (!card) return;
+
+    // Remove from hand
+    Player.removeFromHand(handIndex);
+
+    // Add to collection (backup deck) via CardSystem.addCard
+    if (typeof CardSystem !== 'undefined') {
+      CardSystem.addCard(card);
+    }
+
+    var emoji = card.emoji || '\uD83C\uDCA0';
+    Toast.show(emoji + ' \u2192 Backup Deck', 'info');
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
+    _refreshPanels();
+  }
+
+  function _backupToHand(deckIndex) {
+    var hand = CardSystem.getHand();
+    if (hand.length >= Player.MAX_HAND) {
+      Toast.show(i18n.t('inv.hand_full', 'Hand is full! (5/5)'), 'warning');
+      return;
+    }
+
+    var collection = (typeof CardSystem !== 'undefined')
+      ? CardSystem.getCollection() : [];
+    var card = collection[deckIndex];
+    if (!card) return;
+
+    // Remove from collection by id
+    if (typeof CardSystem !== 'undefined') {
+      CardSystem.removeCard(card.id);
+    }
+
+    // Add to hand
+    Player.addToHand(card);
+
+    var emoji = card.emoji || '\uD83C\uDCA0';
+    Toast.show(emoji + ' \u2192 Hand', 'info');
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
+    _refreshPanels();
+  }
+
   // ── Tick (game logic at 10fps — enemies, aggro) ────────────────────
 
   function _tick(deltaMs) {
@@ -1162,6 +1369,11 @@ var Game = (function () {
       MenuBox.update(frameDt);
       var ctx = _canvas.getContext('2d');
       MenuBox.render(ctx, _canvas.width, _canvas.height);
+      // Drag-drop ghost overlay (renders above pause menu)
+      if (typeof DragDrop !== 'undefined') DragDrop.render(ctx);
+      // Toast overlay (feedback during inventory drags)
+      Toast.update(frameDt);
+      Toast.render(ctx, _canvas.width, _canvas.height);
       return;
     }
 
@@ -1195,14 +1407,29 @@ var Game = (function () {
       InteractPrompt.check();
       InteractPrompt.update(frameDt);
       InteractPrompt.render(ctx, _canvas.width, _canvas.height);
-      if (typeof DoorPeek   !== 'undefined') DoorPeek.update(frameDt);
-      if (typeof CratePeek  !== 'undefined') CratePeek.update(frameDt);
-      if (typeof ChestPeek  !== 'undefined') ChestPeek.update(frameDt);
-      if (typeof PuzzlePeek !== 'undefined') PuzzlePeek.update(frameDt);
+      if (typeof DoorPeek        !== 'undefined') DoorPeek.update(frameDt);
+      if (typeof LockedDoorPeek !== 'undefined') LockedDoorPeek.update(frameDt);
+      if (typeof CratePeek     !== 'undefined') CratePeek.update(frameDt);
+      if (typeof ChestPeek    !== 'undefined') ChestPeek.update(frameDt);
+      if (typeof CorpsePeek   !== 'undefined') CorpsePeek.update(frameDt);
+      if (typeof MerchantPeek !== 'undefined') MerchantPeek.update(frameDt);
+      if (typeof PuzzlePeek   !== 'undefined') PuzzlePeek.update(frameDt);
+
+      // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
+      if (typeof PeekSlots !== 'undefined') PeekSlots.update(frameDt);
       DialogBox.update(frameDt);
       DialogBox.render(ctx, _canvas.width, _canvas.height);
       Toast.update(frameDt);
       Toast.render(ctx, _canvas.width, _canvas.height);
+
+      // CrateUI slot overlay (renders during PeekSlots FILLING state)
+      if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
+        CrateUI.update(frameDt);
+        CrateUI.render(ctx, _canvas.width, _canvas.height);
+      }
+
+      // Drag-drop ghost overlay (renders above all other UI)
+      if (typeof DragDrop !== 'undefined') DragDrop.render(ctx);
 
       // Combat report (DOM overlay, ticks auto-dismiss timer)
       if (typeof CombatReport !== 'undefined') {
@@ -1245,6 +1472,7 @@ var Game = (function () {
 
       // Use EnemySprites system for visual state if available
       var spriteEmoji = e.emoji;
+      var spriteStack = null;
       var spriteGlow = null;
       var spriteGlowR = 0;
       var spriteTint = null;
@@ -1252,9 +1480,12 @@ var Game = (function () {
       var spriteOverlay = null;
       var spriteBobY = 0;
       var spriteScaleAdd = 0;
-      if (typeof EnemySprites !== 'undefined' && e.spriteState) {
+      var spriteStackFX = null;
+      if (typeof EnemySprites !== 'undefined') {
         var frame = EnemySprites.computeFrame(e, now);
         spriteEmoji = frame.emoji;
+        spriteStack = frame.stack;
+        spriteStackFX = frame.stackFX;
         spriteGlow = frame.glowColor;
         spriteGlowR = frame.glowRadius || 0;
         spriteTint = frame.tint;
@@ -1268,6 +1499,8 @@ var Game = (function () {
         x: e.x, y: e.y,
         id: e.id,                         // Pass 8: intent telegraph match
         emoji: spriteEmoji,
+        stack: spriteStack,               // Triple emoji stack (null = legacy)
+        stackFX: spriteStackFX,           // Per-stack FX data (null = none)
         color: aState.color,
         scale: e.isElite ? 0.8 : 0.6,
         facing: e.facing,
@@ -1280,6 +1513,42 @@ var Game = (function () {
         bobY: spriteBobY,
         scaleAdd: spriteScaleAdd
       });
+    }
+
+    // ── Vendor NPC sprites (behind counter, facing player) ──────────
+    if (typeof NpcComposer !== 'undefined' && floorData.shops) {
+      for (var vi = 0; vi < floorData.shops.length; vi++) {
+        var shopEntry = floorData.shops[vi];
+        var vendorStack = NpcComposer.getVendorPreset(shopEntry.factionId);
+        if (vendorStack) {
+          // Determine facing toward nearest walkable neighbor
+          var vendorFacing = shopEntry.facing || 'south';
+          _sprites.push({
+            x: shopEntry.x, y: shopEntry.y,
+            id: 'vendor_' + shopEntry.factionId,
+            emoji: vendorStack.head || vendorStack.torso || '🧙',
+            stack: {
+              head:   vendorStack.head   || '',
+              torso:  vendorStack.torso  || '',
+              legs:   vendorStack.legs   || '',
+              hat:    vendorStack.hat    ? { emoji: vendorStack.hat, scale: vendorStack.hatScale || 0.5, behind: !!vendorStack.hatBehind } : null,
+              backWeapon:  vendorStack.backWeapon  ? { emoji: vendorStack.backWeapon,  scale: vendorStack.backWeaponScale || 0.4,  offsetX: vendorStack.backWeaponOffsetX || 0.3 }  : null,
+              frontWeapon: vendorStack.frontWeapon ? { emoji: vendorStack.frontWeapon, scale: vendorStack.frontWeaponScale || 0.65, offsetX: vendorStack.frontWeaponOffsetX || -0.25 } : null,
+              headMods:  vendorStack.headMods  || null,
+              torsoMods: vendorStack.torsoMods || null,
+              tintHue: vendorStack.tintHue
+            },
+            color: null,
+            scale: 0.7,
+            facing: vendorFacing,
+            awareness: 0,
+            counterOcclude: true,
+            glow: null, glowRadius: 0, tint: null,
+            particleEmoji: null, overlayText: null,
+            bobY: 0, scaleAdd: 0
+          });
+        }
+      }
     }
 
     // ── Corpse ground sprites (A2 evolved: CorpseRegistry entities) ──
@@ -1298,6 +1567,25 @@ var Game = (function () {
 
     // Tick combat viewport FX (lunge/pulse/flash timers)
     if (typeof CombatFX !== 'undefined') CombatFX.update(frameDt);
+
+    // ── Sync KaomojiCapsule from intent + dialogue systems ──
+    if (typeof KaomojiCapsule !== 'undefined') {
+      // Combat intent → capsule
+      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive()) {
+        KaomojiCapsule.updateFromIntent(EnemyIntent.getRenderData());
+      }
+      // NPC speech → capsule (start when dialog opens, stop when it closes)
+      if (typeof DialogBox !== 'undefined') {
+        var speakerId = DialogBox.getActiveSpeakerId();
+        if (speakerId !== null && !KaomojiCapsule.isActive(speakerId)) {
+          KaomojiCapsule.startSpeech(speakerId);
+          _lastSpeechSpriteId = speakerId;
+        } else if (speakerId === null && _lastSpeechSpriteId !== null) {
+          KaomojiCapsule.stopSpeech(_lastSpeechSpriteId);
+          _lastSpeechSpriteId = null;
+        }
+      }
+    }
 
     // Raycaster render — apply combat zoom if active
     var combatZoom = (typeof CombatFX !== 'undefined') ? CombatFX.getZoom() : 1;
@@ -1327,9 +1615,24 @@ var Game = (function () {
 
   // ── Public API ─────────────────────────────────────────────────────
 
+  /**
+   * Request a pause with a specific context and starting face.
+   * Called by external modules (StatusBar, NchWidget) that need to
+   * open the menu on a particular face.
+   *
+   * @param {string} context  - 'pause', 'bonfire', 'shop', 'harvest'
+   * @param {number} [face=0] - Starting face index (0-3)
+   */
+  function requestPause(context, face) {
+    if (!ScreenManager.isPlaying()) return;
+    _pendingMenuContext = context || 'pause';
+    _pendingMenuFace = face || 0;
+    ScreenManager.toPause();
+  }
+
   return {
     init: init,
-    toggleMinimap: function () { Minimap.toggle(); }
+    requestPause: requestPause
   };
 })();
 

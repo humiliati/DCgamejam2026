@@ -144,4 +144,17 @@ The step fill (the colored strip in the gap) uses the contract's `stepColor` at 
 
 ## Source codebases
 
-**EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy A
+**EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI.
+
+## Browser testing (Cowork sessions)
+
+The game is a canvas-based HTML5 app. Testing in-browser requires specific setup:
+
+1. **Use Claude in Chrome** (not Kapture) — Kapture doesn't connect to Brave.
+2. **Brave is the default browser.** The extension name is still "Claude in Chrome" but it works in Brave.
+3. **Enable file:// access**: Brave → `brave://extensions` → Claude in Chrome → Details → toggle "Allow access to file URLs". Without this, `read_page` and `javascript_tool` return permission errors on `file://` URLs.
+4. **Navigating to file:// URLs**: The `navigate` tool prepends `https://` to bare paths. Instead, navigate to `example.com` first, then use `javascript_tool` with `window.location.href = 'file:///...'`. Or ask the user to paste the URL into the MCP tab group manually.
+5. **Game file URL**: `file:///C:/Users/hughe/.openclaw/workspace/LG%20Apps/Games/DCgamejam2026/index.html`
+6. **Canvas apps return empty from `read_page`** — use `javascript_tool` to query game state and `computer` action `screenshot` for visuals.
+7. **Console errors**: Call `read_console_messages` once to start tracking, then reload the page to capture load-time errors.
+8. **Tab group**: The game tab must be dragged into the Claude MCP tab group before tools can access it.

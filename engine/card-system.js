@@ -240,6 +240,68 @@ var CardSystem = (function () {
     return drawn;
   }
 
+  /**
+   * Draw a card with overflow cascade (Gone-Rogue pattern):
+   *   1. If hand < MAX_HAND: draw normally
+   *   2. If hand is full: bump last card in hand → deck (collection)
+   *   3. If deck (collection) is also full (MAX_COLLECTION): incinerate the bumped card
+   *   4. Draw the new card into the freed hand slot
+   *
+   * Returns { drawn: card|null, bumped: card|null, incinerated: card|null }
+   * Callers use this for Toast feedback.
+   *
+   * @param {number} [maxHand=5] — hand capacity (Player.MAX_HAND)
+   * @param {number} [maxCollection=30] — collection cap (0 = unlimited)
+   * @returns {Object}
+   */
+  function drawWithOverflow(maxHand, maxCollection) {
+    maxHand = maxHand || 5;
+    maxCollection = maxCollection || 0;  // 0 = unlimited
+
+    var result = { drawn: null, bumped: null, incinerated: null };
+
+    // Refill deck if empty
+    if (_deck.length === 0) {
+      var handIds = {};
+      for (var h = 0; h < _hand.length; h++) {
+        handIds[_hand[h].id] = (handIds[_hand[h].id] || 0) + 1;
+      }
+      _deck = [];
+      for (var c = 0; c < _collection.length; c++) {
+        var cid = _collection[c].id;
+        if (handIds[cid] && handIds[cid] > 0) {
+          handIds[cid]--;
+        } else {
+          _deck.push(_collection[c]);
+        }
+      }
+      SeededRNG.shuffle(_deck);
+    }
+
+    if (_deck.length === 0) return result;  // Nothing to draw
+
+    // Overflow cascade: hand full → bump last card
+    if (_hand.length >= maxHand) {
+      var bumped = _hand.pop();
+      result.bumped = bumped;
+
+      // Try to push bumped card to collection
+      if (maxCollection > 0 && _collection.length >= maxCollection) {
+        // Collection also full — incinerate the bumped card
+        result.incinerated = bumped;
+      } else {
+        _collection.push(bumped);
+      }
+    }
+
+    // Draw new card
+    var card = _deck.pop();
+    _hand.push(card);
+    result.drawn = card;
+
+    return result;
+  }
+
   // ── Collection mutation ───────────────────────────────────────────
 
   /**
@@ -318,6 +380,18 @@ var CardSystem = (function () {
     });
   }
 
+  /**
+   * Push a card directly into _hand (e.g. from inventory drag).
+   * Does NOT draw from deck — the card object is inserted as-is.
+   * @param {Object} card
+   * @returns {boolean} True if added (hand not full).
+   */
+  function pushToHand(card) {
+    if (!card) return false;
+    _hand.push(card);
+    return true;
+  }
+
   /** Return the full raw registry (for editor / debug overlays). */
   function getAllRegistry() {
     if (!_loaded) _loadRegistry();
@@ -333,6 +407,8 @@ var CardSystem = (function () {
     playFromHand:  playFromHand,
     playStack:     playStack,
     drawToHand:    drawToHand,
+    drawWithOverflow: drawWithOverflow,
+    pushToHand:    pushToHand,
     addCard:       addCard,
     removeCard:    removeCard,
     getCollection: getCollection,

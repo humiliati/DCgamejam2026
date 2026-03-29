@@ -262,12 +262,23 @@ var CombatBridge = (function () {
         EnemyIntent.onCombatEvent('round_end');
       }
 
-      // Per-turn draw from backup deck (Gone Rogue pattern)
+      // Per-turn draw from backup deck (Gone Rogue overflow cascade)
       if (CombatEngine.canDraw()) {
-        var drawn = CardSystem.drawToHand(1);
+        var maxH = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
+        var drawResult = CardSystem.drawWithOverflow(maxH, 0);
         CombatEngine.useDraw();
-        if (drawn.length > 0) {
-          HUD.showCombatLog('📥 Drew ' + drawn[0].emoji + ' ' + drawn[0].name);
+        if (drawResult.drawn) {
+          HUD.showCombatLog('\uD83D\uDCE5 Drew ' + drawResult.drawn.emoji + ' ' + drawResult.drawn.name);
+          if (drawResult.bumped && !drawResult.incinerated) {
+            if (typeof Toast !== 'undefined') {
+              Toast.show((drawResult.bumped.name || 'Card') + ' \u2192 deck (hand full)', 'info');
+            }
+          }
+          if (drawResult.incinerated) {
+            if (typeof Toast !== 'undefined') {
+              Toast.show('\uD83D\uDD25 ' + (drawResult.incinerated.name || 'Card') + ' destroyed (overflow)', 'warning');
+            }
+          }
         }
       }
 

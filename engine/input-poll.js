@@ -78,14 +78,18 @@ var InputPoll = (function () {
 
     var now = performance.now();
 
+    // ── Cancel minimap auto-path on any manual input ──
+    var _manualInput = false;
+
     // ── Turns (edge-triggered only, no repeat) ──
-    if (InputManager.downEdge('turn_left'))  MC.turnLeft();
-    if (InputManager.downEdge('turn_right')) MC.turnRight();
+    if (InputManager.downEdge('turn_left'))  { MC.turnLeft();  _manualInput = true; }
+    if (InputManager.downEdge('turn_right')) { MC.turnRight(); _manualInput = true; }
 
     // ── Movement (edge + held repeat) ──
     for (var i = 0; i < MOVE_ACTIONS.length; i++) {
       var ma = MOVE_ACTIONS[i];
       if (InputManager.downEdge(ma.action)) {
+        _manualInput = true;
         MC.startRelativeMove(ma.rel);
       } else if (InputManager.isDown(ma.action)) {
         if (MC.checkKeyRepeat(ma.hash, now)) {
@@ -103,6 +107,11 @@ var InputPoll = (function () {
       }
     }
     if (!anyMovementHeld) MC.resetRepeat();
+
+    // Cancel minimap auto-path on any manual movement/turn
+    if (_manualInput && typeof MinimapNav !== 'undefined' && MinimapNav.isActive()) {
+      MinimapNav.cancel();
+    }
 
     // ── Edge-triggered actions ──
     if (InputManager.downEdge('interact') && _onInteract)   _onInteract();

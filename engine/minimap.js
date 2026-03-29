@@ -19,8 +19,12 @@ var Minimap = (function () {
 
   var _canvas = null;
   var _ctx = null;
-  var _size = 320;  // Doubled from 160 for HUD 2× scale
-  var _visible = false;   // Start hidden — player toggles via M key or map button
+  var _frame = null;       // #minimap-frame container
+  var _expandBtn = null;   // #minimap-expand toggle
+  var _floorLabelEl = null; // #minimap-floor-label
+  var _expanded = false;   // false = embedded (160px), true = overlay (320px)
+  var _visible = true;     // Always visible during gameplay (embedded mode)
+  var _size = 160;         // Current render size (changes with expand/collapse)
 
   // ── Floor cache & stack ──────────────────────────────────────────
   // _floorCache: floorId → { explored, lastPlayerPos }
@@ -70,8 +74,26 @@ var Minimap = (function () {
   function init(canvas) {
     _canvas = canvas;
     _ctx = canvas.getContext('2d');
+
+    // Find frame container and controls
+    _frame = document.getElementById('minimap-frame');
+    _expandBtn = document.getElementById('minimap-expand');
+    _floorLabelEl = document.getElementById('minimap-floor-label');
+
+    // Set initial embedded size
+    _size = 160;
+    _expanded = false;
+    _visible = true;
     _canvas.width = _size;
     _canvas.height = _size;
+
+    // Wire expand/collapse click
+    if (_expandBtn) {
+      _expandBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _toggleExpand();
+      });
+    }
   }
 
   // ── Floor management ─────────────────────────────────────────────
@@ -177,12 +199,54 @@ var Minimap = (function () {
     _floorLabel = '';
   }
 
+  /**
+   * Toggle expanded overlay mode (M key or click expand icon).
+   * In embedded mode the minimap is always visible at 160px.
+   * In expanded mode it triples to 480px centered in the viewport.
+   * Toggled by clicking the compass sprite on the minimap canvas.
+   */
   function toggle() {
-    _visible = !_visible;
-    _canvas.style.display = _visible ? 'block' : 'none';
+    _toggleExpand();
+  }
+
+  function _toggleExpand() {
+    _expanded = !_expanded;
+    _size = _expanded ? 480 : 160;
+    _canvas.width = _size;
+    _canvas.height = _size;
+    if (_frame) {
+      _frame.classList.toggle('expanded', _expanded);
+      if (_expanded) {
+        _frame.style.width = '480px';
+        _frame.style.height = '480px';
+      } else {
+        _frame.style.width = '';
+        _frame.style.height = '';
+      }
+    }
+    if (_expandBtn) {
+      // Hide the old expand button — compass is the toggle now
+      _expandBtn.style.display = 'none';
+    }
+  }
+
+  /**
+   * Expand the minimap (compass click).
+   */
+  function compassExpand() {
+    if (!_expanded) _toggleExpand();
+  }
+
+  /**
+   * Collapse the minimap back to normal embedded size.
+   * Called when click-to-move path starts.
+   */
+  function compassCollapse() {
+    if (_expanded) _toggleExpand();
   }
 
   function isVisible() { return _visible; }
+  function isExpanded() { return _expanded; }
 
   /**
    * Reveal tiles around a position (fog of war).
@@ -210,7 +274,7 @@ var Minimap = (function () {
    * @param {Array}  [enemies] - [{ x, y, awareness }]
    */
   function render(player, grid, gridW, gridH, enemies) {
-    if (!_visible || !_ctx) return;
+    if (!_ctx) return;
     var ctx = _ctx;
     var tileSize = Math.max(2, Math.floor(_size / Math.max(gridW, gridH)));
     var offsetX = Math.floor((_size - gridW * tileSize) / 2);
@@ -331,14 +395,18 @@ var Minimap = (function () {
     ctx.closePath();
     ctx.fill();
 
-    // Draw floor label overlay (bottom-left corner)
-    if (_floorLabel) {
-      ctx.font = '18px monospace';
-      var labelW = ctx.measureText(_floorLabel).width + 12;
-      ctx.fillStyle = COLORS.labelBg;
-      ctx.fillRect(2, _size - 26, labelW, 24);
-      ctx.fillStyle = COLORS.label;
-      ctx.fillText(_floorLabel, 8, _size - 6);
+    // Update MinimapNav render params and draw path overlay
+    if (typeof MinimapNav !== 'undefined') {
+      MinimapNav.setRenderParams(tileSize, offsetX, offsetY, gridW, gridH);
+      MinimapNav.drawOverlay(ctx);
+    }
+
+    // Draw compass in bottom-left corner (rotates to show north)
+    _drawCompass(ctx, player.dir);
+
+    // Update floor label in DOM frame (not drawn on canvas)
+    if (_floorLabelEl) {
+      _floorLabelEl.textContent = _floorLabel || '';
     }
 
     // Draw depth indicator (breadcrumb dots, top-right)
@@ -410,6 +478,96 @@ var Minimap = (function () {
     ctx.stroke();
   }
 
+  // ── Compass ──────────────────────────────────────────────────────
+
+  // Compass hit-test region (updated each render frame)
+  var _compassCX = 0;
+  var _compassCY = 0;
+  var _compassR  = 0;
+
+  /**
+   * Draw a compass rose in the bottom-left corner.
+   * The "N" needle always points toward world-north, rotating
+   * opposite to the player's facing so it reads correctly.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} playerAngle - Player facing in radians (0=east, π/2=south)
+   */
+  function _drawCompass(ctx, playerAngle) {
+    var r = Math.max(10, _size * 0.07);
+    var cx = r + 6;
+    var cy = _size - r - 6;
+    _compassCX = cx;
+    _compassCY = cy;
+    _compassR  = r;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Outer ring
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(51,255,136,0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Rotate so north needle points to world-north
+    // World-north is -π/2 in our coord system; player.dir is the camera angle.
+    // Needle should point toward -π/2 minus player's current angle.
+    var northAngle = -Math.PI / 2 - playerAngle;
+    ctx.rotate(northAngle);
+
+    // North needle (bright green triangle)
+    var needleLen = r * 0.75;
+    var needleW   = r * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(0, -needleLen);
+    ctx.lineTo(-needleW, needleLen * 0.3);
+    ctx.lineTo(needleW, needleLen * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(51,255,136,0.85)';
+    ctx.fill();
+
+    // South needle (dim)
+    ctx.beginPath();
+    ctx.moveTo(0, needleLen);
+    ctx.lineTo(-needleW, -needleLen * 0.3);
+    ctx.lineTo(needleW, -needleLen * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(51,255,136,0.25)';
+    ctx.fill();
+
+    // "N" label at needle tip
+    ctx.rotate(-northAngle); // Un-rotate for text
+    // Place "N" at the north tip position (rotated)
+    var nx = Math.cos(northAngle - Math.PI / 2) * (needleLen + 3);
+    var ny = Math.sin(northAngle - Math.PI / 2) * (needleLen + 3);
+    // Only draw "N" label in expanded/compass modes where there's room
+    if (_size >= 320) {
+      ctx.fillStyle = 'rgba(51,255,136,0.7)';
+      ctx.font = Math.max(7, r * 0.55) + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('N', nx, ny);
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Test if a canvas-local pixel coordinate hits the compass.
+   * @param {number} px - Canvas-local X
+   * @param {number} py - Canvas-local Y
+   * @returns {boolean}
+   */
+  function hitTestCompass(px, py) {
+    var dx = px - _compassCX;
+    var dy = py - _compassCY;
+    return (dx * dx + dy * dy) <= (_compassR + 4) * (_compassR + 4);
+  }
+
   /**
    * Draw breadcrumb dots showing depth in floor stack.
    * Current floor = bright dot, parent floors = dim dots.
@@ -454,6 +612,11 @@ var Minimap = (function () {
     clearAllFloors: clearAllFloors,
 
     toggle: toggle,
-    isVisible: isVisible
+    isVisible: isVisible,
+    isExpanded: isExpanded,
+    compassExpand: compassExpand,
+    compassCollapse: compassCollapse,
+    hitTestCompass: hitTestCompass,
+    getExplored: function () { return _explored; }
   };
 })();

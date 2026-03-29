@@ -681,6 +681,7 @@ var FloorManager = (function () {
         height: contract.gridSize.h,
         biome: getBiome(_floorId),
         floor: _floorId,
+        floorId: _floorId,
         placeStairsUp: true,
         placeStairsDn: true,
         roomCount: SeededRNG.randInt(contract.roomCount.min, contract.roomCount.max)

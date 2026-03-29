@@ -49,8 +49,8 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.DOOR]      = { action: 'interact.enter',  icon: '' };
     ACTION_MAP[TILES.DOOR_BACK] = { action: 'interact.enter',  icon: '' };
     ACTION_MAP[TILES.DOOR_EXIT] = { action: 'interact.exit',   icon: '' };
-    ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '' };
-    ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨' };
+    ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '', gleaner: 'interact.restock', gleanerIcon: '🧪' };
+    ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨', gleaner: 'interact.restock', gleanerIcon: '📦' };
     ACTION_MAP[TILES.PUZZLE]    = { action: 'interact.reset',   icon: '🧩' };
   }
 
@@ -81,6 +81,21 @@ var InteractPrompt = (function () {
       _visible = true;
       _actionText = i18n.t(entry.action, entry.action.split('.')[1]);
       _iconText = entry.icon;
+
+      // Gleaner mode: show restock prompt for containers that exist
+      if (entry.gleaner && typeof CrateSystem !== 'undefined') {
+        var flId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+        if (CrateSystem.hasContainer(fx, fy, flId)) {
+          var cont = CrateSystem.getContainer(fx, fy, flId);
+          if (cont && cont.sealed) {
+            _actionText = 'sealed \u2714';
+            _iconText = '\u2714';
+          } else {
+            _actionText = i18n.t(entry.gleaner, entry.gleaner.split('.')[1]);
+            _iconText = entry.gleanerIcon || entry.icon;
+          }
+        }
+      }
 
       // Append destination floor ID for door tiles so the player
       // knows where they're going: "[OK] Enter → 1.1"

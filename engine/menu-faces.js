@@ -40,8 +40,80 @@ var MenuFaces = (function () {
   // Rebuilt every render frame; each entry: { x, y, w, h, slot }
   var _hitZones = [];
   var _hoverSlot = -1;   // slot index under pointer, or -1
+  var _hoverDetail = null; // { item, x, y } — item/card under pointer for tooltip
+  var _selectedSlot = -1;  // tap-selected slot for highlight mode
+  var _selectedPayload = null; // payload from selected slot (for drop matching)
+  var _selectedZoneId = null;  // zone id of selected slot
+
+  // ── DragDrop zone IDs ──────────────────────────────────────────
+  var ZONE_EQUIP  = 'inv-equip';   // equipped quick-slots area
+  var ZONE_BAG    = 'inv-bag';     // bag grid area
+  var ZONE_STASH  = 'inv-stash';   // stash grid area (bonfire)
+  var ZONE_SELL   = 'inv-sell';    // shop sell zone
+  var ZONE_INCIN  = 'inv-incin';   // incinerator drop zone (always active)
+  var _dragZonesRegistered = false;
 
   // ── Shared helpers ──────────────────────────────────────────────
+
+  /**
+   * Draw a hover tooltip for a card or item near the cursor position.
+   * Shows: emoji, name, rarity, suit, power, description.
+   */
+  function _drawHoverTooltip(ctx, detail, panelX, panelW) {
+    if (!detail || !detail.item) return;
+    var it = detail.item;
+    var isCard = !!(it.suit || it.power || it.value);
+
+    var TW = 160, TH = isCard ? 80 : 60;
+    var tx = Math.min(detail.x + 10, panelX + panelW - TW - 4);
+    var ty = detail.y - TH - 6;
+    if (ty < 0) ty = detail.y + 30;
+
+    // Background
+    ctx.fillStyle = 'rgba(15,12,25,0.92)';
+    _roundRectFill(ctx, tx, ty, TW, TH, 6);
+    ctx.strokeStyle = 'rgba(255,215,0,0.5)';
+    ctx.lineWidth = 1;
+    _roundRectStroke(ctx, tx, ty, TW, TH, 6);
+
+    var cy = ty + 16;
+    // Name + emoji
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff';
+    ctx.fillText((it.emoji || '') + ' ' + (it.name || '???'), tx + 6, cy);
+    cy += 14;
+
+    // Rarity
+    if (it.rarity) {
+      ctx.font = '10px monospace';
+      ctx.fillStyle = INV_RARITY_COL[it.rarity] || COL.dim;
+      ctx.fillText(it.rarity.toUpperCase(), tx + 6, cy);
+      cy += 12;
+    }
+
+    if (isCard) {
+      // Suit + power
+      var suit = it.suit || '';
+      ctx.font = '10px monospace';
+      ctx.fillStyle = INV_SUIT_COLOR[suit] || COL.dim;
+      ctx.fillText((INV_SUIT_EMOJI[suit] || '') + ' ' + suit, tx + 6, cy);
+      ctx.fillStyle = COL.text;
+      ctx.textAlign = 'right';
+      ctx.fillText('PWR ' + (it.power || it.value || '?'), tx + TW - 6, cy);
+      ctx.textAlign = 'left';
+      cy += 12;
+    }
+
+    // Description (truncated)
+    if (it.description) {
+      ctx.font = '9px monospace';
+      ctx.fillStyle = COL.dim;
+      var desc = it.description;
+      if (desc.length > 24) desc = desc.substring(0, 23) + '\u2026';
+      ctx.fillText(desc, tx + 6, cy);
+    }
+  }
 
   function _drawTitle(ctx, x, y, w, text, emoji) {
     ctx.fillStyle = COL.title;
@@ -578,11 +650,172 @@ var MenuFaces = (function () {
   }
 
   function _renderJournal(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '📖');
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '\uD83D\uDCD6');
     ctx.fillStyle = COL.dim;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('menu.journal_placeholder', 'No entries yet.'), x + w / 2, ty + 30);
+  }
+
+  /**
+   * B5.4 — Deck management section (rendered as part of unified inventory face).
+   * Shows hand preview (5 slots) + backup deck grid.
+   * Click backup card → move to hand. Click hand card → return to backup.
+   */
+  function _renderDeckSection(ctx, x, y, w, h) {
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'DECK'), '🂠');
+
+    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+    var maxHand = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
+
+    // Suit symbols for display
+    var SUIT_EMOJI = { spade: '♠', club: '♣', diamond: '♦', heart: '♥' };
+    var SUIT_COLOR = { spade: '#8888ff', club: '#88ff88', diamond: '#ff8888', heart: '#ff88ff' };
+    var RARITY_COL = {
+      common: '#aaa', uncommon: '#4cf', rare: '#c8f',
+      epic: '#fa4', legendary: '#ff0'
+    };
+
+    // ── Hand preview (5 slots across top) ──────────────────────
+    ctx.fillStyle = COL.dim;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('HAND  ' + hand.length + '/' + maxHand, x + w / 2, ty + 10);
+    ty += 16;
+
+    var cardW = 36;
+    var cardH = 50;
+    var cardGap = 4;
+    var handTotalW = 5 * cardW + 4 * cardGap;
+    var handX = x + (w - handTotalW) / 2;
+
+    for (var hi = 0; hi < 5; hi++) {
+      var cx = handX + hi * (cardW + cardGap);
+      var card = hand[hi];
+
+      if (card) {
+        var isHov = (_hoverSlot === (500 + hi));
+        // Card background
+        ctx.fillStyle = isHov ? 'rgba(255,100,100,0.12)' : 'rgba(40,35,50,0.8)';
+        _roundRectFill(ctx, cx, ty, cardW, cardH, 3);
+        // Rarity border
+        ctx.strokeStyle = RARITY_COL[card.rarity] || '#666';
+        ctx.lineWidth = isHov ? 2 : 1;
+        _roundRectStroke(ctx, cx, ty, cardW, cardH, 3);
+
+        // Suit icon
+        var suit = card.suit || '';
+        ctx.font = '14px serif';
+        ctx.fillStyle = SUIT_COLOR[suit] || '#fff';
+        ctx.fillText(SUIT_EMOJI[suit] || '?', cx + cardW / 2, ty + 18);
+
+        // Card name (truncated)
+        ctx.font = '6px monospace';
+        ctx.fillStyle = COL.text;
+        var cName = card.name || '';
+        if (cName.length > 6) cName = cName.substring(0, 5) + '…';
+        ctx.fillText(cName, cx + cardW / 2, ty + 32);
+
+        // Value
+        ctx.font = '7px monospace';
+        ctx.fillStyle = COL.dim;
+        ctx.fillText((card.power || card.value || '?'), cx + cardW / 2, ty + 42);
+
+        // Hit zone: click to return to backup
+        _hitZones.push({ x: cx, y: ty, w: cardW, h: cardH, slot: 500 + hi, action: 'hand_to_backup' });
+      } else {
+        // Empty hand slot
+        ctx.setLineDash([2, 3]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, cx, ty, cardW, cardH, 3);
+        ctx.setLineDash([]);
+      }
+    }
+
+    ty += cardH + 10;
+
+    // ── Backup deck grid (scrollable, 4 cols) ──────────────────
+    ctx.fillStyle = COL.dim;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    var backupDeck = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
+      ? CardSystem.getCollection() : [];
+    ctx.fillText('BACKUP DECK  (' + backupDeck.length + ')', x + w / 2, ty + 8);
+    ty += 14;
+
+    if (backupDeck.length === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '9px monospace';
+      ctx.fillText('Empty — pick up cards to build your deck', x + w / 2, ty + 20);
+    } else {
+      var bCols = 4;
+      var bSlotW = 36;
+      var bSlotH = 50;
+      var bGap = 4;
+      var bGridW = bCols * bSlotW + (bCols - 1) * bGap;
+      var bGridX = x + (w - bGridW) / 2;
+      var bRows = Math.ceil(backupDeck.length / bCols);
+      var maxVisible = Math.min(bRows, 3);  // Show max 3 rows in the panel
+
+      for (var br = 0; br < maxVisible; br++) {
+        for (var bc = 0; bc < bCols; bc++) {
+          var bi = br * bCols + bc;
+          if (bi >= backupDeck.length) break;
+          var bCard = backupDeck[bi];
+          var bx = bGridX + bc * (bSlotW + bGap);
+          var by = ty + br * (bSlotH + bGap);
+          var bHov = (_hoverSlot === (600 + bi));
+
+          // Card tile
+          ctx.fillStyle = bHov ? 'rgba(100,255,100,0.12)' : 'rgba(40,35,50,0.6)';
+          _roundRectFill(ctx, bx, by, bSlotW, bSlotH, 3);
+          ctx.strokeStyle = RARITY_COL[bCard.rarity] || '#555';
+          ctx.lineWidth = bHov ? 2 : 1;
+          _roundRectStroke(ctx, bx, by, bSlotW, bSlotH, 3);
+
+          // Suit
+          var bSuit = bCard.suit || '';
+          ctx.font = '12px serif';
+          ctx.fillStyle = SUIT_COLOR[bSuit] || '#fff';
+          ctx.textAlign = 'center';
+          ctx.fillText(SUIT_EMOJI[bSuit] || '?', bx + bSlotW / 2, by + 16);
+
+          // Name
+          ctx.font = '6px monospace';
+          ctx.fillStyle = COL.text;
+          var bName = bCard.name || '';
+          if (bName.length > 6) bName = bName.substring(0, 5) + '…';
+          ctx.fillText(bName, bx + bSlotW / 2, by + 30);
+
+          // Value
+          ctx.font = '7px monospace';
+          ctx.fillStyle = COL.dim;
+          ctx.fillText((bCard.power || bCard.value || '?'), bx + bSlotW / 2, by + 40);
+
+          // Hit zone: click to add to hand
+          _hitZones.push({ x: bx, y: by, w: bSlotW, h: bSlotH, slot: 600 + bi, action: 'backup_to_hand' });
+        }
+      }
+
+      ty += maxVisible * (bSlotH + bGap) + 4;
+
+      // Overflow indicator
+      if (bRows > maxVisible) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('▼ ' + (backupDeck.length - maxVisible * bCols) + ' more cards', x + w / 2, ty + 6);
+        ty += 14;
+      }
+    }
+
+    // ── Bottom hint ─────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[Click] Shuttle cards  [Drag→🔥] Dispose  [Q/E] Rotate', x + w / 2, y + h - 8);
+    ctx.textAlign = 'left';
   }
 
   function _renderStash(ctx, x, y, w, h) {
@@ -724,140 +957,453 @@ var MenuFaces = (function () {
   }
 
   // ── Equipped slot labels (matches Player.EQUIP_SLOTS order) ──
-  var EQUIP_LABELS = ['⚔ Weapon', '🧪 Consumable', '🗝 Key'];
-  var EQUIP_SLOT_W = 56;
-  var EQUIP_SLOT_H = 42;
+  var EQUIP_LABELS = ['\u2694\uFE0F Weapon', '\uD83E\uDDEA Item', '\uD83D\uDD11 Key'];
 
+  // ── Inventory scroll state (persists while menu is open) ──────
+  var _bagOffset  = 0;   // Bag wheel scroll offset
+  var _deckOffset = 0;   // Deck wheel scroll offset
+  var _invFocus   = 'bag'; // Which wheel has focus: 'bag' | 'deck'
+
+  // Suit / rarity display helpers
+  var INV_SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+  var INV_SUIT_COLOR = { spade: '#8888ff', club: '#88ff88', diamond: '#ff8888', heart: '#ff88ff' };
+  var INV_RARITY_COL = {
+    common: '#aaa', uncommon: '#4cf', rare: '#c8f',
+    epic: '#fa4', legendary: '#ff0'
+  };
+
+  /**
+   * B6 — Unified inventory + deck face with full-width scroll wheels.
+   *
+   * Layout (top to bottom):
+   *   1. Equipped quick-slots (3 across, legible)
+   *   2. Bag wheel (5 visible, scrollable, full content width)
+   *   3. Hand strip (5 card slots, full size)
+   *   4. Deck wheel (5 visible, scrollable, full content width)
+   *   5. Currency + hint row
+   *
+   * Keys 1-5 fire against the focused wheel.
+   * Q/E scroll the focused wheel.
+   * TAB toggles focus between bag and deck.
+   * Click any slot for equip/transfer actions.
+   */
   function _renderInventory(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face2', 'INVENTORY'), '🎒');
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face2', 'Inventory'), '\uD83C\uDF92');
     var ps = Player.state();
 
-    // ── Section 1: Equipped quick-slots (3 across) ──────────────
-    ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('EQUIPPED', x + w / 2, ty + 10);
-    ty += 16;
+    // Slot sizing — scale to fill content width
+    var SLOT_S   = Math.min(56, Math.floor((w - 40) / 5 - 6));  // 5 slots + gaps + chevrons
+    var SLOT_GAP = 6;
+    var SLOT_RAD = 4;
+    var CHEV_W   = 18;
+    var CHEV_GAP = 4;
 
-    var eqTotalW = 3 * EQUIP_SLOT_W + 2 * 6;
+    // ── Section 1: Equipped (3 across) ──────────────────────────
+    var eqSlotW = Math.min(80, Math.floor((w - 20) / 3 - 8));
+    var eqSlotH = 48;
+    var eqGap   = 8;
+    var eqTotalW = 3 * eqSlotW + 2 * eqGap;
     var eqX = x + (w - eqTotalW) / 2;
+    var eqStartY = ty;
 
     var equipped = Player.getEquipped();
     for (var e = 0; e < 3; e++) {
-      var sx = eqX + e * (EQUIP_SLOT_W + 6);
+      var sx = eqX + e * (eqSlotW + eqGap);
       var item = equipped[e];
-
       if (item) {
-        // Occupied — draw item tile (compact)
-        ctx.fillStyle = (_hoverSlot === (100 + e)) ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
-        _roundRectFill(ctx, sx, ty, EQUIP_SLOT_W, EQUIP_SLOT_H, 4);
-        ctx.strokeStyle = (_hoverSlot === (100 + e)) ? COL.accent : 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        _roundRectStroke(ctx, sx, ty, EQUIP_SLOT_W, EQUIP_SLOT_H, 4);
-
-        ctx.font = '16px serif';
+        var eHov = (_hoverSlot === (100 + e));
+        ctx.fillStyle = eHov ? 'rgba(51,255,136,0.1)' : COL.slot_bg;
+        _roundRectFill(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
+        ctx.strokeStyle = eHov ? COL.accent : 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = eHov ? 2 : 1;
+        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
+        ctx.font = '20px serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
-        ctx.fillText(item.emoji || '?', sx + EQUIP_SLOT_W / 2, ty + 18);
-        ctx.font = '7px monospace';
+        ctx.fillText(item.emoji || '?', sx + eqSlotW / 2, ty + 22);
+        ctx.font = '10px monospace';
         ctx.fillStyle = COL.text;
         var iName = item.name || '';
-        if (iName.length > 8) iName = iName.substring(0, 7) + '…';
-        ctx.fillText(iName, sx + EQUIP_SLOT_W / 2, ty + 32);
-        ctx.font = '6px monospace';
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillText('[UNEQUIP]', sx + EQUIP_SLOT_W / 2, ty + EQUIP_SLOT_H - 2);
-
-        // Hit zone: click to unequip (slot 100+ to avoid collision with bag slots)
-        _hitZones.push({ x: sx, y: ty, w: EQUIP_SLOT_W, h: EQUIP_SLOT_H, slot: 100 + e, action: 'unequip' });
+        if (iName.length > 9) iName = iName.substring(0, 8) + '\u2026';
+        ctx.fillText(iName, sx + eqSlotW / 2, ty + 38);
+        _hitZones.push({ x: sx, y: ty, w: eqSlotW, h: eqSlotH, slot: 100 + e, action: 'unequip' });
       } else {
-        // Empty — dashed border with slot label
-        ctx.setLineDash([3, 3]);
+        ctx.setLineDash([4, 4]);
         ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.lineWidth = 1;
-        _roundRectStroke(ctx, sx, ty, EQUIP_SLOT_W, EQUIP_SLOT_H, 4);
+        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
         ctx.setLineDash([]);
-        ctx.font = '8px monospace';
+        ctx.font = '10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.18)';
-        ctx.fillText(EQUIP_LABELS[e], sx + EQUIP_SLOT_W / 2, ty + EQUIP_SLOT_H / 2 + 3);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillText(EQUIP_LABELS[e], sx + eqSlotW / 2, ty + eqSlotH / 2 + 3);
       }
     }
+    ty += eqSlotH + 8;
 
-    ty += EQUIP_SLOT_H + 8;
-
-    // ── Section 2: Bag grid (4 cols, live data) ─────────────────
-    ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
+    // ── Section 2: Bag Wheel (5 visible, scrollable) ────────────
     var bag = Player.getBag();
-    ctx.fillText('BAG  ' + bag.length + '/' + Player.MAX_BAG, x + w / 2, ty + 10);
+    var bagMax = Player.MAX_BAG || 12;
+    _bagOffset = Math.max(0, Math.min(bag.length - 5, _bagOffset));
+    if (bag.length <= 5) _bagOffset = 0;
+
+    var bagFocused = (_invFocus === 'bag');
+
+    // Header
+    ctx.fillStyle = bagFocused ? COL.accent : COL.dim;
+    ctx.font = bagFocused ? 'bold 12px monospace' : '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(bagFocused ? '\u25C6 BAG' : '  BAG', x, ty + 10);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COL.dim;
+    ctx.font = '11px monospace';
+    ctx.fillText(bag.length + '/' + bagMax, x + w, ty + 10);
     ty += 16;
 
-    var bagCols = 4;
-    var bagSlotS = Math.min(Math.floor((w - 20) / bagCols) - 4, TILE_SIZE);
-    var bagGridW = bagCols * (bagSlotS + 4);
-    var bagGridX = x + (w - bagGridW) / 2;
+    var bagStartY = ty;
+    var wheelTotalW = 5 * SLOT_S + 4 * SLOT_GAP;
+    var wheelRowX = x + (w - wheelTotalW - 2 * (CHEV_W + CHEV_GAP)) / 2;
+    var chevLX = wheelRowX;
+    var slotsStartX = wheelRowX + CHEV_W + CHEV_GAP;
+    var chevRX = slotsStartX + wheelTotalW + CHEV_GAP;
 
-    // Draw bag items
-    var bagRows = Math.max(2, Math.ceil(Player.MAX_BAG / bagCols));
-    for (var r = 0; r < bagRows; r++) {
-      for (var c = 0; c < bagCols; c++) {
-        var bi = r * bagCols + c;
-        if (bi >= Player.MAX_BAG) break;
-        var bsx = bagGridX + c * (bagSlotS + 4);
-        var bsy = ty + r * (bagSlotS + 4);
-        var bagItem = bag[bi];
+    // Focus ring
+    if (bagFocused) {
+      ctx.strokeStyle = 'rgba(255,215,0,0.4)';
+      ctx.lineWidth = 1.5;
+      _roundRectStroke(ctx, chevLX - 2, ty - 2, chevRX + CHEV_W - chevLX + 4, SLOT_S + 4, 6);
+    }
 
-        if (bagItem) {
-          // Compact item tile
-          var isHov = (_hoverSlot === (200 + bi));
-          ctx.fillStyle = isHov ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
-          _roundRectFill(ctx, bsx, bsy, bagSlotS, bagSlotS, 4);
-          ctx.strokeStyle = isHov ? COL.accent : 'rgba(255,255,255,0.15)';
-          ctx.lineWidth = 1;
-          _roundRectStroke(ctx, bsx, bsy, bagSlotS, bagSlotS, 4);
+    // Left chevron
+    var bagCanLeft = _bagOffset > 0;
+    ctx.fillStyle = bagCanLeft ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u25C0', chevLX + CHEV_W / 2, ty + SLOT_S / 2);
+    _hitZones.push({ x: chevLX, y: ty, w: CHEV_W, h: SLOT_S, slot: 700, action: 'bag_scroll_left' });
 
-          ctx.font = '14px serif';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = '#fff';
-          ctx.fillText(bagItem.emoji || '?', bsx + bagSlotS / 2, bsy + bagSlotS / 2 + 2);
+    // Bag slots
+    for (var bs = 0; bs < 5; bs++) {
+      var bsx = slotsStartX + bs * (SLOT_S + SLOT_GAP);
+      var bdi = _bagOffset + bs;
+      var bagItem = (bdi < bag.length) ? bag[bdi] : null;
+      var bHov = (_hoverSlot === (200 + bdi));
+      var isCardInBag = bagItem && (bagItem._bagStored || (bagItem.suit !== undefined && bagItem.value !== undefined));
 
-          ctx.font = '6px monospace';
-          ctx.fillStyle = COL.text;
-          var bName = bagItem.name || '';
-          if (bName.length > 7) bName = bName.substring(0, 6) + '…';
-          ctx.fillText(bName, bsx + bagSlotS / 2, bsy + bagSlotS - 3);
+      // Slot background
+      if (bagItem) {
+        ctx.fillStyle = bHov ? 'rgba(51,255,136,0.1)' : COL.slot_bg;
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      }
+      _roundRectFill(ctx, bsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
 
-          // Hit zone: click to equip (slot 200+ to avoid collision)
-          _hitZones.push({ x: bsx, y: bsy, w: bagSlotS, h: bagSlotS, slot: 200 + bi, action: 'equip' });
-        } else {
-          // Empty slot
-          ctx.setLineDash([2, 3]);
-          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-          ctx.lineWidth = 1;
-          _roundRectStroke(ctx, bsx, bsy, bagSlotS, bagSlotS, 4);
-          ctx.setLineDash([]);
+      // Card-in-bag glow
+      if (isCardInBag) {
+        ctx.fillStyle = 'rgba(128,0,255,0.12)';
+        _roundRectFill(ctx, bsx + 2, ty + 2, SLOT_S - 4, SLOT_S - 4, SLOT_RAD - 1);
+      }
+
+      // Border
+      if (bagItem) {
+        ctx.strokeStyle = bHov ? COL.accent : (bagFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.2)');
+        ctx.lineWidth = bHov ? 2 : 1;
+      } else {
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+      }
+      _roundRectStroke(ctx, bsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
+      ctx.setLineDash([]);
+
+      // Content
+      if (bagItem) {
+        var bagEmoji = isCardInBag ? '\uD83C\uDCCF' : (bagItem.emoji || '\uD83D\uDCE6');
+        ctx.font = '22px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(bagEmoji, bsx + SLOT_S / 2, ty + SLOT_S / 2 - 2);
+
+        // Name below emoji
+        ctx.font = '9px monospace';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = COL.text;
+        var bName = bagItem.name || '';
+        if (bName.length > 7) bName = bName.substring(0, 6) + '\u2026';
+        ctx.fillText(bName, bsx + SLOT_S / 2, ty + SLOT_S - 4);
+
+        _hitZones.push({ x: bsx, y: ty, w: SLOT_S, h: SLOT_S, slot: 200 + bdi, action: 'equip' });
+      }
+
+      // Slot number
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = (bagFocused && bagItem) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
+      ctx.fillText(String(bs + 1), bsx + SLOT_S / 2, ty + SLOT_S + 1);
+    }
+    ctx.textBaseline = 'alphabetic';
+
+    // Right chevron
+    var bagCanRight = _bagOffset + 5 < bag.length;
+    ctx.fillStyle = bagCanRight ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u25B6', chevRX + CHEV_W / 2, ty + SLOT_S / 2);
+    ctx.textBaseline = 'alphabetic';
+    _hitZones.push({ x: chevRX, y: ty, w: CHEV_W, h: SLOT_S, slot: 701, action: 'bag_scroll_right' });
+
+    ty += SLOT_S + 18;
+
+    // ── Section 3: Hand (5 card slots, full size) ───────────────
+    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+    var maxHand = Player.MAX_HAND || 5;
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('  HAND', x, ty + 10);
+    ctx.textAlign = 'right';
+    ctx.fillText(hand.length + '/' + maxHand, x + w, ty + 10);
+    ty += 16;
+
+    var cardW = Math.min(50, Math.floor((w - 20) / 5 - 6));
+    var cardH = Math.floor(cardW * 1.35);
+    var cardGap = 6;
+    var handTotalW = 5 * cardW + 4 * cardGap;
+    var handX = x + (w - handTotalW) / 2;
+    var handStartY = ty;  // capture for drag zone bounds
+
+    for (var hi = 0; hi < 5; hi++) {
+      var hcx = handX + hi * (cardW + cardGap);
+      var card = hand[hi];
+      if (card) {
+        var hHov = (_hoverSlot === (500 + hi));
+        ctx.fillStyle = hHov ? 'rgba(255,100,100,0.12)' : 'rgba(40,35,50,0.7)';
+        _roundRectFill(ctx, hcx, ty, cardW, cardH, 4);
+        ctx.strokeStyle = INV_RARITY_COL[card.rarity] || '#666';
+        ctx.lineWidth = hHov ? 2 : 1;
+        _roundRectStroke(ctx, hcx, ty, cardW, cardH, 4);
+
+        // Suit icon
+        var suit = card.suit || '';
+        ctx.font = '18px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = INV_SUIT_COLOR[suit] || '#fff';
+        ctx.fillText(INV_SUIT_EMOJI[suit] || '?', hcx + cardW / 2, ty + 20);
+
+        // Card name
+        ctx.font = '9px monospace';
+        ctx.fillStyle = COL.text;
+        var cName = card.name || '';
+        if (cName.length > 7) cName = cName.substring(0, 6) + '\u2026';
+        ctx.fillText(cName, hcx + cardW / 2, ty + 36);
+
+        // Power value
+        ctx.font = '11px monospace';
+        ctx.fillStyle = COL.dim;
+        ctx.fillText('' + (card.power || card.value || ''), hcx + cardW / 2, ty + cardH - 6);
+        _hitZones.push({ x: hcx, y: ty, w: cardW, h: cardH, slot: 500 + hi, action: 'hand_to_backup' });
+      } else {
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, hcx, ty, cardW, cardH, 4);
+        ctx.setLineDash([]);
+      }
+    }
+    ty += cardH + 8;
+
+    // ── Section 4: Deck Wheel (5 visible, scrollable) ───────────
+    var collection = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
+      ? CardSystem.getCollection() : [];
+    _deckOffset = Math.max(0, Math.min(collection.length - 5, _deckOffset));
+    if (collection.length <= 5) _deckOffset = 0;
+
+    var deckFocused = (_invFocus === 'deck');
+
+    // Header
+    ctx.fillStyle = deckFocused ? COL.accent : COL.dim;
+    ctx.font = deckFocused ? 'bold 12px monospace' : '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(deckFocused ? '\u25C6 DECK' : '  DECK', x, ty + 10);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COL.dim;
+    ctx.font = '11px monospace';
+    ctx.fillText('' + collection.length, x + w, ty + 10);
+    ty += 16;
+
+    var deckStartY = ty;  // capture for drag zone bounds
+    var deckSlotsStartX = slotsStartX;  // reuse bag wheel X alignment
+
+    // Focus ring
+    if (deckFocused) {
+      ctx.strokeStyle = 'rgba(255,215,0,0.4)';
+      ctx.lineWidth = 1.5;
+      _roundRectStroke(ctx, chevLX - 2, ty - 2, chevRX + CHEV_W - chevLX + 4, SLOT_S + 4, 6);
+    }
+
+    // Left chevron
+    var deckCanLeft = _deckOffset > 0;
+    ctx.fillStyle = deckCanLeft ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u25C0', chevLX + CHEV_W / 2, ty + SLOT_S / 2);
+    _hitZones.push({ x: chevLX, y: ty, w: CHEV_W, h: SLOT_S, slot: 710, action: 'deck_scroll_left' });
+
+    // Deck slots
+    for (var ds = 0; ds < 5; ds++) {
+      var dsx = slotsStartX + ds * (SLOT_S + SLOT_GAP);
+      var ddi = _deckOffset + ds;
+      var dCard = (ddi < collection.length) ? collection[ddi] : null;
+      var dHov = (_hoverSlot === (600 + ddi));
+
+      // Slot background
+      if (dCard) {
+        ctx.fillStyle = dHov ? 'rgba(100,255,100,0.1)' : 'rgba(40,35,50,0.6)';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      }
+      _roundRectFill(ctx, dsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
+
+      // Border
+      if (dCard) {
+        ctx.strokeStyle = dHov ? COL.accent : (deckFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.2)');
+        ctx.lineWidth = dHov ? 2 : 1;
+      } else {
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+      }
+      _roundRectStroke(ctx, dsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
+      ctx.setLineDash([]);
+
+      // Content
+      if (dCard) {
+        var dSuit = dCard.suit || '';
+        ctx.font = '22px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = INV_SUIT_COLOR[dSuit] || '#fff';
+        ctx.fillText(INV_SUIT_EMOJI[dSuit] || '?', dsx + SLOT_S / 2, ty + SLOT_S / 2 - 6);
+        ctx.textBaseline = 'alphabetic';
+
+        // Card name
+        ctx.font = '9px monospace';
+        ctx.fillStyle = COL.text;
+        var dName = dCard.name || '';
+        if (dName.length > 7) dName = dName.substring(0, 6) + '\u2026';
+        ctx.fillText(dName, dsx + SLOT_S / 2, ty + SLOT_S - 4);
+
+        _hitZones.push({ x: dsx, y: ty, w: SLOT_S, h: SLOT_S, slot: 600 + ddi, action: 'backup_to_hand' });
+      }
+
+      // Slot number
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = (deckFocused && dCard) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
+      ctx.fillText(String(ds + 1), dsx + SLOT_S / 2, ty + SLOT_S + 1);
+    }
+    ctx.textBaseline = 'alphabetic';
+
+    // Right chevron
+    var deckCanRight = _deckOffset + 5 < collection.length;
+    ctx.fillStyle = deckCanRight ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u25B6', chevRX + CHEV_W / 2, ty + SLOT_S / 2);
+    ctx.textBaseline = 'alphabetic';
+    _hitZones.push({ x: chevRX, y: ty, w: CHEV_W, h: SLOT_S, slot: 711, action: 'deck_scroll_right' });
+
+    ty += SLOT_S + 16;
+
+    // ── Incinerator + Currency row ─────────────────────────────
+    var incinW = 36, incinH = 36;
+    var incinX = x + 6;
+    var incinY = ty - 6;
+    var incinHov = (_hoverSlot === 800);
+    // Incinerator icon
+    ctx.fillStyle = incinHov ? 'rgba(255,60,30,0.25)' : 'rgba(60,20,10,0.5)';
+    _roundRectFill(ctx, incinX, incinY, incinW, incinH, 4);
+    ctx.strokeStyle = incinHov ? '#ff4422' : 'rgba(255,80,40,0.3)';
+    ctx.lineWidth = incinHov ? 2 : 1;
+    _roundRectStroke(ctx, incinX, incinY, incinW, incinH, 4);
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = incinHov ? '#ff6644' : 'rgba(255,100,60,0.6)';
+    ctx.fillText('\uD83D\uDD25', incinX + incinW / 2, incinY + 24);
+    _hitZones.push({ x: incinX, y: incinY, w: incinW, h: incinH, slot: 800, action: 'incinerator' });
+
+    // Currency
+    ctx.fillStyle = COL.currency;
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('\uD83D\uDCB0 ' + ps.currency + 'g', x + w / 2, ty + 4);
+    ty += 18;
+
+    // ── Bottom hint ─────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[Drag] Transfer  [Q/E] Scroll  [TAB] Focus', x + w / 2, y + h - 6);
+    ctx.textAlign = 'left';
+
+    // ── Hover detail tooltip ────────────────────────────────────
+    _hoverDetail = null;
+    if (_hoverSlot >= 0) {
+      // Resolve hovered slot to actual item/card
+      var _hovItem = null, _hovHZ = null;
+      for (var _hz = 0; _hz < _hitZones.length; _hz++) {
+        if (_hitZones[_hz].slot === _hoverSlot) { _hovHZ = _hitZones[_hz]; break; }
+      }
+      if (_hovHZ) {
+        if (_hoverSlot >= 100 && _hoverSlot < 200) {
+          _hovItem = equipped[_hoverSlot - 100];
+        } else if (_hoverSlot >= 200 && _hoverSlot < 300) {
+          _hovItem = bag[_hoverSlot - 200];
+        } else if (_hoverSlot >= 500 && _hoverSlot < 600) {
+          _hovItem = hand[_hoverSlot - 500];
+        } else if (_hoverSlot >= 600 && _hoverSlot < 700) {
+          _hovItem = collection[_hoverSlot - 600];
+        }
+        if (_hovItem) {
+          _hoverDetail = { item: _hovItem, x: _hovHZ.x + _hovHZ.w, y: _hovHZ.y };
+          _drawHoverTooltip(ctx, _hoverDetail, x, w);
         }
       }
     }
 
-    ty += bagRows * (bagSlotS + 4) + 6;
-
-    // ── Section 3: Currency + hand count ────────────────────────
-    ctx.fillStyle = COL.currency;
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('💰 ' + ps.currency, x + w / 2 - 40, ty + 10);
-    ctx.fillStyle = '#800080';
-    var hand = CardSystem.getHand();
-    ctx.fillText('🂠 ' + hand.length + '/5', x + w / 2 + 40, ty + 10);
-
-    // ── Bottom hint ─────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '8px monospace';
-    ctx.fillText('[Click] Equip/Unequip   [Q/E] Rotate', x + w / 2, ty + 26);
-    ctx.textAlign = 'left';
+    // ── Sync DragDrop per-slot zone bounds ─────────────────────
+    if (typeof DragDrop !== 'undefined' && _dragZonesRegistered) {
+      var eqSlots = [];
+      for (var _ei = 0; _ei < 3; _ei++) {
+        eqSlots.push({ x: eqX + _ei * (eqSlotW + eqGap), y: eqStartY, w: eqSlotW, h: eqSlotH });
+      }
+      var bagSlots = [];
+      for (var _bi = 0; _bi < 5; _bi++) {
+        bagSlots.push({ x: slotsStartX + _bi * (SLOT_S + SLOT_GAP), y: bagStartY, w: SLOT_S, h: SLOT_S });
+      }
+      var handSlots = [];
+      for (var _hi = 0; _hi < 5; _hi++) {
+        handSlots.push({ x: handX + _hi * (cardW + cardGap), y: handStartY, w: cardW, h: cardH });
+      }
+      var deckSlots = [];
+      for (var _di = 0; _di < 5; _di++) {
+        deckSlots.push({ x: deckSlotsStartX + _di * (SLOT_S + SLOT_GAP), y: deckStartY, w: SLOT_S, h: SLOT_S });
+      }
+      _storeInvLayout({
+        eqSlots: eqSlots, bagSlots: bagSlots, handSlots: handSlots, deckSlots: deckSlots,
+        incin: { x: incinX, y: incinY, w: incinW, h: incinH }
+      });
+      // Draw selection highlights over inventory (after layout stored)
+      _drawSelectionHighlights(ctx);
+    }
   }
 
   function _renderBag(ctx, x, y, w, h) {
@@ -1283,6 +1829,501 @@ var MenuFaces = (function () {
     return null;
   }
 
+  // ── DragDrop Integration (Gone-Rogue Pattern) ────────────────────
+  //
+  // Every inventory slot is BOTH a drag source AND a drop target.
+  // Pointer-down on an occupied slot starts a drag with the item/card
+  // as payload. Dropping onto a valid target zone completes the transfer.
+  // The actual data mutation (remove from source, add to target) happens
+  // in the onDrop callback — items are never removed until drop succeeds.
+
+  // Zone ID tracking for cleanup
+  var _registeredZoneIds = [];
+
+  /** Helper: detect card stored in bag */
+  function _isBagCard(item) {
+    return item && (item._bagStored || (item.suit !== undefined && item.value !== undefined));
+  }
+
+  /** Helper: suit emoji lookup */
+  var _SUIT_EMOJI_DD = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+
+  /**
+   * Tap-to-select handler. Called by DragDrop onTap when a slot is tapped
+   * without dragging. Toggles selection or executes transfer if tapping
+   * a valid target while another slot is selected.
+   */
+  function _handleSlotTap(zoneId, payload) {
+    if (!payload) {
+      // Tapped empty slot — if something selected, try to drop here
+      if (_selectedPayload && _selectedZoneId) {
+        var targetZone = DragDrop.getZone(zoneId);
+        if (targetZone && targetZone.accepts && targetZone.accepts(_selectedPayload)) {
+          if (targetZone.onDrop && targetZone.onDrop(_selectedPayload)) {
+            // Transfer succeeded
+            _selectedSlot = -1;
+            _selectedPayload = null;
+            _selectedZoneId = null;
+            return;
+          }
+        }
+      }
+      _selectedSlot = -1;
+      _selectedPayload = null;
+      _selectedZoneId = null;
+      return;
+    }
+    // Tapped an occupied slot
+    if (_selectedZoneId === zoneId) {
+      // Same slot — deselect
+      _selectedSlot = -1;
+      _selectedPayload = null;
+      _selectedZoneId = null;
+    } else if (_selectedPayload) {
+      // Something else was selected — try to transfer to this slot's zone
+      var tgtZone = DragDrop.getZone(zoneId);
+      if (tgtZone && tgtZone.accepts && tgtZone.accepts(_selectedPayload)) {
+        if (tgtZone.onDrop && tgtZone.onDrop(_selectedPayload)) {
+          _selectedSlot = -1;
+          _selectedPayload = null;
+          _selectedZoneId = null;
+          return;
+        }
+      }
+      // Can't drop here — select this slot instead
+      _selectedSlot = payload.index !== undefined ? payload.index : -1;
+      _selectedPayload = payload;
+      _selectedZoneId = zoneId;
+    } else {
+      // Nothing selected — select this slot
+      _selectedSlot = payload.index !== undefined ? payload.index : -1;
+      _selectedPayload = payload;
+      _selectedZoneId = zoneId;
+    }
+  }
+
+  /**
+   * Register per-slot drag-drop zones for the inventory face.
+   * Every occupied slot becomes a drag source AND every zone
+   * becomes a drop target for the appropriate payload types.
+   *
+   * Called when MenuBox opens. Re-called each render frame to keep
+   * zone bounds in sync with layout (zones are re-registered with
+   * updated bounds + payload closures).
+   */
+  function registerDragZones() {
+    if (typeof DragDrop === 'undefined') return;
+    // Always rebuild — slots change every frame as items move
+    unregisterDragZones();
+
+    var equipped = Player.getEquipped();
+    var bag = Player.getBag();
+    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+    var collection = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
+      ? CardSystem.getCollection() : [];
+
+    // ── Equip slots (3) — sources: drag item out. targets: accept items ──
+    for (var ei = 0; ei < 3; ei++) {
+      (function (slotIdx) {
+        var zid = 'inv-eq-' + slotIdx;
+        DragDrop.registerZone(zid, {
+          x: 0, y: 0, w: 0, h: 0,  // Updated by _renderInventory
+          dragPayload: function () {
+            var cur = Player.getEquipped()[slotIdx];
+            if (!cur) return null;
+            return { type: 'item', zone: 'equip', index: slotIdx, data: cur,
+                     emoji: cur.emoji || '\uD83D\uDCE6', label: cur.name };
+          },
+          accepts: function (p) {
+            if (!p || p.zone === 'equip') return false;
+            if (p.type !== 'item') return false;
+            // Cards stored as items can't be equipped
+            if (_isBagCard(p.data)) return false;
+            return true;
+          },
+          onDrop: function (p) {
+            if (!p || !p.data) return false;
+            var item2 = p.data;
+            // Remove from source
+            if (p.zone === 'bag') Player.removeFromBag(item2.id);
+            else if (p.zone === 'stash' && Player.removeFromStash) Player.removeFromStash(item2.id);
+            // Swap: put existing back to bag
+            var prev = Player.getEquipped()[slotIdx];
+            if (prev) Player.addToBag(prev);
+            Player.equipDirect(slotIdx, item2);
+            _refreshAfterDrag();
+            return true;
+          },
+          onTap: function (payload) { _handleSlotTap('inv-eq-' + slotIdx, payload); }
+        });
+        _registeredZoneIds.push(zid);
+      })(ei);
+    }
+
+    // ── Bag wheel slots (5 visible) — sources + targets ──
+    for (var bi = 0; bi < 5; bi++) {
+      (function (slotIdx) {
+        var zid = 'inv-bag-' + slotIdx;
+        DragDrop.registerZone(zid, {
+          x: 0, y: 0, w: 0, h: 0,
+          dragPayload: function () {
+            var b = Player.getBag();
+            var di = _bagOffset + slotIdx;
+            var it = (di < b.length) ? b[di] : null;
+            if (!it) return null;
+            var isCard = _isBagCard(it);
+            return {
+              type: isCard ? 'card' : 'item',
+              zone: 'bag', index: di, data: it,
+              emoji: isCard ? '\uD83C\uDCCF' : (it.emoji || '\uD83D\uDCE6'),
+              label: it.name
+            };
+          },
+          accepts: function (p) {
+            if (!p) return false;
+            if (p.zone === 'bag') return false;  // No bag→bag
+            if (Player.getBag().length >= Player.MAX_BAG) return false;
+            return (p.type === 'item' || p.type === 'card');
+          },
+          onDrop: function (p) {
+            if (!p || !p.data) return false;
+            if (Player.getBag().length >= Player.MAX_BAG) return false;
+            // Remove from source
+            if (p.zone === 'equip') Player.equipDirect(p.index, null);
+            else if (p.zone === 'hand') Player.removeFromHand(p.index);
+            else if (p.zone === 'deck') {
+              if (typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+            }
+            else if (p.zone === 'stash' && Player.removeFromStash) Player.removeFromStash(p.data.id);
+            // Add to bag (cards get _bagStored flag)
+            var d = p.data;
+            if (p.type === 'card') d._bagStored = true;
+            Player.addToBag(d);
+            _refreshAfterDrag();
+            return true;
+          },
+          onTap: function (payload) { _handleSlotTap('inv-bag-' + slotIdx, payload); }
+        });
+        _registeredZoneIds.push(zid);
+      })(bi);
+    }
+
+    // ── Hand card slots (5) — sources + targets ──
+    for (var hi = 0; hi < 5; hi++) {
+      (function (slotIdx) {
+        var zid = 'inv-hand-' + slotIdx;
+        DragDrop.registerZone(zid, {
+          x: 0, y: 0, w: 0, h: 0,
+          dragPayload: function () {
+            var h = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+            var c = h[slotIdx];
+            if (!c) return null;
+            var suit = c.suit || '';
+            return {
+              type: 'card', zone: 'hand', index: slotIdx, data: c,
+              emoji: _SUIT_EMOJI_DD[suit] || '\uD83C\uDCA0',
+              label: c.name
+            };
+          },
+          accepts: function (p) {
+            if (!p) return false;
+            if (p.zone === 'hand') return false;
+            if (p.type !== 'card') return false;
+            return true;  // Always accept — push-out handles overflow
+          },
+          onDrop: function (p) {
+            if (!p || !p.data) return false;
+            var h2 = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+            var maxH = Player.MAX_HAND || 5;
+            // Push-out: if hand is full, bump last card to deck
+            if (h2.length >= maxH) {
+              var bumped = h2[h2.length - 1];
+              Player.removeFromHand(h2.length - 1);
+              if (typeof CardSystem !== 'undefined') {
+                CardSystem.addCard(bumped);  // Push to deck
+              }
+              if (typeof Toast !== 'undefined') {
+                Toast.show((bumped.name || 'Card') + ' \u2192 deck', 'info');
+              }
+            }
+            // Remove from source
+            if (p.zone === 'deck') {
+              if (typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+            } else if (p.zone === 'bag') {
+              Player.removeFromBag(p.data.id);
+              delete p.data._bagStored;
+            }
+            // Add to hand
+            Player.addToHand(p.data);
+            _refreshAfterDrag();
+            return true;
+          },
+          onTap: function (payload) { _handleSlotTap('inv-hand-' + slotIdx, payload); }
+        });
+        _registeredZoneIds.push(zid);
+      })(hi);
+    }
+
+    // ── Deck wheel slots (5 visible) — sources + targets ──
+    for (var di = 0; di < 5; di++) {
+      (function (slotIdx) {
+        var zid = 'inv-deck-' + slotIdx;
+        DragDrop.registerZone(zid, {
+          x: 0, y: 0, w: 0, h: 0,
+          dragPayload: function () {
+            var col = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
+              ? CardSystem.getCollection() : [];
+            var idx = _deckOffset + slotIdx;
+            var c = (idx < col.length) ? col[idx] : null;
+            if (!c) return null;
+            var suit = c.suit || '';
+            return {
+              type: 'card', zone: 'deck', index: idx, data: c,
+              emoji: _SUIT_EMOJI_DD[suit] || '\uD83C\uDCA0',
+              label: c.name
+            };
+          },
+          accepts: function (p) {
+            if (!p) return false;
+            if (p.zone === 'deck') return false;
+            if (p.type !== 'card') return false;
+            return true;  // Deck is unlimited
+          },
+          onDrop: function (p) {
+            if (!p || !p.data) return false;
+            if (p.type !== 'card') return false;
+            // Remove from source
+            if (p.zone === 'hand') Player.removeFromHand(p.index);
+            else if (p.zone === 'bag') {
+              Player.removeFromBag(p.data.id);
+              delete p.data._bagStored;
+            }
+            // Add to deck
+            if (typeof CardSystem !== 'undefined') CardSystem.addCard(p.data);
+            _refreshAfterDrag();
+            return true;
+          },
+          onTap: function (payload) { _handleSlotTap('inv-deck-' + slotIdx, payload); }
+        });
+        _registeredZoneIds.push(zid);
+      })(di);
+    }
+
+    // ── Stash zone (bonfire only) ──
+    DragDrop.registerZone(ZONE_STASH, {
+      x: 0, y: 0, w: 0, h: 0,
+      active: false,
+      accepts: function (p) {
+        if (!p || p.type !== 'item') return false;
+        return Player.getStash().length < (Player.MAX_STASH || 20);
+      },
+      onDrop: function (p) {
+        if (!p || !p.data) return false;
+        if (p.zone === 'bag') Player.removeFromBag(p.data.id);
+        Player.addToStash(p.data);
+        _refreshAfterDrag();
+        return true;
+      }
+    });
+    _registeredZoneIds.push(ZONE_STASH);
+
+    // ── Sell zone (shop only) ──
+    DragDrop.registerZone(ZONE_SELL, {
+      x: 0, y: 0, w: 0, h: 0,
+      active: false,
+      accepts: function (p) {
+        return p && (p.type === 'card' || p.type === 'item');
+      },
+      onDrop: function (p) {
+        if (!p || !p.data || typeof Shop === 'undefined') return false;
+        var SELL_VALUE = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
+        if (p.type === 'card') {
+          var sv = SELL_VALUE[p.data.rarity] || 12;
+          if (p.zone === 'hand') Player.removeFromHand(p.index);
+          else if (p.zone === 'deck' && typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+          else if (p.zone === 'bag') Player.removeFromBag(p.data.id);
+          Player.addCurrency(sv);
+          if (typeof Toast !== 'undefined') Toast.show((p.data.emoji || '\uD83C\uDCA0') + ' sold +' + sv + 'g', 'loot');
+        } else {
+          var price = p.data.baseValue || 1;
+          if (p.zone === 'bag') Player.removeFromBag(p.data.id);
+          else if (p.zone === 'equip') Player.equipDirect(p.index, null);
+          Player.addCurrency(price);
+          if (typeof Toast !== 'undefined') Toast.show((p.data.emoji || '\uD83D\uDCE6') + ' sold +' + price + 'g', 'loot');
+        }
+        _refreshAfterDrag();
+        return true;
+      }
+    });
+    _registeredZoneIds.push(ZONE_SELL);
+
+    // ── Incinerator zone (always active on inventory face) ──
+    DragDrop.registerZone(ZONE_INCIN, {
+      x: 0, y: 0, w: 0, h: 0,
+      accepts: function (p) {
+        return p && (p.type === 'card' || p.type === 'item');
+      },
+      onDrop: function (p) {
+        if (!p || !p.data) return false;
+        // Remove from source
+        if (p.zone === 'hand') Player.removeFromHand(p.index);
+        else if (p.zone === 'deck' && typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+        else if (p.zone === 'bag') Player.removeFromBag(p.data.id);
+        else if (p.zone === 'equip') Player.equipDirect(p.index, null);
+        if (typeof Toast !== 'undefined') {
+          Toast.show('\uD83D\uDD25 ' + (p.data.name || 'Item') + ' destroyed', 'warning');
+        }
+        _refreshAfterDrag();
+        return true;
+      },
+      onTap: function () { _handleSlotTap(ZONE_INCIN, null); }
+    });
+    _registeredZoneIds.push(ZONE_INCIN);
+
+    _dragZonesRegistered = true;
+  }
+
+  /** Post-drag refresh: update panels and HUD */
+  function _refreshAfterDrag() {
+    if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());
+    if (typeof NchWidget !== 'undefined') NchWidget.refresh();
+    if (typeof QuickBar !== 'undefined') QuickBar.refresh();
+    if (typeof StatusBar !== 'undefined') StatusBar.refresh();
+  }
+
+  /**
+   * Unregister all inventory drag-drop zones.
+   */
+  function unregisterDragZones() {
+    if (typeof DragDrop === 'undefined') return;
+    for (var i = 0; i < _registeredZoneIds.length; i++) {
+      DragDrop.removeZone(_registeredZoneIds[i]);
+    }
+    _registeredZoneIds = [];
+    _dragZonesRegistered = false;
+    _selectedSlot = -1;
+    _selectedPayload = null;
+    _selectedZoneId = null;
+  }
+
+  /**
+   * Update drag zone bounds from the last _renderInventory layout.
+   * Called at the end of _renderInventory to sync zone positions with
+   * the canvas slot positions. Stores layout data in module-level vars
+   * so registerDragZones can re-register with correct bounds next frame.
+   */
+  var _lastInvLayout = null;
+
+  function _storeInvLayout(layout) {
+    _lastInvLayout = layout;
+    _syncDragZoneBounds();
+  }
+
+  function _syncDragZoneBounds() {
+    if (!_lastInvLayout || typeof DragDrop === 'undefined' || !_dragZonesRegistered) return;
+    var L = _lastInvLayout;
+    // Equip slots
+    for (var ei = 0; ei < 3; ei++) {
+      DragDrop.updateZone('inv-eq-' + ei, {
+        x: L.eqSlots[ei].x, y: L.eqSlots[ei].y,
+        w: L.eqSlots[ei].w, h: L.eqSlots[ei].h
+      });
+    }
+    // Bag wheel slots
+    for (var bi = 0; bi < 5; bi++) {
+      DragDrop.updateZone('inv-bag-' + bi, {
+        x: L.bagSlots[bi].x, y: L.bagSlots[bi].y,
+        w: L.bagSlots[bi].w, h: L.bagSlots[bi].h
+      });
+    }
+    // Hand slots
+    for (var hi = 0; hi < 5; hi++) {
+      DragDrop.updateZone('inv-hand-' + hi, {
+        x: L.handSlots[hi].x, y: L.handSlots[hi].y,
+        w: L.handSlots[hi].w, h: L.handSlots[hi].h
+      });
+    }
+    // Deck wheel slots
+    for (var di = 0; di < 5; di++) {
+      DragDrop.updateZone('inv-deck-' + di, {
+        x: L.deckSlots[di].x, y: L.deckSlots[di].y,
+        w: L.deckSlots[di].w, h: L.deckSlots[di].h
+      });
+    }
+    // Incinerator
+    if (L.incin) {
+      DragDrop.updateZone(ZONE_INCIN, {
+        x: L.incin.x, y: L.incin.y,
+        w: L.incin.w, h: L.incin.h
+      });
+    }
+  }
+
+  /**
+   * Draw pulsing highlight borders on all valid drop targets
+   * when a slot is tap-selected.
+   */
+  function _drawSelectionHighlights(ctx) {
+    if (!_selectedPayload || !_lastInvLayout || typeof DragDrop === 'undefined') return;
+    var L = _lastInvLayout;
+    var t = Date.now();
+    var pulse = 0.5 + 0.5 * Math.sin(t * 0.006);  // 0..1 pulsing
+    var alpha = 0.3 + 0.5 * pulse;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 255, 180, ' + alpha + ')';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 3]);
+
+    // Check each zone type
+    var allZones = [
+      { prefix: 'inv-eq-', slots: L.eqSlots, count: 3 },
+      { prefix: 'inv-bag-', slots: L.bagSlots, count: 5 },
+      { prefix: 'inv-hand-', slots: L.handSlots, count: 5 },
+      { prefix: 'inv-deck-', slots: L.deckSlots, count: 5 }
+    ];
+    for (var g = 0; g < allZones.length; g++) {
+      var group = allZones[g];
+      for (var s = 0; s < group.count; s++) {
+        var zid = group.prefix + s;
+        if (zid === _selectedZoneId) continue;  // Don't highlight the source
+        var zone = DragDrop.getZone(zid);
+        if (zone && zone.accepts && zone.accepts(_selectedPayload)) {
+          var sl = group.slots[s];
+          ctx.strokeRect(sl.x - 2, sl.y - 2, sl.w + 4, sl.h + 4);
+        }
+      }
+    }
+    // Incinerator highlight
+    if (L.incin && ZONE_INCIN !== _selectedZoneId) {
+      var incZone = DragDrop.getZone(ZONE_INCIN);
+      if (incZone && incZone.accepts && incZone.accepts(_selectedPayload)) {
+        ctx.strokeStyle = 'rgba(255, 80, 40, ' + alpha + ')';
+        ctx.strokeRect(L.incin.x - 2, L.incin.y - 2, L.incin.w + 4, L.incin.h + 4);
+      }
+    }
+    // Draw a solid highlight ring on the selected source
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255, 255, 100, 0.9)';
+    ctx.lineWidth = 2;
+    // Find the selected slot bounds
+    var selBounds = null;
+    if (_selectedZoneId) {
+      for (var g2 = 0; g2 < allZones.length; g2++) {
+        for (var s2 = 0; s2 < allZones[g2].count; s2++) {
+          if (allZones[g2].prefix + s2 === _selectedZoneId) {
+            selBounds = allZones[g2].slots[s2];
+            break;
+          }
+        }
+        if (selBounds) break;
+      }
+    }
+    if (selBounds) {
+      ctx.strokeRect(selBounds.x - 1, selBounds.y - 1, selBounds.w + 2, selBounds.h + 2);
+    }
+    ctx.restore();
+  }
+
   // ── Registration helper ─────────────────────────────────────────
 
   /**
@@ -1298,6 +2339,30 @@ var MenuFaces = (function () {
 
   // ── Public API ──────────────────────────────────────────────────
 
+  // ── Inventory Wheel Scroll/Focus API ─────────────────────────────
+
+  function scrollBag(delta) {
+    var bag = Player.getBag();
+    var max = Math.max(0, bag.length - 5);
+    _bagOffset = Math.max(0, Math.min(max, _bagOffset + delta));
+  }
+
+  function scrollDeck(delta) {
+    var col = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
+      ? CardSystem.getCollection() : [];
+    var max = Math.max(0, col.length - 5);
+    _deckOffset = Math.max(0, Math.min(max, _deckOffset + delta));
+  }
+
+  function scrollFocused(delta) {
+    if (_invFocus === 'bag') scrollBag(delta);
+    else scrollDeck(delta);
+  }
+
+  function toggleInvFocus() {
+    _invFocus = (_invFocus === 'bag') ? 'deck' : 'bag';
+  }
+
   return {
     renderFace0:          renderFace0,
     renderFace1:          renderFace1,
@@ -1309,6 +2374,16 @@ var MenuFaces = (function () {
     resetSettings:        resetSettings,
     clearHitZones:        clearHitZones,
     updateHover:          updateHover,
-    handlePointerClick:   handlePointerClick
+    handlePointerClick:   handlePointerClick,
+
+    // DragDrop integration
+    registerDragZones:    registerDragZones,
+    unregisterDragZones:  unregisterDragZones,
+
+    // Inventory wheel scroll/focus
+    scrollBag:            scrollBag,
+    scrollDeck:           scrollDeck,
+    scrollFocused:        scrollFocused,
+    toggleInvFocus:       toggleInvFocus
   };
 })();

@@ -878,6 +878,275 @@ var Raycaster = (function () {
     }
   }
 
+  // ── Triple emoji stack renderer ──────────────────────────────────
+  // Slot Y offsets as fraction of spriteH from center:
+  //   Slot 0 (head):  -0.28
+  //   Slot 1 (torso):  0.00
+  //   Slot 2 (legs):  +0.28
+  var _SLOT_Y = [-0.28, 0.0, 0.28];
+  // Per-slot bob damping: head bobs full, legs stay grounded
+  var _SLOT_BOB = [1.0, 0.6, 0.2];
+  // Per-slot font scale (fraction of spriteH for each emoji)
+  var _SLOT_FONT = 0.32;
+
+  /**
+   * Render a triple emoji stack at billboard position.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Object} stack - { head, torso, legs, hat, backWeapon, frontWeapon, headMods, torsoMods, tintHue }
+   * @param {number} screenX - Horizontal center (px)
+   * @param {number} centerY - Vertical center (px)
+   * @param {number} spriteH - Total sprite height (px)
+   * @param {number} spriteW - Total sprite width (px)
+   * @param {number} hSquish - Horizontal squish from Euler flattening
+   * @param {number} ySquish - Vertical squish for ground tilt
+   * @param {string} facing  - Cardinal direction string ('north','south','east','west')
+   * @param {Object} item    - Sorted sprite item (has .dx, .dy, .dist)
+   */
+  function _renderStack(ctx, stack, screenX, centerY, spriteH, spriteW, hSquish, ySquish, facing, item, bobY, stackFX) {
+    var fontSize = Math.max(8, Math.floor(spriteH * _SLOT_FONT));
+    var sx = hSquish < 0.98 ? hSquish : 1;
+    // Differential idle bob per slot (head leads, legs anchor)
+    var baseBob = bobY || 0;
+
+    // ── Stack FX extraction ──────────────────────────────────────
+    var fx = stackFX || {};
+    var travelSpring = fx.travelSpring || 0;
+    var lungePhase   = fx.lungePhase   || 0;
+    var flashWhite   = fx.flashWhite   || false;
+    var dotFlash     = fx.dotFlash     || false;
+    var statusHue    = (fx.statusHue !== null && fx.statusHue !== undefined) ? fx.statusHue : -1;
+    var statusAlpha  = fx.statusAlpha  || 0;
+    var ghostAlpha   = fx.ghostAlpha !== undefined ? fx.ghostAlpha : 1;
+
+    // Apply ghost alpha to all slots
+    if (ghostAlpha < 1) ctx.globalAlpha *= ghostAlpha;
+
+    // Per-slot travel spring offsets (head sways most, legs least)
+    // Spring is a horizontal displacement that creates a walking sway
+    var _SPRING_SCALE = [1.0, 0.5, 0.15];
+    // Per-slot lunge offsets (torso leads, head follows, legs anchor)
+    // Lunge shifts slots upward (toward player in billboard space) for forward lean
+    var _LUNGE_SCALE = [0.6, 1.0, 0.1];
+
+    // Resolve directional facing dot product for layer visibility
+    var faceDot = 0;
+    if (facing && item) {
+      var fv = _FACE_VEC[facing];
+      if (fv && item.dist > 0.01) {
+        var invD = 1 / item.dist;
+        var ex = -item.dx * invD;
+        var ey = -item.dy * invD;
+        faceDot = fv[0] * ex + fv[1] * ey;
+      }
+    }
+    // Layer visibility based on facing
+    var showFrontWeapon = faceDot > -0.1;
+    var showBackWeapon  = faceDot < 0.2;
+    var headDim = faceDot < -0.3 ? 0.6 : 1.0;
+    // Head Y-squash when facing away (back-of-head foreshortening)
+    var headSquash = faceDot < -0.3 ? 0.94 : 1.0;
+    // Weapon scale multiplier at side angles (foreshortening)
+    var absFace = Math.abs(faceDot);
+    var weaponFore = absFace < 0.3 ? 0.7 : 1.0;
+    // Hat X-shift in facing direction (perspective offset)
+    var hatShiftX = 0;
+    if (facing && absFace < 0.5) {
+      var fv2 = _FACE_VEC[facing];
+      if (fv2) hatShiftX = fv2[0] * fontSize * 0.12;
+    }
+
+    var slots = [stack.head, stack.torso, stack.legs];
+    var mods  = [stack.headMods, stack.torsoMods, null];
+
+    for (var si = 0; si < 3; si++) {
+      var slotEmoji = slots[si];
+      if (!slotEmoji) continue;
+
+      var slotBob = baseBob * _SLOT_BOB[si];
+      // Travel spring: horizontal sway per slot
+      var slotSpringX = travelSpring * _SPRING_SCALE[si] * fontSize * 0.5;
+      // Attack lunge: Y offset (torso dips forward most)
+      var slotLungeY = lungePhase * _LUNGE_SCALE[si] * fontSize * -0.3;
+      var slotY = centerY + _SLOT_Y[si] * spriteH + slotBob + slotLungeY;
+      var slotX = screenX + slotSpringX;
+
+      // ── Back sub-layers (render behind this slot) ──
+      if (si === 0 && stack.hat && stack.hat.behind) {
+        _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
+                        fontSize * stack.hat.scale, sx, ySquish);
+      }
+      if (si === 1 && stack.backWeapon && showBackWeapon) {
+        var bwX = slotX + spriteW * stack.backWeapon.offsetX;
+        _renderSubLayer(ctx, stack.backWeapon.emoji, bwX, slotY,
+                        fontSize * stack.backWeapon.scale * weaponFore, sx, ySquish);
+      }
+
+      // ── Slot modifiers (behind main emoji) ──
+      if (mods[si]) {
+        for (var mi = 0; mi < mods[si].length; mi++) {
+          var mod = mods[si][mi];
+          var modX = slotX + spriteW * (mod.offsetX || 0);
+          var modY = slotY + spriteH * (mod.offsetY || 0);
+          _renderSubLayer(ctx, mod.emoji, modX, modY,
+                          fontSize * (mod.scale || 0.4), sx, ySquish);
+        }
+      }
+
+      // ── Main slot emoji ──
+      ctx.save();
+      ctx.translate(slotX, slotY);
+      var slotSx = sx;
+      var slotSy = ySquish;
+      // Head: dim + Y-squash when facing away
+      if (si === 0) {
+        if (headDim < 1) ctx.globalAlpha *= headDim;
+        if (headSquash < 1) slotSy *= headSquash;
+      }
+      if (slotSx !== 1 || slotSy !== 1) ctx.scale(slotSx, slotSy);
+      ctx.font = fontSize + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(slotEmoji, 0, 0);
+      ctx.restore();
+
+      // ── Front sub-layers (render over this slot) ──
+      if (si === 0 && stack.hat && !stack.hat.behind) {
+        _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
+                        fontSize * stack.hat.scale, sx, ySquish);
+      }
+      if (si === 1 && stack.frontWeapon && showFrontWeapon) {
+        var fwX = slotX + spriteW * stack.frontWeapon.offsetX;
+        _renderSubLayer(ctx, stack.frontWeapon.emoji, fwX, slotY,
+                        fontSize * stack.frontWeapon.scale * weaponFore, sx, ySquish);
+      }
+    }
+
+    // ── Hue tint overlay (subtle color variation for NPC variety) ──
+    if (stack.tintHue !== null && stack.tintHue !== undefined && spriteH > 10) {
+      var rgb = _hueToRgb(stack.tintHue);
+      ctx.save();
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
+      ctx.fillRect(screenX - spriteW * 0.4, centerY - spriteH * 0.4,
+                   spriteW * 0.8, spriteH * 0.8);
+      ctx.restore();
+    }
+
+    // ── Status effect hue overlay (poison green, frozen blue, etc.) ──
+    if (statusHue >= 0 && statusAlpha > 0 && spriteH > 6) {
+      var sRgb = _hueToRgb(statusHue);
+      ctx.save();
+      ctx.globalAlpha = statusAlpha;
+      ctx.fillStyle = 'rgb(' + sRgb.r + ',' + sRgb.g + ',' + sRgb.b + ')';
+      ctx.fillRect(screenX - spriteW * 0.45, centerY - spriteH * 0.45,
+                   spriteW * 0.9, spriteH * 0.9);
+      ctx.restore();
+    }
+
+    // ── Damage white flash (all slots flash white on hit) ──
+    if ((flashWhite || dotFlash) && spriteH > 6) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = flashWhite ? 0.6 : 0.35;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(screenX - spriteW * 0.45, centerY - spriteH * 0.45,
+                   spriteW * 0.9, spriteH * 0.9);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Render a sub-layer emoji (hat, weapon, modifier) at given position/scale.
+   */
+  /**
+   * Render a corpse pile — scattered stack slots on the ground plane.
+   * Each slot emoji is drawn at its pile offset with resting rotation.
+   */
+  function _renderCorpsePile(ctx, pile, screenX, centerY, spriteH, ySquish) {
+    var fontSize = Math.max(6, Math.floor(spriteH * _SLOT_FONT));
+    var dir = pile.dir || 1;
+    var slots = pile.slots;
+
+    for (var si = 0; si < slots.length; si++) {
+      if (!slots[si]) continue;
+      var px = screenX + pile.pileX[si] * dir * spriteH * 0.4;
+      var py = centerY + pile.pileY[si] * spriteH * 0.2;
+      var rot = pile.pileRot[si] * dir;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(rot);
+      if (ySquish !== 1) ctx.scale(1, ySquish);
+      ctx.globalAlpha = 0.85;
+      ctx.font = Math.floor(fontSize * 0.9) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(slots[si], 0, 0);
+      ctx.restore();
+    }
+
+    // Detached accessories (hat, weapon) at scattered offsets
+    if (pile.hat) {
+      var hatX = screenX + dir * spriteH * 0.25;
+      var hatY = centerY - spriteH * 0.1;
+      ctx.save();
+      ctx.translate(hatX, hatY);
+      ctx.rotate(dir * 0.4);
+      if (ySquish !== 1) ctx.scale(1, ySquish);
+      ctx.globalAlpha = 0.7;
+      ctx.font = Math.floor(fontSize * (pile.hatScale || 0.5)) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pile.hat, 0, 0);
+      ctx.restore();
+    }
+    if (pile.frontWeapon) {
+      var wpnX = screenX - dir * spriteH * 0.3;
+      var wpnY = centerY + spriteH * 0.05;
+      ctx.save();
+      ctx.translate(wpnX, wpnY);
+      ctx.rotate(-dir * 0.5);
+      if (ySquish !== 1) ctx.scale(1, ySquish);
+      ctx.globalAlpha = 0.75;
+      ctx.font = Math.floor(fontSize * (pile.frontWeaponScale || 0.65)) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pile.frontWeapon, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  function _renderSubLayer(ctx, emoji, x, y, fontSize, hSquish, ySquish) {
+    if (!emoji) return;
+    ctx.save();
+    ctx.translate(x, y);
+    var sx = hSquish < 0.98 ? hSquish : 1;
+    if (sx !== 1 || ySquish !== 1) ctx.scale(sx, ySquish);
+    ctx.font = Math.max(6, Math.floor(fontSize)) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, 0, 0);
+    ctx.restore();
+  }
+
+  /**
+   * Convert a hue (0-360) to an RGB object for tint overlay.
+   */
+  function _hueToRgb(hue) {
+    // HSL to RGB with S=100%, L=50%
+    var h = hue / 60;
+    var c = 255;
+    var x = Math.floor(c * (1 - Math.abs(h % 2 - 1)));
+    if (h < 1) return { r: c, g: x, b: 0 };
+    if (h < 2) return { r: x, g: c, b: 0 };
+    if (h < 3) return { r: 0, g: c, b: x };
+    if (h < 4) return { r: 0, g: x, b: c };
+    if (h < 5) return { r: x, g: 0, b: c };
+    return { r: c, g: 0, b: x };
+  }
+
   function _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor) {
     var sorted = [];
     for (var i = 0; i < sprites.length; i++) {
@@ -982,7 +1251,40 @@ var Raycaster = (function () {
       // Horizontal squish ratio for perpendicular flattening
       var hSquish = spriteH > 0 ? spriteW / spriteH : 1;
 
-      if (s.emoji) {
+      // ── Counter occlusion (vendor behind half-height counter) ──
+      var _counterClipped = false;
+      if (s.counterOcclude && s.stack && spriteH > 6) {
+        ctx.save();
+        ctx.beginPath();
+        // Clip to upper 60% of sprite — legs hidden by counter tile
+        var clipTop = spriteCenterY - spriteH * 0.5;
+        ctx.rect(screenX - spriteW, clipTop, spriteW * 2, spriteH * 0.6);
+        ctx.clip();
+        _counterClipped = true;
+      }
+
+      if (s.stack && spriteH > 6 && s.stackFX && s.stackFX.sleeping) {
+        // ── Sleeping stack: render as pile (like corpse) ────────
+        var sleepPile = {
+          slots: [s.stack.head, s.stack.torso, s.stack.legs],
+          dir: 1,
+          pileX: [-0.3, 0.1, 0.35],
+          pileY: [0.15, 0.0, -0.1],
+          pileRot: [0.12, 0.08, 0.04],
+          hat: s.stack.hat ? s.stack.hat.emoji : null,
+          hatScale: s.stack.hat ? s.stack.hat.scale : 0.5,
+          frontWeapon: s.stack.frontWeapon ? s.stack.frontWeapon.emoji : null,
+          frontWeaponScale: s.stack.frontWeapon ? s.stack.frontWeapon.scale : 0.65
+        };
+        _renderCorpsePile(ctx, sleepPile, screenX, spriteCenterY, spriteH, ySquish);
+      } else if (s.stack && spriteH > 6) {
+        // ── Triple emoji stack rendering ──────────────────────────
+        _renderStack(ctx, s.stack, screenX, spriteCenterY, spriteH, spriteW,
+                     hSquish, ySquish, s.facing, item, bobOffset, s.stackFX);
+      } else if (s.corpseStack && spriteH > 4) {
+        // ── Corpse pile: scattered stack slots on ground ─────────
+        _renderCorpsePile(ctx, s.corpseStack, screenX, spriteCenterY, spriteH, ySquish);
+      } else if (s.emoji) {
         ctx.save();
         ctx.translate(screenX, spriteCenterY);
         var sx = hSquish < 0.98 ? hSquish : 1;
@@ -995,6 +1297,11 @@ var Raycaster = (function () {
       } else if (s.color) {
         ctx.fillStyle = s.color;
         ctx.fillRect(drawX, spriteCenterY - spriteH / 2, spriteW, spriteH * ySquish);
+      }
+
+      // Close counter occlusion clip if active
+      if (_counterClipped) {
+        ctx.restore();
       }
 
       // ── Tint overlay ───────────────────────────────────────────
@@ -1057,78 +1364,132 @@ var Raycaster = (function () {
         ctx.fillText(s.overlayText, screenX, spriteCenterY - spriteH * 0.45);
       }
 
-      // ── Overhead awareness / intent expression (above enemy head) ──
-      // During combat: show EnemyIntent telegraph (face + card stack).
-      // Exploration: show awareness glyph (MGS-style 💤/❓/❗/⚔️).
-      var _intentRendered = false;
-      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive() && spriteH > 12) {
-        var intentData = EnemyIntent.getRenderData();
-        // Match this sprite to the combat enemy by id
-        if (intentData && s.id !== undefined && intentData.enemyId === s.id) {
-          _intentRendered = true;
-          var now = Date.now();
-          var ibobPhase = (now * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
-          var ibob = Math.sin(ibobPhase) * OVERHEAD_BOB_AMP / dist;
-          var iOverheadY = spriteCenterY - spriteH * 0.58;
+      // ── Kaomoji capsule (intent + speech) above head ──────────────
+      // Replaces old floating emoji intent glyph with a pill-shaped
+      // capsule containing animated kaomoji text.
+      var _capsuleRendered = false;
+      if (typeof KaomojiCapsule !== 'undefined' && s.id !== undefined && spriteH > 12) {
+        var capsuleNow = performance.now();
+        var capData = KaomojiCapsule.getRenderData(s.id, capsuleNow);
+        if (capData && capData.text) {
+          _capsuleRendered = true;
+          var cbobPhase = (capsuleNow * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
+          var cbob = Math.sin(cbobPhase) * OVERHEAD_BOB_AMP / dist;
 
-          // ── Expression glyph (face emoji) ──
-          var iGlyphSize = Math.max(12, Math.floor(spriteH * 0.32));
-          ctx.globalAlpha = alpha * 0.95;
-          ctx.font = iGlyphSize + 'px serif';
+          // Position capsule above head slot (or above single-emoji sprite)
+          var capsuleBaseY = s.stack
+            ? spriteCenterY - spriteH * 0.28 // head slot Y
+            : spriteCenterY;
+          var capsuleY = capsuleBaseY - spriteH * 0.32 + cbob;
+
+          // Capsule dimensions scale with sprite height
+          var capFontSize = Math.max(8, Math.floor(spriteH * 0.18));
+          var textWidth = capData.text.length * capFontSize * 0.55;
+          var capsuleW = Math.max(textWidth + capFontSize * 0.8, spriteH * 0.35);
+          var capsuleH = capFontSize * 1.4;
+          var capR = capsuleH / 2; // Corner radius = half height (full pill)
+
+          // Background pill
+          ctx.save();
+          ctx.globalAlpha = alpha * capData.alpha * 0.5;
+          ctx.fillStyle = 'rgba(' + capData.bgR + ',' + capData.bgG + ',' + capData.bgB + ',0.55)';
+          ctx.beginPath();
+          // Rounded rect as pill shape
+          var cx1 = screenX - capsuleW / 2;
+          var cy1 = capsuleY - capsuleH / 2;
+          if (ctx.roundRect) {
+            ctx.roundRect(cx1, cy1, capsuleW, capsuleH, capR);
+          } else {
+            // Fallback for browsers without roundRect
+            ctx.moveTo(cx1 + capR, cy1);
+            ctx.lineTo(cx1 + capsuleW - capR, cy1);
+            ctx.arcTo(cx1 + capsuleW, cy1, cx1 + capsuleW, cy1 + capR, capR);
+            ctx.lineTo(cx1 + capsuleW, cy1 + capsuleH - capR);
+            ctx.arcTo(cx1 + capsuleW, cy1 + capsuleH, cx1 + capsuleW - capR, cy1 + capsuleH, capR);
+            ctx.lineTo(cx1 + capR, cy1 + capsuleH);
+            ctx.arcTo(cx1, cy1 + capsuleH, cx1, cy1 + capsuleH - capR, capR);
+            ctx.lineTo(cx1, cy1 + capR);
+            ctx.arcTo(cx1, cy1, cx1 + capR, cy1, capR);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Kaomoji text
+          ctx.save();
+          ctx.globalAlpha = alpha * capData.alpha * 0.95;
+          ctx.font = 'bold ' + capFontSize + 'px monospace';
           ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          // Dark outline for readability
+          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.strokeText(capData.text, screenX, capsuleY);
+          ctx.fillStyle = '#fff';
+          ctx.fillText(capData.text, screenX, capsuleY);
+          ctx.restore();
+        }
+      }
+
+      // ── Card stack telegraph (rendered below capsule during combat) ──
+      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive() && spriteH > 18) {
+        var intentData = EnemyIntent.getRenderData();
+        if (intentData && s.id !== undefined && intentData.enemyId === s.id && intentData.greed > 0) {
+          _capsuleRendered = true;
+          var csNow = Date.now();
+          var csBobPhase = (csNow * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
+          var csBob = Math.sin(csBobPhase) * OVERHEAD_BOB_AMP / dist;
+          var csBaseY = s.stack
+            ? spriteCenterY - spriteH * 0.28
+            : spriteCenterY;
+          var csOverheadY = csBaseY - spriteH * 0.32 + csBob;
+
+          var slotSize = Math.max(8, Math.floor(spriteH * 0.18));
+          var slotGap = Math.max(2, Math.floor(slotSize * 0.25));
+          var totalW = intentData.greed * slotSize + (intentData.greed - 1) * slotGap;
+          // Card row sits above the capsule
+          var cardRowY = csOverheadY - slotSize * 0.9;
+          var stackStartX = screenX - totalW * 0.5;
+
+          ctx.font = slotSize + 'px serif';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(intentData.glyph, screenX, iOverheadY + ibob);
+          ctx.textAlign = 'center';
 
-          // ── Card stack telegraph (row of committed cards + empty slots) ──
-          if (intentData.greed > 0 && spriteH > 18) {
-            var slotSize = Math.max(8, Math.floor(spriteH * 0.18));
-            var slotGap = Math.max(2, Math.floor(slotSize * 0.25));
-            var totalW = intentData.greed * slotSize + (intentData.greed - 1) * slotGap;
-            var stackY = iOverheadY + ibob - iGlyphSize * 0.9;
-            var stackStartX = screenX - totalW * 0.5;
+          for (var ci = 0; ci < intentData.greed; ci++) {
+            var slotCX = stackStartX + ci * (slotSize + slotGap) + slotSize * 0.5;
 
-            ctx.font = slotSize + 'px serif';
-            ctx.textBaseline = 'bottom';
-            ctx.textAlign = 'center';
-
-            for (var si = 0; si < intentData.greed; si++) {
-              var slotCX = stackStartX + si * (slotSize + slotGap) + slotSize * 0.5;
-
-              if (si < intentData.cardEmojis.length) {
-                // Filled slot — committed card emoji
-                ctx.globalAlpha = alpha * 0.9;
-                ctx.fillText(intentData.cardEmojis[si], slotCX, stackY);
-              } else {
-                // Empty slot — dim placeholder square
-                ctx.globalAlpha = alpha * 0.3;
-                ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                ctx.fillRect(
-                  slotCX - slotSize * 0.35,
-                  stackY - slotSize * 0.8,
-                  slotSize * 0.7,
-                  slotSize * 0.7
-                );
-              }
-            }
-
-            // ── Ready pulse (stack full — flashing warning) ──
-            if (intentData.ready) {
-              var pulse = (Math.sin(now * 0.008) * 0.5 + 0.5);
-              ctx.globalAlpha = alpha * 0.25 * pulse;
-              ctx.fillStyle = '#ff4040';
+            if (ci < intentData.cardEmojis.length) {
+              ctx.globalAlpha = alpha * 0.9;
+              ctx.fillText(intentData.cardEmojis[ci], slotCX, cardRowY);
+            } else {
+              ctx.globalAlpha = alpha * 0.3;
+              ctx.fillStyle = 'rgba(255,255,255,0.4)';
               ctx.fillRect(
-                stackStartX - slotGap,
-                stackY - slotSize,
-                totalW + slotGap * 2,
-                slotSize * 1.1
+                slotCX - slotSize * 0.35,
+                cardRowY - slotSize * 0.8,
+                slotSize * 0.7,
+                slotSize * 0.7
               );
             }
+          }
+
+          // Ready pulse (stack full — flashing warning)
+          if (intentData.ready) {
+            var csPulse = (Math.sin(csNow * 0.008) * 0.5 + 0.5);
+            ctx.globalAlpha = alpha * 0.25 * csPulse;
+            ctx.fillStyle = '#ff4040';
+            ctx.fillRect(
+              stackStartX - slotGap,
+              cardRowY - slotSize,
+              totalW + slotGap * 2,
+              slotSize * 1.1
+            );
           }
         }
       }
 
-      // Exploration awareness glyph (only when intent telegraph is NOT shown)
-      if (!_intentRendered && s.awareness !== undefined && spriteH > 8) {
+      // Exploration awareness glyph (only when capsule is NOT shown)
+      if (!_capsuleRendered && s.awareness !== undefined && spriteH > 8) {
         var awarenessState = typeof EnemyAI !== 'undefined'
           ? EnemyAI.getAwarenessState(s.awareness)
           : null;

@@ -20,6 +20,7 @@ var BreakableSpawner = (function () {
   var _breakables = [];
   var _biome = 'cellar';
   var _floor = 1;
+  var _floorId = '';
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -39,11 +40,13 @@ var BreakableSpawner = (function () {
    * @param {number} H     - Grid height
    * @param {string} biome - 'cellar' | 'foundry' | 'sealab'
    * @param {number} floor - Current floor number
+   * @param {string} [floorId] - Floor ID string (for CrateSystem integration)
    */
-  function spawnBreakables(grid, rooms, W, H, biome, floor) {
+  function spawnBreakables(grid, rooms, W, H, biome, floor, floorId) {
     _breakables = [];
     _biome = biome || 'cellar';
     _floor = floor || 1;
+    _floorId = floorId || '';
 
     var props = LootTables.getBiomeProps(_biome);
     var breakableProps = props.filter(function (p) { return p.breakable; });
@@ -88,6 +91,12 @@ var BreakableSpawner = (function () {
       _breakables.push(bDef);
       grid[ry][rx] = TILES.BREAKABLE;
       placed++;
+
+      // Create CrateSystem slot container for this breakable (Phase B)
+      if (typeof CrateSystem !== 'undefined') {
+        var floorId = _floorId || '';
+        CrateSystem.createCrate(rx, ry, floorId, _biome);
+      }
     }
   }
 

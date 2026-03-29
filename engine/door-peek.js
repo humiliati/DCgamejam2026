@@ -60,8 +60,8 @@ var DoorPeek = (function () {
       _subLabel.id = 'door-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:30px; text-align:left;' +
-        'font:36px monospace; color:rgba(180,170,150,0);' +
+        'margin-top:36px; text-align:left;' +
+        'font:42px monospace; color:rgba(180,170,150,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.7);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
@@ -191,8 +191,8 @@ var DoorPeek = (function () {
       // Insert destination label inside the glow area
       var glow = inst.querySelector('.box3d-glow');
       if (glow) {
-        glow.innerHTML = '<span style="font:bold 16px monospace;color:' +
-          labelColor + ';text-shadow:0 0 12px ' + glowColor +
+        glow.innerHTML = '<span style="font:bold 28px monospace;color:' +
+          labelColor + ';text-shadow:0 0 16px ' + glowColor +
           ';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
           'white-space:nowrap;">' + displayLabel + '</span>';
       }
@@ -261,4 +261,4 @@ var DoorPeek = (function () {
     init: init,
     update: update
   };
-})();
+})();

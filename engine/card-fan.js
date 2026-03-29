@@ -90,6 +90,11 @@ var CardFan = (function () {
   var COL_TEXT   = '#d8d0c0';
   var COL_NAME   = '#f0d070';
 
+  // ── Maximize / minimize state ────────────────────────────────────
+  var _maximized  = false;    // True when fan takes over bottom 30%
+  var _minimizeBtnEl = null;  // DOM element: minimize toggle
+  var _onMinimize = null;     // Callback when minimize button clicked
+
   // ── State ───────────────────────────────────────────────────────
   var _open       = false;
   var _hand       = [];       // Card objects from CardSystem
@@ -103,6 +108,18 @@ var CardFan = (function () {
   // ── Drag state (mirrors EyesOnly _dragState pattern) ────────────
   var _drag = null;  // { cardIdx, startX, startY, curX, curY, started, pointerId }
 
+  // ── Fire animation state ────────────────────────────────────────
+  // When stack is fired, cards animate upward into enemy half of screen.
+  // Each card launches with a stagger delay, flies to a target y (~25% of screen),
+  // then flashes in its resource color. Persistent cards retract back;
+  // one-use cards dissolve (fade + shrink).
+  var _fireAnim = null;  // null or { cards: [{card, startX, startY, targetX, targetY, delay, timer, phase, persistent}], totalDuration }
+  var FIRE_STAGGER     = 80;    // ms between card launches
+  var FIRE_FLY_MS      = 250;   // ms flight time per card
+  var FIRE_FLASH_MS    = 200;   // ms resource color flash at impact
+  var FIRE_RETRACT_MS  = 300;   // ms for persistent cards to slide back
+  var FIRE_DISSOLVE_MS = 400;   // ms for one-use cards to fade out
+
   // ── Init ────────────────────────────────────────────────────────
 
   function init(canvas) {
@@ -113,7 +130,88 @@ var CardFan = (function () {
       _canvas.addEventListener('pointerup', _onPointerUp, false);
       _canvas.addEventListener('pointercancel', _onPointerCancel, false);
     }
+    _createMinimizeBtn();
   }
+
+  /**
+   * Create the DOM minimize toggle button (hidden by default).
+   * Floats above the fan at z-index 20.
+   */
+  function _createMinimizeBtn() {
+    if (_minimizeBtnEl) return;
+    var vp = document.getElementById('viewport');
+    if (!vp) return;
+
+    _minimizeBtnEl = document.createElement('button');
+    _minimizeBtnEl.id = 'fan-minimize-btn';
+    _minimizeBtnEl.textContent = '▼';
+    _minimizeBtnEl.title = 'Minimize hand';
+    _minimizeBtnEl.style.cssText =
+      'position:absolute; bottom:28%; right:12px; z-index:20;' +
+      'width:36px; height:36px; border-radius:50%;' +
+      'background:rgba(20,18,28,0.85); border:2px solid rgba(160,140,100,0.5);' +
+      'color:#f0d070; font-size:16px; cursor:pointer;' +
+      'display:none; align-items:center; justify-content:center;' +
+      'font-family:monospace; pointer-events:auto;' +
+      'transition:background 0.15s, transform 0.15s;';
+    _minimizeBtnEl.addEventListener('mouseenter', function () {
+      _minimizeBtnEl.style.background = 'rgba(40,36,56,0.95)';
+      _minimizeBtnEl.style.transform = 'scale(1.1)';
+    });
+    _minimizeBtnEl.addEventListener('mouseleave', function () {
+      _minimizeBtnEl.style.background = 'rgba(20,18,28,0.85)';
+      _minimizeBtnEl.style.transform = 'scale(1)';
+    });
+    _minimizeBtnEl.addEventListener('click', function (e) {
+      e.stopPropagation();
+      minimize();
+    });
+    vp.appendChild(_minimizeBtnEl);
+  }
+
+  // ── Maximize / Minimize ─────────────────────────────────────────
+
+  /**
+   * Enter maximized mode: fan takes bottom ~30%, DOM overlays suppressed.
+   * Called by NchWidget when opening the fan in explore mode.
+   */
+  function maximize(opts) {
+    _maximized = true;
+    _onMinimize = (opts && opts.onMinimize) || null;
+
+    // Show minimize button
+    if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'flex';
+
+    // Suppress overlapping DOM elements
+    var sb = document.getElementById('status-bar');
+    var qb = document.getElementById('quick-bar');
+    if (sb) sb.style.opacity = '0.15';
+    if (qb) qb.style.opacity = '0.15';
+  }
+
+  /**
+   * Exit maximized mode, restoring DOM overlays.
+   * Called by minimize button or when fan closes.
+   */
+  function minimize() {
+    _maximized = false;
+    if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
+
+    // Restore DOM elements
+    var sb = document.getElementById('status-bar');
+    var qb = document.getElementById('quick-bar');
+    if (sb) sb.style.opacity = '1';
+    if (qb) qb.style.opacity = '1';
+
+    // Close the fan and notify
+    if (_open) {
+      close();
+    }
+    if (_onMinimize) _onMinimize();
+    _onMinimize = null;
+  }
+
+  function isMaximized() { return _maximized; }
 
   // ── Open / Close ────────────────────────────────────────────────
 
@@ -151,6 +249,16 @@ var CardFan = (function () {
     _hoverIdx = -1;
     _selectedIdx = -1;
     _drag = null;
+
+    // Clean up maximized state if active
+    if (_maximized) {
+      _maximized = false;
+      if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
+      var sb = document.getElementById('status-bar');
+      var qb = document.getElementById('quick-bar');
+      if (sb) sb.style.opacity = '1';
+      if (qb) qb.style.opacity = '1';
+    }
   }
 
   function isOpen() { return _open; }
@@ -542,6 +650,10 @@ var CardFan = (function () {
 
     _playAudio('card-fire', { volume: 0.55 });
 
+    // Start toss animation before CombatBridge resolves
+    var stackForAnim = CardStack.getStack().slice();
+    startFireAnim(stackForAnim);
+
     // Fire via CombatBridge
     if (typeof CombatBridge !== 'undefined') {
       CombatBridge.fireStack(thrust);
@@ -584,10 +696,217 @@ var CardFan = (function () {
     }
   }
 
+  // ── Fire animation (toss cards into enemy half) ──────────────────
+
+  /**
+   * Start the fire animation. Called by _handleSwipeFire BEFORE CombatBridge
+   * resolves the stack. Cards splay upward with stagger into the enemy's
+   * screen region, flash in their resource color, then persistent cards
+   * retract and one-use cards dissolve.
+   *
+   * @param {Array} stackCards — [{card, handIndex}] from CardStack.getStack()
+   */
+  function startFireAnim(stackCards) {
+    if (!_canvas || !stackCards || stackCards.length === 0) return;
+
+    var w = _canvas.width;
+    var h = _canvas.height;
+    var cx = w / 2;
+    var pivotY = h + PIVOT_Y_OFF;
+    var n = stackCards.length;
+
+    var animCards = [];
+    var spreadW = Math.min(w * 0.6, n * (CARD_W + 10));
+    var startX = cx - spreadW / 2;
+
+    for (var i = 0; i < n; i++) {
+      var sc = stackCards[i];
+      // Find this card's current fan position for launch origin
+      var srcX = cx;
+      var srcY = h - CARD_H;
+      for (var f = 0; f < _cards.length; f++) {
+        if (_cards[f].handIndex === sc.handIndex) {
+          var pos = _getCardPos(_cards[f], cx, pivotY, h);
+          srcX = pos.x;
+          srcY = pos.y;
+          break;
+        }
+      }
+
+      // Target: spread across top ~25% of screen
+      var targetX = startX + (spreadW / Math.max(1, n - 1)) * i;
+      if (n === 1) targetX = cx;
+      var targetY = h * 0.18 + (i % 2) * 12;  // Slight wave
+
+      var persistent = false;
+      if (typeof CardStack !== 'undefined' && CardStack.isPersistent) {
+        persistent = CardStack.isPersistent(sc.card);
+      }
+
+      animCards.push({
+        card: sc.card,
+        startX: srcX,
+        startY: srcY,
+        targetX: targetX,
+        targetY: targetY,
+        delay: i * FIRE_STAGGER,
+        timer: 0,
+        phase: 'waiting',  // waiting → flying → flash → retract/dissolve → done
+        persistent: persistent
+      });
+    }
+
+    var totalDuration = (n - 1) * FIRE_STAGGER + FIRE_FLY_MS + FIRE_FLASH_MS +
+                        Math.max(FIRE_RETRACT_MS, FIRE_DISSOLVE_MS) + 100;
+
+    _fireAnim = {
+      cards: animCards,
+      totalDuration: totalDuration,
+      elapsed: 0
+    };
+  }
+
+  /** Is the fire animation currently playing? */
+  function isFireAnimPlaying() {
+    return _fireAnim !== null;
+  }
+
+  /**
+   * Update fire animation timers.
+   * @param {number} dt — frame delta in ms
+   */
+  function _updateFireAnim(dt) {
+    if (!_fireAnim) return;
+    _fireAnim.elapsed += dt;
+
+    var allDone = true;
+    for (var i = 0; i < _fireAnim.cards.length; i++) {
+      var ac = _fireAnim.cards[i];
+      if (ac.phase === 'done') continue;
+
+      allDone = false;
+      ac.timer += dt;
+
+      if (ac.phase === 'waiting' && ac.timer >= ac.delay) {
+        ac.phase = 'flying';
+        ac.timer = 0;  // Reset for fly phase
+      } else if (ac.phase === 'flying' && ac.timer >= FIRE_FLY_MS) {
+        ac.phase = 'flash';
+        ac.timer = 0;
+      } else if (ac.phase === 'flash' && ac.timer >= FIRE_FLASH_MS) {
+        ac.phase = ac.persistent ? 'retract' : 'dissolve';
+        ac.timer = 0;
+      } else if (ac.phase === 'retract' && ac.timer >= FIRE_RETRACT_MS) {
+        ac.phase = 'done';
+      } else if (ac.phase === 'dissolve' && ac.timer >= FIRE_DISSOLVE_MS) {
+        ac.phase = 'done';
+      }
+    }
+
+    if (allDone) {
+      _fireAnim = null;
+    }
+  }
+
+  /**
+   * Render fire animation cards.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w — canvas width
+   * @param {number} h — canvas height
+   */
+  function _renderFireAnim(ctx, w, h) {
+    if (!_fireAnim) return;
+
+    ctx.save();
+    for (var i = 0; i < _fireAnim.cards.length; i++) {
+      var ac = _fireAnim.cards[i];
+      if (ac.phase === 'waiting' || ac.phase === 'done') continue;
+
+      var suit = ac.card.suit || '';
+      var resourceColor = SUIT_BORDER_COLORS[suit] || '#c0d0e0';
+
+      var x, y, alpha, scale;
+
+      if (ac.phase === 'flying') {
+        var t = Math.min(1, ac.timer / FIRE_FLY_MS);
+        // Ease-out for satisfying deceleration
+        var ease = 1 - (1 - t) * (1 - t);
+        x = ac.startX + (ac.targetX - ac.startX) * ease;
+        y = ac.startY + (ac.targetY - ac.startY) * ease;
+        alpha = 1;
+        scale = 1 + 0.15 * (1 - ease);  // Slightly larger at start
+        // Spin while flying
+        var spin = t * 0.3 * (i % 2 === 0 ? 1 : -1);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(spin);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        _drawCardBody(ctx, { card: ac.card, handIndex: i }, false, false);
+        ctx.restore();
+        continue;
+      }
+
+      if (ac.phase === 'flash') {
+        x = ac.targetX;
+        y = ac.targetY;
+        var ft = ac.timer / FIRE_FLASH_MS;
+        // Flash: bright glow that fades
+        alpha = 1;
+        scale = 1 + 0.1 * (1 - ft);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        _drawCardBody(ctx, { card: ac.card, handIndex: i }, true, false);
+        // Resource color flash overlay
+        var hw = CARD_W / 2;
+        var hh = CARD_H / 2;
+        ctx.globalAlpha = 0.5 * (1 - ft);
+        ctx.fillStyle = resourceColor;
+        _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      if (ac.phase === 'retract') {
+        var rt = Math.min(1, ac.timer / FIRE_RETRACT_MS);
+        var rEase = rt * rt;  // Ease-in: accelerate back
+        x = ac.targetX + (ac.startX - ac.targetX) * rEase;
+        y = ac.targetY + (ac.startY - ac.targetY) * rEase;
+        alpha = 1;
+        scale = 1;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        _drawCardBody(ctx, { card: ac.card, handIndex: i }, false, false);
+        ctx.restore();
+        continue;
+      }
+
+      if (ac.phase === 'dissolve') {
+        var dt2 = Math.min(1, ac.timer / FIRE_DISSOLVE_MS);
+        x = ac.targetX;
+        y = ac.targetY - dt2 * 20;  // Drift upward slightly
+        alpha = 1 - dt2;
+        scale = 1 - dt2 * 0.3;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        _drawCardBody(ctx, { card: ac.card, handIndex: i }, false, false);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
   // ── Update ──────────────────────────────────────────────────────
 
   function update(dt) {
-    if (!_open) return;
+    if (!_open && !_fireAnim) return;
     _openTimer += dt;
 
     // Update play animations
@@ -605,6 +924,9 @@ var CardFan = (function () {
         }
       }
     }
+
+    // Update fire animation
+    _updateFireAnim(dt);
 
     // Update hover from pointer (only when not dragging)
     if (!_drag && typeof InputManager !== 'undefined') {
@@ -638,6 +960,26 @@ var CardFan = (function () {
 
     ctx.save();
 
+    // ── Maximized backdrop: dark gradient across bottom ~30% ──
+    if (_maximized) {
+      var backdropH = h * 0.35;
+      var backdropY = h - backdropH;
+      var grad = ctx.createLinearGradient(0, backdropY, 0, h);
+      grad.addColorStop(0, 'rgba(10,8,16,0)');
+      grad.addColorStop(0.15, 'rgba(10,8,16,0.7)');
+      grad.addColorStop(1, 'rgba(10,8,16,0.92)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, backdropY, w, backdropH);
+
+      // Thin divider line at top of backdrop
+      ctx.strokeStyle = 'rgba(160,140,100,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, backdropY + backdropH * 0.15);
+      ctx.lineTo(w, backdropY + backdropH * 0.15);
+      ctx.stroke();
+    }
+
     // ── First pass: render stack glow behind stacked cards ──
     if (_inCombat() && typeof CardStack !== 'undefined' && CardStack.getSize() > 1) {
       _renderStackGlow(ctx, cx, pivotY, h);
@@ -658,6 +1000,35 @@ var CardFan = (function () {
       _renderCard(ctx, c, i, cx, pivotY, h, false);
     }
 
+    // ── 2.5 pass: envelope highlights on valid stack targets during combat drag ──
+    if (_drag && _drag.started && _inCombat() && typeof CardStack !== 'undefined') {
+      var dragC = _cards[_drag.cardIdx];
+      if (dragC) {
+        for (var ei = 0; ei < _cards.length; ei++) {
+          if (ei === _drag.cardIdx) continue;
+          var ec = _cards[ei];
+          if (ec.playing) continue;
+          if (_checkCanCombine(dragC.card, ec.card)) {
+            var ePos = _getCardPos(ec, cx, pivotY, h);
+            var eSO = _getStackOffset(ei);
+            ePos.x += eSO.dx;
+            ePos.y += eSO.dy;
+            // Draw pulsing green envelope
+            var pulse = 0.4 + 0.3 * Math.sin(_openTimer * 0.008);
+            ctx.save();
+            ctx.translate(ePos.x, ePos.y - 6);
+            ctx.strokeStyle = 'rgba(80,255,120,' + pulse + ')';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([6, 3]);
+            _roundRect(ctx, -CARD_W / 2 - 4, -CARD_H / 2 - 4, CARD_W + 8, CARD_H + 8, 7);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+      }
+    }
+
     // ── Third pass: render dragged ghost card on top ──
     if (_drag && _drag.started && _drag.cardIdx >= 0 && _drag.cardIdx < _cards.length) {
       _renderDragGhost(ctx, w, h);
@@ -667,6 +1038,9 @@ var CardFan = (function () {
     if (!_drag || !_drag.started) {
       _renderTooltip(ctx, cx, pivotY, h);
     }
+
+    // ── Fire animation (toss cards into enemy half) ──
+    _renderFireAnim(ctx, w, h);
 
     ctx.restore();
   }
@@ -986,6 +1360,11 @@ var CardFan = (function () {
     hitTest: hitTest,
     update: update,
     render: render,
-    handlePointerClick: handlePointerClick
+    handlePointerClick: handlePointerClick,
+    maximize: maximize,
+    minimize: minimize,
+    isMaximized: isMaximized,
+    startFireAnim: startFireAnim,
+    isFireAnimPlaying: isFireAnimPlaying
   };
 })();

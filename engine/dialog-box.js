@@ -312,6 +312,16 @@ var DialogBox = (function () {
     return _active !== null && !_active.transient;
   }
 
+  /**
+   * Get the active NPC's entity ID (for speech capsule attachment).
+   * Returns null if no NPC dialogue is active.
+   * @returns {string|number|null}
+   */
+  function getActiveSpeakerId() {
+    if (!_active || !_active._npc) return null;
+    return _active._npc.id || null;
+  }
+
   function _getCurrentText() {
     if (!_active) return '';
     if (_active.pages && _active.pages.length > 0) {
@@ -672,6 +682,7 @@ var DialogBox = (function () {
     isOpen: isOpen,
     isModal: isModal,
     moveLocked: moveLocked,
+    getActiveSpeakerId: getActiveSpeakerId,
     update: update,
     render: render,
     handlePointerClick: handlePointerClick,

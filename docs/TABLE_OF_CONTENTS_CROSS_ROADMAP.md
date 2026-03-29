@@ -136,20 +136,30 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 
 ---
 
-### 🟠 PHASE B — Crate Slot System & Restocking Loop (Days 2–3: Mar 29–30)
-> **Critical path.** The Gleaner pivot's core mechanic. Crate interaction is the game.
+### 🟠 PHASE B — Crate & Corpse Slot System & Restocking Loop (Days 2–3: Mar 29–30)
+> **Critical path.** The Gleaner pivot's core mechanic. Container, puzzle, and vendor interaction is the game.
 
-| # | Task | Source Doc | Section | Est. | Depends On |
-|---|------|-----------|---------|------|------------|
-| B1 | Crate slot data schema + crate-system.js | DOC-2 TUTORIAL | §16 Phase 1 | 3h | — |
-| B2 | Slot UI (frame colors, fill interaction) | DOC-2 TUTORIAL | §16 Phase 1 | 1h | B1 |
-| B3 | Frame→resource color mapping + hydration | DOC-4 BIOME | §17.2 | 1h | B1 |
-| B4 | Seal reward d100 table (currency → legendary) | DOC-2 TUTORIAL | §13.2 | 30m | B1 |
-| B5 | Shop round-trip: buy restock supplies | DOC-1 GAP | T2 (implicit) | 1h | B1 |
-| B6 | Bag inventory viewer | DOC-1 GAP | T2.1 | 2h | B1 |
-| B7 | Stash transfer at bonfire | DOC-1 GAP | T2.2 | 1h | B6 |
+| # | Task | Source Doc | Section | Est. | Status |
+|---|------|-----------|---------|------|--------|
+| B1 | Unified slot schema: crate-system.js (crates + corpse stocks) | DOC-2 TUTORIAL | §16 Phase 1 | 3h | ✅ |
+| B2 | Slot UI: crate-ui.js (canvas-rendered framed boxes) | DOC-2 TUTORIAL | §16 Phase 1 | 1h | ✅ |
+| B3 | Frame→resource color mapping + hydration + suit card slot | DOC-4 BIOME | §17.2 | 1h | ✅ |
+| B4 | Seal reward d100 table + corpse reanimation path | DOC-2 TUTORIAL | §13.2 | 30m | ✅ |
+| B4b | Corpse-peek.js (BoxAnim coffin reveal for CORPSE tiles) | DOC-4 BIOME | §17.2 | 1h | ✅ |
+| B5 | Shop round-trip: buy restock supplies | DOC-1 GAP | T2 (implicit) | 1h | — |
+| B6 | Bag inventory viewer | DOC-1 GAP | T2.1 | 2h | — |
+| B7 | Stash transfer at bonfire | DOC-1 GAP | T2.2 | 1h | — |
 
-**Phase B total**: ~9.5h
+**B1–B4b implemented.** Corpse stocks are functionally identical to crates but:
+- Yield less loot (1–2 coins/slot vs 2–3, +3 seal bonus vs +5)
+- Include a mandatory **suit card slot** requiring a matching ♠♣♦♥ combat card
+- Sealing with matched suit card enables **reanimation → friendly NPC**
+- Contribute to floor readiness score (25% weight alongside crate readiness)
+
+**New files**: `engine/crate-system.js` (Layer 1), `engine/crate-ui.js` (Layer 2), `engine/corpse-peek.js` (Layer 3)
+**Modified**: `corpse-registry.js` (auto-creates corpse stock + suit-gated reanimate), `breakable-spawner.js` (auto-creates crate containers), `interact-prompt.js` (Gleaner mode labels), `grid-gen.js` (floorId passthrough), `floor-manager.js` (floorId in opts)
+
+**Phase B total**: ~9.5h (~6.5h complete, ~4h remaining for B5–B7)
 **Unblocks**: Phase C (cleaning needs working crate economy), Phase E (hero encounters need restockable dungeon)
 **Design refs**: DOC-4 §17.2 (crate slot schema), DOC-2 §13 (Gleaner pivot data structures)
 
@@ -324,4 +334,4 @@ Once the playable prototype ships, the next week focuses on:
 
 ---
 
-*This document is the single entry point for sprint planning. When in doubt about what to work on next, consult the Phase table above and pick the lowest-lettered phase with unfinished tasks whose dependencies are met.*
+*This document is the single entry point for sprint planning. When in doubt about what to work on next, consult the Phase table above and pick the lowest-lettered phase with unfinished ta

@@ -29,7 +29,8 @@ var TILES = (function () {
     COLLECTIBLE: 20,  // Walk-over pickup (gold, battery, food) — placed by WorldItems
     TREE:        21,  // Exterior tree — solid, 2x tall, brown trunk + green canopy
     SHRUB:       22,  // Half-height hedge — blocks movement, player sees over
-    PUZZLE:      23   // Sliding-tile puzzle panel — solved state, player disorganizes
+    PUZZLE:      23,  // Sliding-tile puzzle panel — solved state, player disorganizes
+    LOCKED_DOOR: 24   // Locked door — requires key item to open
   };
 
   /** Check if a tile blocks movement */
@@ -51,13 +52,14 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR;
   };
 
   /** Check if tile is a door of any kind */
   T.isDoor = function (tile) {
     return tile === T.DOOR || tile === T.DOOR_BACK || tile === T.DOOR_EXIT ||
-           tile === T.STAIRS_DN || tile === T.STAIRS_UP || tile === T.BOSS_DOOR;
+           tile === T.STAIRS_DN || tile === T.STAIRS_UP || tile === T.BOSS_DOOR ||
+           tile === T.LOCKED_DOOR;
   };
 
   return T;

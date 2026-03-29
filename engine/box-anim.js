@@ -49,6 +49,7 @@ var BoxAnim = (function () {
     var variant = 'splash';
     if (el.classList.contains('chest-variant'))  variant = 'chest';
     if (el.classList.contains('door-variant'))   variant = 'door';
+    if (el.classList.contains('locked-variant')) variant = 'locked';
     if (el.classList.contains('button-variant')) variant = 'button';
     _instances[id] = { el: el, variant: variant, state: 'closed' };
     return id;
@@ -74,6 +75,17 @@ var BoxAnim = (function () {
     if (opts.spin === false) {
       var spinEl = wrap.querySelector('.box3d-spin');
       if (spinEl) spinEl.classList.remove('spinning');
+    }
+
+    // Inject lock overlay for locked variant
+    if (variant === 'locked') {
+      var spinEl2 = wrap.querySelector('.box3d-spin');
+      if (spinEl2) {
+        var lockEl = document.createElement('div');
+        lockEl.className = 'lock-overlay';
+        lockEl.textContent = '\uD83D\uDD12';  // 🔒
+        spinEl2.appendChild(lockEl);
+      }
     }
 
     parentEl.appendChild(wrap);
@@ -146,6 +158,27 @@ var BoxAnim = (function () {
     else spinEl.classList.remove('spinning');
   }
 
+  // ── Shake (locked door rejection) ──────────────────────────────────
+
+  /**
+   * Trigger shake + lock flash on a locked-variant box.
+   * @param {string} id
+   * @param {function} [cb] - Called when shake animation ends
+   */
+  function shake(id, cb) {
+    var inst = _instances[id];
+    if (!inst) return;
+    inst.el.classList.add('shaking');
+    inst.state = 'shaking';
+
+    // Remove shaking class after animation completes
+    setTimeout(function () {
+      if (inst.el) inst.el.classList.remove('shaking');
+      inst.state = 'closed';
+      if (cb) cb();
+    }, 600);
+  }
+
   // ── Public API ────────────────────────────────────────────────────
 
   return {
@@ -154,6 +187,7 @@ var BoxAnim = (function () {
     open:     open,
     close:    close,
     envelop:  envelop,
+    shake:    shake,
     getState: getState,
     destroy:  destroy,
     setSpin:  setSpin

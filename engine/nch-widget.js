@@ -175,6 +175,7 @@ var NchWidget = (function () {
     if (typeof CardFan === 'undefined') return;
 
     if (CardFan.isOpen() && _fanOpenByWidget) {
+      // Close fan + exit maximized mode
       CardFan.close();
       _fanOpenByWidget = false;
       _setModeClass('idle');
@@ -190,6 +191,15 @@ var NchWidget = (function () {
       CardFan.open(hand, { onPlay: null });
       _fanOpenByWidget = true;
       _setModeClass('open');
+
+      // Enter maximized mode with minimize callback
+      CardFan.maximize({
+        onMinimize: function () {
+          _fanOpenByWidget = false;
+          _setModeClass('idle');
+          _renderStack();
+        }
+      });
     }
   }
 

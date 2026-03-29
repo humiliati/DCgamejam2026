@@ -38,8 +38,15 @@ var EnemyAI = (function () {
   var FLEE_IMMUNITY_MS = 3000;
 
   function createEnemy(opts) {
+    // Derive type key for EnemySprites lookup:
+    // Canonical form = lower-case name with spaces → underscores
+    var typeName = (opts.type || opts.name || 'skeleton').toLowerCase().replace(/[\s\-]+/g, '_');
+    // Strip non-alphanumeric (except underscore) for safety
+    typeName = typeName.replace(/[^a-z0-9_]/g, '');
+
     return {
       id: opts.id || ('enemy_' + Math.floor(Math.random() * 99999)),
+      type: typeName,                         // Stack registry key
       x: opts.x,
       y: opts.y,
       name: opts.name || 'Skeleton',
@@ -48,6 +55,11 @@ var EnemyAI = (function () {
       maxHp: opts.hp || 5,
       str: opts.str || 2,
       dex: opts.dex || 1,
+      stealth: opts.stealth || 0,
+      awarenessRange: opts.awarenessRange || 4,
+      suit: opts.suit || 'spade',             // RPS suit: spade/club/diamond/heart
+      lootProfile: opts.lootProfile || null,
+      tags: opts.tags ? opts.tags.slice() : [],
       awareness: 0,
       facing: opts.facing || 'south', // north, south, east, west
       path: opts.path || null,
@@ -277,6 +289,80 @@ var EnemyAI = (function () {
     }
   }
 
+  // ── enemies.json population tables ──────────────────────────────
+  // Loaded at init; falls back to hardcoded legacy pool if JSON missing.
+  var _populationByBiome = {};   // biome → [entries] (standard only)
+  var _elitesByBiome     = {};   // biome → [entries] (elite only)
+  var _bossesByBiome     = {};   // biome → [entries] (boss only)
+  var _crossBiome        = [];   // special cross-biome enemies
+  var _populationReady   = false;
+
+  /**
+   * Load the enemies.json population data.
+   * Called once from Game.init() via EnemyAI.loadPopulation().
+   * Synchronous XHR for jam simplicity (file is local, tiny).
+   */
+  function loadPopulation() {
+    if (_populationReady) return;
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'data/enemies.json', false); // sync
+      xhr.send();
+      if (xhr.status === 200 || xhr.status === 0) {
+        var raw = JSON.parse(xhr.responseText);
+        for (var i = 0; i < raw.length; i++) {
+          var e = raw[i];
+          if (e._comment || !e.id) continue; // skip comment entries
+          // Index by biome
+          var biomes = e.biomes || [];
+          for (var b = 0; b < biomes.length; b++) {
+            var biome = biomes[b];
+            if (e.tier === 'boss') {
+              if (!_bossesByBiome[biome]) _bossesByBiome[biome] = [];
+              _bossesByBiome[biome].push(e);
+            } else if (e.tier === 'elite' || e.isElite) {
+              if (!_elitesByBiome[biome]) _elitesByBiome[biome] = [];
+              _elitesByBiome[biome].push(e);
+            } else {
+              if (!_populationByBiome[biome]) _populationByBiome[biome] = [];
+              _populationByBiome[biome].push(e);
+            }
+          }
+          // Cross-biome enemies (appear in 3+ biomes or special IDs)
+          if (biomes.length >= 3 && e.tier !== 'boss') {
+            _crossBiome.push(e);
+          }
+        }
+        _populationReady = true;
+      }
+    } catch (err) {
+      // Silently fail — spawnEnemies falls back to legacy pool
+    }
+  }
+
+  // ── Biome resolution from floor ID ─────────────────────────────
+  // Floor hierarchy: "1.1.N" = cellar, "1.1.3+" eventually = foundry, etc.
+  // For jam scope: dungeon levels 1-2 = cellar, 3-5 = foundry, 6+ = sealab
+  function _resolveBiome(floorId) {
+    var parts = String(floorId).split('.');
+    var depth = parts.length;
+    if (depth < 3) return 'cellar'; // exterior/interior = cellar encounters
+    var level = parseInt(parts[parts.length - 1], 10) || 1;
+    if (level <= 2) return 'cellar';
+    if (level <= 5) return 'foundry';
+    return 'sealab';
+  }
+
+  // ── Legacy fallback (used if enemies.json fails to load) ───────
+  var _LEGACY_TYPES = [
+    { name: 'Bone Guard',       emoji: '💀', hp: 4, str: 2, dex: 1, suit: 'spade' },
+    { name: 'Soot Imp',         emoji: '👺', hp: 3, str: 1, dex: 3, suit: 'diamond' },
+    { name: 'Scrap Brute',      emoji: '🦾', hp: 8, str: 3, dex: 1, suit: 'spade' },
+    { name: 'Mold Wraith',      emoji: '👻', hp: 3, str: 2, dex: 4, suit: 'club' },
+    { name: 'Bio-Hazard Slime', emoji: '🫧', hp: 6, str: 1, dex: 0, suit: 'club' },
+    { name: 'Wandering Vendor', emoji: '🛒', hp: 5, str: 3, dex: 2, suit: 'spade' }
+  ];
+
   /**
    * Spawn enemies for a floor.
    * @param {Object} floorData - from GridGen
@@ -298,17 +384,20 @@ var EnemyAI = (function () {
     var count = Math.min(rooms.length - 1, SeededRNG.randInt(2, 3 + Math.floor(dungeonLevel / 2)));
     var enemies = [];
 
-    var ENEMY_TYPES = [
-      { name: 'Skeleton',  emoji: '💀', hp: 4,  str: 1, dex: 1 },
-      { name: 'Goblin',    emoji: '👺', hp: 3,  str: 1, dex: 3 },
-      { name: 'Orc',       emoji: '👹', hp: 8,  str: 3, dex: 1 },
-      { name: 'Ghost',     emoji: '👻', hp: 3,  str: 2, dex: 4 },
-      { name: 'Slime',     emoji: '🟢', hp: 6,  str: 1, dex: 0 },
-      { name: 'Mimic',     emoji: '📦', hp: 5,  str: 3, dex: 2 }
-    ];
+    // Resolve population pool from biome
+    var biome = _resolveBiome(floorId);
+    var pool = (_populationReady && _populationByBiome[biome])
+      ? _populationByBiome[biome]
+      : _LEGACY_TYPES;
+    var elitePool = (_populationReady && _elitesByBiome[biome])
+      ? _elitesByBiome[biome]
+      : null;
 
     // Scale enemies with dungeon level
     var tierBonus = Math.floor(dungeonLevel / 3);
+
+    // Elite spawn chance: 15% base, +5% per dungeon level (max 40%)
+    var eliteChance = Math.min(0.40, 0.15 + dungeonLevel * 0.05);
 
     for (var i = 0; i < count; i++) {
       // Pick a room (skip first room, which has stairs up / player spawn)
@@ -326,7 +415,15 @@ var EnemyAI = (function () {
       // Don't spawn on player
       if (playerSpawn && ex === playerSpawn.x && ey === playerSpawn.y) continue;
 
-      var type = SeededRNG.pick(ENEMY_TYPES);
+      // Roll elite or standard
+      var useElite = elitePool && SeededRNG.random() < eliteChance;
+      var type = useElite ? SeededRNG.pick(elitePool) : SeededRNG.pick(pool);
+
+      // Rare cross-biome spawn (5% chance, only if population loaded)
+      if (_populationReady && _crossBiome.length > 0 && SeededRNG.random() < 0.05) {
+        type = SeededRNG.pick(_crossBiome);
+      }
+
       var patrol = _generatePatrol(room, grid, W, H);
 
       enemies.push(createEnemy({
@@ -336,7 +433,14 @@ var EnemyAI = (function () {
         emoji: type.emoji,
         hp: type.hp + tierBonus * 2,
         str: type.str + tierBonus,
-        dex: type.dex + Math.floor(tierBonus / 2),
+        dex: (type.dex || 1) + Math.floor(tierBonus / 2),
+        stealth: type.stealth || 0,
+        awarenessRange: type.awarenessRange || 4,
+        suit: type.suit || 'spade',
+        lootProfile: type.lootProfile || null,
+        isElite: type.isElite || false,
+        nonLethal: type.nonLethal || false,
+        tags: type.tags || [],
         path: patrol,
         facing: SeededRNG.pick(['north', 'south', 'east', 'west'])
       }));
@@ -391,6 +495,7 @@ var EnemyAI = (function () {
     createEnemy: createEnemy,
     updateEnemy: updateEnemy,
     spawnEnemies: spawnEnemies,
+    loadPopulation: loadPopulation,
     getAwarenessState: getAwarenessState,
     applyFleeImmunity: applyFleeImmunity,
     canEngage: canEngage,

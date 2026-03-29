@@ -51,6 +51,16 @@ var CorpseRegistry = (function () {
       corpseEmoji = EnemySprites.getEmoji(enemyType, 'corpse', enemy.emoji || '💀');
     }
 
+    // Resolve stack definition for pile rendering
+    var stackDef = null;
+    if (typeof EnemySprites !== 'undefined') {
+      stackDef = EnemySprites.getStack(enemyType);
+    }
+
+    // Seed for deterministic pile scatter direction
+    var seed = 0;
+    for (var ci = 0; ci < enemyType.length; ci++) seed += enemyType.charCodeAt(ci);
+
     var corpse = {
       x: x,
       y: y,
@@ -58,10 +68,13 @@ var CorpseRegistry = (function () {
       enemyType: enemyType,
       enemyName: enemy.name || 'Unknown',
       // Visual state
-      emoji: enemy.emoji || '💀',         // Living emoji (for folded origami look)
+      emoji: enemy.emoji || '💀',         // Living emoji (for reanimation)
       corpseEmoji: corpseEmoji,            // Corpse pose emoji (shown when folded)
       boneEmoji: '🦴',                     // Dry/looted emoji
       displayEmoji: corpseEmoji,           // Current display — starts as corpse pose
+      // Stack data for pile rendering
+      stackDef: stackDef,                  // Full stack definition (null = legacy)
+      pileSeed: seed,                      // Scatter direction seed
       // Loot tracking
       lootState: LOOT_STATE.FULL,
       // Hydration / restock slots (Phase B stub — mirrors crate system)
@@ -82,7 +95,26 @@ var CorpseRegistry = (function () {
 
     var key = _key(x, y, floorId);
     _corpses[key] = corpse;
+
+    // Auto-create corpse stock container in CrateSystem (Phase B)
+    if (typeof CrateSystem !== 'undefined') {
+      var biome = _resolveBiome(floorId);
+      var suit = enemy.suit || 'spade';
+      CrateSystem.createCorpse(x, y, floorId, biome, suit);
+    }
+
     return corpse;
+  }
+
+  // Biome resolution helper (mirrors EnemyAI._resolveBiome)
+  function _resolveBiome(floorId) {
+    var parts = String(floorId).split('.');
+    var depth = parts.length;
+    if (depth < 3) return 'cellar';
+    var level = parseInt(parts[parts.length - 1], 10) || 1;
+    if (level <= 2) return 'cellar';
+    if (level <= 5) return 'foundry';
+    return 'sealab';
   }
 
   // ── Queries ─────────────────────────────────────────────────────────
@@ -177,14 +209,34 @@ var CorpseRegistry = (function () {
   }
 
   /**
-   * Reanimate a fully hydrated corpse as a friendly NPC.
+   * Reanimate a corpse as a friendly NPC.
+   * Requires the CrateSystem container to be sealed with a matching suit card.
+   * Falls back to legacy hydration slot check if CrateSystem is unavailable.
+   *
    * @returns {Object|null} The reanimated entity data, or null if not ready
    */
   function reanimate(x, y, floorId) {
     var corpse = _corpses[_key(x, y, floorId)];
     if (!corpse) return null;
     if (corpse.reanimated) return null;
-    if (corpse.hydrationSlots.length < corpse.maxHydrationSlots) return null;
+
+    // Primary path: CrateSystem corpse stock must be sealed with suit card match
+    if (typeof CrateSystem !== 'undefined') {
+      var container = CrateSystem.getContainer(x, y, floorId);
+      if (!container || !container.sealed) return null;
+      // Check suit card slot was matched
+      var hasSuitMatch = false;
+      for (var i = 0; i < container.slots.length; i++) {
+        if (container.slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD && container.slots[i].matched) {
+          hasSuitMatch = true;
+          break;
+        }
+      }
+      if (!hasSuitMatch) return null;
+    } else {
+      // Legacy fallback: hydration slots
+      if (corpse.hydrationSlots.length < corpse.maxHydrationSlots) return null;
+    }
 
     corpse.reanimated = true;
     corpse.friendly = true;
@@ -241,6 +293,11 @@ var CorpseRegistry = (function () {
    * @param {string} floorId
    * @returns {Array} Sprite objects with groundLevel, tilt flags
    */
+  // Pile layout constants (match DeathAnim pile positions)
+  var PILE_X = [-0.3, 0.1, 0.35];
+  var PILE_Y = [0.15, 0.0, -0.1];
+  var PILE_ROT = [0.17, 0.11, 0.05]; // resting rotation per slot
+
   function buildSprites(floorId) {
     var corpses = getAllCorpses(floorId);
     var sprites = [];
@@ -250,18 +307,48 @@ var CorpseRegistry = (function () {
       // Skip reanimated corpses — they become living NPCs handled elsewhere
       if (c.reanimated) continue;
 
-      sprites.push({
-        x: c.x,
-        y: c.y,
-        emoji: c.displayEmoji,
-        scale: 0.35,
-        groundLevel: true,       // Render at floor plane
-        groundTilt: true,        // Billboard tilt toward player for visibility
-        facing: null,
-        awareness: undefined,
-        isCorpse: true,          // Tag for raycaster special handling
-        lootState: c.lootState
-      });
+      if (c.stackDef && c.lootState !== LOOT_STATE.DRY) {
+        // Stack corpse: render as scattered pile of slot emojis
+        var dir = (c.pileSeed % 2 === 0) ? 1 : -1;
+        var slots = [c.stackDef.head, c.stackDef.torso, c.stackDef.legs];
+        sprites.push({
+          x: c.x,
+          y: c.y,
+          emoji: c.displayEmoji,       // Fallback
+          corpseStack: {               // Pile layout for raycaster
+            slots: slots,
+            dir: dir,
+            pileX: PILE_X,
+            pileY: PILE_Y,
+            pileRot: PILE_ROT,
+            hat: c.stackDef.hat || null,
+            hatScale: c.stackDef.hatScale || 0.5,
+            frontWeapon: c.stackDef.frontWeapon || null,
+            frontWeaponScale: c.stackDef.frontWeaponScale || 0.65
+          },
+          scale: 0.35,
+          groundLevel: true,
+          groundTilt: true,
+          facing: null,
+          awareness: undefined,
+          isCorpse: true,
+          lootState: c.lootState
+        });
+      } else {
+        // Legacy single-emoji corpse or dry bone
+        sprites.push({
+          x: c.x,
+          y: c.y,
+          emoji: c.displayEmoji,
+          scale: 0.35,
+          groundLevel: true,
+          groundTilt: true,
+          facing: null,
+          awareness: undefined,
+          isCorpse: true,
+          lootState: c.lootState
+        });
+      }
     }
 
     return sprites;

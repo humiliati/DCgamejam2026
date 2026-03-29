@@ -138,7 +138,7 @@ var GridGen = (function () {
     // ── Place breakable props (barrels, crates, etc.) ──
     if (typeof BreakableSpawner !== 'undefined') {
       var biomeStr = opts.biome || 'cellar';
-      BreakableSpawner.spawnBreakables(grid, rooms, W, H, biomeStr, floor);
+      BreakableSpawner.spawnBreakables(grid, rooms, W, H, biomeStr, floor, opts.floorId || '');
     }
 
     // ── Place faction shop ──

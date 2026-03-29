@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dungeon Gleaner — Inventory Drag-Drop Test</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a1a2e; color: #d0d0d0; font-family: monospace;
+  display: flex; flex-direction: column; height: 100vh;
+}
+#header {
+  background: #0f0f23; padding: 8px 16px; display: flex;
+  justify-content: space-between; align-items: center;
+  border-bottom: 1px solid #333;
+}
+#header h1 { font-size: 14px; color: #f0d070; }
+#header .status { font-size: 11px; color: #888; }
+#main {
+  display: flex; flex: 1; overflow: hidden;
+}
+.panel {
+  border: 1px solid #333; padding: 8px; margin: 4px;
+  border-radius: 4px; background: rgba(255,255,255,0.02);
+}
+.panel h3 {
+  font-size: 11px; color: #f0d070; margin-bottom: 8px;
+  border-bottom: 1px solid #333; padding-bottom: 4px;
+}
+#left { width: 220px; display: flex; flex-direction: column; gap: 4px; }
+#center { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+#right { width: 200px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Zone containers */
+.zone {
+  min-height: 60px; border: 1px dashed #555; border-radius: 4px;
+  padding: 6px; position: relative;
+}
+.zone.drop-hover { border-color: #0f0; background: rgba(0,255,0,0.05); }
+.zone-label {
+  position: absolute; top: -8px; left: 8px; background: #1a1a2e;
+  padding: 0 4px; font-size: 9px; color: #888;
+}
+
+/* Slot items */
+.slot {
+  display: inline-flex; flex-direction: column; align-items: center;
+  width: 48px; height: 56px; margin: 2px; border: 1px solid #444;
+  border-radius: 4px; cursor: grab; user-select: none; position: relative;
+  background: rgba(255,255,255,0.04); transition: all 0.15s;
+}
+.slot:hover { border-color: #f0d070; background: rgba(240,208,112,0.08); }
+.slot.empty { border-style: dashed; cursor: default; opacity: 0.3; }
+.slot .emoji { font-size: 18px; margin-top: 4px; }
+.slot .name { font-size: 7px; color: #aaa; max-width: 44px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.slot .meta { font-size: 7px; color: #666; }
+.slot.card { border-color: #666; }
+.slot.card.spade { border-color: #8888ff; }
+.slot.card.club { border-color: #88ff88; }
+.slot.card.diamond { border-color: #ff8888; }
+.slot.card.heart { border-color: #ff88ff; }
+
+/* Equip slots */
+.equip-slot { width: 56px; height: 40px; }
+.equip-slot .label { font-size: 7px; color: #555; }
+
+/* Incinerator */
+#incinerator {
+  border: 2px dashed #a44; min-height: 80px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; transition: all 0.2s;
+}
+#incinerator.active { border-color: #f80; background: rgba(255,80,0,0.1);
+  box-shadow: 0 0 15px rgba(255,80,0,0.3); }
+#incinerator .icon { font-size: 24px; }
+
+/* Transfer log */
+#log {
+  font-size: 9px; max-height: 200px; overflow-y: auto;
+  background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;
+}
+#log .entry { padding: 2px 0; border-bottom: 1px solid #222; }
+#log .accepted { color: #4a4; }
+#log .rejected { color: #a44; }
+
+/* Dragging state */
+.dragging { opacity: 0.4; }
+body.has-drag * { cursor: grabbing !important; }
+
+/* Buttons */
+button {
+  background: #333; color: #ddd; border: 1px solid #555;
+  padding: 4px 8px; font-size: 10px; border-radius: 3px;
+  cursor: pointer; margin: 2px;
+}
+button:hover { background: #444; border-color: #f0d070; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🧪 Inventory Drag-Drop Test (B5.8)</h1>
+  <div class="status">
+    <span id="drag-status">Idle</span> |
+    <span id="zone-count">Zones: 0</span> |
+    <span id="log-count">Transfers: 0</span>
+  </div>
+</div>
+
+<div id="main">
+  <!-- LEFT: Hand + Backup Deck -->
+  <div id="left">
+    <div class="panel">
+      <h3>🂠 HAND (5 max)</h3>
+      <div id="hand-zone" class="zone" data-testid="zone-hand">
+        <span class="zone-label">HAND</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>📚 BACKUP DECK</h3>
+      <div id="deck-zone" class="zone" data-testid="zone-deck">
+        <span class="zone-label">DECK</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>🏪 SHOP (5 cards)</h3>
+      <div id="shop-zone" class="zone" data-testid="zone-shop">
+        <span class="zone-label">SHOP</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Bag + Equipped + Stash -->
+  <div id="center">
+    <div class="panel">
+      <h3>⚔️ EQUIPPED (3 slots)</h3>
+      <div id="equip-zone" class="zone" data-testid="zone-equip" style="display:flex;gap:4px">
+        <span class="zone-label">EQUIPPED</span>
+      </div>
+    </div>
+    <div class="panel" style="flex:1">
+      <h3>🎒 BAG (12 max)</h3>
+      <div id="bag-zone" class="zone" data-testid="zone-bag" style="display:flex;flex-wrap:wrap">
+        <span class="zone-label">BAG</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>📦 STASH (20 max, death-safe)</h3>
+      <div id="stash-zone" class="zone" data-testid="zone-stash" style="display:flex;flex-wrap:wrap">
+        <span class="zone-label">STASH</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;padding:4px">
+      <button onclick="resetInventory()">🔄 Reset</button>
+      <button onclick="clearLog()">🗑 Clear Log</button>
+      <button onclick="dumpState()">📋 Dump State</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Incinerator + Crate + Log -->
+  <div id="right">
+    <div class="panel">
+      <h3>🔥 INCINERATOR</h3>
+      <div id="incinerator" class="zone" data-testid="zone-incinerator">
+        <span class="icon">🔥</span>
+        <span style="font-size:9px;color:#a44">Drop to destroy</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>📜 TRANSFER LOG</h3>
+      <div id="log" data-testid="transfer-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  Inventory Test Harness — standalone drag-drop testing
+//  Does NOT load engine modules (self-contained for isolation)
+// ═══════════════════════════════════════════════════════════════════
+
+(function () {
+  'use strict';
+
+  // ── Mock Data ──────────────────────────────────────────────────
+
+  var SUIT_EMOJI = { spade: '♠', club: '♣', diamond: '♦', heart: '♥' };
+
+  var MOCK_CARDS = [
+    { id: 'ACT-001', name: 'Iron Slash', suit: 'spade',   rarity: 'common',   emoji: '⚔️', power: 3, value: 10 },
+    { id: 'ACT-002', name: 'Fire Bolt',  suit: 'diamond', rarity: 'uncommon', emoji: '🔥', power: 5, value: 24 },
+    { id: 'ACT-003', name: 'Vine Whip',  suit: 'club',    rarity: 'common',   emoji: '🌿', power: 2, value: 10 },
+    { id: 'ACT-004', name: 'Holy Light', suit: 'heart',   rarity: 'rare',     emoji: '✨', power: 7, value: 40 },
+    { id: 'ACT-005', name: 'Dark Edge',  suit: 'spade',   rarity: 'uncommon', emoji: '🗡️', power: 4, value: 24 },
+    { id: 'ACT-006', name: 'Ice Shard',  suit: 'diamond', rarity: 'common',   emoji: '❄️', power: 3, value: 10 },
+    { id: 'ACT-007', name: 'Shield Bash',suit: 'club',    rarity: 'rare',     emoji: '🛡️', power: 6, value: 40 },
+    { id: 'ACT-008', name: 'Moon Strike',suit: 'heart',   rarity: 'epic',     emoji: '🌙', power: 9, value: 72 }
+  ];
+
+  var MOCK_ITEMS = [
+    { id: 'food-01', name: 'Bread',      type: 'consumable', emoji: '🍞', baseValue: 5 },
+    { id: 'food-02', name: 'Potion',     type: 'consumable', emoji: '🧪', baseValue: 12 },
+    { id: 'bat-01',  name: 'Battery',    type: 'consumable', emoji: '🔋', baseValue: 8 },
+    { id: 'bat-02',  name: 'Cell',       type: 'consumable', emoji: '⚡', baseValue: 10 },
+    { id: 'sal-01',  name: 'Gear',       type: 'salvage',    emoji: '⚙️', baseValue: 3 },
+    { id: 'sal-02',  name: 'Scrap',      type: 'salvage',    emoji: '🔩', baseValue: 2 },
+    { id: 'wpn-01',  name: 'Rusty Blade',type: 'weapon',     emoji: '🗡️', attack: 3, baseValue: 15 },
+    { id: 'key-01',  name: 'Iron Key',   type: 'key',        emoji: '🔑', isKey: true, baseValue: 0 }
+  ];
+
+  // ── State ──────────────────────────────────────────────────────
+
+  var state = {
+    hand:     [],   // cards (max 5)
+    deck:     [],   // backup cards
+    bag:      [],   // items (max 12)
+    equipped: [null, null, null],
+    stash:    [],   // items (max 20)
+    shop:     [],   // cards
+    currency: 50
+  };
+
+  var transferLog = [];
+  window.__transferLog = transferLog;
+  window.__inventoryState = function () { return JSON.parse(JSON.stringify(state)); };
+
+  // ── Drag State ─────────────────────────────────────────────────
+
+  var drag = null;  // { source, index, element, type, data }
+
+  // ── Init ───────────────────────────────────────────────────────
+
+  function init() {
+    resetInventory();
+    setupDragListeners();
+    updateStatus();
+  }
+
+  window.resetInventory = function () {
+    state.hand = MOCK_CARDS.slice(0, 5);
+    state.deck = MOCK_CARDS.slice(5, 8);
+    state.bag = MOCK_ITEMS.slice(0, 8);
+    state.equipped = [
+      { id: 'wpn-eq', name: 'Steel Sword', type: 'weapon', emoji: '⚔️', attack: 5, baseValue: 20 },
+      { id: 'con-eq', name: 'Health Kit',   type: 'consumable', emoji: '💊', baseValue: 8 },
+      null
+    ];
+    state.stash = [
+      { id: 'st-01', name: 'Gold Bar', type: 'salvage', emoji: '🥇', baseValue: 50 },
+      { id: 'st-02', name: 'Ruby',     type: 'salvage', emoji: '💎', baseValue: 30 },
+      { id: 'st-03', name: 'Old Map',  type: 'key',     emoji: '🗺️', isKey: true, baseValue: 0 },
+      { id: 'st-04', name: 'Elixir',   type: 'consumable', emoji: '🧴', baseValue: 25 }
+    ];
+    state.shop = MOCK_CARDS.slice(0, 5).map(function (c) {
+      return { card: Object.assign({}, c), price: c.value * 2, sold: false };
+    });
+    state.currency = 50;
+    renderAll();
+  };
+
+  window.clearLog = function () {
+    transferLog.length = 0;
+    document.getElementById('log').innerHTML = '';
+    updateStatus();
+  };
+
+  window.dumpState = function () {
+    console.log('=== INVENTORY STATE ===');
+    console.log(JSON.stringify(state, null, 2));
+    console.log('=== TRANSFER LOG ===');
+    console.log(JSON.stringify(transferLog, null, 2));
+    logTransfer('system', 'console', { type: 'debug' }, true);
+  };
+
+  // ── Rendering ──────────────────────────────────────────────────
+
+  function renderAll() {
+    renderZone('hand-zone', state.hand, 'hand', 'card');
+    renderZone('deck-zone', state.deck, 'deck', 'card');
+    renderZone('bag-zone', state.bag, 'bag', 'item');
+    renderEquip();
+    renderZone('stash-zone', state.stash, 'stash', 'item');
+    renderShop();
+    updateStatus();
+  }
+
+  function renderZone(elId, items, zoneName, type) {
+    var el = document.getElementById(elId);
+    var label = el.querySelector('.zone-label');
+    el.innerHTML = '';
+    if (label) el.appendChild(label);
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (!item) continue;
+      var slot = createSlot(item, zoneName, i, type);
+      el.appendChild(slot);
+    }
+
+    // Empty slots for fixed-size zones
+    var maxSlots = { hand: 5, bag: 12, stash: 20 };
+    if (maxSlots[zoneName]) {
+      for (var j = items.length; j < maxSlots[zoneName]; j++) {
+        var empty = document.createElement('div');
+        empty.className = 'slot empty';
+        empty.innerHTML = '<span class="emoji">·</span>';
+        el.appendChild(empty);
+      }
+    }
+  }
+
+  function createSlot(item, zone, index, type) {
+    var el = document.createElement('div');
+    el.className = 'slot' + (type === 'card' ? ' card' : '');
+    if (type === 'card' && item.suit) el.classList.add(item.suit);
+    el.draggable = true;
+    el.dataset.zone = zone;
+    el.dataset.index = index;
+    el.dataset.type = type;
+    el.dataset.testid = zone + '-' + index;
+
+    var emoji = item.emoji || '?';
+    var name = item.name || 'Unknown';
+    var meta = '';
+    if (type === 'card') {
+      meta = (SUIT_EMOJI[item.suit] || '') + ' ' + (item.power || '') + 'pw';
+    } else {
+      meta = item.type || '';
+    }
+
+    el.innerHTML =
+      '<span class="emoji">' + emoji + '</span>' +
+      '<span class="name">' + name + '</span>' +
+      '<span class="meta">' + meta + '</span>';
+
+    return el;
+  }
+
+  function renderEquip() {
+    var el = document.getElementById('equip-zone');
+    var label = el.querySelector('.zone-label');
+    el.innerHTML = '';
+    if (label) el.appendChild(label);
+
+    var labels = ['⚔ Weapon', '🧪 Item', '🔑 Key'];
+    for (var i = 0; i < 3; i++) {
+      var item = state.equipped[i];
+      if (item) {
+        var slot = createSlot(item, 'equip', i, 'item');
+        slot.classList.add('equip-slot');
+        el.appendChild(slot);
+      } else {
+        var empty = document.createElement('div');
+        empty.className = 'slot equip-slot empty';
+        empty.innerHTML = '<span class="label">' + labels[i] + '</span>';
+        empty.dataset.zone = 'equip';
+        empty.dataset.index = i;
+        empty.dataset.type = 'item';
+        el.appendChild(empty);
+      }
+    }
+  }
+
+  function renderShop() {
+    var el = document.getElementById('shop-zone');
+    var label = el.querySelector('.zone-label');
+    el.innerHTML = '';
+    if (label) el.appendChild(label);
+
+    for (var i = 0; i < state.shop.length; i++) {
+      var entry = state.shop[i];
+      if (entry.sold) {
+        var soldEl = document.createElement('div');
+        soldEl.className = 'slot empty';
+        soldEl.innerHTML = '<span class="emoji">SOLD</span>';
+        el.appendChild(soldEl);
+      } else {
+        var slot = createSlot(entry.card, 'shop', i, 'card');
+        slot.style.cursor = 'pointer';
+        slot.draggable = false;
+        slot.addEventListener('click', (function (idx) {
+          return function () { buyFromShop(idx); };
+        })(i));
+        el.appendChild(slot);
+      }
+    }
+  }
+
+  // ── Drag & Drop ────────────────────────────────────────────────
+
+  function setupDragListeners() {
+    document.addEventListener('dragstart', onDragStart);
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('drop', onDrop);
+    document.addEventListener('dragend', onDragEnd);
+
+    // Setup drop zones
+    var zones = document.querySelectorAll('.zone');
+    for (var i = 0; i < zones.length; i++) {
+      zones[i].addEventListener('dragenter', function (e) {
+        e.preventDefault();
+        this.classList.add('drop-hover');
+      });
+      zones[i].addEventListener('dragleave', function (e) {
+        // Only remove if actually leaving the zone
+        if (!this.contains(e.relatedTarget)) {
+          this.classList.remove('drop-hover');
+        }
+      });
+    }
+
+    // Incinerator special styling
+    var incin = document.getElementById('incinerator');
+    incin.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      this.classList.add('active');
+    });
+    incin.addEventListener('dragleave', function (e) {
+      if (!this.contains(e.relatedTarget)) {
+        this.classList.remove('active');
+      }
+    });
+  }
+
+  function onDragStart(e) {
+    var slot = e.target.closest('.slot');
+    if (!slot || slot.classList.contains('empty')) {
+      e.preventDefault();
+      return;
+    }
+
+    drag = {
+      source: slot.dataset.zone,
+      index: parseInt(slot.dataset.index, 10),
+      type: slot.dataset.type,
+      element: slot
+    };
+
+    slot.classList.add('dragging');
+    document.body.classList.add('has-drag');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', drag.source + ':' + drag.index);
+
+    updateStatus('Dragging ' + drag.type + ' from ' + drag.source + '[' + drag.index + ']');
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    var zone = e.target.closest('.zone');
+    if (!zone || !drag) return;
+
+    zone.classList.remove('drop-hover');
+    var target = zone.id.replace('-zone', '');
+    if (target === 'incinerator') target = 'incinerator';
+
+    var accepted = processTransfer(drag.source, target, drag.index, drag.type);
+    logTransfer(drag.source, target, getItemAt(drag.source, drag.index, drag.type), accepted);
+    renderAll();
+  }
+
+  function onDragEnd(e) {
+    if (drag && drag.element) {
+      drag.element.classList.remove('dragging');
+    }
+    document.body.classList.remove('has-drag');
+    // Remove all hover states
+    var zones = document.querySelectorAll('.zone');
+    for (var i = 0; i < zones.length; i++) {
+      zones[i].classList.remove('drop-hover');
+    }
+    document.getElementById('incinerator').classList.remove('active');
+    drag = null;
+    updateStatus();
+  }
+
+  // ── Transfer Logic ─────────────────────────────────────────────
+
+  function getItemAt(source, index, type) {
+    if (source === 'hand')  return state.hand[index];
+    if (source === 'deck')  return state.deck[index];
+    if (source === 'bag')   return state.bag[index];
+    if (source === 'equip') return state.equipped[index];
+    if (source === 'stash') return state.stash[index];
+    return null;
+  }
+
+  function processTransfer(from, to, index, type) {
+    var item = getItemAt(from, index, type);
+    if (!item) return false;
+
+    // Same zone → reorder (not implemented, treat as no-op)
+    if (from === to) return false;
+
+    // ── Incinerator ──
+    if (to === 'incinerator') {
+      if (item.isKey) return false;  // Can't destroy key items
+      removeFrom(from, index);
+      var refund = (type === 'card') ? Math.max(1, Math.floor((item.value || 10) * 0.1)) : 0;
+      state.currency += refund;
+      return true;
+    }
+
+    // ── Card transfers ──
+    if (type === 'card') {
+      if (from === 'hand' && to === 'deck') {
+        state.deck.push(item);
+        removeFrom('hand', index);
+        return true;
+      }
+      if (from === 'deck' && to === 'hand') {
+        if (state.hand.length >= 5) return false;
+        state.hand.push(item);
+        removeFrom('deck', index);
+        return true;
+      }
+      return false;
+    }
+
+    // ── Item transfers ──
+    if (type === 'item') {
+      if (from === 'bag' && to === 'equip') {
+        var slotIdx = getEquipSlot(item);
+        if (slotIdx < 0) return false;
+        var existing = state.equipped[slotIdx];
+        state.equipped[slotIdx] = item;
+        removeFrom('bag', index);
+        if (existing) state.bag.push(existing);
+        return true;
+      }
+      if (from === 'equip' && to === 'bag') {
+        if (state.bag.length >= 12) return false;
+        state.bag.push(item);
+        state.equipped[index] = null;
+        return true;
+      }
+      if (from === 'bag' && to === 'stash') {
+        if (state.stash.length >= 20) return false;
+        state.stash.push(item);
+        removeFrom('bag', index);
+        return true;
+      }
+      if (from === 'stash' && to === 'bag') {
+        if (state.bag.length >= 12) return false;
+        state.bag.push(item);
+        removeFrom('stash', index);
+        return true;
+      }
+      if (from === 'equip' && to === 'stash') {
+        if (state.stash.length >= 20) return false;
+        state.stash.push(item);
+        state.equipped[index] = null;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function removeFrom(zone, index) {
+    if (zone === 'hand')  state.hand.splice(index, 1);
+    if (zone === 'deck')  state.deck.splice(index, 1);
+    if (zone === 'bag')   state.bag.splice(index, 1);
+    if (zone === 'equip') state.equipped[index] = null;
+    if (zone === 'stash') state.stash.splice(index, 1);
+  }
+
+  function getEquipSlot(item) {
+    if (item.type === 'weapon') return 0;
+    if (item.type === 'consumable') return 1;
+    if (item.type === 'key') return 2;
+    return -1;
+  }
+
+  // ── Shop ───────────────────────────────────────────────────────
+
+  function buyFromShop(idx) {
+    var entry = state.shop[idx];
+    if (!entry || entry.sold) return;
+    if (state.currency < entry.price) {
+      logTransfer('shop', 'hand', entry.card, false);
+      return;
+    }
+    state.currency -= entry.price;
+    entry.sold = true;
+
+    if (state.hand.length < 5) {
+      state.hand.push(entry.card);
+    } else {
+      state.deck.push(entry.card);
+    }
+    logTransfer('shop', 'hand/deck', entry.card, true);
+    renderAll();
+  }
+
+  // ── Logging ────────────────────────────────────────────────────
+
+  function logTransfer(from, to, item, accepted) {
+    var entry = {
+      from: from,
+      to: to,
+      item: item ? (item.emoji + ' ' + item.name) : '???',
+      accepted: accepted,
+      timestamp: Date.now()
+    };
+    transferLog.push(entry);
+
+    var logEl = document.getElementById('log');
+    var div = document.createElement('div');
+    div.className = 'entry ' + (accepted ? 'accepted' : 'rejected');
+    div.textContent = (accepted ? '✓' : '✗') + ' ' +
+      from + ' → ' + to + ': ' + entry.item;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+
+    updateStatus();
+  }
+
+  function updateStatus(msg) {
+    document.getElementById('drag-status').textContent = msg || 'Idle | 💰 ' + state.currency + 'g';
+    document.getElementById('zone-count').textContent = 'Zones: 7';
+    document.getElementById('log-count').textContent = 'Transfers: ' + transferLog.length;
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  init();
+})();
+</script>
+</body>
+</html>

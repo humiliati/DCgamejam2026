@@ -131,12 +131,102 @@ var QuickBar = (function () {
     }
   }
 
+  // ── DragDrop Integration ─────────────────────────────────────────
+
+  var ZONE_QB = ['qb-weapon', 'qb-consumable', 'qb-key'];
+  var SLOT_TYPE_MAP = { 0: 'weapon', 1: 'consumable', 2: 'key' };
+  var _qbZonesRegistered = false;
+
+  /**
+   * Register QuickBar slots as DragDrop target zones.
+   * Items dragged from the inventory bag can be dropped onto
+   * these slots to equip them directly from the game HUD.
+   */
+  function registerDragZones() {
+    if (typeof DragDrop === 'undefined') return;
+    if (_qbZonesRegistered) return;
+
+    for (var i = 0; i < SLOT_COUNT; i++) {
+      (function (idx) {
+        DragDrop.registerZone(ZONE_QB[idx], {
+          x: 0, y: 0, w: 0, h: 0,
+          accepts: function (payload) {
+            if (!payload || payload.type !== 'item') return false;
+            var data = payload.data;
+            if (!data) return false;
+            return data.type === SLOT_TYPE_MAP[idx];
+          },
+          onDrop: function (payload) {
+            if (!payload || !payload.data) return false;
+            var item = payload.data;
+            if (item.type !== SLOT_TYPE_MAP[idx]) return false;
+
+            // Remove from source by item ID
+            if (payload.zone === 'bag' && typeof Player !== 'undefined') {
+              Player.removeFromBag(item.id);
+            }
+
+            // Swap if occupied (put old item back in bag)
+            var existing = Player.getEquipped()[idx];
+            if (existing) {
+              Player.addToBag(existing);
+            }
+            // Direct equip (item already removed from source)
+            Player.equipDirect(idx, item);
+
+            refresh();
+            if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());
+            if (typeof Toast !== 'undefined') {
+              Toast.show(item.emoji + ' equipped to ' + SLOT_LABELS[idx], 'loot');
+            }
+            return true;
+          },
+          onHover: function () {
+            if (_slots[idx]) _slots[idx].style.boxShadow = '0 0 12px rgba(100,255,100,0.5)';
+          },
+          onLeave: function () {
+            if (_slots[idx]) _slots[idx].style.boxShadow = '';
+          }
+        });
+      })(i);
+    }
+    _qbZonesRegistered = true;
+    _updateQBZoneBounds();
+  }
+
+  function unregisterDragZones() {
+    if (typeof DragDrop === 'undefined') return;
+    for (var i = 0; i < SLOT_COUNT; i++) {
+      DragDrop.removeZone(ZONE_QB[i]);
+    }
+    _qbZonesRegistered = false;
+  }
+
+  function _updateQBZoneBounds() {
+    if (typeof DragDrop === 'undefined' || !_qbZonesRegistered) return;
+    var canvas = document.getElementById('view-canvas');
+    var cRect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+
+    for (var i = 0; i < SLOT_COUNT; i++) {
+      if (!_slots[i]) continue;
+      var rect = _slots[i].getBoundingClientRect();
+      DragDrop.updateZone(ZONE_QB[i], {
+        x: rect.left - cRect.left,
+        y: rect.top - cRect.top,
+        w: rect.width,
+        h: rect.height
+      });
+    }
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   return {
-    init:    init,
-    show:    show,
-    hide:    hide,
-    refresh: refresh
+    init:                init,
+    show:                show,
+    hide:                hide,
+    refresh:             refresh,
+    registerDragZones:   registerDragZones,
+    unregisterDragZones: unregisterDragZones
   };
 })();

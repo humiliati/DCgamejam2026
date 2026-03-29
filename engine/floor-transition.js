@@ -58,8 +58,9 @@ var FloorTransition = (function () {
     if (_transitioning) return;
     _transitioning = true;
 
-    // Cancel any queued movement
+    // Cancel any queued movement and minimap auto-path
     MC.cancelAll();
+    if (typeof MinimapNav !== 'undefined') MinimapNav.cancel();
 
     var sourceFloorId = FloorManager.getFloor();
     var audioDir = direction === 'advance' ? 'down' : 'up';

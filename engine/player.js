@@ -179,8 +179,8 @@ var Player = (function () {
   }
 
   function addToHand(card) {
-    if (typeof CardSystem !== 'undefined' && CardSystem.addCard) {
-      return CardSystem.addCard(card);
+    if (typeof CardSystem !== 'undefined' && CardSystem.pushToHand) {
+      return CardSystem.pushToHand(card);
     }
     if (_state.hand.length >= MAX_HAND) return false;
     _state.hand.push(card);
@@ -253,6 +253,18 @@ var Player = (function () {
     if (prev) {
       _state.bag.push(prev);
     }
+    return prev;
+  }
+
+  /**
+   * Directly set an equipped slot (for DragDrop workflows where
+   * the item has already been removed from its source container).
+   * Returns the previously equipped item (or null).
+   */
+  function equipDirect(slot, item) {
+    if (slot < 0 || slot >= EQUIP_SLOTS) return null;
+    var prev = _state.equipped[slot];
+    _state.equipped[slot] = item;
     return prev;
   }
 
@@ -479,6 +491,7 @@ var Player = (function () {
     // Inventory: equipped (quick-slots)
     getEquipped: getEquipped,
     equip: equip,
+    equipDirect: equipDirect,
     unequip: unequip,
     useItem: useItem,
     hasItem: hasItem,

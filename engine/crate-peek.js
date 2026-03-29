@@ -58,8 +58,8 @@ var CratePeek = (function () {
       _subLabel.id = 'crate-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:24px; text-align:left;' +
-        'font:28px monospace; color:rgba(200,170,100,0);' +
+        'margin-top:36px; text-align:left;' +
+        'font:38px monospace; color:rgba(200,170,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
@@ -126,7 +126,7 @@ var CratePeek = (function () {
       if (glow) {
         var span = document.createElement('span');
         span.style.cssText =
-          'font:bold 14px monospace;color:' + labelColor +
+          'font:bold 26px monospace;color:' + labelColor +
           ';text-shadow:0 0 10px ' + glowColor +
           ';position:absolute;top:50%;left:50%;' +
           'transform:translate(-50%,-50%);white-space:nowrap;';
