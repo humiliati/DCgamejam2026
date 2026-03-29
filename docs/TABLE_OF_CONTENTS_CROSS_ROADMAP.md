@@ -109,6 +109,47 @@ All five design documents, their scope, and section inventories. Each document n
 | Spatial Audio | Distance attenuation proposal for enemy/hero footsteps (Phase D) |
 | Modification Guide | Adding SFX, sequences, music tracks, tuning volume levels |
 
+### DOC-7: CORE_GAME_LOOP_AND_JUICE.md
+> **Scope**: Core loop design doc. Covers the three toyful pillars (Clean / Restock / Endure), Kingdom Two Crowns economy model, narrative hero cycle (3-day cadence + Taskmaster NPC), Stardew Valley day/night pressure with skybox transitions, death/home/debuff system, peek interaction expansion, dungeon persistence & multi-floor maintenance, hero run mailbox reports with dungeon thumbnails, dungeon reset element catalog, daily vermin refresh & reanimation economy, and fail state narrative design (death hero-rescue, curfew NPC wink, humiliation gradient).
+
+| Section | Content |
+|---------|---------|
+| §1 One-Line Pitch | The janitor framing and central tension |
+| §2 Three Core Pillars | Clean, Restock, Endure — one-liners and primary verbs |
+| §3 Kingdom Two Crowns Economy | Drip→jackpot structure, visible economy (7-category readiness), "just one more crate" pull |
+| §4 Hero Cycle — Narrative Deploy | 3-day cadence, Taskmaster NPC, implied deploy via mail/barks/dungeon re-entry, payout tiers |
+| §5 Day/Night Cycle — Living World Pressure | Skybox transitions, player home, clock mechanics, sleep/death/curfew/debuffs, bonfire role |
+| §6 Juice Inventory | Per-pillar juice tables: Clean, Restock, Hero Cycle, Day/Night, Ambient/Meta |
+| §7 Pressure Gradient | Readiness target escalation per hero cycle |
+| §8 3-Day Cycle Session Rhythm | The "one more cycle" pull, daily structure |
+| §9 Implementation Notes | Module mapping table + jam-scope priority order |
+| §10 Design Axioms | Seven guiding principles (expanded: "home is heartbeat", "discovery over declaration") |
+| §11 Peek Interaction Expansion | Bed, Mailbox, Job Board, Taskmaster, Bonfire peek specs with mockup layouts |
+| §12 Time Cycle Accommodation Inventory | Fits naturally / requires adaptation / deferred tables, time-aware peek summary |
+| §13 Dungeon Persistence & Multi-Floor Maintenance | Work persists across days, dungeon difficulty tiers, hero chain penetration depth |
+| §14 Hero Run Report — Mailbox Detail Design | Dungeon thumbnail cards, report tone by readiness, activity breakdown icons |
+| §15 Dungeon Reset Elements | Corpse cleanup, puzzle re-scramble, door relock, button reset, persistence rules |
+| §16 Daily Vermin Refresh & Reanimation Economy | Vermin spawn nodes, reanimation flow, value hierarchy, friendly NPC behavior, 2-day walkthrough |
+| §17 Fail States — Death & Curfew Narrative | Hero rescue on death (cycle shift, halved payout, rescue mail variant), curfew NPC wink, humiliation gradient, NPC bark pool |
+
+### DOC-8: VISUAL_OVERHAUL.md
+> **Scope**: Visual pivot design doc. Shifts the aesthetic from combat-operative/CRT terminal to clinical-hazmat/corporate-paperwork/powerwash style. Covers the ironic gap (operative naming for janitor work), complete UI palette swap (phosphor green → paper/ink/clipboard), HUD redesign (geriatric size, ruled-paper texture, labeled form fields, plastic tool indicators), title screen as corporate onboarding forms, card fan as laminated playing cards, exterior biome palette nudges (brighter, higher contrast), MenuBox as tabbed binder, typography scale and font stack, player archetype visual refresh (janitor descriptions), and splash screen as hazmat warning label.
+
+| Section | Content |
+|---------|---------|
+| §1 Design Philosophy | The ironic gap — operative naming for janitor work, three visual pillars, tone calibration |
+| §2 Color System Overhaul | Paper/ink/pencil palette replacing CRT phosphor, suit colours retained + brightened |
+| §3 HUD Redesign | Geriatric size, clipboard-backed form layout, ruled-paper lines, plastic tool indicators |
+| §4 Title Screen Pivot | Corporate onboarding flow — cover letter, name badge (Form 1A), assignment form (Form 1B), shift punch-in |
+| §5 Card Fan Visual Refresh | Laminated playing cards on paper, suit corner pips, stencil art style |
+| §6 Biome Palette Nudges | Per-floor hex adjustments for all 4 exterior floors — brighter, warmer, higher contrast |
+| §7 MenuBox / Pause Screen | Binder aesthetic — tabbed sections, paper on brown backing board |
+| §8 Typography | Font stack (form/label/handwrite), geriatric size scale, ruled-paper CSS effect |
+| §9 Player Archetype Visual Identity | Class emoji + description refresh — janitor-themed, ironic operative naming maintained |
+| §10 Splash Screen Pivot | Hazmat warning label — yellow background, diagonal stripes, stencil title |
+| §11 Implementation Priority | Jam-scope (7.5h) vs post-jam changes, per-module estimates |
+| §12 Design Axioms | Seven visual-specific axioms (clipboard is the frame, ink on paper, bigger is funner) |
+
 ---
 
 ## Cross-Roadmap Execution Order
