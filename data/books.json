@@ -6,7 +6,7 @@
       "id": "string — unique stable identifier",
       "title": "string — display title shown at top of peek overlay",
       "icon": "string — emoji shown on the bookshelf tile and in peek header",
-      "category": "string — 'tip' | 'lore' | 'manual' | 'letter' | 'notice'",
+      "category": "string — 'tip' | 'lore' | 'manual' | 'letter' | 'notice' | 'journal' | 'fiction'",
       "pages": ["array of strings — each string is one page of text"],
       "biome": "string — which building biome this book belongs to (for random assignment)"
     }
@@ -444,6 +444,108 @@
         "The hero further agrees to: accept procurement guidance from Foundry field agents when guidance is provided, prioritize dragon-class encounters over other targets when Foundry intelligence identifies an active site, and maintain confidentiality regarding the specific terms of this agreement. Violations of the procurement reporting clause void all equipment provisions retroactively. Standard contract term: one season."
       ],
       "biome": "dungeon"
+    },
+    {
+      "id": "fiction_tides_of_passion",
+      "title": "Tides of Passion, Vol. VII — The Harbour Master's Secret",
+      "icon": "💕",
+      "category": "fiction",
+      "pages": [
+        "Chapter Fourteen: The Storm\n\nMarina clutched the railing as the pier groaned beneath her. 'You cannot leave,' she said, rain plastering her hair to her face. 'Not tonight. Not after what happened at the lighthouse.'\n\nThe harbour master turned slowly. His jawline could have been carved from the same coral that lined the boardwalk. 'What happened at the lighthouse,' he said, 'was a mistake.'\n\n'A mistake?' Her voice broke. 'You call three consecutive evenings of passionate inventory auditing a MISTAKE?'",
+        "He removed his harbour master's cap and held it to his chest. 'Marina. I am the harbour master. You are the assistant harbourmaster. The bylaws are clear — Section 14, Paragraph 9: No romantic entanglements between harbour staff during active tidal advisories.'\n\n'Damn your bylaws, Castellan!' She seized a nearby mooring rope for emphasis. 'Damn them to the deep!'\n\nSomewhere behind them, a seagull cried. It was, Marina reflected, the most romantic seagull she had ever heard.",
+        "He stepped closer. The rain intensified, as it always did during moments of emotional significance. 'There's something I never told you,' he whispered. 'I'm not just a harbour master.'\n\n'What do you mean?'\n\n'I'm also...'\n\nHe paused. The seagull cried again.\n\n'...a licensed ship chandler.'\n\nMarina gasped. A ship chandler AND a harbour master? The raw administrative power was almost too much to bear.\n\n— TO BE CONTINUED IN VOLUME VIII —"
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_siren_of_coral_cove",
+      "title": "The Siren of Coral Cove — A Drama in Three Acts",
+      "icon": "🎭",
+      "category": "fiction",
+      "pages": [
+        "ACT I, SCENE IV — THE FISHMONGER'S CONFESSION\n\n[Interior: a modest fishmonger's stall. CORWIN stands behind the counter, gutting a halibut with visible anguish. Enter DELPHINE, wearing an impractical evening gown.]\n\nCORWIN: Delphine! You shouldn't be here. If your father — the wealthy and disapproving fish merchant — were to see us—\n\nDELPHINE: My father can take his premium tuna and cast it into the harbour. I love you, Corwin. I love your modest stall. I love your economy-grade halibut.\n\nCORWIN: [tormented] Don't say that.",
+        "DELPHINE: It's true! Every fibre of my being yearns for your discount seafood.\n\nCORWIN: But I am just a fishmonger, Delphine. A simple man who guts fish and occasionally has feelings. Your father controls the entire premium tuna market. What could I possibly offer you?\n\nDELPHINE: [seizing his halibut-stained hands] You could offer me TRUTH, Corwin. In a world of overpriced tuna, you are the only honest fish in the sea.\n\n[Thunder. Lightning. A cat knocks something off a shelf.]\n\nCORWIN: There's something you should know. I'm not just a fishmonger.",
+        "DELPHINE: [breathless] What?\n\nCORWIN: I'm also... your father's secret business partner.\n\nDELPHINE: [staggering backward into a display of sardines] NO!\n\nCORWIN: I'm sorry. The premium tuna trade... it was too lucrative to resist.\n\nDELPHINE: You MONSTER! This halibut was a LIE!\n\n[She hurls a mackerel at him and exits weeping. CORWIN catches it. He looks at the mackerel. The mackerel looks back.]\n\nCORWIN: [quietly] She's right. I've become everything I gutted against.\n\n— END OF ACT I —"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_boardwalk_confessions",
+      "title": "Beneath the Boardwalk — Confessions of a Lamplighter",
+      "icon": "🔥",
+      "category": "fiction",
+      "pages": [
+        "Entry the Fourth — On the Subject of Mrs Pemberton\n\nMrs Pemberton came to the lamp at Pier Six again tonight. She says she comes for the light, but I know the truth. She comes because her husband — the esteemed Mr Pemberton, dealer in decorative corals — has taken up with the woman who runs the shell-polishing kiosk on Lantern Row.\n\nI said nothing. A lamplighter does not gossip. A lamplighter ILLUMINATES.",
+        "'Dorian,' she said to me — for that is my name, Dorian, lamplighter third class — 'Dorian, do you think a woman can love two men?'\n\nI adjusted my wick. This is what I do when I am uncomfortable.\n\n'Mrs Pemberton,' I said, 'I light lamps. I am not qualified to illuminate the human heart.'\n\nShe laughed. It was the sort of laugh that makes a lamplighter reconsider his career choices. The sort that makes you think perhaps there is more to life than wicks and whale oil and the quiet dignity of municipal infrastructure maintenance.",
+        "'You're very wise, Dorian,' she whispered, and placed her hand on mine. My hand, which smelled of lamp oil. Her hand, which smelled of expensive coral dust and poor decisions.\n\nI should note for the record that nothing improper occurred. I am a professional. I lit Pier Six, Pier Seven, and the decorative sconce outside the harbourmaster's office, all within regulation timeframes.\n\nBut I will confess: Pier Eight was three minutes late that evening.\n\nThree minutes. Mrs Pemberton has cost me my perfect record.\n\nI shall never forgive her. I shall also be at Pier Six again tomorrow.",
+        "Entry the Seventh — On the Subject of Mr Pemberton\n\nMr Pemberton confronted me today. He said, 'I know my wife visits your lamp.'\n\nI said, 'Sir, it is a public lamp. Many people visit it. That is the purpose of a lamp.'\n\nHe narrowed his eyes. 'She speaks of you, lamplighter. She says you are WISE.'\n\n'I am not wise,' I said. 'I am adequately trained in wick maintenance and municipal lighting schedules. These are different things.'\n\nHe seemed satisfied with this answer and left. I lit Pier Six in record time that evening. Some emotions can only be expressed through punctual civic service."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_love_among_crates",
+      "title": "Love Among the Crates — A Gleaner's Romance",
+      "icon": "💘",
+      "category": "fiction",
+      "pages": [
+        "She was everything a gleaner shouldn't want.\n\nRosalind ran the candle stall at the corner of Driftwood Lane — the one with the hand-dipped tapers and the little sign that said 'SCENTED AND UNSCENTED — NO REFUNDS.' She had ink-dark hair, a laugh like windchimes, and absolutely zero understanding of dungeon sanitation protocols.\n\n'You missed a spot,' she said one morning, leaning over the counter as I trudged past with my mop and bucket.\n\n'It's a twelve-floor dungeon,' I said. 'There are many spots.'",
+        "'You look tired,' she said.\n\nI WAS tired. I'd been scrubbing hero-residue off basement walls since four in the morning. There was something caked into the grout on floor 1.3 that I was fairly certain used to be alive.\n\n'It's honest work,' I said, because that's what you say when the work is terrible.\n\nShe slid a candle across the counter. Lavender. 'For the smell,' she said. 'You could use it.'\n\nI should have been offended. Instead I took the candle and felt something I hadn't felt since orientation week: hope. Also lavender.",
+        "We started meeting after shifts. She'd close the stall, I'd finish my route, and we'd sit on the old pier and watch the tide come in. She'd tell me about candle-making. I'd tell her about mould classifications.\n\n'Type Seven is the worst,' I said. 'Bioluminescent. Grows in spiral patterns. Beautiful, actually, but it dissolves boot leather.'\n\n'You talk about mould the way poets talk about the sea,' she said.\n\nNo one had ever said anything like that to me before. In fairness, no one had ever had reason to.",
+        "It couldn't last. She was offered a stall at the Frontier Gate market — better foot traffic, higher margins, a proper awning. Three districts away.\n\n'Come with me,' she said.\n\n'I can't. My contract's through the season. And floor 2.2 won't clean itself.'\n\nShe kissed me on the cheek. She smelled like lavender and beeswax and a future I wasn't licensed to pursue.\n\nThe candle she gave me still sits on my bedside shelf. I light it after bad shifts. The dungeon smells like death and forgotten ambition, but my room, for a few hours, smells like her.\n\n— This copy is dog-eared and has been read many times —"
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "fiction_watchmans_wife",
+      "title": "The Watchman's Wife — Season 4 Finale Novelization",
+      "icon": "📺",
+      "category": "fiction",
+      "pages": [
+        "PREVIOUSLY ON THE WATCHMAN'S WIFE:\n\nBrenna discovered that her husband Aldric was leading a double life as both a night watchman AND a volunteer at the municipal library. Confronted with evidence (an overdue library book found in his patrol cloak), Aldric confessed to everything — the late fees, the secret reading nook behind the reference section, and his passionate disagreement with the library's cataloguing system.\n\nMeanwhile, Brenna's sister Catrin has fallen for the new apothecary, unaware that he is ALSO Aldric's library co-volunteer. The love triangle has become a love RECTANGLE, and the rectangle is OVERDUE.",
+        "CHAPTER THIRTY-ONE: THE RECKONING\n\n'You lied to me,' Brenna said, her voice like ice on a winter pier. 'Every night you said you were walking the walls, and instead you were—'\n\n'Reorganizing the folklore section by region instead of author surname,' Aldric finished quietly. 'Yes.'\n\n'Do you know how that makes me feel?'\n\n'Brenna—'\n\n'ALPHABETICALLY BETRAYED, Aldric. That's how it makes me feel.'\n\nHe reached for her hand. She pulled away and accidentally knocked his reading glasses off the table. They both watched them fall. It was the most dramatic thing that had happened in their marriage since the Soup Incident of Year Three.",
+        "Catrin burst through the door, mascara running. 'Brenna! Aldric! The apothecary — Edmund — he's—'\n\n'Also a library volunteer?' Brenna said flatly.\n\nCatrin stopped mid-sob. 'How did you—'\n\n'EVERYONE is a library volunteer, Catrin. This whole town is built on lies and late fees.'\n\nAldric cleared his throat. 'To be fair, the library's collection is genuinely excellent—'\n\n'NOT NOW, ALDRIC.'\n\nOutside, the town bell struck midnight. Somewhere, a book was being returned after hours via the unmonitored drop slot. The cycle of deception continued.",
+        "NEXT SEASON PREVIEW:\n\nThe library burns down under mysterious circumstances. Aldric is the primary suspect. Brenna must choose between her husband and the TRUTH. Catrin opens a rival bookshop out of spite. Edmund the apothecary reveals he can't actually read — he was volunteering at the library to be near the HEATING SYSTEM.\n\nNew character: Aldric's mother, who has opinions about EVERYTHING.\n\n— Unauthorized novelization. The Coralshore Broadcasting Company does not endorse this product. —"
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_romantic_correspondence",
+      "title": "Madame Coralie's Guide to Romantic Correspondence",
+      "icon": "💌",
+      "category": "fiction",
+      "pages": [
+        "A NOTE FROM THE AUTHOR\n\nDearest reader — you hold in your trembling hands the DEFINITIVE guide to the written pursuit of love. Whether you are a harbour worker yearning for a fishwife, a shopkeeper pining for a lamplighter, or simply someone who has made regrettable eye contact and now must follow through, Madame Coralie is here to help.\n\nLet us begin with the fundamentals. Rule One: Never open a love letter with a discussion of the weather. The weather is not romantic. The weather is MUNICIPAL.",
+        "TEMPLATE THE THIRD — For When You Have Wronged Your Beloved\n\nMy Dearest [NAME],\n\nI write to you with a heart heavier than a wet net full of administrative guilt. What I did at [LOCATION] was unforgivable, and I say that as someone who has studied forgiveness from a theoretical perspective and found it WANTING.\n\nI should never have [OFFENCE — be specific, but not TOO specific, as these letters are sometimes read aloud in taverns]. You deserved better. You deserved someone who [POSITIVE QUALITY YOU LACK].\n\nPlease accept this [GIFT — nothing alive, nothing that was recently alive, nothing from the discount bin at the Coral Bazaar] as a token of my boundless remorse.\n\nYours in perpetual regret,\n[YOUR NAME, spelled correctly this time]",
+        "COMMON MISTAKES — A Cautionary Chapter\n\nDO NOT send poetry unless you are certain it is good. Bad poetry has ended more relationships in Coralshore than infidelity and fish-related disputes combined.\n\nDO NOT compare your beloved to the sea. Everyone compares their beloved to the sea. Your beloved is tired of being compared to the sea.\n\nDO NOT use the phrase 'my darling barnacle.' I don't care what context you think justifies it. There is no context.\n\nDO NOT send a love letter via municipal post if you are ALSO conducting a secret correspondence with someone else via municipal post. The postal workers talk. They talk about EVERYTHING.",
+        "ADVANCED TECHNIQUE — The Art of the Graceful Rejection\n\nSometimes, you are on the RECEIVING end. A love letter arrives and your heart sinks like a poorly maintained rowboat. Fear not. Madame Coralie has a template for this also.\n\nMy Dear [NAME],\n\nThank you for your letter, which I read with [choose one: 'great interest' / 'some surprise' / 'the assistance of a translator, as your handwriting is medically concerning']. Your feelings do you credit, but I must confess that my heart belongs to [another / my work / a concept of personal freedom that does not include you specifically].\n\nI wish you every happiness and strongly recommend Volume II of this guide, which covers 'Moving On With Dignity.'\n\nWarmly but Firmly,\n[YOUR NAME]"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_dashing_rogue",
+      "title": "The Dashing Rogue of Lantern Row",
+      "icon": "🗡️",
+      "category": "fiction",
+      "pages": [
+        "Chapter One: A Scoundrel Arrives\n\nThey say Rafferty Vane arrived in Coralshore with nothing but a deck of cards, a borrowed coat, and a smile that had been legally classified as a public disturbance in two neighbouring towns.\n\n'I'm looking for three things,' he told the innkeeper, dropping a single coin on the bar with practised flair. 'A room, a drink, and trouble.'\n\n'We've got rooms and drinks,' said the innkeeper. 'Trouble finds itself.'\n\n'Then we have an understanding.' He flipped the coin. It landed on its edge. Even the coin was showing off.",
+        "Vane's first mark was the card dealer at the Coral Bazaar — a woman named Sparrow who shuffled cards so fast they blurred. He sat down at her table with his borrowed coat and his dangerous smile and said, 'Deal me in.'\n\n'You can't afford this table,' Sparrow said.\n\n'I can't afford most things. It's never stopped me before.'\n\nShe dealt. He lost. He lost MAGNIFICENTLY. Three hands in a row, each more creative in its failure than the last. Sparrow was, against her professional judgement, impressed.\n\n'You're the worst card player I've ever seen,' she said.\n\n'Madam,' he said, straightening his borrowed cuffs, 'I am the worst card player ANYONE has ever seen. There is a difference.'",
+        "By the end of the week, Vane had: lost every card game on Lantern Row, been barred from two establishments and enthusiastically welcomed at three others, accidentally solved a minor property dispute through sheer charm, and developed what he described as 'a professional interest' in Sparrow the card dealer.\n\n'You're following me,' Sparrow said, not looking up from her shuffle.\n\n'I prefer to think of it as walking in the same direction with great enthusiasm.'\n\n'That's following.'\n\n'Semantics.' He produced a flower from his sleeve. It was slightly crushed. 'Peace offering?'\n\nShe took it. She didn't smile. But she didn't NOT smile, and Rafferty Vane had built entire careers on the space between those two things.",
+        "'You know,' Sparrow said one evening, as the lanterns along the Row flickered to life, 'for a man who loses every hand, you seem remarkably content.'\n\n'Winning is easy,' Vane said. 'Any fool with good cards can win. But losing with STYLE — that takes real talent. That takes commitment. That takes a man who looked at success and said, no thank you, I have other plans.'\n\n'Those are the plans of an idiot.'\n\n'An idiot with a flower in his sleeve and nowhere else to be.'\n\nThe lanterns burned. The boardwalk creaked. Somewhere in the distance, a card game was being played honestly, and Rafferty Vane wanted absolutely nothing to do with it.\n\n— BOOK ONE OF THE LANTERN ROW SCOUNDRELS SERIES —"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_forbidden_tinctures",
+      "title": "Forbidden Tinctures — A Potion-Maker's Diary",
+      "icon": "⚗️",
+      "category": "fiction",
+      "pages": [
+        "Day 1.\n\nThe love potion is a perfectly legitimate branch of alchemy and I will not be shamed for pursuing it. Mrs Hartwell at the Guild canteen says it's 'unethical.' Mrs Hartwell also puts salt in her tea. I do not take ethical guidance from people who salt their tea.\n\nFormula 1: Rose petals, moonwater, essence of yearning (3 drops).\nResult: Test subject (a crab) became deeply attached to a rock. More attached than crabs usually are to rocks, I mean. Which is saying something.",
+        "Day 12.\n\nFormula 7: Crushed pearls, distilled starlight, a single eyelash donated willingly.\nResult: I accidentally drank it myself while reaching for my actual tea (note to self: LABEL YOUR CUPS). Spent the next four hours profoundly in love with my own reflection in the window. Not in a vain way — more in a 'you seem like a really good listener' way. Very unsettling.\n\nDay 15.\n\nFormula 9: Coral dust, honey, extract of dramatic tension.\nResult: Applied to Mrs Hartwell's doorknob as a field test. She fell in love with the door. Would not stop complimenting its hinges. I feel this is progress adjacent.",
+        "Day 23.\n\nFormula 14: Tide foam, candlewax, powdered ambition.\nResult: The crab from Day 1 — who I have named Gerald — drank the residue from my workbench. Gerald is now in love with Formula 7 (the window reflection one). He keeps clicking at his own reflection in the side of my cauldron. I have created a narcissistic crab. This was not the goal.\n\nDay 24.\n\nGerald has a following. Three other crabs now sit around my cauldron admiring themselves. I may have invented crab vanity. The alchemical community will not know what to do with this information.",
+        "Day 30.\n\nBreakthrough! Formula 19 works. Applied in controlled conditions (two consenting volunteers from the Driftwood Inn, observed at a safe distance). Subject A told Subject B that their 'eyes were like the sea at sunset.' Subject B said 'that's the nicest thing anyone's ever said to me' and they shared a meal.\n\nFormula 19: Just regular tea with a nice biscuit.\n\nI have spent thirty days and considerable resources to discover that the most effective love potion is TEA AND BISCUITS.\n\nGerald remains narcissistic. I will continue to monitor the situation.\n\n— This journal has water stains and smells faintly of rose petals —"
+      ],
+      "biome": "home"
     }
   ]
 }
