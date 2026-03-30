@@ -181,7 +181,7 @@ All five design documents, their scope, and section inventories. Each document n
 | §5 Bar Counter Interactions | BAR_COUNTER tile (26) properties, BarCounterPeek module, per-biome drink menus, "micro-bonfire" design intent |
 | §6 Per-Building Interaction Inventory | Full tile inventories for Entry Lobby, Bazaar, Inn, Guild, Home, Watchman's Post |
 | §7 Cozy Minigame Stubs | Post-jam roadmap: card sorting table, trophy shelf, cooking pot, notice board puzzle, music box |
-| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (38 books: 13 original + 25 conspiracy lore), how to add new books |
+| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (46 books: 13 original + 25 conspiracy lore + 8 fiction), how to add new books |
 | §9 Peek Overlay Module Specs | BookshelfPeek API table + BarCounterPeek API table with full method signatures |
 | §10 Juice — Interiors Feel Like Home | Time-freeze juice, bookshelf juice, bar counter juice, building ambient juice |
 | §11 Implementation Status & Roadmap | Phase A.0 (complete), Phase B (day cycle + home), Phase C (interior polish), Post-jam (minigames) |
