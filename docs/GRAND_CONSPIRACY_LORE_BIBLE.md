@@ -108,7 +108,7 @@ For 320 years, this arrangement held. The Admiralty studied. The dragons lived. 
 
 ### The Discovery (80 Years Ago)
 
-The Foundry Collective was, at the time, primarily a regional arms manufacturer and private intelligence firm — the Pinkertons of Coralshore. They were hired to investigate "unusual procurement patterns" at the Moonpetal Apothecary by a business rival. What their investigator found instead was the Lamplit Catacombs.
+The Foundry Collective was, at the time, primarily a regional arms manufacturer and private intelligence firm with a substantial commercial espionage division. They were hired to investigate "unusual procurement patterns" at the Moonpetal Apothecary by a business rival. What their investigator found instead was the Lamplit Catacombs.
 
 The field report — now known as the **Crow Predecessor Documents** — described the Catacombs in detail: preserved dragon specimens, tissue samples in sealed vials, detailed biological catalogs going back three centuries. The investigator understood immediately what the Admiralty had been doing.
 
