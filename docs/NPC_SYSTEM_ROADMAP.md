@@ -383,7 +383,8 @@ Each building interior has a small, curated roster of NPCs with **building-speci
 | `1.1` | Coral Bazaar | 2 patrons (ambient), 1 vendor per faction | `interior.bazaar` |
 | `1.2` | Driftwood Inn | 1 innkeeper (interactive), 2 guests (ambient) | `interior.inn` |
 | `1.3` | Gleaner's Guild | 1 guild clerk (interactive), 2 guildmates (ambient) | `interior.guild` |
-| `2.1` | Watchman's Post | 1 watchman (interactive), 1 sleeping guard (ambient) | `interior.watchpost` |
+| `2.1` | Dispatcher's Office | 1 dispatcher (interactive) | `interior.office` |
+| `2.2` | Watchman's Post | 1 watchman (interactive), 1 sleeping guard (ambient) | `interior.watchpost` |
 
 ### 9.4 Building-NPC Assignment Pattern
 

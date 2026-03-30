@@ -1351,7 +1351,7 @@ var Game = (function () {
     if (Salvage.getStagedLoot().length === 0) {
       var corpse = Salvage.getStagedCorpse();
       if (corpse) {
-        var floorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+        var floorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
         // Mark dry in registry — transitions display emoji to bone
         if (typeof CorpseRegistry !== 'undefined') {
           CorpseRegistry.setLootState(corpse.x, corpse.y, floorId, 'dry');
@@ -1856,7 +1856,7 @@ var Game = (function () {
     // Build sprites from the registry — each corpse retains its defeated
     // enemy's folded origami appearance until looted dry (→ bone).
     if (typeof CorpseRegistry !== 'undefined') {
-      var floorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+      var floorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
       var corpseSprites = CorpseRegistry.buildSprites(floorId);
       for (var ci = 0; ci < corpseSprites.length; ci++) {
         _sprites.push(corpseSprites[ci]);

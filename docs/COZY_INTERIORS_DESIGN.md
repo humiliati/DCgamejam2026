@@ -1,5 +1,7 @@
 # Cozy Interiors Design — Building Havens & Time-Freeze Sanctuaries
 > **DOC-10** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-03-29
+>
+> **⚠ Partial alignment note (v2.0):** The world graph was restructured in Tutorial_world_roadmap.md v2.0. Floor 0.1 (Entry Lobby) no longer exists — the player goes directly from Floor 0 to Floor 1 (The Promenade). References to "Entry Lobby" and "Floor 0.1" in this document should be read as Floor 1 interiors. The interior design principles and time-freeze rules remain valid.
 
 ---
 
@@ -276,7 +278,7 @@ The 3-tap limit prevents exploitation while still rewarding the player for visit
 
 **Home is the emotional anchor.** The bookshelf and bar counter are small comforts — the player's own space, with personal items. The anonymous letter on the bookshelf is the first direct conspiracy hook. The stew on the counter is the game's smallest, most human reward.
 
-### 6.6 Watchman's Post (Floor 2.1) — Planned
+### 6.6 Watchman's Post (Floor 2.2) — Planned
 
 | Tile | Position | Content |
 |------|----------|---------|

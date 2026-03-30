@@ -414,7 +414,7 @@ var CombatBridge = (function () {
               fd.grid[corpseY][corpseX] = TILES.CORPSE;
             }
             // Register in CorpseRegistry with full enemy data
-            var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+            var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
             if (typeof CorpseRegistry !== 'undefined') {
               CorpseRegistry.register(corpseX, corpseY, flId, enemy);
             }
@@ -428,7 +428,7 @@ var CombatBridge = (function () {
             fd.grid[corpseY][corpseX] === TILES.EMPTY) {
           fd.grid[corpseY][corpseX] = TILES.CORPSE;
         }
-        var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.1.1';
+        var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
         if (typeof CorpseRegistry !== 'undefined') {
           CorpseRegistry.register(corpseX, corpseY, flId, enemy);
         }

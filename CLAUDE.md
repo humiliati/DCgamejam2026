@@ -47,14 +47,21 @@ String floor IDs are the primary identifier throughout the codebase. There is NO
 Current world map:
 
 ```
-"0"       The Approach       (exterior — tutorial courtyard)
-"1"       The Promenade      (exterior — sunset boardwalk town)
-"1.1"     Coral Bazaar       (interior — market hall)
-"1.1.1"   Coral Cellars      (dungeon — first proc-gen level)
-"1.1.2+"  deeper dungeon     (dungeon — proc-gen)
+"0"       The Approach        (exterior — tutorial courtyard)
+"1"       The Promenade       (exterior — sunset boardwalk town)
+"1.1"     Coral Bazaar        (interior — card shop)
+"1.2"     Driftwood Inn       (interior — inn, overheal bonfire)
+"1.3"     Cellar Entrance     (interior — soft dungeon building)
+"1.6"     Gleaner's Home      (interior — player bunk, keyring)
+"1.3.1"   Soft Cellar         (dungeon — tutorial trap, easy enemies)
+"2"       Lantern Row         (exterior — commercial district, more shops)
+"2.1"     Dispatcher's Office (interior — employer, mission briefing)
+"2.2"     Watchman's Post     (interior — shaken NPC, dungeon staging)
+"2.2.1"   Hero's Wake B1      (dungeon — Hero reveal, high-level corpses)
+"2.2.2"   Hero's Wake B2      (dungeon — deeper scavenge)
 ```
 
-Future floors: `"2"` Lantern Gardens (ext), `"2.1"` Inn (int), `"3"` Frontier Gate (ext), `"3.1"` Armory (int).
+Future floors: `"3"` Frontier Gate (ext), `"3.1"` Armory (int), `"3.1.1"+` Deep Vaults (dungeon).
 
 ### Floor ID navigation
 
@@ -62,8 +69,8 @@ FloorManager exposes tree-traversal helpers:
 
 - `parentId("1.1")` → `"1"` (ascend)
 - `childId("1", "1")` → `"1.1"` (descend)
-- `nextSiblingId("1.1.1")` → `"1.1.2"` (deeper dungeon level)
-- `prevSiblingId("1.1.2")` → `"1.1.1"` (shallower dungeon level)
+- `nextSiblingId("2.2.1")` → `"2.2.2"` (deeper dungeon level)
+- `prevSiblingId("2.2.2")` → `"2.2.1"` (shallower dungeon level)
 
 ### Door target resolution
 
