@@ -163,6 +163,287 @@
         "ROOT FACTION — Natural remedies\n  Food, herbs, antidotes, energy restoratives"
       ],
       "biome": "bazaar"
+    },
+    {
+      "id": "journal_operative_brief",
+      "title": "Operative Orientation: Gleaner Classification 4-C",
+      "icon": "📋",
+      "category": "journal",
+      "pages": [
+        "Congratulations on your classification. As a Tier 4 Civic Contractor, your duties fall under the Gleaner's Guild Standard Operating Protocols. You are responsible for maintaining reset readiness across all assigned subsurface zones.\n\nYour role encompasses hero facilitation, floor maintenance, and timely execution of all reset cycles as assigned.",
+        "Your work order assignments will be issued by the Guild Dispatcher. All restock, cleaning, and maintenance activities must be completed within the designated cycle window. Compliance with Guild protocols serves the interests of all parties to the Compact.",
+        "Contractor non-disclosure requirements are outlined in your standard agreement. Please note that questions regarding sub-depth assignments should be directed to Guild Oversight, not to your field Dispatcher. Welcome to the Guild."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_contract_terms",
+      "title": "Employment Terms — Gleaner's Guild Standard Contract",
+      "icon": "📋",
+      "category": "journal",
+      "pages": [
+        "ARTICLE I — CONTRACTOR DUTIES. The Contractor agrees to perform all assigned maintenance, restock, and cleaning functions within the designated floor zones. Assignments are issued by the Guild Dispatcher on a rolling three-day cycle. Contractor will maintain all equipment in Guild-certified condition.",
+        "ARTICLE II — COMPENSATION. Payment is calculated per completed floor reset, per cleaned tile (0.4c), and per restocked crate (2c base, suit-match bonus applies). Hazard pay is available for floors designated as active combat zones. Guild dues are deducted at 8% of gross.",
+        "ARTICLE III — NON-DISCLOSURE. Contractor agrees not to disclose the contents of any chamber below depth 2.0 without written authorization from the Guild Oversight Board. Contractor agrees not to remove, copy, or transmit any document, artifact, or biological material designated under the Providence Codex. Violation terminates contract."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_field_notes_day1",
+      "title": "Personal Field Notes — Day 1",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "Arrived in Coralshore at dawn. Met the Dispatcher — seems straight enough, procedural type, runs a clean office. The dungeons are messier than the contract description suggested. Heroes apparently treat the halls like a personal waste site. Three priorities: clean, restock, report. Manageable.",
+        "The Foundry Collective rep was loitering near the armory district when I came off the first run. Noted his position and made no contact. The Tide Council vendor in the Bazaar asked me twice if I found anything 'unusual' in the restocked crates. I said no. I'm logging this."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_field_notes_week1",
+      "title": "Personal Field Notes — Week 1 Assessment",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "Hero pattern: entry, operation, extraction within 36 hours. Dispatcher confirms this is within normal parameters. Three different hero teams cleared B1 in the first week alone. Restock demand is higher than the cycle budget allows. Someone is underquoting this contract.",
+        "The Admiralty rep visited the Moonpetal today. Brought a sealed crate from B2. Nobody mentioned what was in it. The crate had a Tide Council registry mark on the outside — standard artifact transfer paperwork. Not standard for a medical supply run.",
+        "The Tide Council vendor asked again about unusual finds. I said no again. I've started keeping a log of who asks me what. The Guild memo on 'foreign investigators' uses the phrase 'standard narrative.' Interesting choice of words for a policy document."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_hero_file",
+      "title": "Personal Dossier: The Seeker (Active)",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "Subject: foreign national, no verified affiliation on record. Operating under a provisional Guild license — Foundry-sponsored tier. Behavior: methodical, intelligence-led, not trophy-focused. Three runs completed in the last week. Loot recovery minimal. Dragon location intel appears to be the actual objective.",
+        "Not glory. Not wealth. DRAGONS specifically. I have run into enough trained operatives to recognize the pattern: this person has a target list, not an adventure itinerary. Running down this thread. Cross-reference: Foundry field rep sightings match The Seeker's entry dates."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "lore_coralshore_founding",
+      "title": "Coralshore: A Brief Civic History",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The founding of Coralshore is generally dated to Year 1 of the Civic Calendar, though historians note that this date refers to the first formal settlement charter rather than initial habitation of the site. The coastal cliffs above the current Promenade show evidence of pre-settlement occupation.",
+        "The first settlers found the cave system below the cliffs occupied but welcoming. The Dragon Compact was formalized in Year 1 as the town's founding legal document. The Gleaner's Guild was established in Year 2, becoming one of the oldest civic institutions in the region.",
+        "Coralshore has since grown into a model settlement: commerce on the surface, tradition below, and the Guild maintaining the balance between them. The town's long prosperity is frequently attributed by local scholars to the stability of the Compact."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_the_compact_annotated",
+      "title": "The Dragon Compact — Annotated Edition",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Let it be known that the entities of the lower chambers and the citizens of the surface have reached an accord, to be maintained in perpetuity and upheld by a Guild of appointed stewards. [Ed. note: 'Entities' is the term used in the original document. The beings are not named. This imprecision is unusual in a founding legal text.]",
+        "The obligations of each party are as follows. The entities of the lower chambers shall maintain the integrity of the deep floors and shall not ascend to the surface without invitation. The surface citizens shall maintain the transitional zones and shall not descend past the first chamber without Guild escort. [Ed. note: Guild escort provisions were quietly amended in Year 47 to allow academic expeditions.]",
+        "Historians note the unusual precision of the Compact's language, which reads as the work of legal scholars rather than frontier diplomats. The Admiralty's founding Coralshore chapter was established in the same calendar year as the Compact. Whether this is coincidence or coordination, the record does not specify."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_gleaner_guild_charter",
+      "title": "The Gleaner's Guild — Founding Charter, Year 2",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Be it known that the Gleaner's Guild is hereby established to serve the purposes of the Dragon Compact, to maintain the readiness of all transitional zones, and to provide trained stewards for the ongoing obligations of the surface-dwelling parties to the Compact.",
+        "Guild members are reminded that their work serves not commerce but covenant. The maintenance of these halls is a civic and legal obligation, not a labor contract. The Guild exists to fulfill a promise made to all parties at the founding of this settlement."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "lore_adventuring_economy",
+      "title": "The Adventuring Economy: A Survey",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The adventuring trade has grown from a small-scale local enterprise into Coralshore's primary export industry over the last forty years. Hero licensing, equipment sales, dungeon-route mapping, and post-expedition artifact recovery together now represent approximately 60% of all registered commercial activity.",
+        "The Foundry Collective's expansion into hero sponsorship, beginning approximately thirty years ago, is widely credited with professionalizing the trade. Sponsorship contracts standardized equipment, introduced liability frameworks, and created a reliable recruitment pipeline from the wider region.",
+        "Some economists have noted the curious correlation between Foundry Collective expansion into new regional markets and the subsequent increase in dragon sighting reports from those same areas. The Guild has attributed this to improved documentation practices. We leave further interpretation to the reader."
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "lore_dragon_naturalis",
+      "title": "On the Natural Philosophy of the Deep Dwellers",
+      "icon": "📖",
+      "category": "lore",
+      "pages": [
+        "The deep-dwelling specimens of Coralshore's lower chambers present a fascinating study in biological longevity. Examination of recovered specimens — cross-referenced with historical Compact documentation — suggests a natural lifespan significantly exceeding any comparable organism currently catalogued by the Guild's natural philosophy committee.",
+        "Organ structure in the deep-dwelling specimens reflects a degree of biological complexity that resists simple taxonomic classification. Tissue compatibility with standard preservation reagents is notably high, suggesting shared biochemical ancestry with surface organisms. The practical applications of this compatibility are under ongoing review by the Admiralty's medical research division.",
+        "Behavioral observation records from Years 1 through 147 — compiled before chamber access was restricted — indicate a degree of social intelligence in the deep-dwelling specimens inconsistent with the 'instinctive predator' classification currently used in Guild training materials. A formal reclassification proposal submitted in Year 44 was declined by the Admiralty Oversight Board. [REMAINDER OF SECTION REDACTED — ADMIRALTY BOARD, YEAR 44]"
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "lore_history_of_heroes",
+      "title": "A History of the Hero Trade in Coralshore",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The first formal adventuring company operating in Coralshore — The Breakwater Company — was established eighty years ago. At that time, the concept of professional dragon-hunting was largely unknown; the Company's initial charter described its purpose as 'exploration and recovery of sub-surface resources.'",
+        "The Foundry Collective opened its Coralshore armory the same year as the Breakwater Company's founding. Contemporary records do not document any formal relationship between the two. What is documented: The Breakwater Company's founding investors included several entities that later reorganized as Foundry subsidiaries.",
+        "The earliest hero recruits came with letters of recommendation from Foundry representatives. Guild records from that period describe this as a 'professional courtesy arrangement.' Contemporary historians have found the arrangement's persistence across three generations more difficult to characterize as mere courtesy."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "letter_foundry_field_report",
+      "title": "Foundry Collective — Field Bulletin 7-C",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Dragon event confirmed, Hero's Wake Floor B2. Harvest window estimated 48 hours from confirmed time of kill. Procurement team to coordinate with Tide Council receiving agent — confirm cache location before transfer. Reminder: the Moonpetal contract specifies whole tissue only; partial specimens will not be accepted at standard rate. The Guild Gleaner assigned to this rotation has not been briefed on procurement protocols. Keep it that way."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "letter_guild_memo_redacted",
+      "title": "GUILD MEMO — RESTRICTED — OVERSIGHT BOARD ONLY",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "MEMO — OVERSIGHT BOARD CIRCULATION ONLY\nRE: Active [REDACTED] Protocol Status\n\nThe [REDACTED] protocol has been suspended pending Oversight review. Field operatives assigned to [REDACTED] floors should not be informed of the suspension. Standard work orders will continue. Any anomalous findings reported by field operatives should be escalated to [REDACTED] before entering the standard incident log.",
+        "The Compact's [REDACTED] provisions remain in effect regardless of protocol status. Handler [REDACTED] has been notified and confirms continued monitoring. Oversight Board members are reminded that discussion of this memo outside of Board sessions is a contract violation. Archive and destroy field copies after seven days."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "letter_seeker_journal_fragment",
+      "title": "Torn Journal Page",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Day 14 in Coralshore. The dragon was not where the intelligence said it would be. When I reached the B2 cache point, the chamber had been cleaned. Not destroyed — cleaned. Equipment restocked. Traps reset. Someone had been here within the last 24 hours and tidied the evidence.",
+        "The 'monster reports' that brought me here were fabricated, or at least significantly embellished. The Guild janitor has been appearing at confirmed sites before my team arrives. Either this person is extraordinarily thorough, or they are being guided to these sites the same way I am being guided — and neither of us is seeing the full map."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "letter_father_ashworth",
+      "title": "Letter: F. Ashworth to the Inner Twelve",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Brothers, I will not dissemble. The arithmetic is clear. At the current hero cycle rate, the last Compact-protected specimens in the deep chambers will not survive another three years. I am proposing, for the final time, that we release the Providence Codex. Let the world know what the dragons are. Let the trade collapse. Yes, the Foundry will retaliate. Yes, the Tide Council will howl. But I was not brought into this order to preside over an extinction we engineered. I will not put my seal on another harvest ledger. — F.A."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "letter_dr_yuen_notes",
+      "title": "Research Notes — Dr. K. Yuen (Last Entry)",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "I have spent three years documenting longevity anomalies in the deep specimens. I believed I was contributing to a study of natural lifespan extension. I was wrong about the word 'natural.' I was wrong about the word 'study.' I have reviewed the Catacomb transfer logs from the last forty years. The specimens do not leave the Catacombs alive.",
+        "The Lamplit Catacombs are not a museum or a research facility. They are an abattoir with academic credentials. I am leaving these notes where I hope a curious and careful person finds them. Not a scholar — scholars here are the problem. A worker. Someone who comes through these halls and pays attention. Do not let them take these pages."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "letter_agent_crow_report",
+      "title": "Crow Report 22 — Eyes Only",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Weekly surveillance summary. Guild Gleaner: routine maintenance, no deviations from standard protocol, low threat classification maintained. May have accessed the Yuen materials in B2 — flagging for follow-up, non-urgent. The Seeker: threat level elevated. Running independent location grids that do not match our provided intelligence. Recommend Foundry consider interdiction before B2 access. Additional note: the Necromancer's restock schedules are irregular. Someone is maintaining a live holding area below the standard floor map. Investigating."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "letter_handler_vala",
+      "title": "Vala Dispatch — Encrypted (Partial Decrypt)",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "[PARTIAL DECRYPT — CIPHER KEY INCOMPLETE]\nGLEANER — if you are reading this, you found the second key. The Guild Oversight Board is not the institution described in the founding charter. Your Dispatcher is honest and uninformed. These are not the same thing.\n[GARBLED — 4 LINES]\nYour work matters more than your contract describes.",
+        "[DECRYPT RESUMES]\nLook for the Providence Codex. It exists. It will be held somewhere you would not expect a document of that significance to be stored — somewhere that looks like maintenance, not archives. Do not trust the [GARBLED]. Do not contact me through Guild channels.\n— V."
+      ],
+      "biome": "watchpost"
+    },
+    {
+      "id": "notice_coralshore_fauna_ordinance",
+      "title": "Coralshore Municipal Ordinance #47 — Subsurface Fauna Regulation",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "MUNICIPAL ORDINANCE #47\nRegulation of Deep-Dwelling Fauna — Extraction, Transport, and Commercial Handling\n\nAll extraction, transport, and commercial sale of biological material originating from classified subsurface zones (defined as any chamber below depth 2.0 as measured by the Guild Oversight Board's official depth register) must be coordinated through the Guild and logged with the Municipal Trade Office within 48 hours of recovery.",
+        "Specimens designated under the Providence Codex are subject to special handling protocols as defined by the Admiralty Oversight Board. Commercial handling of Providence Codex specimens without written Admiralty authorization is a Class 2 Civic Violation. Guild operatives are reminded to report any recovered material to their Dispatcher rather than directly to private buyers."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "notice_guild_foreign_investigators",
+      "title": "Guild Advisory — Handling of External Investigators",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "GUILD ADVISORY — ALL FIELD OPERATIVES\nRE: Inquiries from Non-Guild Investigators\n\nOperatives are advised that external investigators — including independent researchers, foreign trade representatives, and unsponsored heroes — may be conducting inquiries in the Coralshore area during the current season. Guild policy is as follows: cooperate fully with surface-level inquiries; do not escort external parties to subsurface zones without Oversight Board authorization.",
+        "If an external investigator asks about 'dragon activity' or 'Compact provisions,' operatives should provide the standard narrative as outlined in Guild Bulletin 4 and redirect to the Dispatcher's public intake. Do not discuss deep-floor inventory, reset schedules, or the contents of any crate marked with a Tide Council registry number. If in doubt, say nothing and report the inquiry."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "notice_tide_council_artifact_prices",
+      "title": "Tide Council Market — Premium Item Registry (Season 4)",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "TIDE COUNCIL PREMIUM REGISTRY — SEASON 4\n\nArtifact Grade: Standard Surface Recovery\nCeramic fragments (pre-Compact): 8c/unit\nMetalwork (unidentified origin): 12–18c/unit\nInscribed stonework: 22c/unit\nWeapon fragments (hero-grade): 5c/unit",
+        "Artifact Grade: Subsurface — Special Handling\nDragon-scale fragments (unprocessed): 40c/unit\nDeep structural fragments (confirmed sub-depth 2.0): 55c/unit\nPreserved tissue samples (sealed vial, Guild-certified): PRICE ON REQUEST\nCompact artifacts (pre-Year 300, Admiralty provenance): ADMIRALTY CONTRACT ONLY\n\nAll special handling inquiries to the Senior Factor. No walk-in pricing."
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "notice_hero_registration",
+      "title": "Hero Registration Requirements — Coralshore Guild Office",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "HERO LICENSING — REQUIREMENTS FOR REGISTRATION\n\nAll individuals wishing to operate as licensed heroes in Coralshore must complete the following: (1) Submit proof of combat certification from a recognized institution. (2) Disclose any sponsoring organization. (3) Complete Guild safety orientation. (4) Pay the licensing fee (12c standard, 6c reduced for Guild members).",
+        "Approved sponsoring organizations include: The Foundry Collective (Premier Sponsor), The Driftwood Adventuring Society, and individual Guild members in good standing. Please note: heroes sponsored by the Foundry Collective are subject to additional procurement reporting requirements as per the Foundry's standard rider agreement. See the Dispatcher for details."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "manual_admiralty_handbook",
+      "title": "The Scholar's Companion — Admiralty Field Reference, Vol. III",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "CHAPTER 7 — SPECIMEN CATALOGUING BY DEPTH ZONE\n\nSpecimens recovered from surface zones (depth 0–1.0) should be catalogued by morphological type using the standard Admiralty species register. Attach recovery location, approximate age, and condition notes. Label with the Guild certification stamp if Guild personnel were present at recovery.",
+        "For specimens recovered from transitional zones (depth 1.0–2.0), apply standard tissue preservation protocols before cataloguing. Vial sealing must be completed within six hours of recovery to maintain sample integrity. Ship to Moonpetal Apothecary receiving bay within the 48-hour transfer window.",
+        "For specimens found in chambers below depth 3.0 — catalogued as Provisional Compact Status — do not disturb without explicit Board authorization. Our mission is documentation, not intervention. If a specimen below depth 3.0 is encountered alive and exhibiting social behavior, withdraw and file a Level 1 observation report. Do not initiate contact. Do not take samples."
+      ],
+      "biome": "watchpost"
+    },
+    {
+      "id": "manual_adventurer_quarterly",
+      "title": "The Adventurer's Quarterly — Issue 52",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "THIS SEASON'S DESTINATION: CORALSHORE!\n\nLooking for a premier dragon-hunting destination with professional support, fresh dungeon resets every three days, and the best gear money can buy? Coralshore is THE address this season. The Gleaner's Guild ensures every floor is reset and restocked before you arrive — no cold trails, no depleted caches. Just clean halls and live targets.",
+        "GEAR SPOTLIGHT: The Foundry Collective's new Dragonsteel kit comes with a full season's service contract and a Coralshore dungeon-route map updated by Foundry field representatives. Pair it with a Foundry sponsorship rider and your procurement reporting is handled — you hunt, we handle the rest. Contact your nearest Foundry representative. Adventurer's Quarterly is a proud Foundry Collective publication."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "manual_foundry_contract_terms",
+      "title": "Foundry Collective — Hero Sponsorship Agreement",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "FOUNDRY COLLECTIVE SPONSORSHIP AGREEMENT — STANDARD TIER\n\nThe Foundry Collective agrees to provide the sponsored hero with: equipment at cost, dungeon intelligence briefings, field support contact, and procurement coordination services. In exchange, the hero agrees to: complete all assigned runs within the designated season window, report all significant organic finds to the assigned Foundry field representative within 12 hours.",
+        "The hero further agrees to: accept procurement guidance from Foundry field agents when guidance is provided, prioritize dragon-class encounters over other targets when Foundry intelligence identifies an active site, and maintain confidentiality regarding the specific terms of this agreement. Violations of the procurement reporting clause void all equipment provisions retroactively. Standard contract term: one season."
+      ],
+      "biome": "dungeon"
     }
   ]
 }
