@@ -184,7 +184,7 @@
       "pages": [
         "ARTICLE I — CONTRACTOR DUTIES. The Contractor agrees to perform all assigned maintenance, restock, and cleaning functions within the designated floor zones. Assignments are issued by the Guild Dispatcher on a rolling three-day cycle. Contractor will maintain all equipment in Guild-certified condition.",
         "ARTICLE II — COMPENSATION. Payment is calculated per completed floor reset, per cleaned tile (0.4c), and per restocked crate (2c base, suit-match bonus applies). Hazard pay is available for floors designated as active combat zones. Guild dues are deducted at 8% of gross.",
-        "ARTICLE III — NON-DISCLOSURE. Contractor agrees not to disclose the contents of any chamber below depth 2.0 without written authorization from the Guild Oversight Board. Contractor agrees not to remove, copy, or transmit any document, artifact, or biological material designated under the Providence Codex. Violation terminates contract."
+        "ARTICLE III — NON-DISCLOSURE. Contractor agrees not to disclose the contents of any chamber below depth 2.0 without written authorization from the Guild Oversight Board. Contractor agrees not to remove, copy, or transmit any document, artifact, or biological material designated under the Providence Codex (Admiralty Oversight Board Classification Registry, Section 9). Violation terminates contract."
       ],
       "biome": "home"
     },
@@ -253,7 +253,7 @@
       "category": "lore",
       "pages": [
         "Be it known that the Gleaner's Guild is hereby established to serve the purposes of the Dragon Compact, to maintain the readiness of all transitional zones, and to provide trained stewards for the ongoing obligations of the surface-dwelling parties to the Compact.",
-        "Guild members are reminded that their work serves not commerce but covenant. The maintenance of these halls is a civic and legal obligation, not a labor contract. The Guild exists to fulfill a promise made to all parties at the founding of this settlement."
+        "Guild members are reminded that their work serves not commerce but Compact. The maintenance of these halls is a civic and legal obligation, not a labor contract. The Guild exists to fulfill a promise made to all parties at the founding of this settlement."
       ],
       "biome": "guild"
     },
@@ -277,7 +277,7 @@
       "pages": [
         "The deep-dwelling specimens of Coralshore's lower chambers present a fascinating study in biological longevity. Examination of recovered specimens — cross-referenced with historical Compact documentation — suggests a natural lifespan significantly exceeding any comparable organism currently catalogued by the Guild's natural philosophy committee.",
         "Organ structure in the deep-dwelling specimens reflects a degree of biological complexity that resists simple taxonomic classification. Tissue compatibility with standard preservation reagents is notably high, suggesting shared biochemical ancestry with surface organisms. The practical applications of this compatibility are under ongoing review by the Admiralty's medical research division.",
-        "Behavioral observation records from Years 1 through 147 — compiled before chamber access was restricted — indicate a degree of social intelligence in the deep-dwelling specimens inconsistent with the 'instinctive predator' classification currently used in Guild training materials. A formal reclassification proposal submitted in Year 44 was declined by the Admiralty Oversight Board. [REMAINDER OF SECTION REDACTED — ADMIRALTY BOARD, YEAR 44]"
+        "Behavioral observation records from Years 1 through 147 — compiled before chamber access was restricted — indicate a degree of social intelligence in the deep-dwelling specimens inconsistent with the 'instinctive predator' classification currently used in Guild training materials. A formal reclassification proposal, submitted in Year 44 on the basis of the first generation of observation records, was declined by the Admiralty Oversight Board. Chamber access was restricted the following year. [REMAINDER OF SECTION REDACTED — ADMIRALTY BOARD, YEAR 44]"
       ],
       "biome": "dungeon"
     },
