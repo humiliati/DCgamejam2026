@@ -181,11 +181,44 @@ All five design documents, their scope, and section inventories. Each document n
 | §5 Bar Counter Interactions | BAR_COUNTER tile (26) properties, BarCounterPeek module, per-biome drink menus, "micro-bonfire" design intent |
 | §6 Per-Building Interaction Inventory | Full tile inventories for Entry Lobby, Bazaar, Inn, Guild, Home, Watchman's Post |
 | §7 Cozy Minigame Stubs | Post-jam roadmap: card sorting table, trophy shelf, cooking pot, notice board puzzle, music box |
-| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (13 books), how to add new books |
+| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (38 books: 13 original + 25 conspiracy lore), how to add new books |
 | §9 Peek Overlay Module Specs | BookshelfPeek API table + BarCounterPeek API table with full method signatures |
 | §10 Juice — Interiors Feel Like Home | Time-freeze juice, bookshelf juice, bar counter juice, building ambient juice |
 | §11 Implementation Status & Roadmap | Phase A.0 (complete), Phase B (day cycle + home), Phase C (interior polish), Post-jam (minigames) |
 | §12 Cross-References | Links to DOC-7/DOC-2/DOC-9 sections and engine files |
+
+### DOC-11: STREET_CHRONICLES_NARRATIVE_OUTLINE.md
+> **Scope**: Narrative bible for Dungeon Gleaner. Covers the full conspiracy structure (Dragon Compact origins, Foundry Collective infiltration, Admiralty schism, Necromancer's pivot), faction table with in-game proper nouns, proper noun alignment table (real-world → in-game), key NPCs, Act 1 story arcs (jam scope), breadcrumb revelation order across four phases, biome-narrative integration, and tone notes. **Source of truth for all in-game text, NPC dialogue, and book content.**
+
+| Section | Content |
+|---------|---------|
+| Core Premise | Dragon Compact context; four-faction summary; Gleaner's unwitting position |
+| Faction Table | Tide Council / Foundry Collective / Admiralty / Necromancer / Guild / Seeker — symbols, HQs, public vs hidden roles |
+| Proper Noun Alignment | Real-world concept → in-game name cross-reference (contributor knowledge only) |
+| Full Conspiracy Timeline | Four eras: Founding (400yr) → Foundry Discovery (80yr) → Necromancer's Pivot → Now |
+| Key NPCs | 7 NPCs: Dispatcher, The Seeker, Father Ashworth, Dr. Yuen, Agent Crow, Handler Vala, The Necromancer |
+| Story Arcs | Act 1 beats 1–6; three-way choice ending (standard report / report anomaly / contact Vala) |
+| Breadcrumb Revelation Order | Four phases keyed to book IDs and floor locations |
+| Biome-Narrative Integration | Per-floor narrative function and key document assignments |
+| Tone Notes | No nihilism; Gleaner's dry spy voice; tragedy not thriller; writing register guidelines |
+
+### DOC-12: GRAND_CONSPIRACY_LORE_BIBLE.md
+> **Scope**: Full internal conspiracy tree at Metal Gear Solid scale. **Contributor-only, not player-facing.** Covers the Admiralty's chimera engineering program, the Foundry Collective's discovery and infiltration architecture, the Necromancer's fall and pivot strategy, the Admiralty's internal schism (Father Ashworth / Dr. Yuen / Providence Codex), the industrialization of adventuring as a self-reinforcing systemic problem, the Tide Council's moral compromise, three Act 1 player endings, chapter-by-chapter revelation order, and a cross-reference table for all 25 conspiracy-layer book IDs and their floor placements.
+
+| Section | Content |
+|---------|---------|
+| One-Sentence Version | Single-sentence full conspiracy summary |
+| Full Conspiracy Tree | ASCII dependency tree: all six factions, their actions, and cross-faction links |
+| Origin Story | What the public knows vs what actually happened — the Admiralty's chimera engineering |
+| Foundry Discovery | The Crow Predecessor Documents; four-step infiltration architecture (Licensing / Sponsorship / Media / Tide Council) |
+| Necromancer's Fall | The guardian's pivot; dungeon reset economy as cover; Gleaner as unwitting operative |
+| Admiralty Schism | Father Ashworth's Providence Codex proposal; Dr. Yuen's independent discovery and disappearance |
+| Industrialization | Self-reinforcing loop diagram; moral architecture of distributed responsibility |
+| Tide Council | "The Third Factor" incident; chosen complicity; 40% revenue dependency |
+| Player Agency | Three endings: Complicity / Disruption / Resistance |
+| Chapter Revelation Order | Seven chapters from Day One to The Report; key book ID per chapter |
+| Book ID Cross-Reference | Full table: 25 books × floor placement |
+| Design Notes | Writing guidelines: no fourth-wall breaks; dragon sapience; Gleaner's voice arc; Seeker ambiguity; Necromancer's inscrutability |
 
 ---
 
