@@ -86,7 +86,7 @@ The Admiralty did not discover dragons in Coralshore. They placed them there.
 
 Eighty years before the founding of Coralshore, the Admiralty's predecessor institution had been studying a class of long-lived chimeric organisms of unclear origin — beings that appeared in fragmentary records from multiple ancient civilizations, always described as protectors, always associated with sacred sites. The Admiralty recognized a pattern: these beings were bioengineered, not naturally evolved. Someone had made them, for a purpose, a very long time ago.
 
-The Admiralty believed they could replicate the engineering. They were correct.
+The Admiralty believed they could replicate the engineering from these ancient templates — reverse-engineering, not original creation. They were correct.
 
 The Admiralty's "dragons" introduced to Coralshore were not wild creatures. They were purpose-bred specimens — chimeric beings with:
 - Extreme longevity (400+ year natural lifespan without intervention)
