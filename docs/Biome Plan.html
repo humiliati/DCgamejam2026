@@ -186,7 +186,7 @@
     <td>Building interior (shop, inn, guild). 2x wall height. Fog CLAMP. Solid ceiling. Template-based layout.</td>
   </tr>
   <tr>
-    <td>3</td><td><code>"N.N.N"</code></td><td><code>"1.1.1"</code></td>
+    <td>3</td><td><code>"N.N.N"</code></td><td><code>"1.3.1"</code></td>
     <td><code>SpatialContract.nestedDungeon()</code></td>
     <td>Dungeon (the Hero's mess). Proc-gen. Fog DARKNESS. Void ceiling. 1x wall height (with chamber overrides for boss rooms).</td>
   </tr>
@@ -207,7 +207,7 @@
 </table>
 
 <div class="note">
-  <strong>Door sound grammar:</strong> <code>DoorContractAudio</code> uses the <code>"srcDepth:tgtDepth"</code> pair to select the correct sound sequence. Moving from <code>"1"</code> to <code>"1.1"</code> plays a different creak than <code>"1.1"</code> to <code>"1.1.1"</code>. This is already wired &mdash; just set the floor IDs correctly.
+  <strong>Door sound grammar:</strong> <code>DoorContractAudio</code> uses the <code>"srcDepth:tgtDepth"</code> pair to select the correct sound sequence. Moving from <code>"1"</code> to <code>"1.1"</code> plays a different creak than <code>"1.1"</code> to <code>"1.3.1"</code>. This is already wired &mdash; just set the floor IDs correctly.
 </div>
 
 <hr>
@@ -294,7 +294,7 @@
     <td>Promenade (<code>"1"</code>)</td>
     <td><code>'bazaar'</code></td>
     <td>Main shop. Buy/sell loot. Chrome display cases, sunset light through high windows. Warm coral-and-gold interior &mdash; the town's signature palette intensified indoors. <strong>First dungeon is accessed from here.</strong></td>
-    <td>Yes &rarr; <code>"1.1.1"</code></td>
+    <td>Yes &rarr; <code>"1.3.1"</code></td>
   </tr>
   <tr>
     <td><code>"1.2"</code></td>
@@ -310,7 +310,7 @@
     <td>Lantern Gardens (<code>"2"</code>)</td>
     <td><code>'inn'</code></td>
     <td>Rest point (full heal). NPC dialogue about dragons, the Hero, town history. Warm amber-and-jade interior &mdash; lantern light on driftwood beams. Inn cellar leads to second dungeon.</td>
-    <td>Yes &rarr; <code>"2.1.1"</code></td>
+    <td>Yes &rarr; <code>"2.2.1"</code></td>
   </tr>
   <tr>
     <td><code>"2.2"</code></td>
@@ -380,7 +380,7 @@
 <table>
   <tr><th>Floor ID</th><th>Dungeon Name</th><th>Parent Interior</th><th>Biome</th><th>Narrative</th><th>Difficulty</th></tr>
   <tr>
-    <td><code>"1.1.1"</code></td>
+    <td><code>"1.3.1"</code></td>
     <td>Coral Cellars</td>
     <td>Coral Bazaar (<code>"1.1"</code>)</td>
     <td><code>'cellar'</code></td>
@@ -388,7 +388,7 @@
     <td>Very Easy. 3&ndash;4 comedic remnants. Safe learning environment.</td>
   </tr>
   <tr>
-    <td><code>"2.1.1"</code></td>
+    <td><code>"2.2.1"</code></td>
     <td>Lamplit Catacombs</td>
     <td>Driftwood Inn (<code>"2.1"</code>)</td>
     <td><code>'catacomb'</code></td>
@@ -870,19 +870,19 @@
   </tr>
   <tr>
     <td>Gleaner's Lantern</td>
-    <td><code>"1.1.1"</code> Coral Cellars</td>
+    <td><code>"1.3.1"</code> Coral Cellars</td>
     <td><code>TORCH</code> light source (radius 6). Found near the opening sequence area &mdash; the Hero dropped it.</td>
     <td>Required for darker dungeons</td>
   </tr>
   <tr>
     <td>Dragon Scale Fragment</td>
-    <td><code>"1.1.1"</code> Coral Cellars</td>
+    <td><code>"1.3.1"</code> Coral Cellars</td>
     <td>Lore item. Mosaic on the wall. Interacting reveals text about "the Scaled Ones."</td>
     <td>Sets <code>dragon_clue_1</code>. NPC dialogue branches.</td>
   </tr>
   <tr>
     <td>Catacomb Inscription Rubbing</td>
-    <td><code>"2.1.1"</code> Lamplit Catacombs</td>
+    <td><code>"2.2.1"</code> Lamplit Catacombs</td>
     <td>Lore item. Ancient text praising dragons as protectors of the dead.</td>
     <td>Sets <code>dragon_clue_2</code>. Inn NPCs reveal more about the Hero's mission.</td>
   </tr>
@@ -1063,7 +1063,7 @@ FloorTransition.tryInteractDoor(fx, fy)       &lt;-- extend existing module
   |     "1.1" --&gt; 'bazaar', "1.2" --&gt; 'guild',
   |     "2.1" --&gt; 'inn', "2.2" --&gt; 'apothecary',
   |     "3.1" --&gt; 'armory'
-  |     "1.1.1" --&gt; 'cellar', "2.1.1" --&gt; 'catacomb', "3.1.1" --&gt; 'depths'
+  |     "1.3.1" --&gt; 'cellar', "2.2.1" --&gt; 'catacomb', "3.1.1" --&gt; 'depths'
   |-- Raycaster.setContract(contract, rooms)
   |-- Raycaster.setBiomeColors(palette)
   v
@@ -1071,7 +1071,7 @@ Player spawns near target door on new floor
   (DoorContracts.applyContract handles placement)
 
 
-Player enters Coral Cellars for first time (floorId "1.1.1")
+Player enters Coral Cellars for first time (floorId "1.3.1")
   |
   v
 FloorManager checks QuestTracker.get('opening_complete')

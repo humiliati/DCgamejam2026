@@ -14,18 +14,19 @@ var InteractPrompt = (function () {
   var MC = MovementController;
 
   // ── Config ──────────────────────────────────────────────────────
-  var FADE_IN   = 150;   // ms fade-in
-  var FADE_OUT  = 100;   // ms fade-out
-  var BOX_H     = 28;    // Prompt box height
-  var BOX_PAD   = 14;    // Horizontal padding
-  var BOX_RAD   = 6;     // Corner radius
-  var BOX_Y_OFF = 80;    // Pixels from bottom of viewport
+  var FADE_IN   = 120;   // ms fade-in
+  var FADE_OUT  = 80;    // ms fade-out
+  var BOX_H     = 52;    // Prompt box height (large, tactile)
+  var BOX_PAD   = 24;    // Horizontal padding
+  var BOX_RAD   = 10;    // Corner radius
+  var BOX_Y_OFF = 200;   // Pixels from bottom — must clear status bar (120px) + card tray
 
   // ── Colors ──────────────────────────────────────────────────────
-  var COL_BG      = 'rgba(10,8,18,0.82)';
-  var COL_BORDER  = 'rgba(200,180,120,0.45)';
+  var COL_BG      = 'rgba(10,8,18,0.88)';
+  var COL_BORDER  = 'rgba(200,180,120,0.55)';
   var COL_KEY     = '#f0d070';     // [OK] highlight
-  var COL_ACTION  = '#d8d0c0';     // Action text
+  var COL_ACTION  = '#e0d8c8';     // Action text
+  var COL_GLOW    = 'rgba(240,208,112,0.12)'; // Ambient glow behind box
 
   // ── Tile → action label map ─────────────────────────────────────
   var ACTION_MAP = {};
@@ -54,6 +55,8 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.PUZZLE]    = { action: 'interact.reset',   icon: '🧩' };
     ACTION_MAP[TILES.BOOKSHELF] = { action: 'interact.read',    icon: '📖' };
     ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
+    ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
+    ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
   }
 
   /**
@@ -113,6 +116,18 @@ var InteractPrompt = (function () {
       return;
     }
 
+    // Blood tile cleaning — walkable tile with blood on it
+    if (typeof CleaningSystem !== 'undefined') {
+      var flId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+      if (CleaningSystem.isDirty(fx, fy, flId)) {
+        _visible = true;
+        var bloodLvl = CleaningSystem.getBlood(fx, fy, flId);
+        _actionText = i18n.t('interact.clean', 'Scrub') + ' (' + bloodLvl + '/' + CleaningSystem.MAX_BLOOD + ')';
+        _iconText = '🧹';
+        return;
+      }
+    }
+
     // Check for enemies on the facing tile (NPC interaction — future)
     var enemies = FloorManager.getEnemies();
     for (var i = 0; i < enemies.length; i++) {
@@ -154,10 +169,11 @@ var InteractPrompt = (function () {
 
     ctx.save();
     ctx.globalAlpha = _alpha;
-    ctx.font = '12px monospace';
+    ctx.font = 'bold 20px monospace';
 
     var keyW = ctx.measureText(keyLabel).width;
-    var actW = ctx.measureText(' ' + fullText).width;
+    ctx.font = '20px monospace';
+    var actW = ctx.measureText('  ' + fullText).width;
     var boxW = BOX_PAD * 2 + keyW + actW;
     var boxX = (vpW - boxW) / 2;
     var boxY = vpH - BOX_Y_OFF;
@@ -176,31 +192,49 @@ var InteractPrompt = (function () {
       }
     }
 
+    // Ambient glow halo behind the box
+    var glowR = boxW * 0.6;
+    var grd = ctx.createRadialGradient(
+      boxX + boxW / 2, boxY + BOX_H / 2, 0,
+      boxX + boxW / 2, boxY + BOX_H / 2, glowR
+    );
+    grd.addColorStop(0, _hovered ? 'rgba(240,208,112,0.18)' : COL_GLOW);
+    grd.addColorStop(1, 'rgba(240,208,112,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(boxX - glowR, boxY - glowR + BOX_H / 2, boxW + glowR * 2, glowR * 2);
+
     // Background — brighter when hovered
     _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
-    ctx.fillStyle = _hovered ? 'rgba(30,25,40,0.92)' : COL_BG;
+    ctx.fillStyle = _hovered ? 'rgba(30,25,40,0.94)' : COL_BG;
     ctx.fill();
+
+    // Border with subtle glow
+    ctx.shadowColor = 'rgba(240,208,112,0.25)';
+    ctx.shadowBlur = _hovered ? 12 : 6;
     ctx.strokeStyle = _hovered ? '#f0d070' : COL_BORDER;
-    ctx.lineWidth = _hovered ? 1.5 : 1;
+    ctx.lineWidth = _hovered ? 2.5 : 1.5;
     _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    // Key label
+    // Key label (bold)
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
+    ctx.font = 'bold 20px monospace';
     ctx.fillStyle = COL_KEY;
     ctx.fillText(keyLabel, boxX + BOX_PAD, boxY + BOX_H / 2);
 
     // Action text
+    ctx.font = '20px monospace';
     ctx.fillStyle = _hovered ? '#fff' : COL_ACTION;
-    ctx.fillText(' ' + fullText, boxX + BOX_PAD + keyW, boxY + BOX_H / 2);
+    ctx.fillText('  ' + fullText, boxX + BOX_PAD + keyW, boxY + BOX_H / 2);
 
     // Pointer cursor hint (clickable affordance)
     if (_hovered) {
-      ctx.fillStyle = 'rgba(240,208,112,0.5)';
-      ctx.font = '9px monospace';
+      ctx.fillStyle = 'rgba(240,208,112,0.55)';
+      ctx.font = '12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('▶ click', boxX + boxW / 2, boxY + BOX_H + 10);
+      ctx.fillText('\u25b6 click', boxX + boxW / 2, boxY + BOX_H + 16);
     }
 
     ctx.restore();

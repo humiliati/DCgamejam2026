@@ -219,6 +219,35 @@ var TextureAtlas = (function () {
       glassR: 10, glassG: 25, glassB: 45    // Lighter — looking toward surface
     });
 
+    // Bed — warm quilted blanket texture, pillow band at top
+    _genBed('bed_quilt', {
+      blanketR: 100, blanketG: 55, blanketB: 45,   // Deep burgundy-rust
+      pillowR: 180, pillowG: 170, pillowB: 155,    // Off-white linen pillow
+      frameR: 70,   frameG: 48,   frameB: 28        // Dark wood frame
+    });
+
+    // Table — flat-top work surface, warm wood with tool clutter
+    _genTable('table_wood', {
+      topR: 120, topG: 85, topB: 50,      // Lighter work surface
+      legR: 75,  legG: 50, legB: 30,      // Dark wood legs
+      clothR: 90, clothG: 60, clothB: 40  // Stained cloth runner
+    });
+
+    // Hearth — riverrock column with fire opening (dark archway center)
+    _genHearth('hearth_riverrock', {
+      stoneR: 95,  stoneG: 88,  stoneB: 78,    // Warm grey-brown river stones
+      mortarR: 50, mortarG: 45, mortarB: 38,    // Dark mortar between stones
+      fireR: 180,  fireG: 80,   fireB: 20,     // Orange fire glow at opening edges
+      openR: 10,   openG: 5,    openB: 2        // Near-black fire opening
+    });
+
+    // Stash — reinforced chest with iron bands and latch
+    _genStashChest('stash_chest', {
+      woodR: 95,   woodG: 65,  woodB: 35,   // Medium oak
+      bandR: 70,   bandG: 72,  bandB: 78,   // Iron bands
+      latchR: 160, latchG: 140, latchB: 60  // Brass latch
+    });
+
     // Locked door — iron-banded wood with chain + lock overlay
     _genDoorLocked('door_locked', {
       baseR: 100, baseG: 68, baseB: 38,      // Wood base
@@ -1529,6 +1558,219 @@ var TextureAtlas = (function () {
       imgData.data.set(d);
       ctx.putImageData(imgData, 0, 0);
     }
+  }
+
+  // ── Bed texture (quilted blanket, pillow at top, wood frame) ────
+
+  function _genBed(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Frame border (bottom 6px, sides 3px)
+      if (y >= S - 6 || x < 3 || x >= S - 3) {
+        var fNoise = (_hash(x + 90, y + 91) - 0.5) * 8;
+        return {
+          r: _clamp(p.frameR + fNoise),
+          g: _clamp(p.frameG + fNoise * 0.7),
+          b: _clamp(p.frameB + fNoise * 0.4)
+        };
+      }
+
+      // Pillow band (top 16px)
+      if (y < 16) {
+        var pNoise = (_hash(x + 200, y + 201) - 0.5) * 10;
+        // Pillow puff shadow — subtle sine wave
+        var puffShadow = Math.sin(x * 0.3) * 6 - 3;
+        return {
+          r: _clamp(p.pillowR + pNoise + puffShadow),
+          g: _clamp(p.pillowG + pNoise + puffShadow),
+          b: _clamp(p.pillowB + pNoise + puffShadow * 0.5)
+        };
+      }
+
+      // Quilted blanket — diamond quilt stitch pattern
+      var qx = (x % 12) - 6;
+      var qy = ((y - 16) % 12) - 6;
+      var onStitch = (Math.abs(qx + qy) < 1) || (Math.abs(qx - qy) < 1);
+      var stitchDarken = onStitch ? -15 : 0;
+
+      // Color variation per quilt diamond
+      var diamondSeed = _hash(Math.floor(x / 12), Math.floor((y - 16) / 12));
+      var hueShift = (diamondSeed - 0.5) * 20;
+      var bNoise = (_hash(x + 300, y + 301) - 0.5) * 8;
+
+      return {
+        r: _clamp(p.blanketR + hueShift + bNoise + stitchDarken),
+        g: _clamp(p.blanketG + hueShift * 0.5 + bNoise * 0.7 + stitchDarken),
+        b: _clamp(p.blanketB + hueShift * 0.3 + bNoise * 0.4 + stitchDarken)
+      };
+    });
+  }
+
+  // ── Table texture (work surface top, dark legs, cloth runner) ──
+
+  function _genTable(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Table legs (bottom 20px, two pillars at x 8-14 and 50-56)
+      if (y >= S - 20) {
+        var isLeg = (x >= 8 && x < 15) || (x >= S - 15 && x < S - 8);
+        if (isLeg) {
+          var lNoise = (_hash(x + 400, y + 401) - 0.5) * 6;
+          return {
+            r: _clamp(p.legR + lNoise),
+            g: _clamp(p.legG + lNoise * 0.7),
+            b: _clamp(p.legB + lNoise * 0.4)
+          };
+        }
+        // Shadow under table (dark between legs)
+        return { r: 15, g: 12, b: 10 };
+      }
+
+      // Table top (upper portion) — wood grain with cloth runner down center
+      var isRunner = (x >= S / 2 - 8 && x < S / 2 + 8);
+      if (isRunner && y >= 6 && y < S - 24) {
+        // Cloth runner texture
+        var cNoise = (_hash(x + 500, y + 501) - 0.5) * 10;
+        var weave = ((x + y) % 3 === 0) ? -5 : 0;
+        return {
+          r: _clamp(p.clothR + cNoise + weave),
+          g: _clamp(p.clothG + cNoise * 0.7 + weave),
+          b: _clamp(p.clothB + cNoise * 0.5 + weave)
+        };
+      }
+
+      // Wood surface
+      var grain = Math.sin(x * 0.4 + _hash(x, 0) * 3) * 0.5 + 0.5;
+      var darkGrain = grain < 0.3 ? 0.75 : 1.0;
+      var tNoise = (_hash(x + 600, y + 601) - 0.5) * 8;
+
+      return {
+        r: _clamp(p.topR * darkGrain + tNoise),
+        g: _clamp(p.topG * darkGrain + tNoise * 0.7),
+        b: _clamp(p.topB * darkGrain + tNoise * 0.4)
+      };
+    });
+  }
+
+  // ── Stash chest texture (reinforced wood box with iron bands) ──
+
+  function _genStashChest(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Iron bands — horizontal at y=8, y=S/2, y=S-8
+      var bandY = (y % Math.floor(S / 2));
+      var isBand = bandY < 4 || (y >= 6 && y < 10) || (y >= S - 10 && y < S - 6);
+      if (isBand) {
+        var bNoise = (_hash(x + 700, y + 701) - 0.5) * 6;
+        // Rivet dots every 12px
+        var isRivet = (x % 12 < 3 && (y === 7 || y === 8 || y === S - 9 || y === S - 8));
+        return {
+          r: _clamp(p.bandR + bNoise + (isRivet ? 20 : 0)),
+          g: _clamp(p.bandG + bNoise + (isRivet ? 22 : 0)),
+          b: _clamp(p.bandB + bNoise + (isRivet ? 25 : 0))
+        };
+      }
+
+      // Latch (center, at vertical midpoint)
+      if (x >= S / 2 - 4 && x < S / 2 + 4 && y >= S / 2 - 3 && y < S / 2 + 3) {
+        return {
+          r: _clamp(p.latchR),
+          g: _clamp(p.latchG),
+          b: _clamp(p.latchB)
+        };
+      }
+
+      // Wood body — vertical grain
+      var grain = Math.sin(x * 0.35 + _hash(x, 0) * 2.5) * 0.5 + 0.5;
+      var darkGrain = grain < 0.25 ? 0.7 : 1.0;
+      var wNoise = (_hash(x + 800, y + 801) - 0.5) * 10;
+
+      return {
+        r: _clamp(p.woodR * darkGrain + wNoise),
+        g: _clamp(p.woodG * darkGrain + wNoise * 0.7),
+        b: _clamp(p.woodB * darkGrain + wNoise * 0.4)
+      };
+    });
+  }
+
+  // ── Hearth texture (riverrock masonry with arched fire opening) ──
+
+  function _genHearth(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // ── Fire opening: arched doorway shape in center ──
+      // Arch: half-ellipse top, rectangular bottom
+      var openLeft  = cx - 12;
+      var openRight = cx + 12;
+      var openTop   = 14;
+      var openBot   = S - 6;
+      var archCY    = openTop + 6;
+      var archRX    = 12;
+      var archRY    = 8;
+
+      var inOpenX = (x >= openLeft && x <= openRight);
+      var inOpenRect = inOpenX && (y >= archCY && y <= openBot);
+
+      // Arch ellipse test
+      var dx = (x - cx) / archRX;
+      var dy = (y - archCY) / archRY;
+      var inArch = inOpenX && (y < archCY) && (dx * dx + dy * dy <= 1.0);
+
+      if (inOpenRect || inArch) {
+        // Inside the fire opening — dark with subtle fire glow at edges
+        var edgeDist = Math.min(
+          Math.abs(x - openLeft), Math.abs(x - openRight),
+          Math.abs(y - openBot), inArch ? 2 : Math.abs(y - archCY)
+        );
+        var glowFade = Math.max(0, 1 - edgeDist / 5);
+        var flicker = (_hash(x + 900, y + 901) - 0.5) * 30 * glowFade;
+        return {
+          r: _clamp(p.openR + p.fireR * glowFade + flicker),
+          g: _clamp(p.openG + p.fireG * glowFade * 0.4 + flicker * 0.3),
+          b: _clamp(p.openB + p.fireB * glowFade * 0.1)
+        };
+      }
+
+      // ── Riverrock masonry — irregular rounded stones ──
+      // Use offset grid to create interlocking stone pattern
+      var stoneW = 10;
+      var stoneH = 7;
+      var rowOff = (Math.floor(y / stoneH) % 2 === 0) ? 0 : stoneW / 2;
+      var stoneCol = Math.floor((x + rowOff) / stoneW);
+      var stoneRow = Math.floor(y / stoneH);
+      var localX = (x + rowOff) - stoneCol * stoneW;
+      var localY = y - stoneRow * stoneH;
+
+      // Mortar gaps (1px border around each stone)
+      if (localX < 1 || localX >= stoneW - 1 || localY < 1 || localY >= stoneH - 1) {
+        var mNoise = (_hash(x + 1000, y + 1001) - 0.5) * 6;
+        return {
+          r: _clamp(p.mortarR + mNoise),
+          g: _clamp(p.mortarG + mNoise * 0.8),
+          b: _clamp(p.mortarB + mNoise * 0.6)
+        };
+      }
+
+      // Stone face — per-stone color variation + rounded edge darkening
+      var stoneSeed = _hash(stoneCol * 7 + 33, stoneRow * 13 + 77);
+      var stoneHue = (stoneSeed - 0.5) * 25;
+      var edgeX = Math.min(localX - 1, stoneW - 2 - localX) / (stoneW / 2 - 1);
+      var edgeY = Math.min(localY - 1, stoneH - 2 - localY) / (stoneH / 2 - 1);
+      var edgeDarken = Math.min(edgeX, edgeY);
+      edgeDarken = 0.7 + 0.3 * Math.min(1, edgeDarken * 2); // Rounded falloff
+      var pixN = (_hash(x + 1100, y + 1101) - 0.5) * 8;
+
+      return {
+        r: _clamp((p.stoneR + stoneHue) * edgeDarken + pixN),
+        g: _clamp((p.stoneG + stoneHue * 0.6) * edgeDarken + pixN * 0.8),
+        b: _clamp((p.stoneB + stoneHue * 0.3) * edgeDarken + pixN * 0.6)
+      };
+    });
   }
 
   // ── Public API ──────────────────────────────────────────────────

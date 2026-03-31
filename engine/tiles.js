@@ -32,7 +32,10 @@ var TILES = (function () {
     PUZZLE:      23,  // Sliding-tile puzzle panel — solved state, player disorganizes
     LOCKED_DOOR: 24,  // Locked door — requires key item to open
     BOOKSHELF:   25,  // Interior furnishing — face to read a tip/lore page (peek overlay)
-    BAR_COUNTER: 26   // Interior furnishing — face to tap for a small stat boost (finite uses)
+    BAR_COUNTER: 26,  // Interior furnishing — face to tap for a small stat boost (finite uses)
+    BED:         27,  // Interior furnishing — half-height, face to rest (bonfire equivalent)
+    TABLE:       28,  // Interior furnishing — half-height, face for cozy inspection
+    HEARTH:      29   // Fireplace — opaque column, fire emoji, incinerator + bonfire rest
   };
 
   /** Check if a tile blocks movement */
@@ -54,7 +57,7 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH;
   };
 
   /** Check if tile is a door of any kind */

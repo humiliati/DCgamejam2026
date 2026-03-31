@@ -42,7 +42,11 @@ var NpcComposer = (function () {
     scholar:  { hats: ['🎓','🎓','🎩'],     weapons: ['📜','🪄','📜'],        torsos: ['🥼','👔','🥼'] },
     citizen:  { hats: ['','','','🧢','👒'],  weapons: ['','','',''],            torsos: ['👕','🎽','👘','🧥'] },
     rogue:    { hats: ['','',''],             weapons: ['🗡️','🏹','🗡️'],      torsos: ['🥷','🖤','🥷'] },
-    priest:   { hats: ['','👑',''],           weapons: ['','🪄',''],            torsos: ['👘','👘','🥼'] }
+    priest:   { hats: ['','👑',''],           weapons: ['','🪄',''],            torsos: ['👘','👘','🥼'] },
+    // ── Faction uniforms (GTA2-style gang visuals) ──
+    tide_member:      { hats: ['🎓','','',''],      weapons: ['🪄','🔱','',''],    torsos: ['👘','🥼','👘'],   tintHue: 200 },
+    foundry_member:   { hats: ['⛑️','🧢','⛑️'],   weapons: ['🔧','🪓','⚔️'],    torsos: ['🦺','🧥','🦺'],  tintHue: 30  },
+    admiralty_member:  { hats: ['🪖','👑','🪖'],    weapons: ['🛡️','🏹','⚔️'],   torsos: ['🧥','👔','🧥'],  tintHue: 280 }
   };
 
   // ── Named vendor presets ────────────────────────────────────────
@@ -105,11 +109,11 @@ var NpcComposer = (function () {
     var legPool    = LEGS;
 
     // Override pools for role-specific NPCs
-    if (role && ROLES[role]) {
-      var r = ROLES[role];
-      if (r.hats)    hatPool    = r.hats;
-      if (r.weapons) weaponPool = r.weapons;
-      if (r.torsos)  torsoPool  = r.torsos;
+    var roleDef = (role && ROLES[role]) ? ROLES[role] : null;
+    if (roleDef) {
+      if (roleDef.hats)    hatPool    = roleDef.hats;
+      if (roleDef.weapons) weaponPool = roleDef.weapons;
+      if (roleDef.torsos)  torsoPool  = roleDef.torsos;
     }
 
     var h  = headPool[seed % headPool.length];
@@ -117,7 +121,8 @@ var NpcComposer = (function () {
     var t  = torsoPool[Math.floor(seed / P_TORSO) % torsoPool.length];
     var w  = weaponPool[Math.floor(seed / P_WEAPON) % weaponPool.length];
     var l  = legPool[Math.floor(seed / P_LEGS) % legPool.length];
-    var hue = (seed * P_HUE) % 360;
+    // Faction roles override hue with their faction's tint; others get seed-varied hue
+    var hue = (roleDef && roleDef.tintHue !== undefined) ? roleDef.tintHue : ((seed * P_HUE) % 360);
 
     return {
       head: h,

@@ -1,7 +1,7 @@
 # Dungeon Gleaner — Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28
-**Jam Deadline**: April 5, 2026 (8 days remaining)
+**Created**: 2026-03-28 | **Updated**: 2026-03-30
+**Jam Deadline**: April 5, 2026 (6 days remaining)
 **Goal**: Somewhat playable prototype → debug, smooth, and raise with designer portals through final week
 
 ---
@@ -31,7 +31,7 @@ All five design documents, their scope, and section inventories. Each document n
 | Section | Content |
 |---------|---------|
 | §1 Overview | Environmental teaching philosophy |
-| §2 World Graph | Floor 0 → 0.1 → 0.1.N → 1 → 1.N → 1.6 → 2 → 3 hierarchy |
+| §2 World Graph | Floor 0 → 1 → 1.1/1.2/1.3/1.6 → 1.3.1 → 2 → 2.1/2.2 → 2.2.1/2.2.2 → 3 hierarchy |
 | §3 Floor Registry | 15 floors + connection edges (includes Floor 1.6 Gleaner's Home) |
 | §4 Gate-Contract System | Gate taxonomy, full-span rule, floor state tracking |
 | §5 Floor Designs | 5.1–5.8 individual floor specs (Approach → Frontier) |
@@ -181,11 +181,84 @@ All five design documents, their scope, and section inventories. Each document n
 | §5 Bar Counter Interactions | BAR_COUNTER tile (26) properties, BarCounterPeek module, per-biome drink menus, "micro-bonfire" design intent |
 | §6 Per-Building Interaction Inventory | Full tile inventories for Entry Lobby, Bazaar, Inn, Guild, Home, Watchman's Post |
 | §7 Cozy Minigame Stubs | Post-jam roadmap: card sorting table, trophy shelf, cooking pot, notice board puzzle, music box |
-| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (13 books), how to add new books |
+| §8 Book & Document Data Schema | `data/books.json` format spec, current catalog (52 books), how to add new books |
 | §9 Peek Overlay Module Specs | BookshelfPeek API table + BarCounterPeek API table with full method signatures |
 | §10 Juice — Interiors Feel Like Home | Time-freeze juice, bookshelf juice, bar counter juice, building ambient juice |
 | §11 Implementation Status & Roadmap | Phase A.0 (complete), Phase B (day cycle + home), Phase C (interior polish), Post-jam (minigames) |
 | §12 Cross-References | Links to DOC-7/DOC-2/DOC-9 sections and engine files |
+
+### DOC-11: NPC_FACTION_BOOK_AUDIT.md
+> **Scope**: Comprehensive audit of books.json content/placement, NPC faction uniforms (GTA2-style gangs), choreographed NPC dialogue, faction HQ buildings, and NPC-to-NPC world-building barks. 5-phase implementation roadmap.
+
+| Section | Content |
+|---------|---------|
+| §1 Books Audit | 52-book catalog review, non-fiction wrapping problem, bookshelf placement requirements, fix list |
+| §2 NPC Faction System | Faction uniform design (tide/foundry/admiralty role templates), NPC population targets, faction HQ buildings |
+| §3 World-Building Barks | NPC-to-NPC dialogue philosophy, bark categories, choreographed 2-NPC encounters, faction interaction behaviors |
+| §4 Implementation Roadmap | Phase 1 (books fix), Phase 2 (uniforms), Phase 3 (barks), Phase 4 (encounters), Phase 5 (faction HQs) |
+| §5 Cross-References | Links to books.json, npc-composer.js, bark-library.js, npc-system.js |
+
+### DOC-12: PEEK_SYSTEM_ROADMAP.md
+> **Scope**: Consolidation plan for 9 duplicate peek overlay modules (~2,200 lines) into a unified PeekSystem with variant registry, lifecycle FSM, juice budget, and label system.
+
+| Section | Content |
+|---------|---------|
+| §1 Architecture | PeekDescriptor schema, variant registry, lifecycle FSM (IDLE→SHOWING→OPEN→CLOSING) |
+| §2 Juice Budget | Entry/open animations, glow system, particles, SFX per variant |
+| §3 Label System | InteractPrompt integration, contextual labels by tile type |
+| §4 Variant Catalog | All 9 tile types: door, crate, chest, corpse, merchant, bookshelf, bar, bonfire, NPC |
+| §5 Migration Plan | 5-phase migration from individual modules to unified PeekSystem |
+
+### DOC-13: STREET_CHRONICLES_NARRATIVE_OUTLINE.md
+> **Scope**: Core narrative structure — MSS operative cover, three-faction conspiracy (Tide Council, Foundry Collective, Admiralty), dragon compact, and the Gleaner's role in the conspiracy.
+
+### DOC-14: TEXTURE_ROADMAP.md
+> **Scope**: 3-layer visual upgrade plan — flat-colored Wolfenstein walls → Octopath Traveller-style pixel-art textures. Procedural 64×64 texture generation and caching.
+
+### DOC-15: SPRITE_STACK_ROADMAP.md
+> **Scope**: Triple-emoji sprite composition system (head/torso/legs) with layered accessories, replacing single-emoji rendering for NPCs and enemies.
+
+### DOC-16: SUIT_SYSTEM_ROADMAP.md
+> **Scope**: Playing card suit element system — RPS combat triangle (♣>♦>♠>♣), ♥ as rule-breaker/healing, biome suit alignment.
+
+### DOC-17: SKYBOX_ROADMAP.md
+> **Scope**: Parallax sky, cloud layers, and water reflections replacing flat gradient backgrounds on exterior floors.
+
+### DOC-18: NLAYER_RAYCASTER_ROADMAP.md
+> **Scope**: N-layer compositing for half-height see-over tiles, floor visibility, and exterior map depth. Replaces 2-layer background hack.
+
+### DOC-19: DOOR_EFFECTS_ROADMAP.md
+> **Scope**: Three-phase visual door transition effects (approach/pass/exit) replacing hard-cut black loading screens.
+
+### DOC-20: COMBAT_DRAG_SYSTEM.md
+> **Scope**: Drag-and-drop card interactions for reordering, stack building, and synergy matching in the hand fan during combat.
+
+### DOC-21: GAME_FLOW_ROADMAP.md
+> **Scope**: Pause menu 4-face rotating box (minimap/items/gear/system), screen state transitions, ScreenManager wiring.
+
+### DOC-22: HUD_ROADMAP.md
+> **Scope**: Terminal-themed HUD layout — ASCII canon, status bars, card tray, minimap, quick-bar, interaction mandate.
+
+### DOC-23: UI_ROADMAP.md
+> **Scope**: Reusable UI components (DialogBox, Toast, inventory data model) feeding into the rotating box menu system.
+
+### DOC-24: B5_INVENTORY_INTERACTION_DESIGN.md
+> **Scope**: 8-zone inventory system with drag-drop transfers between hand, backup deck, bag, and stash for card loadout management.
+
+### DOC-25: B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md
+> **Scope**: Scrolling 5-slot SlotWheel widget for bag/deck items beyond position 5, card rendering in inventory views.
+
+### DOC-26: UNIFIED_INVENTORY_METADATA_CONTRACT.md
+> **Scope**: Canonical item/card/collectible schema — registries in items.json, cards.json, enemies.json, loot-tables.json.
+
+### DOC-27: JAM_COMPLIANCE.md
+> **Scope**: DC Jam 2026 mandatory requirement audit — first-person, grid movement, keyboard controls, procedural dungeons, combat, cards, inventory.
+
+### DOC-28: ROADMAP.md
+> **Scope**: Original 8-pass extraction roadmap from EyesOnly scaffold to playable dungeon crawler.
+
+### DOC-29: hud-ui-debugging-notes.md
+> **Scope**: Active debugging priorities — minimap embedding, floor label repositioning, battery display, NCH widget, bag menu.
 
 ---
 

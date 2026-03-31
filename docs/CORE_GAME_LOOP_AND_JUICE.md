@@ -556,7 +556,7 @@ The existing peek system (DoorPeek, CratePeek, ChestPeek, CorpsePeek, LockedDoor
 ┌─────────────────────────────────┐
 │  📜  ADVENTURER'S GUILD REPORT  │
 │  ───────────────────────────    │
-│  Coral Cellars (Floor 1.1.1)   │
+│  Coral Cellars (Floor 1.3.1)   │
 │  Readiness: 72% ✓              │
 │  Hero: The Seeker (Fighter)    │
 │  Result: Cleared. 3 crates     │
@@ -780,7 +780,7 @@ Every peek interaction that should display or react to the current time:
 
 ### 13.1 Work Persists Across Days
 
-When the player restocks Floor 1.1.1 on Day 1 and returns on Day 2, **every sealed crate, cleaned tile, re-armed trap, and scrambled puzzle is exactly where they left it**. The dungeon remembers. This is the foundation of the maintenance loop: progress is cumulative across the 2 work days before Hero Day.
+When the player restocks Floor 1.3.1 on Day 1 and returns on Day 2, **every sealed crate, cleaned tile, re-armed trap, and scrambled puzzle is exactly where they left it**. The dungeon remembers. This is the foundation of the maintenance loop: progress is cumulative across the 2 work days before Hero Day.
 
 The only things that change between days are:
 - **Daily vermin refresh** (§16) — a fresh set of rats and bats spawns in cleared rooms.
@@ -792,7 +792,7 @@ Not all dungeons restock at the same rate. The player manages a portfolio of dun
 
 | Dungeon Tier | Example Floor | Reset Tasks | Expected Pace | Notes |
 |-------------|--------------|-------------|---------------|-------|
-| **Shallow** (1.1.1) | Coral Cellars | ~8 crates, ~20 dirty tiles, 2 traps, 1 puzzle | Fully restockable in 1 day | Bread-and-butter income. Can be perfected for bonus. |
+| **Shallow** (1.3.1) | Coral Cellars | ~8 crates, ~20 dirty tiles, 2 traps, 1 puzzle | Fully restockable in 1 day | Bread-and-butter income. Can be perfected for bonus. |
 | **Mid** (1.1.2) | Coral Depths | ~14 crates, ~40 tiles, 4 traps, 2 puzzles, 3 corpses | Restockable in 1.5 days | Requires both work days and good time management. |
 | **Deep** (1.1.3+) | Coral Abyss | ~20 crates, ~60 tiles, 6 traps, 3 puzzles, 6 corpses, 2 formidable enemies | Barely touchable in 2 days | Partial restocking is the norm. Strategic triage required. |
 | **Surface interior** (1.1) | Coral Bazaar | ~5 crates, ~15 tiles, 0 traps, 1 puzzle | Half a day | Town-adjacent. Low payout, but reliable. |
@@ -806,7 +806,7 @@ On Hero Day, the dispatched hero doesn't just enter one floor. They follow a **d
 ```
 Hero enters Floor 1.1 (Coral Bazaar — baited, 72% ready)
     ↓ clears it — smashes 2 crates, solves puzzle
-Hero descends to Floor 1.1.1 (Coral Cellars — baited, 85% ready)
+Hero descends to Floor 1.3.1 (Coral Cellars — baited, 85% ready)
     ↓ clears it — good run, most crates survive
 Hero descends to Floor 1.1.2 (Coral Depths — baited, 41% ready)
     ↓ struggles — 2 traps misfire, hero takes damage
@@ -837,7 +837,7 @@ The mailbox report is the primary feedback loop for the hero cycle. It must comm
 │                🧩 1 puzzle solved                 │
 │                🪙 Payout: 18 coins                │
 │                                                  │
-│  ┌──────────┐  Coral Cellars (1.1.1)            │
+│  ┌──────────┐  Coral Cellars (1.3.1)            │
 │  │ ██████▓▓ │  Readiness: 85% ✓ CLEAN RUN       │
 │  │ ████████ │  Hero: The Seeker (Fighter)       │
 │  │ ██████▓▓ │  ⚔ 3 monsters slain                │
@@ -1058,7 +1058,7 @@ The pyramid communicates priority: **formidable enemies are the most impactful r
 ### 16.6 Day-Over-Day Example: A Two-Day Restocking Run
 
 ```
-DAY 1 (Floor 1.1.1 — Coral Cellars, post-hero state):
+DAY 1 (Floor 1.3.1 — Coral Cellars, post-hero state):
   ─────────────────────────────────────────
   Readiness: 0% (everything trashed)
   8 crates smashed, 20 dirty tiles, 3 blood pools (6 bloody tiles),
@@ -1076,7 +1076,7 @@ DAY 1 (Floor 1.1.1 — Coral Cellars, post-hero state):
   
   End of Day 1: Readiness at ~47%. Head home before dusk.
   
-DAY 2 (Floor 1.1.1 — continuing):
+DAY 2 (Floor 1.3.1 — continuing):
   ─────────────────────────────────────────
   Readiness: 47% (yesterday's work persists)
   3 new rats spawned at cleared nodes. Construct corpse still there.
@@ -1174,11 +1174,11 @@ The mailbox report after a death-triggered hero run uses a **distinct visual tre
 │  ─────── ⚠ OPERATIVE RESCUE ⚠ ──────────────  │
 │                                                  │
 │  The Seeker located Operative [Callsign]         │
-│  unconscious in the Coral Cellars (Floor 1.1.1). │
+│  unconscious in the Coral Cellars (Floor 1.3.1). │
 │  The operative was returned to their quarters.   │
 │  The Guild has docked rescue costs from payout.  │
 │                                                  │
-│  ┌──────────┐  Coral Cellars (1.1.1)            │
+│  ┌──────────┐  Coral Cellars (1.3.1)            │
 │  │ ▓▓░░░░░░ │  Readiness at rescue: 47%         │
 │  │ ░░░░▓▓░░ │  Hero: The Seeker (Fighter)       │
 │  │ ▓▓░░░░░░ │  ⚔ 2 monsters slain                │

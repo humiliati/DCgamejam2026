@@ -81,8 +81,9 @@ var Game = (function () {
     InputManager.initPointer(_canvas);
     AudioSystem.init();
 
-    // Wire BarkLibrary display function — routes picks to Toast by default,
-    // falling back gracefully if Toast is unavailable.
+    // Wire BarkLibrary display function — routes barks to StatusBar tooltip
+    // space (bottom footer) for persistent history, with DialogBox fallback
+    // for dialog-style barks that need the full conversation UI.
     if (typeof BarkLibrary !== 'undefined') {
       BarkLibrary.setDisplay(function (bark, opts) {
         var style = (opts && opts.style) || bark.style || 'info';
@@ -93,12 +94,18 @@ var Game = (function () {
             speaker: bark.speaker || '',
             lines:   [bark.text]
           });
-        } else if (typeof Toast !== 'undefined') {
-          // For toast barks, prefix the speaker name inline if present.
+        } else if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
+          // Route barks to tooltip footer — persistent, scrollable history.
           var text = bark.speaker
+            ? bark.speaker + ': \u201c' + bark.text + '\u201d'
+            : bark.text;
+          StatusBar.pushTooltip(text, 'npc');
+        } else if (typeof Toast !== 'undefined') {
+          // Fallback to top-right toast if StatusBar not available.
+          var text2 = bark.speaker
             ? bark.speaker + ': ' + bark.text
             : bark.text;
-          Toast.show(text, style === 'dialog' ? 'info' : style);
+          Toast.show(text2, style === 'dialog' ? 'info' : style);
         }
       });
     }
@@ -323,6 +330,8 @@ var Game = (function () {
             _unequipSlot(hit.slot - 100);   // strip offset
           } else if (hit.action === 'stash') {
             _bagToStash(hit.slot - 300);    // strip offset
+          } else if (hit.action === 'unstash') {
+            _stashToBag(hit.slot - 400);    // strip offset
           } else if (hit.action === 'hand_to_backup') {
             // Skip if DragDrop just handled a pointer session (prevents click+drag overlap)
             if (typeof DragDrop !== 'undefined' && DragDrop.wasRecentPointerSession(200)) { /* suppressed */ }
@@ -743,6 +752,28 @@ var Game = (function () {
       _ambientBarkTimer = null;
     }
 
+    // C6: Reshuffle deck on floor transition — fresh hand for each floor.
+    // Only reshuffle when entering dungeons (depth 3+) to keep town safe.
+    var depth = floorId.split('.').length;
+    if (typeof CardSystem !== 'undefined' && depth >= 3) {
+      CardSystem.resetDeck();
+      CardSystem.drawHand();
+    }
+
+    // Seed blood splatter from corpse tiles on dungeon floors (depth 3+).
+    // Only on first visit — cached floors keep their cleaned state.
+    if (typeof CleaningSystem !== 'undefined' && depth >= 3) {
+      var fd = FloorManager.getFloorData();
+      if (fd && CleaningSystem.getDirtyTiles(floorId).length === 0) {
+        CleaningSystem.seedFromCorpses(floorId, fd.grid, fd.gridW, fd.gridH);
+      }
+    }
+
+    // Wire blood floor ID to raycaster so floor tiles render blood tint
+    if (typeof Raycaster !== 'undefined' && Raycaster.setBloodFloorId) {
+      Raycaster.setBloodFloorId(depth >= 3 ? floorId : null);
+    }
+
     // Clear NpcSystem active list — previous floor's NPC refs are stale
     if (typeof NpcSystem !== 'undefined') NpcSystem.clearActive();
 
@@ -899,7 +930,7 @@ var Game = (function () {
   function _checkWorkKeysChest(fx, fy) {
     return !_gateUnlocked
       && FloorManager.getFloor() === '1.6'
-      && fx === 5 && fy === 3;
+      && fx === 19 && fy === 3;
   }
 
   function _generateAndWire() {
@@ -1087,15 +1118,42 @@ var Game = (function () {
       }
     }
 
+    // Blood cleaning — scrub tiles near corpses
+    if (typeof CleaningSystem !== 'undefined') {
+      var cleanFloorId = FloorManager.getCurrentFloorId();
+      if (CleaningSystem.isDirty(fx, fy, cleanFloorId)) {
+        if (CleaningSystem.scrub(fx, fy, cleanFloorId)) {
+          AudioSystem.play('sweep', { volume: 0.5 });
+          var remaining = CleaningSystem.getBlood(fx, fy, cleanFloorId);
+          if (remaining <= 0) {
+            Toast.show('🧹 ' + i18n.t('toast.tile_clean', 'Tile cleaned!'), 'loot');
+            SessionStats.inc('tilesCleaned');
+          }
+        }
+        return;
+      }
+    }
+
     var tile = floorData.grid[fy][fx];
     if (tile === TILES.CHEST) {
       CombatBridge.openChest(fx, fy);
-    } else if (tile === TILES.BONFIRE) {
-      // Rest at bonfire (heal) then open the stash MenuBox
+    } else if (tile === TILES.BONFIRE || tile === TILES.BED) {
+      // Rest at bonfire/bed (heal) then open the stash MenuBox
       HazardSystem.restAtBonfire(fx, fy);
       _pendingMenuContext = 'bonfire';
       _pendingMenuFace = 0;
       ScreenManager.toPause();
+    } else if (tile === TILES.TABLE) {
+      // Cozy table inspection — show a toast with a lived-in detail
+      var tableQuips = [
+        i18n.t('table.quip1', 'A mug of cold tea. Still half full.'),
+        i18n.t('table.quip2', 'Scattered notes — dungeon cleaning checklists.'),
+        i18n.t('table.quip3', 'A pressed flower between two invoice sheets.'),
+        i18n.t('table.quip4', 'Crumbs from this morning\'s flatbread.'),
+        i18n.t('table.quip5', 'A dull knife and a half-whittled figurine.')
+      ];
+      var qi = Math.floor(Math.random() * tableQuips.length);
+      Toast.show('🔍 ' + tableQuips[qi], 'info');
     } else if (tile === TILES.SHOP) {
       // Resolve which faction owns this shop tile
       var shopFaction = 'tide';  // fallback
@@ -1542,6 +1600,28 @@ var Game = (function () {
     _refreshPanels();
   }
 
+  /**
+   * Move a stash item to bag (bonfire context only).
+   * @param {number} stashIndex
+   */
+  function _stashToBag(stashIndex) {
+    var stash = Player.state().stash;
+    var item = stash[stashIndex];
+    if (!item) return;
+
+    if (!Player.addToBag(item)) {
+      Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
+      return;
+    }
+    // Remove from stash
+    stash.splice(stashIndex, 1);
+
+    Toast.show(item.emoji + ' → ' + i18n.t('inv.bag', 'Bag'), 'info');
+    AudioSystem.play('pickup-success');
+    HUD.updatePlayer(Player.state());
+    _refreshPanels();
+  }
+
   // ── Deck management actions (B5.4) ────────────────────────────────
 
   function _handToBackup(handIndex) {
@@ -1771,6 +1851,25 @@ var Game = (function () {
       if (e.hp <= 0) continue;
       var aState = EnemyAI.getAwarenessState(e.awareness);
 
+      // ── Smooth lerp: advance interpolation timer and compute render position ──
+      // _prevX/_prevY are set when movement occurs; _lerpT animates 0→1.
+      // Lerp duration scales with the entity's step interval for natural pacing.
+      var lerpDur = e._stepInterval || (e.friendly ? 800 : 400);
+      if (e._lerpT !== undefined && e._lerpT < 1) {
+        e._lerpT = Math.min(1, e._lerpT + frameDt / lerpDur);
+      }
+      var renderX, renderY;
+      if (e._prevX !== undefined && e._lerpT !== undefined && e._lerpT < 1) {
+        // Ease-out cubic for natural deceleration
+        var t = e._lerpT;
+        var eased = 1 - (1 - t) * (1 - t) * (1 - t);
+        renderX = e._prevX + (e.x - e._prevX) * eased;
+        renderY = e._prevY + (e.y - e._prevY) * eased;
+      } else {
+        renderX = e.x;
+        renderY = e.y;
+      }
+
       // Use EnemySprites system for visual state if available
       var spriteEmoji = e.emoji;
       var spriteStack = null;
@@ -1795,9 +1894,25 @@ var Game = (function () {
         spriteBobY = frame.bobY || 0;
         spriteScaleAdd = frame.scaleAdd || 0;
       }
+      // NPC fallback: if EnemySprites didn't resolve a stack but the
+      // entity carries one (from NpcComposer), use it directly.
+      if (!spriteStack && e.stack) {
+        spriteStack = {
+          head:   e.stack.head   || '',
+          torso:  e.stack.torso  || '',
+          legs:   e.stack.legs   || '',
+          hat:    e.stack.hat ? { emoji: e.stack.hat, scale: e.stack.hatScale || 0.5, behind: !!e.stack.hatBehind } : null,
+          backWeapon:  e.stack.backWeapon  ? { emoji: e.stack.backWeapon,  scale: e.stack.backWeaponScale || 0.4,  offsetX: e.stack.backWeaponOffsetX || 0.3 }  : null,
+          frontWeapon: e.stack.frontWeapon ? { emoji: e.stack.frontWeapon, scale: e.stack.frontWeaponScale || 0.65, offsetX: e.stack.frontWeaponOffsetX || -0.25 } : null,
+          headMods:  e.stack.headMods  || null,
+          torsoMods: e.stack.torsoMods || null,
+          tintHue: e.stack.tintHue
+        };
+        spriteEmoji = e.stack.head || e.emoji;
+      }
 
       _sprites.push({
-        x: e.x, y: e.y,
+        x: renderX, y: renderY,
         id: e.id,                         // Pass 8: intent telegraph match
         emoji: spriteEmoji,
         stack: spriteStack,               // Triple emoji stack (null = legacy)

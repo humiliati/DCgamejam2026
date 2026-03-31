@@ -39,14 +39,15 @@ BarkLibrary.register('ambient.approach', [
 // These fire throughout the day whenever the player is near an NPC.
 
 BarkLibrary.register('ambient.promenade', [
-  { text: '🗣️ "Working day, Gleaner. Shouldn\'t you be underground?"',        weight: 3 },
-  { text: '🗣️ "They say heroes arrive in three days. Place better be ready."',weight: 3 },
-  { text: '🗣️ "Guild posted another reset contract. Big one."',               weight: 2 },
-  { text: '🗣️ "That dungeon entrance looked sealed this morning..."',         weight: 2 },
-  { text: '🗣️ "You forget your keys again? My cousin does that every week."', weight: 2, style: 'bubble' },
-  { text: '🗣️ "Adventurers pay better when the traps actually work."',        weight: 1 },
-  { text: '🗣️ "The Dispatcher was looking for you earlier."',                 weight: 1 },
-  { text: '🗣️ "I heard the last Gleaner quit without finishing the reset. Brave of you to take the job."', weight: 0.5 }
+  // NPC-to-NPC world-building — the player is eavesdropping on town life
+  { text: '🗣️ "Did you see the state of floor 2 this morning? Heroes tore through again."', weight: 3 },
+  { text: '🗣️ "Three hero parties this season. Commerce is up, but so is the damage."', weight: 3 },
+  { text: '🗣️ "Guild posted another reset contract. Bigger than the last one."', weight: 2 },
+  { text: '🗣️ "The inn\u2019s got a new stew. Seaweed base. Can\u2019t decide if it\u2019s brave or sad."', weight: 2, style: 'bubble' },
+  { text: '🗣️ "My cousin works the night shift. Says the lower caves make sounds."', weight: 2 },
+  { text: '🗣️ "Scale fragments are up to 40 coin. Used to be 12. Something\u2019s changed down there."', weight: 1 },
+  { text: '🗣️ "The old fisherman on Pier Nine swears he saw a light in the deep caves last night."', weight: 1 },
+  { text: '🗣️ "Storm coming in from the east. Good night to stay inside."', weight: 0.5 }
 ], { cooldownMs: 30000 });
 
 // ── Floor 1: The Promenade — morning (Day 1 pre-work nudge) ─────────
@@ -55,11 +56,11 @@ BarkLibrary.register('ambient.promenade', [
 // pointed — the town notices the player hasn't gone to work yet.
 
 BarkLibrary.register('ambient.promenade.morning', [
-  { text: '🗣️ "Why aren\'t you at work?"',                                    weight: 3 },
-  { text: '🗣️ "Don\'t you know the adventurers are coming in three days?"',   weight: 3 },
-  { text: '🗣️ "The dungeon won\'t reset itself, you know."',                  weight: 2 },
-  { text: '🗣️ "Gleaner\'s Guild contract says dawn start. Sun\'s already up."', weight: 2 },
-  { text: '🗣️ "My nephew works the Coral Cellars. He says they\'re a mess after last cycle."', weight: 1, style: 'bubble' }
+  { text: '🗣️ "Saw the new Gleaner heading out. Think they\u2019ll last the season?"', weight: 3 },
+  { text: '🗣️ "Adventurers are due in three days. The boardwalk\u2019s not ready."', weight: 3 },
+  { text: '🗣️ "My nephew works the Coral Cellars. Says the last reset was botched."', weight: 2, style: 'bubble' },
+  { text: '🗣️ "Dawn shift already started. Seen anyone from the Guild yet?"', weight: 2 },
+  { text: '🗣️ "Smells like the deep caves again. Wind must be coming from below."', weight: 1 }
 ], { cooldownMs: 25000 });
 
 // ── Floor 1: Hero Day ambient ────────────────────────────────────────
@@ -84,6 +85,49 @@ BarkLibrary.register('ambient.promenade.dusk', [
   { text: '🗣️ "Guild curfew\'s at two bells. Don\'t push it."',               weight: 2 },
   { text: '🗣️ "Last Gleaner who worked through the night ended up in the infirmary."', weight: 1 }
 ], { cooldownMs: 60000 });
+
+// ── Faction bark pools ──────────────────────────────────────────────
+// NPC-to-NPC chatter between faction members. The player overhears
+// these as ambient world-building — faction identity, politics,
+// inter-faction tension, and conspiracy breadcrumbs.
+
+BarkLibrary.register('faction.tide', [
+  { text: '🗣️ "The Compact archives need re-cataloguing. Third time this year."', weight: 3 },
+  { text: '🗣️ "Council meeting ran late. Something about the deep-floor readings."', weight: 3 },
+  { text: '🗣️ "The Foundry\u2019s new kiln runs on the same fuel the deep caves produce naturally."', weight: 2 },
+  { text: '🗣️ "Have you read the annotated Compact? The footnotes are... revealing."', weight: 2 },
+  { text: '🗣️ "Scholar Meridian says the old records don\u2019t match the official history."', weight: 1 },
+  { text: '🗣️ "The dragons used to sing, you know. Before the heroes came."', weight: 0.5, oneShot: true }
+], { cooldownMs: 28000 });
+
+BarkLibrary.register('faction.foundry', [
+  { text: '🗣️ "New shipment of dragonsteel coming in. Quality\u2019s better than last batch."', weight: 3 },
+  { text: '🗣️ "Foundry\u2019s hiring again. Third time this season. Wonder what happened to the last batch."', weight: 3 },
+  { text: '🗣️ "The sponsorship numbers are up. Heroes love the new equipment line."', weight: 2 },
+  { text: '🗣️ "Tide Council says the deep caves are \u2018protected.\u2019 Foundry says they\u2019re \u2018unexploited.\u2019 Same caves."', weight: 2 },
+  { text: '🗣️ "Someone asked about the procurement reports. I said \u2018ask the field rep.\u2019"', weight: 1 },
+  { text: '🗣️ "The yield numbers don\u2019t add up. More goes in than comes out."', weight: 0.5 }
+], { cooldownMs: 28000 });
+
+BarkLibrary.register('faction.admiralty', [
+  { text: '🗣️ "Patrol report: nothing unusual on the upper floors. The lower floors... different story."', weight: 3 },
+  { text: '🗣️ "The garrison commander wants a full sweep before hero day."', weight: 3 },
+  { text: '🗣️ "New classification came through. More specimens added to the restricted list."', weight: 2 },
+  { text: '🗣️ "The Oversight Board denied the reclassification proposal. Again."', weight: 2 },
+  { text: '🗣️ "Dr. Yuen\u2019s research notes went missing from the archive last week."', weight: 1 },
+  { text: '🗣️ "Someone\u2019s maintaining a live holding area below the standard floor map."', weight: 0.5, oneShot: true }
+], { cooldownMs: 28000 });
+
+// ── Dragon whisper barks ─────────────────────────────────────────────
+// Rare conspiracy breadcrumbs. One-shot per floor visit. These are
+// the atmospheric hints that something is wrong beneath the surface.
+
+BarkLibrary.register('dragon.whisper', [
+  { text: '🗣️ "My grandmother says the caves used to sing at night. Before the heroes came."', weight: 1, oneShot: true },
+  { text: '🗣️ "The old compact... nobody reads it anymore. Maybe that\u2019s the point."', weight: 1, oneShot: true },
+  { text: '🗣️ "Forty years of hero cycles. Forty years. And the deep caves keep getting quieter."', weight: 1, oneShot: true },
+  { text: '🗣️ "The harbour master saw something on his night shift. Won\u2019t talk about it."', weight: 1, oneShot: true }
+], { cooldownMs: 120000 });
 
 // ── Dispatcher (player's employer) — gate encounter, Day 1 ──────────
 // The Dispatcher is the player's agency handler. He appears at the
@@ -233,13 +277,13 @@ BarkLibrary.register('system.curfew_collapse', [
 // ambient NpcSystem patrons when the player is within barkRadius tiles.
 
 BarkLibrary.register('interior.bazaar', [
-  { text: '🗣️ "They say the Cellars below took three parties last month."',          weight: 3 },
-  { text: '🗣️ "Best haul in the Bazaar this week — restocked everything."',          weight: 3 },
-  { text: '🗣️ "The gleaning contracts are posted on the back board."',                weight: 2 },
-  { text: '🗣️ "Watch your step near the stairs — something smells off down there."', weight: 2 },
-  { text: '🗣️ "Heard the hero party this cycle is paying extra for intact crates."', weight: 1 },
-  { text: '🗣️ "The Dispatcher was here earlier. Looking for his Gleaner."',          weight: 1, style: 'bubble' },
-  { text: '🗣️ "If you\'re heading to the Cellars, take extra torches."',             weight: 0.5 }
+  { text: '🗣️ "They say the Cellars below took three parties last month."', weight: 3 },
+  { text: '🗣️ "Best haul this week. Prices are climbing on everything."', weight: 3 },
+  { text: '🗣️ "The Tide vendor got a new shipment. Won\u2019t say where from."', weight: 2 },
+  { text: '🗣️ "Something smells off near the stairs. Has anyone been down there lately?"', weight: 2 },
+  { text: '🗣️ "Hero party this cycle is paying extra for intact crates. Commerce is good."', weight: 1 },
+  { text: '🗣️ "The card dealer on Lantern Row says the decks are getting stranger. New suits."', weight: 1, style: 'bubble' },
+  { text: '🗣️ "Someone bought every scale fragment in stock yesterday. Every single one."', weight: 0.5 }
 ], { cooldownMs: 40000 });
 
 BarkLibrary.register('interior.guild', [

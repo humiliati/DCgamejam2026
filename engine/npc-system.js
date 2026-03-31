@@ -160,6 +160,7 @@ var NpcSystem = (function () {
       dialogueTree:  def.dialogueTree || null,
 
       factionId:     def.factionId    || null,
+      role:          def.role         || null,    // NpcComposer role key (e.g. 'tide_member')
       blocksMovement:def.blocksMovement || (def.type === TYPES.DISPATCHER)
     };
   }
@@ -216,6 +217,20 @@ var NpcSystem = (function () {
     if (!stack && def.type === TYPES.DISPATCHER
         && typeof NpcComposer !== 'undefined') {
       stack = NpcComposer.getVendorPreset(def.factionId || 'dispatcher');
+    }
+    // Ambient / Interactive NPCs: generate a seed-based stack via NpcComposer.
+    // The seed is derived from the NPC id string so each NPC gets a unique
+    // but deterministic appearance across sessions.
+    if (!stack && typeof NpcComposer !== 'undefined' && NpcComposer.compose) {
+      var seed = 0;
+      var idStr = def.id || '';
+      for (var ci = 0; ci < idStr.length; ci++) {
+        seed = (seed * 31 + idStr.charCodeAt(ci)) | 0;
+      }
+      // Map NPC roles to NpcComposer role templates for variety.
+      // Faction NPCs use def.role (e.g., 'tide_member'); others default by type.
+      var role = def.role || (def.type === TYPES.INTERACTIVE ? 'guard' : 'citizen');
+      stack = NpcComposer.compose(Math.abs(seed), role);
     }
 
     return {
@@ -340,6 +355,11 @@ var NpcSystem = (function () {
     }
 
     if (!blocked) {
+      // Store previous position for lerp interpolation
+      npc._prevX = npc.x;
+      npc._prevY = npc.y;
+      npc._lerpT = 0;
+
       npc.x = nx;
       npc.y = ny;
       // Update facing
@@ -490,7 +510,10 @@ var NpcSystem = (function () {
     ]);
 
     // ── Floor 1: The Promenade ─────────────────────────────────────
+    // 12 NPCs: 5 faction (2 Tide, 1 Foundry, 2 Admiralty) + 7 citizen.
+    // Tide is dominant here (temple is nearby on this floor).
     register('1', [
+      // ── Citizens (7) ───────────────────────────────────────────
       {
         id:           'floor1_citizen_1',
         type:         TYPES.AMBIENT,
@@ -500,7 +523,7 @@ var NpcSystem = (function () {
         name:         'Townsperson',
         patrolPoints: [{ x: 8, y: 10 }, { x: 12, y: 10 }],
         stepInterval: 1500,
-        barkPool:     'ambient.promenade.morning',
+        barkPool:     'ambient.promenade',
         barkRadius:   3,
         barkInterval: 22000
       },
@@ -529,6 +552,131 @@ var NpcSystem = (function () {
         barkPool:     'ambient.promenade',
         barkRadius:   3,
         barkInterval: 35000
+      },
+      {
+        id:           'floor1_citizen_4',
+        type:         TYPES.AMBIENT,
+        x: 10, y: 6,
+        facing:       'west',
+        emoji:        '👧',
+        name:         'Stall Keeper',
+        patrolPoints: [{ x: 10, y: 6 }, { x: 12, y: 6 }],
+        stepInterval: 1600,
+        barkPool:     'ambient.promenade',
+        barkRadius:   3,
+        barkInterval: 26000
+      },
+      {
+        id:           'floor1_citizen_5',
+        type:         TYPES.AMBIENT,
+        x: 6, y: 11,
+        facing:       'north',
+        emoji:        '🧑',
+        name:         'Dockworker',
+        patrolPoints: [{ x: 6, y: 11 }, { x: 6, y: 8 }],
+        stepInterval: 1400,
+        barkPool:     'ambient.promenade',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      {
+        id:           'floor1_citizen_6',
+        type:         TYPES.AMBIENT,
+        x: 16, y: 10,
+        facing:       'south',
+        emoji:        '👴',
+        name:         'Fisherman',
+        patrolPoints: [{ x: 16, y: 10 }, { x: 16, y: 6 }],
+        stepInterval: 2000,
+        barkPool:     'ambient.promenade',
+        barkRadius:   3,
+        barkInterval: 40000
+      },
+      {
+        id:           'floor1_citizen_7',
+        type:         TYPES.AMBIENT,
+        x: 2, y: 8,
+        facing:       'east',
+        emoji:        '👨',
+        name:         'Lamplighter',
+        patrolPoints: [{ x: 2, y: 8 }, { x: 2, y: 4 }],
+        stepInterval: 1700,
+        barkPool:     'ambient.promenade',
+        barkRadius:   3,
+        barkInterval: 32000
+      },
+      // ── Tide Council (2) — dominant on Floor 1 ─────────────────
+      {
+        id:           'floor1_tide_1',
+        type:         TYPES.AMBIENT,
+        x: 7, y: 4,
+        facing:       'south',
+        emoji:        '🧙',
+        name:         'Tide Scholar',
+        role:         'tide_member',
+        patrolPoints: [{ x: 7, y: 4 }, { x: 11, y: 4 }],
+        stepInterval: 1600,
+        barkPool:     'faction.tide',
+        barkRadius:   3,
+        barkInterval: 25000
+      },
+      {
+        id:           'floor1_tide_2',
+        type:         TYPES.AMBIENT,
+        x: 3, y: 10,
+        facing:       'north',
+        emoji:        '🧝',
+        name:         'Tide Acolyte',
+        role:         'tide_member',
+        patrolPoints: [{ x: 3, y: 10 }, { x: 7, y: 10 }],
+        stepInterval: 1400,
+        barkPool:     'faction.tide',
+        barkRadius:   3,
+        barkInterval: 28000
+      },
+      // ── The Foundry (1) ────────────────────────────────────────
+      {
+        id:           'floor1_foundry_1',
+        type:         TYPES.AMBIENT,
+        x: 15, y: 6,
+        facing:       'south',
+        emoji:        '👨',
+        name:         'Foundry Rep',
+        role:         'foundry_member',
+        patrolPoints: [{ x: 15, y: 6 }, { x: 15, y: 10 }],
+        stepInterval: 1500,
+        barkPool:     'faction.foundry',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      // ── The Admiralty (2) ──────────────────────────────────────
+      {
+        id:           'floor1_admiralty_1',
+        type:         TYPES.AMBIENT,
+        x: 12, y: 8,
+        facing:       'west',
+        emoji:        '👩',
+        name:         'Admiralty Officer',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 12, y: 8 }, { x: 8, y: 8 }],
+        stepInterval: 1300,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 26000
+      },
+      {
+        id:           'floor1_admiralty_2',
+        type:         TYPES.AMBIENT,
+        x: 17, y: 4,
+        facing:       'south',
+        emoji:        '🧑',
+        name:         'Admiralty Ensign',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 17, y: 4 }, { x: 17, y: 8 }],
+        stepInterval: 1500,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 32000
       }
     ]);
 

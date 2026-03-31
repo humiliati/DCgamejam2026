@@ -836,15 +836,44 @@ var MenuFaces = (function () {
     var gridX = x + (w - gridW) / 2;
     var gridY = ty + 24;
 
+    var stash = Player.getStash();
+    var maxStash = 20; // Player.MAX_STASH
+
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
         var idx = row * cols + col;
         var sx = gridX + col * (slotSize + 4);
         var sy = gridY + row * (slotSize + 4);
+        var stashItem = stash[idx];
 
-        // TODO: Check Player.getStash()[idx] when inventory model is built
-        _drawSlot(ctx, sx, sy, slotSize, slotSize,
-                  '' + (idx + 1), null, false);
+        if (stashItem) {
+          var isHov = (_hoverSlot === (400 + idx));
+          ctx.fillStyle = isHov ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
+          _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
+          ctx.strokeStyle = isHov ? COL.accent : 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 1;
+          _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
+
+          ctx.font = '14px serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(stashItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
+
+          ctx.font = '6px monospace';
+          ctx.fillStyle = COL.text;
+          var nm = stashItem.name || '';
+          if (nm.length > 7) nm = nm.substring(0, 6) + '\u2026';
+          ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 3);
+
+          // Click to move to bag (slot 400+ range)
+          _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: 400 + idx, action: 'unstash' });
+        } else {
+          ctx.setLineDash([2, 3]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.lineWidth = 1;
+          _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
+          ctx.setLineDash([]);
+        }
       }
     }
 
@@ -852,8 +881,13 @@ var MenuFaces = (function () {
     ctx.fillStyle = COL.dim;
     ctx.font = '9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('0 / 20 ' + i18n.t('shop.stash_capacity', 'slots'),
+    ctx.fillText(stash.length + ' / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
                  x + w / 2, gridY + rows * (slotSize + 4) + 12);
+
+    // Hint
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '8px monospace';
+    ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + 24);
   }
 
   function _renderShopBuy(ctx, x, y, w, h) {

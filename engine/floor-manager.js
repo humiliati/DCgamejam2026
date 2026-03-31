@@ -268,25 +268,28 @@ var FloorManager = (function () {
           floorTexture: 'floor_grass_stone'
         };
       case 'home':
-        // Gleaner's bunk room — warm planked interior. Low ceiling, lived-in.
-        // Wood plank walls with a soft amber lamp glow. Bare stone floor.
-        // Contains: bed (BONFIRE tile repurposed), stash chest (DOOR tile),
-        // mailbox (PILLAR tile), exit door to The Promenade (DOOR_EXIT).
+        // Gleaner's dwelling — warm planked interior, multiple rooms.
+        // Wood plank walls with a soft amber lamp glow. Wooden floor.
+        // Contains: BED (bonfire), TABLE (cozy), CHEST (stash+keys),
+        // PILLAR (mailbox), BOOKSHELF (reading), DOOR_EXIT (to Promenade).
         return {
           textures: Object.freeze({
-            1: 'wood_plank',       // WALL — warm plank walls
-            2: 'door_wood',        // DOOR — stash chest (reused door tile)
-            3: 'door_wood',        // DOOR_BACK
-            4: 'door_wood',        // DOOR_EXIT — out to The Promenade
-            5: 'stairs_down',      // STAIRS_DN (unused in home)
-            6: 'stairs_up',        // STAIRS_UP (unused in home)
-            10: 'stone_rough',     // PILLAR — mailbox post
-            14: 'door_iron'        // BOSS_DOOR (unused in home)
+            1:  'wood_plank',       // WALL — warm plank walls
+            2:  'door_wood',        // DOOR (unused in home)
+            3:  'door_wood',        // DOOR_BACK (unused)
+            4:  'door_wood_asc',    // DOOR_EXIT — out to The Promenade
+            7:  'stash_chest',      // CHEST — stash container
+            10: 'stone_rough',      // PILLAR — mailbox post
+            25: 'wood_dark',        // BOOKSHELF — dark wood shelves
+            27: 'bed_quilt',        // BED — quilted blanket
+            28: 'table_wood'        // TABLE — work surface
           }),
           tileWallHeights: Object.freeze({
-            10: 1.8                // PILLAR/mailbox — shoulder-height post
+            10: 1.0,               // PILLAR/mailbox — half-height post
+            27: 0.6,               // BED — low, player sees over it
+            28: 0.7                 // TABLE — half-height surface
           }),
-          floorTexture: 'floor_dirt'
+          floorTexture: 'floor_wood'
         };
       case 'cellar':
         // Stone walls ↔ brown dirt floor — dungeon contrast
@@ -418,13 +421,20 @@ var FloorManager = (function () {
         return SpatialContract.interior(Object.assign({
           label: "Gleaner's Home",
           wallHeight: 2.0,
-          renderDistance: 8,
-          fogDistance: 6,
+          renderDistance: 14,
+          fogDistance: 12,
           fogColor: { r: 20, g: 10, b: 5 },
           ceilColor: '#2a1808',
           floorColor: '#4a3018',
-          gridSize: { w: 10, h: 8 },
-          roomCount: { min: 1, max: 1 }
+          gridSize: { w: 24, h: 20 },
+          roomCount: { min: 4, max: 4 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at front door
+            7:  -0.08,   // CHEST (stash) — sunken into floor alcove
+            10: 1.0,     // PILLAR (mailbox post) — half-height post
+            27: -0.15,   // BED — low to the ground, player looks down at it
+            28: -0.10    // TABLE — half-height work surface
+          })
         }, biomeTextures));
       }
       // Generic interior fallback
@@ -635,12 +645,12 @@ var FloorManager = (function () {
     // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
     [  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  perimeter
     [  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 1  north hall
-    [  1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1], // 2  inner wall
+    [  1, 0,25, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0,25, 0, 1], // 2  inner wall + BOOKSHELVES (2,2) (13,2)
     [  1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1], // 3  stair chamber
     [  1, 0, 0, 0, 1, 0, 0, 5, 0, 0, 0, 1, 0, 0, 0, 1], // 4  STAIRS_DN (7,4)
     [  1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1], // 5  stair chamber
     [  1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1], // 6  gap at (6-8)
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 7  main hall
+    [  1, 0,25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 7  main hall + BOOKSHELF (2,7)
     [  1, 0,10, 0, 0, 0, 0,18, 0, 0, 0, 0, 0,10, 0, 1], // 8  pillars + bonfire (7,8)
     [  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 9  entry hall
     [  1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1], // 10 DOOR_EXIT (7,10)
@@ -672,43 +682,70 @@ var FloorManager = (function () {
       gridW: _FLOOR2_W,
       gridH: _FLOOR2_H,
       biome: 'bazaar',
-      shops: []
+      shops: [],
+      books: [
+        { x: 2,  y: 2, bookId: 'tip_bazaar_shopping' },       // How to Buy and Sell
+        { x: 13, y: 2, bookId: 'lore_adventuring_economy' },   // Adventuring Economy survey
+        { x: 2,  y: 7, bookId: 'fiction_dashing_rogue' }       // The Dashing Rogue (fiction)
+      ]
     };
   }
 
   // ── Hand-authored Floor 1.6: Gleaner's Home (depth 2) ─────────────
   //
-  // 10×8 interior. The player's bunk room off The Promenade. Cosy,
-  // minimal — a single room with bed, stash chest, and mailbox post.
-  // The DOOR_EXIT at (5, 7) leads back out to The Promenade (Floor 1).
+  // 24×20 interior. Multi-room Gleaner's dwelling — generous interior
+  // space that takes advantage of the "bigger on the inside" rule for
+  // depth-2 floors. Existing on a single-tile door from the 20×-wide
+  // Promenade, the home unfolds into four distinct zones:
   //
-  // Layout note: The dungeon entrance on Floor 1 is at (5, 2) facing
-  // NORTH. The player's home door is on the EAST wall of the Promenade,
-  // at (17, 7) behind a pillar. From the dungeon gate at (5, 2) the
-  // home door is due EAST — the Dispatcher gives this direction hint.
+  //   1. Entry hall (south)   — front door (DOOR_EXIT), coat hooks
+  //   2. Living room (center) — table with cozy contents, bookshelves
+  //   3. Bedroom (west)       — two BED tiles (bonfire), nightstand
+  //   4. Storage (east)       — stash CHEST (work keys), mailbox, shelves
   //
-  // Legend: 0=EMPTY, 1=WALL, 4=DOOR_EXIT, 10=PILLAR(mailbox), 18=BONFIRE(bed)
+  // Work keys (🗝️) are on the CHEST (tile 7) at (19, 4).
+  // BED tiles (27) at (3,3) and (4,3) act as the bonfire.
+  // TABLE tiles (28) at (11,5) and (12,5) hold cozy items.
   //
-  //   Work keys (🗝️) are represented as a DOOR (tile 2) at (5, 3).
-  //   Interacting triggers the key-pickup event in Game (_checkWorkKeysChest).
+  // DOOR_EXIT at (11, 19) leads back to The Promenade (Floor 1).
+  //
+  // Tile legend:
+  //   0=EMPTY  1=WALL  4=DOOR_EXIT  7=CHEST(stash)
+  //  10=PILLAR(mailbox/post)  25=BOOKSHELF  27=BED  28=TABLE
 
-  var _FLOOR16_W = 10;
-  var _FLOOR16_H = 8;
+  var _FLOOR16_W = 24;
+  var _FLOOR16_H = 20;
+  // prettier-ignore
   var _FLOOR16_GRID = [
-    // 0  1  2  3  4  5  6  7  8  9
-    [  1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  ceiling wall
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 1  back of room
-    [  1, 0,18, 0, 0, 0, 0, 0, 0, 1], // 2  BED (bonfire tile) at (2,2)
-    [  1, 0, 0, 0, 0, 2, 0, 0, 0, 1], // 3  KEYS (door tile) at (5,3)
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 4  open floor
-    [  1, 0,10, 0, 0, 0, 0, 0, 0, 1], // 5  MAILBOX (pillar) at (2,5)
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 6  approach
-    [  1, 1, 1, 1, 1, 4, 1, 1, 1, 1]  // 7  south wall — DOOR_EXIT (5,7) to Promenade
+    //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  north wall
+    [ 1,25, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,25, 0, 1], // 1  bedroom shelf | living room | storage shelf
+    [ 1, 0, 0, 0, 0, 0, 1, 0, 0,25, 0, 0, 0, 0,25, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 2  bedroom open  | bookshelves | storage open
+    [ 1, 0,27,27, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 7, 0, 0, 0, 1], // 3  BED pair      | living open | CHEST (stash+keys)
+    [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 4  bedroom open  | living open | storage open
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,28,28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 5  ←doorway      | TABLE pair  | doorway→
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 1], // 6  bedroom open  | living open | PILLAR (mailbox)
+    [ 1, 0, 0, 0,28, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 7  nightstand    | living open | storage open
+    [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,25, 0, 0, 1], // 8  bedroom floor | living open | storage shelf
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], // 9  bedroom wall  | living mid  | storage wall
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,10, 0, 0,10, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //10               | hall pillars |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //11               | corridor    |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //12               | entry hall  |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //13               | entry hall  |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //14               | entry hall  |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0,25, 0, 0, 0, 0,25, 0, 1, 1, 1, 1, 1, 1, 1, 1], //15               | hall shelves|
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //16               | entry open  |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //17               | entry open  |
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //18               | spawn row   |
+    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  //19  DOOR_EXIT(11,19)
   ];
 
-  var _FLOOR16_SPAWN = { x: 5, y: 6, dir: 3 }; // facing NORTH (toward room interior)
+  var _FLOOR16_SPAWN = { x: 11, y: 18, dir: 3 }; // facing NORTH (toward rooms)
   var _FLOOR16_ROOMS = [
-    { x: 1, y: 1, w: 8, h: 6, cx: 5, cy: 3 }
+    { x: 1,  y: 1,  w: 5,  h: 8,  cx: 3,  cy: 4  },  // Bedroom (west)
+    { x: 7,  y: 1,  w: 9,  h: 8,  cx: 11, cy: 5  },  // Living room (center)
+    { x: 17, y: 1,  w: 6,  h: 8,  cx: 20, cy: 4  },  // Storage (east)
+    { x: 7,  y: 10, w: 9,  h: 9,  cx: 11, cy: 14 }   // Entry hall (south)
   ];
 
   function _buildFloor16() {
@@ -722,14 +759,80 @@ var FloorManager = (function () {
       doors: {
         stairsUp: null,
         stairsDn: null,
-        doorExit: { x: 5, y: 7 }   // DOOR_EXIT — back to The Promenade
+        doorExit: { x: 11, y: 19 }   // DOOR_EXIT — back to The Promenade
       },
-      doorTargets: { '5,7': '1' },  // DOOR_EXIT → The Promenade
+      doorTargets: { '11,19': '1' },  // DOOR_EXIT → The Promenade
       gridW: _FLOOR16_W,
       gridH: _FLOOR16_H,
       biome: 'home',
-      shops: []
+      shops: [],
+      books: [
+        { x: 1,  y: 1,  bookId: 'fiction_love_among_crates' },  // Bedroom shelf — personal fiction
+        { x: 9,  y: 2,  bookId: 'tip_home_schedule' },          // Living room — work schedule
+        { x: 14, y: 2,  bookId: 'lore_gleaner_guild_charter' }, // Living room — guild lore
+        { x: 21, y: 1,  bookId: 'lore_dragon_history_1' },      // Storage shelf — dragon lore
+        { x: 20, y: 8,  bookId: 'fiction_dashing_rogue' },      // Storage shelf — adventure novel
+        { x: 9,  y: 15, bookId: 'tip_bazaar_shopping' },        // Entry hall — shopping guide
+        { x: 14, y: 15, bookId: 'fiction_ghost_of_pier_nine' }   // Entry hall — ghost story
+      ]
     };
+  }
+
+  // ── Bookshelf placement for procedural interiors ────────────────
+  //
+  // Scans the first room for wall-adjacent EMPTY tiles and converts
+  // 1-2 of them to BOOKSHELF (25). Assigns biome-appropriate books.
+
+  var _INTERIOR_BOOK_PRESETS = {
+    'inn':       ['tip_inn_bonfire', 'fiction_tides_of_passion', 'lore_dragon_history_1'],
+    'guild':     ['tip_dispatch_protocol', 'notice_work_order_template', 'lore_gleaner_guild_charter'],
+    'watchpost': ['manual_admiralty_handbook', 'lore_hero_arrival', 'notice_hero_registration'],
+    'dungeon':   ['tip_combat', 'lore_dragon_history_2'],
+    'bazaar':    ['tip_bazaar_shopping', 'fiction_dashing_rogue', 'lore_adventuring_economy']
+  };
+
+  function _placeBookshelvesInInterior(fd, floorId) {
+    var T = TILES;
+    var grid = fd.grid;
+    var W = fd.gridW;
+    var H = fd.gridH;
+    var rooms = fd.rooms;
+    if (!rooms || rooms.length === 0) return;
+
+    // Use the first room (main room)
+    var room = rooms[0];
+    var candidates = [];
+
+    // Find EMPTY tiles adjacent to WALLs inside the room
+    for (var ry = room.y; ry < room.y + room.h && ry < H; ry++) {
+      for (var rx = room.x; rx < room.x + room.w && rx < W; rx++) {
+        if (grid[ry][rx] !== T.EMPTY) continue;
+        // Check if adjacent to a wall
+        var adjWall = false;
+        if (ry > 0 && grid[ry - 1][rx] === T.WALL) adjWall = true;
+        if (ry < H - 1 && grid[ry + 1][rx] === T.WALL) adjWall = true;
+        if (rx > 0 && grid[ry][rx - 1] === T.WALL) adjWall = true;
+        if (rx < W - 1 && grid[ry][rx + 1] === T.WALL) adjWall = true;
+        if (adjWall) candidates.push({ x: rx, y: ry });
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    // Place 1-2 bookshelves using seeded selection
+    var biome = fd.biome || 'guild';
+    var presets = _INTERIOR_BOOK_PRESETS[biome] || _INTERIOR_BOOK_PRESETS['guild'];
+    var count = Math.min(2, candidates.length, presets.length);
+    fd.books = [];
+
+    // Stable shuffle: pick spaced candidates
+    var step = Math.max(1, Math.floor(candidates.length / count));
+    for (var i = 0; i < count; i++) {
+      var ci = (i * step) % candidates.length;
+      var pos = candidates[ci];
+      grid[pos.y][pos.x] = T.BOOKSHELF;
+      fd.books.push({ x: pos.x, y: pos.y, bookId: presets[i] });
+    }
   }
 
   /**
@@ -800,6 +903,13 @@ var FloorManager = (function () {
 
       _enemies = EnemyAI.spawnEnemies(_floorData, _floorId, null);
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    }
+
+    // ── Post-gen bookshelf injection for interior floors ──────────
+    // Depth 2 (interiors) that weren't hand-authored get 1-2 bookshelves
+    // placed against walls in the first room.
+    if (!fromCache && _depth(_floorId) === 2 && !_floorData.books) {
+      _placeBookshelvesInInterior(_floorData, _floorId);
     }
 
     // Compute per-cell door height overrides (building entrance vs archway rule).

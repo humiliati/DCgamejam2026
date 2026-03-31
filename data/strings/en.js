@@ -217,6 +217,7 @@ i18n.register('en', {
   'interact.exit':        'Exit',
   'interact.use':         'Use',
   'interact.examine':     'Examine',
+  'interact.inspect':     'Inspect',
   'interact.harvest':     'Harvest',
   'interact.smash':       'Smash',
   'interact.reset':       'Reset Puzzle',

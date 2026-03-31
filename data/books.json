@@ -6,7 +6,7 @@
       "id": "string — unique stable identifier",
       "title": "string — display title shown at top of peek overlay",
       "icon": "string — emoji shown on the bookshelf tile and in peek header",
-      "category": "string — 'tip' | 'lore' | 'manual' | 'letter' | 'notice'",
+      "category": "string — 'tip' | 'lore' | 'manual' | 'letter' | 'notice' | 'journal' | 'fiction'",
       "pages": ["array of strings — each string is one page of text"],
       "biome": "string — which building biome this book belongs to (for random assignment)"
     }
@@ -163,6 +163,460 @@
         "ROOT FACTION — Natural remedies\n  Food, herbs, antidotes, energy restoratives"
       ],
       "biome": "bazaar"
+    },
+    {
+      "id": "journal_operative_brief",
+      "title": "Guild Personnel File — Operative Gleaner (Classification 4-C)",
+      "icon": "📋",
+      "category": "journal",
+      "pages": [
+        "PERSONNEL FILE — GLEANER'S GUILD\nClassification: Tier 4 Civic Contractor\nStatus: Active\n\nThe operative was assigned standard duties under the Guild's maintenance protocols. Role encompasses hero facilitation, floor maintenance, and timely execution of all reset cycles.",
+        "Work order assignments are issued by the Guild Dispatcher on a rolling three-day cycle. The operative's compliance record to date is noted as satisfactory. No disciplinary actions on file.",
+        "Non-disclosure requirements apply per standard agreement. Note from Oversight: all sub-depth inquiries from this operative are to be redirected to Guild Oversight, not the field Dispatcher. Flag for monitoring if pattern continues."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_contract_terms",
+      "title": "Guild Records — Standard Employment Contract (Filed Copy)",
+      "icon": "📋",
+      "category": "journal",
+      "pages": [
+        "GLEANER'S GUILD — FILED CONTRACT COPY\nContractor: [Operative Gleaner]\n\nArticle I — Duties: Maintenance, restock, and cleaning functions within designated floor zones. Assignments issued by Guild Dispatcher on a rolling three-day cycle. Equipment to be maintained in Guild-certified condition.",
+        "Article II — Compensation: Per completed floor reset, per cleaned tile (0.4c), per restocked crate (2c base, suit-match bonus applies). Hazard pay available for active combat zones. Guild dues deducted at 8% of gross.\n\nNote: this operative's hazard pay has been approved for floors 1.3.1 and below.",
+        "Article III — Non-Disclosure: The operative may not disclose contents of any chamber below depth 2.0 without Oversight Board authorization. Removal, copying, or transmission of Providence Codex materials (Admiralty Classification Registry, Section 9) is grounds for immediate termination.\n\n[Stamp: FILED — GUILD RECORDS OFFICE]"
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_field_notes_day1",
+      "title": "Dispatcher's Log — New Operative Intake (Day 1)",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "DISPATCHER'S FIELD LOG\nRe: New operative (Gleaner classification)\n\nThe new operative arrived at dawn. Initial assessment: competent, quiet, follows instructions. Assigned standard orientation route. First impressions of the dungeon floors were notably negative — the operative was not prepared for the state heroes leave behind. Standard reaction.",
+        "Flagging: The Foundry Collective rep was observed near the armory district when the operative returned from the first run. The Tide Council vendor in the Bazaar reportedly asked the operative about 'unusual finds' — twice. The operative reported both interactions unprompted. This is either admirable honesty or a test. Monitoring."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_field_notes_week1",
+      "title": "Dispatcher's Log — Operative Assessment (Week 1)",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "DISPATCHER'S FIELD LOG — WEEK 1 REVIEW\n\nHero throughput this week: three separate teams cleared B1. Restock demand exceeds the cycle budget by approximately 40%. The operative has maintained schedule despite the overload. Contract pricing does not reflect actual workload — noted for Oversight review.",
+        "Incident: An Admiralty representative was observed delivering a sealed crate from B2 to the Moonpetal. The crate bore Tide Council registry marks — standard artifact transfer paperwork. This is irregular for a medical supply route. The operative noticed and reported without prompting.",
+        "The Tide Council vendor continues to ask operatives about 'unusual finds.' This is the third report this week. The Guild advisory on external investigators uses the phrase 'standard narrative' — the operative flagged this language as unusual. Recommend continued monitoring. This one pays attention."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_hero_file",
+      "title": "Guild Oversight — Active Surveillance File: 'The Seeker'",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "GUILD OVERSIGHT — SURVEILLANCE FILE\nSubject designation: 'The Seeker'\nStatus: ACTIVE — elevated monitoring\n\nSubject is a foreign national with no verified affiliation on record. Operating under a provisional Guild license, Foundry-sponsored tier. Behavior profile: methodical, intelligence-led, not trophy-focused. Three dungeon runs completed in the first week. Loot recovery minimal. Dragon location intelligence appears to be the primary objective.",
+        "Assessment: Subject is not a standard hero. Pattern analysis indicates a target list, not an adventure itinerary. Foundry field representative sightings correlate with the Seeker's dungeon entry dates — recommend cross-referencing Foundry dispatch logs.\n\nNote: The operative assigned to this floor rotation has overlapped with the Seeker twice. No contact reported. Maintain separation.\n\n[Filed by: Guild Oversight, Week 1]"
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "lore_coralshore_founding",
+      "title": "Coralshore: A Brief Civic History",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The founding of Coralshore is generally dated to Year 1 of the Civic Calendar, though historians note that this date refers to the first formal settlement charter rather than initial habitation of the site. The coastal cliffs above the current Promenade show evidence of pre-settlement occupation.",
+        "The first settlers found the cave system below the cliffs occupied but welcoming. The Dragon Compact was formalized in Year 1 as the town's founding legal document. The Gleaner's Guild was established in Year 2, becoming one of the oldest civic institutions in the region.",
+        "Coralshore has since grown into a model settlement: commerce on the surface, tradition below, and the Guild maintaining the balance between them. The town's long prosperity is frequently attributed by local scholars to the stability of the Compact."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_the_compact_annotated",
+      "title": "The Dragon Compact — Annotated Edition",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Let it be known that the entities of the lower chambers and the citizens of the surface have reached an accord, to be maintained in perpetuity and upheld by a Guild of appointed stewards. [Ed. note: 'Entities' is the term used in the original document. The beings are not named. This imprecision is unusual in a founding legal text.]",
+        "The obligations of each party are as follows. The entities of the lower chambers shall maintain the integrity of the deep floors and shall not ascend to the surface without invitation. The surface citizens shall maintain the transitional zones and shall not descend past the first chamber without Guild escort. [Ed. note: Guild escort provisions were quietly amended in Year 47 to allow academic expeditions.]",
+        "Historians note the unusual precision of the Compact's language, which reads as the work of legal scholars rather than frontier diplomats. The Admiralty's founding Coralshore chapter was established in the same calendar year as the Compact. Whether this is coincidence or coordination, the record does not specify."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "lore_gleaner_guild_charter",
+      "title": "The Gleaner's Guild — Founding Charter, Year 2",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Be it known that the Gleaner's Guild is hereby established to serve the purposes of the Dragon Compact, to maintain the readiness of all transitional zones, and to provide trained stewards for the ongoing obligations of the surface-dwelling parties to the Compact.",
+        "Guild members are reminded that their work serves not commerce but Compact. The maintenance of these halls is a civic and legal obligation, not a labor contract. The Guild exists to fulfill a promise made to all parties at the founding of this settlement."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "lore_adventuring_economy",
+      "title": "The Adventuring Economy: A Survey",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The adventuring trade has grown from a small-scale local enterprise into Coralshore's primary export industry over the last forty years. Hero licensing, equipment sales, dungeon-route mapping, and post-expedition artifact recovery together now represent approximately 60% of all registered commercial activity.",
+        "The Foundry Collective's expansion into hero sponsorship, beginning approximately thirty years ago, is widely credited with professionalizing the trade. Sponsorship contracts standardized equipment, introduced liability frameworks, and created a reliable recruitment pipeline from the wider region.",
+        "Some economists have noted the curious correlation between Foundry Collective expansion into new regional markets and the subsequent increase in dragon sighting reports from those same areas. The Guild has attributed this to improved documentation practices. We leave further interpretation to the reader."
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "lore_dragon_naturalis",
+      "title": "On the Natural Philosophy of the Deep Dwellers",
+      "icon": "📖",
+      "category": "lore",
+      "pages": [
+        "The deep-dwelling specimens of Coralshore's lower chambers present a fascinating study in biological longevity. Examination of recovered specimens — cross-referenced with historical Compact documentation — suggests a natural lifespan significantly exceeding any comparable organism currently catalogued by the Guild's natural philosophy committee.",
+        "Organ structure in the deep-dwelling specimens reflects a degree of biological complexity that resists simple taxonomic classification. Tissue compatibility with standard preservation reagents is notably high, suggesting shared biochemical ancestry with surface organisms. The practical applications of this compatibility are under ongoing review by the Admiralty's medical research division.",
+        "Behavioral observation records from Years 1 through 44 — compiled before chamber access was restricted — indicate a degree of social intelligence in the deep-dwelling specimens inconsistent with the 'instinctive predator' classification currently used in Guild training materials. A formal reclassification proposal, submitted in Year 44 on the basis of these first-generation records, was declined by the Admiralty Oversight Board. Chamber access was restricted the following year. [REMAINDER OF SECTION REDACTED — ADMIRALTY BOARD, YEAR 45]"
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "lore_history_of_heroes",
+      "title": "A History of the Hero Trade in Coralshore",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The first formal adventuring company operating in Coralshore — The Breakwater Company — was established eighty years ago. At that time, the concept of professional dragon-hunting was largely unknown; the Company's initial charter described its purpose as 'exploration and recovery of sub-surface resources.'",
+        "The Foundry Collective opened its Coralshore armory the same year as the Breakwater Company's founding. Contemporary records do not document any formal relationship between the two. What is documented: The Breakwater Company's founding investors included several entities that later reorganized as Foundry subsidiaries.",
+        "The earliest hero recruits came with letters of recommendation from Foundry representatives. Guild records from that period describe this as a 'professional courtesy arrangement.' Contemporary historians have found the arrangement's persistence across three generations more difficult to characterize as mere courtesy."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "letter_foundry_field_report",
+      "title": "Foundry Collective — Field Bulletin 7-C",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Dragon event confirmed, Hero's Wake Floor B2. Harvest window estimated 48 hours from confirmed time of kill. Procurement team to coordinate with Tide Council receiving agent — confirm cache location before transfer. Reminder: the Moonpetal contract specifies whole tissue only; partial specimens will not be accepted at standard rate. The Guild Gleaner assigned to this rotation has not been briefed on procurement protocols. Keep it that way."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_guild_memo_redacted",
+      "title": "GUILD MEMO — RESTRICTED — OVERSIGHT BOARD ONLY",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "MEMO — OVERSIGHT BOARD CIRCULATION ONLY\nRE: Active [REDACTED] Protocol Status\n\nThe [REDACTED] protocol has been suspended pending Oversight review. Field operatives assigned to [REDACTED] floors should not be informed of the suspension. Standard work orders will continue. Any anomalous findings reported by field operatives should be escalated to [REDACTED] before entering the standard incident log.",
+        "The Compact's [REDACTED] provisions remain in effect regardless of protocol status. Handler [REDACTED] has been notified and confirms continued monitoring. Oversight Board members are reminded that discussion of this memo outside of Board sessions is a contract violation. Archive and destroy field copies after seven days."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_seeker_journal_fragment",
+      "title": "Torn Journal Page",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Day 14 in Coralshore. The dragon was not where the intelligence said it would be. When I reached the B2 cache point, the chamber had been cleaned. Not destroyed — cleaned. Equipment restocked. Traps reset. Someone had been here within the last 24 hours and tidied the evidence.",
+        "The 'monster reports' that brought me here were fabricated, or at least significantly embellished. The Guild janitor has been appearing at confirmed sites before my team arrives. Either this person is extraordinarily thorough, or they are being guided to these sites the same way I am being guided — and neither of us is seeing the full map."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_father_ashworth",
+      "title": "Letter: F. Ashworth to the Inner Twelve",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Brothers, I will not dissemble. The arithmetic is clear. At the current hero cycle rate, the last Compact-protected specimens in the deep chambers will not survive another three years. I am proposing, for the final time, that we release the Providence Codex. Let the world know what the dragons are. Let the trade collapse. Yes, the Foundry will retaliate. Yes, the Tide Council will howl. But I was not brought into this order to preside over an extinction we engineered. I will not put my seal on another harvest ledger. — F.A."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_dr_yuen_notes",
+      "title": "Research Notes — Dr. K. Yuen (Last Entry)",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "I have spent three years documenting longevity anomalies in the deep specimens. I believed I was contributing to a study of natural lifespan extension. I was wrong about the word 'natural.' I was wrong about the word 'study.' I have reviewed the Catacomb transfer logs from the last forty years. The specimens do not leave the Catacombs alive.",
+        "The Lamplit Catacombs are not a museum or a research facility. They are an abattoir with academic credentials. I am leaving these notes where I hope a curious and careful person finds them. Not a scholar — scholars here are the problem. A worker. Someone who comes through these halls and pays attention. Do not let them take these pages."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_agent_crow_report",
+      "title": "Crow Report 22 — Eyes Only",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "Weekly surveillance summary. Guild Gleaner: routine maintenance, no deviations from standard protocol, low threat classification maintained. May have accessed the Yuen materials in B2 — flagging for follow-up, non-urgent. The Seeker: threat level elevated. Running independent location grids that do not match our provided intelligence. Recommend Foundry consider interdiction before B2 access. Additional note: the Necromancer's restock schedules are irregular. Someone is maintaining a live holding area below the standard floor map. Investigating."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "letter_handler_vala",
+      "title": "Vala Dispatch — Encrypted (Partial Decrypt)",
+      "icon": "📄",
+      "category": "letter",
+      "pages": [
+        "[PARTIAL DECRYPT — CIPHER KEY INCOMPLETE]\nGLEANER — if you are reading this, you found the second key. The Guild Oversight Board is not the institution described in the founding charter. Your Dispatcher is honest and uninformed. These are not the same thing.\n[GARBLED — 4 LINES]\nYour work matters more than your contract describes.",
+        "[DECRYPT RESUMES]\nLook for the Providence Codex. It exists. It will be held somewhere you would not expect a document of that significance to be stored — somewhere that looks like maintenance, not archives. Do not trust the [GARBLED]. Do not contact me through Guild channels.\n— V."
+      ],
+      "biome": "watchpost"
+    },
+    {
+      "id": "notice_coralshore_fauna_ordinance",
+      "title": "Coralshore Municipal Ordinance #47 — Subsurface Fauna Regulation",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "MUNICIPAL ORDINANCE #47\nRegulation of Deep-Dwelling Fauna — Extraction, Transport, and Commercial Handling\n\nAll extraction, transport, and commercial sale of biological material originating from classified subsurface zones (defined as any chamber below depth 2.0 as measured by the Guild Oversight Board's official depth register) must be coordinated through the Guild and logged with the Municipal Trade Office within 48 hours of recovery.",
+        "Specimens designated under the Providence Codex are subject to special handling protocols as defined by the Admiralty Oversight Board. Commercial handling of Providence Codex specimens without written Admiralty authorization is a Class 2 Civic Violation. Guild operatives are reminded to report any recovered material to their Dispatcher rather than directly to private buyers."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "notice_guild_foreign_investigators",
+      "title": "Guild Advisory — Handling of External Investigators",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "GUILD ADVISORY — ALL FIELD OPERATIVES\nRE: Inquiries from Non-Guild Investigators\n\nOperatives are advised that external investigators — including independent researchers, foreign trade representatives, and unsponsored heroes — may be conducting inquiries in the Coralshore area during the current season. Guild policy is as follows: cooperate fully with surface-level inquiries; do not escort external parties to subsurface zones without Oversight Board authorization.",
+        "If an external investigator asks about 'dragon activity' or 'Compact provisions,' operatives should provide the standard narrative as outlined in Guild Bulletin 4 and redirect to the Dispatcher's public intake. Do not discuss deep-floor inventory, reset schedules, or the contents of any crate marked with a Tide Council registry number. If in doubt, say nothing and report the inquiry."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "notice_tide_council_artifact_prices",
+      "title": "Tide Council Market — Premium Item Registry (Season 4)",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "TIDE COUNCIL PREMIUM REGISTRY — SEASON 4\n\nArtifact Grade: Standard Surface Recovery\nCeramic fragments (pre-Compact): 8c/unit\nMetalwork (unidentified origin): 12–18c/unit\nInscribed stonework: 22c/unit\nWeapon fragments (hero-grade): 5c/unit",
+        "Artifact Grade: Subsurface — Special Handling\nDragon-scale fragments (unprocessed): 40c/unit\nDeep structural fragments (confirmed sub-depth 2.0): 55c/unit\nPreserved tissue samples (sealed vial, Guild-certified): PRICE ON REQUEST\nCompact artifacts (pre-Year 300, Admiralty provenance): ADMIRALTY CONTRACT ONLY\n\nAll special handling inquiries to the Senior Factor. No walk-in pricing."
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "notice_hero_registration",
+      "title": "Hero Registration Requirements — Coralshore Guild Office",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "HERO LICENSING — REQUIREMENTS FOR REGISTRATION\n\nAll individuals wishing to operate as licensed heroes in Coralshore must complete the following: (1) Submit proof of combat certification from a recognized institution. (2) Disclose any sponsoring organization. (3) Complete Guild safety orientation. (4) Pay the licensing fee (12c standard, 6c reduced for Guild members).",
+        "Approved sponsoring organizations include: The Foundry Collective (Premier Sponsor), The Driftwood Adventuring Society, and individual Guild members in good standing. Please note: heroes sponsored by the Foundry Collective are subject to additional procurement reporting requirements as per the Foundry's standard rider agreement. See the Dispatcher for details."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "manual_admiralty_handbook",
+      "title": "The Scholar's Companion — Admiralty Field Reference, Vol. III",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "CHAPTER 7 — SPECIMEN CATALOGUING BY DEPTH ZONE\n\nSpecimens recovered from surface zones (depth 0–1.0) should be catalogued by morphological type using the standard Admiralty species register. Attach recovery location, approximate age, and condition notes. Label with the Guild certification stamp if Guild personnel were present at recovery.",
+        "For specimens recovered from transitional zones (depth 1.0–2.0), apply standard tissue preservation protocols before cataloguing. Vial sealing must be completed within six hours of recovery to maintain sample integrity. Ship to Moonpetal Apothecary receiving bay within the 48-hour transfer window.",
+        "For specimens found in chambers below depth 3.0 — catalogued as Provisional Compact Status — do not disturb without explicit Board authorization. Our mission is documentation, not intervention. If a specimen below depth 3.0 is encountered alive and exhibiting social behavior, withdraw and file a Level 1 observation report. Do not initiate contact. Do not take samples."
+      ],
+      "biome": "watchpost"
+    },
+    {
+      "id": "manual_adventurer_quarterly",
+      "title": "The Adventurer's Quarterly — Issue 52",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "THIS SEASON'S DESTINATION: CORALSHORE!\n\nLooking for a premier dragon-hunting destination with professional support, fresh dungeon resets every three days, and the best gear money can buy? Coralshore is THE address this season. The Gleaner's Guild ensures every floor is reset and restocked before you arrive — no cold trails, no depleted caches. Just clean halls and live targets.",
+        "GEAR SPOTLIGHT: The Foundry Collective's new Dragonsteel kit comes with a full season's service contract and a Coralshore dungeon-route map updated by Foundry field representatives. Pair it with a Foundry sponsorship rider and your procurement reporting is handled — you hunt, we handle the rest. Contact your nearest Foundry representative. Adventurer's Quarterly is a proud Foundry Collective publication."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "manual_foundry_contract_terms",
+      "title": "Foundry Collective — Hero Sponsorship Agreement",
+      "icon": "📖",
+      "category": "manual",
+      "pages": [
+        "FOUNDRY COLLECTIVE SPONSORSHIP AGREEMENT — STANDARD TIER\n\nThe Foundry Collective agrees to provide the sponsored hero with: equipment at cost, dungeon intelligence briefings, field support contact, and procurement coordination services. In exchange, the hero agrees to: complete all assigned runs within the designated season window, report all significant organic finds to the assigned Foundry field representative within 12 hours.",
+        "The hero further agrees to: accept procurement guidance from Foundry field agents when guidance is provided, prioritize dragon-class encounters over other targets when Foundry intelligence identifies an active site, and maintain confidentiality regarding the specific terms of this agreement. Violations of the procurement reporting clause void all equipment provisions retroactively. Standard contract term: one season."
+      ],
+      "biome": "dungeon_drop"
+    },
+    {
+      "id": "tip_bazaar_shopping",
+      "title": "How to Buy and Sell — A Visitor's Guide",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "Welcome to the Coral Bazaar!\n\nFace a vendor and press OK to open the shop.\nBrowse with A/D. Buy with OK. Exit with Escape.",
+        "Vendors sell cards in their faction's suit.\nTide Council: ♥ Hearts — healing and magic.\nThe Foundry: ♦ Diamonds — gear and combat.\nThe Admiralty: ♣ Clubs — defence and tactics.",
+        "Tip: Check the card's power value AND suit.\nA high-power card in the wrong suit won't\nwin against the right counter.\nBuild a balanced deck — don't go all-in on one suit."
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "tip_inn_bonfire",
+      "title": "The Bonfire — Rest & Recovery",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "The bonfire at the Driftwood Inn restores\nyour health to full and clears most debuffs.",
+        "Overheal: If you rest at the bonfire while\nalready at full health, you gain a temporary\nHP shield that absorbs the next hit.\n\nThe shield lasts until you take damage\nor leave the current floor.",
+        "The inn is a safe zone — time does not\nadvance while you're inside. Take a moment.\nRead a book. Plan your next run."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "tip_home_schedule",
+      "title": "Your Work Schedule — Day & Night",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "GLEANER'S GUILD — SCHEDULE NOTICE\n\nThe day cycle runs while you're on exterior\nfloors. Dawn, Day, Dusk, Night, Curfew.",
+        "Time STOPS inside buildings and dungeons.\nYou can browse shops, read books, and rest\nwithout burning daylight.",
+        "Be home before curfew. If you collapse\non the street, you'll wake up groggy with\ndebuffs and a wasted day.\n\nYour bed is here. Use it."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "tip_dispatch_protocol",
+      "title": "Dungeon Assignment Protocol",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "GLEANER'S GUILD — DISPATCH OFFICE\n\nThe Dispatcher assigns your dungeon runs.\nSpeak to the Dispatcher to receive your\ncurrent work order.",
+        "Each work order specifies:\n• Target floor\n• Minimum readiness percentage\n• Deadline (in day-cycle units)\n\nComplete the order to receive payment.\nBonus coin for 100% readiness.",
+        "Tip: Check the order BEFORE you descend.\nKnowing the target floor helps you plan\nwhich cards and supplies to bring.\n\nThe Dispatcher is honest. The work orders\nare real. What happens below... that's\nanother matter."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "fiction_ghost_of_pier_nine",
+      "title": "The Ghost of Pier Nine",
+      "icon": "👻",
+      "category": "fiction",
+      "pages": [
+        "Everyone in Coralshore knows the story. Pier Nine collapsed in a storm thirty years ago, taking old Montague the net-mender with it. They rebuilt the pier. Montague was less cooperative.\n\nHe appears at low tide, they say. Sitting on the end of the new pier, mending a net that isn't there. If you speak to him, he'll ask if you've seen his best needle — a bone needle, carved from something he'd never name.",
+        "The night watch tried to exorcise him once. Brought a Tide Council scholar, two candles, and a bell. Montague listened politely to the entire ritual, then asked the scholar if she'd seen his needle.\n\nThe scholar said no.\n\nMontague said, 'Typical. Nobody takes care of anything anymore.'\n\nThen he vanished. The scholar filed a report. The report was three pages long and concluded that Montague was 'non-threatening but administratively frustrating.'",
+        "Some nights, if the tide is very low and the moon is right, you can hear the sound of mending — a soft, rhythmic clicking from the end of Pier Nine. The night watch has learned to ignore it.\n\nBut occasionally, a gleaner working the late shift will find a small bone needle on the boardwalk, placed carefully where someone would see it. By morning it's always gone.\n\nMontague is still looking. Coralshore is still not helping.\n\n— Collected Boardwalk Folk Tales, Vol. 3 —"
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_counting_rhyme",
+      "title": "A Counting Rhyme for Young Gleaners",
+      "icon": "🎒",
+      "category": "fiction",
+      "pages": [
+        "One for the crate that the hero broke,\nTwo for the trap that went up in smoke,\nThree for the wall with the scorch marks wide,\nFour for the monster that ran and hid,\nFive for the coin at the bottom of the pile,\nSix for the gleaner who swept every tile.",
+        "Seven for the dragon who sleeps below,\nEight for the secret that no one should know,\nNine for the door that you must not try,\nTen for the reason nobody says why.\n\nClean your floors and count your pay,\nBe home before the end of day.\nGood gleaners sweep and good gleaners rest.\nGood gleaners never ask what's in the chest.\n\n— Traditional. Sung by Coralshore children since Year 80. —"
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "fiction_tides_of_passion",
+      "title": "Tides of Passion, Vol. VII — The Harbour Master's Secret",
+      "icon": "💕",
+      "category": "fiction",
+      "pages": [
+        "Chapter Fourteen: The Storm\n\nMarina clutched the railing as the pier groaned beneath her. 'You cannot leave,' she said, rain plastering her hair to her face. 'Not tonight. Not after what happened at the lighthouse.'\n\nThe harbour master turned slowly. His jawline could have been carved from the same coral that lined the boardwalk. 'What happened at the lighthouse,' he said, 'was a mistake.'\n\n'A mistake?' Her voice broke. 'You call three consecutive evenings of passionate inventory auditing a MISTAKE?'",
+        "He removed his harbour master's cap and held it to his chest. 'Marina. I am the harbour master. You are the assistant harbourmaster. The bylaws are clear — Section 14, Paragraph 9: No romantic entanglements between harbour staff during active tidal advisories.'\n\n'Damn your bylaws, Castellan!' She seized a nearby mooring rope for emphasis. 'Damn them to the deep!'\n\nSomewhere behind them, a seagull cried. It was, Marina reflected, the most romantic seagull she had ever heard.",
+        "He stepped closer. The rain intensified, as it always did during moments of emotional significance. 'There's something I never told you,' he whispered. 'I'm not just a harbour master.'\n\n'What do you mean?'\n\n'I'm also...'\n\nHe paused. The seagull cried again.\n\n'...a licensed ship chandler.'\n\nMarina gasped. A ship chandler AND a harbour master? The raw administrative power was almost too much to bear.\n\n— TO BE CONTINUED IN VOLUME VIII —"
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_siren_of_coral_cove",
+      "title": "The Siren of Coral Cove — A Drama in Three Acts",
+      "icon": "🎭",
+      "category": "fiction",
+      "pages": [
+        "ACT I, SCENE IV — THE FISHMONGER'S CONFESSION\n\n[Interior: a modest fishmonger's stall. CORWIN stands behind the counter, gutting a halibut with visible anguish. Enter DELPHINE, wearing an impractical evening gown.]\n\nCORWIN: Delphine! You shouldn't be here. If your father — the wealthy and disapproving fish merchant — were to see us—\n\nDELPHINE: My father can take his premium tuna and cast it into the harbour. I love you, Corwin. I love your modest stall. I love your economy-grade halibut.\n\nCORWIN: [tormented] Don't say that.",
+        "DELPHINE: It's true! Every fibre of my being yearns for your discount seafood.\n\nCORWIN: But I am just a fishmonger, Delphine. A simple man who guts fish and occasionally has feelings. Your father controls the entire premium tuna market. What could I possibly offer you?\n\nDELPHINE: [seizing his halibut-stained hands] You could offer me TRUTH, Corwin. In a world of overpriced tuna, you are the only honest fish in the sea.\n\n[Thunder. Lightning. A cat knocks something off a shelf.]\n\nCORWIN: There's something you should know. I'm not just a fishmonger.",
+        "DELPHINE: [breathless] What?\n\nCORWIN: I'm also... your father's secret business partner.\n\nDELPHINE: [staggering backward into a display of sardines] NO!\n\nCORWIN: I'm sorry. The premium tuna trade... it was too lucrative to resist.\n\nDELPHINE: You MONSTER! This halibut was a LIE!\n\n[She hurls a mackerel at him and exits weeping. CORWIN catches it. He looks at the mackerel. The mackerel looks back.]\n\nCORWIN: [quietly] She's right. I've become everything I gutted against.\n\n— END OF ACT I —"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_boardwalk_confessions",
+      "title": "Beneath the Boardwalk — Confessions of a Lamplighter",
+      "icon": "🔥",
+      "category": "fiction",
+      "pages": [
+        "Entry the Fourth — On the Subject of Mrs Pemberton\n\nMrs Pemberton came to the lamp at Pier Six again tonight. She says she comes for the light, but I know the truth. She comes because her husband — the esteemed Mr Pemberton, dealer in decorative corals — has taken up with the woman who runs the shell-polishing kiosk on Lantern Row.\n\nI said nothing. A lamplighter does not gossip. A lamplighter ILLUMINATES.",
+        "'Dorian,' she said to me — for that is my name, Dorian, lamplighter third class — 'Dorian, do you think a woman can love two men?'\n\nI adjusted my wick. This is what I do when I am uncomfortable.\n\n'Mrs Pemberton,' I said, 'I light lamps. I am not qualified to illuminate the human heart.'\n\nShe laughed. It was the sort of laugh that makes a lamplighter reconsider his career choices. The sort that makes you think perhaps there is more to life than wicks and whale oil and the quiet dignity of municipal infrastructure maintenance.",
+        "'You're very wise, Dorian,' she whispered, and placed her hand on mine. My hand, which smelled of lamp oil. Her hand, which smelled of expensive coral dust and poor decisions.\n\nI should note for the record that nothing improper occurred. I am a professional. I lit Pier Six, Pier Seven, and the decorative sconce outside the harbourmaster's office, all within regulation timeframes.\n\nBut I will confess: Pier Eight was three minutes late that evening.\n\nThree minutes. Mrs Pemberton has cost me my perfect record.\n\nI shall never forgive her. I shall also be at Pier Six again tomorrow.",
+        "Entry the Seventh — On the Subject of Mr Pemberton\n\nMr Pemberton confronted me today. He said, 'I know my wife visits your lamp.'\n\nI said, 'Sir, it is a public lamp. Many people visit it. That is the purpose of a lamp.'\n\nHe narrowed his eyes. 'She speaks of you, lamplighter. She says you are WISE.'\n\n'I am not wise,' I said. 'I am adequately trained in wick maintenance and municipal lighting schedules. These are different things.'\n\nHe seemed satisfied with this answer and left. I lit Pier Six in record time that evening. Some emotions can only be expressed through punctual civic service."
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_love_among_crates",
+      "title": "Love Among the Crates — A Gleaner's Romance",
+      "icon": "💘",
+      "category": "fiction",
+      "pages": [
+        "She was everything a gleaner shouldn't want.\n\nRosalind ran the candle stall at the corner of Driftwood Lane — the one with the hand-dipped tapers and the little sign that said 'SCENTED AND UNSCENTED — NO REFUNDS.' She had ink-dark hair, a laugh like windchimes, and absolutely zero understanding of dungeon sanitation protocols.\n\n'You missed a spot,' she said one morning, leaning over the counter as I trudged past with my mop and bucket.\n\n'It's a twelve-floor dungeon,' I said. 'There are many spots.'",
+        "'You look tired,' she said.\n\nI WAS tired. I'd been scrubbing hero-residue off basement walls since four in the morning. There was something caked into the grout on floor 1.3 that I was fairly certain used to be alive.\n\n'It's honest work,' I said, because that's what you say when the work is terrible.\n\nShe slid a candle across the counter. Lavender. 'For the smell,' she said. 'You could use it.'\n\nI should have been offended. Instead I took the candle and felt something I hadn't felt since orientation week: hope. Also lavender.",
+        "We started meeting after shifts. She'd close the stall, I'd finish my route, and we'd sit on the old pier and watch the tide come in. She'd tell me about candle-making. I'd tell her about mould classifications.\n\n'Type Seven is the worst,' I said. 'Bioluminescent. Grows in spiral patterns. Beautiful, actually, but it dissolves boot leather.'\n\n'You talk about mould the way poets talk about the sea,' she said.\n\nNo one had ever said anything like that to me before. In fairness, no one had ever had reason to.",
+        "It couldn't last. She was offered a stall at the Frontier Gate market — better foot traffic, higher margins, a proper awning. Three districts away.\n\n'Come with me,' she said.\n\n'I can't. My contract's through the season. And floor 2.2 won't clean itself.'\n\nShe kissed me on the cheek. She smelled like lavender and beeswax and a future I wasn't licensed to pursue.\n\nThe candle she gave me still sits on my bedside shelf. I light it after bad shifts. The dungeon smells like death and forgotten ambition, but my room, for a few hours, smells like her.\n\n— This copy is dog-eared and has been read many times —"
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "fiction_watchmans_wife",
+      "title": "The Watchman's Wife — Season 4 Finale Novelization",
+      "icon": "📺",
+      "category": "fiction",
+      "pages": [
+        "PREVIOUSLY ON THE WATCHMAN'S WIFE:\n\nBrenna discovered that her husband Aldric was leading a double life as both a night watchman AND a volunteer at the municipal library. Confronted with evidence (an overdue library book found in his patrol cloak), Aldric confessed to everything — the late fees, the secret reading nook behind the reference section, and his passionate disagreement with the library's cataloguing system.\n\nMeanwhile, Brenna's sister Catrin has fallen for the new apothecary, unaware that he is ALSO Aldric's library co-volunteer. The love triangle has become a love RECTANGLE, and the rectangle is OVERDUE.",
+        "CHAPTER THIRTY-ONE: THE RECKONING\n\n'You lied to me,' Brenna said, her voice like ice on a winter pier. 'Every night you said you were walking the walls, and instead you were—'\n\n'Reorganizing the folklore section by region instead of author surname,' Aldric finished quietly. 'Yes.'\n\n'Do you know how that makes me feel?'\n\n'Brenna—'\n\n'ALPHABETICALLY BETRAYED, Aldric. That's how it makes me feel.'\n\nHe reached for her hand. She pulled away and accidentally knocked his reading glasses off the table. They both watched them fall. It was the most dramatic thing that had happened in their marriage since the Soup Incident of Year Three.",
+        "Catrin burst through the door, mascara running. 'Brenna! Aldric! The apothecary — Edmund — he's—'\n\n'Also a library volunteer?' Brenna said flatly.\n\nCatrin stopped mid-sob. 'How did you—'\n\n'EVERYONE is a library volunteer, Catrin. This whole town is built on lies and late fees.'\n\nAldric cleared his throat. 'To be fair, the library's collection is genuinely excellent—'\n\n'NOT NOW, ALDRIC.'\n\nOutside, the town bell struck midnight. Somewhere, a book was being returned after hours via the unmonitored drop slot. The cycle of deception continued.",
+        "NEXT SEASON PREVIEW:\n\nThe library burns down under mysterious circumstances. Aldric is the primary suspect. Brenna must choose between her husband and the TRUTH. Catrin opens a rival bookshop out of spite. Edmund the apothecary reveals he can't actually read — he was volunteering at the library to be near the HEATING SYSTEM.\n\nNew character: Aldric's mother, who has opinions about EVERYTHING.\n\n— Unauthorized novelization. The Coralshore Broadcasting Company does not endorse this product. —"
+      ],
+      "biome": "inn"
+    },
+    {
+      "id": "fiction_romantic_correspondence",
+      "title": "Madame Coralie's Guide to Romantic Correspondence",
+      "icon": "💌",
+      "category": "fiction",
+      "pages": [
+        "A NOTE FROM THE AUTHOR\n\nDearest reader — you hold in your trembling hands the DEFINITIVE guide to the written pursuit of love. Whether you are a harbour worker yearning for a fishwife, a shopkeeper pining for a lamplighter, or simply someone who has made regrettable eye contact and now must follow through, Madame Coralie is here to help.\n\nLet us begin with the fundamentals. Rule One: Never open a love letter with a discussion of the weather. The weather is not romantic. The weather is MUNICIPAL.",
+        "TEMPLATE THE THIRD — For When You Have Wronged Your Beloved\n\nMy Dearest [NAME],\n\nI write to you with a heart heavier than a wet net full of administrative guilt. What I did at [LOCATION] was unforgivable, and I say that as someone who has studied forgiveness from a theoretical perspective and found it WANTING.\n\nI should never have [OFFENCE — be specific, but not TOO specific, as these letters are sometimes read aloud in taverns]. You deserved better. You deserved someone who [POSITIVE QUALITY YOU LACK].\n\nPlease accept this [GIFT — nothing alive, nothing that was recently alive, nothing from the discount bin at the Coral Bazaar] as a token of my boundless remorse.\n\nYours in perpetual regret,\n[YOUR NAME, spelled correctly this time]",
+        "COMMON MISTAKES — A Cautionary Chapter\n\nDO NOT send poetry unless you are certain it is good. Bad poetry has ended more relationships in Coralshore than infidelity and fish-related disputes combined.\n\nDO NOT compare your beloved to the sea. Everyone compares their beloved to the sea. Your beloved is tired of being compared to the sea.\n\nDO NOT use the phrase 'my darling barnacle.' I don't care what context you think justifies it. There is no context.\n\nDO NOT send a love letter via municipal post if you are ALSO conducting a secret correspondence with someone else via municipal post. The postal workers talk. They talk about EVERYTHING.",
+        "ADVANCED TECHNIQUE — The Art of the Graceful Rejection\n\nSometimes, you are on the RECEIVING end. A love letter arrives and your heart sinks like a poorly maintained rowboat. Fear not. Madame Coralie has a template for this also.\n\nMy Dear [NAME],\n\nThank you for your letter, which I read with [choose one: 'great interest' / 'some surprise' / 'the assistance of a translator, as your handwriting is medically concerning']. Your feelings do you credit, but I must confess that my heart belongs to [another / my work / a concept of personal freedom that does not include you specifically].\n\nI wish you every happiness and strongly recommend Volume II of this guide, which covers 'Moving On With Dignity.'\n\nWarmly but Firmly,\n[YOUR NAME]"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_dashing_rogue",
+      "title": "The Dashing Rogue of Lantern Row",
+      "icon": "🗡️",
+      "category": "fiction",
+      "pages": [
+        "Chapter One: A Scoundrel Arrives\n\nThey say Rafferty Vane arrived in Coralshore with nothing but a deck of cards, a borrowed coat, and a smile that had been legally classified as a public disturbance in two neighbouring towns.\n\n'I'm looking for three things,' he told the innkeeper, dropping a single coin on the bar with practised flair. 'A room, a drink, and trouble.'\n\n'We've got rooms and drinks,' said the innkeeper. 'Trouble finds itself.'\n\n'Then we have an understanding.' He flipped the coin. It landed on its edge. Even the coin was showing off.",
+        "Vane's first mark was the card dealer at the Coral Bazaar — a woman named Sparrow who shuffled cards so fast they blurred. He sat down at her table with his borrowed coat and his dangerous smile and said, 'Deal me in.'\n\n'You can't afford this table,' Sparrow said.\n\n'I can't afford most things. It's never stopped me before.'\n\nShe dealt. He lost. He lost MAGNIFICENTLY. Three hands in a row, each more creative in its failure than the last. Sparrow was, against her professional judgement, impressed.\n\n'You're the worst card player I've ever seen,' she said.\n\n'Madam,' he said, straightening his borrowed cuffs, 'I am the worst card player ANYONE has ever seen. There is a difference.'",
+        "By the end of the week, Vane had: lost every card game on Lantern Row, been barred from two establishments and enthusiastically welcomed at three others, accidentally solved a minor property dispute through sheer charm, and developed what he described as 'a professional interest' in Sparrow the card dealer.\n\n'You're following me,' Sparrow said, not looking up from her shuffle.\n\n'I prefer to think of it as walking in the same direction with great enthusiasm.'\n\n'That's following.'\n\n'Semantics.' He produced a flower from his sleeve. It was slightly crushed. 'Peace offering?'\n\nShe took it. She didn't smile. But she didn't NOT smile, and Rafferty Vane had built entire careers on the space between those two things.",
+        "'You know,' Sparrow said one evening, as the lanterns along the Row flickered to life, 'for a man who loses every hand, you seem remarkably content.'\n\n'Winning is easy,' Vane said. 'Any fool with good cards can win. But losing with STYLE — that takes real talent. That takes commitment. That takes a man who looked at success and said, no thank you, I have other plans.'\n\n'Those are the plans of an idiot.'\n\n'An idiot with a flower in his sleeve and nowhere else to be.'\n\nThe lanterns burned. The boardwalk creaked. Somewhere in the distance, a card game was being played honestly, and Rafferty Vane wanted absolutely nothing to do with it.\n\n— BOOK ONE OF THE LANTERN ROW SCOUNDRELS SERIES —"
+      ],
+      "biome": "bazaar"
+    },
+    {
+      "id": "fiction_forbidden_tinctures",
+      "title": "Forbidden Tinctures — A Potion-Maker's Diary",
+      "icon": "⚗️",
+      "category": "fiction",
+      "pages": [
+        "Day 1.\n\nThe love potion is a perfectly legitimate branch of alchemy and I will not be shamed for pursuing it. Mrs Hartwell at the Guild canteen says it's 'unethical.' Mrs Hartwell also puts salt in her tea. I do not take ethical guidance from people who salt their tea.\n\nFormula 1: Rose petals, moonwater, essence of yearning (3 drops).\nResult: Test subject (a crab) became deeply attached to a rock. More attached than crabs usually are to rocks, I mean. Which is saying something.",
+        "Day 12.\n\nFormula 7: Crushed pearls, distilled starlight, a single eyelash donated willingly.\nResult: I accidentally drank it myself while reaching for my actual tea (note to self: LABEL YOUR CUPS). Spent the next four hours profoundly in love with my own reflection in the window. Not in a vain way — more in a 'you seem like a really good listener' way. Very unsettling.\n\nDay 15.\n\nFormula 9: Coral dust, honey, extract of dramatic tension.\nResult: Applied to Mrs Hartwell's doorknob as a field test. She fell in love with the door. Would not stop complimenting its hinges. I feel this is progress adjacent.",
+        "Day 23.\n\nFormula 14: Tide foam, candlewax, powdered ambition.\nResult: The crab from Day 1 — who I have named Gerald — drank the residue from my workbench. Gerald is now in love with Formula 7 (the window reflection one). He keeps clicking at his own reflection in the side of my cauldron. I have created a narcissistic crab. This was not the goal.\n\nDay 24.\n\nGerald has a following. Three other crabs now sit around my cauldron admiring themselves. I may have invented crab vanity. The alchemical community will not know what to do with this information.",
+        "Day 30.\n\nBreakthrough! Formula 19 works. Applied in controlled conditions (two consenting volunteers from the Driftwood Inn, observed at a safe distance). Subject A told Subject B that their 'eyes were like the sea at sunset.' Subject B said 'that's the nicest thing anyone's ever said to me' and they shared a meal.\n\nFormula 19: Just regular tea with a nice biscuit.\n\nI have spent thirty days and considerable resources to discover that the most effective love potion is TEA AND BISCUITS.\n\nGerald remains narcissistic. I will continue to monitor the situation.\n\n— This journal has water stains and smells faintly of rose petals —"
+      ],
+      "biome": "home"
     }
   ]
 }

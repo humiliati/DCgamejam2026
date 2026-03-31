@@ -32,6 +32,7 @@ var Raycaster = (function () {
 
   // Active spatial contract (set per floor)
   var _contract = null;
+  var _bloodFloorId = null;  // Set by Game to enable blood rendering
   var _rooms = null;        // Room list for chamber height lookups
   var _cellHeights = null;  // Per-cell height overrides (door entrance caps)
 
@@ -765,6 +766,20 @@ var Raycaster = (function () {
         var g = texData[texIdx + 1] * bright;
         var b = texData[texIdx + 2] * bright;
 
+        // Blood splatter tint — red overlay on dirty tiles
+        if (_bloodFloorId && typeof CleaningSystem !== 'undefined') {
+          var tileGX = Math.floor(floorX);
+          var tileGY = Math.floor(floorY);
+          var blood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
+          if (blood > 0) {
+            // Blood intensity: 0.15–0.45 depending on blood level (1–3)
+            var bloodAlpha = 0.15 * blood;
+            r = r * (1 - bloodAlpha) + 140 * bloodAlpha;
+            g = g * (1 - bloodAlpha * 1.3);
+            b = b * (1 - bloodAlpha * 1.3);
+          }
+        }
+
         // Apply fog
         if (rowFog > 0.01) {
           r = r * invFog + fr * rowFog;
@@ -1320,6 +1335,11 @@ var Raycaster = (function () {
       // of the enemy's facing vector and the enemy→player vector
       // gives -1 (back) to +1 (front). We map that to a 0→max
       // darkness overlay, giving implied depth and pathing.
+      //
+      // Exterior floors (ceilingType === 'sky') get an additional
+      // radial center-fade that implies the featureless back of the
+      // emoji — a soft silhouette where the center washes out to a
+      // color-averaged blur while the edges retain some definition.
       if (s.facing && spriteH > 0) {
         var fv = _FACE_VEC[s.facing];
         if (fv) {
@@ -1330,14 +1350,47 @@ var Raycaster = (function () {
           var darkness = (1 - dot) * 0.5 * FACING_DARK_MAX;
 
           if (darkness > 0.01) {
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = 'rgba(0,0,0,' + darkness.toFixed(3) + ')';
-            ctx.fillRect(
-              screenX - spriteW * 0.45,
-              spriteCenterY - spriteH * 0.45,
-              spriteW * 0.9,
-              spriteH * 0.9
-            );
+            var isExterior = _contract && _contract.ceilingType === 'sky';
+            var backFactor = Math.max(0, -dot);   // 0 when front, 1 when directly away
+
+            if (isExterior && backFactor > 0.2) {
+              // ── Exterior back-of-sprite: radial silhouette ──
+              // A radial gradient that is opaque at center and transparent
+              // at edges — the emoji's details vanish in the middle while
+              // the silhouette outline persists. Combined with fog color
+              // so the back blends into the environment.
+              var silAlpha = Math.min(0.65, backFactor * 0.7);
+              var fogR = fogColor ? fogColor.r : 0;
+              var fogG = fogColor ? fogColor.g : 0;
+              var fogB = fogColor ? fogColor.b : 0;
+              var silR = Math.round(fogR * 0.4);
+              var silG = Math.round(fogG * 0.4);
+              var silB = Math.round(fogB * 0.4);
+              var sX = screenX;
+              var sY = spriteCenterY;
+              var sR = Math.max(spriteW, spriteH) * 0.45;
+              var grad = ctx.createRadialGradient(sX, sY, 0, sX, sY, sR);
+              grad.addColorStop(0, 'rgba(' + silR + ',' + silG + ',' + silB + ',' + silAlpha.toFixed(3) + ')');
+              grad.addColorStop(0.6, 'rgba(' + silR + ',' + silG + ',' + silB + ',' + (silAlpha * 0.4).toFixed(3) + ')');
+              grad.addColorStop(1, 'rgba(' + silR + ',' + silG + ',' + silB + ',0)');
+              ctx.globalAlpha = 1;
+              ctx.fillStyle = grad;
+              ctx.fillRect(
+                screenX - spriteW * 0.5,
+                spriteCenterY - spriteH * 0.5,
+                spriteW, spriteH
+              );
+            } else {
+              // ── Interior / dungeon: flat darkness overlay ──
+              ctx.globalAlpha = 1;
+              ctx.fillStyle = 'rgba(0,0,0,' + darkness.toFixed(3) + ')';
+              ctx.fillRect(
+                screenX - spriteW * 0.45,
+                spriteCenterY - spriteH * 0.45,
+                spriteW * 0.9,
+                spriteH * 0.9
+              );
+            }
           }
         }
       }
@@ -1538,6 +1591,7 @@ var Raycaster = (function () {
     init: init,
     render: render,
     setBiomeColors: setBiomeColors,
-    setContract: setContract
+    setContract: setContract,
+    setBloodFloorId: function (id) { _bloodFloorId = id; }
   };
 })();

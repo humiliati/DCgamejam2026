@@ -241,6 +241,11 @@ var EnemyAI = (function () {
     if (nx < 0 || nx >= W || ny < 0 || ny >= H) return;
     if (!TILES.isWalkable(grid[ny][nx])) return;
 
+    // Store previous position for lerp interpolation
+    enemy._prevX = enemy.x;
+    enemy._prevY = enemy.y;
+    enemy._lerpT = 0;
+
     // Update facing
     _faceToward(enemy, pt);
     enemy.x = nx;
@@ -273,6 +278,12 @@ var EnemyAI = (function () {
   function _tryMove(enemy, nx, ny, grid, W, H) {
     if (nx < 0 || nx >= W || ny < 0 || ny >= H) return false;
     if (!TILES.isWalkable(grid[ny][nx])) return false;
+
+    // Store previous position for lerp interpolation
+    enemy._prevX = enemy.x;
+    enemy._prevY = enemy.y;
+    enemy._lerpT = 0;
+
     _faceToward(enemy, { x: nx, y: ny });
     enemy.x = nx;
     enemy.y = ny;

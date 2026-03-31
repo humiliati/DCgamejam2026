@@ -377,7 +377,7 @@ Suit tint hues (avoiding resource UI colours):
 - **Cross-biome**: 5% chance of rare cross-biome spawn (Hero's Shadow, Wandering Vendor)
 - **Legacy fallback**: If JSON load fails, falls back to 6-enemy hardcoded pool
 
-Biome resolution from floor ID: `"1.1.1-2"` = cellar, `"1.1.3-5"` = foundry, `"1.1.6+"` = sealab.
+Biome resolution from floor ID: `"1.3.1-2"` = cellar, `"2.2.1-2"` = hero's wake, `"3.1.1+"` = deep vaults.
 
 ### 4.4 Type Field Pipeline
 

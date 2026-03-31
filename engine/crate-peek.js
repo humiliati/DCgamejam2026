@@ -88,9 +88,14 @@ var CratePeek = (function () {
     var tile = floorData.grid[fy][fx];
     if (tile !== TILES.BREAKABLE) { _hide(); return; }
 
-    // Same tile we were already peeking at
+    // Same tile we were already peeking at — hold steady
     if (_active && _facingTile === tile && _facingX === fx && _facingY === fy) {
       return;
+    }
+
+    // Different tile while active — dismiss first, reset debounce
+    if (_active && (_facingX !== fx || _facingY !== fy)) {
+      _hide();
     }
 
     // New tile — accumulate debounce
