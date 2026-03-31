@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dungeon Gleaner — Cobweb System Test Harness</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1a1a2e; color: #d0d0d0; font-family: monospace;
+      padding: 16px;
+    }
+    h1 { font-size: 14px; color: #f0d070; margin-bottom: 12px; }
+    h2 { font-size: 12px; color: #a0c8e0; margin: 16px 0 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+
+    .suite {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+    .test {
+      font-size: 11px;
+      line-height: 1.8;
+      display: flex;
+      gap: 8px;
+    }
+    .pass { color: #78e8a0; }
+    .fail { color: #e87878; }
+    .badge {
+      display: inline-block;
+      min-width: 40px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    #summary {
+      font-size: 12px;
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+    #summary.all-pass { background: rgba(80,220,120,0.12); color: #78e8a0; }
+    #summary.has-fail  { background: rgba(220,80,80,0.12);  color: #e87878; }
+
+    /* Corridor grid preview */
+    #grid-preview {
+      display: inline-block;
+      font-size: 10px;
+      line-height: 1.4;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    .cell-wall  { color: #555; }
+    .cell-empty { color: #8fd; }
+    .cell-elig  { color: #f0d070; font-weight: bold; }
+    .cell-cob   { color: #78e8a0; }
+  </style>
+</head>
+<body>
+  <h1>🕷️ Cobweb System — Test Harness</h1>
+
+  <!-- Minimal TILES stub so cobweb-system.js can load standalone -->
+  <script>
+    // Minimal TILES stub — matches engine/tiles.js constants used by CobwebSystem
+    var TILES = {
+      EMPTY:       0,
+      WALL:        1,
+      DOOR:        2,
+      PILLAR:      10,
+      BREAKABLE:   11,
+      TREE:        21,
+      SHRUB:       22,
+      BOOKSHELF:   25,
+      BAR_COUNTER: 26
+    };
+  </script>
+
+  <!-- Load cobweb-system module under test -->
+  <script src="../engine/cobweb-system.js"></script>
+
+  <script>
+    // ── Tiny test framework ─────────────────────────────────────────
+    var _total = 0, _passed = 0, _failed = 0;
+    var _currentSuite = null;
+
+    function suite(name, fn) {
+      _currentSuite = document.createElement('div');
+      _currentSuite.className = 'suite';
+      var h = document.createElement('h2');
+      h.textContent = name;
+      _currentSuite.appendChild(h);
+      document.body.appendChild(_currentSuite);
+      fn();
+      _currentSuite = null;
+    }
+
+    function test(description, ok) {
+      _total++;
+      var row = document.createElement('div');
+      row.className = 'test';
+      var badge = document.createElement('span');
+      var msg   = document.createElement('span');
+      if (ok) {
+        _passed++;
+        badge.className = 'badge pass';
+        badge.textContent = 'PASS';
+        msg.className = 'pass';
+      } else {
+        _failed++;
+        badge.className = 'badge fail';
+        badge.textContent = 'FAIL';
+        msg.className = 'fail';
+      }
+      msg.textContent = description;
+      row.appendChild(badge);
+      row.appendChild(msg);
+      (_currentSuite || document.body).appendChild(row);
+    }
+
+    // ── Build a small test grid ─────────────────────────────────────
+    // Layout (W=9, H=7):
+    //   All WALL except:
+    //     Row 3: columns 1-7 → EMPTY  (horizontal corridor, 7 wide, walls N/S ✓)
+    //     Col 4: rows 1-5   → EMPTY  (vertical corridor, 5 tall, walls E/W ✓)
+    //     Intersection (4,3) is already EMPTY from the horizontal corridor.
+    //
+    //   Expected eligible positions:
+    //     Horizontal corridor (row 3, cols 1-7): all 7 positions,
+    //       EXCEPT col 4 (intersection — walls E/W absent)
+    //     Vertical corridor (col 4, rows 1-5): all 5 positions,
+    //       EXCEPT row 3 (intersection — walls N/S absent)
+
+    var W = 9, H = 7;
+    var grid = [];
+    for (var y = 0; y < H; y++) {
+      grid[y] = [];
+      for (var x = 0; x < W; x++) {
+        grid[y][x] = TILES.WALL;
+      }
+    }
+
+    // Horizontal corridor: row 3, cols 1-7
+    for (var x = 1; x <= 7; x++) grid[3][x] = TILES.EMPTY;
+
+    // Vertical corridor: col 4, rows 1-5
+    for (var y = 1; y <= 5; y++) grid[y][4] = TILES.EMPTY;
+
+    var floorData = { grid: grid, gridW: W, gridH: H };
+    var FLOOR_A = '2.2.1';
+    var FLOOR_B = '2.2.2';
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.onFloorLoad — eligibility detection', function () {
+
+      CobwebSystem.onFloorLoad(floorData, FLOOR_A);
+      var eligible = CobwebSystem.getEligible(FLOOR_A);
+
+      test('getEligible returns an array', Array.isArray(eligible));
+      test('at least 1 eligible position found', eligible.length >= 1);
+
+      // Horizontal corridor cells (walls on N and S, open E/W, run ≥ 3)
+      // Col 4 row 3 is the intersection so it has open N and S → vertical, not horizontal
+      var hCount = eligible.filter(function(p){ return p.corridorDir === 'H'; }).length;
+      var vCount = eligible.filter(function(p){ return p.corridorDir === 'V'; }).length;
+
+      test('horizontal corridor positions detected', hCount >= 1);
+      test('vertical corridor positions detected',   vCount >= 1);
+
+      // The intersection tile (4, 3) is open in both directions — it should
+      // NOT qualify for either corridor (neither axis has walled perpendiculars)
+      test('intersection tile (4,3) is NOT eligible',
+        !CobwebSystem.isEligiblePosition(4, 3, FLOOR_A));
+
+      // Wall tile can never be eligible
+      test('WALL tile (0,0) is not eligible',
+        !CobwebSystem.isEligiblePosition(0, 0, FLOOR_A));
+
+      // Horizontal corridor midpoint (no intersection)
+      test('mid-horizontal tile (2,3) is eligible (H)',
+        CobwebSystem.isEligiblePosition(2, 3, FLOOR_A));
+
+      // Vertical corridor midpoint (no intersection)
+      test('mid-vertical tile (4,2) is eligible (V)',
+        CobwebSystem.isEligiblePosition(4, 2, FLOOR_A));
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.install / hasAt', function () {
+
+      // Install on an eligible position
+      var ok = CobwebSystem.install(2, 3, FLOOR_A, 'standalone');
+      test('install succeeds on eligible corridor tile', ok === true);
+      test('hasAt returns true after install', CobwebSystem.hasAt(2, 3, FLOOR_A));
+
+      // Install on same tile again → should fail (already intact)
+      var dup = CobwebSystem.install(2, 3, FLOOR_A, 'standalone');
+      test('duplicate install returns false', dup === false);
+
+      // Install on non-eligible tile → should fail
+      var bad = CobwebSystem.install(0, 0, FLOOR_A, 'standalone');
+      test('install on wall tile returns false', bad === false);
+      test('hasAt is false for failed install', !CobwebSystem.hasAt(0, 0, FLOOR_A));
+
+      // wall_overlay bypasses corridor eligibility check
+      var wallOk = CobwebSystem.install(0, 0, FLOOR_A, 'wall_overlay');
+      test('wall_overlay install on any tile succeeds', wallOk === true);
+      test('hasAt true for wall_overlay cobweb', CobwebSystem.hasAt(0, 0, FLOOR_A));
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.destroy / onEntityMove', function () {
+
+      // Destroy the cobweb at (2,3)
+      var destroyed = CobwebSystem.destroy(2, 3, FLOOR_A);
+      test('destroy returns true for intact cobweb', destroyed === true);
+      test('hasAt returns false after destroy', !CobwebSystem.hasAt(2, 3, FLOOR_A));
+
+      // Destroy again → should return false
+      var secondDestroy = CobwebSystem.destroy(2, 3, FLOOR_A);
+      test('destroy on already-destroyed cobweb returns false', secondDestroy === false);
+
+      // Install fresh cobweb for onEntityMove test
+      CobwebSystem.install(4, 2, FLOOR_A, 'standalone');
+      var moved = CobwebSystem.onEntityMove(4, 2, FLOOR_A);
+      test('onEntityMove destroys standalone cobweb', moved === true);
+      test('hasAt false after onEntityMove', !CobwebSystem.hasAt(4, 2, FLOOR_A));
+
+      // wall_overlay cobweb: onEntityMove should NOT destroy it
+      // (only standalone cobwebs are destroyed by movement)
+      CobwebSystem.install(1, 0, FLOOR_A, 'wall_overlay');
+      var wallMove = CobwebSystem.onEntityMove(1, 0, FLOOR_A);
+      test('onEntityMove does NOT destroy wall_overlay cobweb', wallMove === false);
+      test('wall_overlay cobweb intact after entity move', CobwebSystem.hasAt(1, 0, FLOOR_A));
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.getIntact / getReadinessBonus', function () {
+
+      // Reset floor and install known quantity
+      CobwebSystem.resetFloor(FLOOR_A);
+
+      CobwebSystem.install(2, 3, FLOOR_A, 'standalone');
+      CobwebSystem.install(3, 3, FLOOR_A, 'standalone');
+      CobwebSystem.install(4, 2, FLOOR_A, 'standalone');
+
+      var intact = CobwebSystem.getIntact(FLOOR_A);
+      test('getIntact returns 3 cobwebs', intact.length === 3);
+
+      var bonus = CobwebSystem.getReadinessBonus(FLOOR_A);
+      test('readiness bonus = 3 × READINESS_PER_COB',
+        bonus === 3 * CobwebSystem.READINESS_PER_COB);
+
+      // Destroy one
+      CobwebSystem.destroy(2, 3, FLOOR_A);
+      var intact2 = CobwebSystem.getIntact(FLOOR_A);
+      test('getIntact decreases after destroy', intact2.length === 2);
+      test('readiness bonus decreases after destroy',
+        CobwebSystem.getReadinessBonus(FLOOR_A) === 2 * CobwebSystem.READINESS_PER_COB);
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.resetFloor', function () {
+
+      CobwebSystem.resetFloor(FLOOR_A);
+      test('resetFloor clears all cobwebs', CobwebSystem.getIntact(FLOOR_A).length === 0);
+      test('readiness bonus is 0 after reset', CobwebSystem.getReadinessBonus(FLOOR_A) === 0);
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem.getCorridorDir', function () {
+
+      var dirH = CobwebSystem.getCorridorDir(2, 3, FLOOR_A);
+      test('getCorridorDir returns H for horizontal position', dirH === 'H');
+
+      var dirV = CobwebSystem.getCorridorDir(4, 2, FLOOR_A);
+      test('getCorridorDir returns V for vertical position', dirV === 'V');
+
+      var dirNone = CobwebSystem.getCorridorDir(0, 0, FLOOR_A);
+      test('getCorridorDir returns null for non-eligible tile', dirNone === null);
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem — Floor isolation', function () {
+
+      // onFloorLoad without existing state creates fresh cobweb map
+      CobwebSystem.onFloorLoad(floorData, FLOOR_B);
+      test('onFloorLoad creates isolated cobweb state for new floor',
+        CobwebSystem.getIntact(FLOOR_B).length === 0);
+
+      // Installing on FLOOR_B does not affect FLOOR_A
+      CobwebSystem.install(2, 3, FLOOR_A, 'standalone');
+      CobwebSystem.install(2, 3, FLOOR_B, 'standalone');
+      CobwebSystem.destroy(2, 3, FLOOR_A);
+      test('destroy on FLOOR_A does not affect FLOOR_B cobweb',
+        CobwebSystem.hasAt(2, 3, FLOOR_B) === true);
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    suite('CobwebSystem — Frozen API', function () {
+
+      test('CobwebSystem is frozen (immutable public API)',
+        Object.isFrozen(CobwebSystem));
+      test('COBWEB_TILE constant is 27',
+        CobwebSystem.COBWEB_TILE === 27);
+      test('READINESS_PER_COB constant is 5',
+        CobwebSystem.READINESS_PER_COB === 5);
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    // Optional: corridor grid preview
+    (function () {
+      var h = document.createElement('h2');
+      h.textContent = 'Grid Preview (yellow = eligible, green = cobweb installed)';
+      document.body.appendChild(h);
+
+      CobwebSystem.resetFloor(FLOOR_A);
+      CobwebSystem.onFloorLoad(floorData, FLOOR_A);
+      CobwebSystem.install(2, 3, FLOOR_A, 'standalone');
+      CobwebSystem.install(4, 2, FLOOR_A, 'standalone');
+
+      var eligible = CobwebSystem.getEligible(FLOOR_A);
+      var eligSet  = {};
+      eligible.forEach(function(p){ eligSet[p.x + ',' + p.y] = p.corridorDir; });
+
+      var pre = document.createElement('pre');
+      pre.id  = 'grid-preview';
+      var lines = [];
+      for (var gy = 0; gy < H; gy++) {
+        var row = '';
+        for (var gx = 0; gx < W; gx++) {
+          var k = gx + ',' + gy;
+          if (CobwebSystem.hasAt(gx, gy, FLOOR_A)) {
+            row += '<span class="cell-cob">W</span>';
+          } else if (eligSet[k]) {
+            row += '<span class="cell-elig">' + eligSet[k] + '</span>';
+          } else if (grid[gy][gx] === TILES.EMPTY) {
+            row += '<span class="cell-empty">·</span>';
+          } else {
+            row += '<span class="cell-wall">█</span>';
+          }
+        }
+        lines.push(row);
+      }
+      pre.innerHTML = lines.join('\n') + '\n\nLegend: █=wall  ·=open  H/V=eligible corridor  W=cobweb installed';
+      document.body.appendChild(pre);
+    })();
+
+    // ─────────────────────────────────────────────────────────────────
+    // Summary
+    var summary = document.createElement('div');
+    summary.id = 'summary';
+    summary.className = _failed === 0 ? 'all-pass' : 'has-fail';
+    summary.textContent = 'Results: ' + _passed + ' passed / ' + _failed + ' failed / ' + _total + ' total';
+    document.body.appendChild(summary);
+  </script>
+</body>
+</html>
