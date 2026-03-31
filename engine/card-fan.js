@@ -40,18 +40,18 @@ var CardFan = (function () {
   var BASE_CARD_W  = 56;        // Card width at 1x
   var BASE_CARD_H  = 80;        // Card height at 1x
   var ARC_ANGLE    = Math.PI / 3;  // Total fan arc (~60°)
-  var BASE_PIVOT_Y = 160;      // Pivot point below viewport bottom at 1x
+  var BASE_PIVOT_Y = 60;       // Pivot point below viewport bottom at 1x (raised 20px so card bottoms stay in view)
   var LIFT_PX      = 20;       // Hover lift amount
   var LIFT_SCALE   = 1.12;     // Hover scale-up
   var DEAL_STAGGER = 60;       // ms stagger per card on open
   var PLAY_DURATION = 200;     // ms card-fly-forward animation
 
   // Mode-aware sizing:
-  //   Combat:     2.0x base (100% larger), 30px higher
+  //   Combat:     2.0x base (100% larger), 60px higher
   //   Non-combat: 2.5x base (150% larger) for easy inspection
   var COMBAT_SCALE     = 2.0;
   var EXPLORE_SCALE    = 2.5;
-  var COMBAT_LIFT      = 30;   // px additional upward shift in combat
+  var COMBAT_LIFT      = 60;   // px additional upward shift in combat (increased for status bar clearance)
 
   // ── Derived (recalculated on open) ──────────────────────────────
   var CARD_W       = BASE_CARD_W;

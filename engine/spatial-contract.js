@@ -126,6 +126,12 @@ var SpatialContract = (function () {
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_cobble',
 
+      // ── Per-tile-type floor texture overrides ──
+      // Keyed by TILES constant value → TextureAtlas texture ID.
+      // Tiles matching a key here render a different floor texture
+      // (e.g. TREE and SHRUB tiles render grass instead of cobble).
+      tileFloorTextures: opts.tileFloorTextures || null,
+
       // ── Per-tile-type wall height overrides ──
       // Keyed by TILES constant value → height multiplier.
       // Used for tiles that should render taller/shorter than the contract default
@@ -134,6 +140,7 @@ var SpatialContract = (function () {
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time passes on the surface
+      timeRate:         opts.timeRate || 24,  // Game-minutes per real minute (Stardew pacing: 1440/24 = 60 real min per day)
       canNest:          true,    // Can contain doors to floorsN.N
       maxNestDepth:     2        // Can go N → N.N → N.N.N
     });
@@ -195,11 +202,15 @@ var SpatialContract = (function () {
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_wood',
 
+      // ── Per-tile-type floor texture overrides ──
+      tileFloorTextures: opts.tileFloorTextures || null,
+
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,
 
       // ── Gameplay rules ──
       timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
+      timeRate:         0,       // Frozen — shops/inns are safe havens (matches timeFreeze)
       canNest:          true,    // Can contain doors to floorsN.N.N
       maxNestDepth:     1
     });
@@ -272,11 +283,15 @@ var SpatialContract = (function () {
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_stone',
 
+      // ── Per-tile-type floor texture overrides ──
+      tileFloorTextures: opts.tileFloorTextures || null,
+
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time ticks in the dungeons — pressure!
+      timeRate:         opts.timeRate || 12,  // Half exterior rate — dungeons eat time but aren't oppressive
       canNest:          false,   // Bottom of the hierarchy
       maxNestDepth:     0
     });

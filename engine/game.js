@@ -73,6 +73,12 @@ var Game = (function () {
   var _homeDoorRestOffered = false;
   var _dayCyclePausedBeforeMenu = false;
 
+  // ── Fire crackle ambient timer ──────────────────────────────────
+  var _fireCrackleTimer = 0;
+
+  // ── Passive time drip timer (exterior floors) ──────────────────
+  var _passiveTimeTimer = 0;
+
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
@@ -437,6 +443,34 @@ var Game = (function () {
         SessionStats.reset();
         _initGameplay();
       }
+
+      // Sync player avatar to DebriefFeed (callsign, class, emoji)
+      var _ps = Player.state();
+      if (typeof DebriefFeed !== 'undefined' && DebriefFeed.setAvatar) {
+        DebriefFeed.setAvatar(
+          _ps.avatarEmoji || '\uD83D\uDDE1\uFE0F',
+          _ps.callsign   || 'ROOK',
+          _ps.avatarName  || 'Blade'
+        );
+      }
+
+      // Equip starting class item if nothing equipped yet
+      if (_ps.equipped[0] === null && _ps.avatarName) {
+        var _startItems = {
+          'Blade':    { emoji: '\uD83D\uDDE1\uFE0F', name: 'Iron Sword',    subtype: 'melee',   stat: 'str',     value: 2 },
+          'Ranger':   { emoji: '\uD83C\uDFF9',       name: 'Short Bow',     subtype: 'ranged',  stat: 'dex',     value: 2 },
+          'Shadow':   { emoji: '\uD83D\uDCA8',       name: 'Smoke Bomb',    subtype: 'stealth', stat: 'stealth', value: 2 },
+          'Sentinel': { emoji: '\uD83D\uDEE1\uFE0F', name: 'Tower Shield',  subtype: 'shield',  stat: 'hp',      value: 2 },
+          'Seer':     { emoji: '\uD83D\uDD2E',       name: 'Focus Crystal', subtype: 'focus',   stat: 'energy',  value: 2 },
+          'Wildcard': { emoji: '\uD83C\uDCCF',       name: 'Lucky Card',    subtype: 'wild',    stat: 'random',  value: 2 }
+        };
+        var _si = _startItems[_ps.avatarName];
+        if (_si) {
+          _ps.equipped[0] = _si;
+          if (typeof QuickBar !== 'undefined' && QuickBar.refresh) QuickBar.refresh();
+        }
+      }
+
       // Show HUD, enable mouse look
       _showHUD(true);
       MouseLook.init(_canvas);
@@ -754,6 +788,11 @@ var Game = (function () {
           }
         }, 600);
       });
+    }
+
+    // Advance game clock past 06:00 start (operatives deploy at dawn, arrive ~06:15)
+    if (typeof DayCycle !== 'undefined' && DayCycle.advanceTime) {
+      DayCycle.advanceTime(15);
     }
 
     // HUD day/cycle counter
@@ -1276,7 +1315,7 @@ var Game = (function () {
                FloorTransition.isTransitioning() ||
                DialogBox.moveLocked() ||
                (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive && StatusBar.isDialogueActive()) ||
-               (typeof IntroWalk !== 'undefined' && IntroWalk.isActive()) ||
+               (typeof IntroWalk !== 'undefined' && IntroWalk.isBlocking()) ||
                (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen());
       },
       onInteract: _interact,
@@ -1350,48 +1389,48 @@ var Game = (function () {
 
   // ── Intro auto-walk sequence ──────────────────────────────────────
   //
-  // After avatar selection, player spawns on Floor 0 exterior (9,13)
-  // facing north. Auto-walk through the courtyard, past the bonfire,
-  // up to the building facade. Then auto-trigger DOOR interaction at
-  // (9,6) → depth 1→2 transition into the Entry Lobby (Floor 1).
+  // After avatar selection, player spawns on Floor 0 exterior (19,26)
+  // facing north on the 40×30 grid. Auto-walk through the courtyard,
+  // past the bonfire, up to the building facade. Then auto-trigger
+  // DOOR interaction at (19,5) → depth 1→1 transition to Promenade.
   //
-  // Player gets free movement inside the lobby. They find STAIRS_DN
-  // to descend into the dungeon (depth 2→3, Floor 2+).
+  // Player gets free movement on the Promenade. They find building
+  // DOORs to descend into interiors and dungeons.
   //
-  // Path: (9,13) → 6 steps north to (9,7) — one tile south of DOOR
-  // Auto-interact DOOR at (9,6) → "Entering..." → Floor 1 lobby.
+  // Path: (19,26) → 20 steps north to (19,6) — one tile south of DOOR
+  // Auto-interact DOOR at (19,5) → "Entering..." → Floor 1 Promenade.
 
   function _startIntroWalk() {
     if (typeof IntroWalk === 'undefined') return;
 
-    // 6 steps north: (9,13) → (9,7), one tile south of the building DOOR
-    var steps = [];
-    for (var i = 0; i < 6; i++) {
-      steps.push({ action: 'forward', delay: 550 });
-    }
+    // Cursor-hijack tutorial: shows a fake cursor clicking the minimap
+    // to teach the player about click-to-move pathfinding. Player has
+    // free input the entire time — if they move, the demo aborts.
+    //
+    // Target: DOOR at (19,5) on the 40×30 Floor 0 grid.
+    // MinimapNav walks the player to (19,6) — one tile south of DOOR.
+    // onComplete triggers the door transition to The Promenade.
 
     IntroWalk.start({
-      steps: steps,
+      targetX: 19,
+      targetY: 5,
       startDelay: 1200,  // Let player see the exterior courtyard
       onComplete: function () {
-        // Player is at (9, 7) facing north — DOOR at (9, 6)
-        // Trigger depth 1→2 door transition to Entry Lobby
+        // Player arrived at (19,6) facing north — DOOR at (19,5)
+        // Trigger depth 1→1 door transition to The Promenade.
         //
         // IMPORTANT: Call go() synchronously — no setTimeout. IntroWalk
         // sets _active=false before calling onComplete, which unblocks
-        // InputPoll. If we delay with setTimeout, the very next frame
-        // can poll input, see the player facing a door, and trigger a
-        // manual tryInteractDoor that races with our scripted go().
-        // Calling go() here sets _transitioning=true before any frame
-        // has a chance to poll, closing the race window.
-        console.log('[Game] Intro walk complete — entering building');
+        // InputPoll. If we delay, the next frame can poll input and
+        // trigger a manual tryInteractDoor that races with our go().
+        console.log('[Game] Cursor-hijack tutorial complete — entering building');
 
         // Start door animation (visual: door opens before fade)
         if (typeof DoorAnimator !== 'undefined') {
-          DoorAnimator.start(9, 6, TILES.DOOR, 'advance', '0', '1');
+          DoorAnimator.start(19, 5, TILES.DOOR, 'advance', '0', '1');
         }
 
-        DoorContracts.setContract({ x: 9, y: 6 }, 'advance', TILES.DOOR);
+        DoorContracts.setContract({ x: 19, y: 5 }, 'advance', TILES.DOOR, '0');
         FloorTransition.go('1', 'advance');
       }
     });
@@ -1578,8 +1617,8 @@ var Game = (function () {
 
     enemies.push({
       id:          _dispatcherSpawnId,
-      x:           5,   // Dungeon entrance DOOR tile on Floor 1
-      y:           2,
+      x:           12,  // Near Coral Bazaar entrance on Floor 1 (40×30 grid)
+      y:           5,
       name:        'Dispatcher',
       emoji:       stack ? stack.head : '🐉',
       stack:       stack,
@@ -1944,8 +1983,18 @@ var Game = (function () {
 
   var _dayCounterEl = null;
 
+  // ── Week-strip widget config ───────────────────────────────────
+  // Day abbreviations and dungeon suit symbols per hero-cycle day
+  var _WEEK_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  // Suit symbols for hero-day indicators (each dungeon gets a color+suit)
+  var _DUNGEON_SUITS = [
+    { sym: '\u2660', color: '#8888ff' },  // ♠ spades — blue dungeon
+    { sym: '\u2666', color: '#ff6666' },  // ♦ diamonds — red dungeon
+    { sym: '\u2663', color: '#66cc66' }   // ♣ clubs — green dungeon
+  ];
+
   /**
-   * Create the day counter DOM element (anchored near minimap).
+   * Create the day counter DOM element — week-strip with day nodes.
    */
   function _initDayCounter() {
     _dayCounterEl = document.getElementById('hud-day-counter');
@@ -1953,12 +2002,13 @@ var Game = (function () {
       _dayCounterEl = document.createElement('div');
       _dayCounterEl.id = 'hud-day-counter';
       _dayCounterEl.style.cssText =
-        'position:absolute;top:10px;right:180px;' +
-        'font:bold 14px monospace;color:#d4c8a0;' +
+        'position:absolute;top:10px;right:308px;' +
+        'font:bold 13px var(--font-data, monospace);color:#d4c8a0;' +
         'text-shadow:0 1px 3px rgba(0,0,0,0.8);' +
-        'z-index:15;pointer-events:none;' +
-        'background:rgba(10,8,5,0.6);padding:4px 10px;' +
-        'border:1px solid rgba(180,160,120,0.3);border-radius:4px;';
+        'z-index:15;pointer-events:auto;' +
+        'background:rgba(10,8,5,0.7);padding:4px 8px;' +
+        'border:1px solid rgba(180,160,120,0.3);border-radius:4px;' +
+        'display:flex;align-items:center;gap:2px;';
       var viewport = document.getElementById('viewport');
       if (viewport) viewport.appendChild(_dayCounterEl);
     }
@@ -1966,7 +2016,8 @@ var Game = (function () {
   }
 
   /**
-   * Update the day counter text.
+   * Update the week-strip widget — [S M ♠ W T F S] style display.
+   * Current day highlighted and bobbing. Hero days show suit symbol.
    */
   function _updateDayCounter() {
     if (!_dayCounterEl) return;
@@ -1974,30 +2025,57 @@ var Game = (function () {
 
     var day = DayCycle.getDay();
     var heroInterval = DayCycle.HERO_DAY_INTERVAL || 3;
-    var dayInCycle = (day % heroInterval) + 1;
-    var daysUntil = DayCycle.daysUntilHeroDay();
+    var weekDayIndex = day % 7;
     var isHero = DayCycle.isHeroDay();
+    var timeStr = DayCycle.getTimeString ? DayCycle.getTimeString() : '06:00';
 
-    var text = 'Day ' + (day + 1) + ' (' + dayInCycle + '/' + heroInterval + ')';
-    if (isHero) {
-      text += '  \u2694\uFE0F HERO DAY';
-      _dayCounterEl.style.color = '#f0c040';
-      _dayCounterEl.style.borderColor = 'rgba(240,192,64,0.5)';
-    } else if (daysUntil === 1) {
-      text += '  \u26A0 Heroes tomorrow';
-      _dayCounterEl.style.color = '#e0a040';
-      _dayCounterEl.style.borderColor = 'rgba(224,160,64,0.4)';
-    } else {
-      _dayCounterEl.style.color = '#d4c8a0';
-      _dayCounterEl.style.borderColor = 'rgba(180,160,120,0.3)';
+    var html = '';
+
+    // Build 7-day strip
+    for (var i = 0; i < 7; i++) {
+      var dayNum = day - weekDayIndex + i; // absolute day number for this slot
+      var isToday = (i === weekDayIndex);
+      var isHeroSlot = (dayNum % heroInterval === 0);
+      var dungeonIdx = Math.floor(dayNum / heroInterval) % _DUNGEON_SUITS.length;
+
+      var label = _WEEK_DAYS[i];
+      var nodeColor = '#8a8068';
+      var nodeStyle = '';
+
+      if (isHeroSlot) {
+        // Show suit symbol instead of day letter
+        label = _DUNGEON_SUITS[dungeonIdx].sym;
+        nodeColor = _DUNGEON_SUITS[dungeonIdx].color;
+      }
+
+      if (isToday) {
+        nodeColor = isHero ? '#f0c040' : '#ffe8a0';
+        nodeStyle = 'animation:day-bob 1.2s ease-in-out infinite;font-weight:900;';
+      }
+
+      var bg = isToday ? 'rgba(255,255,255,0.12)' : 'transparent';
+      html += '<span style="display:inline-block;width:20px;height:22px;' +
+              'text-align:center;line-height:22px;border-radius:3px;' +
+              'color:' + nodeColor + ';background:' + bg + ';' +
+              'font-size:' + (isToday ? '14px' : '11px') + ';' +
+              nodeStyle + '" title="Day ' + (dayNum + 1) +
+              (isHeroSlot ? ' — HERO DAY' : '') + '">' +
+              label + '</span>';
     }
 
-    // Append time string
-    if (DayCycle.getTimeString) {
-      text += '  ' + DayCycle.getTimeString();
-    }
+    // Time display
+    html += '<span style="margin-left:6px;font-size:12px;color:#a09880;letter-spacing:0.05em">' +
+            timeStr + '</span>';
 
-    _dayCounterEl.textContent = text;
+    _dayCounterEl.innerHTML = html;
+
+    // Inject bobbing keyframe if not already present
+    if (!document.getElementById('day-bob-style')) {
+      var style = document.createElement('style');
+      style.id = 'day-bob-style';
+      style.textContent = '@keyframes day-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }';
+      document.head.appendChild(style);
+    }
   }
 
   /**
@@ -2046,13 +2124,13 @@ var Game = (function () {
     if (!_gateUnlocked) {
       // Phase 1: get work keys
       if (floorId === '0') {
-        // Point at the door to Promenade
-        Minimap.setQuestTarget({ x: 9, y: 6 });
+        // Point at the door to Promenade (40×30 grid: door at 19,5)
+        Minimap.setQuestTarget({ x: 19, y: 5 });
       } else if (floorId === '1') {
-        // Point at Gleaner's Home door (east side)
-        Minimap.setQuestTarget({ x: 17, y: 7 });
+        // Point at Gleaner's Home door (40×30 grid: east side at 34,9)
+        Minimap.setQuestTarget({ x: 34, y: 9 });
       } else if (floorId === '1.6') {
-        // Point at the key chest
+        // Point at the key chest (unchanged: 19,3)
         Minimap.setQuestTarget({ x: 19, y: 3 });
       } else {
         Minimap.setQuestTarget(null);
@@ -2060,10 +2138,10 @@ var Game = (function () {
     } else {
       // Phase 2: head to dungeon
       if (floorId === '1') {
-        // Point at Coral Bazaar entrance
-        Minimap.setQuestTarget({ x: 5, y: 2 });
+        // Point at Coral Bazaar entrance (40×30 grid: NW building at 12,3)
+        Minimap.setQuestTarget({ x: 12, y: 3 });
       } else if (floorId === '1.1') {
-        // Point at stairs down to dungeon
+        // Point at stairs down to dungeon (unchanged: 7,4)
         Minimap.setQuestTarget({ x: 7, y: 4 });
       } else {
         // In dungeon or elsewhere — no specific waypoint
@@ -2200,6 +2278,20 @@ var Game = (function () {
       for (var i = 0; i < enemies.length; i++) {
         var e = enemies[i];
         if (e.id === _dispatcherSpawnId && e.x === bumpX && e.y === bumpY) {
+          // Turn dispatcher to face the player before showing dialog
+          if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
+            NpcSystem.engageTalk(e);
+          } else {
+            // Manual face-toward-player fallback
+            var pp = MC.getGridPos();
+            var ddx = pp.x - e.x;
+            var ddy = pp.y - e.y;
+            if (Math.abs(ddx) >= Math.abs(ddy)) {
+              e.facing = ddx > 0 ? 'east' : 'west';
+            } else {
+              e.facing = ddy > 0 ? 'south' : 'north';
+            }
+          }
           _showDispatcherGateDialog();
           break;
         }
@@ -3062,6 +3154,30 @@ var Game = (function () {
         AudioSystem.play('fire_crackle', { volume: vol });
       }
     }
+
+    // ── Passive time drip (Stardew Valley pacing) ──
+    // Each SpatialContract carries a timeRate (game-minutes per real minute).
+    // Exterior=24 (~1hr real per game day), Dungeon=12 (half), Interior=0 (frozen).
+    // The drip accumulates fractional minutes and advances DayCycle in whole-minute chunks.
+    if (typeof DayCycle !== 'undefined' && DayCycle.advanceTime && typeof FloorManager !== 'undefined') {
+      var _floorId = FloorManager.getFloor();
+      var contract = _floorId ? FloorManager.getFloorContract(_floorId) : null;
+      var timeRate = (contract && contract.timeRate) ? contract.timeRate : 0;
+
+      if (timeRate > 0 && !DayCycle.isPaused()) {
+        // timeRate = game-minutes per real minute
+        // Convert: game-min per ms = timeRate / 60000
+        var gameMinsElapsed = (deltaMs * timeRate) / 60000;
+        _passiveTimeTimer += gameMinsElapsed;
+
+        if (_passiveTimeTimer >= 1) {
+          var wholeMinutes = Math.floor(_passiveTimeTimer);
+          _passiveTimeTimer -= wholeMinutes;
+          DayCycle.advanceTime(wholeMinutes);
+          _updateDayCounter();
+        }
+      }
+    }
   }
 
   // ── Render (every frame — input, movement, draw) ───────────────────
@@ -3235,7 +3351,7 @@ var Game = (function () {
       // ── Smooth lerp: advance interpolation timer and compute render position ──
       // _prevX/_prevY are set when movement occurs; _lerpT animates 0→1.
       // Lerp duration scales with the entity's step interval for natural pacing.
-      var lerpDur = e._stepInterval || (e.friendly ? 800 : 400);
+      var lerpDur = e._stepInterval || (e.friendly ? 1200 : 800);
       if (e._lerpT !== undefined && e._lerpT < 1) {
         e._lerpT = Math.min(1, e._lerpT + frameDt / lerpDur);
       }

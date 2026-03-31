@@ -20,6 +20,7 @@ var DoorContracts = (function () {
   var _lastExitPos = null;
   var _spawnDir = null;  // 'advance' | 'retreat' | null
   var _exitTile = null;  // TILES constant of the door/stair used to exit
+  var _sourceFloorId = null;  // Floor ID the player is leaving (for doorTargets reverse lookup)
   var _protect = null;   // { x, y, stepsRemaining }
 
   var GUARDRAIL_STEPS = 5;
@@ -29,16 +30,18 @@ var DoorContracts = (function () {
   function getProtect()       { return _protect; }
   function clearProtect()     { _protect = null; }
 
-  function setContract(exitPos, direction, exitTile) {
+  function setContract(exitPos, direction, exitTile, sourceFloorId) {
     _lastExitPos = exitPos;
     _spawnDir = direction;
     _exitTile = exitTile || null;
+    _sourceFloorId = sourceFloorId || null;
   }
 
   function resetAll() {
     _lastExitPos = null;
     _spawnDir = null;
     _exitTile = null;
+    _sourceFloorId = null;
     _protect = null;
   }
 
@@ -72,14 +75,35 @@ var DoorContracts = (function () {
    * When the player exits through a DOOR tile, look for the complementary
    * door tile on the new floor (DOOR_BACK/DOOR_EXIT for advance, DOOR for retreat).
    *
-   * Also checks doors.doorEntry / doors.doorExit if GridGen provides them.
+   * Priority:
+   *   1. doorTargets reverse lookup — find the door on this floor whose
+   *      target matches the source floor ID. This handles multi-door floors
+   *      (e.g. Promenade has 4 building doors, each leading somewhere different).
+   *   2. doors.doorEntry / doors.doorExit — single-door shorthand
+   *   3. Grid scan for matching tile type — last resort
    *
    * @returns {{ x: number, y: number } | null}
    */
-  function _resolveDoorTarget(grid, W, H, doors) {
+  function _resolveDoorTarget(grid, W, H, doors, doorTargets) {
     if (!_exitTile) return null;
 
-    // Determine which tile types to search for on the target floor
+    // ── Strategy 1: doorTargets reverse lookup ──
+    // If we know which floor we came from, find the door on THIS floor
+    // that leads there. This is the only correct method for multi-door floors.
+    if (_sourceFloorId && doorTargets) {
+      for (var key in doorTargets) {
+        if (String(doorTargets[key]) === String(_sourceFloorId)) {
+          var parts = key.split(',');
+          var dx = parseInt(parts[0], 10);
+          var dy = parseInt(parts[1], 10);
+          if (!isNaN(dx) && !isNaN(dy)) {
+            return { x: dx, y: dy };
+          }
+        }
+      }
+    }
+
+    // ── Strategy 2: doors shorthand (single-door floors) ──
     var searchTiles;
     if (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR) {
       // Entered through door: look for exit / back door to spawn near
@@ -94,7 +118,7 @@ var DoorContracts = (function () {
       return null; // Not a door tile
     }
 
-    // Grid scan for matching door tile
+    // ── Strategy 3: Grid scan for matching door tile ──
     for (var y = 1; y < H - 1; y++) {
       for (var x = 1; x < W - 1; x++) {
         var t = grid[y][x];
@@ -208,10 +232,11 @@ var DoorContracts = (function () {
     var doors = floorData.doors;
 
     var targetDoor, avoidDoor;
+    var doorTargets = floorData.doorTargets || null;
 
     // If exited through a door tile, look for the complementary door
     // on the target floor before falling back to stairs.
-    var doorTarget = _resolveDoorTarget(grid, W, H, doors);
+    var doorTarget = _resolveDoorTarget(grid, W, H, doors, doorTargets);
 
     if (doorTarget) {
       targetDoor = doorTarget;
@@ -260,6 +285,7 @@ var DoorContracts = (function () {
     _lastExitPos = null;
     _spawnDir = null;
     _exitTile = null;
+    _sourceFloorId = null;
 
     return { x: spawn.x, y: spawn.y, dir: dir };
   }

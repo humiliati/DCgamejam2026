@@ -157,6 +157,9 @@ var CardSystem = (function () {
   /** Return the current hand without modifying it. */
   function getHand() { return _hand; }
 
+  /** Return the number of cards remaining in the draw pile. */
+  function getDeckSize() { return _deck.length; }
+
   /**
    * Remove and return the card at hand[index], or null if out of bounds.
    * @param {number} index
@@ -404,6 +407,7 @@ var CardSystem = (function () {
     resetDeck:     resetDeck,
     drawHand:      drawHand,
     getHand:       getHand,
+    getDeckSize:   getDeckSize,
     playFromHand:  playFromHand,
     playStack:     playStack,
     drawToHand:    drawToHand,

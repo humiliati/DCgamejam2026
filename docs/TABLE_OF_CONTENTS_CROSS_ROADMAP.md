@@ -1,7 +1,7 @@
 # Dungeon Gleaner — Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-03-30
-**Jam Deadline**: April 5, 2026 (6 days remaining)
+**Created**: 2026-03-28 | **Updated**: 2026-03-31
+**Jam Deadline**: April 5, 2026 (5 days remaining)
 **Goal**: Somewhat playable prototype → debug, smooth, and raise with designer portals through final week
 
 ---
@@ -299,6 +299,42 @@ All five design documents, their scope, and section inventories. Each document n
 | Phase 5 | Reinforced variants — web tiers, trap tiers | Planned |
 | Phase 6 | Enemy pathfinding — AI avoidance, awareness events | Planned |
 | Phase 7 | Cobweb ecology — nesting, web networks, environmental | Far future |
+
+### DOC-33: GAP_ANALYSIS.md
+> **Scope**: Comprehensive cross-phase status audit of implemented features against design roadmap, with task completion tracking through jam deadline. Sprint-level gap inventory referenced by Phase C.5 tasks.
+
+### DOC-34: UNIFIED_UI_OVERHAUL.md
+> **Scope**: Consolidated design system unifying the paper/hazmat/CRT aesthetic trichotomy — color palette, sizing scale, font hierarchy, and component styling across HUD, menus, and overlays.
+
+### DOC-35: DEBUG_NOTES_SCREENER.md
+> **Scope**: Active UI polish and debugging checklist — title screen, class selection, settings menu styling, in-game HUD issues, and interaction bugs. Living document updated per debug pass.
+
+### DOC-36: FACE2_INVENTORY_POLISH.md
+> **Scope**: Known issues and interaction improvements for the inventory UI (MenuBox Face 2) — slot sizing, drag-drop conflicts, affordance clarity, and visual feedback.
+
+### DOC-37: INPUT_CONTROLLER_ROADMAP.md
+> **Scope**: Input parity audit for keyboard, click, and D-pad controls. Identified gaps, gamepad support plan, and Magic Remote mapping notes.
+
+### DOC-38: PLAYER_CONTROLLER_ROADMAP.md
+> **Scope**: Movement controller architecture reference — dual-queue lerp system, interpolation model, speed tuning benchmarks, and collision edge cases.
+
+### DOC-39: SHOP_REFRESH_ECONOMY.md
+> **Scope**: Staggered inventory refresh mechanics across faction shops — scarcity-driven economy, purchasing urgency, and restock timing per hero cycle.
+
+### DOC-40: SPRITE_COMMISSIONING_MAP.md
+> **Scope**: Artist brief for sprite replacements prioritized by rendering need — critical visual clarity fixes, NPC/enemy portraits, and particle effects.
+
+### DOC-41: SPRITE_LIBRARY_PLAN.md
+> **Scope**: Sprite asset budget and jam-reasonable animation frame specifications — coin flip, smoke, light-burst particles, and NPC idle cycles.
+
+### DOC-42: SPRITE_STUB_ROADMAP.md
+> **Scope**: Code-side implementation plan for layering artist PNG sprites with emoji fallback across raycaster, particle system, and UI components.
+
+### DOC-43: AGENT_BLOCKOUT_INSTRUCTIONS.md
+> **Scope**: Level design guidelines for creating modular, interconnected floor spaces — building archetypes, critical-path navigation, and spatial composition rules.
+
+### DOC-44: EYESONLYS_TOOLTIP_SPACE_CANON.md
+> **Scope**: Production-target reference from EyesOnly — responsive tooltip and NPC dialogue system dimensions for desktop, tablet, and mobile breakpoints.
 
 ---
 

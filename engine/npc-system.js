@@ -777,21 +777,34 @@ var NpcSystem = (function () {
       // Release when dialog closes (TALK_HOLD_MS auto-release covers this)
       return;
     }
+
     // Fall back: fire the interaction bark pool
+    var barkFired = false;
     if (npc.dialoguePool && typeof BarkLibrary !== 'undefined') {
-      BarkLibrary.fire(npc.dialoguePool, { style: 'dialog' });
-      // Auto-dismiss speech capsule and release NPC after bark
-      setTimeout(function () {
-        if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
-        _releaseTalk(npc);
-      }, SPEECH_CAPSULE_MS);
-    } else if (npc.barkPool && typeof BarkLibrary !== 'undefined') {
-      BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
-      setTimeout(function () {
-        if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
-        _releaseTalk(npc);
-      }, SPEECH_CAPSULE_MS);
+      var b = BarkLibrary.fire(npc.dialoguePool, { style: 'dialog' });
+      if (b) barkFired = true;
     }
+    if (!barkFired && npc.barkPool && typeof BarkLibrary !== 'undefined') {
+      var b2 = BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
+      if (b2) barkFired = true;
+    }
+
+    // Fallback: all bark pools exhausted — push a generic acknowledgement
+    // so the player still gets visible feedback from the interaction.
+    if (!barkFired) {
+      var fallbackText = (npc.name || 'NPC') + ' nods silently.';
+      if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
+        StatusBar.pushTooltip(fallbackText, 'npc');
+      } else if (typeof Toast !== 'undefined') {
+        Toast.show(fallbackText, 'info');
+      }
+    }
+
+    // Auto-dismiss speech capsule and release NPC after bark
+    setTimeout(function () {
+      if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+      _releaseTalk(npc);
+    }, SPEECH_CAPSULE_MS);
   }
 
   // ── Built-in NPC populations ──────────────────────────────────────
@@ -808,32 +821,100 @@ var NpcSystem = (function () {
   function _registerBuiltinPopulations() {
 
     // ── Floor 0: The Approach ──────────────────────────────────────
+    // Campground vibes: cozy NPCs hanging out by bonfires, a worker
+    // sweeping the courtyard, and an old-timer who knows things.
     register('0', [
+      // ── Courtyard worker (dirt path sweeper) ──
       {
         id:           'floor0_worker_1',
         type:         TYPES.AMBIENT,
-        x: 6, y: 10,
+        x: 15, y: 7,
         facing:       'east',
-        emoji:        '🧹',
-        name:         'Maintenance Worker',
-        patrolPoints: [{ x: 6, y: 10 }, { x: 12, y: 10 }],
+        emoji:        '\uD83E\uDDF9',
+        name:         'Groundskeeper',
+        patrolPoints: [{ x: 15, y: 7 }, { x: 24, y: 7 }],
         stepInterval: 1400,
         barkPool:     'ambient.approach',
         barkRadius:   4,
         barkInterval: 22000
       },
+      // ── North-west campfire sitter ──
       {
-        id:           'floor0_worker_2',
-        type:         TYPES.AMBIENT,
-        x: 9, y: 9,
+        id:           'floor0_camper_nw',
+        type:         TYPES.INTERACTIVE,
+        x: 14, y: 9,
         facing:       'north',
-        emoji:        '🪣',
-        name:         'Maintenance Worker',
-        patrolPoints: [{ x: 9, y: 9 }, { x: 9, y: 13 }],
-        stepInterval: 1600,
+        emoji:        '\uD83E\uDDD1',
+        name:         'Resting Traveler',
+        talkable:     true,
+        dialoguePool: 'npc.approach.camper',
         barkPool:     'ambient.approach',
         barkRadius:   3,
         barkInterval: 30000
+      },
+      // ── North-east campfire sitter ──
+      {
+        id:           'floor0_camper_ne',
+        type:         TYPES.AMBIENT,
+        x: 25, y: 9,
+        facing:       'west',
+        emoji:        '\uD83D\uDC74',
+        name:         'Old Camper',
+        barkPool:     'ambient.approach',
+        barkRadius:   3,
+        barkInterval: 25000
+      },
+      // ── Central bonfire — stationary NPC warming hands ──
+      {
+        id:           'floor0_camper_center',
+        type:         TYPES.INTERACTIVE,
+        x: 18, y: 12,
+        facing:       'east',
+        emoji:        '\uD83E\uDDD1\u200D\uD83D\uDD27',
+        name:         'Off-duty Gleaner',
+        talkable:     true,
+        dialoguePool: 'npc.approach.gleaner',
+        barkPool:     'ambient.approach',
+        barkRadius:   4,
+        barkInterval: 20000
+      },
+      // ── West campfire alcove (row 18) ──
+      {
+        id:           'floor0_camper_w',
+        type:         TYPES.AMBIENT,
+        x: 5, y: 18,
+        facing:       'east',
+        emoji:        '\uD83E\uDDD3',
+        name:         'Dozing Vagrant',
+        barkPool:     'ambient.approach',
+        barkRadius:   3,
+        barkInterval: 35000
+      },
+      // ── East campfire alcove (row 18) ──
+      {
+        id:           'floor0_camper_e',
+        type:         TYPES.AMBIENT,
+        x: 34, y: 18,
+        facing:       'west',
+        emoji:        '\uD83D\uDC69',
+        name:         'Campfire Cook',
+        barkPool:     'ambient.approach',
+        barkRadius:   3,
+        barkInterval: 28000
+      },
+      // ── South campfire near spawn ──
+      {
+        id:           'floor0_camper_south',
+        type:         TYPES.INTERACTIVE,
+        x: 19, y: 25,
+        facing:       'north',
+        emoji:        '\uD83E\uDDD1',
+        name:         'Waiting Operative',
+        talkable:     true,
+        dialoguePool: 'npc.approach.operative',
+        barkPool:     'ambient.approach',
+        barkRadius:   4,
+        barkInterval: 18000
       }
     ]);
 
@@ -1342,6 +1423,7 @@ var NpcSystem = (function () {
     spawn:        spawn,
     tick:         tick,
     interact:     interact,
+    engageTalk:   _engageTalk,
     clearActive:  clearActive,
     findById:     findById,
     findAtTile:   findAtTile,

@@ -40,9 +40,11 @@ var Raycaster = (function () {
   // Pre-allocated buffer for multi-hit DDA results. Avoids per-frame
   // allocation. Each layer stores the grid hit info; geometry (perpDist,
   // drawStart, etc.) is computed on-demand during back-to-front render.
-  var _MAX_LAYERS = 4; // shrub → pillar → tree → building
-  var _MAX_BG_STEPS = 16; // max DDA steps past first hit
+  var _MAX_LAYERS = 6; // shrub → pillar → tree → building → far wall → skyline
+  var _MAX_BG_STEPS = 24; // max DDA steps past first hit (increased for deeper views)
   var _layerBuf = [
+    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
@@ -93,8 +95,7 @@ var Raycaster = (function () {
     var ctx = _ctx;
     var w = _width;
     var h = _height;
-    // Apply head bob vertical offset (player.bobY from MovementController)
-    var halfH = Math.round(h / 2 + (player.bobY || 0));
+    var halfH = h / 2;
     var fov = Math.PI / 3;
     var halfFov = fov / 2;
 
@@ -138,9 +139,23 @@ var Raycaster = (function () {
     var floorTex = floorTexId && typeof TextureAtlas !== 'undefined'
       ? TextureAtlas.get(floorTexId) : null;
 
+    // Resolve per-tile floor texture overrides (e.g. grass under trees)
+    var tileFloorTexArr = null;
+    if (_contract && _contract.tileFloorTextures && typeof TextureAtlas !== 'undefined') {
+      tileFloorTexArr = [];
+      var _tft = _contract.tileFloorTextures;
+      for (var _tfk in _tft) {
+        if (_tft.hasOwnProperty(_tfk)) {
+          var _tfTex = TextureAtlas.get(_tft[_tfk]);
+          if (_tfTex) tileFloorTexArr[parseInt(_tfk, 10)] = _tfTex;
+        }
+      }
+      if (tileFloorTexArr.length === 0) tileFloorTexArr = null;
+    }
+
     if (floorTex) {
       _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex,
-                   fogDist, fogColor);
+                   fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr);
     } else {
       var floorGrads = _contract ? SpatialContract.getGradients(_contract)
         : { floorTop: '#444', floorBottom: '#111' };
@@ -307,7 +322,9 @@ var Raycaster = (function () {
       // close-range walls. Removing the cap fixes the stretch bug where
       // nearby walls widen (more columns) without getting proportionally
       // taller, because the old h*3 cap limited height but not width.
-      var lineHeight = Math.floor((h * wallHeightMult) / perpDist);
+      // MIN WALL BAND: always render at least 2px strip so distant walls
+      // never vanish — maintains LOD silhouette at any range.
+      var lineHeight = Math.max(2, Math.floor((h * wallHeightMult) / perpDist));
 
       // ── Tile height offset (Doom rule) ──────────────────────────
       // Transition tiles are vertically displaced from the floor plane.
@@ -342,6 +359,13 @@ var Raycaster = (function () {
       var brightness = 1.0;
       if (lightMap && lightMap[mapY] && lightMap[mapY][mapX] !== undefined) {
         brightness = lightMap[mapY][mapX];
+      }
+      // Sun intensity boost for exterior floors — torch-only is too dark for daytime
+      if (_contract && _contract.ceilingType === 'sky' &&
+          typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
+        var sunI = DayCycle.getSunIntensity();
+        // Blend: max of torch light vs ambient sun (sun lifts the floor, doesn't replace torches)
+        brightness = Math.max(brightness, 0.25 + sunI * 0.7);
       }
 
       // ── Back-to-front N-layer wall rendering ────────────────
@@ -622,8 +646,8 @@ var Raycaster = (function () {
 
     // Wall height from contract
     var wh = SpatialContract.getWallHeight(_contract, L.mx, L.my, _rooms, L.tile, _cellHeights);
-    var lineH = Math.floor((h * wh) / pd);
-    var baseLH = Math.floor((h * baseWallH) / pd);
+    var lineH = Math.max(2, Math.floor((h * wh) / pd));
+    var baseLH = Math.max(2, Math.floor((h * baseWallH) / pd));
 
     // Bottom-anchored positioning (same as foreground)
     var flatBot = Math.floor(halfH + baseLH / 2);
@@ -643,6 +667,12 @@ var Raycaster = (function () {
     var bri = 1.0;
     if (lightMap && lightMap[L.my] && lightMap[L.my][L.mx] !== undefined) {
       bri = lightMap[L.my][L.mx];
+    }
+    // Sun intensity boost for exterior background layers
+    if (_contract && _contract.ceilingType === 'sky' &&
+        typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
+      var sunBG = DayCycle.getSunIntensity();
+      bri = Math.max(bri, 0.25 + sunBG * 0.7);
     }
 
     // Wall UV
@@ -702,7 +732,7 @@ var Raycaster = (function () {
   // ── Floor casting — textured floor via ImageData ──
   // For each pixel below the horizon, computes the world floor position
   // and samples the floor texture. Uses a reusable ImageData buffer.
-  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor) {
+  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr) {
     var floorH = h - Math.floor(halfH);
     if (floorH <= 0) return;
 
@@ -768,20 +798,38 @@ var Raycaster = (function () {
       var rowOffset = row * w * 4;
 
       for (var col = 0; col < w; col++) {
+        // Compute grid tile coordinates (used for per-tile texture and blood)
+        var tileGX = Math.floor(floorX);
+        var tileGY = Math.floor(floorY);
+
+        // Select floor texture — per-tile override or default
+        var curTexW = texW;
+        var curTexH = texH;
+        var curTexData = texData;
+
+        if (tileFloorTexArr &&
+            tileGX >= 0 && tileGX < gridW &&
+            tileGY >= 0 && tileGY < gridH) {
+          var altTex = tileFloorTexArr[grid[tileGY][tileGX]];
+          if (altTex) {
+            curTexW = altTex.width;
+            curTexH = altTex.height;
+            curTexData = altTex.data;
+          }
+        }
+
         // Texture coordinates — wrap to tile boundaries
-        var tx = ((Math.floor(floorX * texW) % texW) + texW) % texW;
-        var ty = ((Math.floor(floorY * texH) % texH) + texH) % texH;
+        var tx = ((Math.floor(floorX * curTexW) % curTexW) + curTexW) % curTexW;
+        var ty = ((Math.floor(floorY * curTexH) % curTexH) + curTexH) % curTexH;
 
         // Sample texel
-        var texIdx = (ty * texW + tx) * 4;
-        var r = texData[texIdx]     * bright;
-        var g = texData[texIdx + 1] * bright;
-        var b = texData[texIdx + 2] * bright;
+        var texIdx = (ty * curTexW + tx) * 4;
+        var r = curTexData[texIdx]     * bright;
+        var g = curTexData[texIdx + 1] * bright;
+        var b = curTexData[texIdx + 2] * bright;
 
         // Blood splatter tint — red overlay on dirty tiles
         if (_bloodFloorId && typeof CleaningSystem !== 'undefined') {
-          var tileGX = Math.floor(floorX);
-          var tileGY = Math.floor(floorY);
           var blood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
           if (blood > 0) {
             // Blood intensity: 0.15–0.45 depending on blood level (1–3)
@@ -1243,6 +1291,13 @@ var Raycaster = (function () {
         ? SpatialContract.getFogFactor(_contract, dist)
         : Math.min(1, dist / fogDist);
       var alpha = Math.max(0.1, 1 - fogFactor);
+      // Sun boost: sprites are more visible in daylight on exterior floors
+      if (_contract && _contract.ceilingType === 'sky' &&
+          typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
+        var sunSprite = DayCycle.getSunIntensity();
+        // Reduce fog effect proportional to sun — at full sun, fog drops by 60%
+        alpha = Math.max(alpha, Math.min(1, alpha + sunSprite * 0.6));
+      }
 
       ctx.save();
       ctx.globalAlpha = alpha;

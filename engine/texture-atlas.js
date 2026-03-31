@@ -186,6 +186,14 @@ var TextureAtlas = (function () {
       variance: 6
     });
 
+    // Pure grass floor — under trees and shrubs on exterior floors
+    _genFloorGrass('floor_grass', {
+      baseR: 42, baseG: 78, baseB: 32,      // Muted forest green base
+      hiR:   55, hiG:   98, hiB:   42,      // Sunlit blade highlights
+      darkR: 30, darkG:  55, darkB: 22,     // Shadow patches (under canopy)
+      variance: 18
+    });
+
     // Exterior tree — brown bark bottom, dense green canopy top
     _genTreeTrunk('tree_trunk', {
       barkR: 85, barkG: 55, barkB: 30,      // Brown bark
@@ -932,6 +940,46 @@ var TextureAtlas = (function () {
         r: _clamp((p.baseR + pn) * patchMult),
         g: _clamp((p.baseG + pn * 0.8) * patchMult),
         b: _clamp((p.baseB + pn * 0.6) * patchMult)
+      };
+    });
+  }
+
+  // ── Floor: red brick courtyard (warm terracotta, contrasts grey stone walls) ──
+
+  // ── Floor: grass (pure grass under trees and shrubs on exterior floors) ──
+
+  function _genFloorGrass(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Multi-frequency noise for organic grass variation
+      var n1 = _hash(x + 5100, y + 5200);
+      var n2 = _hash(x * 3 + 5300, y * 3 + 5400);
+      var n3 = _hash(x * 7 + 5500, y * 5 + 5600);  // Blade-scale detail
+      var combined = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+
+      // Clump pattern — darker areas simulate shadow under foliage
+      var clump = _hash(Math.floor(x / 8), Math.floor(y / 8));
+      var inShadow = clump > 0.7;
+
+      // Blade direction hint — slight vertical streaking
+      var blade = _hash(x, Math.floor(y / 3) + 9000);
+
+      var pn = (combined - 0.5) * p.variance * 2;
+      var bn = (blade - 0.5) * 8;
+
+      if (inShadow) {
+        return {
+          r: _clamp(p.darkR + pn * 0.5),
+          g: _clamp(p.darkG + pn + bn),
+          b: _clamp(p.darkB + pn * 0.3)
+        };
+      }
+
+      // Sunlit grass — occasional bright blade highlights
+      var highlight = n3 > 0.85 ? 1 : 0;
+      return {
+        r: _clamp(p.baseR + pn * 0.6 + highlight * (p.hiR - p.baseR)),
+        g: _clamp(p.baseG + pn + bn + highlight * (p.hiG - p.baseG)),
+        b: _clamp(p.baseB + pn * 0.4 + highlight * (p.hiB - p.baseB))
       };
     });
   }

@@ -200,11 +200,17 @@ var EnemyAI = (function () {
 
   // ── Patrol movement ──
 
+  // Normal patrol: 1200ms per step (mosey pace)
+  // Hero/rush NPCs can override via enemy.rushSpeed flag
+  var PATROL_STEP_MS = 1200;
+  var RUSH_STEP_MS   = 400;  // Hero pass-through speed
+
   function _updatePatrol(enemy, grid, W, H, deltaMs) {
     if (!enemy.path) return;
 
+    var stepMs = enemy.rushSpeed ? RUSH_STEP_MS : PATROL_STEP_MS;
     enemy.pathTimer = (enemy.pathTimer || 0) + deltaMs;
-    if (enemy.pathTimer < 500) return;
+    if (enemy.pathTimer < stepMs) return;
     enemy.pathTimer = 0;
 
     if (enemy.path.type === PATH_TYPES.PATROL) {
@@ -256,7 +262,8 @@ var EnemyAI = (function () {
 
   function _chasePlayer(enemy, player, grid, W, H, deltaMs) {
     enemy.pathTimer = (enemy.pathTimer || 0) + deltaMs;
-    if (enemy.pathTimer < 400) return; // Slightly faster than patrol
+    var chaseMs = enemy.rushSpeed ? 300 : 800; // Chase: faster than patrol but still measured
+    if (enemy.pathTimer < chaseMs) return;
     enemy.pathTimer = 0;
 
     // Simple greedy chase (step toward player)

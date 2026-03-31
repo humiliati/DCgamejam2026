@@ -19,9 +19,11 @@ var StatusBar = (function () {
   var _btnDebrief = null;
   var _btnMap     = null;
   var _btnBag     = null;
+  var _btnDeck    = null;
   var _floorEl    = null;
   var _biomeEl    = null;
   var _headingEl  = null;
+  var _goldEl     = null;  // #sb-gold — currency display
   var _visible    = false;
 
   // Tooltip footer
@@ -68,9 +70,11 @@ var StatusBar = (function () {
     _btnDebrief = document.getElementById('sb-debrief');
     _btnMap     = document.getElementById('sb-map');
     _btnBag     = document.getElementById('sb-bag');
+    _btnDeck    = document.getElementById('sb-deck');
     _floorEl    = document.getElementById('sb-floor');
     _biomeEl    = document.getElementById('sb-biome');
     _headingEl  = document.getElementById('sb-heading');
+    _goldEl     = document.getElementById('sb-gold');
 
     // Tooltip footer
     _tooltipArea    = document.getElementById('sb-tooltip-area');
@@ -119,9 +123,26 @@ var StatusBar = (function () {
           if (ScreenManager.isPaused()) {
             if (typeof MenuBox !== 'undefined') MenuBox.close();
           } else if (ScreenManager.isPlaying()) {
-            // Signal game.js to open on inventory face
             if (typeof Game !== 'undefined' && Game.requestPause) {
               Game.requestPause('pause', 2);
+            } else {
+              ScreenManager.toPause();
+            }
+          }
+        }
+      });
+    }
+
+    // Deck button → opens pause menu on deck face (face 3)
+    if (_btnDeck) {
+      _btnDeck.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (typeof ScreenManager !== 'undefined') {
+          if (ScreenManager.isPaused()) {
+            if (typeof MenuBox !== 'undefined') MenuBox.close();
+          } else if (ScreenManager.isPlaying()) {
+            if (typeof Game !== 'undefined' && Game.requestPause) {
+              Game.requestPause('pause', 3);
             } else {
               ScreenManager.toPause();
             }
@@ -168,15 +189,27 @@ var StatusBar = (function () {
       if (Player.getBag) count = Player.getBag().length;
       if (Player.MAX_BAG) max = Player.MAX_BAG;
     }
-    _btnBag.textContent = 'BAG ' + count + '/' + max;
+    _btnBag.textContent = '\uD83C\uDF92 BAG ' + count + '/' + max;
 
-    // Pulse when >75% full
+    // Visual urgency by fullness
     var full = count / max;
-    if (full > 0.75) {
-      _btnBag.classList.add('sb-active');
-    } else {
-      _btnBag.classList.remove('sb-active');
+    _btnBag.classList.remove('sb-active', 'sb-bag-critical', 'sb-bag-warn');
+    if (full >= 0.90) {
+      _btnBag.classList.add('sb-bag-critical');  // stamp-red border + pulse
+    } else if (full > 0.70) {
+      _btnBag.classList.add('sb-bag-warn');       // hazmat-yellow hint
     }
+  }
+
+  function updateDeck() {
+    if (!_btnDeck) return;
+    var handSize = 0;
+    var deckSize = 0;
+    if (typeof CardSystem !== 'undefined') {
+      if (CardSystem.getHand) handSize = CardSystem.getHand().length;
+      if (CardSystem.getDeckSize) deckSize = CardSystem.getDeckSize();
+    }
+    _btnDeck.textContent = '\uD83C\uDCCF DECK ' + handSize + '/' + deckSize;
   }
 
   function _updateMapBtn() {
@@ -200,8 +233,8 @@ var StatusBar = (function () {
     if (!_visible) return;
 
     if (_inCombat) {
-      // Swap [MAP] → [FLEE] label during combat
-      if (_btnMap) _btnMap.textContent = 'FLEE';
+      // Swap compass to FLEE indicator during combat
+      if (_btnMap) _btnMap.textContent = '!';
       // Update floor area with combat info
       if (_floorEl) {
         _floorEl.innerHTML = 'Round <span>' + _combatRound + '</span>';
@@ -213,8 +246,8 @@ var StatusBar = (function () {
         _headingEl.textContent = '\u26A1' + _combatEnergy + ' EN';
       }
     } else {
-      // Restore normal labels
-      if (_btnMap) _btnMap.textContent = 'MAP';
+      // Restore compass label
+      if (_btnMap) _btnMap.textContent = 'N';
       _updateMapBtn();
     }
   }
@@ -519,9 +552,16 @@ var StatusBar = (function () {
     if (!_visible) return;
     _updateMapBtn();
     updateBag();
+    updateDeck();
     // Heading from Player direction
     if (typeof Player !== 'undefined' && Player.getDir) {
       updateHeading(Player.getDir());
+    }
+    // Gold counter
+    if (_goldEl && typeof Player !== 'undefined') {
+      var p = Player.state();
+      var g = (p && typeof p.currency === 'number') ? p.currency : 0;
+      _goldEl.textContent = '\uD83D\uDCB0 ' + g + 'g';
     }
   }
 
@@ -534,6 +574,7 @@ var StatusBar = (function () {
     updateFloor:       updateFloor,
     updateHeading:     updateHeading,
     updateBag:         updateBag,
+    updateDeck:        updateDeck,
     setCombat:         setCombat,
     refresh:           refresh,
     pushTooltip:       pushTooltip,

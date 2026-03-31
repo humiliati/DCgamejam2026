@@ -193,12 +193,12 @@ var FloorTransition = (function () {
     if (direction === 'down' && tile === TILES.STAIRS_DN) {
       var target = _resolveStairTarget(currentId, 'down');
       if (!target) return;
-      DoorContracts.setContract({ x: pos.x, y: pos.y }, 'advance');
+      DoorContracts.setContract({ x: pos.x, y: pos.y }, 'advance', null, currentId);
       go(target, 'advance');
     } else if (direction === 'up' && tile === TILES.STAIRS_UP) {
       var target = _resolveStairTarget(currentId, 'up');
       if (!target) return;
-      DoorContracts.setContract({ x: pos.x, y: pos.y }, 'retreat');
+      DoorContracts.setContract({ x: pos.x, y: pos.y }, 'retreat', null, currentId);
       go(target, 'retreat');
     }
   }
@@ -221,14 +221,14 @@ var FloorTransition = (function () {
       var target = _resolveStairTarget(currentId, 'down');
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'advance');
-      DoorContracts.setContract({ x: fx, y: fy }, 'advance');
+      DoorContracts.setContract({ x: fx, y: fy }, 'advance', null, currentId);
       go(target, 'advance');
       return true;
     } else if (tile === TILES.STAIRS_UP) {
       var target = _resolveStairTarget(currentId, 'up');
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'retreat');
-      DoorContracts.setContract({ x: fx, y: fy }, 'retreat');
+      DoorContracts.setContract({ x: fx, y: fy }, 'retreat', null, currentId);
       go(target, 'retreat');
       return true;
     }
@@ -323,7 +323,7 @@ var FloorTransition = (function () {
     }
 
     _startDoorAnimation(fx, fy, tile, direction, currentId, targetId);
-    DoorContracts.setContract({ x: fx, y: fy }, direction, tile);
+    DoorContracts.setContract({ x: fx, y: fy }, direction, tile, currentId);
     go(targetId, direction);
     return true;
   }

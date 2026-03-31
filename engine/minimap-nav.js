@@ -302,12 +302,71 @@ var MinimapNav = (function () {
     }
   }
 
+  // ── Programmatic navigation (used by tutorial) ─────────────────────
+
+  /**
+   * Navigate to a grid tile programmatically (no click required).
+   * Returns true if a valid path was found and walking started.
+   *
+   * @param {number} gx - Target grid X
+   * @param {number} gy - Target grid Y
+   * @param {Object} [opts] - Optional: { onArrived }
+   * @returns {boolean}
+   */
+  function navigateTo(gx, gy, opts) {
+    opts = opts || {};
+
+    var floorData = FloorManager.getFloorData();
+    if (!floorData) return false;
+
+    var pos = MC.getGridPos();
+    if (pos.x === gx && pos.y === gy) return false;
+
+    var explored = Minimap.getExplored ? Minimap.getExplored() : null;
+    var path = Pathfind.find(
+      floorData.grid, floorData.gridW, floorData.gridH,
+      pos.x, pos.y, gx, gy,
+      { explored: explored }
+    );
+
+    if (!path || path.length < 2) return false;
+
+    // Trim to adjacent if target not walkable
+    var destTile = floorData.grid[gy][gx];
+    if (!TILES.isWalkable(destTile) && path.length > 1) {
+      path.pop();
+    }
+
+    path.shift(); // Remove current position
+
+    _path = path;
+    _fullPath = path.slice();
+    _targetX = path[path.length - 1].x;
+    _targetY = path[path.length - 1].y;
+    _active = true;
+
+    MC.cancelQueued();
+
+    // Override onArrived for this specific call if provided
+    if (opts.onArrived) {
+      var _origArrived = _onArrived;
+      _onArrived = function () {
+        _onArrived = _origArrived;
+        opts.onArrived();
+      };
+    }
+
+    _advance();
+    return true;
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
     init:            init,
     cancel:          cancel,
     isActive:        isActive,
+    navigateTo:      navigateTo,
     onMoveFinish:    onMoveFinish,
     onBump:          onBump,
     setRenderParams: setRenderParams,

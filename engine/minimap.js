@@ -304,9 +304,12 @@ var Minimap = (function () {
   function render(player, grid, gridW, gridH, enemies) {
     if (!_ctx) return;
     var ctx = _ctx;
-    var tileSize = Math.max(2, Math.floor(_size / Math.max(gridW, gridH)));
-    var offsetX = Math.floor((_size - gridW * tileSize) / 2);
-    var offsetY = Math.floor((_size - gridH * tileSize) / 2);
+    var baseTileSize = Math.max(2, Math.floor(_size / Math.max(gridW, gridH)));
+    // 1.7× zoom for content legibility (user feedback: 70% larger)
+    var tileSize = Math.max(3, Math.floor(baseTileSize * 1.7));
+    // Center on player position instead of centering the whole grid
+    var offsetX = Math.floor(_size / 2 - player.x * tileSize - tileSize / 2);
+    var offsetY = Math.floor(_size / 2 - player.y * tileSize - tileSize / 2);
 
     // Clear
     ctx.fillStyle = COLORS.bg;
@@ -807,7 +810,7 @@ var Minimap = (function () {
     var nx = Math.cos(northAngle - Math.PI / 2) * (needleLen + 3);
     var ny = Math.sin(northAngle - Math.PI / 2) * (needleLen + 3);
     // Only draw "N" label in expanded/compass modes where there's room
-    if (_size >= 320) {
+    if (_size >= 160) {
       ctx.fillStyle = 'rgba(51,255,136,0.7)';
       ctx.font = Math.max(7, r * 0.55) + 'px monospace';
       ctx.textAlign = 'center';

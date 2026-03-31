@@ -228,10 +228,17 @@ var MenuBox = (function () {
     _blurCanvas.height = smallH;
 
     var sCtx = _blurCanvas.getContext('2d');
-    sCtx.drawImage(_mainCanvas, 0, 0, smallW, smallH);
-
-    // 3-pass box blur (approximates gaussian at this resolution)
-    _boxBlur(sCtx, smallW, smallH, 3);
+    try {
+      sCtx.drawImage(_mainCanvas, 0, 0, smallW, smallH);
+      // 3-pass box blur (approximates gaussian at this resolution)
+      _boxBlur(sCtx, smallW, smallH, 3);
+    } catch (e) {
+      // Canvas may be tainted by cross-origin images (e.g. file:// protocol).
+      // Fall back to a solid dark snapshot instead of crashing.
+      console.warn('[MenuBox] Blur snapshot failed (tainted canvas), using solid fallback');
+      sCtx.fillStyle = '#080c08';
+      sCtx.fillRect(0, 0, smallW, smallH);
+    }
   }
 
   function _boxBlur(ctx, w, h, passes) {

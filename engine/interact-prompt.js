@@ -39,6 +39,7 @@ var InteractPrompt = (function () {
   var _iconText   = '';      // Optional emoji prefix
   var _hitBox     = null;    // { x, y, w, h } — screen-space click zone
   var _hovered    = false;   // Pointer is over the prompt
+  var _clickFlash = 0;       // Click feedback flash timer (ms remaining)
 
   function init() {
     ACTION_MAP[TILES.CHEST]     = { action: 'interact.open',   icon: '' };
@@ -170,6 +171,7 @@ var InteractPrompt = (function () {
     } else {
       _alpha = Math.max(0, _alpha - dt / FADE_OUT);
     }
+    if (_clickFlash > 0) _clickFlash = Math.max(0, _clickFlash - dt);
   }
 
   /**
@@ -220,9 +222,14 @@ var InteractPrompt = (function () {
     ctx.fillStyle = grd;
     ctx.fillRect(boxX - glowR, boxY - glowR + BOX_H / 2, boxW + glowR * 2, glowR * 2);
 
-    // Background — brighter when hovered
+    // Background — brighter when hovered, flash white on click
     _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
-    ctx.fillStyle = _hovered ? 'rgba(30,25,40,0.94)' : COL_BG;
+    if (_clickFlash > 0) {
+      var flashAlpha = _clickFlash / 200;
+      ctx.fillStyle = 'rgba(240,220,140,' + (0.3 + flashAlpha * 0.5).toFixed(2) + ')';
+    } else {
+      ctx.fillStyle = _hovered ? 'rgba(30,25,40,0.94)' : COL_BG;
+    }
     ctx.fill();
 
     // Border with subtle glow
@@ -269,8 +276,13 @@ var InteractPrompt = (function () {
     if (typeof InputManager === 'undefined') return false;
     var ptr = InputManager.getPointer();
     if (!ptr || !ptr.active) return false;
-    return ptr.x >= _hitBox.x && ptr.x <= _hitBox.x + _hitBox.w &&
-           ptr.y >= _hitBox.y && ptr.y <= _hitBox.y + _hitBox.h;
+    var hit = ptr.x >= _hitBox.x && ptr.x <= _hitBox.x + _hitBox.w &&
+              ptr.y >= _hitBox.y && ptr.y <= _hitBox.y + _hitBox.h;
+    if (hit) {
+      _clickFlash = 200; // 200ms bright flash on click
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui_confirm');
+    }
+    return hit;
   }
 
   // ── Helpers ─────────────────────────────────────────────────────

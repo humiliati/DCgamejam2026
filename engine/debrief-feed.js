@@ -16,8 +16,10 @@ var DebriefFeed = (function () {
   'use strict';
 
   // ── Config ──────────────────────────────────────────────────────
-  var MODE_COUNT    = 3;
-  var MODE_NAMES    = ['MOK', 'SYSTEMS', '>FEED'];
+  // Single-page smartwatch layout — no cycling between modes.
+  // All info (avatar + gauges + stats) on one unified page.
+  var MODE_COUNT    = 1;
+  var MODE_NAMES    = ['STATUS'];
   var MAX_FEED_LINES = 40;
 
   // EyesOnly pip-bar characters
@@ -55,9 +57,10 @@ var DebriefFeed = (function () {
     _contentEl = document.getElementById('df-content');
 
     if (_el) {
+      // Single-page mode — click no longer cycles.
+      // Kept for incinerator drop zone registration only.
       _el.addEventListener('click', function (e) {
         e.stopPropagation();
-        cycleMode();
       });
     }
 
@@ -200,20 +203,20 @@ var DebriefFeed = (function () {
   function render() {
     if (!_visible || !_contentEl || !_headerEl) return;
 
-    _headerEl.textContent = MODE_NAMES[_mode] || '';
-
-    if (_mode === 0) {
-      _renderMOK();
-    } else if (_mode === 1) {
-      _renderResources();
-    } else {
-      _renderFeed();
+    // Smartwatch header: callsign + time
+    var timeStr = '';
+    if (typeof DayCycle !== 'undefined' && DayCycle.getTimeString) {
+      timeStr = ' ' + DayCycle.getTimeString();
     }
+    _headerEl.textContent = _escape(_mokCallsign) + timeStr;
+
+    // Single unified page — avatar + gauges + stats
+    _renderUnified();
   }
 
-  // ── MOK Avatar mode ─────────────────────────────────────────────
+  // ── Unified smartwatch display ──────────────────────────────────
 
-  function _renderMOK() {
+  function _renderUnified() {
     var p = (typeof Player !== 'undefined') ? Player.state() : {};
     var hp    = p.hp || 0;
     var maxHp = p.maxHp || 10;
@@ -224,29 +227,39 @@ var DebriefFeed = (function () {
     var currency = p.currency || 0;
 
     var html = '';
-    // Avatar
-    html += '<div class="df-avatar">';
-    html += '<span class="df-emoji">' + _mokEmoji + '</span>';
-    html += '<span class="df-callsign">' + _escape(_mokCallsign) + '</span><br>';
+
+    // Compact avatar row (emoji + class)
+    html += '<div class="df-avatar" style="padding:2px 0">';
+    html += '<span class="df-emoji">' + _mokEmoji + '</span> ';
     html += '<span class="df-class">' + _escape(_mokClass) + '</span>';
     html += '</div>';
-    html += '<hr class="df-divider">';
 
-    // Compact gauge rows (EyesOnly pip format)
-    html += _gaugeRow('HP', hp, maxHp, '#FF6B9D', 8);
-    html += _gaugeRow('EN', en, maxEn, '#00D4FF', 8);
-    html += _gaugeRow('\u25C8', bat, maxBat, '#00FFA6', 5); // ◈
-    html += '<hr class="df-divider">';
+    // Full-width bars
+    html += _fullBar('HP', hp, maxHp, '#FF6B9D');
+    html += _fullBar('EN', en, maxEn, '#00D4FF');
+    html += _pipRow('BAT', bat, maxBat, '#00FFA6');
 
-    // Currency
-    html += '<div class="df-stat-row">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
+    // Currency + stats row (compact)
+    html += '<div class="df-stat-row" style="margin-top:2px">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
 
-    // Stats (if available)
     if (p.str !== undefined) {
-      html += '<hr class="df-divider">';
-      html += '<div class="df-stat-row">STR <span>' + (p.str || 0) + '</span></div>';
-      html += '<div class="df-stat-row">DEX <span>' + (p.dex || 0) + '</span></div>';
-      html += '<div class="df-stat-row">STL <span>' + (p.stealth || 0) + '</span></div>';
+      html += '<div class="df-stat-row" style="font-size:11px">';
+      html += 'STR ' + (p.str || 0) + ' \u2502 ';
+      html += 'DEX ' + (p.dex || 0) + ' \u2502 ';
+      html += 'STL ' + (p.stealth || 0);
+      html += '</div>';
+    }
+
+    // Buffs (compact)
+    if (typeof StatusEffect !== 'undefined' && StatusEffect.getAll) {
+      var effs = StatusEffect.getAll();
+      if (effs && effs.length > 0) {
+        html += '<div class="df-stat-row" style="font-size:10px;color:var(--phosphor-dim)">';
+        for (var i = 0; i < effs.length; i++) {
+          html += (effs[i].emoji || '\u25CF') + ' ';
+        }
+        html += '</div>';
+      }
     }
 
     _contentEl.innerHTML = html;
@@ -271,40 +284,6 @@ var DebriefFeed = (function () {
       '<span class="df-label">' + label + '</span>' +
       '<span class="df-bar" style="color:' + color + '">' + numStr + bar + '</span>' +
       '</div>';
-  }
-
-  // ── Resources mode ──────────────────────────────────────────────
-
-  function _renderResources() {
-    var p = (typeof Player !== 'undefined') ? Player.state() : {};
-    var hp    = p.hp || 0;
-    var maxHp = p.maxHp || 10;
-    var en    = p.energy || 0;
-    var maxEn = p.maxEnergy || 5;
-    var bat   = (typeof p.battery === 'number') ? p.battery : 3;
-    var maxBat = p.maxBattery || 5;
-    var currency = p.currency || 0;
-    var bagCount = (typeof Player !== 'undefined' && Player.getBag) ? Player.getBag().length : 0;
-    var maxBag = (typeof Player !== 'undefined' && Player.MAX_BAG) ? Player.MAX_BAG : 12;
-
-    var html = '<div style="font-size:8px;color:var(--phosphor-dim);letter-spacing:0.1em;margin-bottom:4px">SYSTEMS</div>';
-
-    // Full-width bars with numeric readout
-    html += _fullBar('HP', hp, maxHp, '#FF6B9D');
-    html += _fullBar('EN', en, maxEn, '#00D4FF');
-    html += _pipRow('BAT', bat, maxBat, '#00FFA6');
-    html += '<hr class="df-divider">';
-
-    // Currency + bag
-    html += '<div class="df-stat-row">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
-    html += '<div class="df-stat-row">\uD83C\uDF92 <span>' + bagCount + '/' + maxBag + '</span></div>';
-    html += '<hr class="df-divider">';
-
-    // Buffs placeholder
-    html += '<div class="df-stat-row" style="color:var(--phosphor-dim)">BUFFS</div>';
-    html += '<div class="df-stat-row" style="opacity:0.4">[none]</div>';
-
-    _contentEl.innerHTML = html;
   }
 
   function _fullBar(label, cur, max, color) {
@@ -347,8 +326,6 @@ var DebriefFeed = (function () {
         html += '<div class="' + cls + '">' + _escape(entry.text) + '</div>';
       }
     }
-    // Cursor blink at bottom
-    html += '<div class="df-feed-line df-cursor-blink" style="color:var(--phosphor)">\u258C</div>';
 
     _contentEl.innerHTML = html;
     // Auto-scroll to bottom
@@ -384,7 +361,7 @@ var DebriefFeed = (function () {
     _mokEmoji = emoji || _mokEmoji;
     _mokCallsign = callsign || _mokCallsign;
     _mokClass = className || _mokClass;
-    if (_mode === 0 && _visible) _renderMOK();
+    if (_mode === 0 && _visible) _renderUnified();
   }
 
   function setExpression(expr) {
@@ -396,8 +373,7 @@ var DebriefFeed = (function () {
 
   function refresh() {
     if (!_visible) return;
-    if (_mode === 0) _renderMOK();
-    else if (_mode === 1) _renderResources();
+    _renderUnified();
     // Feed mode doesn't need periodic refresh — it's event-driven
   }
 

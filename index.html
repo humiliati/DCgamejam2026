@@ -6,7 +6,7 @@
   <title>Dungeon Gleaner — DC Jam 2026</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #ddd; font-family: 'Courier New', monospace; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; color: #ddd; font-family: var(--font-body, -apple-system, 'Segoe UI', system-ui, sans-serif); }
 
     /* ── Splash Overlay (DOM 3D cube reveal) ─────────────────────── */
     #splash-overlay {
@@ -29,11 +29,11 @@
     /* Title text above cube */
     .splash-title {
       font-family: 'Courier New', monospace;
-      font-size: 42px; font-weight: bold;
+      font-size: 64px; font-weight: bold;
       color: #c8c8ff;
-      letter-spacing: 8px;
+      letter-spacing: 10px;
       text-transform: uppercase;
-      text-shadow: 0 0 24px rgba(96,96,232,0.7), 0 0 80px rgba(96,96,232,0.3), 0 2px 0 rgba(0,0,0,0.5);
+      text-shadow: 0 0 30px rgba(96,96,232,0.7), 0 0 100px rgba(96,96,232,0.3), 0 2px 0 rgba(0,0,0,0.5);
       margin-bottom: 40px;
       opacity: 0;
       animation: splash-text-in 0.8s ease-out 0.3s forwards;
@@ -42,9 +42,9 @@
     /* Subtitle below cube */
     .splash-subtitle {
       font-family: 'Courier New', monospace;
-      font-size: 16px;
+      font-size: 24px;
       color: #667;
-      letter-spacing: 5px;
+      letter-spacing: 6px;
       text-transform: uppercase;
       text-shadow: 0 0 12px rgba(96,96,232,0.3);
       margin-top: 40px;
@@ -57,9 +57,9 @@
       position: absolute;
       bottom: 48px;
       font-family: 'Courier New', monospace;
-      font-size: 14px;
+      font-size: 20px;
       color: #556;
-      letter-spacing: 3px;
+      letter-spacing: 4px;
       opacity: 0;
       animation: splash-blink 2s ease-in-out 1.2s infinite;
     }
@@ -886,25 +886,58 @@
       100% { background: rgba(0,255,166,0.08); transform: scale(1); }
     }
 
-    /* ── Minimap frame (embedded in HUD, right side) ── */
+    /* ── Minimap frame (radar CRT — right side) ── */
     #minimap-frame {
       position: absolute;
       top: 8px; right: 8px;
-      width: 200px; height: 200px;
-      background: rgba(0,0,0,0.85);
-      border: 2px solid rgba(51,255,136,0.3);
-      border-radius: 4px;
+      width: 288px; height: 288px;
+      background: #0a120a;
+      border: 2px solid seagreen;
+      border-radius: 50%;
       z-index: 14;
       overflow: hidden;
-      transition: width 0.25s ease, height 0.25s ease, top 0.25s ease, right 0.25s ease;
-      box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 0 4px rgba(51,255,136,0.05);
+      transition: width 0.25s ease, height 0.25s ease, top 0.25s ease, right 0.25s ease, border-radius 0.25s ease;
+      box-shadow: inset 0 0 7px seagreen, 0 0 12px rgba(0,0,0,0.7),
+                  0 0 20px rgba(46,139,87,0.1);
+    }
+    /* Radar range ring — inner circle */
+    #minimap-frame::before {
+      content: '';
+      position: absolute;
+      inset: 20%;
+      background: transparent;
+      border: 1px solid rgba(46,139,87,0.35);
+      border-radius: 50%;
+      box-shadow: inset 0 0 5px rgba(46,139,87,0.15);
+      pointer-events: none;
+      z-index: 2;
+    }
+    /* Radar sweep line */
+    #minimap-frame::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 100%; height: 100%;
+      background: transparent;
+      transform-origin: top left;
+      animation: minimap-radar-sweep 4s linear infinite;
+      box-shadow: -25px -75px 30px -50px seagreen;
+      border-top: 1px solid rgba(46,139,87,0.5);
+      pointer-events: none;
+      z-index: 3;
+    }
+    @keyframes minimap-radar-sweep {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
     #minimap-frame.expanded {
-      width: 320px; height: 320px;
+      width: 360px; height: 360px;
       top: 50%; right: 50%;
       transform: translate(50%, -50%);
-      border-color: var(--phosphor-dim, #1a8844);
-      box-shadow: 0 0 20px rgba(0,0,0,0.8), 0 0 4px var(--phosphor-glow, rgba(51,255,136,0.15));
+      border-radius: 50%;
+      border-color: seagreen;
+      box-shadow: inset 0 0 12px seagreen, 0 0 24px rgba(0,0,0,0.8),
+                  0 0 8px rgba(46,139,87,0.2);
       z-index: 60;
     }
     #minimap-frame #minimap {
@@ -914,96 +947,150 @@
     }
     /* Expand/collapse button */
     #minimap-expand {
-      position: absolute; top: 2px; right: 4px;
-      font-size: 14px; color: var(--phosphor-dim, #666);
+      position: absolute; top: 6px; right: 12px;
+      font-size: 14px; color: rgba(46,139,87,0.6);
       cursor: pointer; pointer-events: auto;
-      z-index: 2;
+      z-index: 5;
       opacity: 0.6;
       transition: opacity 0.15s;
       line-height: 1;
     }
-    #minimap-expand:hover { opacity: 1; color: var(--phosphor-bright, #66ffaa); }
-    #minimap-frame.expanded #minimap-expand { font-size: 18px; top: 6px; right: 8px; }
+    #minimap-expand:hover { opacity: 1; color: #66ffaa; }
+    #minimap-frame.expanded #minimap-expand { font-size: 18px; top: 10px; right: 16px; }
+    /* Compass widget on minimap frame */
+    .minimap-compass-btn {
+      position: absolute; top: 6px; left: 6px;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(10,18,10,0.85);
+      border: 2px solid seagreen;
+      color: #66ffaa;
+      font-family: var(--font-crt, 'Courier New', monospace);
+      font-size: 14px; font-weight: bold;
+      cursor: pointer; z-index: 5;
+      display: flex; align-items: center; justify-content: center;
+      text-shadow: 0 0 4px rgba(51,255,136,0.5);
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .minimap-compass-btn:hover {
+      background: rgba(46,139,87,0.3);
+      border-color: #66ffaa;
+    }
     /* Floor label inside frame */
     #minimap-floor-label {
-      position: absolute; bottom: 2px; left: 4px;
-      font-family: var(--font-terminal, 'Courier New', monospace);
-      font-size: 10px; color: var(--phosphor-dim, #666);
-      letter-spacing: 0.05em;
+      position: absolute; bottom: 8px; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-crt, 'Courier New', monospace);
+      font-size: 10px; color: rgba(46,139,87,0.6);
+      letter-spacing: 0.08em;
       pointer-events: none;
-      z-index: 2;
+      z-index: 5;
+      text-shadow: 0 0 4px rgba(46,139,87,0.3);
     }
-    #minimap-frame.expanded #minimap-floor-label { font-size: 14px; bottom: 6px; left: 8px; }
+    #minimap-frame.expanded #minimap-floor-label { font-size: 13px; bottom: 14px; }
 
-    /* ── D-pad movement controls (bottom-right, above status bar) ──
-     * 3×2 grid matching dcexjam2025 layout:
-     *   Row 1: Turn Left | Forward | Turn Right
-     *   Row 2: Strafe L  | Back    | Strafe R
-     * 20×20 sprites scaled 2× = 40px buttons, 8px gaps
-     * Total: (40×3 + 8×2) = 136w × (40×2 + 8) = 88h
+    /* ── D-pad movement controls — CSS monochrome arrows ──────────
+     * Disembodied center-right between minimap and footer.
+     * 3×2 grid: Turn Left | Forward | Turn Right
+     *           Strafe L  | Back    | Strafe R
      */
     #dpad-frame {
       position: absolute;
-      bottom: 80px; right: 12px;
-      width: 136px; height: 88px;
+      bottom: 50%; right: 12px;
+      transform: translateY(50%);
+      width: 144px; height: 96px;
       z-index: 16;
       pointer-events: none;
-      opacity: 0.65;
+      opacity: 0.7;
       transition: opacity 0.2s;
     }
     #dpad-frame:hover { opacity: 1; }
     .dpad-btn {
       position: absolute;
-      width: 40px; height: 40px;
-      background-image: url('assets/ui/buttons/buttons.png');
-      background-size: 120px 160px; /* 60×80 sheet scaled 2× */
-      image-rendering: pixelated;
+      width: 44px; height: 44px;
+      background: none; border: none;
       border: none;
       border-radius: 3px;
       cursor: pointer;
       pointer-events: auto;
       user-select: none;
       -webkit-user-select: none;
-      transition: filter 0.08s;
+      transition: background 0.1s, transform 0.08s;
+      /* Arrow rendered via ::after pseudo-element */
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 6px;
+      background: rgba(200,200,200,0.08);
+    }
+    .dpad-btn::after {
+      content: '';
+      display: block;
+      width: 0; height: 0;
+      border: 8px solid transparent;
     }
     .dpad-btn:hover {
-      background-image: url('assets/ui/buttons/buttons_rollover.png');
+      background: rgba(200,200,200,0.18);
     }
     .dpad-btn:active {
-      background-image: url('assets/ui/buttons/buttons_down.png');
-      filter: brightness(1.2);
+      background: rgba(200,200,200,0.28);
+      transform: scale(0.92);
     }
-    /* Grid positions: 3 cols × 2 rows, 48px stride (40+8) */
-    /* Row 1: Turn Left (frame 0), Forward (frame 1), Turn Right (frame 2) */
-    #dpad-turn-l  { top: 0; left: 0;   background-position: 0 0; }
-    #dpad-fwd     { top: 0; left: 48px; background-position: -40px 0; }
-    #dpad-turn-r  { top: 0; left: 96px; background-position: -80px 0; }
-    /* Row 2: Strafe Left (frame 3), Back (frame 4), Strafe Right (frame 5) */
-    #dpad-str-l   { top: 48px; left: 0;   background-position: 0 -40px; }
-    #dpad-back    { top: 48px; left: 48px; background-position: -40px -40px; }
-    #dpad-str-r   { top: 48px; left: 96px; background-position: -80px -40px; }
+    /* Arrow directions via border tricks */
+    #dpad-fwd::after    { border-bottom: 12px solid rgba(220,220,220,0.85); border-left-width: 10px; border-right-width: 10px; margin-top: -6px; }
+    #dpad-back::after   { border-top: 12px solid rgba(220,220,220,0.85); border-left-width: 10px; border-right-width: 10px; margin-bottom: -6px; }
+    #dpad-turn-l::after { border-right: 12px solid rgba(220,220,220,0.85); border-top-width: 10px; border-bottom-width: 10px; margin-left: -6px; }
+    #dpad-turn-r::after { border-left: 12px solid rgba(220,220,220,0.85); border-top-width: 10px; border-bottom-width: 10px; margin-right: -6px; }
+    #dpad-str-l::after  { border-right: 10px solid rgba(220,220,220,0.55); border-top-width: 8px; border-bottom-width: 8px; margin-left: -4px; }
+    #dpad-str-r::after  { border-left: 10px solid rgba(220,220,220,0.55); border-top-width: 8px; border-bottom-width: 8px; margin-right: -4px; }
+    /* Grid positions: 3 cols × 2 rows, 48px stride */
+    #dpad-turn-l  { top: 0; left: 0; }
+    #dpad-fwd     { top: 0; left: 48px; }
+    #dpad-turn-r  { top: 0; left: 96px; }
+    #dpad-str-l   { top: 48px; left: 0; }
+    #dpad-back    { top: 48px; left: 48px; }
+    #dpad-str-r   { top: 48px; left: 96px; }
 
-    /* ── Card tray (combat hand) ── */
+    /* ── Card tray (laminated playing cards on desk) ── */
     #card-tray {
       height: 144px;
-      background: var(--bg-panel, rgba(0,0,0,0.85));
-      border-top: var(--border-terminal, 2px solid #333);
+      background: linear-gradient(180deg, #d4c8b8 0%, #c0b4a4 100%);
+      border-top: 3px solid var(--desk-brown);
       display: flex; align-items: center; justify-content: center; gap: 16px;
       padding: 12px 32px;
       margin-left: var(--debrief-w, 0px);
     }
     .card-slot {
       width: 104px; height: 120px;
-      border: 2px solid #555; border-radius: 12px;
-      background: #1a1a1a;
+      border: 2px solid var(--desk-brown); border-radius: 10px;
+      background: var(--paper);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 40px; cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+      font-size: 40px; cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
       user-select: none;
+      /* Laminate shine */
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.15);
+      position: relative;
     }
-    .card-slot:hover { transform: translateY(-8px); border-color: #aaa; }
-    .card-slot .card-name { font-size: 14px; color: #888; margin-top: 4px; text-align: center; }
-    .card-slot.empty { opacity: 0.3; cursor: default; }
-    .card-slot.empty:hover { transform: none; border-color: #555; }
+    .card-slot::after {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .card-slot:hover { transform: translateY(-8px); border-color: var(--clipboard-blue); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .card-slot .card-name { font-size: 13px; color: var(--ink-dim); margin-top: 4px; text-align: center; font-family: var(--font-body); }
+    .card-slot.empty { opacity: 0.35; cursor: default; border-style: dashed; }
+    .card-slot.empty:hover { transform: none; border-color: var(--desk-brown); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.15); }
+    /* Draw-opportunity highlight — applied by JS when deck has cards to draw */
+    .card-slot.card-draw-highlight {
+      animation: card-draw-glow 1.5s ease-in-out infinite alternate;
+      border-color: var(--hazmat-yellow);
+      opacity: 0.6;
+    }
+    @keyframes card-draw-glow {
+      0%   { box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 0 4px rgba(240,200,48,0.1); }
+      100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 0 10px rgba(240,200,48,0.3); }
+    }
 
     /* ── Combat overlay ── */
     #combat-overlay {
@@ -1040,25 +1127,55 @@
        ═══════════════════════════════════════════════════════════════ */
 
     :root {
+      /* ── CRT phosphor (minimap + debrief feed ONLY) ──────────── */
       --phosphor:        #33ff88;
       --phosphor-dim:    #1a8844;
       --phosphor-bright: #66ffaa;
       --phosphor-glow:   rgba(51,255,136,0.15);
       --bg-terminal:     #080c08;
-      --bg-panel:        rgba(8,12,8,0.88);
+      --bg-panel:        #080c08;
       --scanline-opacity: 0.06;
       --scanline-speed:  8s;
       --font-terminal:   'Courier New', monospace;
       --border-terminal: 1px solid var(--phosphor-dim);
-      --status-bar-h:    120px;
-      --debrief-w:       240px;
+      --status-bar-h:    128px;
+      --debrief-w:       248px;
+
+      /* ── Paper / Desk surface ────────────────────────────────── */
+      --paper:           #f5f0e8;
+      --paper-ruled:     #c8d0e0;
+      --ink:             #2a2520;
+      --ink-dim:         #8a8078;
+      --desk-brown:      #6b5b4a;
+      --clipboard-blue:  #4888c0;
+      --hazmat-yellow:   #f0c830;
+      --stamp-red:       #c04040;
+      --check-green:     #48a858;
+      --tape-clear:      rgba(255,255,248,0.35);
+
+      /* ── Resource colors (RESOURCE_COLORS.md) ────────────────── */
+      --rc-hp:       #FF6B9D;
+      --rc-energy:   #00D4FF;
+      --rc-battery:  #00FFA6;
+      --rc-currency: #FFFF00;
+      --rc-xp:       #C88FFF;
+
+      /* ── Font topology ───────────────────────────────────────── */
+      --font-display: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+      --font-body:    -apple-system, 'Segoe UI', system-ui, Roboto, sans-serif;
+      --font-data:    ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+      --font-crt:     'Courier New', Courier, monospace;
     }
 
-    /* ── Scanline overlay (covers viewport only, not splash) ───── */
+    /* ── Scanline overlay — HIDDEN during gameplay, shown only for peek screens ── */
     #crt-scanlines {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       pointer-events: none; z-index: 50;
       overflow: hidden;
+      display: none; /* Hidden by default — JS shows it for peek/title only */
+    }
+    #crt-scanlines.peek-active {
+      display: block;
     }
     #crt-scanlines::before {
       content: '';
@@ -1092,40 +1209,48 @@
       100% { transform: translateY(50%); }
     }
 
-    /* ── Vignette (CRT edge darkening) ─────────────────────────── */
+    /* ── Vignette (CRT edge darkening) — hidden during gameplay ── */
     #crt-vignette {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       box-shadow: inset 0 0 100px 30px rgba(0,0,0,0.4);
       pointer-events: none; z-index: 51;
+      display: none; /* Hidden by default — JS shows for peek/title */
+    }
+    #crt-vignette.peek-active {
+      display: block;
     }
 
-    /* ── Debrief Feed (left column) ────────────────────────────── */
+    /* ── Debrief Feed (left column — 4:3 aspect CRT panel) ────── */
     #debrief-feed {
-      position: absolute; top: 0; left: 0;
+      position: absolute; top: 8px; left: 8px;
       width: var(--debrief-w);
-      bottom: calc(var(--status-bar-h) + 160px); /* clear quick bar (~3 slots) */
+      /* Compact smartwatch — auto height, no forced aspect ratio */
+      max-height: calc(100% - var(--status-bar-h) - 120px);
       background: var(--bg-panel);
-      border-right: var(--border-terminal);
-      font-family: var(--font-terminal);
-      font-size: 20px;
+      border: 1px solid var(--phosphor-dim);
+      border-radius: 10px;
+      font-family: var(--font-crt);
+      font-size: 16px;
       color: var(--phosphor);
       text-shadow: 0 0 4px var(--phosphor-glow);
       overflow: hidden;
-      cursor: pointer;
+      cursor: default;
       z-index: 10;
       display: flex; flex-direction: column;
+      pointer-events: auto;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5), inset 0 0 8px rgba(51,255,136,0.05);
     }
     #debrief-feed .df-header {
-      padding: 8px 12px;
+      padding: 4px 10px;
       border-bottom: 1px solid var(--phosphor-dim);
-      font-size: 16px; letter-spacing: 0.12em;
+      font-size: 14px; letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--phosphor-dim);
       flex-shrink: 0;
     }
     #debrief-feed .df-content {
       flex: 1; overflow-y: auto; overflow-x: hidden;
-      padding: 8px 12px;
+      padding: 4px 8px;
       scrollbar-width: thin;
       scrollbar-color: var(--phosphor-dim) transparent;
     }
@@ -1134,109 +1259,125 @@
     #debrief-feed .df-content::-webkit-scrollbar-track { background: transparent; }
 
     /* Debrief: MOK avatar mode */
-    .df-avatar { text-align: center; padding: 12px 0; }
-    .df-avatar .df-emoji { font-size: 56px; display: block; margin-bottom: 8px; }
-    .df-avatar .df-callsign { font-size: 20px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
-    .df-avatar .df-class { font-size: 16px; color: var(--phosphor-dim); }
-    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 8px 0; opacity: 0.4; }
-    .df-gauge-row { display: flex; align-items: center; gap: 6px; font-size: 18px; line-height: 1.4; }
-    .df-gauge-row .df-label { width: 36px; color: var(--phosphor-dim); }
+    .df-avatar { text-align: center; padding: 2px 0; }
+    .df-avatar .df-emoji { font-size: 28px; }
+    .df-avatar .df-callsign { font-size: 14px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
+    .df-avatar .df-class { font-size: 12px; color: var(--phosphor-dim); }
+    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 4px 0; opacity: 0.4; }
+    .df-gauge-row { display: flex; align-items: center; gap: 4px; font-size: 13px; line-height: 1.3; }
+    .df-gauge-row .df-label { width: 28px; color: var(--phosphor-dim); font-family: var(--font-crt); font-size: 10px; }
     .df-gauge-row .df-bar { flex: 1; letter-spacing: -1px; }
-    .df-stat-row { font-size: 18px; color: var(--phosphor-dim); line-height: 1.5; }
+    .df-stat-row { font-size: 12px; color: var(--phosphor-dim); line-height: 1.3; }
     .df-stat-row span { color: var(--phosphor); }
 
     /* Debrief: Feed/log mode */
-    .df-feed-line { font-size: 16px; line-height: 1.4; color: var(--phosphor-dim); word-break: break-all; }
+    .df-feed-line { font-size: 16px; line-height: 1.6; color: var(--phosphor-dim); word-break: break-all; }
     .df-feed-line.df-loot { color: var(--phosphor-bright); }
     .df-feed-line.df-dmg { color: #ff6b6b; }
     .df-feed-line.df-heal { color: #66ffaa; }
-    .df-cursor-blink { animation: cursor-blink 1s step-end infinite; }
-    @keyframes cursor-blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
+    /* cursor-blink removed — no typing in this game */
 
-    /* ── Quick Bar (below debrief, left column) ────────────────── */
+    /* ── Quick Bar (below debrief — yellow post-it note aesthetic) ── */
     #quick-bar {
       position: absolute; left: 0;
       bottom: var(--status-bar-h);
       width: var(--debrief-w);
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 8px 12px;
-      background: var(--bg-panel);
-      border-right: var(--border-terminal);
-      border-top: 1px solid var(--phosphor-dim);
+      display: flex; flex-direction: column; gap: 5px;
+      padding: 10px 12px;
+      background: transparent;
       z-index: 11;
     }
     .qb-slot {
       display: flex; align-items: center; gap: 8px;
-      padding: 6px 8px;
-      border: 2px solid rgba(255,255,255,0.08);
-      border-radius: 6px;
-      background: rgba(0,0,0,0.2);
+      padding: 8px 10px;
+      background: #ffe066;
+      border: none;
+      border-radius: 2px;
       cursor: pointer;
-      font-family: var(--font-terminal);
-      font-size: 18px;
-      color: var(--phosphor-dim);
-      transition: border-color 0.15s, background 0.15s;
+      font-family: var(--font-body);
+      font-size: 16px;
+      color: #3a3520;
+      box-shadow: 2px 3px 6px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.3) inset;
+      transition: transform 0.1s, box-shadow 0.15s;
+      position: relative;
+      /* Slight random tilt for organic sticky-note look */
     }
+    .qb-slot:nth-child(1) { transform: rotate(-0.8deg); }
+    .qb-slot:nth-child(2) { transform: rotate(0.5deg); }
+    .qb-slot:nth-child(3) { transform: rotate(-0.3deg); }
     .qb-slot:hover {
-      border-color: var(--phosphor);
-      background: rgba(51,255,136,0.06);
-      box-shadow: 0 0 6px var(--phosphor-glow);
+      transform: rotate(0deg) scale(1.03);
+      box-shadow: 3px 4px 10px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.3) inset;
     }
-    .qb-slot .qb-icon { font-size: 28px; width: 40px; text-align: center; }
-    .qb-slot .qb-label { flex: 1; color: var(--phosphor); font-size: 16px; }
+    .qb-slot .qb-icon { font-size: 24px; width: 36px; text-align: center; }
+    .qb-slot .qb-label { flex: 1; color: #2a2510; font-size: 15px; font-weight: 700; }
     .qb-slot.qb-empty {
-      border-style: dashed;
-      border-color: rgba(255,255,255,0.06);
-      opacity: 0.4;
+      background: #f0d850;
+      opacity: 0.45;
       cursor: default;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.2) inset;
     }
-    .qb-slot.qb-empty:hover { border-color: rgba(255,255,255,0.06); background: rgba(0,0,0,0.2); box-shadow: none; }
+    .qb-slot.qb-empty .qb-label { color: #8a7a50; font-weight: 500; }
+    .qb-slot.qb-empty:hover { transform: none; box-shadow: 1px 2px 4px rgba(0,0,0,0.15); }
+    /* Equip-opportunity highlight — applied by JS when a compatible item is in hand */
+    .qb-slot.qb-equip-highlight {
+      animation: qb-equip-glow 1.5s ease-in-out infinite alternate;
+      background: #ffed80;
+      opacity: 0.9;
+    }
+    @keyframes qb-equip-glow {
+      0%   { box-shadow: 2px 3px 6px rgba(0,0,0,0.25), 0 0 6px rgba(240,200,48,0.3); }
+      100% { box-shadow: 2px 3px 8px rgba(0,0,0,0.3), 0 0 14px rgba(240,200,48,0.5); }
+    }
 
-    /* ── Status Bar (bottom strip — tooltip footer) ─────────────── */
+    /* ── Status Bar (bottom strip — clipboard/paper aesthetic) ──── */
     #status-bar {
       position: absolute; bottom: 0; left: 0; right: 0;
       height: var(--status-bar-h);
-      background: var(--bg-panel);
-      border-top: var(--border-terminal);
+      background: var(--paper);
+      background-image: repeating-linear-gradient(
+        180deg,
+        transparent 0px, transparent 23px,
+        rgba(180,190,210,0.25) 23px, rgba(180,190,210,0.25) 24px
+      );
+      border-top: 3px solid var(--desk-brown);
       display: flex; flex-direction: column;
-      font-family: var(--font-terminal);
-      font-size: 20px;
-      color: var(--phosphor);
-      text-shadow: 0 0 3px var(--phosphor-glow);
+      font-family: var(--font-body);
+      font-size: 18px;
+      color: #1a1510;
+      text-shadow: none;
       z-index: 12;
     }
     /* Top row: buttons + floor info */
     .sb-row {
       display: flex; align-items: center;
       padding: 0 16px;
-      height: 40px;
-      gap: 6px;
+      height: 44px;
+      gap: 8px;
       flex-shrink: 0;
     }
     /* Tooltip area: latest message line + expandable history */
     .sb-tooltip-area {
       flex: 1;
-      overflow: hidden;
-      border-top: 1px solid rgba(51,255,136,0.08);
+      overflow: visible;
+      border-top: 1px solid rgba(107,91,74,0.15);
       padding: 4px 16px;
       cursor: pointer;
-      transition: max-height 0.3s ease;
       position: relative;
+      /* Sticky-note accent — slight yellow tint */
+      background: linear-gradient(135deg, rgba(240,200,48,0.08) 0%, transparent 60%);
     }
     .sb-tooltip-latest {
-      font-size: 16px;
-      color: var(--phosphor);
+      font-size: 17px;
+      color: #1a1510;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       line-height: 1.5;
       min-height: 24px;
       padding-right: 80px; /* room for expand button */
-      font-weight: 500;
-      text-shadow: 0 0 6px rgba(51,255,136,0.15);
+      font-weight: 600;
+      text-shadow: none;
       transition: white-space 0.2s;
     }
     /* When dialogue is active, the latest row wraps and grows */
@@ -1248,38 +1389,49 @@
       padding-right: 10px;
     }
     .sb-tooltip-history {
+      /* Expand UPWARD from status bar */
+      position: absolute;
+      bottom: 100%;
+      left: 0; right: 0;
       max-height: 0;
       overflow-y: auto;
       transition: max-height 0.3s ease;
-      font-size: 12px;
-      color: rgba(180,200,180,0.55);
-      line-height: 1.35;
+      font-size: 16px;
+      color: var(--ink);
+      line-height: 1.5;
+      background: var(--paper);
+      border-top: 2px solid var(--desk-brown);
+      padding: 0 16px;
+      z-index: 13;
     }
     #status-bar.sb-expanded .sb-tooltip-history {
       max-height: 320px;
+      padding: 8px 16px;
     }
     .sb-tooltip-history::-webkit-scrollbar { width: 4px; }
-    .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border-radius: 2px; }
-    .sb-tooltip-history::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--desk-brown); border-radius: 2px; }
+    .sb-tooltip-history::-webkit-scrollbar-track { background: rgba(107,91,74,0.08); }
     .sb-tooltip-entry {
       padding: 2px 0;
-      border-bottom: 1px solid rgba(51,255,136,0.04);
+      border-bottom: 1px solid rgba(107,91,74,0.08);
       display: flex;
       align-items: baseline;
       gap: 6px;
     }
     .sb-tooltip-entry .sb-tt-time {
-      font-size: 10px;
-      color: rgba(51,255,136,0.25);
+      font-size: 13px;
+      color: var(--ink-dim);
       flex-shrink: 0;
-      min-width: 34px;
+      min-width: 38px;
+      font-family: var(--font-data);
     }
     .sb-tooltip-entry .sb-tt-text {
       flex: 1;
+      font-size: 15px;
     }
-    /* New entries flash brighter then settle */
+    /* New entries are darker ink */
     .sb-tooltip-entry:first-child {
-      color: rgba(200,220,200,0.7);
+      color: var(--ink);
     }
     /* Category color dots for scannable history */
     .sb-tooltip-entry .sb-tt-cat {
@@ -1289,42 +1441,44 @@
       flex-shrink: 0;
       margin-top: 3px;
     }
-    .sb-tt-cat-loot     { background: #8fd8a0; }
-    .sb-tt-cat-warning  { background: #fd8; }
-    .sb-tt-cat-currency { background: #f0d070; }
-    .sb-tt-cat-info     { background: rgba(51,255,136,0.4); }
-    .sb-tt-cat-damage   { background: #f88; }
-    .sb-tt-cat-hp       { background: #f09090; }
-    .sb-tt-cat-dim      { background: rgba(120,120,130,0.5); }
-    .sb-tt-cat-npc      { background: #a0c8f0; }
-    .sb-tt-cat-dialogue { background: #f0d070; }
+    .sb-tt-cat-loot     { background: var(--check-green); }
+    .sb-tt-cat-warning  { background: var(--hazmat-yellow); }
+    .sb-tt-cat-currency { background: var(--rc-currency); }
+    .sb-tt-cat-info     { background: var(--clipboard-blue); }
+    .sb-tt-cat-damage   { background: var(--stamp-red); }
+    .sb-tt-cat-hp       { background: var(--rc-hp); }
+    .sb-tt-cat-dim      { background: var(--ink-dim); }
+    .sb-tt-cat-npc      { background: var(--clipboard-blue); }
+    .sb-tt-cat-dialogue { background: var(--hazmat-yellow); }
 
     /* ── Inline dialogue in tooltip (Canon Phase 1) ─────────── */
     .sb-dialogue-entry {
       padding: 5px 0;
-      border-bottom: 1px solid rgba(240,208,112,0.12);
+      border-bottom: 1px solid rgba(107,91,74,0.1);
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
       gap: 4px 8px;
-      background: rgba(240,208,112,0.03);
-      border-left: 2px solid rgba(240,208,112,0.3);
+      background: rgba(240,200,48,0.06);
+      border-left: 3px solid var(--hazmat-yellow);
       padding-left: 8px;
       margin: 2px 0;
     }
     .sb-dialogue-speaker {
       font-weight: bold;
-      color: #f0d070;
+      color: var(--desk-brown);
       font-size: 15px;
       flex-shrink: 0;
-      text-shadow: 0 0 4px rgba(240,208,112,0.2);
+      text-shadow: none;
+      font-family: var(--font-body);
     }
     .sb-dialogue-text {
-      color: #d8d0c0;
+      color: var(--ink);
       font-size: 14px;
       flex: 1 1 100%;
       margin: 3px 0;
-      line-height: 1.45;
+      line-height: 1.5;
+      font-family: var(--font-body);
     }
     .sb-dialogue-choices {
       display: flex;
@@ -1336,7 +1490,7 @@
       border-top: 1px solid rgba(102,204,102,0.1);
     }
     .sb-dialogue-choice {
-      color: #6c6;
+      color: var(--clipboard-blue);
       text-decoration: underline;
       cursor: pointer;
       font-size: 14px;
@@ -1346,56 +1500,76 @@
       min-height: 26px;
       display: inline-flex;
       align-items: center;
-      border: 1px solid rgba(102,204,102,0.15);
+      border: 1px solid rgba(72,136,192,0.2);
+      font-family: var(--font-body);
     }
     .sb-dialogue-choice:hover {
-      color: #afa;
-      background: rgba(102,204,102,0.15);
-      border-color: rgba(102,204,102,0.35);
+      color: #2a68a0;
+      background: rgba(72,136,192,0.12);
+      border-color: rgba(72,136,192,0.4);
     }
     .sb-dialogue-choice-visited {
-      color: #585;
+      color: var(--ink-dim);
       text-decoration: dotted underline;
       opacity: 0.65;
-      border-color: rgba(102,204,102,0.08);
+      border-color: rgba(107,91,74,0.1);
     }
     .sb-dialogue-choice-visited:hover {
-      color: #8a8;
-      background: rgba(102,204,102,0.06);
+      color: var(--ink);
+      background: rgba(107,91,74,0.06);
     }
-    /* Expand button — visible, legible, inviting */
+    /* Expand button — tape label aesthetic */
     .sb-expand-hint {
       position: absolute; right: 10px; top: 2px;
-      font-size: 14px;
-      color: var(--phosphor);
-      opacity: 0.7;
-      padding: 2px 8px;
-      border: 1px solid rgba(51,255,136,0.15);
-      border-radius: 4px;
-      background: rgba(51,255,136,0.04);
+      font-size: 13px;
+      color: #3a3530;
+      opacity: 0.85;
+      padding: 3px 10px;
+      border: 1px solid rgba(90,74,58,0.3);
+      border-radius: 3px;
+      background: rgba(220,210,195,0.6);
+      font-family: var(--font-data);
+      font-weight: 600;
       transition: opacity 0.15s, transform 0.3s, background 0.15s;
       user-select: none;
     }
     .sb-expand-hint:hover {
       opacity: 1;
-      background: rgba(51,255,136,0.1);
+      background: rgba(240,200,48,0.2);
     }
     #status-bar.sb-expanded .sb-expand-hint { transform: rotate(180deg); opacity: 0.9; }
     .sb-btn {
-      background: none; border: 1px solid var(--phosphor-dim);
-      border-radius: 6px; padding: 4px 12px;
-      color: var(--phosphor); font-family: var(--font-terminal);
-      font-size: 18px; cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      background: rgba(255,255,248,0.5); border: 2px solid #5a4a3a;
+      border-radius: 6px; padding: 5px 14px;
+      color: #1a1510; font-family: var(--font-body);
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
     }
     .sb-btn:hover {
-      border-color: var(--phosphor-bright);
-      box-shadow: 0 0 6px var(--phosphor-glow);
+      border-color: var(--clipboard-blue);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      background: rgba(72,136,192,0.1);
     }
-    .sb-btn.sb-active { border-color: var(--phosphor); background: rgba(51,255,136,0.08); }
+    .sb-btn.sb-active { border-color: var(--clipboard-blue); background: rgba(72,136,192,0.12); }
+    .sb-btn.sb-bag-warn {
+      border-color: var(--hazmat-yellow);
+      color: #8a6a10;
+      background: rgba(240,200,48,0.1);
+    }
+    .sb-btn.sb-bag-critical {
+      border-color: var(--stamp-red);
+      color: var(--stamp-red);
+      background: rgba(192,64,64,0.08);
+      animation: sb-bag-pulse 1.2s ease-in-out infinite alternate;
+      font-weight: 700;
+    }
+    @keyframes sb-bag-pulse {
+      0%   { box-shadow: 0 0 0 rgba(192,64,64,0); }
+      100% { box-shadow: 0 0 8px rgba(192,64,64,0.3); }
+    }
     .sb-spacer { flex: 1; }
-    .sb-info { color: var(--phosphor-dim); font-size: 18px; }
-    .sb-info span { color: var(--phosphor); }
+    .sb-info { color: #5a5048; font-size: 16px; font-family: var(--font-body); font-weight: 500; }
+    .sb-info span { color: #1a1510; font-weight: 700; }
 
     /* ── NCH Widget (draggable card-stack capsule — EyesOnly pattern) ── */
     #nch-widget {
@@ -1532,6 +1706,54 @@
       color: var(--phosphor-dim);
       animation: cursor-blink 2s ease-in-out infinite;
     }
+
+    /* ═══════════════════════════════════════════════════════════════
+       MOBILE LANDSCAPE — D-pad right-thumb, viewport constrained
+       ═══════════════════════════════════════════════════════════════ */
+    @media (orientation: landscape) and (max-width: 1024px) {
+      :root {
+        --debrief-w: 200px;
+        --status-bar-h: 120px;
+      }
+      #dpad-frame {
+        bottom: 50%; right: 8px;
+        transform: translateY(50%);
+        width: 156px; height: 104px;
+        opacity: 0.8;
+      }
+      .dpad-btn {
+        width: 48px; height: 48px;
+      }
+      #dpad-turn-l  { top: 0; left: 0; }
+      #dpad-fwd     { top: 0; left: 52px; }
+      #dpad-turn-r  { top: 0; left: 104px; }
+      #dpad-str-l   { top: 52px; left: 0; }
+      #dpad-back    { top: 52px; left: 52px; }
+      #dpad-str-r   { top: 52px; left: 104px; }
+      #minimap-frame {
+        width: 192px; height: 192px;
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       DESKTOP — viewport crowding (HUD panels take priority)
+       ═══════════════════════════════════════════════════════════════ */
+    @media (min-width: 1025px) {
+      #dpad-frame {
+        bottom: 50%; right: 16px;
+        transform: translateY(50%);
+        width: 156px; height: 104px;
+      }
+      .dpad-btn {
+        width: 48px; height: 48px;
+      }
+      #dpad-turn-l  { top: 0; left: 0; }
+      #dpad-fwd     { top: 0; left: 52px; }
+      #dpad-turn-r  { top: 0; left: 104px; }
+      #dpad-str-l   { top: 52px; left: 0; }
+      #dpad-back    { top: 52px; left: 52px; }
+      #dpad-str-r   { top: 52px; left: 104px; }
+    }
   </style>
 </head>
 <body>
@@ -1627,28 +1849,31 @@
       <!-- Minimap embed (right-side HUD frame, always visible during gameplay) -->
       <div id="minimap-frame" style="display:none">
         <canvas id="minimap"></canvas>
-        <div id="minimap-expand" title="Expand map">⛶</div>
+        <div id="minimap-expand" title="Expand map">\u26F6</div>
+        <button id="sb-map" class="minimap-compass-btn" title="Toggle Map (M)">N</button>
         <div id="minimap-floor-label"></div>
       </div>
 
-      <!-- D-pad movement controls — 3×2 grid matching dcexjam2025 -->
+      <!-- D-pad movement controls — CSS monochrome arrows -->
       <div id="dpad-frame" style="display:none">
-        <div class="dpad-btn" id="dpad-turn-l" title="Turn Left (Q)"></div>
-        <div class="dpad-btn" id="dpad-fwd"    title="Forward (W)"></div>
-        <div class="dpad-btn" id="dpad-turn-r" title="Turn Right (E)"></div>
-        <div class="dpad-btn" id="dpad-str-l"  title="Strafe Left (A)"></div>
-        <div class="dpad-btn" id="dpad-back"   title="Back (S)"></div>
-        <div class="dpad-btn" id="dpad-str-r"  title="Strafe Right (D)"></div>
+        <div class="dpad-btn" id="dpad-turn-l" title="Turn Left — Q / ← / L-Bumper"></div>
+        <div class="dpad-btn" id="dpad-fwd"    title="Forward — W / ↑ / L-Stick Up"></div>
+        <div class="dpad-btn" id="dpad-turn-r" title="Turn Right — E / → / R-Bumper"></div>
+        <div class="dpad-btn" id="dpad-str-l"  title="Strafe Left — A / L-Stick Left"></div>
+        <div class="dpad-btn" id="dpad-back"   title="Back — S / ↓ / L-Stick Down"></div>
+        <div class="dpad-btn" id="dpad-str-r"  title="Strafe Right — D / L-Stick Right"></div>
       </div>
 
       <!-- Status Bar (bottom strip with tooltip footer, hidden until gameplay) -->
       <div id="status-bar" style="display:none">
         <div class="sb-row">
-          <button class="sb-btn" id="sb-bag">BAG 0/12</button>
+          <button class="sb-btn" id="sb-bag" title="Inventory (I)">\uD83C\uDF92 BAG 0/12</button>
+          <button class="sb-btn" id="sb-deck" title="Deck (K)">\uD83C\uDCCF DECK 0/0</button>
           <span class="sb-spacer"></span>
           <span class="sb-info" id="sb-floor">Floor <span>0</span></span>
           <span class="sb-info" id="sb-biome"></span>
-          <span class="sb-info" id="sb-heading">▸ N</span>
+          <span class="sb-info" id="sb-gold" title="Currency">\uD83D\uDCB0 0g</span>
+          <span class="sb-info" id="sb-heading">\u25B8 N</span>
         </div>
         <div class="sb-tooltip-area" id="sb-tooltip-area">
           <div class="sb-tooltip-latest" id="sb-tooltip-latest">Ready.</div>
@@ -1713,11 +1938,6 @@
   <script src="engine/work-order-system.js"></script>
   <script src="engine/hero-run.js"></script>
   <script src="engine/status-effect.js"></script>
-  <script src="engine/floor-data-1-2.js"></script>
-  <script src="engine/floor-data-1-3.js"></script>
-  <script src="engine/floor-data-2.js"></script>
-  <script src="engine/floor-data-2-1.js"></script>
-  <script src="engine/floor-data-2-2.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>
@@ -1753,6 +1973,12 @@
   <script src="engine/player.js"></script>
   <script src="engine/mouse-look.js"></script>
   <script src="engine/floor-manager.js"></script>
+  <!-- Floor blockout files (register hand-authored floors via FloorManager.registerFloorBuilder) -->
+  <script src="engine/floor-blockout-1-2.js"></script>
+  <script src="engine/floor-blockout-1-3.js"></script>
+  <script src="engine/floor-blockout-2.js"></script>
+  <script src="engine/floor-blockout-2-1.js"></script>
+  <script src="engine/floor-blockout-2-2.js"></script>
   <script src="engine/minimap-nav.js"></script>
   <script src="engine/intro-walk.js"></script>
   <script src="engine/npc-system.js"></script>
@@ -1778,6 +2004,7 @@
   <script src="engine/combat-bridge.js"></script>
   <script src="engine/hazard-system.js"></script>
   <script src="engine/shop.js"></script>
+  <script src="engine/vendor-dialog.js"></script>
   <script src="engine/menu-faces.js"></script>
   <script src="engine/title-screen.js"></script>
   <script src="engine/game-over-screen.js"></script>
