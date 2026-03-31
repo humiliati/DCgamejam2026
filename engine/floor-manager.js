@@ -41,6 +41,11 @@ var FloorManager = (function () {
   var _floorCache = {};        // floorId string → { floorData, enemies }
   var _enemies = [];
 
+  // ── Registered floor builders ──────────────────────────────────────
+  // External blockout files register hand-authored floor builders here.
+  // Checked before the hard-coded if/else chain in generateCurrentFloor().
+  var _registeredBuilders = {};
+
   // ── Floor ID helpers ───────────────────────────────────────────────
 
   /**
@@ -131,6 +136,18 @@ var FloorManager = (function () {
   function setFloorNum(id)     { _floorId = String(id); }
   function floorId(numOrId)    { return String(numOrId != null ? numOrId : _floorId); }
 
+  /**
+   * Register a hand-authored floor builder from an external blockout file.
+   * Registered builders take priority over the hard-coded if/else chain
+   * and over GridGen fallback in generateCurrentFloor().
+   *
+   * @param {string} id  Floor ID string (e.g. '1.2', '2', '2.1')
+   * @param {Function} builderFn  Returns floor data object (same shape as _buildFloor0)
+   */
+  function registerFloorBuilder(id, builderFn) {
+    _registeredBuilders[String(id)] = builderFn;
+  }
+
   // ── Biome resolution ───────────────────────────────────────────────
 
   /**
@@ -147,7 +164,7 @@ var FloorManager = (function () {
     if (_depth(floor) === 1) {
       if (floor === '0') return 'exterior';      // The Approach
       if (floor === '1') return 'promenade';     // The Promenade
-      if (floor === '2') return 'gardens';       // Gardens (future)
+      if (floor === '2') return 'lantern';       // Lantern Row (commercial district)
       if (floor === '3') return 'frontier';      // Frontier (future)
       return 'exterior';  // fallback for unknown exteriors
     }
@@ -155,9 +172,11 @@ var FloorManager = (function () {
     // Depth 2: interior biomes — keyed by full floor ID
     if (_depth(floor) === 2) {
       if (floor === '1.1') return 'bazaar';      // Coral Bazaar
-      if (floor === '1.2') return 'guild';       // Gleaner's Guild (future)
+      if (floor === '1.2') return 'inn';         // Driftwood Inn
+      if (floor === '1.3') return 'cellar_entry'; // Cellar Entrance (soft dungeon building)
       if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
-      if (floor === '2.1') return 'inn';         // Inn (future)
+      if (floor === '2.1') return 'office';      // Dispatcher's Office
+      if (floor === '2.2') return 'watchpost';   // Watchman's Post
       if (floor === '3.1') return 'armory';      // Armory (future)
       return 'bazaar';  // fallback for unknown interiors
     }
@@ -165,7 +184,8 @@ var FloorManager = (function () {
     // Depth 3+: dungeon biomes — based on parent interior
     var parent = _parentId(floor);
     if (parent === '1.1') return 'cellar';       // Coral Cellars
-    if (parent === '2.1') return 'catacomb';     // Lamplit Catacombs
+    if (parent === '1.3') return 'cellar';       // Soft Cellar (tutorial dungeon)
+    if (parent === '2.2') return 'catacomb';     // Hero's Wake (catacombs)
     if (parent === '3.1') return 'foundry';      // Ironhold Depths
 
     // Deep fallback: use dungeon level for biome progression
@@ -293,6 +313,135 @@ var FloorManager = (function () {
           }),
           floorTexture: 'floor_wood'
         };
+      case 'inn':
+        // Driftwood Inn — warm tavern interior with bar counter and cozy seating
+        // Wood walls with amber light, similar to home but more public.
+        return {
+          textures: Object.freeze({
+            1:  'wood_plank',       // WALL — warm plank walls
+            2:  'door_wood',        // DOOR
+            3:  'door_wood',        // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            5:  'stairs_down',      // STAIRS_DN (if applicable)
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'wood_dark',        // PILLAR — dark wood accent columns
+            25: 'wood_dark',        // BOOKSHELF — dark wood shelves
+            26: 'wood_dark',        // BAR_COUNTER — bar surface
+            27: 'bed_quilt',        // BED — inn guest bed
+            28: 'table_wood',       // TABLE — dining table
+            29: 'hearth_riverrock'  // HEARTH — tavern fireplace
+          }),
+          tileWallHeights: Object.freeze({
+            10: 2.2,               // PILLAR — tall decorative beams
+            26: 0.8,               // BAR_COUNTER — counter height
+            27: 0.6,               // BED — low inn bed
+            28: 0.7,               // TABLE — dining height
+            29: 1.6                // HEARTH — tall fireplace
+          }),
+          floorTexture: 'floor_wood'
+        };
+      case 'cellar_entry':
+        // Cellar Entrance — transitional building leading to dungeon below
+        // Stone walls with dirt undertones, cellar doors hint at what's below.
+        return {
+          textures: Object.freeze({
+            1:  'stone_rough',      // WALL — rough stone cellar walls
+            2:  'door_cellar',      // DOOR
+            3:  'door_cellar',      // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            5:  'stairs_down',      // STAIRS_DN — to dungeon
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'stone_rough',      // PILLAR — stone columns
+            25: 'wood_dark',        // BOOKSHELF — dusty shelves
+            29: 'hearth_riverrock'  // HEARTH — warming fire
+          }),
+          tileWallHeights: Object.freeze({
+            10: 1.8,               // PILLAR — cellar columns
+            29: 1.2                // HEARTH — modest fireplace
+          }),
+          floorTexture: 'floor_dirt'
+        };
+      case 'lantern':
+        // Lantern Row — commercial exterior district, warm brick and lantern light
+        // Brick facades with warm amber tones, cobblestone walkways.
+        return {
+          textures: Object.freeze({
+            1:  'brick_light',      // WALL — light brick commercial facades
+            2:  'door_wood_desc',   // DOOR — descending porthole (advancing deeper)
+            3:  'door_wood_asc',    // DOOR_BACK — ascending porthole
+            4:  'door_wood_asc',    // DOOR_EXIT — ascending porthole (returning)
+            5:  'stairs_down',      // STAIRS_DN
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'pillar_stone',     // PILLAR — decorative lamp columns
+            14: 'door_iron',        // BOSS_DOOR
+            21: 'tree_trunk',       // TREE — perimeter trees
+            22: 'shrub'             // SHRUB — wayfinding hedgerows
+          }),
+          tileWallHeights: Object.freeze({
+            1:  3.5,               // WALL — multi-story commercial facades
+            2:  3.5,               // DOOR — flush with building facade
+            3:  3.5,               // DOOR_BACK — flush with building facade
+            4:  3.5,               // DOOR_EXIT — flush with building facade
+            10: 1.5,               // PILLAR — lantern post height
+            14: 3.5,               // BOSS_DOOR — flush with building facade
+            21: 2.5,               // TREE — perimeter trees
+            22: 0.5                // SHRUB — half-height hedge
+          }),
+          floorTexture: 'floor_cobble'
+        };
+      case 'office':
+        // Dispatcher's Office — formal institutional interior
+        // Clean stone walls, orderly layout, dispatch desk.
+        return {
+          textures: Object.freeze({
+            1:  'concrete',         // WALL — clean institutional stone
+            2:  'door_wood',        // DOOR
+            3:  'door_wood',        // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            10: 'stone_rough',      // PILLAR — stone columns
+            25: 'wood_dark',        // BOOKSHELF — filing shelves
+            28: 'table_wood'        // TABLE — dispatch desk
+          }),
+          tileWallHeights: Object.freeze({
+            10: 2.0,               // PILLAR — formal columns
+            28: 0.7                // TABLE — desk height
+          }),
+          floorTexture: 'floor_stone'
+        };
+      case 'watchpost':
+        // Watchman's Post — military staging area, stone and iron
+        // Heavy stone walls, iron-bound doors, staging room for dungeon.
+        return {
+          textures: Object.freeze({
+            1:  'stone_cathedral',  // WALL — heavy dressed stone
+            2:  'door_iron',        // DOOR — iron gate
+            3:  'door_iron',        // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            5:  'stairs_down',      // STAIRS_DN — to Hero's Wake
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'stone_cathedral',  // PILLAR — stone columns
+            25: 'wood_dark',        // BOOKSHELF — records shelves
+            28: 'table_wood'        // TABLE — planning table
+          }),
+          tileWallHeights: Object.freeze({
+            10: 2.2,               // PILLAR — imposing columns
+            28: 0.7                // TABLE — planning table height
+          }),
+          floorTexture: 'floor_stone'
+        };
+      case 'catacomb':
+        // Hero's Wake — ancient catacombs, bone-dry stone, dim torchlight
+        return {
+          textures: Object.freeze({
+            1: 'stone_cathedral', 2: 'door_cellar', 3: 'door_cellar', 4: 'door_cellar',
+            5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
+            29: 'hearth_riverrock'
+          }),
+          tileWallHeights: Object.freeze({ 29: 1.0 }),
+          floorTexture: 'floor_stone',
+          fogColor: { r: 6, g: 4, b: 8 },
+          stepColor: '#140e18'
+        };
       case 'cellar':
         // Stone walls ↔ brown dirt floor — dungeon contrast
         return {
@@ -343,13 +492,19 @@ var FloorManager = (function () {
 
   function getBiomeColors(floor) {
     var biomes = {
-      exterior:   { wallLight: '#7a8a7a', wallDark: '#5a6a5a', door: '#8a7a60', doorDark: '#6a5a40', ceil: '#2a3a4a', floor: '#6a4038' },  // cool evening
-      promenade:  { wallLight: '#d4a080', wallDark: '#a07858', door: '#c89050', doorDark: '#a07040', ceil: '#e8a070', floor: '#d4a878' },  // warm sunset coral
-      bazaar:     { wallLight: '#c89868', wallDark: '#a07848', door: '#b08050', doorDark: '#8a6030', ceil: '#3a1a0a', floor: '#c89868' },  // warm coral-gold interior
-      home:       { wallLight: '#b88a58', wallDark: '#8a6438', door: '#a07040', doorDark: '#7a5020', ceil: '#2a1808', floor: '#4a3018' },  // warm amber plank room
-      cellar:     { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#b08040', doorDark: '#906830', ceil: '#1a1a22', floor: '#3a3028' },  // dirt-brown fallback
-      foundry:    { wallLight: '#7a5a4a', wallDark: '#5a3a2a', door: '#aa6a3a', doorDark: '#8a5a2a', ceil: '#1a1210', floor: '#3a2a20' },  // warm dirt fallback
-      sealab:     { wallLight: '#6a7a8a', wallDark: '#4a5a6a', door: '#6a8aaa', doorDark: '#4a6a8a', ceil: '#0a1a2a', floor: '#4a5a6a' }   // cool tile fallback
+      exterior:     { wallLight: '#7a8a7a', wallDark: '#5a6a5a', door: '#8a7a60', doorDark: '#6a5a40', ceil: '#2a3a4a', floor: '#6a4038' },  // cool evening
+      promenade:    { wallLight: '#d4a080', wallDark: '#a07858', door: '#c89050', doorDark: '#a07040', ceil: '#e8a070', floor: '#d4a878' },  // warm sunset coral
+      bazaar:       { wallLight: '#c89868', wallDark: '#a07848', door: '#b08050', doorDark: '#8a6030', ceil: '#3a1a0a', floor: '#c89868' },  // warm coral-gold interior
+      home:         { wallLight: '#b88a58', wallDark: '#8a6438', door: '#a07040', doorDark: '#7a5020', ceil: '#2a1808', floor: '#4a3018' },  // warm amber plank room
+      inn:          { wallLight: '#c09060', wallDark: '#987048', door: '#b08050', doorDark: '#8a6030', ceil: '#2a1a0a', floor: '#5a3a20' },  // warm tavern amber
+      cellar_entry: { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#9a7a50', doorDark: '#7a5a30', ceil: '#1a1818', floor: '#3a3028' },  // dim stone cellar
+      lantern:      { wallLight: '#c8a080', wallDark: '#a08060', door: '#b89060', doorDark: '#987040', ceil: '#d09060', floor: '#b8a080' },  // warm lantern-lit brick
+      office:       { wallLight: '#9a9a8a', wallDark: '#7a7a6a', door: '#8a8070', doorDark: '#6a6050', ceil: '#2a2828', floor: '#5a5850' },  // clean institutional grey
+      watchpost:    { wallLight: '#8a8a8a', wallDark: '#5a5a5a', door: '#7a7a7a', doorDark: '#4a4a4a', ceil: '#1a1a1a', floor: '#4a4a48' },  // cold military stone
+      catacomb:     { wallLight: '#7a6a6a', wallDark: '#5a4a4a', door: '#8a6a50', doorDark: '#6a4a30', ceil: '#0a0808', floor: '#2a2020' },  // ancient bone-dry stone
+      cellar:       { wallLight: '#8a7a6a', wallDark: '#6a5a4a', door: '#b08040', doorDark: '#906830', ceil: '#1a1a22', floor: '#3a3028' },  // dirt-brown fallback
+      foundry:      { wallLight: '#7a5a4a', wallDark: '#5a3a2a', door: '#aa6a3a', doorDark: '#8a5a2a', ceil: '#1a1210', floor: '#3a2a20' },  // warm dirt fallback
+      sealab:       { wallLight: '#6a7a8a', wallDark: '#4a5a6a', door: '#6a8aaa', doorDark: '#4a6a8a', ceil: '#0a1a2a', floor: '#4a5a6a' }   // cool tile fallback
     };
     return biomes[getBiome(floor)] || biomes.cellar;
   }
@@ -401,6 +556,24 @@ var FloorManager = (function () {
           ]
         }, biomeTextures));
       }
+      if (floor === '2') {
+        return SpatialContract.exterior(Object.assign({
+          label: 'Lantern Row',
+          wallHeight: 1.0,
+          renderDistance: 22,
+          fogDistance: 18,
+          fogColor: { r: 35, g: 22, b: 15 },
+          ceilColor: '#d09060',
+          floorColor: '#b8a080',
+          gridSize: { w: 32, h: 24 },
+          roomCount: { min: 3, max: 4 },
+          skyPreset: 'sunset',
+          parallax: [
+            { depth: 0.95, color: '#b06040', height: 0.10 },
+            { depth: 0.85, color: '#4a2030', height: 0.12 }
+          ]
+        }, biomeTextures));
+      }
       // Generic exterior fallback
       return SpatialContract.exterior(Object.assign({
         label: 'District ' + floor,
@@ -443,6 +616,79 @@ var FloorManager = (function () {
             27: -0.15,   // BED — low to the ground, player looks down at it
             28: -0.10,   // TABLE — half-height work surface
             29:  0.0     // HEARTH — flush with floor (natural stone base)
+          })
+        }, biomeTextures));
+      }
+      if (floor === '1.2') {
+        return SpatialContract.interior(Object.assign({
+          label: 'Driftwood Inn',
+          wallHeight: 2.0,
+          renderDistance: 14,
+          fogDistance: 12,
+          fogColor: { r: 25, g: 12, b: 6 },
+          ceilColor: '#2a1a0a',
+          floorColor: '#5a3a20',
+          gridSize: { w: 20, h: 16 },
+          roomCount: { min: 3, max: 4 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — bar height offset
+            27: -0.15,   // BED — low guest bed
+            28: -0.10,   // TABLE — dining table
+            29:  0.0     // HEARTH — flush fireplace
+          })
+        }, biomeTextures));
+      }
+      if (floor === '1.3') {
+        return SpatialContract.interior(Object.assign({
+          label: 'Cellar Entrance',
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 18, g: 14, b: 10 },
+          ceilColor: '#1a1818',
+          floorColor: '#3a3028',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            5: -0.12,    // STAIRS_DN — sunken entry to dungeon
+            29: 0.0      // HEARTH — flush fireplace
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.1') {
+        return SpatialContract.interior(Object.assign({
+          label: "Dispatcher's Office",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 15, g: 14, b: 12 },
+          ceilColor: '#2a2828',
+          floorColor: '#5a5850',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            28: -0.10    // TABLE — dispatch desk height
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.2') {
+        return SpatialContract.interior(Object.assign({
+          label: "Watchman's Post",
+          wallHeight: 2.0,
+          renderDistance: 14,
+          fogDistance: 12,
+          fogColor: { r: 10, g: 10, b: 12 },
+          ceilColor: '#1a1a1a',
+          floorColor: '#4a4a48',
+          gridSize: { w: 18, h: 14 },
+          roomCount: { min: 3, max: 4 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            5: -0.12,    // STAIRS_DN — sunken descent to Hero's Wake
+            28: -0.10    // TABLE — planning table
           })
         }, biomeTextures));
       }
@@ -596,18 +842,18 @@ var FloorManager = (function () {
     // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0  tree perimeter
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 1  north walk
-    [21, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1, 1, 1, 0,21], // 2  shop facades + DOORs (5,2) (14,2)
+    [21, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1, 1, 1, 0,21], // 2  shop facades: Bazaar (5,2) + Inn (14,2)
     [21, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0,21], // 3  shop backs (solid mass)
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 4  corridor
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 5  pillar row
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 6  plaza
-    [21, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  bonfire (9,7) + HOME DOOR (17,7)
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 8  plaza
+    [21, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 6  cellar bldg top wall
+    [21, 0, 1, 2, 1, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  cellar DOOR (3,7) + bonfire (9,7) + HOME DOOR (17,7)
+    [21, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 8  cellar bldg bottom wall
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 9  pillar row
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 10 open
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 11 approach
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 12 spawn area
-    [21, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1,21], // 13 south gate, DOOR_EXIT (9,13)
+    [21, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 2, 1, 1, 1, 1, 1, 1, 1,21], // 13 south: EXIT (9,13)→"0" + GATE (11,13)→"2"
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 14 behind gate
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  // 15 tree perimeter
   ];
@@ -632,7 +878,14 @@ var FloorManager = (function () {
         doorExit: { x: 9, y: 13 },  // DOOR_EXIT — back to The Approach (depth 1→1)
         doorEntry: { x: 5, y: 2 }   // DOOR — Coral Bazaar entrance (depth 1→2)
       },
-      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0', '17,7': '1.6' },  // DOORs (5,2)+(14,2)→Coral Bazaar, DOOR_EXIT (9,13)→Approach, HOME DOOR (17,7)→Gleaner's Home
+      doorTargets: {
+        '5,2':  '1.1',   // Coral Bazaar
+        '14,2': '1.2',   // Driftwood Inn
+        '3,7':  '1.3',   // Cellar Entrance
+        '17,7': '1.6',   // Gleaner's Home
+        '9,13': '0',     // DOOR_EXIT → The Approach
+        '11,13': '2'     // Gate → Lantern Row (critical path)
+      },
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
       biome: 'promenade',
@@ -863,6 +1116,13 @@ var FloorManager = (function () {
       _floorData = _floorCache[_floorId].floorData;
       _enemies = _floorCache[_floorId].enemies;
       fromCache = true;
+    } else if (_registeredBuilders[_floorId]) {
+      // External blockout file registered a builder for this floor
+      _floorData = _registeredBuilders[_floorId]();
+      _floorData.contract = contract;
+      // Depth 1-2 floors are safe zones (no enemies); depth 3+ spawns enemies
+      _enemies = _depth(_floorId) >= 3 ? EnemyAI.spawnEnemies(_floorData, _floorId, null) : [];
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else if (_floorId === '0') {
       // Hand-authored Floor 0: exterior courtyard (depth 1)
       _floorData = _buildFloor0();
@@ -1050,6 +1310,9 @@ var FloorManager = (function () {
     // Generation
     generateCurrentFloor: generateCurrentFloor,
     getCollisionCheck: getCollisionCheck,
+
+    // External floor registration (for blockout files)
+    registerFloorBuilder: registerFloorBuilder,
 
     // Lookups
     getBiome: getBiome,
