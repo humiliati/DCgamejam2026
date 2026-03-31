@@ -132,9 +132,18 @@ var Game = (function () {
     // ── Phase 2b: CRT HUD panels ──
     if (typeof DragDrop !== 'undefined') DragDrop.init(_canvas);
     if (typeof DebriefFeed !== 'undefined') DebriefFeed.init();
-    if (typeof StatusBar !== 'undefined') StatusBar.init();
+    if (typeof StatusBar !== 'undefined') {
+      StatusBar.init();
+      if (StatusBar.setOnFlee) {
+        StatusBar.setOnFlee(function () { CombatBridge.flee(); });
+      }
+    }
     if (typeof QuickBar !== 'undefined') QuickBar.init();
     if (typeof InteractPrompt !== 'undefined') InteractPrompt.init();
+    if (typeof DPad !== 'undefined') {
+      DPad.init();
+      DPad.setOnInteract(function () { _interact(); });
+    }
 
     // ── Phase 3: ScreenManager transition wiring ──
     ScreenManager.onChange(_onScreenChange);
@@ -1325,6 +1334,9 @@ var Game = (function () {
     if (typeof NchWidget !== 'undefined') {
       if (visible) NchWidget.show(); else NchWidget.hide();
     }
+    if (typeof DPad !== 'undefined') {
+      if (visible) DPad.show(); else DPad.hide();
+    }
   }
 
   // ── Phase 2 panel refresh helper ────────────────────────────────────
@@ -2020,10 +2032,15 @@ var Game = (function () {
 
   // ── Movement callbacks ─────────────────────────────────────────────
 
+  var _footstepFoot = 0; // 0=left, 1=right — alternates per step
+
   function _onMoveStart(fromX, fromY, toX, toY, dir) {
     Player.setDir(dir);
     DoorContracts.tickProtect();
-    AudioSystem.playRandom('step-left', { volume: 0.35 });
+    // Alternate left/right footstep for natural cadence
+    var foot = _footstepFoot === 0 ? 'step-left' : 'step-right';
+    _footstepFoot = 1 - _footstepFoot;
+    AudioSystem.playRandom(foot, { volume: 0.4 });
   }
 
   function _onMoveFinish(x, y, dir) {
@@ -3154,6 +3171,9 @@ var Game = (function () {
     // Tick movement animation
     MC.tick(frameDt);
 
+    // Smooth mouse free-look (acceleration + exponential lerp)
+    if (typeof MouseLook !== 'undefined' && MouseLook.tick) MouseLook.tick();
+
     // Get interpolated render position
     var renderPos = MC.getRenderPos();
     var p = Player.state();
@@ -3333,7 +3353,8 @@ var Game = (function () {
     }
 
     Raycaster.render(
-      { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset },
+      { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset,
+        bobY: MC.getBobY() },
       floorData.grid, floorData.gridW, floorData.gridH,
       _sprites, lightMap
     );

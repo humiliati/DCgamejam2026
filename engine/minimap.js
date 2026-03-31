@@ -41,13 +41,24 @@ var Minimap = (function () {
   // Current explored hash (reference into cache)
   var _explored = {};
 
+  // ── Lit/unlit visibility tracking ─────────────────────────────────
+  // _visibleFrame: tile key → frame counter when last in player's sight.
+  // Tiles within reveal radius on the CURRENT frame get stamped with
+  // _frameCounter.  Tiles where _visibleFrame[key] === _frameCounter
+  // render "lit" (bright); explored tiles with stale stamps render "unlit"
+  // (dimmed).  This matches dcexjam2025's visible_frame pattern.
+  var _visibleFrame = {};   // key → last-seen frame counter
+  var _frameCounter = 0;    // incremented each reveal() call
+
   // Floor label (from spatial contract) for overlay
   var _floorLabel = '';
 
   var COLORS = {
     bg:         'rgba(0,0,0,0.7)',
     wall:       '#555',
+    wallUnlit:  '#3a3a3a',    // Dimmed wall (explored but not in sight)
     floor:      '#2a2a2a',
+    floorLit:   '#3a3a3a',    // Brighter floor (currently in sight radius)
     door:       '#b08040',    // Horizontal transition markers (amber)
     stairs:     '#5588ff',    // Vertical transition markers (blue)
     stairsUp:   '#55bbff',    // Stairs up (lighter blue)
@@ -68,7 +79,14 @@ var Minimap = (function () {
     breakable:  '#876',       // Tan-brown for destructible props
     unexplored: '#000',
     label:      'rgba(255,255,255,0.6)',
-    labelBg:    'rgba(0,0,0,0.5)'
+    labelBg:    'rgba(0,0,0,0.5)',
+    // Battle zone / hazard area tinting
+    battleZone: 'rgba(255,68,68,0.12)',   // Red tint over hazard tiles
+    // Event icon colors
+    npcIcon:    '#6cf',       // Cyan for NPC markers
+    shopIcon:   '#fd4',       // Gold for shop markers
+    bossIcon:   '#f4a',       // Pink for boss door markers
+    questIcon:  '#af6'        // Green for quest markers
   };
 
   function init(canvas) {
@@ -80,8 +98,8 @@ var Minimap = (function () {
     _expandBtn = document.getElementById('minimap-expand');
     _floorLabelEl = document.getElementById('minimap-floor-label');
 
-    // Set initial embedded size
-    _size = 160;
+    // Set initial embedded size (matches CSS #minimap-frame 200px)
+    _size = 200;
     _expanded = false;
     _visible = true;
     _canvas.width = _size;
@@ -110,6 +128,7 @@ var Minimap = (function () {
     if (_currentFloorId) {
       _floorCache[_currentFloorId] = _floorCache[_currentFloorId] || {};
       _floorCache[_currentFloorId].explored = _explored;
+      _floorCache[_currentFloorId].visibleFrame = _visibleFrame;
     }
 
     _currentFloorId = floorId;
@@ -118,9 +137,11 @@ var Minimap = (function () {
     // Restore cached explored state or start fresh
     if (_floorCache[floorId] && _floorCache[floorId].explored) {
       _explored = _floorCache[floorId].explored;
+      _visibleFrame = _floorCache[floorId].visibleFrame || {};
     } else {
       _explored = {};
-      _floorCache[floorId] = { explored: _explored };
+      _visibleFrame = {};
+      _floorCache[floorId] = { explored: _explored, visibleFrame: _visibleFrame };
     }
   }
 
@@ -183,8 +204,10 @@ var Minimap = (function () {
    */
   function clearExplored() {
     _explored = {};
+    _visibleFrame = {};
     if (_currentFloorId && _floorCache[_currentFloorId]) {
       _floorCache[_currentFloorId].explored = _explored;
+      _floorCache[_currentFloorId].visibleFrame = _visibleFrame;
     }
   }
 
@@ -196,6 +219,8 @@ var Minimap = (function () {
     _floorStack = [];
     _currentFloorId = null;
     _explored = {};
+    _visibleFrame = {};
+    _frameCounter = 0;
     _floorLabel = '';
   }
 
@@ -211,7 +236,7 @@ var Minimap = (function () {
 
   function _toggleExpand() {
     _expanded = !_expanded;
-    _size = _expanded ? 480 : 160;
+    _size = _expanded ? 480 : 200;
     _canvas.width = _size;
     _canvas.height = _size;
     if (_frame) {
@@ -256,10 +281,13 @@ var Minimap = (function () {
    */
   function reveal(px, py, radius) {
     radius = radius || 5;
+    _frameCounter++;
     for (var dy = -radius; dy <= radius; dy++) {
       for (var dx = -radius; dx <= radius; dx++) {
         if (dx * dx + dy * dy <= radius * radius) {
-          _explored[(px + dx) + ',' + (py + dy)] = true;
+          var key = (px + dx) + ',' + (py + dy);
+          _explored[key] = true;
+          _visibleFrame[key] = _frameCounter;
         }
       }
     }
@@ -284,7 +312,7 @@ var Minimap = (function () {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, _size, _size);
 
-    // Draw grid
+    // ── Pass 1: Tile grid with lit/unlit distinction ───────────────
     for (var y = 0; y < gridH; y++) {
       for (var x = 0; x < gridW; x++) {
         var key = x + ',' + y;
@@ -293,34 +321,41 @@ var Minimap = (function () {
         var tile = grid[y][x];
         var px2 = offsetX + x * tileSize;
         var py2 = offsetY + y * tileSize;
+        var isLit = (_visibleFrame[key] === _frameCounter);
 
         if (tile === TILES.WALL || tile === TILES.PILLAR || tile === TILES.TREE) {
-          ctx.fillStyle = COLORS.wall;
+          ctx.fillStyle = isLit ? COLORS.wall : COLORS.wallUnlit;
         } else if (tile === TILES.STAIRS_UP) {
-          ctx.fillStyle = COLORS.stairsUp;
+          ctx.fillStyle = isLit ? COLORS.stairsUp : _dimColor(COLORS.stairsUp);
         } else if (tile === TILES.STAIRS_DN) {
-          ctx.fillStyle = COLORS.stairsDn;
+          ctx.fillStyle = isLit ? COLORS.stairsDn : _dimColor(COLORS.stairsDn);
         } else if (TILES.isDoor && TILES.isDoor(tile)) {
-          ctx.fillStyle = COLORS.door;
+          ctx.fillStyle = isLit ? COLORS.door : _dimColor(COLORS.door);
         } else if (tile === TILES.CHEST) {
-          ctx.fillStyle = COLORS.chest;
+          ctx.fillStyle = isLit ? COLORS.chest : _dimColor(COLORS.chest);
         } else if (TILES.isHazard && TILES.isHazard(tile)) {
-          ctx.fillStyle = COLORS.hazard;
+          ctx.fillStyle = isLit ? COLORS.hazard : _dimColor(COLORS.hazard);
         } else if (tile === TILES.BONFIRE) {
-          ctx.fillStyle = COLORS.bonfire;
+          ctx.fillStyle = isLit ? COLORS.bonfire : _dimColor(COLORS.bonfire);
         } else if (tile === TILES.CORPSE) {
-          ctx.fillStyle = COLORS.corpse;
+          ctx.fillStyle = isLit ? COLORS.corpse : _dimColor(COLORS.corpse);
         } else if (tile === TILES.COLLECTIBLE) {
-          ctx.fillStyle = COLORS.collectible;
+          ctx.fillStyle = isLit ? COLORS.collectible : _dimColor(COLORS.collectible);
         } else if (tile === TILES.BREAKABLE) {
-          ctx.fillStyle = COLORS.breakable;
+          ctx.fillStyle = isLit ? COLORS.breakable : _dimColor(COLORS.breakable);
         } else if (tile === TILES.EMPTY || (TILES.isWalkable && TILES.isWalkable(tile))) {
-          ctx.fillStyle = COLORS.floor;
+          ctx.fillStyle = isLit ? COLORS.floorLit : COLORS.floor;
         } else {
           ctx.fillStyle = COLORS.unexplored;
         }
 
         ctx.fillRect(px2, py2, tileSize, tileSize);
+
+        // ── Battle zone tinting (hazard area overlay) ──
+        if (isLit && TILES.isHazard && TILES.isHazard(tile)) {
+          ctx.fillStyle = COLORS.battleZone;
+          ctx.fillRect(px2, py2, tileSize, tileSize);
+        }
 
         // Draw directional chevrons on stair tiles
         if (tileSize >= 4) {
@@ -331,6 +366,11 @@ var Minimap = (function () {
           }
         }
       }
+    }
+
+    // ── Pass 2: Event icon overlays (shops, boss doors, bonfires) ──
+    if (tileSize >= 5) {
+      _drawEventIcons(ctx, grid, gridW, gridH, tileSize, offsetX, offsetY);
     }
 
     // Draw enemy sight cones (behind dots so dots stay visible)
@@ -361,10 +401,11 @@ var Minimap = (function () {
       }
     }
 
-    // Draw enemy dots (on top of cones)
+    // Draw enemy dots (on top of cones) — skip NPCs (drawn separately)
     if (enemies) {
       for (var i = 0; i < enemies.length; i++) {
         var e = enemies[i];
+        if (e.npcType) continue; // NPCs rendered as diamonds below
         var ek = e.x + ',' + e.y;
         if (!_explored[ek]) continue;
 
@@ -377,13 +418,58 @@ var Minimap = (function () {
       }
     }
 
+    // Draw NPC icons (cyan diamonds — distinct from enemy dots)
+    _drawNpcIcons(ctx, enemies, tileSize, offsetX, offsetY);
+
+    // ── Orientation grid: draw subtle grid lines on tiles near the player ──
+    // Helps the player see exactly which tile they're on and what's adjacent.
+    if (tileSize >= 4) {
+      var gridR = 3; // radius of grid overlay in tiles
+      ctx.strokeStyle = 'rgba(51,255,136,0.12)';
+      ctx.lineWidth = 1;
+      for (var gx = player.x - gridR; gx <= player.x + gridR + 1; gx++) {
+        if (gx < 0 || gx > gridW) continue;
+        var lx = offsetX + gx * tileSize;
+        var ly0 = offsetY + Math.max(0, player.y - gridR) * tileSize;
+        var ly1 = offsetY + Math.min(gridH, player.y + gridR + 1) * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly0);
+        ctx.lineTo(lx, ly1);
+        ctx.stroke();
+      }
+      for (var gy = player.y - gridR; gy <= player.y + gridR + 1; gy++) {
+        if (gy < 0 || gy > gridH) continue;
+        var ly = offsetY + gy * tileSize;
+        var lx0 = offsetX + Math.max(0, player.x - gridR) * tileSize;
+        var lx1 = offsetX + Math.min(gridW, player.x + gridR + 1) * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(lx0, ly);
+        ctx.lineTo(lx1, ly);
+        ctx.stroke();
+      }
+      // Highlight the player's own tile with a brighter outline
+      ctx.strokeStyle = 'rgba(51,255,136,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(
+        offsetX + player.x * tileSize,
+        offsetY + player.y * tileSize,
+        tileSize, tileSize
+      );
+    }
+
     // Draw player
     var ppx = offsetX + player.x * tileSize + tileSize / 2;
     var ppy = offsetY + player.y * tileSize + tileSize / 2;
 
+    // Glow behind player marker for visibility
+    ctx.fillStyle = 'rgba(0,255,128,0.15)';
+    ctx.beginPath();
+    ctx.arc(ppx, ppy, Math.max(4, tileSize * 0.8), 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.fillStyle = COLORS.player;
     ctx.beginPath();
-    var triSize = Math.max(3, tileSize);
+    var triSize = Math.max(4, tileSize * 1.1);
     var tipX = ppx + Math.cos(player.dir) * triSize;
     var tipY = ppy + Math.sin(player.dir) * triSize;
     var baseAngle = Math.PI * 0.8;
@@ -412,6 +498,135 @@ var Minimap = (function () {
     // Draw depth indicator (breadcrumb dots, top-right)
     if (_floorStack.length > 1) {
       _drawBreadcrumbs(ctx);
+    }
+  }
+
+  // ── Color dimming for unlit tiles ──────────────────────────────────
+  // Cache dimmed versions of hex colors to avoid recalculating each frame.
+  var _dimCache = {};
+  var _DIM_FACTOR = 0.5; // 50% brightness for explored-but-not-visible tiles
+
+  /**
+   * Return a dimmed version of a hex color string.
+   * @param {string} hex - e.g. '#55bbff'
+   * @returns {string} Dimmed hex color
+   */
+  function _dimColor(hex) {
+    if (_dimCache[hex]) return _dimCache[hex];
+    // Parse hex (supports #rgb and #rrggbb)
+    var h = hex.replace('#', '');
+    if (h.length === 3) {
+      h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    }
+    var r = Math.round(parseInt(h.substr(0, 2), 16) * _DIM_FACTOR);
+    var g = Math.round(parseInt(h.substr(2, 2), 16) * _DIM_FACTOR);
+    var b = Math.round(parseInt(h.substr(4, 2), 16) * _DIM_FACTOR);
+    var result = '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+    _dimCache[hex] = result;
+    return result;
+  }
+
+  // ── Event icon overlays ───────────────────────────────────────────
+  // Draws small procedural icons on special tiles: shops, boss doors,
+  // bonfires, bookshelves. Matches dcexjam2025's event icon system
+  // but uses canvas primitives instead of sprite atlas.
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Array[]} grid
+   * @param {number} gridW
+   * @param {number} gridH
+   * @param {number} ts - tileSize
+   * @param {number} ox - offsetX
+   * @param {number} oy - offsetY
+   */
+  function _drawEventIcons(ctx, grid, gridW, gridH, ts, ox, oy) {
+    var half = ts / 2;
+    var iconR = Math.max(2, ts * 0.3);
+    ctx.font = Math.max(6, ts * 0.6) + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (var y = 0; y < gridH; y++) {
+      for (var x = 0; x < gridW; x++) {
+        var key = x + ',' + y;
+        if (!_explored[key]) continue;
+        var isLit = (_visibleFrame[key] === _frameCounter);
+        if (!isLit) continue; // Only show icons for currently visible tiles
+
+        var tile = grid[y][x];
+        var cx = ox + x * ts + half;
+        var cy = oy + y * ts + half;
+        var icon = null;
+        var iconColor = null;
+
+        if (tile === TILES.SHOP) {
+          icon = '$';
+          iconColor = COLORS.shopIcon;
+        } else if (tile === TILES.BOSS_DOOR) {
+          icon = '!';
+          iconColor = COLORS.bossIcon;
+        } else if (tile === TILES.BONFIRE) {
+          icon = '*';
+          iconColor = COLORS.bonfire;
+        } else if (tile === TILES.BOOKSHELF) {
+          icon = '?';
+          iconColor = COLORS.questIcon;
+        } else if (tile === TILES.PUZZLE) {
+          icon = '~';
+          iconColor = COLORS.questIcon;
+        }
+
+        if (icon) {
+          // Draw icon background pip
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, iconR + 1, 0, Math.PI * 2);
+          ctx.fill();
+          // Draw icon text
+          ctx.fillStyle = iconColor;
+          ctx.fillText(icon, cx, cy);
+        }
+      }
+    }
+  }
+
+  // ── NPC minimap icons ─────────────────────────────────────────────
+  // Draws small diamond markers for NPCs (non-enemy entities) on the
+  // minimap. Distinguishes from enemy dots by shape and color.
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Array} enemies - Entity list (includes NPCs with npcType)
+   * @param {number} ts - tileSize
+   * @param {number} ox - offsetX
+   * @param {number} oy - offsetY
+   */
+  function _drawNpcIcons(ctx, enemies, ts, ox, oy) {
+    if (!enemies) return;
+    var half = ts / 2;
+    var dSize = Math.max(2, ts * 0.35);
+
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (!e.npcType) continue; // Only NPCs, not combat enemies
+      if (e.hp <= 0) continue;
+
+      var key = e.x + ',' + e.y;
+      if (!_explored[key]) continue;
+
+      var cx = ox + e.x * ts + half;
+      var cy = oy + e.y * ts + half;
+
+      // Diamond shape for NPCs
+      ctx.fillStyle = COLORS.npcIcon;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - dSize);
+      ctx.lineTo(cx + dSize, cy);
+      ctx.lineTo(cx, cy + dSize);
+      ctx.lineTo(cx - dSize, cy);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 

@@ -190,9 +190,10 @@ var Toast = (function () {
       var minW = 120;
       if (toastW < minW) toastW = minW;
 
-      // Position: top-right, stacked downward
+      // Position: top-right, stacked downward — offset below minimap (200+8+8 = 216px)
+      var MINIMAP_CLEAR = 216;
       var tx = vpW - TOAST_MARGIN - toastW * slide;
-      var ty = TOAST_MARGIN + i * (TOAST_H + TOAST_GAP);
+      var ty = MINIMAP_CLEAR + i * (TOAST_H + TOAST_GAP);
 
       ctx.globalAlpha = alpha;
 

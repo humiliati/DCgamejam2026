@@ -14,12 +14,22 @@
 var MovementController = (function () {
   'use strict';
 
-  // ── Timing constants (ms) — tuned from dcexjam2025 ──
-  var WALK_TIME      = 500;   // ms per grid step
-  var ROT_TIME       = 250;   // ms per 90° turn
-  var BUMP_TIME      = 250;   // ms for wall-bump feedback
-  var KEY_REPEAT_DELAY = 500; // ms before held key starts repeating
-  var KEY_REPEAT_RATE  = 200; // ms between repeats once repeating
+  // ── Timing constants (ms) — tuned for dungeon crawler feel ──
+  // Forward/back: snappy advance (competitor reference: ~320ms)
+  // Turns: deliberate rotation for peaks & reveals (competitor reference: ~350ms)
+  var WALK_TIME      = 320;   // ms per grid step (was 500 — faster advance)
+  var ROT_TIME       = 350;   // ms per 90° turn (was 250 — slower, more dramatic)
+  var BUMP_TIME      = 200;   // ms for wall-bump feedback
+  var KEY_REPEAT_DELAY = 400; // ms before held key starts repeating
+  var KEY_REPEAT_RATE  = 180; // ms between repeats once repeating
+
+  // ── Head bob ──
+  // Subtle vertical oscillation during movement (Doom/EotB feel).
+  // bobPhase accumulates during WALK actions; the raycaster reads bobY.
+  var BOB_AMPLITUDE  = 3.5;   // px vertical displacement (half-swing)
+  var BOB_FREQUENCY  = 2;     // full cycles per grid step
+  var _bobPhase      = 0;     // 0→1 per walk
+  var _bobY          = 0;     // current bob offset in px
 
   // ── Action types ──
   var ACTION_NONE = 0;
@@ -56,6 +66,10 @@ var MovementController = (function () {
   }
 
   // ── Easing ──
+  // Glov-style smoothstep: hermite S-curve with configurable sharpness.
+  // power=2 → quadratic (original), power=3 → cubic (Glov default).
+  // At power=3 the midpoint acceleration is ~14% steeper — snappier
+  // start/stop with a more natural dwell in the middle.
   function easeInOut(t, power) {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
@@ -292,7 +306,7 @@ var MovementController = (function () {
   function tick(dt) {
     if (_interpQueue.length === 0) return;
 
-    var easing = 2; // quadratic ease-in-out
+    var easing = 3; // cubic ease-in-out (matches Glov's smoothstep)
 
     var doOnce = true;
     while (_queueLength() > 1 && (dt > 0 || doOnce)) {
@@ -308,7 +322,10 @@ var MovementController = (function () {
       var next = _interpQueue[1];
 
       // Determine total animation time for this segment
-      var totTime = next.actionType === ACTION_MOVE ? WALK_TIME :
+      // Apply debuff walk-time multiplier (e.g. GROGGY → 1.25× slower)
+      var walkMult = (typeof Player !== 'undefined' && Player.getWalkTimeMultiplier)
+        ? Player.getWalkTimeMultiplier() : 1;
+      var totTime = next.actionType === ACTION_MOVE ? (WALK_TIME * walkMult) :
                     next.actionType === ACTION_ROT ? ROT_TIME : BUMP_TIME;
 
       // Double-time acceleration
@@ -353,14 +370,20 @@ var MovementController = (function () {
       if (next.actionType === ACTION_MOVE) {
         _renderX = lerp(progress, cur.posX, next.posX);
         _renderY = lerp(progress, cur.posY, next.posY);
+        // Head bob: sinusoidal vertical oscillation during movement
+        _bobPhase = _moveOffs;
+        _bobY = Math.sin(_bobPhase * Math.PI * 2 * BOB_FREQUENCY) * BOB_AMPLITUDE;
       } else if (next.actionType === ACTION_BUMP) {
         // Subtle push toward wall then back (peak at 2.4% offset)
         var p = (1 - Math.abs(1 - progress * 2)) * 0.024;
         _renderX = lerp(p, cur.posX, next.bumpX);
         _renderY = lerp(p, cur.posY, next.bumpY);
+        _bobY = 0;
       } else {
         _renderX = cur.posX;
         _renderY = cur.posY;
+        // Gentle settle — decay any residual bob during turns
+        _bobY *= 0.85;
       }
 
       // Angle interpolation (shortest path)
@@ -373,6 +396,12 @@ var MovementController = (function () {
       _renderX = cur.posX;
       _renderY = cur.posY;
       _renderAngle = dirToAngle(cur.rot);
+      // Decay bob when idle
+      if (Math.abs(_bobY) > 0.1) {
+        _bobY *= 0.85;
+      } else {
+        _bobY = 0;
+      }
     }
   }
 
@@ -427,6 +456,7 @@ var MovementController = (function () {
   function getRenderPos() { return { x: _renderX, y: _renderY, angle: _renderAngle }; }
   function getGridPos() { return { x: _gridX, y: _gridY, dir: _gridDir }; }
   function getRenderAngle() { return _renderAngle; }
+  function getBobY() { return _bobY; }
 
   /** Cancel all queued (unstarted) movements */
   function cancelQueued() {
@@ -488,6 +518,7 @@ var MovementController = (function () {
     getRenderPos: getRenderPos,
     getGridPos: getGridPos,
     getRenderAngle: getRenderAngle,
+    getBobY: getBobY,
     effRot: effRot,
     effPos: effPos,
 

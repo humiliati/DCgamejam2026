@@ -276,7 +276,14 @@ var NpcSystem = (function () {
 
       // Internal bark state
       _barkTimer:    Math.random() * BARK_STAGGER_MS,
-      _inRadius:     false
+      _inRadius:     false,
+
+      // Patrol pause at waypoints
+      _waypointPause: 0,
+
+      // Conversation lock — true while player is talking to this NPC
+      _talking:      false,
+      _talkTimer:    0
     };
   }
 
@@ -303,9 +310,18 @@ var NpcSystem = (function () {
       }
       if (!alive) continue;
 
-      // Patrol advance
+      // Conversation lock: NPC stays put while talking to the player.
+      // Auto-release after TALK_HOLD_MS in case dismiss is missed.
+      if (npc._talking) {
+        npc._talkTimer -= dt;
+        if (npc._talkTimer <= 0) {
+          _releaseTalk(npc);
+        }
+      }
+
+      // Patrol advance — skip if NPC is in conversation
       if (npc._patrolPoints && npc._patrolPoints.length >= 2
-          && npc.npcType !== TYPES.DISPATCHER) {
+          && npc.npcType !== TYPES.DISPATCHER && !npc._talking) {
         _tickPatrol(npc, dt, grid);
       }
 
@@ -414,16 +430,38 @@ var NpcSystem = (function () {
     }
   }
 
+  // Natural pause range at waypoint endpoints (ms)
+  var WAYPOINT_PAUSE_MIN = 1500;
+  var WAYPOINT_PAUSE_MAX = 4000;
+
   function _tickPatrol(npc, dt, grid) {
+    // Waypoint pause: NPC idles at endpoints before turning around
+    if (npc._waypointPause > 0) {
+      npc._waypointPause -= dt;
+      return;
+    }
+
     npc._stepTimer -= dt;
     if (npc._stepTimer > 0) return;
     npc._stepTimer = npc._stepInterval + (Math.random() * 200 - 100);
 
     var target = npc._patrolPoints[npc._patrolIdx];
     if (npc.x === target.x && npc.y === target.y) {
-      // Reached target — advance to next waypoint (bounce)
+      // Reached target — pause naturally, then advance to next waypoint
       npc._patrolIdx = (npc._patrolIdx + 1) % npc._patrolPoints.length;
       target = npc._patrolPoints[npc._patrolIdx];
+      // Add idle pause with randomized duration
+      npc._waypointPause = WAYPOINT_PAUSE_MIN +
+        Math.random() * (WAYPOINT_PAUSE_MAX - WAYPOINT_PAUSE_MIN);
+      // Face toward next target while pausing
+      var pdx = target.x - npc.x;
+      var pdy = target.y - npc.y;
+      if (Math.abs(pdx) >= Math.abs(pdy)) {
+        npc.facing = pdx > 0 ? 'east' : 'west';
+      } else {
+        npc.facing = pdy > 0 ? 'south' : 'north';
+      }
+      return;
     }
 
     // Determine step direction
@@ -511,6 +549,75 @@ var NpcSystem = (function () {
 
   // Speech capsule duration — how long the rolling ellipsis shows above NPC
   var SPEECH_CAPSULE_MS = 3000;
+  var TALK_HOLD_MS      = 8000;   // How long NPC stays rooted after interact
+
+  // ── Faction voice pitch map ──────────────────────────────────────
+  // Each faction gets a distinct playbackRate range for the voice SFX,
+  // giving NPCs a tonal personality without needing recorded voice lines.
+  var FACTION_VOICE = {
+    'tide':       { sfx: 'ui-blip',  rate: 1.3  },  // bright, high-pitched
+    'foundry':    { sfx: 'ui-blop',  rate: 0.75 },  // low, gruff
+    'admiralty':  { sfx: 'ui-bip',   rate: 1.0  },  // mid, authoritative
+    '_default':   { sfx: 'ui-blip',  rate: 1.1  }   // neutral citizen
+  };
+
+  /**
+   * Play a short voice chirp for an NPC based on faction.
+   * Three rapid pitch-varied blips to simulate speech cadence.
+   */
+  function _playVoiceSfx(npc) {
+    if (typeof AudioSystem === 'undefined') return;
+    var fv = FACTION_VOICE[npc.factionId] || FACTION_VOICE['_default'];
+    var base = fv.rate;
+    // 3-chirp burst with slight randomized pitch for natural feel
+    AudioSystem.play(fv.sfx, { volume: 0.35, playbackRate: base + (Math.random() * 0.15 - 0.07) });
+    setTimeout(function () {
+      AudioSystem.play(fv.sfx, { volume: 0.30, playbackRate: base + (Math.random() * 0.2 - 0.1) });
+    }, 120);
+    setTimeout(function () {
+      AudioSystem.play(fv.sfx, { volume: 0.25, playbackRate: base + (Math.random() * 0.25 - 0.12) });
+    }, 250);
+  }
+
+  /**
+   * Lock an NPC in place and set their sprite to a talking/attentive state.
+   */
+  function _engageTalk(npc) {
+    npc._talking = true;
+    npc._talkTimer = TALK_HOLD_MS;
+
+    // Face the player
+    if (typeof MovementController !== 'undefined') {
+      var pp = MovementController.getGridPos();
+      var dx = pp.x - npc.x;
+      var dy = pp.y - npc.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        npc.facing = dx > 0 ? 'east' : 'west';
+      } else {
+        npc.facing = dy > 0 ? 'south' : 'north';
+      }
+    }
+
+    // Animate NPC sprite — use pacified state for a calm "waiting" look
+    // (gentle bob, peace overlay, no aggression). Falls back gracefully.
+    if (typeof EnemySprites !== 'undefined' && EnemySprites.STATE) {
+      npc.spriteState = EnemySprites.STATE.PACIFIED;
+    }
+
+    // Voice chirp
+    _playVoiceSfx(npc);
+  }
+
+  /**
+   * Release an NPC from talk lock, restore idle state.
+   */
+  function _releaseTalk(npc) {
+    npc._talking = false;
+    npc._talkTimer = 0;
+    if (typeof EnemySprites !== 'undefined' && EnemySprites.STATE) {
+      npc.spriteState = EnemySprites.STATE.IDLE;
+    }
+  }
 
   /**
    * Resolve the best bark pool for the current time of day.
@@ -606,6 +713,9 @@ var NpcSystem = (function () {
    * @param {string} floorId - Current floor ID
    */
   function interact(npc, floorId) {
+    // Lock NPC in place and animate for all talkable types
+    _engageTalk(npc);
+
     switch (npc.npcType) {
       case TYPES.AMBIENT:
         // Ambient NPCs don't advertise interaction, but if somehow
@@ -613,6 +723,8 @@ var NpcSystem = (function () {
         if (npc.barkPool && typeof BarkLibrary !== 'undefined') {
           BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
         }
+        // Release after short delay (ambient barks are brief)
+        setTimeout(function () { _releaseTalk(npc); }, SPEECH_CAPSULE_MS);
         break;
 
       case TYPES.INTERACTIVE:
@@ -626,6 +738,7 @@ var NpcSystem = (function () {
         if (npc.dialoguePool && typeof BarkLibrary !== 'undefined') {
           BarkLibrary.fire(npc.dialoguePool, { style: 'bubble' });
         }
+        // Release when shop closes (auto-release timer handles it)
         break;
 
       case TYPES.DISPATCHER:
@@ -661,20 +774,23 @@ var NpcSystem = (function () {
         { id: npc.id, name: npc.name, emoji: npc.emoji },
         tree
       );
+      // Release when dialog closes (TALK_HOLD_MS auto-release covers this)
       return;
     }
     // Fall back: fire the interaction bark pool
     if (npc.dialoguePool && typeof BarkLibrary !== 'undefined') {
       BarkLibrary.fire(npc.dialoguePool, { style: 'dialog' });
-      // Auto-dismiss speech capsule after bark
-      if (typeof KaomojiCapsule !== 'undefined') {
-        setTimeout(function () { KaomojiCapsule.stopSpeech(npc.id); }, SPEECH_CAPSULE_MS);
-      }
+      // Auto-dismiss speech capsule and release NPC after bark
+      setTimeout(function () {
+        if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+        _releaseTalk(npc);
+      }, SPEECH_CAPSULE_MS);
     } else if (npc.barkPool && typeof BarkLibrary !== 'undefined') {
       BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
-      if (typeof KaomojiCapsule !== 'undefined') {
-        setTimeout(function () { KaomojiCapsule.stopSpeech(npc.id); }, SPEECH_CAPSULE_MS);
-      }
+      setTimeout(function () {
+        if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+        _releaseTalk(npc);
+      }, SPEECH_CAPSULE_MS);
     }
   }
 

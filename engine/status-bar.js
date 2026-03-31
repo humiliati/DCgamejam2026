@@ -59,6 +59,7 @@ var StatusBar = (function () {
   var _combatRound = 0;
   var _advantage   = '';
   var _combatEnergy = 0;
+  var _onFleeCallback = null;  // Set by Game at init for FLEE button
 
   // ── Init ────────────────────────────────────────────────────────
 
@@ -97,9 +98,15 @@ var StatusBar = (function () {
     if (_btnMap) {
       _btnMap.addEventListener('click', function (e) {
         e.stopPropagation();
-        if (typeof Minimap !== 'undefined') {
-          Minimap.toggle();
-          _updateMapBtn();
+        if (_inCombat) {
+          // During combat, this button is [FLEE]
+          if (_onFleeCallback) _onFleeCallback();
+        } else {
+          // Normal mode — toggle minimap
+          if (typeof Minimap !== 'undefined') {
+            Minimap.toggle();
+            _updateMapBtn();
+          }
         }
       });
     }
@@ -533,6 +540,7 @@ var StatusBar = (function () {
     pushDialogue:      pushDialogue,
     clearDialogue:     clearDialogue,
     isDialogueActive:  isDialogueActive,
-    checkWalkAway:     checkWalkAway
+    checkWalkAway:     checkWalkAway,
+    setOnFlee: function (fn) { _onFleeCallback = fn; }
   };
 })();

@@ -93,7 +93,8 @@ var Raycaster = (function () {
     var ctx = _ctx;
     var w = _width;
     var h = _height;
-    var halfH = h / 2;
+    // Apply head bob vertical offset (player.bobY from MovementController)
+    var halfH = Math.round(h / 2 + (player.bobY || 0));
     var fov = Math.PI / 3;
     var halfFov = fov / 2;
 
