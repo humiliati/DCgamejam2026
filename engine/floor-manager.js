@@ -536,13 +536,13 @@ var FloorManager = (function () {
         return SpatialContract.exterior(Object.assign({
           label: 'The Approach',
           wallHeight: 1.0,
-          renderDistance: 20,
-          fogDistance: 16,
+          renderDistance: 24,
+          fogDistance: 20,
           fogColor: { r: 30, g: 40, b: 55 },
           ceilColor: '#1a2a3a',
           floorColor: '#3a4a3a',
-          gridSize: { w: 20, h: 16 },
-          roomCount: { min: 2, max: 2 },
+          gridSize: { w: 40, h: 30 },
+          roomCount: { min: 3, max: 3 },
           skyPreset: 'cedar',
           parallax: [
             { depth: 0.95, color: '#1a2a1a', height: 0.10 },
@@ -554,13 +554,13 @@ var FloorManager = (function () {
         return SpatialContract.exterior(Object.assign({
           label: 'The Promenade',
           wallHeight: 1.0,
-          renderDistance: 20,
-          fogDistance: 18,
+          renderDistance: 24,
+          fogDistance: 22,
           fogColor: { r: 45, g: 28, b: 22 },
           ceilColor: '#e8a070',
           floorColor: '#d4a878',
-          gridSize: { w: 20, h: 16 },
-          roomCount: { min: 2, max: 2 },
+          gridSize: { w: 40, h: 30 },
+          roomCount: { min: 3, max: 3 },
           skyPreset: 'sunset',
           parallax: [
             { depth: 0.95, color: '#c06848', height: 0.08 },
@@ -775,41 +775,59 @@ var FloorManager = (function () {
   // The player approaches, interacts → depth 1→1 transition to Promenade.
   // Rows 2-5 are solid building mass (inaccessible from exterior).
 
-  var _FLOOR0_W = 20;
-  var _FLOOR0_H = 16;
-  // Legend: 0=EMPTY, 1=WALL (building), 2=DOOR, 10=PILLAR, 18=BONFIRE, 21=TREE
-  // Perimeter and yard-behind-building use TREE (21) — 2.5× tall, solid treeline.
-  // Building facade uses WALL (1) — 3.5× tall, multi-story, towers over trees.
-  // SHRUB (22) hedgerows guide player from spawn to building entrance.
-  // Rows 1-5 flanking the building (columns 1-4, 15-18) are TREE to close the
-  // gap between building edge and perimeter — prevents sky peeking through.
+  var _FLOOR0_W = 40;
+  var _FLOOR0_H = 30;
+  // Legend: 0=EMPTY (path floor), 1=WALL (3.5× building), 2=DOOR, 10=PILLAR (1.5×),
+  //         18=BONFIRE, 21=TREE (2.5×, grass floor), 22=SHRUB (0.5×, grass floor)
   //
-  // N-layer compositing test: from spawn facing north, the player sees
-  // shrub hedges (0.5×) → floor between → pillars (1.5×) → building (3.5×) → sky.
+  // 40×30 exterior — The Approach. Double-thick tree perimeter with inner shrub
+  // corridors. Building facade at north houses the gate to Floor 1. A central
+  // path lined with alternating shrub borders, pillar waypoints, and tree clusters
+  // funnels the player from south spawn to the building entrance. TREE and SHRUB
+  // tiles render grass floor; walkable (0) tiles render brick/path floor, creating
+  // visible texture alternation between grassy areas and paved walkways.
   var _FLOOR0_GRID = [
-    // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0  tree perimeter
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 1  tree row (closes gap behind building)
-    [21,21,21,21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21,21,21,21], // 2  building top wall + trees flanking
-    [21,21,21,21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21,21,21,21], // 3  solid building + trees flanking
-    [21,21,21,21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21,21,21,21], // 4  solid building + trees flanking
-    [21,21,21,21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21,21,21,21], // 5  solid building + trees flanking
-    [21,22,22,22, 0,10, 1, 1, 1, 2, 1, 1, 1, 1,10, 0,22,22,22,21], // 6  DOOR(9,6) + pillars(5,14) + shrub wings
-    [21,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,21], // 7  courtyard path + shrub borders
-    [21,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,21], // 8  courtyard path + shrub borders
-    [21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21], // 9  widening path
-    [21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0,22,21], // 10 BONFIRE (12,10) — player periphery
-    [21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21], // 11 widening path
-    [21,22,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,22,21], // 12 shrub funnel narrows toward spawn
-    [21,22,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,22,21], // 13 spawn row — hedge-lined corridor
-    [21,22,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,22,21], // 14 south hedge corridor
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  // 15 tree perimeter
+    //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 1
+    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 2  building top + side grass
+    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 3  building body
+    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 4  building body
+    [21,21,22,22, 0, 0, 0,10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,10, 0, 0, 0,22,22,21,21], // 5  DOOR(19,5) + pillar arcades
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 6  pillar arcade row
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 7  courtyard
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], // 8  tree accents flanking
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], // 9  inner shrub rows
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //10  shrub + pillar pair
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //11
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //12  BONFIRE(19,12)
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //13
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //14  pillar pair
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //15
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0,22,21,21], //16  shrub funnel widens
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0,22,21,21], //17
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], //18  inner shrub narrows + pillars
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], //19
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //20  tree + shrub funnel tightens
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //21
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0, 0,22, 0, 0, 0,10, 0, 0, 0, 0,10, 0, 0, 0,22, 0, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //22  narrowest funnel + pillars
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //23
+    [21,21,22,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,22,21,21], //24  spawn approach widens
+    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //25
+    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //26  spawn row
+    [21,21,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,21,21], //27  south shrub border
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], //28
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  //29
   ];
 
-  var _FLOOR0_SPAWN = { x: 9, y: 13, dir: 3 }; // facing NORTH
+  var _FLOOR0_SPAWN = { x: 19, y: 26, dir: 3 }; // facing NORTH
   var _FLOOR0_ROOMS = [
-    // Courtyard (main open area)
-    { x: 1, y: 7, w: 18, h: 8, cx: 9, cy: 11 }
+    // Building courtyard (north)
+    { x: 3, y: 6, w: 34, h: 4, cx: 19, cy: 8 },
+    // Central path corridor
+    { x: 10, y: 10, w: 20, h: 14, cx: 19, cy: 17 },
+    // Spawn area (south)
+    { x: 4, y: 24, w: 32, h: 4, cx: 19, cy: 26 }
   ];
 
   function _buildFloor0() {
@@ -821,11 +839,11 @@ var FloorManager = (function () {
       grid: grid,
       rooms: _FLOOR0_ROOMS.slice(),
       doors: {
-        stairsUp: null,            // Surface — nowhere higher to go
-        stairsDn: null,            // No stairs; town gate is a DOOR
-        doorEntry: { x: 9, y: 6 } // DOOR — gate to The Promenade (depth 1→1)
+        stairsUp: null,
+        stairsDn: null,
+        doorEntry: { x: 19, y: 5 }  // DOOR — gate to The Promenade (depth 1→1)
       },
-      doorTargets: { '9,6': '1' },  // DOOR at (9,6) → The Promenade
+      doorTargets: { '19,5': '1' },  // DOOR at (19,5) → The Promenade
       gridW: _FLOOR0_W,
       gridH: _FLOOR0_H,
       biome: 'exterior',
@@ -835,45 +853,63 @@ var FloorManager = (function () {
 
   // ── Hand-authored Floor 1: The Promenade (depth 1) ────────────────
   //
-  // 20×16 exterior. Sunset-washed town plaza. Player arrives from
-  // the south gate (DOOR_EXIT back to The Approach). Shop facades at
-  // the north with DOORs into building interiors (→ floor 2).
-  // Home door at (17,7) on the east wall — behind the east pillar,
-  // leads to Gleaner's Home (Floor 1.6). From the dungeon entrance
-  // at (5,2), home is due EAST — the Dispatcher's direction hint.
+  // 40×30 exterior. Sunset-washed town plaza. Significantly larger layout
+  // with thick tree perimeter, inner shrub corridors, and pillar arcades
+  // that funnel players from the south gate toward buildings and Floor 2.
+  // Trees and shrubs sit on grass-texture floor; paths use cobble texture.
   //
-  // Legend: 0=EMPTY, 1=WALL, 2=DOOR, 4=DOOR_EXIT, 10=PILLAR, 18=BONFIRE, 21=TREE
+  // Buildings:
+  //   NW: Coral Bazaar (DOOR 12,3 → 1.1)  — facade at row 3, approach from row 4
+  //   NE: Driftwood Inn (DOOR 27,3 → 1.2)  — facade at row 3, approach from row 4
+  //   W:  Cellar Entrance (DOOR 5,9 → 1.3)  — east-facing, approach from col 6
+  //   E:  Gleaner's Home (DOOR 34,9 → 1.6)  — west-facing, approach from col 33
   //
-  // The Promenade is the first proper town area. Warm sunset palette.
-  // Coral Bazaar entrance (DOOR at 5,2) and Gleaner's Guild (DOOR at
-  // 14,2). Both currently route to floor 2 (Coral Bazaar interior).
+  // South gate: EXIT(18,26)→"0" + GATE(20,26)→"2" (Lantern Row critical path)
 
-  var _FLOOR1_W = 20;
-  var _FLOOR1_H = 16;
+  var _FLOOR1_W = 40;
+  var _FLOOR1_H = 30;
   var _FLOOR1_GRID = [
-    // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0  tree perimeter
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 1  north walk
-    [21, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1, 1, 1, 0,21], // 2  shop facades: Bazaar (5,2) + Inn (14,2)
-    [21, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0,21], // 3  shop backs (solid mass)
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 4  corridor
-    [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 5  pillar row
-    [21, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 6  cellar bldg top wall
-    [21, 0, 1, 2, 1, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  cellar DOOR (3,7) + bonfire (9,7) + HOME DOOR (17,7)
-    [21, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 8  cellar bldg bottom wall
-    [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 9  pillar row
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 10 open
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 11 approach
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 12 spawn area
-    [21, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 2, 1, 1, 1, 1, 1, 1, 1,21], // 13 south: EXIT (9,13)→"0" + GATE (11,13)→"2"
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 14 behind gate
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  // 15 tree perimeter
+    //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 1
+    [21,21,22, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,22,21,21], // 2  building backs (NW+NE)
+    [21,21,22, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0,22,21,21], // 3  NW Bazaar DOOR(12,3) + NE Inn DOOR(27,3)
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 4  corridor in front of shops
+    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 5  open walk
+    [21,21,22, 0, 0,21, 0, 0,10, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0,10, 0, 0,21, 0, 0,22,21,21], // 6  pillar arcade + tree accents
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], // 7  open plaza
+    [21,21, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,21,21], // 8  W cellar bldg top + E home bldg top
+    [21,21, 1, 1, 1, 2, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 2, 1, 1, 1,21,21], // 9  Cellar DOOR(5,9) + Home DOOR(34,9) + shrub
+    [21,21, 1, 1, 1, 1, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 1, 1, 1, 1,21,21], //10  building bottoms + shrub borders
+    [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //11  tree + shrub borders
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], //12  pillar pair
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], //13  BONFIRE(19,13) — central plaza
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], //14  open plaza
+    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], //15  pillar pair
+    [21,21,22, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0,22,21,21], //16  shrub funnel toward south
+    [21,21,22, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0,22,21,21], //17
+    [21,21,22, 0, 0, 0,21, 0, 0, 0,22, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0,22, 0, 0, 0,21, 0, 0, 0,22,21,21], //18  tree + shrub + pillar — narrowing
+    [21,21,22, 0, 0, 0,21, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0,21, 0, 0, 0,22,21,21], //19
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //20  shrub tightens
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //21
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0,10, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //22  pillar pair + tightest funnel
+    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //23
+    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //24  gate approach
+    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //25  spawn area
+    [21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21], //26  gate: EXIT(18,26)→"0" + GATE(20,26)→"2"
+    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //27  behind gate
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], //28
+    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  //29
   ];
 
-  var _FLOOR1_SPAWN = { x: 9, y: 12, dir: 3 }; // facing NORTH
+  var _FLOOR1_SPAWN = { x: 19, y: 25, dir: 3 }; // facing NORTH
   var _FLOOR1_ROOMS = [
-    // Main plaza (open area between gate and shops)
-    { x: 1, y: 4, w: 18, h: 9, cx: 9, cy: 7 }
+    // Shop corridor (north)
+    { x: 3, y: 3, w: 34, h: 3, cx: 19, cy: 4 },
+    // Central plaza
+    { x: 6, y: 8, w: 28, h: 8, cx: 19, cy: 13 },
+    // South approach funnel
+    { x: 10, y: 16, w: 20, h: 10, cx: 19, cy: 22 }
   ];
 
   function _buildFloor1() {
@@ -887,16 +923,16 @@ var FloorManager = (function () {
       doors: {
         stairsUp: null,
         stairsDn: null,
-        doorExit: { x: 9, y: 13 },  // DOOR_EXIT — back to The Approach (depth 1→1)
-        doorEntry: { x: 5, y: 2 }   // DOOR — Coral Bazaar entrance (depth 1→2)
+        doorExit: { x: 18, y: 26 },  // DOOR_EXIT — back to The Approach (depth 1→1)
+        doorEntry: { x: 12, y: 3 }   // DOOR — Coral Bazaar entrance (depth 1→2)
       },
       doorTargets: {
-        '5,2':  '1.1',   // Coral Bazaar
-        '14,2': '1.2',   // Driftwood Inn
-        '3,7':  '1.3',   // Cellar Entrance
-        '17,7': '1.6',   // Gleaner's Home
-        '9,13': '0',     // DOOR_EXIT → The Approach
-        '11,13': '2'     // Gate → Lantern Row (critical path)
+        '12,3':  '1.1',   // Coral Bazaar (NW)
+        '27,3':  '1.2',   // Driftwood Inn (NE)
+        '5,9':   '1.3',   // Cellar Entrance (W, east-facing)
+        '34,9':  '1.6',   // Gleaner's Home (E, west-facing)
+        '18,26': '0',     // DOOR_EXIT → The Approach
+        '20,26': '2'      // Gate → Lantern Row (critical path)
       },
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
