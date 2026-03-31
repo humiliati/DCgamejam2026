@@ -360,8 +360,18 @@ var Minimap = (function () {
           ctx.fillRect(px2, py2, tileSize, tileSize);
         }
 
-        // Draw directional chevrons on stair tiles
+        // Draw directional chevrons on stair tiles + bonfire glow marker
         if (tileSize >= 4) {
+          if (tile === TILES.BONFIRE && isLit) {
+            // Bonfire: pulsing glow dot + flame chevron for visibility
+            ctx.fillStyle = '#ff4';
+            var bfCx = px2 + tileSize * 0.5;
+            var bfCy = py2 + tileSize * 0.5;
+            var bfR  = Math.max(2, tileSize * 0.35);
+            ctx.beginPath();
+            ctx.arc(bfCx, bfCy, bfR, 0, Math.PI * 2);
+            ctx.fill();
+          }
           if (tile === TILES.STAIRS_DN) {
             _drawChevron(ctx, px2, py2, tileSize, 'down');
           } else if (tile === TILES.STAIRS_UP) {

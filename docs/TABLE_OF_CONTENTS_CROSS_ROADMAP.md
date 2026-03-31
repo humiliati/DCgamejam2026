@@ -336,6 +336,9 @@ All five design documents, their scope, and section inventories. Each document n
 ### DOC-44: EYESONLYS_TOOLTIP_SPACE_CANON.md
 > **Scope**: Production-target reference from EyesOnly — responsive tooltip and NPC dialogue system dimensions for desktop, tablet, and mobile breakpoints.
 
+### DOC-45: INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md
+> **Scope**: Comprehensive audit mapping DG containers to EyesOnly, 9 confirmed bugs, 6-phase fix plan, transfer matrix, consistency checklist, decision log.
+
 ---
 
 ## Cross-Roadmap Execution Order

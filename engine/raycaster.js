@@ -1407,7 +1407,9 @@ var Raycaster = (function () {
       // radial center-fade that implies the featureless back of the
       // emoji — a soft silhouette where the center washes out to a
       // color-averaged blur while the edges retain some definition.
-      if (s.facing && spriteH > 0) {
+      if (s.facing && spriteH > 0 && !s.friendly) {
+        // Skip directional shading for friendly NPCs — they should always
+        // be clearly visible regardless of facing direction.
         var fv = _FACE_VEC[s.facing];
         if (fv) {
           var invDist = 1 / dist;

@@ -1,313 +1,165 @@
-splash, title, callsign, class all need to be between 70-120% bigger, stronger text, flashier and consistent css styling.
+# Debug Notes Screener
 
+**Updated**: 2026-03-31 | **Status key**: ✅ Fixed | 🔧 In Progress | ❌ Open | 📋 Deferred
 
+---
 
-the buttons at title screen have no hover indication. 
+## DN-01: System menu sliders grab arrow keys ✅
 
-they need frames, polish. 
+**Reported**: Arrow keys used to flip between menu faces get captured by sound sliders on Face 3 (System). Player gets stuck on the settings pane.
 
+**Root cause**: `game.js` lines 236-258 routed `turn_left`/`turn_right` directly to `MenuFaces.handleSettingsAdjust()` when Face 3 was active, with `return` preventing face rotation.
 
+**Fix**: ←/→ arrows now always rotate faces (all faces including Face 3). Slider adjustment is done via scroll wheel (±10 per tick) and W/S navigates slider rows. Face 3 hint text updated to reflect new controls.
 
-there's no clickable way out of the settings menu. 
+**Files changed**: `engine/game.js`, `engine/menu-faces.js`
 
+---
 
+## DN-02: Tooltip log history wrong order ✅
 
-the class selection buttons are still broken with text hiding outside of frame and details simply too small. 
+**Reported**: Expander button shows history wrong — oldest entry near the current row, newest at the top. Should be newest closest to current row with oldest fading off at top.
 
+**Root cause**: `_history` array stores newest-first via `unshift()`, but `_rebuildHistory()` iterated forward (index 0 → length), putting newest at the DOM top. Since the history panel sits above the current row, newest should be at the DOM bottom.
 
+**Fix**: Reversed iteration order in `_rebuildHistory()` — now iterates from `_history.length - 1` down to `end`, placing oldest at top and newest at bottom (closest to current row).
 
-now that we have a new theme direction from HYBRID-LAYOUT-SPEC.md for styling that is working let's use assets for our title etc from specifically https://flapsandseals.com/partners or the eyesonly/public partners.html  
+**File changed**: `engine/status-bar.js`
 
+---
 
+## DN-03: Debrief feed time redundant and doesn't update 📋
 
+**Reported** (Figure 1): Time row in debrief feed is static/redundant with the weekly time indicator in HUD.
 
+**EyesOnly reference**: Debrief feed has NO time display. Only resource rows with block character bars (█▒░).
 
-specifically this button on background glow effect for our splash-class selection screens with paper styling:
+**Status**: Deferred to inventory roadmap Phase 2. Remove time row entirely, match EyesOnly format.
 
- 
+**File**: `engine/debrief-feed.js`
 
-form {
+---
 
-  background-color: #444444;
+## DN-04: Debrief feed contents illegibly small 📋
 
-  border-radius: 10px;
+**Reported** (Figure 2): All debrief feed content too small to read.
 
-  padding: 20px;
+**EyesOnly reference**: Uses container-query scaling `clamp(8px, 12cqh, 56px)`, block character bars with resource-colored text.
 
-  width: 300px;
+**Status**: Deferred to inventory roadmap Phase 2. Adopt clamp-style scaling based on container height.
 
-  margin: 50px auto;
+**File**: `engine/debrief-feed.js`
 
-}
+---
 
-.lb {
+## DN-05: NPCs rendering as transparent outlines ✅
 
-  display: block;
+**Reported** (Figure 3): NPC sprites appear as transparent with only their overlays outlining them.
 
-  margin-bottom: 10px;
+**Root cause**: Two issues combined:
+1. **Directional facing shade** (raycaster.js lines 1410-1463) applies a radial center-fade gradient when sprites face away from the player. On exterior floors, this washes the center to fog color while keeping edges — producing the "transparent outline" effect.
+2. **`friendly` flag not passed to sprite data** — game.js built sprite objects without the `e.friendly` property, so the raycaster couldn't exempt friendly NPCs from the aggressive back-facing silhouette.
 
-  font-size: 18px;
+**Fix**:
+- Added `friendly: e.friendly` to the sprite push in game.js (line 3408)
+- Added `!s.friendly` guard to directional shading in raycaster.js (line 1410) — friendly NPCs now skip all directional darkness overlays
 
-  font-weight: bold;
+**Files changed**: `engine/game.js`, `engine/raycaster.js`
 
-}
+---
 
-.infos[type="text"], input[type="email"], input[type="date"] {
+## DN-06: Bonfire markers unclear on exterior minimap ✅
 
-  width: 100%;
+**Reported**: Bonfires need a visible marker on exterior minimap to prevent player confusion.
 
-  padding: 10px;
+**Prior state**: Bonfire tile was already color-coded orange (`#f80`) in minimap.js, but at small tile sizes it was indistinguishable from other colored tiles.
 
-  font-size: 16px;
+**Fix**: Added bright yellow (`#ff4`) glow dot drawn over bonfire tiles when lit, providing a distinctive visual marker on the minimap.
 
-  border-radius: 5px;
+**File changed**: `engine/minimap.js`
 
-  border: none;
+---
 
-  margin-bottom: 20px;
+## DN-07: All non-HUD menus/panels too small 📋
 
-  background-color: #333333;
+**Reported**: Pause menu, systems menu, inventories, shops, bonfires, puzzles — all render at tiny sizes. Hilariously small click targets.
 
-  color: white;
+**Current state**: MenuBox fills 70% viewport width × 80% viewport height (menu-box.js lines 414-416). Face renderers use hardcoded pixel sizes (equip slots 80×48px, bag slots 56px, hand slots 50×67.5px).
 
-}
+**Status**: Deferred to inventory roadmap Phase 3. Requires scaling up MenuBox dimensions and all Face renderer element sizes.
 
-#send {
+**Files**: `engine/menu-box.js`, `engine/menu-faces.js`
 
-  --glow-color: rgb(176, 255, 189);
+---
 
-  --glow-spread-color: rgba(123, 255, 160, 0.781);
+## DN-08: Dispatcher interaction broken ✅ (partial) / 🔧
 
-  --enhanced-glow-color: rgb(182, 175, 71);
+**Reported** (Figure 4): Dispatcher turn-around doesn't grab player properly. No NPC dialogue or barks printing anywhere. "ok to talk" shows but NPC does nothing.
 
-  --btn-color: rgba(13, 241, 21, 0.508);
+**Root cause found**: InteractPrompt checked `e.friendly` to show "Talk" prompt, but game.js `_interact()` required `e.talkable`. An NPC with `friendly: true` but `talkable: false` would show the prompt but clicking did nothing.
 
-  border: .25em solid var(--glow-color);
+**Fix applied**: InteractPrompt now requires BOTH `e.friendly && e.talkable` before showing the prompt (interact-prompt.js line 153).
 
-  padding: 1em 2em;
+**Remaining work**: Verify dispatcher has `talkable: true` set. Verify dialogue tree / bark pool is registered for dispatcher NPC. The dispatcher gate bump path (game.js `_onBump` → `_showDispatcherGateDialog`) is separate from the general NPC interact path — need to confirm both work.
 
-  color: var(--glow-color);
+**Files changed**: `engine/interact-prompt.js`
 
-  font-size: 14px;
+---
 
-  font-weight: bold;
+## DN-09: Tooltip clickable hyperlinks for NPC dialogue 🔧
 
-  background-color: var(--btn-color);
+**Reported**: Need clickable hyperlinks in NPC dialogue. Dispatcher interaction should only be dismissible via dialogue choice hyperlinks: [Ok] [I have reason to believe the floor is unlocked] [Who are you, who am I?]
 
-  border-radius: 1em;
+**Status**: Requires DialogBox to support clickable choice rendering. Currently DialogBox renders text but choice buttons may not be wired. Needs investigation into DialogBox.startConversation() choice callback chain.
 
-  outline: none;
+**File**: `engine/dialog-box.js`, `engine/npc-system.js`
 
-  box-shadow: 0 0 1em .25em var(--glow-color),
+---
 
-        0 0 4em 1em var(--glow-spread-color),
+## DN-10: DECK button opens System menu instead of Inventory ❌
 
-        inset 0 0 .05em .25em var(--glow-color);
+**Reported** (Figure 5): Clicking DECK button pulls up Face 3 (SYSTEM) instead of Face 2 (INVENTORY).
 
-  text-shadow: 0 0 .5em var(--glow-color);
+**Root cause**: `status-bar.js` line 145: `Game.requestPause('pause', 3)` — passes face index 3 instead of 2.
 
-  position: relative;
+**Fix**: One-line change: `3` → `2`. Deferred to inventory roadmap Phase 1 (awaiting design decision sign-off).
 
-  transition: all 0.3s;
+**File**: `engine/status-bar.js`
 
-}
+---
 
-#send::after {
+## DN-11: Deck quantity denominator wrong ❌
 
-  pointer-events: none;
+**Reported** (Figure 5): Backup deck quantity display is broken.
 
-  content: "";
+**Root cause**: `status-bar.js` line 210-212 shows `handSize / deckSize` where `deckSize = CardSystem.getDeckSize()` returns `_deck.length` (remaining draw pile), not `_collection.length` (total owned cards). After drawing cards, denominator shrinks misleadingly.
 
-  position: absolute;
+**Fix**: Use `CardSystem.getCollection().length` for denominator. Deferred to inventory roadmap Phase 1.
 
-  top: 120%;
+**File**: `engine/status-bar.js`, `engine/card-system.js`
 
-  left: 0;
+---
 
-  height: 100%;
+## DN-12: Inventory drag-drop non-functional (card fan ↔ bags) ❌
 
-  width: 100%;
+**Reported** (Figure 5): Need card drag from hand fan component to bag/deck buttons. Multiple failed passes at fixing this.
 
-  background-color: var(--glow-spread-color);
+**Root cause**: Card fan (card-fan.js) is a closed drag system — supports reorder/stack/swipe-fire within the fan only. No external drop zones. Face 2 inventory (menu-faces.js) has its own canvas-based drag zones but they don't receive from the card fan. Two disconnected drag systems.
 
-  filter: blur(2em);
+**Status**: Deferred to inventory roadmap Phase 4 (critical path, 2-3 hours). Full audit document: `docs/INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md`
 
-  opacity: .7;
+**Files**: `engine/card-fan.js`, `engine/menu-faces.js`, `engine/player.js`
 
-  transform: perspective(1.5em) rotateX(35deg) scale(1, .6);
+---
 
-}
+## DN-13: Tooltip aesthetic and function mismatch with EyesOnly 🔧
 
-#send:hover {
+**Reported**: Tooltip needs to match EyesOnly identically where applicable. EyesOnly uses container-query responsive sizing, block character resource bars, idle animations.
 
-  color: var(--btn-color);
+**Status**: Partially addressed (history order fixed in DN-02). Remaining: scaling, resource bar format, aesthetic matching.
 
-  background-color: var(--glow-color);
+**File**: `engine/status-bar.js`
 
-  box-shadow: 0 0 1em .25em var(--glow-color),
+---
 
-        0 0 4em 2em var(--glow-spread-color),
-
-        inset 0 0 .75em .25em var(--glow-color);
-
-}
-
-#send:active {
-
-  box-shadow: 0 0 0.6em .25em var(--glow-color),
-
-        0 0 2.5em 2em var(--glow-spread-color),
-
-        inset 0 0 .5em .25em var(--glow-color);
-
-}
-
-#limpar {
-
-  --glow-color: rgb(255, 176, 176);
-
-  --glow-spread-color: rgba(255, 123, 123, 0.781);
-
-  --enhanced-glow-color: rgb(182, 175, 71);
-
-  --btn-color: rgba(241, 13, 13, 0.508);
-
-  border: .25em solid var(--glow-color);
-
-  padding: 1em 2em;
-
-  color: var(--glow-color);
-
-  font-size: 14px;
-
-  font-weight: bold;
-
-  background-color: var(--btn-color);
-
-  border-radius: 1em;
-
-  outline: none;
-
-  box-shadow: 0 0 1em .25em var(--glow-color),
-
-        0 0 4em 1em var(--glow-spread-color),
-
-        inset 0 0 .05em .25em var(--glow-color);
-
-  text-shadow: 0 0 .5em var(--glow-color);
-
-  position: relative;
-
-  transition: all 0.3s;
-
-}
-
-#limpar::after {
-
-  pointer-events: none;
-
-  content: "";
-
-  position: absolute;
-
-  top: 120%;
-
-  left: 0;
-
-  height: 100%;
-
-  width: 100%;
-
-  background-color: var(--glow-spread-color);
-
-  filter: blur(2em);
-
-  opacity: .7;
-
-  transform: perspective(1.5em) rotateX(35deg) scale(1, .6);
-
-}
-
-#limpar:hover {
-
-  color: var(--btn-color);
-
-  background-color: var(--glow-color);
-
-  box-shadow: 0 0 1em .25em var(--glow-color),
-
-        0 0 4em 2em var(--glow-spread-color),
-
-        inset 0 0 .75em .25em var(--glow-color);
-
-}
-
-#limpar:active {
-
-  box-shadow: 0 0 0.6em .25em var(--glow-color),
-
-        0 0 2.5em 2em var(--glow-spread-color),
-
-        inset 0 0 .5em .25em var(--glow-color);
-
-}
-
-
-
-
-
-# Debug Notes Screener — UI/HUD Overhaul Pass 2
-
-Status: **Resolved** | Updated: 2026-03-31
-
-## Issues & Resolutions
-
-### 1. Debrief Feed — 4:3 Aspect + Category Cycling
-- **Issue**: Panel stretched full height; clicking cycled through degraded views
-- **Fix**: Added `aspect-ratio: 3/4` CSS. Removed cursor blink. Renamed `>FEED` to `FEED`. Mode cycling works: MOK → SYSTEMS → FEED.
-- **Future**: Port full EyesOnly debrief-feed-controller expandable rows (post-jam)
-
-### 2. Quick Slots — Yellow Post-It Note
-- **Issue**: Paper-with-lines didn't read at scale
-- **Fix**: Restyled as yellow sticky notes (#ffe066), slight rotation per slot, drop shadow, no ruled lines
-
-### 3. D-Pad — Reposition + Rethink
-- **Issue**: Sprite-based D-pad overlapped footer, used pixel art assets
-- **Fix**: Pure CSS monochrome arrows, positioned center-right (50% vertical), hover tooltips with keybind+controller info
-
-### 4. CRT Scanlines — Viewport Scope
-- **Issue**: Scanlines + vignette covered entire gameplay viewport
-- **Fix**: Both `#crt-scanlines` and `#crt-vignette` hidden by default (`display:none`). Add `.peek-active` class via JS for peek/title screens only.
-- **Side effect fixed**: Debrief panel was semi-transparent (0.88 opacity) relying on vignette backdrop. Changed `--bg-panel` to solid `#080c08`.
-
-### 5. Exterior Wall Brightness — Day/Night
-- **Issue**: Walls used lightmap-only brightness (torch radius), too dark for daytime
-- **Fix**: Added sun intensity multiplier in raycaster `_applyFogAndBrightness`. Both foreground and background layers get `max(torchLight, 0.25 + sunI * 0.7)` when `ceilingType === 'sky'`.
-
-### 6. Minimap Sizing + Compass + Map Button
-- **Issue**: Tiles too small, frame too small, compass "N" label hidden
-- **Fix**: Tile contents 1.7× zoom (player-centered instead of grid-centered). Frame CSS 240→288px. Compass "N" label threshold lowered to 160px. MAP button added to status bar footer. Gold counter added to status bar.
-
-### 7. Raycaster Minimum Wall-Band LOD
-- **Issue**: Distant walls disappeared; shrubs cut up tree backgrounds
-- **Fix**: `Math.max(2, ...)` on lineHeight ensures 2px minimum wall strip. Increased `_MAX_LAYERS` 4→6, `_MAX_BG_STEPS` 16→24 for deeper vegetation/building views.
-
-### 8. Debrief Feed Cycling Bug
-- **Issue**: Clicking cycled through degraded views; blinking cursor at bottom
-- **Fix**: Removed cursor blink div from `_renderFeed()`. Removed `.df-cursor-blink` CSS + keyframes. Cleaned `>FEED` → `FEED`.
-
-### 9. Clock Stuck at 06:00
-- **Issue**: DayCycle starts at 06:00, time only advances on floor transitions
-- **Fix**: Added `DayCycle.advanceTime(15)` at game init — operatives deploy at dawn, arrive ~06:15.
-
-### 10. Hero Day Week-Strip Widget
-- **Issue**: "Day 1 (1/3)" display was unclear
-- **Fix**: Week-strip `[S M ♠ W T F S]` with day-of-week abbreviations. Hero days show suit symbols (♠♦♣) color-coded per dungeon. Current day highlighted and bobbing. Hover tooltip shows day number + hero status.
-
-### 11. Footer Dead Space
-- **Issue**: Status bar had too much blank area
-- **Fix**: Added MAP button, gold counter (💰 0g) to sb-row. Status bar refresh updates gold from Player.state().currency.
-
-### 12. Shrubs Cutting Up Tree Backgrounds
-- **Issue**: N-layer system had only 4 layers, causing short vegetation to consume slots
-- **Fix**: Increased to 6 layers and 24 BG steps. Combined with min wall-band LOD (#7).
+*Last reviewed: 2026-03-31 by audit session*

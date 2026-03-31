@@ -411,8 +411,8 @@ var MenuBox = (function () {
 
     if (cosA <= 0.01) return null; // Behind camera
 
-    var faceW = vpW * 0.7 * cosA;
-    var faceH = vpH * 0.8;
+    var faceW = vpW * 0.88 * cosA;
+    var faceH = vpH * 0.92;
     var centerX = vpW / 2 + sinA * vpW * 0.4;
 
     return {
@@ -738,6 +738,9 @@ var MenuBox = (function () {
     setStartFace: function (faceIdx) {
       _startFace = Math.max(0, Math.min(FACE_COUNT - 1, faceIdx));
     },
+
+    // Canvas access (for coordinate conversion in external drop handlers)
+    getCanvas: function () { return _mainCanvas; },
 
     // Constants
     FACE_COUNT: FACE_COUNT,

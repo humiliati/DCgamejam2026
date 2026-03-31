@@ -26,10 +26,11 @@ var StatusBar = (function () {
   var _goldEl     = null;  // #sb-gold — currency display
   var _visible    = false;
 
-  // Tooltip footer
+  // Tooltip footer (rolodex layout)
   var _tooltipArea    = null;  // #sb-tooltip-area
-  var _tooltipLatest  = null;  // #sb-tooltip-latest
-  var _tooltipHistory = null;  // #sb-tooltip-history
+  var _tooltipLatest  = null;  // #sb-tooltip-latest (current row, bottom)
+  var _tooltipHistory = null;  // #sb-tooltip-history (expanded scrollable)
+  var _tooltipPreview = null;  // #sb-tooltip-preview (1-2 prev rows, fade)
   var _tooltipExpanded = false;
   var _history = [];           // { text, time, category } entries
   var MAX_HISTORY = 50;
@@ -76,10 +77,11 @@ var StatusBar = (function () {
     _headingEl  = document.getElementById('sb-heading');
     _goldEl     = document.getElementById('sb-gold');
 
-    // Tooltip footer
+    // Tooltip footer (rolodex layout)
     _tooltipArea    = document.getElementById('sb-tooltip-area');
     _tooltipLatest  = document.getElementById('sb-tooltip-latest');
     _tooltipHistory = document.getElementById('sb-tooltip-history');
+    _tooltipPreview = document.getElementById('sb-tooltip-preview');
 
     if (_tooltipArea) {
       _tooltipArea.addEventListener('click', function (e) {
@@ -133,7 +135,7 @@ var StatusBar = (function () {
       });
     }
 
-    // Deck button → opens pause menu on deck face (face 3)
+    // Deck button → opens pause menu on inventory face (face 2)
     if (_btnDeck) {
       _btnDeck.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -142,7 +144,7 @@ var StatusBar = (function () {
             if (typeof MenuBox !== 'undefined') MenuBox.close();
           } else if (ScreenManager.isPlaying()) {
             if (typeof Game !== 'undefined' && Game.requestPause) {
-              Game.requestPause('pause', 3);
+              Game.requestPause('pause', 2);
             } else {
               ScreenManager.toPause();
             }
@@ -189,7 +191,7 @@ var StatusBar = (function () {
       if (Player.getBag) count = Player.getBag().length;
       if (Player.MAX_BAG) max = Player.MAX_BAG;
     }
-    _btnBag.textContent = '\uD83C\uDF92 BAG ' + count + '/' + max;
+    _btnBag.textContent = '🎒 BAG ' + count + '/' + max;
 
     // Visual urgency by fullness
     var full = count / max;
@@ -207,9 +209,14 @@ var StatusBar = (function () {
     var deckSize = 0;
     if (typeof CardSystem !== 'undefined') {
       if (CardSystem.getHand) handSize = CardSystem.getHand().length;
-      if (CardSystem.getDeckSize) deckSize = CardSystem.getDeckSize();
+      if (CardSystem.getDeck) {
+        deckSize = CardSystem.getDeck().length;
+      } else if (CardSystem.getCollection) {
+        // Fallback: collection minus hand = backup deck
+        deckSize = Math.max(0, CardSystem.getCollection().length - handSize);
+      }
     }
-    _btnDeck.textContent = '\uD83C\uDCCF DECK ' + handSize + '/' + deckSize;
+    _btnDeck.textContent = '🃏 DECK ' + handSize + '/' + (handSize + deckSize);
   }
 
   function _updateMapBtn() {
@@ -285,12 +292,11 @@ var StatusBar = (function () {
       return;
     }
 
-    // Update latest line
-    if (_tooltipLatest) {
-      _tooltipLatest.textContent = text;
-    }
+    // Update latest line (preserve LOG button child)
+    _setLatestText(text);
 
     _rebuildHistory();
+    _rebuildPreview();
 
     // ── Burst detection: auto-expand on rapid entries ──
     _burstCount++;
@@ -319,6 +325,47 @@ var StatusBar = (function () {
   /** Minimal HTML escaping for tooltip entries. */
   function _escHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** Set the latest row text without nuking the LOG button child. */
+  function _setLatestText(text) {
+    if (!_tooltipLatest) return;
+    // Find or preserve the expand-hint span
+    var hint = _tooltipLatest.querySelector('.sb-expand-hint');
+    // Set text content via a text node (first child)
+    var textNode = _tooltipLatest.firstChild;
+    if (textNode && textNode.nodeType === 3) {
+      textNode.textContent = text;
+    } else {
+      // Rebuild: text node + hint
+      _tooltipLatest.textContent = '';
+      _tooltipLatest.appendChild(document.createTextNode(text));
+    }
+    // Re-append hint if it got removed
+    if (hint && !_tooltipLatest.contains(hint)) {
+      _tooltipLatest.appendChild(hint);
+    } else if (!hint) {
+      hint = document.getElementById('sb-expand-hint');
+      if (hint) _tooltipLatest.appendChild(hint);
+    }
+  }
+
+  /**
+   * Build the 1-2 preview rows above the current row (rolodex fade).
+   * Shows history[1] and history[2] as dim fading lines.
+   */
+  function _rebuildPreview() {
+    if (!_tooltipPreview) return;
+    if (_dialogueActive) { _tooltipPreview.innerHTML = ''; return; }
+    var html = '';
+    // Show up to 2 previous entries (index 1 = previous, index 2 = older)
+    var maxPreview = Math.min(_history.length, 3);
+    for (var i = maxPreview - 1; i >= 1; i--) {
+      var h = _history[i];
+      var catDot = '<span class="sb-tt-cat sb-tt-cat-' + (h.category || 'info') + '" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:4px;vertical-align:middle;"></span>';
+      html += '<div class="sb-tooltip-prev-row">' + catDot + _escHtml(h.text) + '</div>';
+    }
+    _tooltipPreview.innerHTML = html;
   }
 
   // ── Inline dialogue (Canon Phase 1) ─────────────────────────────
@@ -389,8 +436,12 @@ var StatusBar = (function () {
     html += '</div>';
 
     // Render into latest area (CSS class sb-dialogue-mode handles wrapping)
+    // Preserve LOG button reference before replacing innerHTML
     if (_tooltipLatest) {
+      var logBtn = _tooltipLatest.querySelector('.sb-expand-hint');
       _tooltipLatest.innerHTML = html;
+      // Re-append LOG button so expand still works
+      if (logBtn) _tooltipLatest.appendChild(logBtn);
     }
 
     // Also log to history as plain text
@@ -398,6 +449,7 @@ var StatusBar = (function () {
     _history.unshift({ text: histText, time: _timestamp(), category: 'dialogue' });
     if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
     _rebuildHistory();
+    _rebuildPreview();
 
     // Wire click handlers (delegation)
     if (_tooltipLatest) {
@@ -473,10 +525,10 @@ var StatusBar = (function () {
     _activePriority = PRIORITY.NORMAL;
 
     if (_tooltipLatest) {
-      _tooltipLatest.innerHTML = '';
-      _tooltipLatest.textContent = _history.length > 0 ? _history[0].text : 'Ready.';
       _tooltipLatest.classList.remove('sb-dialogue-mode');
       _tooltipLatest.onclick = null;
+      // Restore: text + LOG button
+      _setLatestText(_history.length > 0 ? _history[0].text : 'Ready.');
     }
 
     // Notify KaomojiCapsule to stop speech
@@ -492,6 +544,7 @@ var StatusBar = (function () {
     }
 
     _rebuildHistory();
+    _rebuildPreview();
 
     // Schedule auto-collapse — tooltip minimizes after dialogue ends
     if (_tooltipExpanded) {
@@ -529,12 +582,14 @@ var StatusBar = (function () {
     return ('0' + now.getMinutes()).slice(-2) + ':' + ('0' + now.getSeconds()).slice(-2);
   }
 
-  /** Rebuild history HTML (shared by pushTooltip and dialogue). */
+  /** Rebuild history HTML (shared by pushTooltip and dialogue).
+   *  Renders oldest at top, newest at bottom (closest to the current row).
+   *  History array is newest-first (via unshift), so iterate in reverse. */
   function _rebuildHistory() {
     if (!_tooltipHistory) return;
     var html = '';
-    var start = _dialogueActive ? 0 : 1; // Skip first entry unless in dialogue (latest shows it)
-    for (var i = start; i < _history.length; i++) {
+    var end = _dialogueActive ? 0 : 1; // Skip index 0 unless in dialogue (latest row shows it)
+    for (var i = _history.length - 1; i >= end; i--) {
       var h = _history[i];
       var catClass = 'sb-tt-cat-' + (h.category || 'info');
       html += '<div class="sb-tooltip-entry">' +
@@ -544,6 +599,73 @@ var StatusBar = (function () {
               '</div>';
     }
     _tooltipHistory.innerHTML = html;
+  }
+
+  // ── Gold coin-wheel ticker ──────────────────────────────────────
+  var _goldCurrent = 0;           // Last displayed gold value
+  var _goldAnimId  = null;        // requestAnimationFrame ID for ticker
+  var _goldTrack   = null;        // #sb-gold-track element (cached)
+
+  function _updateGoldWheel(newVal) {
+    if (!_goldEl) return;
+    if (!_goldTrack) _goldTrack = document.getElementById('sb-gold-track');
+    if (!_goldTrack) {
+      // Fallback — no wheel structure, set text directly
+      _goldEl.textContent = '💰 ' + newVal + 'g';
+      return;
+    }
+
+    if (newVal === _goldCurrent) return;
+
+    var oldVal = _goldCurrent;
+    _goldCurrent = newVal;
+    var gained = newVal > oldVal;
+
+    // Set wheel values for animation
+    var prev = _goldTrack.querySelector('.sb-gold-wheel-prev');
+    var curr = _goldTrack.querySelector('.sb-gold-wheel-curr');
+    var next = _goldTrack.querySelector('.sb-gold-wheel-next');
+
+    if (gained) {
+      // Gain: show old (prev) → roll up to new (curr)
+      if (prev) prev.textContent = oldVal;
+      if (curr) curr.textContent = newVal;
+      if (next) next.textContent = '';
+      _goldTrack.style.transition = 'none';
+      _goldTrack.style.transform = 'translateY(0)';  // start at prev
+    } else {
+      // Loss: show old (next) → roll down to new (curr)
+      if (prev) prev.textContent = '';
+      if (curr) curr.textContent = newVal;
+      if (next) next.textContent = oldVal;
+      _goldTrack.style.transition = 'none';
+      _goldTrack.style.transform = 'translateY(-52px)';  // start at next
+    }
+
+    // Force reflow then animate to center (curr)
+    void _goldTrack.offsetHeight;
+    _goldTrack.style.transition = 'transform 0.25s cubic-bezier(0.22, 0.68, 0.35, 1.2)';
+    _goldTrack.style.transform = 'translateY(-26px)';
+
+    // Pulse highlight
+    _goldEl.classList.add('sb-gold-changing');
+
+    // Play coin sound (use EyesOnly jingles, fallback to sq-sq coins)
+    if (typeof AudioSystem !== 'undefined' && oldVal !== 0) {
+      if (gained) {
+        AudioSystem.play('coin-jingle1', { volume: 0.45 });
+      } else {
+        AudioSystem.play('coin-jingle2', { volume: 0.35 });
+      }
+    }
+
+    // After animation, snap to final state
+    setTimeout(function () {
+      _goldTrack.style.transition = 'none';
+      if (curr) curr.textContent = newVal;
+      _goldTrack.style.transform = 'translateY(-26px)';
+      _goldEl.classList.remove('sb-gold-changing');
+    }, 300);
   }
 
   // ── Refresh (called per frame or on state change) ───────────────
@@ -557,11 +679,11 @@ var StatusBar = (function () {
     if (typeof Player !== 'undefined' && Player.getDir) {
       updateHeading(Player.getDir());
     }
-    // Gold counter
+    // Gold counter (coin-wheel ticker)
     if (_goldEl && typeof Player !== 'undefined') {
       var p = Player.state();
       var g = (p && typeof p.currency === 'number') ? p.currency : 0;
-      _goldEl.textContent = '\uD83D\uDCB0 ' + g + 'g';
+      _updateGoldWheel(g);
     }
   }
 

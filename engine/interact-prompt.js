@@ -146,11 +146,11 @@ var InteractPrompt = (function () {
       }
     }
 
-    // Check for enemies on the facing tile (NPC interaction — future)
+    // Check for friendly talkable NPCs on the facing tile
     var enemies = FloorManager.getEnemies();
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
-      if (e.hp > 0 && e.x === fx && e.y === fy && e.friendly) {
+      if (e.hp > 0 && e.x === fx && e.y === fy && e.friendly && e.talkable) {
         _visible = true;
         _actionText = i18n.t('interact.talk', 'Talk');
         _iconText = e.emoji || '';

@@ -243,18 +243,18 @@ var DebriefFeed = (function () {
     html += '<div class="df-stat-row" style="margin-top:2px">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
 
     if (p.str !== undefined) {
-      html += '<div class="df-stat-row" style="font-size:11px">';
+      html += '<div class="df-stat-row" style="font-size:14px">';
       html += 'STR ' + (p.str || 0) + ' \u2502 ';
       html += 'DEX ' + (p.dex || 0) + ' \u2502 ';
       html += 'STL ' + (p.stealth || 0);
       html += '</div>';
     }
 
-    // Buffs (compact)
+    // Buffs
     if (typeof StatusEffect !== 'undefined' && StatusEffect.getAll) {
       var effs = StatusEffect.getAll();
       if (effs && effs.length > 0) {
-        html += '<div class="df-stat-row" style="font-size:10px;color:var(--phosphor-dim)">';
+        html += '<div class="df-stat-row" style="font-size:14px;color:var(--phosphor-dim)">';
         for (var i = 0; i < effs.length; i++) {
           html += (effs[i].emoji || '\u25CF') + ' ';
         }
@@ -291,10 +291,10 @@ var DebriefFeed = (function () {
     var pct = Math.max(0, Math.min(100, (cur / max) * 100));
     return '<div class="df-gauge-row">' +
       '<span class="df-label">' + label + '</span>' +
-      '<span style="color:' + color + ';font-size:9px">' + cur + '/' + max + '</span>' +
+      '<span style="color:' + color + ';font-size:14px">' + cur + '/' + max + '</span>' +
       '</div>' +
-      '<div style="background:rgba(255,255,255,0.06);height:4px;border-radius:2px;margin:1px 0 3px">' +
-      '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:2px;transition:width 0.3s"></div>' +
+      '<div style="background:rgba(255,255,255,0.08);height:6px;border-radius:3px;margin:2px 0 4px">' +
+      '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px;transition:width 0.3s"></div>' +
       '</div>';
   }
 

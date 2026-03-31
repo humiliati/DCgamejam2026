@@ -29,6 +29,11 @@
 var CardSystem = (function () {
   'use strict';
 
+  // ── Constants ──────────────────────────────────────────────────────
+
+  var MAX_HAND       = 5;
+  var MAX_COLLECTION = 30;  // D1: expandable via equip items post-jam
+
   // ── Internal state ────────────────────────────────────────────────
 
   var _registry   = [];   // Full card definitions from JSON
@@ -37,6 +42,38 @@ var CardSystem = (function () {
   var _deck       = [];   // Shuffled draw pile
   var _hand       = [];   // Cards in current hand
   var _loaded     = false;
+
+  // ── Lightweight event system (D4: CSA pattern) ────────────────────
+  var _listeners  = {};   // { 'hand:changed': [fn, fn], ... }
+
+  function _emit(type, payload) {
+    var fns = _listeners[type];
+    if (fns) {
+      for (var i = 0; i < fns.length; i++) {
+        try { fns[i](payload); } catch (e) { console.warn('[CardSystem] listener error:', e); }
+      }
+    }
+    // Wildcard listeners
+    var wild = _listeners['*'];
+    if (wild) {
+      for (var w = 0; w < wild.length; w++) {
+        try { wild[w]({ type: type, payload: payload }); } catch (e2) { /* ignore */ }
+      }
+    }
+  }
+
+  function on(type, fn) {
+    if (!_listeners[type]) _listeners[type] = [];
+    _listeners[type].push(fn);
+  }
+
+  function off(type, fn) {
+    var fns = _listeners[type];
+    if (!fns) return;
+    for (var i = fns.length - 1; i >= 0; i--) {
+      if (fns[i] === fn) fns.splice(i, 1);
+    }
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────
 
@@ -151,6 +188,7 @@ var CardSystem = (function () {
       }
       if (_deck.length > 0) _hand.push(_deck.pop());
     }
+    _emit('hand:changed', { hand: _hand });
     return _hand;
   }
 
@@ -167,7 +205,9 @@ var CardSystem = (function () {
    */
   function playFromHand(index) {
     if (index < 0 || index >= _hand.length) return null;
-    return _hand.splice(index, 1)[0];
+    var card = _hand.splice(index, 1)[0];
+    _emit('hand:changed', { hand: _hand });
+    return card;
   }
 
   /**
@@ -302,6 +342,10 @@ var CardSystem = (function () {
     _hand.push(card);
     result.drawn = card;
 
+    _emit('hand:changed', { hand: _hand });
+    if (result.bumped || result.incinerated) {
+      _emit('collection:changed', { collection: _collection });
+    }
     return result;
   }
 
@@ -319,7 +363,12 @@ var CardSystem = (function () {
       console.warn('[CardSystem] addCard: unknown id', cardOrId);
       return false;
     }
+    if (_collection.length >= MAX_COLLECTION) {
+      _emit('collection:full', { card: card, max: MAX_COLLECTION });
+      return false;
+    }
     _collection.push(card);
+    _emit('collection:changed', { collection: _collection });
     return true;
   }
 
@@ -333,6 +382,7 @@ var CardSystem = (function () {
     for (var i = 0; i < _collection.length; i++) {
       if (_collection[i].id === cardId) {
         _collection.splice(i, 1);
+        _emit('collection:changed', { collection: _collection });
         return true;
       }
     }
@@ -392,6 +442,7 @@ var CardSystem = (function () {
   function pushToHand(card) {
     if (!card) return false;
     _hand.push(card);
+    _emit('hand:changed', { hand: _hand });
     return true;
   }
 
@@ -401,25 +452,104 @@ var CardSystem = (function () {
     return _registry;
   }
 
+  /** Return collection size. */
+  function getCollectionSize() { return _collection.length; }
+
+  // ── Transfer methods (inventory drag-drop support) ────────────────
+
+  /**
+   * Move a card from hand back to collection (backup deck).
+   * @param {number} handIndex
+   * @returns {Object|null} The moved card, or null on failure.
+   */
+  function moveHandToCollection(handIndex) {
+    if (handIndex < 0 || handIndex >= _hand.length) return null;
+    if (_collection.length >= MAX_COLLECTION) return null;
+    var card = _hand.splice(handIndex, 1)[0];
+    _collection.push(card);
+    _emit('hand:changed', { hand: _hand });
+    _emit('collection:changed', { collection: _collection });
+    return card;
+  }
+
+  /**
+   * Move a card from collection to hand.
+   * @param {number} collectionIndex
+   * @returns {Object|null} The moved card, or null on failure.
+   */
+  function moveCollectionToHand(collectionIndex) {
+    if (collectionIndex < 0 || collectionIndex >= _collection.length) return null;
+    if (_hand.length >= MAX_HAND) return null;
+    var card = _collection.splice(collectionIndex, 1)[0];
+    _hand.push(card);
+    // Also remove from draw pile if present
+    for (var d = _deck.length - 1; d >= 0; d--) {
+      if (_deck[d] === card) { _deck.splice(d, 1); break; }
+    }
+    _emit('hand:changed', { hand: _hand });
+    _emit('collection:changed', { collection: _collection });
+    return card;
+  }
+
+  /**
+   * Clear hand and backup deck (failstate wipe).
+   * Cards in bag (Joker Vault) are preserved by Player, not here.
+   * @returns {{ hand: Array, collection: Array }} The wiped contents.
+   */
+  function failstateWipe() {
+    var wipedHand = _hand.slice();
+    var wipedCollection = _collection.slice();
+    _hand = [];
+    _deck = [];
+    _collection = [];
+    _emit('hand:changed', { hand: _hand });
+    _emit('collection:changed', { collection: _collection });
+    return { hand: wipedHand, collection: wipedCollection };
+  }
+
   // ── Public API ────────────────────────────────────────────────────
   return {
+    // Constants
+    MAX_HAND:       MAX_HAND,
+    MAX_COLLECTION: MAX_COLLECTION,
+
+    // Lifecycle
     init:          init,
     resetDeck:     resetDeck,
+
+    // Hand operations
     drawHand:      drawHand,
     getHand:       getHand,
-    getDeckSize:   getDeckSize,
     playFromHand:  playFromHand,
     playStack:     playStack,
     drawToHand:    drawToHand,
     drawWithOverflow: drawWithOverflow,
     pushToHand:    pushToHand,
+
+    // Collection operations
     addCard:       addCard,
     removeCard:    removeCard,
     getCollection: getCollection,
+    getCollectionSize: getCollectionSize,
+    getDeckSize:   getDeckSize,
+
+    // Transfer methods (inventory drag-drop)
+    moveHandToCollection: moveHandToCollection,
+    moveCollectionToHand: moveCollectionToHand,
+
+    // Failstate
+    failstateWipe: failstateWipe,
+
+    // Registry
     getById:       getById,
     getByPool:     getByPool,
     getBiomeDrops: getBiomeDrops,
     getAllRegistry: getAllRegistry,
+
+    // Event system
+    on:  on,
+    off: off,
+
     // Legacy alias kept for any caller that used getAllCards()
     getAllCards:    getCollection
   };

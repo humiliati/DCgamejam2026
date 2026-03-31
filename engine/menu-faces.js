@@ -36,6 +36,20 @@ var MenuFaces = (function () {
     divider:  'rgba(255,255,255,0.1)'
   };
 
+  // ── Resource color lookup (uses CardRenderer if available) ─────
+  function _getCardResColor(card) {
+    if (typeof CardRenderer !== 'undefined' && CardRenderer.RES_COLORS && CardRenderer.SUIT_DATA) {
+      var res = card.resource || card.costResource || null;
+      if (res && CardRenderer.RES_COLORS[res]) return CardRenderer.RES_COLORS[res];
+      if (card.suit && CardRenderer.SUIT_DATA[card.suit]) {
+        var sres = CardRenderer.SUIT_DATA[card.suit].res;
+        return CardRenderer.RES_COLORS[sres] || CardRenderer.RES_COLORS.cards;
+      }
+      return CardRenderer.RES_COLORS.cards;
+    }
+    return { r: 128, g: 0, b: 128 };
+  }
+
   // ── Click hit zones ───────────────────────────────────────────
   // Rebuilt every render frame; each entry: { x, y, w, h, slot }
   var _hitZones = [];
@@ -985,9 +999,16 @@ var MenuFaces = (function () {
     var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
     var maxHand = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
 
-    // Suit symbols for display
-    var SUIT_EMOJI = { spade: '♠', club: '♣', diamond: '♦', heart: '♥' };
-    var SUIT_COLOR = { spade: '#8888ff', club: '#88ff88', diamond: '#ff8888', heart: '#ff88ff' };
+    // Suit symbols — use CardRenderer data if available, else fallback
+    var SUIT_EMOJI, SUIT_COLOR;
+    if (typeof CardRenderer !== 'undefined' && CardRenderer.SUIT_DATA) {
+      SUIT_EMOJI = {}; SUIT_COLOR = {};
+      var _sd = CardRenderer.SUIT_DATA;
+      for (var _sk in _sd) { SUIT_EMOJI[_sk] = _sd[_sk].sym; SUIT_COLOR[_sk] = _sd[_sk].color; }
+    } else {
+      SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+      SUIT_COLOR = { spade: 'rgba(180,170,150,0.85)', club: '#00D4FF', diamond: '#00FFA6', heart: '#FF6B9D' };
+    }
     var RARITY_COL = {
       common: '#aaa', uncommon: '#4cf', rare: '#c8f',
       epic: '#fa4', legendary: '#ff0'
@@ -1012,32 +1033,10 @@ var MenuFaces = (function () {
 
       if (card) {
         var isHov = (_hoverSlot === (500 + hi));
-        // Card background
-        ctx.fillStyle = isHov ? 'rgba(255,100,100,0.12)' : 'rgba(40,35,50,0.8)';
-        _roundRectFill(ctx, cx, ty, cardW, cardH, 3);
-        // Rarity border
-        ctx.strokeStyle = RARITY_COL[card.rarity] || '#666';
-        ctx.lineWidth = isHov ? 2 : 1;
-        _roundRectStroke(ctx, cx, ty, cardW, cardH, 3);
-
-        // Suit icon
-        var suit = card.suit || '';
-        ctx.font = '14px serif';
-        ctx.fillStyle = SUIT_COLOR[suit] || '#fff';
-        ctx.fillText(SUIT_EMOJI[suit] || '?', cx + cardW / 2, ty + 18);
-
-        // Card name (truncated)
-        ctx.font = '6px monospace';
-        ctx.fillStyle = COL.text;
-        var cName = card.name || '';
-        if (cName.length > 6) cName = cName.substring(0, 5) + '…';
-        ctx.fillText(cName, cx + cardW / 2, ty + 32);
-
-        // Value
-        ctx.font = '7px monospace';
-        ctx.fillStyle = COL.dim;
-        ctx.fillText((card.power || card.value || '?'), cx + cardW / 2, ty + 42);
-
+        // Unified card rendering via CardDraw (MEDIUM LOD)
+        if (typeof CardDraw !== 'undefined') {
+          CardDraw.drawCardInTile(ctx, card, cx + cardW / 2, ty + cardH / 2, cardW, cardH, isHov);
+        }
         // Hit zone: click to return to backup
         _hitZones.push({ x: cx, y: ty, w: cardW, h: cardH, slot: 500 + hi, action: 'hand_to_backup' });
       } else {
@@ -1084,32 +1083,10 @@ var MenuFaces = (function () {
           var by = ty + br * (bSlotH + bGap);
           var bHov = (_hoverSlot === (600 + bi));
 
-          // Card tile
-          ctx.fillStyle = bHov ? 'rgba(100,255,100,0.12)' : 'rgba(40,35,50,0.6)';
-          _roundRectFill(ctx, bx, by, bSlotW, bSlotH, 3);
-          ctx.strokeStyle = RARITY_COL[bCard.rarity] || '#555';
-          ctx.lineWidth = bHov ? 2 : 1;
-          _roundRectStroke(ctx, bx, by, bSlotW, bSlotH, 3);
-
-          // Suit
-          var bSuit = bCard.suit || '';
-          ctx.font = '12px serif';
-          ctx.fillStyle = SUIT_COLOR[bSuit] || '#fff';
-          ctx.textAlign = 'center';
-          ctx.fillText(SUIT_EMOJI[bSuit] || '?', bx + bSlotW / 2, by + 16);
-
-          // Name
-          ctx.font = '6px monospace';
-          ctx.fillStyle = COL.text;
-          var bName = bCard.name || '';
-          if (bName.length > 6) bName = bName.substring(0, 5) + '…';
-          ctx.fillText(bName, bx + bSlotW / 2, by + 30);
-
-          // Value
-          ctx.font = '7px monospace';
-          ctx.fillStyle = COL.dim;
-          ctx.fillText((bCard.power || bCard.value || '?'), bx + bSlotW / 2, by + 40);
-
+          // Unified card rendering via CardDraw (SMALL LOD for backup grid)
+          if (typeof CardDraw !== 'undefined') {
+            CardDraw.drawCardInTile(ctx, bCard, bx + bSlotW / 2, by + bSlotH / 2, bSlotW, bSlotH, bHov);
+          }
           // Hit zone: click to add to hand
           _hitZones.push({ x: bx, y: by, w: bSlotW, h: bSlotH, slot: 600 + bi, action: 'backup_to_hand' });
         }
@@ -1533,30 +1510,10 @@ var MenuFaces = (function () {
       var card = hand[hi];
       if (card) {
         var hHov = (_hoverSlot === (500 + hi));
-        ctx.fillStyle = hHov ? 'rgba(255,100,100,0.12)' : 'rgba(40,35,50,0.7)';
-        _roundRectFill(ctx, hcx, ty, cardW, cardH, 4);
-        ctx.strokeStyle = INV_RARITY_COL[card.rarity] || '#666';
-        ctx.lineWidth = hHov ? 2 : 1;
-        _roundRectStroke(ctx, hcx, ty, cardW, cardH, 4);
-
-        // Suit icon
-        var suit = card.suit || '';
-        ctx.font = '18px serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = INV_SUIT_COLOR[suit] || '#fff';
-        ctx.fillText(INV_SUIT_EMOJI[suit] || '?', hcx + cardW / 2, ty + 20);
-
-        // Card name
-        ctx.font = '9px monospace';
-        ctx.fillStyle = COL.text;
-        var cName = card.name || '';
-        if (cName.length > 7) cName = cName.substring(0, 6) + '\u2026';
-        ctx.fillText(cName, hcx + cardW / 2, ty + 36);
-
-        // Power value
-        ctx.font = '11px monospace';
-        ctx.fillStyle = COL.dim;
-        ctx.fillText('' + (card.power || card.value || ''), hcx + cardW / 2, ty + cardH - 6);
+        // Unified card rendering via CardDraw (MEDIUM LOD)
+        if (typeof CardDraw !== 'undefined') {
+          CardDraw.drawCardInTile(ctx, card, hcx + cardW / 2, ty + cardH / 2, cardW, cardH, hHov);
+        }
         _hitZones.push({ x: hcx, y: ty, w: cardW, h: cardH, slot: 500 + hi, action: 'hand_to_backup' });
       } else {
         ctx.setLineDash([3, 4]);
@@ -1633,23 +1590,11 @@ var MenuFaces = (function () {
       _roundRectStroke(ctx, dsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
       ctx.setLineDash([]);
 
-      // Content
+      // Content — unified card rendering via CardDraw (SMALL LOD for deck wheel)
       if (dCard) {
-        var dSuit = dCard.suit || '';
-        ctx.font = '22px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = INV_SUIT_COLOR[dSuit] || '#fff';
-        ctx.fillText(INV_SUIT_EMOJI[dSuit] || '?', dsx + SLOT_S / 2, ty + SLOT_S / 2 - 6);
-        ctx.textBaseline = 'alphabetic';
-
-        // Card name
-        ctx.font = '9px monospace';
-        ctx.fillStyle = COL.text;
-        var dName = dCard.name || '';
-        if (dName.length > 7) dName = dName.substring(0, 6) + '\u2026';
-        ctx.fillText(dName, dsx + SLOT_S / 2, ty + SLOT_S - 4);
-
+        if (typeof CardDraw !== 'undefined') {
+          CardDraw.drawCardInTile(ctx, dCard, dsx + SLOT_S / 2, ty + SLOT_S / 2, SLOT_S, SLOT_S, dHov);
+        }
         _hitZones.push({ x: dsx, y: ty, w: SLOT_S, h: SLOT_S, slot: 600 + ddi, action: 'backup_to_hand' });
       }
 
@@ -1757,59 +1702,174 @@ var MenuFaces = (function () {
     }
   }
 
+  /**
+   * Bonfire context: two-panel vault interface.
+   * Left panel = BAG (12 slots, 3×4 grid)
+   * Right panel = STASH / VAULT (20 slots, 4×5 grid)
+   * Click item in either panel to transfer to the other.
+   * Interior floors (N.N) only — exterior/dungeon bonfires skip stash.
+   */
   function _renderBag(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.bag_title', 'BAG → STASH'), '🎒');
     var bag = Player.getBag();
+    var stash = Player.getStash();
+    var hasVault = _hasVaultAccess();
 
-    ctx.fillStyle = COL.text;
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('shop.bag_desc', 'Click item to move to stash'),
-                 x + w / 2, ty + 12);
-    ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
-    ctx.fillText(bag.length + ' / ' + Player.MAX_BAG + ' ' + i18n.t('shop.bag_capacity', 'slots'),
-                 x + w / 2, ty + 24);
-    ty += 32;
+    // ── Title ──
+    var titleText = hasVault ? 'BAG ↔ VAULT' : 'BAG';
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('bonfire.vault_title', titleText), '🎒');
+    ty += 4;
 
-    // Bag grid (4×3 = 12 slots) with live data
-    var cols = 4;
-    var slotSize = Math.min(Math.floor((w - 20) / cols) - 4, TILE_SIZE);
-    var gridW = cols * (slotSize + 4);
-    var gridX = x + (w - gridW) / 2;
+    var cols, slotSize, gap;
 
-    var totalSlots = Player.MAX_BAG;
-    var rows = Math.ceil(totalSlots / cols);
+    if (hasVault) {
+      // ── Two-panel layout ──────────────────────────────────────────
+      gap = 8;
+      var halfW = Math.floor((w - gap - 24) / 2);
+      cols = 3;
+      slotSize = Math.min(Math.floor((halfW - 8) / cols) - 4, TILE_SIZE);
 
+      var bagGridW = cols * (slotSize + 4);
+      var stashCols = 4;
+      var stashSlotSize = Math.min(Math.floor((halfW - 8) / stashCols) - 4, TILE_SIZE);
+      var stashGridW = stashCols * (stashSlotSize + 4);
+
+      var panelLX = x + 12;
+      var panelRX = x + 12 + halfW + gap;
+
+      // ── Left panel: BAG ──
+      ctx.fillStyle = COL.accent;
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('BAG (' + bag.length + '/' + Player.MAX_BAG + ')', panelLX + halfW / 2, ty + 10);
+
+      var bagY = ty + 16;
+      var bagRows = Math.ceil(Player.MAX_BAG / cols);
+      var bagGridX = panelLX + (halfW - bagGridW) / 2;
+      _renderSlotGrid(ctx, bag, Player.MAX_BAG, cols, slotSize, bagGridX, bagY, bagRows,
+                       300, 'bag-to-stash');
+
+      // ── Right panel: VAULT / STASH ──
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('VAULT (' + stash.length + '/' + Player.MAX_STASH + ')', panelRX + halfW / 2, ty + 10);
+
+      var stashY = ty + 16;
+      var stashRows = Math.ceil(Player.MAX_STASH / stashCols);
+      var stashGridX = panelRX + (halfW - stashGridW) / 2;
+      _renderSlotGrid(ctx, stash, Player.MAX_STASH, stashCols, stashSlotSize, stashGridX, stashY,
+                       stashRows, 500, 'stash-to-bag');
+
+      // ── Divider line ──
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 12 + halfW + gap / 2, ty + 10);
+      ctx.lineTo(x + 12 + halfW + gap / 2, y + h - 20);
+      ctx.stroke();
+
+      // ── Keyboard hint ──
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+
+    } else {
+      // ── Single panel: BAG only (exterior/dungeon bonfires) ────────
+      cols = 4;
+      slotSize = Math.min(Math.floor((w - 20) / cols) - 4, TILE_SIZE);
+      var gridW2 = cols * (slotSize + 4);
+      var gridX2 = x + (w - gridW2) / 2;
+
+      ctx.fillStyle = COL.dim;
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(bag.length + ' / ' + Player.MAX_BAG + ' slots', x + w / 2, ty + 10);
+      ty += 16;
+
+      var totalSlots2 = Player.MAX_BAG;
+      var rows2 = Math.ceil(totalSlots2 / cols);
+      _renderSlotGrid(ctx, bag, totalSlots2, cols, slotSize, gridX2, ty, rows2, 300, null);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+    }
+    ctx.textAlign = 'left';
+  }
+
+  /**
+   * Check if current bonfire floor has vault access.
+   * Only interior floors (depth 2, format "N.N") have stash chests.
+   */
+  function _hasVaultAccess() {
+    if (typeof FloorManager === 'undefined') return false;
+    var floorId = FloorManager.getFloor();
+    if (!floorId) return false;
+    var parts = String(floorId).split('.');
+    return parts.length === 2; // depth 2 = interior
+  }
+
+  /**
+   * Shared grid renderer for bag/stash slot grids.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Array} items - Source array
+   * @param {number} totalSlots - Max slots to render
+   * @param {number} cols - Columns
+   * @param {number} slotSize - Pixel size per slot
+   * @param {number} gridX - Left edge
+   * @param {number} gridY - Top edge
+   * @param {number} rows - Row count
+   * @param {number} slotBase - Hit zone slot ID base (300 for bag, 500 for stash)
+   * @param {string|null} clickAction - 'bag-to-stash', 'stash-to-bag', or null
+   */
+  function _renderSlotGrid(ctx, items, totalSlots, cols, slotSize, gridX, gridY, rows, slotBase, clickAction) {
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
         var idx = row * cols + col;
         if (idx >= totalSlots) break;
         var sx = gridX + col * (slotSize + 4);
-        var sy = ty + row * (slotSize + 4);
-        var bagItem = bag[idx];
+        var sy = gridY + row * (slotSize + 4);
+        var item = items[idx];
 
-        if (bagItem) {
-          var isHov = (_hoverSlot === (300 + idx));
-          ctx.fillStyle = isHov ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
-          _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
-          ctx.strokeStyle = isHov ? COL.accent : 'rgba(255,255,255,0.15)';
+        if (item) {
+          var isHov = (_hoverSlot === (slotBase + idx));
+          var isCard = item._bagStored || (item.suit !== undefined && item.type === 'card');
+
+          if (isCard) {
+            // Cards in bag/stash: resource-tinted + purple glow
+            var _src = _getCardResColor(item);
+            ctx.fillStyle = isHov
+              ? 'rgba(' + _src.r + ',' + _src.g + ',' + _src.b + ',0.14)'
+              : 'rgba(128,0,255,0.06)';
+            _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
+            ctx.strokeStyle = isHov
+              ? 'rgba(' + _src.r + ',' + _src.g + ',' + _src.b + ',0.6)'
+              : 'rgba(180,100,255,0.3)';
+          } else {
+            // Items: standard dark slot
+            ctx.fillStyle = isHov ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
+            _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
+            ctx.strokeStyle = isHov ? COL.accent : 'rgba(255,255,255,0.15)';
+          }
           ctx.lineWidth = 1;
           _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
 
-          ctx.font = '14px serif';
+          ctx.font = Math.max(10, Math.floor(slotSize * 0.5)) + 'px serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#fff';
-          ctx.fillText(bagItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
+          ctx.fillText(item.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
 
-          ctx.font = '6px monospace';
-          ctx.fillStyle = COL.text;
-          var nm = bagItem.name || '';
-          if (nm.length > 7) nm = nm.substring(0, 6) + '…';
-          ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 3);
+          ctx.font = Math.max(5, Math.floor(slotSize * 0.12)) + 'px monospace';
+          ctx.fillStyle = isCard ? '#f0d070' : COL.text;
+          var nm = item.name || '';
+          if (nm.length > 7) nm = nm.substring(0, 6) + '\u2026';
+          ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 2);
 
-          // Click to move to stash (slot 300+ to avoid collision)
-          _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: 300 + idx, action: 'stash' });
+          if (clickAction) {
+            _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: slotBase + idx, action: clickAction });
+          }
         } else {
           ctx.setLineDash([2, 3]);
           ctx.strokeStyle = 'rgba(255,255,255,0.08)';
@@ -1819,14 +1879,6 @@ var MenuFaces = (function () {
         }
       }
     }
-
-    // Bottom hint
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '8px monospace';
-    ctx.textAlign = 'center';
-    var hintY = ty + rows * (slotSize + 4) + 8;
-    ctx.fillText('[Click] Move to stash   [Q/E] Rotate', x + w / 2, hintY);
-    ctx.textAlign = 'left';
   }
 
   function _renderShopSell(ctx, x, y, w, h) {
@@ -1943,7 +1995,7 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '8px monospace';
-    ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+    ctx.fillText('[W/S] Select   [Scroll] Adjust   [←/→] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
     ctx.textAlign = 'left';
   }
 
@@ -1995,8 +2047,8 @@ var MenuFaces = (function () {
 
   /**
    * All contexts: system settings + exit option.
-   * Input: W/S navigate sliders, ←/→ adjust value, scroll wheel fine-adjust.
-   * Q/E still rotate the box away from this face (handled in game.js).
+   * Input: W/S navigate sliders, scroll wheel adjusts value.
+   * ←/→ and Q/E rotate the box away from this face (handled in game.js).
    */
   function renderFace3(ctx, x, y, w, h, context) {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️');
@@ -2780,6 +2832,86 @@ var MenuFaces = (function () {
     _invFocus = (_invFocus === 'bag') ? 'deck' : 'bag';
   }
 
+  /**
+   * Handle a card dropped from the CardFan external drag system.
+   * Converts screen coordinates to canvas coordinates and hit-tests
+   * against the inventory layout zones.
+   *
+   * @param {Object} info - { cardIdx, card, screenX, screenY }
+   * @returns {boolean} True if the drop was handled.
+   */
+  function handleExternalDrop(info) {
+    if (!_lastInvLayout || !info || !info.card) return false;
+
+    // Convert screen (client) coordinates to canvas coordinates
+    var canvas = MenuBox.getCanvas ? MenuBox.getCanvas() : null;
+    if (!canvas) return false;
+    var rect = canvas.getBoundingClientRect();
+    var cx = (info.screenX - rect.left) * (canvas.width / rect.width);
+    var cy = (info.screenY - rect.top)  * (canvas.height / rect.height);
+
+    var L = _lastInvLayout;
+    var card = info.card;
+
+    // Hit test: bag slots (card-in-bag / Joker Vault)
+    if (L.bagSlots) {
+      for (var bi = 0; bi < L.bagSlots.length; bi++) {
+        var bs = L.bagSlots[bi];
+        if (cx >= bs.x && cx <= bs.x + bs.w && cy >= bs.y && cy <= bs.y + bs.h) {
+          // Card → bag (Joker Vault): store card as item in bag
+          if (typeof Player !== 'undefined' && Player.addToBag) {
+            var bagCard = { id: card.id, name: card.name, emoji: card.emoji || '🃏',
+                           type: 'card', suit: card.suit, _bagStored: true, _cardRef: card };
+            if (!Player.addToBag(bagCard)) {
+              if (typeof Toast !== 'undefined') Toast.show('Bag full — make room first', 'warning');
+              return false;
+            }
+            // Remove from hand
+            CardSystem.playFromHand(info.cardIdx);
+            if (typeof Toast !== 'undefined') Toast.show('🃏 Card stashed in bag', 'info');
+            if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
+            return true;
+          }
+          return false;
+        }
+      }
+    }
+
+    // Hit test: deck wheel slots (return card to collection)
+    if (L.deckSlots) {
+      for (var di = 0; di < L.deckSlots.length; di++) {
+        var ds = L.deckSlots[di];
+        if (cx >= ds.x && cx <= ds.x + ds.w && cy >= ds.y && cy <= ds.y + ds.h) {
+          var moved = CardSystem.moveHandToCollection(info.cardIdx);
+          if (moved) {
+            if (typeof Toast !== 'undefined') Toast.show('🃏 Card returned to deck', 'info');
+            if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
+            return true;
+          } else {
+            if (typeof Toast !== 'undefined') Toast.show('Deck full (' + CardSystem.MAX_COLLECTION + ')', 'warning');
+            return false;
+          }
+        }
+      }
+    }
+
+    // Hit test: incinerator
+    if (L.incin) {
+      var inc = L.incin;
+      if (cx >= inc.x && cx <= inc.x + inc.w && cy >= inc.y && cy <= inc.y + inc.h) {
+        CardSystem.playFromHand(info.cardIdx);
+        if (typeof Toast !== 'undefined') Toast.show('🔥 Card destroyed', 'warning');
+        if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
+        return true;
+      }
+    }
+
+    // Hit test: equip slots — cards can't equip, reject
+    // (items-only slots, card drops are invalid here)
+
+    return false;
+  }
+
   return {
     renderFace0:          renderFace0,
     renderFace1:          renderFace1,
@@ -2796,6 +2928,9 @@ var MenuFaces = (function () {
     // DragDrop integration
     registerDragZones:    registerDragZones,
     unregisterDragZones:  unregisterDragZones,
+
+    // External drop (CardFan → inventory zones)
+    handleExternalDrop:   handleExternalDrop,
 
     // Inventory wheel scroll/focus
     scrollBag:            scrollBag,

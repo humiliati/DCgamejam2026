@@ -129,6 +129,29 @@ var Game = (function () {
     ScreenManager.init();
     DialogBox.init(_canvas);
     CardFan.init(_canvas);
+
+    // ── Wire CardFan external drop → MenuFaces inventory zones ──
+    // When a card is dragged out of the fan (non-combat), this handler
+    // checks if the pointer lands on a MenuFaces drag zone and executes
+    // the transfer. Returns true if handled.
+    if (CardFan.setExternalDropHandler) {
+      CardFan.setExternalDropHandler(function (info) {
+        // info: { cardIdx, card, screenX, screenY }
+        if (!ScreenManager.isPaused()) {
+          // Not in menu — try direct transfers via screen position
+          // For now, only support dropping onto the DECK or BAG button areas
+          // by opening the inventory and queuing the transfer.
+          // Full menu-open drag is Phase 4b.
+          return false;
+        }
+        // Menu is open — delegate to MenuFaces zone hit test
+        if (typeof MenuFaces !== 'undefined' && MenuFaces.handleExternalDrop) {
+          return MenuFaces.handleExternalDrop(info);
+        }
+        return false;
+      });
+    }
+
     MenuBox.init(_canvas);
     SplashScreen.init(_canvas);
     TitleScreen.init(_canvas);
@@ -233,27 +256,15 @@ var Game = (function () {
       MenuBox.snapRight();
     });
 
-    // Turn (A/← and D/→) — snap to adjacent face OR adjust Face 3 slider.
+    // Turn (A/← and D/→) — ALWAYS snap to adjacent face, even on Face 3.
+    // Slider adjustment uses W/S to navigate rows and scroll wheel to fine-tune.
+    // Previously ←/→ was consumed by Face 3 sliders, trapping the player.
     InputManager.on('turn_left', function (type) {
       if (type !== 'press' || !ScreenManager.isPaused()) return;
-      if (MenuBox.getCurrentFace() === 3) {
-        // On settings face: ← decrements the selected slider
-        if (typeof MenuFaces !== 'undefined') {
-          MenuFaces.handleSettingsAdjust(-10);
-        }
-        return; // Never rotate the box from Face 3 via turn keys
-      }
       MenuBox.snapLeft();
     });
     InputManager.on('turn_right', function (type) {
       if (type !== 'press' || !ScreenManager.isPaused()) return;
-      if (MenuBox.getCurrentFace() === 3) {
-        // On settings face: → increments the selected slider
-        if (typeof MenuFaces !== 'undefined') {
-          MenuFaces.handleSettingsAdjust(+10);
-        }
-        return;
-      }
       MenuBox.snapRight();
     });
 
@@ -280,18 +291,19 @@ var Game = (function () {
       }
     });
 
-    // Scroll wheel — Face 3 slider fine-adjust (+1/-1 per tick) or
+    // Scroll wheel — Face 3 slider adjust (+10/-10 per tick) or
     // inventory/face content scroll on other faces (post-jam).
+    // This is now the PRIMARY way to adjust sliders (←/→ navigates faces).
     InputManager.on('scroll_up', function (type) {
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
-        MenuFaces.handleSettingsAdjust(+5);
+        MenuFaces.handleSettingsAdjust(+10);
       }
     });
     InputManager.on('scroll_down', function (type) {
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
-        MenuFaces.handleSettingsAdjust(-5);
+        MenuFaces.handleSettingsAdjust(-10);
       }
     });
 
@@ -348,10 +360,10 @@ var Game = (function () {
             _equipFromBag(hit.slot - 200);  // strip offset
           } else if (hit.action === 'unequip') {
             _unequipSlot(hit.slot - 100);   // strip offset
-          } else if (hit.action === 'stash') {
+          } else if (hit.action === 'stash' || hit.action === 'bag-to-stash') {
             _bagToStash(hit.slot - 300);    // strip offset
-          } else if (hit.action === 'unstash') {
-            _stashToBag(hit.slot - 400);    // strip offset
+          } else if (hit.action === 'unstash' || hit.action === 'stash-to-bag') {
+            _stashToBag(hit.slot - (hit.action === 'stash-to-bag' ? 500 : 400));
           } else if (hit.action === 'hand_to_backup') {
             // Skip if DragDrop just handled a pointer session (prevents click+drag overlap)
             if (typeof DragDrop !== 'undefined' && DragDrop.wasRecentPointerSession(200)) { /* suppressed */ }
@@ -555,6 +567,8 @@ var Game = (function () {
     Minimap.init(document.getElementById('minimap'));
     HUD.init();
     CardSystem.init();
+    // Refresh status bar now that CardSystem has the starting hand/deck
+    if (typeof StatusBar !== 'undefined') { StatusBar.updateDeck(); StatusBar.updateBag(); }
     MouseLook.init(_canvas);
 
     // Combat bridge
@@ -3417,6 +3431,7 @@ var Game = (function () {
         color: aState.color,
         scale: e.isElite ? 0.8 : 0.6,
         facing: e.facing,
+        friendly: e.friendly,             // Friendly NPCs skip directional shading
         awareness: e.awareness,
         glow: spriteGlow,
         glowRadius: spriteGlowR,
@@ -3472,6 +3487,27 @@ var Game = (function () {
       var corpseSprites = CorpseRegistry.buildSprites(floorId);
       for (var ci = 0; ci < corpseSprites.length; ci++) {
         _sprites.push(corpseSprites[ci]);
+      }
+    }
+
+    // ── Bonfire billboard sprites (tent + fire + shrubs) ──────────
+    if (typeof BonfireSprites !== 'undefined') {
+      var _bfFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
+      var bonfireSprites = BonfireSprites.buildSprites(
+        _bfFloorId, floorData.grid, floorData.gridW, floorData.gridH
+      );
+      BonfireSprites.animate(now);
+      for (var bfi = 0; bfi < bonfireSprites.length; bfi++) {
+        var bfs = bonfireSprites[bfi];
+        _sprites.push({
+          x: bfs.x + (bfs._swayX || 0),
+          y: bfs.y,
+          emoji: bfs.emoji,
+          scale: bfs.scale,
+          bobY: bfs.bobY || 0,
+          glow: (bfs.bonfireType === 'fire') ? 'rgba(255,120,40,0.25)' : null,
+          glowRadius: (bfs.bonfireType === 'fire') ? 4 : 0
+        });
       }
     }
 

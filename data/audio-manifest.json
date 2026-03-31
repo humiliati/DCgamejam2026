@@ -97,6 +97,8 @@
   "coin2":            { "src": "sfx/sq-sq-coin2.webm",       "category": "collectible" },
   "coin3":            { "src": "sfx/sq-sq-coin3.webm",       "category": "collectible" },
   "coin4":            { "src": "sfx/sq-sq-coin4.webm",       "category": "collectible" },
+  "coin-jingle1":     { "src": "sfx/coin-1.webm",            "category": "collectible", "_note": "EyesOnly coin jingle — ticker gain" },
+  "coin-jingle2":     { "src": "sfx/coin-2.webm",            "category": "collectible", "_note": "EyesOnly coin jingle — ticker loss" },
   "pickup":           { "src": "sfx/sq-sq-pickup.webm",      "category": "collectible" },
   "pickup-success":   { "src": "sfx/sq-sq-pickup-success1.webm", "category": "collectible" },
   "drop":             { "src": "sfx/sq-sq-drop1.webm",       "category": "collectible" },

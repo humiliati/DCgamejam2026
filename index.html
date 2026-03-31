@@ -1164,7 +1164,7 @@
       --font-display: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
       --font-body:    -apple-system, 'Segoe UI', system-ui, Roboto, sans-serif;
       --font-data:    ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
-      --font-crt:     'Courier New', Courier, monospace;
+      --font-crt:     'Consolas', 'Monaco', 'Lucida Console', 'Liberation Mono', monospace;
     }
 
     /* ── Scanline overlay — HIDDEN during gameplay, shown only for peek screens ── */
@@ -1230,7 +1230,7 @@
       border: 1px solid var(--phosphor-dim);
       border-radius: 10px;
       font-family: var(--font-crt);
-      font-size: 16px;
+      font-size: 14px;
       color: var(--phosphor);
       text-shadow: 0 0 4px var(--phosphor-glow);
       overflow: hidden;
@@ -1239,39 +1239,57 @@
       display: flex; flex-direction: column;
       pointer-events: auto;
       box-shadow: 0 2px 12px rgba(0,0,0,0.5), inset 0 0 8px rgba(51,255,136,0.05);
+      line-height: 1.15;
+    }
+    /* CRT scanline overlay on debrief panel */
+    #debrief-feed::after {
+      content: '';
+      position: absolute; inset: 0;
+      pointer-events: none;
+      border-radius: 10px;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.10) 2px,
+        rgba(0,0,0,0.10) 3px
+      );
+      z-index: 5;
     }
     #debrief-feed .df-header {
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-bottom: 1px solid var(--phosphor-dim);
-      font-size: 14px; letter-spacing: 0.14em;
+      font-size: 11px; letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--phosphor-dim);
       flex-shrink: 0;
+      position: relative; z-index: 6;
     }
     #debrief-feed .df-content {
       flex: 1; overflow-y: auto; overflow-x: hidden;
-      padding: 4px 8px;
+      padding: 3px 6px;
       scrollbar-width: thin;
       scrollbar-color: var(--phosphor-dim) transparent;
+      position: relative; z-index: 6;
     }
     #debrief-feed .df-content::-webkit-scrollbar { width: 3px; }
     #debrief-feed .df-content::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border-radius: 2px; }
     #debrief-feed .df-content::-webkit-scrollbar-track { background: transparent; }
 
     /* Debrief: MOK avatar mode */
-    .df-avatar { text-align: center; padding: 2px 0; }
+    .df-avatar { text-align: center; padding: 1px 0; position: relative; z-index: 6; }
     .df-avatar .df-emoji { font-size: 28px; }
-    .df-avatar .df-callsign { font-size: 14px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
-    .df-avatar .df-class { font-size: 12px; color: var(--phosphor-dim); }
-    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 4px 0; opacity: 0.4; }
-    .df-gauge-row { display: flex; align-items: center; gap: 4px; font-size: 13px; line-height: 1.3; }
-    .df-gauge-row .df-label { width: 28px; color: var(--phosphor-dim); font-family: var(--font-crt); font-size: 10px; }
+    .df-avatar .df-callsign { font-size: 12px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
+    .df-avatar .df-class { font-size: 11px; color: var(--phosphor-dim); }
+    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 2px 0; opacity: 0.4; position: relative; z-index: 6; }
+    .df-gauge-row { display: flex; align-items: center; gap: 3px; font-size: 13px; line-height: 1.15; position: relative; z-index: 6; }
+    .df-gauge-row .df-label { width: 28px; color: var(--phosphor-dim); font-family: var(--font-crt); font-size: 10px; text-align: right; }
     .df-gauge-row .df-bar { flex: 1; letter-spacing: -1px; }
-    .df-stat-row { font-size: 12px; color: var(--phosphor-dim); line-height: 1.3; }
+    .df-stat-row { font-size: 12px; color: var(--phosphor-dim); line-height: 1.2; position: relative; z-index: 6; }
     .df-stat-row span { color: var(--phosphor); }
 
     /* Debrief: Feed/log mode */
-    .df-feed-line { font-size: 16px; line-height: 1.6; color: var(--phosphor-dim); word-break: break-all; }
+    .df-feed-line { font-size: 13px; line-height: 1.25; color: var(--phosphor-dim); word-break: break-all; position: relative; z-index: 6; }
     .df-feed-line.df-loot { color: var(--phosphor-bright); }
     .df-feed-line.df-dmg { color: #ff6b6b; }
     .df-feed-line.df-heal { color: #66ffaa; }
@@ -1356,17 +1374,51 @@
       gap: 8px;
       flex-shrink: 0;
     }
-    /* Tooltip area: latest message line + expandable history */
+    /* ── Tooltip area: rolodex layout ────────────────────────── */
+    /* Displays 2.5 rows: current (bottom, full opacity),
+       previous (above, dimmer), oldest visible (fading out).
+       Current row contains the LOG expand button.
+       Expands upward into scrollable history on click. */
     .sb-tooltip-area {
       flex: 1;
       overflow: visible;
       border-top: 1px solid rgba(107,91,74,0.15);
-      padding: 4px 16px;
+      padding: 0 16px;
       cursor: pointer;
       position: relative;
       /* Sticky-note accent — slight yellow tint */
       background: linear-gradient(135deg, rgba(240,200,48,0.08) 0%, transparent 60%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end; /* pack rows to bottom */
     }
+    /* ── Preview rows (previous + older) — scotch tape fade ── */
+    .sb-tooltip-preview {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+      /* Fade mask: transparent at top → opaque at bottom */
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,1) 100%);
+      mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,1) 100%);
+      pointer-events: none;
+    }
+    .sb-tooltip-prev-row {
+      font-size: 15px;
+      color: var(--ink-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.4;
+      padding: 1px 0;
+      opacity: 0.7;
+    }
+    .sb-tooltip-prev-row:last-child {
+      opacity: 0.85; /* the row just above current is more visible */
+    }
+    /* ── Current (latest) row — always at bottom ─────────── */
     .sb-tooltip-latest {
       font-size: 17px;
       color: #1a1510;
@@ -1374,11 +1426,14 @@
       overflow: hidden;
       text-overflow: ellipsis;
       line-height: 1.5;
-      min-height: 24px;
-      padding-right: 80px; /* room for expand button */
+      min-height: 26px;
+      padding: 2px 0;
+      padding-right: 56px; /* room for LOG button */
       font-weight: 600;
       text-shadow: none;
       transition: white-space 0.2s;
+      flex-shrink: 0;
+      position: relative;
     }
     /* When dialogue is active, the latest row wraps and grows */
     .sb-tooltip-latest.sb-dialogue-mode {
@@ -1388,13 +1443,14 @@
       max-height: none;
       padding-right: 10px;
     }
+    /* ── History panel (expands upward) ───────────────────── */
     .sb-tooltip-history {
-      /* Expand UPWARD from status bar */
       position: absolute;
       bottom: 100%;
       left: 0; right: 0;
       max-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       transition: max-height 0.3s ease;
       font-size: 16px;
       color: var(--ink);
@@ -1407,6 +1463,10 @@
     #status-bar.sb-expanded .sb-tooltip-history {
       max-height: 320px;
       padding: 8px 16px;
+    }
+    /* Hide preview rows when expanded (full history is showing) */
+    #status-bar.sb-expanded .sb-tooltip-preview {
+      display: none;
     }
     .sb-tooltip-history::-webkit-scrollbar { width: 4px; }
     .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--desk-brown); border-radius: 2px; }
@@ -1518,26 +1578,32 @@
       color: var(--ink);
       background: rgba(107,91,74,0.06);
     }
-    /* Expand button — tape label aesthetic */
+    /* LOG button — scotch tape tab inside current row */
     .sb-expand-hint {
-      position: absolute; right: 10px; top: 2px;
-      font-size: 13px;
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      font-size: 12px;
       color: #3a3530;
       opacity: 0.85;
-      padding: 3px 10px;
+      padding: 3px 8px;
       border: 1px solid rgba(90,74,58,0.3);
       border-radius: 3px;
       background: rgba(220,210,195,0.6);
       font-family: var(--font-data);
       font-weight: 600;
-      transition: opacity 0.15s, transform 0.3s, background 0.15s;
+      transition: opacity 0.15s, background 0.15s;
       user-select: none;
+      cursor: pointer;
+      z-index: 2;
+      pointer-events: auto;
     }
     .sb-expand-hint:hover {
       opacity: 1;
-      background: rgba(240,200,48,0.2);
+      background: rgba(240,200,48,0.25);
     }
-    #status-bar.sb-expanded .sb-expand-hint { transform: rotate(180deg); opacity: 0.9; }
+    #status-bar.sb-expanded .sb-expand-hint {
+      opacity: 0.9;
+      background: rgba(240,200,48,0.3);
+    }
     .sb-btn {
       background: rgba(255,255,248,0.5); border: 2px solid #5a4a3a;
       border-radius: 6px; padding: 5px 14px;
@@ -1570,6 +1636,89 @@
     .sb-spacer { flex: 1; }
     .sb-info { color: #5a5048; font-size: 16px; font-family: var(--font-body); font-weight: 500; }
     .sb-info span { color: #1a1510; font-weight: 700; }
+
+    /* ── Currency ticker (coin-wheel from EyesOnly) ──────── */
+    .sb-gold-ticker {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 2px;
+      padding: 5px 10px !important;
+      min-width: 80px;
+    }
+    .sb-gold-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+    .sb-gold-wheel-frame {
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      overflow: hidden;
+      position: relative;
+      border-radius: 4px;
+      background: rgba(30,26,20,0.12);
+      border: 1px solid rgba(90,74,58,0.25);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+    }
+    /* Top/bottom fade mask for coin-wheel (slot-machine look) */
+    .sb-gold-wheel-frame::before,
+    .sb-gold-wheel-frame::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 6px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .sb-gold-wheel-frame::before {
+      top: 0;
+      background: linear-gradient(180deg, rgba(240,235,220,0.9) 0%, transparent 100%);
+    }
+    .sb-gold-wheel-frame::after {
+      bottom: 0;
+      background: linear-gradient(0deg, rgba(240,235,220,0.9) 0%, transparent 100%);
+    }
+    .sb-gold-wheel-track {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 78px; /* 3 × 26px slots */
+      transform: translateY(-26px); /* center on curr slot */
+      transition: transform 0.25s cubic-bezier(0.22, 0.68, 0.35, 1.2);
+      font-family: var(--font-data);
+      font-weight: 700;
+    }
+    .sb-gold-wheel-prev,
+    .sb-gold-wheel-next {
+      font-size: 11px;
+      color: var(--ink-dim);
+      opacity: 0.4;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+    }
+    .sb-gold-wheel-curr {
+      font-size: 16px;
+      color: #8a6a10;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    }
+    .sb-gold-unit {
+      font-size: 14px;
+      color: #8a6a10;
+      font-weight: 700;
+      font-family: var(--font-data);
+    }
+    /* Pulse animation on value change */
+    .sb-gold-ticker.sb-gold-changing {
+      border-color: var(--rc-currency) !important;
+      box-shadow: 0 0 6px rgba(255,255,0,0.25);
+    }
+    .sb-gold-ticker.sb-gold-changing .sb-gold-wheel-curr {
+      color: #c8a020;
+    }
 
     /* ── NCH Widget (draggable card-stack capsule — EyesOnly pattern) ── */
     #nch-widget {
@@ -1867,18 +2016,31 @@
       <!-- Status Bar (bottom strip with tooltip footer, hidden until gameplay) -->
       <div id="status-bar" style="display:none">
         <div class="sb-row">
-          <button class="sb-btn" id="sb-bag" title="Inventory (I)">\uD83C\uDF92 BAG 0/12</button>
-          <button class="sb-btn" id="sb-deck" title="Deck (K)">\uD83C\uDCCF DECK 0/0</button>
+          <button class="sb-btn" id="sb-bag" title="Inventory (I)">🎒 BAG 0/12</button>
+          <button class="sb-btn" id="sb-deck" title="Deck (K)">🃏 DECK 0/0</button>
           <span class="sb-spacer"></span>
           <span class="sb-info" id="sb-floor">Floor <span>0</span></span>
           <span class="sb-info" id="sb-biome"></span>
-          <span class="sb-info" id="sb-gold" title="Currency">\uD83D\uDCB0 0g</span>
+          <button class="sb-btn sb-gold-ticker" id="sb-gold" title="Currency">
+            <span class="sb-gold-icon">💰</span>
+            <span class="sb-gold-wheel-frame">
+              <span class="sb-gold-wheel-track" id="sb-gold-track">
+                <span class="sb-gold-wheel-prev">0</span>
+                <span class="sb-gold-wheel-curr">0</span>
+                <span class="sb-gold-wheel-next">0</span>
+              </span>
+            </span>
+            <span class="sb-gold-unit">g</span>
+          </button>
           <span class="sb-info" id="sb-heading">\u25B8 N</span>
         </div>
         <div class="sb-tooltip-area" id="sb-tooltip-area">
-          <div class="sb-tooltip-latest" id="sb-tooltip-latest">Ready.</div>
           <div class="sb-tooltip-history" id="sb-tooltip-history"></div>
-          <span class="sb-expand-hint" id="sb-expand-hint">▾ LOG</span>
+          <div class="sb-tooltip-preview" id="sb-tooltip-preview"></div>
+          <div class="sb-tooltip-latest" id="sb-tooltip-latest">
+            Ready.
+            <span class="sb-expand-hint" id="sb-expand-hint">▾ LOG</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1938,6 +2100,9 @@
   <script src="engine/work-order-system.js"></script>
   <script src="engine/hero-run.js"></script>
   <script src="engine/status-effect.js"></script>
+  <script src="engine/card-renderer.js"></script>
+  <script src="engine/card-draw.js"></script>
+  <script src="engine/bonfire-sprites.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>

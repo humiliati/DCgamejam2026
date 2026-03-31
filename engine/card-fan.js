@@ -40,7 +40,7 @@ var CardFan = (function () {
   var BASE_CARD_W  = 56;        // Card width at 1x
   var BASE_CARD_H  = 80;        // Card height at 1x
   var ARC_ANGLE    = Math.PI / 3;  // Total fan arc (~60°)
-  var BASE_PIVOT_Y = 60;       // Pivot point below viewport bottom at 1x (raised 20px so card bottoms stay in view)
+  var BASE_PIVOT_Y = 20;       // Pivot point below viewport bottom at 1x (low value = cards higher on screen)
   var LIFT_PX      = 20;       // Hover lift amount
   var LIFT_SCALE   = 1.12;     // Hover scale-up
   var DEAL_STAGGER = 60;       // ms stagger per card on open
@@ -51,7 +51,8 @@ var CardFan = (function () {
   //   Non-combat: 2.5x base (150% larger) for easy inspection
   var COMBAT_SCALE     = 2.0;
   var EXPLORE_SCALE    = 2.5;
-  var COMBAT_LIFT      = 60;   // px additional upward shift in combat (increased for status bar clearance)
+  var COMBAT_LIFT      = 80;   // px additional upward shift in combat (increased for status bar clearance)
+  var EXPLORE_LIFT     = 140;  // px additional upward shift in explore (NCH overlay) — cards must clear status bar
 
   // ── Derived (recalculated on open) ──────────────────────────────
   var CARD_W       = BASE_CARD_W;
@@ -95,6 +96,11 @@ var CardFan = (function () {
   var _minimizeBtnEl = null;  // DOM element: minimize toggle
   var _onMinimize = null;     // Callback when minimize button clicked
 
+  // ── Rejection shake state ─────────────────────────────────────────
+  var _rejectShake = null;  // { cardIdx, timer, startTime }
+  var REJECT_SHAKE_MS = 350;
+  var REJECT_SHAKE_AMP = 6;  // px horizontal shake amplitude
+
   // ── State ───────────────────────────────────────────────────────
   var _open       = false;
   var _hand       = [];       // Card objects from CardSystem
@@ -105,8 +111,16 @@ var CardFan = (function () {
   var _canvas     = null;
   var _openTimer  = 0;        // ms since fan opened
 
+  // ── External drop system (cross-zone drag to inventory) ─────────
+  // Registered by Game.js to bridge fan → MenuFaces drag zones.
+  // Signature: fn({ cardIdx, card, screenX, screenY }) → boolean
+  //   Returns true if the drop was handled, false to cancel.
+  var _externalDropHandler = null;
+  // Ghost element for visual feedback during external drag
+  var _ghostEl = null;
+
   // ── Drag state (mirrors EyesOnly _dragState pattern) ────────────
-  var _drag = null;  // { cardIdx, startX, startY, curX, curY, started, pointerId }
+  var _drag = null;  // { cardIdx, startX, startY, curX, curY, started, pointerId, external }
 
   // ── Fire animation state ────────────────────────────────────────
   // When stack is fired, cards animate upward into enemy half of screen.
@@ -182,11 +196,10 @@ var CardFan = (function () {
     // Show minimize button
     if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'flex';
 
-    // Suppress overlapping DOM elements
-    var sb = document.getElementById('status-bar');
-    var qb = document.getElementById('quick-bar');
-    if (sb) sb.style.opacity = '0.15';
-    if (qb) qb.style.opacity = '0.15';
+    // Slightly blur only the game canvas to focus attention on cards
+    // HUD stays fully opaque and readable
+    var cv = document.getElementById('view-canvas');
+    if (cv) cv.style.filter = 'blur(1.5px) brightness(0.85)';
   }
 
   /**
@@ -197,11 +210,9 @@ var CardFan = (function () {
     _maximized = false;
     if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
 
-    // Restore DOM elements
-    var sb = document.getElementById('status-bar');
-    var qb = document.getElementById('quick-bar');
-    if (sb) sb.style.opacity = '1';
-    if (qb) qb.style.opacity = '1';
+    // Remove canvas blur
+    var cv = document.getElementById('view-canvas');
+    if (cv) cv.style.filter = '';
 
     // Close the fan and notify
     if (_open) {
@@ -237,7 +248,7 @@ var CardFan = (function () {
     var modeScale = inCombat ? COMBAT_SCALE : EXPLORE_SCALE;
     CARD_W = Math.floor(BASE_CARD_W * modeScale);
     CARD_H = Math.floor(BASE_CARD_H * modeScale);
-    PIVOT_Y_OFF = Math.floor(BASE_PIVOT_Y * modeScale) - (inCombat ? COMBAT_LIFT : 0);
+    PIVOT_Y_OFF = Math.floor(BASE_PIVOT_Y * modeScale) - (inCombat ? COMBAT_LIFT : EXPLORE_LIFT);
 
     _buildFan();
   }
@@ -254,10 +265,8 @@ var CardFan = (function () {
     if (_maximized) {
       _maximized = false;
       if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
-      var sb = document.getElementById('status-bar');
-      var qb = document.getElementById('quick-bar');
-      if (sb) sb.style.opacity = '1';
-      if (qb) qb.style.opacity = '1';
+      var cv = document.getElementById('view-canvas');
+      if (cv) cv.style.filter = '';
     }
   }
 
@@ -279,6 +288,21 @@ var CardFan = (function () {
     if (typeof AudioSystem !== 'undefined') {
       AudioSystem.play(name, opts);
     }
+  }
+
+  /** Trigger a visual rejection shake on a specific card index. */
+  function _triggerRejectShake(cardIdx) {
+    _rejectShake = { cardIdx: cardIdx, startTime: Date.now() };
+  }
+
+  /** Get current shake offset for a card (0 if not shaking). */
+  function _getShakeOffset(cardIdx) {
+    if (!_rejectShake || _rejectShake.cardIdx !== cardIdx) return 0;
+    var elapsed = Date.now() - _rejectShake.startTime;
+    if (elapsed > REJECT_SHAKE_MS) { _rejectShake = null; return 0; }
+    var t = elapsed / REJECT_SHAKE_MS;
+    var decay = 1 - t;
+    return Math.sin(t * Math.PI * 6) * REJECT_SHAKE_AMP * decay;
   }
 
   // ── Build card positions ────────────────────────────────────────
@@ -366,9 +390,14 @@ var CardFan = (function () {
       pos.x += stackOff.dx;
       pos.y += stackOff.dy;
 
-      // Simple AABB hit test (rotated cards are approximate)
-      var hw = CARD_W / 2;
-      var hh = CARD_H / 2;
+      // Expanded AABB hit test — compensate for card rotation (angle * 0.6).
+      // At fan edges (~18° tilt), rotated card AABB is ~20% wider.
+      // Also add a minimum pad for touch/pointer tolerance.
+      var tilt = Math.abs(c.angle * 0.6);
+      var sinT = Math.sin(tilt);
+      var cosT = Math.cos(tilt);
+      var hw = (CARD_W * cosT + CARD_H * sinT) / 2 + 4;  // rotated half-width + pad
+      var hh = (CARD_H * cosT + CARD_W * sinT) / 2 + 4;  // rotated half-height + pad
       if (px >= pos.x - hw && px <= pos.x + hw &&
           py >= pos.y - hh && py <= pos.y + hh) {
         return i;
@@ -380,7 +409,8 @@ var CardFan = (function () {
   // ── Get card render position ────────────────────────────────────
 
   function _getCardPos(c, cx, pivotY, viewH) {
-    var radius = PIVOT_Y_OFF + CARD_H * 0.3;
+    // Arc radius decoupled from pivot offset — always positive, scales with card size
+    var radius = Math.max(CARD_H * 0.6, Math.abs(PIVOT_Y_OFF) + CARD_H * 0.3);
     var x = cx + Math.sin(c.angle) * radius;
     var y = pivotY - Math.cos(c.angle) * radius;
     return { x: x, y: y };
@@ -462,7 +492,12 @@ var CardFan = (function () {
 
     if (!_drag) {
       // No drag in progress — just update hover
+      var prevHover = _hoverIdx;
       _hoverIdx = hitTest(px, py);
+      // Update cursor for drag affordance
+      if (_canvas) {
+        _canvas.style.cursor = (_hoverIdx >= 0) ? 'grab' : '';
+      }
       return;
     }
 
@@ -478,11 +513,31 @@ var CardFan = (function () {
       if (Math.sqrt(dx * dx + dy * dy) < DRAG_DEAD_ZONE) return;
 
       _drag.started = true;
+      if (_canvas) _canvas.style.cursor = 'grabbing';
       _playAudio('card-pickup', { volume: 0.4 });
     }
 
     // During drag: update hover to the card under pointer (for drop target)
     _hoverIdx = hitTest(px, py);
+
+    // External drag: if pointer is above the fan area, show ghost overlay
+    if (_drag.started && !_inCombat() && _externalDropHandler) {
+      var fanTop = _getFanTopY();
+      if (py < fanTop) {
+        // Pointer has left the fan — activate external drag ghost
+        if (!_drag.external) {
+          _drag.external = true;
+          _showGhost(_drag.cardIdx, e.clientX, e.clientY);
+        } else {
+          _moveGhost(e.clientX, e.clientY);
+        }
+      } else if (_drag.external) {
+        // Pointer re-entered the fan — hide ghost
+        _drag.external = false;
+        _hideGhost();
+      }
+    }
+
     e.preventDefault();
   }
 
@@ -490,6 +545,7 @@ var CardFan = (function () {
     if (!_drag || _drag.pointerId !== e.pointerId) return;
 
     try { _canvas.releasePointerCapture(e.pointerId); } catch (_ex) {}
+    if (_canvas) _canvas.style.cursor = '';
 
     var rect = _canvas.getBoundingClientRect();
     var px = e.clientX - rect.left;
@@ -527,18 +583,92 @@ var CardFan = (function () {
       return;
     }
 
+    // External drop — card dragged out of fan onto inventory zone
+    if (_drag.external && _externalDropHandler) {
+      var card = _cards[dragIdx] ? _cards[dragIdx].card : null;
+      if (card) {
+        var handled = _externalDropHandler({
+          cardIdx: dragIdx,
+          card:    card,
+          screenX: e.clientX,
+          screenY: e.clientY
+        });
+        if (handled) {
+          _playAudio('card-snap', { volume: 0.5 });
+        }
+      }
+      _hideGhost();
+      _drag = null;
+      return;
+    }
+
     // Drop on same card or empty space → reorder
     if (dropIdx >= 0 && dropIdx !== dragIdx) {
       _handleReorder(dragIdx, dropIdx);
     }
 
+    _hideGhost();
     _drag = null;
   }
 
   function _onPointerCancel(e) {
     if (_drag && _drag.pointerId === e.pointerId) {
       try { _canvas.releasePointerCapture(e.pointerId); } catch (_ex) {}
+      if (_canvas) _canvas.style.cursor = '';
+      _hideGhost();
       _drag = null;
+    }
+  }
+
+  // ── External drag ghost (CDC pattern) ────────────────────────────
+
+  /** Approximate Y coordinate of the fan's top edge in canvas space. */
+  function _getFanTopY() {
+    if (!_canvas) return 0;
+    var h = _canvas.height;
+    // Fan cards arc upward from bottom. Top of tallest card at hover lift.
+    return h - PIVOT_Y_OFF - CARD_H - LIFT_PX - 30;
+  }
+
+  /** Create and show a ghost element for external drag feedback. */
+  function _showGhost(cardIdx, clientX, clientY) {
+    if (_ghostEl) return; // Already showing
+    var c = _cards[cardIdx];
+    if (!c || !c.card) return;
+
+    // Use CardRenderer DOM ghost if available, else simple fallback
+    if (typeof CardRenderer !== 'undefined' && CardRenderer.createGhostFromData) {
+      _ghostEl = CardRenderer.createGhostFromData(c.card);
+    } else {
+      _ghostEl = document.createElement('div');
+      _ghostEl.className = 'cf-drag-ghost';
+      _ghostEl.style.cssText =
+        'position:fixed;z-index:10000;pointer-events:none;' +
+        'padding:6px 10px;border-radius:6px;font:bold 14px monospace;' +
+        'background:rgba(20,18,28,0.92);border:2px solid #f0d070;' +
+        'color:#f0d070;box-shadow:0 8px 24px rgba(0,0,0,0.4);' +
+        'transform:scale(0.9);opacity:0.92;white-space:nowrap;';
+      var card = c.card;
+      var emoji = card.emoji || (card.suit ? { spade:'\u2660', club:'\u2663', diamond:'\u2666', heart:'\u2665' }[card.suit] || '\uD83C\uDCCF' : '\uD83C\uDCCF');
+      _ghostEl.textContent = emoji + ' ' + (card.name || card.id || '???');
+    }
+    document.body.appendChild(_ghostEl);
+
+    _moveGhost(clientX, clientY);
+  }
+
+  /** Move ghost element to follow pointer. */
+  function _moveGhost(clientX, clientY) {
+    if (!_ghostEl) return;
+    _ghostEl.style.left = (clientX + 12) + 'px';
+    _ghostEl.style.top  = (clientY - 20) + 'px';
+  }
+
+  /** Remove ghost element. */
+  function _hideGhost() {
+    if (_ghostEl) {
+      _ghostEl.remove();
+      _ghostEl = null;
     }
   }
 
@@ -606,6 +736,7 @@ var CardFan = (function () {
       }
       // Can't stack — reject with feedback
       _playAudio('card-reject', { volume: 0.3 });
+      _triggerRejectShake(dropIdx);
       return;
     }
 
@@ -623,6 +754,7 @@ var CardFan = (function () {
       // Incompatible tags — undo the stack start, reject
       CardStack.clear();
       _playAudio('card-reject', { volume: 0.3 });
+      _triggerRejectShake(dropIdx);
     }
   }
 
@@ -667,12 +799,17 @@ var CardFan = (function () {
     if (fromIdx < 0 || fromIdx >= _hand.length) return;
     if (toIdx < 0 || toIdx >= _hand.length) return;
 
-    // Move card in _hand array
+    // Move card in _hand array (direct mutation of CardSystem reference)
     var card = _hand.splice(fromIdx, 1)[0];
     _hand.splice(toIdx, 0, card);
 
     _playAudio('card-snap', { volume: 0.3 });
     _buildFan();
+
+    // Notify CardSystem that hand order changed (if API exists)
+    if (typeof CardSystem !== 'undefined' && CardSystem.emitHandChanged) {
+      CardSystem.emitHandChanged();
+    }
   }
 
   // ── Stack change notification ───────────────────────────────────
@@ -985,6 +1122,13 @@ var CardFan = (function () {
       _renderStackGlow(ctx, cx, pivotY, h);
     }
 
+    // ── Compute reorder drop target (explore mode only) ──
+    var reorderDropIdx = -1;
+    if (_drag && _drag.started && !_inCombat()) {
+      reorderDropIdx = hitTest(_drag.curX, _drag.curY);
+      if (reorderDropIdx === _drag.cardIdx) reorderDropIdx = -1;
+    }
+
     // ── Second pass: render cards ──
     for (var i = 0; i < _cards.length; i++) {
       var c = _cards[i];
@@ -994,10 +1138,32 @@ var CardFan = (function () {
 
       // Skip dragged card in normal pass (render ghost separately)
       if (_drag && _drag.started && _drag.cardIdx === i) {
+        // Render a dim placeholder gap where the card was
+        var gapPos = _getCardPos(c, cx, pivotY, h);
+        ctx.save();
+        ctx.translate(gapPos.x, gapPos.y);
+        ctx.rotate(c.angle * 0.6);
+        ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = 'rgba(240,208,112,0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        _roundRect(ctx, -CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, Math.max(4, CARD_W * 0.06));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
         continue;
       }
 
-      _renderCard(ctx, c, i, cx, pivotY, h, false);
+      // If this card is the reorder drop target, shift it slightly to show the gap
+      if (reorderDropIdx === i) {
+        ctx.save();
+        var shiftDir = (_drag.cardIdx < i) ? 1 : -1;
+        ctx.translate(shiftDir * CARD_W * 0.15, 0);
+        _renderCard(ctx, c, i, cx, pivotY, h, false);
+        ctx.restore();
+      } else {
+        _renderCard(ctx, c, i, cx, pivotY, h, false);
+      }
     }
 
     // ── 2.5 pass: envelope highlights on valid stack targets during combat drag ──
@@ -1081,8 +1247,11 @@ var CardFan = (function () {
       lift = 6;
     }
 
+    // Rejection shake offset (horizontal wobble)
+    var shakeOff = _getShakeOffset(i);
+
     ctx.save();
-    ctx.translate(pos.x, pos.y - lift);
+    ctx.translate(pos.x + shakeOff, pos.y - lift);
     ctx.rotate(c.angle * 0.6);  // Slight tilt following arc
     ctx.scale(scale, scale);
 
@@ -1091,7 +1260,10 @@ var CardFan = (function () {
       ctx.globalAlpha = 1 - playProgress;
     }
 
-    _drawCardBody(ctx, c, isHover, isStacked);
+    // Flash red border on reject shake
+    var isRejecting = (shakeOff !== 0);
+
+    _drawCardBody(ctx, c, isHover, isStacked, isRejecting);
     ctx.restore();
   }
 
@@ -1192,92 +1364,21 @@ var CardFan = (function () {
 
   /**
    * Draw a card body (shared between normal render and ghost).
+   * Visual style ported from EyesOnly: coin border, resource gradient,
+   * paper texture, metallic sheen, suit symbols TL + BR (rotated 180°),
+   * cost badge, quality glow.
    */
-  function _drawCardBody(ctx, c, isHover, isStacked) {
-    var hw = CARD_W / 2;
-    var hh = CARD_H / 2;
-    // Primary border: suit color (resource-keyed), fallback to type color
-    var borderColor = (c.card.suit && SUIT_BORDER_COLORS[c.card.suit])
-      ? SUIT_BORDER_COLORS[c.card.suit]
-      : (BORDER_COLORS[c.card.type] || COL_BORDER);
-
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    _roundRect(ctx, -hw + 2, -hh + 2, CARD_W, CARD_H, 5);
-    ctx.fill();
-
-    // Background
-    _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
-    ctx.fillStyle = COL_BG;
-    ctx.fill();
-
-    // Border (color-coded by type)
-    // Stacked cards get a golden border
-    if (isStacked) {
-      ctx.strokeStyle = '#f0d070';
-      ctx.lineWidth = 2.5;
-    } else if (isHover) {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-    } else {
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 1.5;
-    }
-    _roundRect(ctx, -hw, -hh, CARD_W, CARD_H, 5);
-    ctx.stroke();
-
-    // Stack position indicator (small number badge)
-    if (isStacked) {
-      var stack = CardStack.getStack();
-      for (var s = 0; s < stack.length; s++) {
-        if (stack[s].handIndex === c.handIndex) {
-          var badge = String(s + 1);
-          var badgeSize = Math.max(8, Math.floor(CARD_H * 0.09));
-          ctx.font = 'bold ' + badgeSize + 'px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          // Badge circle
-          ctx.fillStyle = 'rgba(240,208,112,0.9)';
-          ctx.beginPath();
-          ctx.arc(hw - badgeSize, -hh + badgeSize, badgeSize * 0.7, 0, Math.PI * 2);
-          ctx.fill();
-          // Badge number
-          ctx.fillStyle = '#1a1520';
-          ctx.fillText(badge, hw - badgeSize, -hh + badgeSize);
-          break;
-        }
-      }
-    }
-
-    // Emoji icon (large, centered)
-    if (c.card.emoji) {
-      var emojiSize = Math.floor(CARD_H * 0.3);
-      ctx.font = emojiSize + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(c.card.emoji, 0, -hh * 0.1);
-    }
-
-    // Suit symbol (top-left corner)
-    if (c.card.suit && typeof SynergyEngine !== 'undefined') {
-      var suitSym = SynergyEngine.getSymbol(c.card.suit);
-      var suitSize = Math.max(9, Math.floor(CARD_H * 0.13));
-      ctx.font = 'bold ' + suitSize + 'px monospace';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = borderColor;
-      ctx.fillText(suitSym, -hw + 4, -hh + 3);
-    }
-
-    // Card name (small, bottom)
-    if (c.card.name) {
-      var nameSize = Math.max(8, Math.floor(CARD_H * 0.11));
-      ctx.font = nameSize + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = COL_NAME;
-      ctx.fillText(c.card.name, 0, hh - Math.floor(hh * 0.08));
+  function _drawCardBody(ctx, c, isHover, isStacked, isRejecting) {
+    // Delegate to unified CardDraw module (Layer 1) at FULL LOD.
+    // CardDraw.drawCard expects the raw card object and dimensions.
+    if (typeof CardDraw !== 'undefined') {
+      CardDraw.drawCard(ctx, c.card, CARD_W, CARD_H, {
+        lod:         'full',
+        isHover:     isHover,
+        isStacked:   isStacked,
+        isRejecting: isRejecting,
+        handIndex:   c.handIndex
+      });
     }
   }
 
@@ -1349,6 +1450,28 @@ var CardFan = (function () {
 
   // ── Public API ──────────────────────────────────────────────────
 
+  /**
+   * Register a handler for cards dragged out of the fan (non-combat).
+   * Signature: fn({ cardIdx, card, screenX, screenY }) → boolean
+   * Return true if the external drop was handled.
+   * @param {Function|null} handler
+   */
+  function setExternalDropHandler(handler) {
+    _externalDropHandler = handler;
+  }
+
+  /** True if a card is currently being dragged outside the fan. */
+  function isExternalDragging() {
+    return !!(_drag && _drag.external);
+  }
+
+  /** Get the currently dragged card info (for zone highlight feedback). */
+  function getDragInfo() {
+    if (!_drag || !_drag.started) return null;
+    var c = _cards[_drag.cardIdx];
+    return c ? { cardIdx: _drag.cardIdx, card: c.card, external: !!_drag.external } : null;
+  }
+
   return {
     init: init,
     open: open,
@@ -1365,6 +1488,11 @@ var CardFan = (function () {
     minimize: minimize,
     isMaximized: isMaximized,
     startFireAnim: startFireAnim,
-    isFireAnimPlaying: isFireAnimPlaying
+    isFireAnimPlaying: isFireAnimPlaying,
+
+    // External drag system (cross-zone transfers)
+    setExternalDropHandler: setExternalDropHandler,
+    isExternalDragging: isExternalDragging,
+    getDragInfo: getDragInfo
   };
 })();
