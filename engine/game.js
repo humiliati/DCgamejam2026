@@ -1738,6 +1738,9 @@ var Game = (function () {
     FloorManager.invalidateCache('1');
 
     console.log('[Game] Work keys collected — dungeon gate unlocked');
+
+    // Update quest waypoint now that gate is open
+    _updateQuestTarget();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -2022,12 +2025,51 @@ var Game = (function () {
     });
 
     Minimap.reveal(spawn.x, spawn.y);
+    _updateQuestTarget();
     HUD.updateFloor(FloorManager.getFloor());
     HUD.updatePlayer(Player.state());
     if (typeof StatusBar !== 'undefined') {
       StatusBar.updateFloor(FloorManager.getFloor(), FloorManager.getBiomeName ? FloorManager.getBiomeName() : '');
     }
     _refreshPanels();
+  }
+
+  // ── Quest waypoint targeting ────────────────────────────────────────
+  // Sets the minimap quest diamond based on current floor and game state.
+  // Day 0 route: approach(0) → promenade(1) → home(1.6) for keys → back
+  // to promenade(1) → bazaar(1.1) → soft cellar(1.3.1).
+  function _updateQuestTarget() {
+    if (typeof Minimap === 'undefined' || !Minimap.setQuestTarget) return;
+    var floorId = FloorManager.getFloor();
+    var floorData = FloorManager.getFloorData();
+
+    if (!_gateUnlocked) {
+      // Phase 1: get work keys
+      if (floorId === '0') {
+        // Point at the door to Promenade
+        Minimap.setQuestTarget({ x: 9, y: 6 });
+      } else if (floorId === '1') {
+        // Point at Gleaner's Home door (east side)
+        Minimap.setQuestTarget({ x: 17, y: 7 });
+      } else if (floorId === '1.6') {
+        // Point at the key chest
+        Minimap.setQuestTarget({ x: 19, y: 3 });
+      } else {
+        Minimap.setQuestTarget(null);
+      }
+    } else {
+      // Phase 2: head to dungeon
+      if (floorId === '1') {
+        // Point at Coral Bazaar entrance
+        Minimap.setQuestTarget({ x: 5, y: 2 });
+      } else if (floorId === '1.1') {
+        // Point at stairs down to dungeon
+        Minimap.setQuestTarget({ x: 7, y: 4 });
+      } else {
+        // In dungeon or elsewhere — no specific waypoint
+        Minimap.setQuestTarget(null);
+      }
+    }
   }
 
   // ── Movement callbacks ─────────────────────────────────────────────
@@ -3405,7 +3447,8 @@ var Game = (function () {
 
   return {
     init: init,
-    requestPause: requestPause
+    requestPause: requestPause,
+    isGateUnlocked: function () { return _gateUnlocked; }
   };
 })();
 

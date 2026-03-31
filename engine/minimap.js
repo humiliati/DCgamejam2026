@@ -421,6 +421,9 @@ var Minimap = (function () {
     // Draw NPC icons (cyan diamonds — distinct from enemy dots)
     _drawNpcIcons(ctx, enemies, tileSize, offsetX, offsetY);
 
+    // Draw quest waypoint marker (pulsing green diamond)
+    _drawQuestMarker(ctx, tileSize, offsetX, offsetY);
+
     // ── Orientation grid: draw subtle grid lines on tiles near the player ──
     // Helps the player see exactly which tile they're on and what's adjacent.
     if (tileSize >= 4) {
@@ -630,6 +633,50 @@ var Minimap = (function () {
     }
   }
 
+  // ── Quest waypoint marker ──────────────────────────────────────────
+  // Draws a pulsing diamond on a target tile to guide the player toward
+  // their current objective. The marker pulses via sine wave on alpha.
+
+  var _questTarget = null; // { x, y } or null — set by Game
+
+  function setQuestTarget(target) {
+    _questTarget = target; // { x, y } or null to clear
+  }
+
+  function _drawQuestMarker(ctx, ts, ox, oy) {
+    if (!_questTarget) return;
+    var key = _questTarget.x + ',' + _questTarget.y;
+    // Show marker even on unexplored tiles (it's a waypoint, not fog)
+    var cx = ox + _questTarget.x * ts + ts / 2;
+    var cy = oy + _questTarget.y * ts + ts / 2;
+
+    // Pulsing alpha (0.4 → 0.9 over ~1.5s cycle)
+    var pulse = 0.65 + 0.25 * Math.sin(performance.now() * 0.004);
+    var dSize = Math.max(3, ts * 0.45);
+
+    // Outer glow
+    ctx.fillStyle = 'rgba(120,220,160,' + (pulse * 0.3).toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.arc(cx, cy, dSize + 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Diamond
+    ctx.fillStyle = 'rgba(120,220,160,' + pulse.toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - dSize);
+    ctx.lineTo(cx + dSize, cy);
+    ctx.lineTo(cx, cy + dSize);
+    ctx.lineTo(cx - dSize, cy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Inner pip
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1, ts * 0.12), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // ── Sight cone helpers ────────────────────────────────────────────
 
   /**
@@ -832,6 +879,7 @@ var Minimap = (function () {
     compassExpand: compassExpand,
     compassCollapse: compassCollapse,
     hitTestCompass: hitTestCompass,
+    setQuestTarget: setQuestTarget,
     getExplored: function () { return _explored; },
     getCanvas: function () { return _canvas; },
     getSize: function () { return _size; }

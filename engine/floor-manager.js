@@ -147,7 +147,7 @@ var FloorManager = (function () {
     if (_depth(floor) === 1) {
       if (floor === '0') return 'exterior';      // The Approach
       if (floor === '1') return 'promenade';     // The Promenade
-      if (floor === '2') return 'gardens';       // Gardens (future)
+      if (floor === '2') return 'exterior';      // Lantern Row (commercial district)
       if (floor === '3') return 'frontier';      // Frontier (future)
       return 'exterior';  // fallback for unknown exteriors
     }
@@ -155,9 +155,11 @@ var FloorManager = (function () {
     // Depth 2: interior biomes — keyed by full floor ID
     if (_depth(floor) === 2) {
       if (floor === '1.1') return 'bazaar';      // Coral Bazaar
-      if (floor === '1.2') return 'guild';       // Gleaner's Guild (future)
+      if (floor === '1.2') return 'inn';         // Driftwood Inn
+      if (floor === '1.3') return 'cellar';      // Cellar Entrance
       if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
-      if (floor === '2.1') return 'inn';         // Inn (future)
+      if (floor === '2.1') return 'inn';         // Dispatcher's Office (future)
+      if (floor === '2.2') return 'bazaar';      // Watchman's Post (military cool)
       if (floor === '3.1') return 'armory';      // Armory (future)
       return 'bazaar';  // fallback for unknown interiors
     }
@@ -165,6 +167,7 @@ var FloorManager = (function () {
     // Depth 3+: dungeon biomes — based on parent interior
     var parent = _parentId(floor);
     if (parent === '1.1') return 'cellar';       // Coral Cellars
+    if (parent === '1.3') return 'cellar';       // Soft Cellar
     if (parent === '2.1') return 'catacomb';     // Lamplit Catacombs
     if (parent === '3.1') return 'foundry';      // Ironhold Depths
 
@@ -425,6 +428,27 @@ var FloorManager = (function () {
           roomCount: { min: 2, max: 3 }
         }, biomeTextures));
       }
+      if (floor === '1.2') {
+        return SpatialContract.interior(Object.assign({
+          label: 'Driftwood Inn',
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 25, g: 12, b: 8 },
+          ceilColor: '#4a2810',
+          floorColor: '#8a6a48',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 4, max: 4 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.08,    // DOOR_EXIT — step at threshold
+            10: 0.05,    // PILLAR — support columns, subtle height
+            18: 0.0,     // BONFIRE — flush with floor
+            26: -0.05,   // BAR_COUNTER — slightly sunken counter
+            27: -0.12,   // BED — low to the ground
+            28: -0.08    // TABLE — work surface
+          })
+        }, biomeTextures));
+      }
       if (floor === '1.6') {
         return SpatialContract.interior(Object.assign({
           label: "Gleaner's Home",
@@ -592,16 +616,20 @@ var FloorManager = (function () {
 
   var _FLOOR1_W = 20;
   var _FLOOR1_H = 16;
+  // Row 1: north gate to Lantern Row (DOOR at 9,1)
+  // Row 2: Coral Bazaar (5,2), Driftwood Inn (14,2)
+  // Row 7: bonfire (9,7), Home (17,7), Cellar Entrance (2,7)
+  // Row 13: south gate back to The Approach (9,13)
   var _FLOOR1_GRID = [
     // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0  tree perimeter
-    [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 1  north walk
-    [21, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1, 1, 1, 0,21], // 2  shop facades + DOORs (5,2) (14,2)
+    [21, 0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0,21], // 1  north gate wall + DOOR(9,1)→Lantern Row
+    [21, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1, 1, 1, 0,21], // 2  Bazaar(5,2) + Inn(14,2)
     [21, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0,21], // 3  shop backs (solid mass)
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 4  corridor
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 5  pillar row
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 6  plaza
-    [21, 0, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  bonfire (9,7) + HOME DOOR (17,7)
+    [21, 1, 2, 1, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 2, 0,21], // 7  Cellar(2,7) + bonfire(9,7) + Home(17,7)
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 8  plaza
     [21, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,21], // 9  pillar row
     [21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21], // 10 open
@@ -632,7 +660,14 @@ var FloorManager = (function () {
         doorExit: { x: 9, y: 13 },  // DOOR_EXIT — back to The Approach (depth 1→1)
         doorEntry: { x: 5, y: 2 }   // DOOR — Coral Bazaar entrance (depth 1→2)
       },
-      doorTargets: { '5,2': '1.1', '14,2': '1.1', '9,13': '0', '17,7': '1.6' },  // DOORs (5,2)+(14,2)→Coral Bazaar, DOOR_EXIT (9,13)→Approach, HOME DOOR (17,7)→Gleaner's Home
+      doorTargets: {
+        '9,1': '2',      // North gate → Lantern Row
+        '5,2': '1.1',    // West shop → Coral Bazaar
+        '14,2': '1.2',   // East shop → Driftwood Inn
+        '2,7': '1.3',    // West alcove → Cellar Entrance
+        '17,7': '1.6',   // East alcove → Gleaner's Home
+        '9,13': '0'      // South gate → The Approach
+      },
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
       biome: 'promenade',
@@ -881,11 +916,41 @@ var FloorManager = (function () {
       _floorData.contract = contract;
       _enemies = [];  // No enemies in the bazaar (safe zone)
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '1.2') {
+      // Hand-authored Floor 1.2: Driftwood Inn (depth 2)
+      _floorData = FloorData12.build();
+      _floorData.contract = contract;
+      _enemies = [];  // No enemies in the inn (safe zone)
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '1.3') {
+      // Hand-authored Floor 1.3: Cellar Entrance (depth 2)
+      _floorData = FloorData13.build();
+      _floorData.contract = contract;
+      _enemies = [];  // Safe staging area
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else if (_floorId === '1.6') {
       // Hand-authored Floor 1.6: Gleaner's Home (depth 2)
       _floorData = _buildFloor16();
       _floorData.contract = contract;
       _enemies = [];  // Home is always safe
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '2') {
+      // Hand-authored Floor 2: Lantern Row (depth 1)
+      _floorData = FloorData2.build();
+      _floorData.contract = contract;
+      _enemies = [];  // Exterior safe zone
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '2.1') {
+      // Hand-authored Floor 2.1: Dispatcher's Office (depth 2)
+      _floorData = FloorData21.build();
+      _floorData.contract = contract;
+      _enemies = [];  // Office safe zone
+      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+    } else if (_floorId === '2.2') {
+      // Hand-authored Floor 2.2: Watchman's Post (depth 2)
+      _floorData = FloorData22.build();
+      _floorData.contract = contract;
+      _enemies = [];  // Staging area is safe (shaken watchman, no combat)
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else {
       _floorData = GridGen.generate({

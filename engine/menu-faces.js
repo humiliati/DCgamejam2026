@@ -261,6 +261,49 @@ var MenuFaces = (function () {
       }
     }
 
+    // ── Progress stats (SessionStats + explored tile count) ──
+    if (typeof SessionStats !== 'undefined') {
+      var stats = SessionStats.get();
+      var explored = (typeof Minimap !== 'undefined' && Minimap.getExplored)
+        ? Minimap.getExplored() : {};
+      var tileCount = 0;
+      for (var _k in explored) { if (explored.hasOwnProperty(_k)) tileCount++; }
+
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+
+      // Row 1: explored tiles + enemies
+      ctx.fillStyle = COL.dim;
+      var statLine1 = tileCount + ' tiles explored';
+      if (stats.enemiesDefeated > 0) {
+        statLine1 += '  \u00B7  ' + stats.enemiesDefeated + ' defeated';
+      }
+      ctx.fillText(statLine1, x + w / 2, ty);
+      ty += 11;
+
+      // Row 2: chests + bonfires + hazards
+      var statParts = [];
+      if (stats.chestsOpened > 0)      statParts.push(stats.chestsOpened + ' chests');
+      if (stats.bonfiresUsed > 0)      statParts.push(stats.bonfiresUsed + ' rests');
+      if (stats.hazardsTriggered > 0)  statParts.push(stats.hazardsTriggered + ' hazards');
+      if (stats.floorsExplored > 0)    statParts.push(stats.floorsExplored + ' floors');
+      if (statParts.length > 0) {
+        ctx.fillText(statParts.join('  \u00B7  '), x + w / 2, ty);
+        ty += 11;
+      }
+    }
+
+    // ── Current quest objective ──
+    var questText = _getQuestObjective();
+    if (questText) {
+      ty += 2;
+      ctx.fillStyle = 'rgba(120,220,160,0.8)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u25C6 ' + questText, x + w / 2, ty);
+      ty += 14;
+    }
+
     // ── Time display (clock frozen while paused) ──
     if (typeof DayCycle !== 'undefined') {
       ctx.fillStyle = COL.accent;
@@ -277,6 +320,29 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
     ctx.textAlign = 'left';
+  }
+
+  // ── Quest objective resolver ──────────────────────────────────────
+  // Returns a short string describing the current Day 0 objective
+  // based on game state flags and current floor.
+  function _getQuestObjective() {
+    var floorId = (typeof FloorManager !== 'undefined') ? FloorManager.getFloor() : '';
+    // Check if Game exposes gate state
+    var gateUnlocked = (typeof Game !== 'undefined' && Game.isGateUnlocked)
+      ? Game.isGateUnlocked() : false;
+
+    if (!gateUnlocked) {
+      // Phase 1: player needs to get work keys from home
+      if (floorId === '1.6') return 'Find work keys in the chest';
+      if (floorId === '0') return 'Enter The Promenade';
+      return 'Head home for your keys \u2014 east side of town';
+    }
+
+    // Phase 2: gate unlocked, head to dungeon
+    if (floorId === '1') return 'Enter the Coral Bazaar \u2014 find the cellar';
+    if (floorId === '1.1') return 'Descend to the Soft Cellar';
+    if (floorId && floorId.split('.').length >= 3) return 'Clear the dungeon floor';
+    return 'Report to the dungeon entrance';
   }
 
   function _renderBonfireRest(ctx, x, y, w, h) {
