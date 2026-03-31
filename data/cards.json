@@ -476,7 +476,7 @@
   {
     "id": "ACT-025",
     "name": "Amber Lock",
-    "emoji": "🫙",
+    "emoji": "🔒",
     "rarity": "uncommon",
     "cost": {
       "type": "free",
@@ -1186,7 +1186,7 @@
   {
     "id": "ACT-063",
     "name": "Bio Surge",
-    "emoji": "🫧",
+    "emoji": "💧",
     "rarity": "uncommon",
     "cost": {
       "type": "free",
@@ -1362,7 +1362,7 @@
   {
     "id": "ACT-068",
     "name": "Cryo Cocoon",
-    "emoji": "🫁",
+    "emoji": "❄️",
     "rarity": "rare",
     "cost": {
       "type": "energy",
@@ -2386,7 +2386,7 @@
   {
     "id": "ACT-117",
     "name": "Final Stand",
-    "emoji": "🫀",
+    "emoji": "💗",
     "rarity": "epic",
     "cost": { "type": "hp", "value": 5 },
     "effects": [
@@ -2744,7 +2744,7 @@
   {
     "id": "ACT-141",
     "name": "Hemorrhage",
-    "emoji": "🩻",
+    "emoji": "💀",
     "rarity": "rare",
     "cost": { "type": "hp", "value": 2 },
     "effects": [

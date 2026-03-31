@@ -26,7 +26,8 @@ var ParticleFX = (function () {
 
   // ── Constants ────────────────────────────────────────────────────
   var MAX_PARTICLES = 400;
-  var COIN_EMOJIS = ['\uD83E\uDE99', '\uD83D\uDCB0'];  // 🪙 💰
+  // 💰 (U+1F4B0) is safe on all platforms. 🪙 (U+1FA99) renders as tofu on older Windows.
+  var COIN_EMOJI = '\uD83D\uDCB0';  // 💰
 
   // ── Particle pool ────────────────────────────────────────────────
   var _particles = [];
@@ -63,7 +64,9 @@ var ParticleFX = (function () {
     fadeOut: true,
     friction: 0,
     scaleDecay: false,    // shrink over lifetime
-    spin: 0               // rotation speed (rad/frame)
+    spin: 0,              // rotation speed (rad/frame)
+    spriteSheet: null,    // SpriteSheet name (e.g. 'coin') — null = emoji
+    frameInterval: 5      // frames between sprite animation advances
   };
 
   /**
@@ -101,7 +104,10 @@ var ParticleFX = (function () {
         friction: opts.friction,
         scaleDecay: opts.scaleDecay,
         spin: opts.spin,
-        rotation: opts.spin ? _randRange(0, Math.PI * 2) : 0
+        rotation: opts.spin ? _randRange(0, Math.PI * 2) : 0,
+        spriteSheet: opts.spriteSheet,
+        frameInterval: opts.frameInterval || 5,
+        frameTick: 0
       });
     }
   }
@@ -130,7 +136,10 @@ var ParticleFX = (function () {
       friction: opts.friction,
       scaleDecay: opts.scaleDecay,
       spin: opts.spin,
-      rotation: opts.spin ? _randRange(0, Math.PI * 2) : 0
+      rotation: opts.spin ? _randRange(0, Math.PI * 2) : 0,
+      spriteSheet: opts.spriteSheet,
+      frameInterval: opts.frameInterval || 5,
+      frameTick: 0
     });
   }
 
@@ -150,6 +159,11 @@ var ParticleFX = (function () {
 
       if (p.spin) {
         p.rotation += p.spin;
+      }
+
+      // Advance sprite animation frame tick
+      if (p.spriteSheet) {
+        p.frameTick++;
       }
 
       p.life--;
@@ -191,6 +205,8 @@ var ParticleFX = (function () {
     ctx.save();
 
     // Draw particles
+    var _hasSpriteSheet = (typeof SpriteSheet !== 'undefined');
+
     for (var i = 0; i < _particles.length; i++) {
       var p = _particles[i];
       var alpha = p.fadeOut ? Math.min(1, p.life / (p.maxLife * 0.35)) : 1;
@@ -198,18 +214,47 @@ var ParticleFX = (function () {
       var drawSize = Math.max(4, Math.floor(p.size * scale));
 
       ctx.globalAlpha = alpha;
-      ctx.font = drawSize + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
 
-      if (p.rotation) {
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rotation);
-        ctx.fillText(p.emoji, 0, 0);
-        ctx.restore();
+      // Try sprite-based rendering first
+      var spriteFrame = null;
+      if (p.spriteSheet && _hasSpriteSheet && SpriteSheet.isLoaded(p.spriteSheet)) {
+        var frameIdx = Math.floor(p.frameTick / p.frameInterval);
+        spriteFrame = SpriteSheet.getFrame(p.spriteSheet, frameIdx);
+      }
+
+      if (spriteFrame) {
+        // Sprite rendering — draw image centered at particle position
+        var halfW = drawSize / 2;
+        var halfH = drawSize / 2;
+        // Maintain aspect ratio from source image
+        var aspect = spriteFrame.naturalWidth / (spriteFrame.naturalHeight || 1);
+        if (aspect > 1) { halfH = halfW / aspect; }
+        else if (aspect < 1) { halfW = halfH * aspect; }
+
+        if (p.rotation) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.drawImage(spriteFrame, -halfW, -halfH, halfW * 2, halfH * 2);
+          ctx.restore();
+        } else {
+          ctx.drawImage(spriteFrame, p.x - halfW, p.y - halfH, halfW * 2, halfH * 2);
+        }
       } else {
-        ctx.fillText(p.emoji, p.x, p.y);
+        // Emoji fallback
+        ctx.font = drawSize + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (p.rotation) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillText(p.emoji, 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(p.emoji, p.x, p.y);
+        }
       }
     }
 
@@ -229,7 +274,7 @@ var ParticleFX = (function () {
       ctx.fillStyle = '#f0d070';
       ctx.shadowColor = 'rgba(240,208,112,0.6)';
       ctx.shadowBlur = 8;
-      ctx.fillText((ct.emoji || '\uD83E\uDE99') + ' +' + ct.current, ct.x, floatY);
+      ctx.fillText((ct.emoji || COIN_EMOJI) + ' +' + ct.current, ct.x, floatY);
       ctx.shadowBlur = 0;
     }
 
@@ -247,18 +292,22 @@ var ParticleFX = (function () {
    */
   function coinBurst(x, y, count) {
     count = count || 8;
+    // Use coin sprite sheet if loaded, otherwise emoji fallback
+    var useCoinSprite = (typeof SpriteSheet !== 'undefined' && SpriteSheet.isLoaded('coin'));
     burst(x, y, {
-      emoji: '\uD83E\uDE99',  // 🪙
+      emoji: COIN_EMOJI,
       count: Math.min(count, 20),
       speed: 4.5,
       life: 40,
       gravity: 0.18,
       spread: Math.PI * 0.8,   // upward cone
       angle: -Math.PI / 2,     // straight up
-      size: 18,
+      size: useCoinSprite ? 24 : 18,  // sprites need slightly more room
       fadeOut: true,
       friction: 0.01,
-      spin: 0.15
+      spin: useCoinSprite ? 0 : 0.15,  // sprite animation replaces spin
+      spriteSheet: useCoinSprite ? 'coin' : null,
+      frameInterval: 4  // ~12fps at 60fps render rate
     });
 
     // Add a couple of sparkles
@@ -289,7 +338,8 @@ var ParticleFX = (function () {
     opts = opts || {};
     var width = opts.width || 120;
     var duration = opts.duration || 1200;
-    var coinEmoji = opts.emoji || '\uD83E\uDE99';
+    var coinEmoji = opts.emoji || COIN_EMOJI;
+    var useCoinSprite = (typeof SpriteSheet !== 'undefined' && SpriteSheet.isLoaded('coin'));
 
     // Determine burst count from amount (logarithmic scaling)
     var burstCount = Math.min(4, Math.max(1, Math.floor(Math.log2(amount + 1))));
@@ -297,7 +347,7 @@ var ParticleFX = (function () {
 
     // Stagger bursts over the first 60% of duration
     for (var b = 0; b < burstCount; b++) {
-      (function (burstIdx) {
+      (function (burstIdx, _useSpr) {
         setTimeout(function () {
           var bx = x + _randRange(-width / 2, width / 2);
           burst(bx, y, {
@@ -308,10 +358,12 @@ var ParticleFX = (function () {
             gravity: 0.15,
             spread: Math.PI * 0.6,
             angle: -Math.PI / 2,
-            size: 16,
+            size: _useSpr ? 22 : 16,
             fadeOut: true,
             friction: 0.008,
-            spin: 0.12
+            spin: _useSpr ? 0 : 0.12,
+            spriteSheet: _useSpr ? 'coin' : null,
+            frameInterval: 4
           });
 
           // Sparkle trail
@@ -325,7 +377,7 @@ var ParticleFX = (function () {
             fadeOut: true
           });
         }, burstIdx * (duration * 0.6 / burstCount));
-      })(b);
+      })(b, useCoinSprite);
     }
 
     // Counter tick-up animation

@@ -590,7 +590,7 @@ var EnemySprites = (function () {
       head: '🤖', torso: '🗿', legs: '🦿',
       torsoMods: [{ emoji: '⚙️', scale: 0.2, offsetX: 0.3, offsetY: 0.0 }],
       tintHue: SUIT_TINT.spade,
-      corpse: '🪨'
+      corpse: '⬛'
     });
 
     // ENM-012  Slag Hound  ♦ — fast forge creature
@@ -624,7 +624,7 @@ var EnemySprites = (function () {
       frontWeapon: '🔨', frontWeaponScale: 0.65,
       torsoMods: [{ emoji: '⚙️', scale: 0.18, offsetX: 0.3, offsetY: 0.1 }],
       tintHue: SUIT_TINT.spade,
-      corpse: '🪨'
+      corpse: '⬛'
     });
 
     // ENM-016  Smelt Master  ♦ — elite foreman
@@ -679,7 +679,7 @@ var EnemySprites = (function () {
     // ENM-023  Deep Crawler  ♠ — high HP brute
     registerStack('deep_crawler', {
       head: '🦀', torso: '', legs: '',
-      headMods: [{ emoji: '🫧', scale: 0.18, offsetX: -0.3, offsetY: 0.1 }],
+      headMods: [{ emoji: '💧', scale: 0.18, offsetX: -0.3, offsetY: 0.1 }],
       tintHue: SUIT_TINT.spade,
       corpse: '🦴'
     });
@@ -694,7 +694,7 @@ var EnemySprites = (function () {
 
     // ENM-025  Bio-Hazard Slime  ♣ — non-lethal organic
     registerStack('bio_hazard_slime', {
-      head: '', torso: '🫧', legs: '',
+      head: '', torso: '💧', legs: '',
       torsoMods: [{ emoji: '💧', scale: 0.22, offsetX: 0.3, offsetY: -0.15 }],
       tintHue: SUIT_TINT.club,
       corpse: '💧'

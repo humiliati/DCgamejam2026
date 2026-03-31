@@ -370,7 +370,7 @@ var EnemyAI = (function () {
     { name: 'Soot Imp',         emoji: '👺', hp: 3, str: 1, dex: 3, suit: 'diamond' },
     { name: 'Scrap Brute',      emoji: '🦾', hp: 8, str: 3, dex: 1, suit: 'spade' },
     { name: 'Mold Wraith',      emoji: '👻', hp: 3, str: 2, dex: 4, suit: 'club' },
-    { name: 'Bio-Hazard Slime', emoji: '🫧', hp: 6, str: 1, dex: 0, suit: 'club' },
+    { name: 'Bio-Hazard Slime', emoji: '💧', hp: 6, str: 1, dex: 0, suit: 'club' },
     { name: 'Wandering Vendor', emoji: '🛒', hp: 5, str: 3, dex: 2, suit: 'spade' }
   ];
 

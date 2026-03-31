@@ -26,7 +26,7 @@ var Salvage = (function () {
   var PARTS = [
     { id: 'scale',   name: 'Dragon Scale',    emoji: '🐉', baseValue: 3, tags: ['dragon', 'organic'] },
     { id: 'bone',    name: 'Monster Bone',     emoji: '🦴', baseValue: 2, tags: ['organic', 'common'] },
-    { id: 'organ',   name: 'Vital Organ',      emoji: '🫀', baseValue: 4, tags: ['organic', 'rare'] },
+    { id: 'organ',   name: 'Vital Organ',      emoji: '❤️', baseValue: 4, tags: ['organic', 'rare'] },
     { id: 'scrap',   name: 'Metal Scrap',      emoji: '⚙️', baseValue: 2, tags: ['metal', 'common'] },
     { id: 'crystal', name: 'Data Crystal',     emoji: '💎', baseValue: 5, tags: ['arcane', 'rare'] },
     { id: 'ichor',   name: 'Monster Ichor',    emoji: '🧪', baseValue: 3, tags: ['organic', 'arcane'] },

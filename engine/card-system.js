@@ -111,7 +111,7 @@ var CardSystem = (function () {
         cost: { type: 'free', value: 0 }, effects: [{ type: 'defense', value: 2, target: 'self' }],
         synergyTags: ['defensive', 'spade'], shopPool: [], biomeDrops: [], dropTier: 0,
         starterDeck: true, description: 'Gain 2 defense.' },
-      { id: 'ACT-003', name: 'Bandage', emoji: '🩹',  suit: 'heart', rarity: 'common',
+      { id: 'ACT-003', name: 'Bandage', emoji: '💊',  suit: 'heart', rarity: 'common',
         cost: { type: 'free', value: 0 }, effects: [{ type: 'hot', value: 1, ticks: 3, target: 'self' }],
         synergyTags: ['medical', 'heart'], shopPool: [], biomeDrops: [], dropTier: 0,
         starterDeck: true, description: 'Heal 1 HP for 3 moves.' },

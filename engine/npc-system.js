@@ -1131,7 +1131,7 @@ var NpcSystem = (function () {
         type:         TYPES.INTERACTIVE,
         x: 6, y: 6,
         facing:       'south',
-        emoji:        '🫡',
+        emoji:        '🎖️',
         name:         'The Watchman',
         talkable:     true,
         patrolPoints: null,  // Stationary — on watch

@@ -82,6 +82,7 @@ var Game = (function () {
     LootTables.init();   // Sync-load data/loot-tables.json before floor gen
     TextureAtlas.init();
     UISprites.init();
+    if (typeof SpriteSheet !== 'undefined') SpriteSheet.preloadAll();
     if (typeof DoorAnimator !== 'undefined') DoorAnimator.init();
     Skybox.init();
     Raycaster.init(_canvas);
