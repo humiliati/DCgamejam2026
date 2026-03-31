@@ -184,20 +184,99 @@ var MenuFaces = (function () {
   }
 
   function _renderMinimap(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face0', 'MAP'), '🗺️');
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face0', 'MAP'), '\uD83D\uDDFA\uFE0F');
 
-    // Minimap.renderToCanvas() hook — placeholder until Minimap exposes it
-    ctx.fillStyle = COL.dim;
+    // ── Floor label + depth info ──
+    var floorId = FloorManager.getFloor();
+    var floorLabel = FloorManager.getFloorLabel();
+    var depth = floorId ? floorId.split('.').length : 1;
+    var depthNames = ['', 'Surface', 'Interior', 'Dungeon'];
+    var depthName = depthNames[Math.min(depth, 3)] || 'Deep';
+
+    ctx.fillStyle = COL.text;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('menu.minimap_placeholder', 'Minimap — Floor ' + FloorManager.getFloor()),
-                 x + w / 2, ty + 40);
-
-    // Floor info
-    ctx.fillStyle = COL.text;
-    ctx.fillText(FloorManager.getFloorLabel(), x + w / 2, ty + 60);
+    ctx.fillText(floorLabel, x + w / 2, ty + 4);
     ctx.fillStyle = COL.dim;
-    ctx.fillText('Depth: ' + FloorManager.getFloor(), x + w / 2, ty + 78);
+    ctx.font = '9px monospace';
+    ctx.fillText(depthName + ' \u2014 ' + floorId, x + w / 2, ty + 16);
+    ty += 24;
+
+    // ── Minimap canvas (live from Minimap module) ──
+    var mapCanvas = (typeof Minimap !== 'undefined' && Minimap.getCanvas)
+      ? Minimap.getCanvas() : null;
+
+    if (mapCanvas && mapCanvas.width > 0) {
+      var mapSize = Math.min(w - 16, h - (ty - y) - 50);
+      if (mapSize < 40) mapSize = 40;
+      var mapX = x + (w - mapSize) / 2;
+      var mapY = ty;
+
+      // Frame border (parchment feel)
+      ctx.fillStyle = 'rgba(60,50,35,0.7)';
+      _roundRectFill(ctx, mapX - 4, mapY - 4, mapSize + 8, mapSize + 8, 6);
+      ctx.strokeStyle = 'rgba(180,160,120,0.5)';
+      ctx.lineWidth = 1.5;
+      _roundRectStroke(ctx, mapX - 4, mapY - 4, mapSize + 8, mapSize + 8, 6);
+
+      // Inner bevel
+      ctx.strokeStyle = 'rgba(100,90,60,0.4)';
+      ctx.lineWidth = 1;
+      _roundRectStroke(ctx, mapX - 1, mapY - 1, mapSize + 2, mapSize + 2, 4);
+
+      // Draw the minimap canvas scaled into the frame
+      ctx.drawImage(mapCanvas, 0, 0, mapCanvas.width, mapCanvas.height,
+                    mapX, mapY, mapSize, mapSize);
+
+      // Corner pips (compass decoration)
+      ctx.fillStyle = 'rgba(180,160,120,0.6)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('N', mapX + mapSize / 2, mapY - 6);
+      ctx.fillText('S', mapX + mapSize / 2, mapY + mapSize + 10);
+      ctx.textAlign = 'left';
+      ctx.fillText('W', mapX - 12, mapY + mapSize / 2 + 3);
+      ctx.textAlign = 'right';
+      ctx.fillText('E', mapX + mapSize + 12, mapY + mapSize / 2 + 3);
+
+      ty = mapY + mapSize + 14;
+    } else {
+      ctx.fillStyle = COL.dim;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Map not available', x + w / 2, ty + 30);
+      ty += 50;
+    }
+
+    // ── Floor stack breadcrumb ──
+    if (typeof Minimap !== 'undefined' && Minimap.getFloorStack) {
+      var stack = Minimap.getFloorStack();
+      if (stack && stack.length > 1) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        var breadcrumb = stack.join(' \u25B8 ');
+        ctx.fillText(breadcrumb, x + w / 2, ty);
+        ty += 14;
+      }
+    }
+
+    // ── Time display (clock frozen while paused) ──
+    if (typeof DayCycle !== 'undefined') {
+      ctx.fillStyle = COL.accent;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      var timeStr = DayCycle.getTimeString();
+      var phase = DayCycle.getPhase ? DayCycle.getPhase() : '';
+      ctx.fillText('\u23F8 ' + timeStr + (phase ? ' \u2014 ' + phase : ''), x + w / 2, ty);
+    }
+
+    // ── Hint ──
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
+    ctx.textAlign = 'left';
   }
 
   function _renderBonfireRest(ctx, x, y, w, h) {
@@ -253,8 +332,42 @@ var MenuFaces = (function () {
     ctx.fillText(FloorManager.getFloorLabel() + ' — ' + FloorManager.getCurrentFloorId(),
                  x + w / 2, ty + 10);
 
+    // ── Warp button (exterior → home, dungeon → entrance) ──
+    var floorId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+    var depth = floorId.split('.').length;
+    var warpTarget = null;
+    var warpLabel  = '';
+    if (depth === 1 && floorId !== '0') {
+      // Exterior (not tutorial) → warp home
+      warpTarget = '1.6';
+      warpLabel  = '\uD83C\uDFE0 ' + i18n.t('bonfire.warp_home', 'Warp Home');
+    } else if (depth >= 3) {
+      // Dungeon → warp to parent interior (dungeon entrance building)
+      warpTarget = (typeof FloorManager !== 'undefined') ? FloorManager.parentId(floorId) : null;
+      warpLabel  = '\uD83D\uDD3C ' + i18n.t('bonfire.warp_entrance', 'Warp to Entrance');
+    }
+
+    if (warpTarget) {
+      ty += 26;
+      var btnW = Math.min(w - 20, 160);
+      var btnH = 24;
+      var btnX = x + (w - btnW) / 2;
+      var isHov = (_hoverSlot === 900);
+      ctx.fillStyle = isHov ? 'rgba(100,180,255,0.2)' : 'rgba(60,120,200,0.1)';
+      _roundRectFill(ctx, btnX, ty, btnW, btnH, 4);
+      ctx.strokeStyle = isHov ? '#88ccff' : 'rgba(100,160,255,0.4)';
+      ctx.lineWidth = isHov ? 2 : 1;
+      _roundRectStroke(ctx, btnX, ty, btnW, btnH, 4);
+      ctx.fillStyle = isHov ? '#bbddff' : 'rgba(160,200,255,0.8)';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(warpLabel, x + w / 2, ty + 16);
+      _hitZones.push({ x: btnX, y: ty, w: btnW, h: btnH, slot: 900, action: 'warp', warpTarget: warpTarget });
+      ty += btnH;
+    }
+
     // Hint
-    ty += 30;
+    ty += 16;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '10px monospace';
     ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
@@ -651,10 +764,148 @@ var MenuFaces = (function () {
 
   function _renderJournal(ctx, x, y, w, h) {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '\uD83D\uDCD6');
+
+    // ── Section 1: Operative dossier (class, callsign, status) ──
+    var ps = (typeof Player !== 'undefined') ? Player.state() : {};
+    var callsign = ps.callsign || 'Gleaner';
+    var className = ps.className || 'Operative';
+    var classEmoji = ps.classEmoji || '\uD83D\uDD27';
+
+    ctx.fillStyle = COL.accent;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(classEmoji + ' ' + callsign, x + 8, ty + 4);
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(className, x + w - 8, ty + 4);
+    ty += 14;
+
+    // ── Active status effects (detailed view) ──
+    if (typeof StatusEffect !== 'undefined') {
+      var active = StatusEffect.getActive();
+      if (active.length > 0) {
+        ctx.fillStyle = COL.divider;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 8, ty); ctx.lineTo(x + w - 8, ty);
+        ctx.stroke();
+        ty += 6;
+
+        ctx.fillStyle = COL.dim;
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('STATUS', x + 8, ty + 6);
+        ty += 12;
+
+        for (var si = 0; si < active.length && si < 4; si++) {
+          var eff = active[si];
+          var isBuff = !eff.debuff;
+          ctx.fillStyle = isBuff ? 'rgba(80,220,120,0.9)' : 'rgba(220,100,80,0.9)';
+          ctx.font = '10px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText((eff.emoji || '\u2B50') + ' ' + (eff.label || eff.id), x + 10, ty + 4);
+          ctx.fillStyle = COL.dim;
+          ctx.font = '9px monospace';
+          ctx.textAlign = 'right';
+          var durText = eff.duration === 'permanent' ? 'permanent'
+            : (typeof eff.duration === 'number' ? eff.duration + 'd' : String(eff.duration || ''));
+          ctx.fillText(durText, x + w - 8, ty + 4);
+          ty += 14;
+        }
+      }
+    }
+    ty += 4;
+
+    // ── Section 2: Books read (thumbnail grid) ──
+    ctx.fillStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, ty); ctx.lineTo(x + w - 8, ty);
+    ctx.stroke();
+    ty += 8;
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('BOOKS', x + 8, ty + 6);
+
+    var catalog = (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.getCatalog)
+      ? BookshelfPeek.getCatalog() : [];
+    var readBooks = [];
+    for (var bi = 0; bi < catalog.length; bi++) {
+      if (typeof Player !== 'undefined' && Player.hasFlag('book_read_' + catalog[bi].id)) {
+        readBooks.push(catalog[bi]);
+      }
+    }
+
+    ctx.textAlign = 'right';
+    ctx.fillText(readBooks.length + '/' + catalog.length, x + w - 8, ty + 6);
+    ty += 14;
+
+    if (readBooks.length === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('No books read yet. Find a bookshelf!', x + w / 2, ty + 10);
+    } else {
+      // Thumbnail grid — 5 across
+      var thumbS = Math.min(36, Math.floor((w - 24) / 5 - 4));
+      var thumbGap = 4;
+      var thumbPerRow = Math.floor((w - 16) / (thumbS + thumbGap));
+      if (thumbPerRow < 1) thumbPerRow = 1;
+      var maxVisible = Math.min(readBooks.length, thumbPerRow * 3);
+
+      for (var rb = 0; rb < maxVisible; rb++) {
+        var bk = readBooks[rb];
+        var col2 = rb % thumbPerRow;
+        var row2 = Math.floor(rb / thumbPerRow);
+        var bx = x + 8 + col2 * (thumbS + thumbGap);
+        var by = ty + row2 * (thumbS + thumbGap);
+        var bHov = (_hoverSlot === (900 + rb));
+
+        // Book tile background
+        ctx.fillStyle = bHov ? 'rgba(180,160,100,0.2)' : 'rgba(60,50,35,0.5)';
+        _roundRectFill(ctx, bx, by, thumbS, thumbS, 3);
+        ctx.strokeStyle = bHov ? COL.accent : 'rgba(180,160,120,0.3)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, bx, by, thumbS, thumbS, 3);
+
+        // Book emoji
+        ctx.font = (thumbS > 30 ? '18' : '14') + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(bk.emoji || '\uD83D\uDCD6', bx + thumbS / 2, by + thumbS / 2 + 4);
+
+        // Hit zone for re-reading
+        _hitZones.push({ x: bx, y: by, w: thumbS, h: thumbS, slot: 900 + rb, action: 'read_book' });
+
+        // Hover detail
+        if (bHov) {
+          _hoverDetail = { item: { name: bk.title || bk.id, emoji: bk.emoji || '\uD83D\uDCD6',
+            description: bk.category || '' }, x: bx + thumbS, y: by };
+        }
+      }
+
+      if (readBooks.length > maxVisible) {
+        var moreY = ty + Math.ceil(maxVisible / thumbPerRow) * (thumbS + thumbGap);
+        ctx.fillStyle = COL.dim;
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('+' + (readBooks.length - maxVisible) + ' more', x + w / 2, moreY + 4);
+      }
+    }
+
+    // ── Day/session stats ──
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('menu.journal_placeholder', 'No entries yet.'), x + w / 2, ty + 30);
+    if (typeof DayCycle !== 'undefined') {
+      ctx.fillText('Day ' + (DayCycle.getDay() + 1) + '  \u2022  ' + DayCycle.getTimeString(),
+                   x + w / 2, y + h - 18);
+    }
+    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
+    ctx.textAlign = 'left';
   }
 
   /**
@@ -1761,7 +2012,7 @@ var MenuFaces = (function () {
     }
 
     // ── Language ──────────────────────────────────────────────────
-    var langY = ty2 + _SLIDER_DEFS.length * rowH + 8;
+    var langY = ty2 + _SLIDER_DEFS.length * rowH + 4;
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1775,21 +2026,82 @@ var MenuFaces = (function () {
     ctx.fillText(
       i18n.t('settings.language', 'Language') + ':  ' +
       i18n.t('settings.lang_en', 'English'),
-      listX + 12, langY + 10
+      listX + 12, langY + 8
     );
 
+    // ── Toggle settings ───────────────────────────────────────────
+    var toggleY = langY + 22;
+    var toggleDefs = [
+      { label: 'Screen Shake', key: 'screenShake', default: true },
+      { label: 'Show FPS', key: 'showFps', default: false },
+      { label: 'Minimap Visible', key: 'minimapVisible', default: true }
+    ];
+
+    for (var ti = 0; ti < toggleDefs.length; ti++) {
+      var td = toggleDefs[ti];
+      var togY = toggleY + ti * 16;
+      var togVal = _settingsState[td.key] !== undefined ? _settingsState[td.key] : td.default;
+      var togSelected = (_settingsState.row === _SLIDER_DEFS.length + ti);
+
+      if (togSelected) {
+        ctx.fillStyle = 'rgba(240,208,112,0.08)';
+        ctx.fillRect(x + 6, togY - 2, w - 12, 14);
+      }
+
+      ctx.fillStyle = togSelected ? COL.accent : COL.dim;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + 12, togY + 8);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = togVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
+      ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + 6, togY + 8);
+    }
+
+    // ── Controls reference ────────────────────────────────────────
+    var ctrlY = toggleY + toggleDefs.length * 16 + 8;
+    ctx.strokeStyle = COL.divider;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, ctrlY - 4);
+    ctx.lineTo(x + w - 10, ctrlY - 4);
+    ctx.stroke();
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('CONTROLS', listX + 12, ctrlY + 6);
+    ctrlY += 12;
+
+    var controls = [
+      ['WASD / Arrows', 'Move & Turn'],
+      ['F / Space', 'Interact'],
+      ['Q / E', 'Browse panes'],
+      ['ESC', 'Pause / Resume'],
+      ['1-5', 'Quick-select']
+    ];
+
+    ctx.font = '8px monospace';
+    for (var ci = 0; ci < controls.length; ci++) {
+      var cY = ctrlY + ci * 11;
+      ctx.fillStyle = 'rgba(240,208,112,0.6)';
+      ctx.textAlign = 'left';
+      ctx.fillText(controls[ci][0], listX + 12, cY + 4);
+      ctx.fillStyle = COL.dim;
+      ctx.textAlign = 'right';
+      ctx.fillText(controls[ci][1], listX + trackW + 6, cY + 4);
+    }
+
     // ── Navigation hint ───────────────────────────────────────────
-    var navHintY = langY + 24;
+    var navHintY = ctrlY + controls.length * 11 + 8;
     ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.font = '9px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(
-      i18n.t('settings.nav_hint', 'W/S  select   ←/→  adjust   Q/E  leave'),
+      i18n.t('settings.nav_hint', 'W/S  select   \u2190/\u2192  adjust   Q/E  leave'),
       x + w / 2, navHintY
     );
 
     // ── Exit options ──────────────────────────────────────────────
-    var exitY = navHintY + 20;
+    var exitY = navHintY + 16;
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
     ctx.moveTo(x + 10, exitY - 4);
@@ -1978,11 +2290,16 @@ var MenuFaces = (function () {
           onDrop: function (p) {
             if (!p || !p.data) return false;
             var item2 = p.data;
+            // Safety: if slot has an item and bag is full, reject the drop
+            var prev = Player.getEquipped()[slotIdx];
+            if (prev && Player.getBag().length >= (Player.MAX_BAG || 12)) {
+              if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDF92 Bag full \u2014 unequip something first', 'warning');
+              return false;
+            }
             // Remove from source
             if (p.zone === 'bag') Player.removeFromBag(item2.id);
             else if (p.zone === 'stash' && Player.removeFromStash) Player.removeFromStash(item2.id);
             // Swap: put existing back to bag
-            var prev = Player.getEquipped()[slotIdx];
             if (prev) Player.addToBag(prev);
             Player.equipDirect(slotIdx, item2);
             _refreshAfterDrag();
@@ -2418,6 +2735,11 @@ var MenuFaces = (function () {
     scrollBag:            scrollBag,
     scrollDeck:           scrollDeck,
     scrollFocused:        scrollFocused,
-    toggleInvFocus:       toggleInvFocus
+    toggleInvFocus:       toggleInvFocus,
+
+    // Incinerator state getters
+    getInvFocus:          function () { return _invFocus; },
+    getBagOffset:         function () { return _bagOffset; },
+    getDeckOffset:        function () { return _deckOffset; }
   };
 })();

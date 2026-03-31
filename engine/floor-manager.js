@@ -282,12 +282,14 @@ var FloorManager = (function () {
             10: 'stone_rough',      // PILLAR — mailbox post
             25: 'wood_dark',        // BOOKSHELF — dark wood shelves
             27: 'bed_quilt',        // BED — quilted blanket
-            28: 'table_wood'        // TABLE — work surface
+            28: 'table_wood',       // TABLE — work surface
+            29: 'hearth_riverrock'  // HEARTH — riverrock fireplace
           }),
           tileWallHeights: Object.freeze({
             10: 1.0,               // PILLAR/mailbox — half-height post
             27: 0.6,               // BED — low, player sees over it
-            28: 0.7                 // TABLE — half-height surface
+            28: 0.7,               // TABLE — half-height surface
+            29: 1.6                 // HEARTH — taller than player, shorter than walls
           }),
           floorTexture: 'floor_wood'
         };
@@ -296,8 +298,10 @@ var FloorManager = (function () {
         return {
           textures: Object.freeze({
             1: 'stone_rough', 2: 'door_cellar', 3: 'door_cellar', 4: 'door_cellar',
-            5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron'
+            5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
+            29: 'hearth_riverrock'   // HEARTH — dungeon rest point
           }),
+          tileWallHeights: Object.freeze({ 29: 1.0 }),  // Shorter hearth in dungeons
           floorTexture: 'floor_dirt'
         };
       case 'foundry':
@@ -305,8 +309,10 @@ var FloorManager = (function () {
         return {
           textures: Object.freeze({
             1: 'metal_plate', 2: 'door_foundry', 3: 'door_foundry', 4: 'door_foundry',
-            5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron'
+            5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
+            29: 'hearth_riverrock'   // HEARTH — dungeon rest point
           }),
+          tileWallHeights: Object.freeze({ 29: 1.0 }),
           floorTexture: 'floor_dirt',
           fogColor: { r: 12, g: 6, b: 3 },    // Warm furnace tint
           stepColor: '#1a1210'
@@ -322,8 +328,10 @@ var FloorManager = (function () {
             5:  'stairs_down',     // STAIRS_DN
             6:  'stairs_up',       // STAIRS_UP
             10: 'porthole_wall',   // PILLAR — porthole windows (animated ocean)
-            14: 'door_iron'        // BOSS_DOOR
+            14: 'door_iron',       // BOSS_DOOR
+            29: 'hearth_riverrock' // HEARTH — dungeon rest point
           }),
+          tileWallHeights: Object.freeze({ 29: 1.0 }),
           floorTexture: 'floor_tile',
           fogColor: { r: 2, g: 5, b: 12 },    // Cold fluorescent tint
           stepColor: '#0a1018'
@@ -433,7 +441,8 @@ var FloorManager = (function () {
             7:  -0.08,   // CHEST (stash) — sunken into floor alcove
             10: 1.0,     // PILLAR (mailbox post) — half-height post
             27: -0.15,   // BED — low to the ground, player looks down at it
-            28: -0.10    // TABLE — half-height work surface
+            28: -0.10,   // TABLE — half-height work surface
+            29:  0.0     // HEARTH — flush with floor (natural stone base)
           })
         }, biomeTextures));
       }
@@ -725,7 +734,7 @@ var FloorManager = (function () {
     [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 4  bedroom open  | living open | storage open
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,28,28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 5  ←doorway      | TABLE pair  | doorway→
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 1], // 6  bedroom open  | living open | PILLAR (mailbox)
-    [ 1, 0, 0, 0,28, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 7  nightstand    | living open | storage open
+    [ 1, 0, 0, 0,28, 0, 1, 0, 0, 0, 0,29, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 7  nightstand    | HEARTH(11,7)| storage open
     [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,25, 0, 0, 1], // 8  bedroom floor | living open | storage shelf
     [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], // 9  bedroom wall  | living mid  | storage wall
     [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,10, 0, 0,10, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //10               | hall pillars |

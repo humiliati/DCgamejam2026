@@ -129,6 +129,95 @@ var HUD = (function () {
     _updateBatteryPips(player || ((typeof Player !== 'undefined') ? Player.state() : {}));
   }
 
+  // ── C2: Readiness HUD bar (canvas-rendered) ──────────────────────
+  // Rendered on dungeon floors (depth ≥ 3) showing floor readiness %.
+  // Small bar in the upper-right corner of the viewport.
+
+  var _readinessBarW     = 120;
+  var _readinessBarH     = 12;
+  var _readinessBarPad   = 12;
+  var _readinessBarY     = 10;
+
+  /**
+   * Render the readiness progress bar on the canvas.
+   * Only shows on dungeon floors (depth ≥ 3) with an active work order.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} vpW - Viewport width
+   * @param {number} vpH - Viewport height
+   * @param {string} floorId - Current floor ID
+   */
+  function renderReadinessBar(ctx, vpW, vpH, floorId) {
+    if (!floorId) return;
+    var depth = floorId.split('.').length;
+    if (depth < 3) return;
+
+    // Get readiness score
+    var score = 0;
+    var target = 0.6;
+    var hasOrder = false;
+
+    if (typeof WorkOrderSystem !== 'undefined') {
+      var progress = WorkOrderSystem.getProgress(floorId);
+      if (progress) {
+        score = progress.score;
+        target = progress.target;
+        hasOrder = true;
+      }
+    }
+
+    if (!hasOrder && typeof ReadinessCalc !== 'undefined') {
+      score = ReadinessCalc.getScore(floorId);
+    }
+
+    var pct = Math.min(1, Math.max(0, score));
+    var barX = vpW - _readinessBarW - _readinessBarPad;
+    var barY = _readinessBarY;
+
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+
+    // Background
+    ctx.fillStyle = 'rgba(10,8,18,0.7)';
+    ctx.fillRect(barX - 2, barY - 2, _readinessBarW + 4, _readinessBarH + 4);
+
+    // Empty track
+    ctx.fillStyle = 'rgba(60,55,50,0.8)';
+    ctx.fillRect(barX, barY, _readinessBarW, _readinessBarH);
+
+    // Filled bar — color shifts green as score rises
+    var fillW = Math.round(pct * _readinessBarW);
+    var barColor = pct >= target ? '#4caf50' : pct >= 0.4 ? '#ff9800' : '#f44336';
+    ctx.fillStyle = barColor;
+    ctx.fillRect(barX, barY, fillW, _readinessBarH);
+
+    // Target marker line
+    if (hasOrder) {
+      var targetX = barX + Math.round(target * _readinessBarW);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(targetX, barY - 1);
+      ctx.lineTo(targetX, barY + _readinessBarH + 1);
+      ctx.stroke();
+    }
+
+    // Label
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#e0d8c8';
+    ctx.fillText(Math.round(pct * 100) + '%', barX - 6, barY + 1);
+
+    // "READINESS" label
+    ctx.textAlign = 'left';
+    ctx.font = '8px monospace';
+    ctx.fillStyle = 'rgba(200,190,170,0.7)';
+    ctx.fillText('READINESS', barX, barY + _readinessBarH + 4);
+
+    ctx.restore();
+  }
+
   return {
     init: init,
     updatePlayer: updatePlayer,
@@ -139,6 +228,7 @@ var HUD = (function () {
     hideCombat: hideCombat,
     showFloorTransition: showFloorTransition,
     hideFloorTransition: hideFloorTransition,
-    setAdvantage: setAdvantage
+    setAdvantage: setAdvantage,
+    renderReadinessBar: renderReadinessBar
   };
 })();

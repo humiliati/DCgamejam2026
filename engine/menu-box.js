@@ -21,8 +21,9 @@ var MenuBox = (function () {
   // ── Timing constants ────────────────────────────────────────────
   var FOLD_DURATION = 400;      // ms for fold-up / fold-down
   var ROT_SPEED = 0.18;         // degrees per ms during active rotation
-  var SETTLE_DELAY = 1500;      // ms before idle box settles to nearest face
-  var SETTLE_EASE = 0.006;      // ease speed toward snap target per ms
+  var SNAP_DURATION = 280;      // ms for snap-to-face animation (OoT feel)
+  var SETTLE_DELAY = 800;       // ms before idle box settles to nearest face (fallback only)
+  var SETTLE_EASE = 0.008;      // ease speed toward snap target per ms (fallback only)
   var FACE_COUNT = 4;
 
   // ── State ───────────────────────────────────────────────────────
@@ -33,9 +34,16 @@ var MenuBox = (function () {
   var _currentFace = 0;         // 0-3, snapped when settled
   var _settled = true;
   var _idleTime = 0;
-  var _rotDir = 0;              // -1 left, 0 idle, 1 right
+  var _rotDir = 0;              // -1 left, 0 idle, 1 right (legacy continuous)
   var _context = 'pause';       // 'pause' | 'title' | 'bonfire' | 'shop'
   var _startFace = 0;           // Which face to show when opening
+
+  // ── Snap animation state ────────────────────────────────────────
+  var _snapping = false;        // true during snap-to-face animation
+  var _snapFrom = 0;            // starting angle of snap
+  var _snapTo = 0;              // target angle of snap
+  var _snapTimer = 0;           // ms into snap animation
+  var _snapDuration = SNAP_DURATION;
 
   // ── Nav button hit zones (screen-space rects updated each frame) ─
   var NAV_BTN_SIZE = 32;        // px — arrow button touch area
@@ -96,6 +104,8 @@ var MenuBox = (function () {
     _settled = true;
     _idleTime = 0;
     _rotDir = 0;
+    _snapping = false;
+    _snapTimer = 0;
 
     // Capture blurred world snapshot
     _captureBlurSnapshot();
@@ -131,6 +141,55 @@ var MenuBox = (function () {
 
   // ── Rotation ────────────────────────────────────────────────────
 
+  /**
+   * Snap-animate to the next face (left = previous, right = next).
+   * This is the primary rotation API — gives OoT L2/R2 feel.
+   * Each call advances exactly one face with smooth ease-out.
+   */
+  function snapToFace(targetFace) {
+    if (_state !== 'open') return;
+    if (_snapping) {
+      // Already snapping — finish current snap instantly, chain the next
+      _rotAngle = _snapTo;
+    }
+
+    targetFace = ((targetFace % FACE_COUNT) + FACE_COUNT) % FACE_COUNT;
+    var targetAngle = targetFace * 90;
+
+    // Find shortest rotation path
+    var currentNorm = ((_rotAngle % 360) + 360) % 360;
+    var diff = targetAngle - currentNorm;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+
+    _snapFrom = _rotAngle;
+    _snapTo = _rotAngle + diff;
+    _snapTimer = 0;
+    _snapDuration = SNAP_DURATION;
+    _snapping = true;
+    _settled = false;
+    _rotDir = 0;
+    _idleTime = 0;
+
+    // Audio feedback — tactile page-turn
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('page-turn', { volume: 0.4 });
+    }
+  }
+
+  function snapLeft() {
+    if (_state !== 'open') return;
+    var cur = (((Math.round(_rotAngle / 90)) % FACE_COUNT) + FACE_COUNT) % FACE_COUNT;
+    snapToFace((cur + FACE_COUNT - 1) % FACE_COUNT);
+  }
+
+  function snapRight() {
+    if (_state !== 'open') return;
+    var cur = (((Math.round(_rotAngle / 90)) % FACE_COUNT) + FACE_COUNT) % FACE_COUNT;
+    snapToFace((cur + 1) % FACE_COUNT);
+  }
+
+  // Legacy continuous rotation (kept for edge cases / analog stick future)
   function rotateLeft() {
     if (_state !== 'open') return;
     _rotDir = -1;
@@ -243,7 +302,22 @@ var MenuBox = (function () {
 
     // ── Rotation ──
     if (_state === 'open') {
-      if (_rotDir !== 0) {
+      if (_snapping) {
+        // Snap-to-face animation (ease-out cubic)
+        _snapTimer += dt;
+        var t = Math.min(1, _snapTimer / _snapDuration);
+        // Ease-out: 1 - (1-t)^3
+        var eased = 1 - (1 - t) * (1 - t) * (1 - t);
+        _rotAngle = _snapFrom + (_snapTo - _snapFrom) * eased;
+
+        if (t >= 1) {
+          _rotAngle = _snapTo;
+          _snapping = false;
+          _settled = true;
+          _currentFace = (((Math.round(_rotAngle / 90)) % FACE_COUNT) + FACE_COUNT) % FACE_COUNT;
+        }
+      } else if (_rotDir !== 0) {
+        // Legacy continuous rotation (analog stick / held key)
         _rotAngle += _rotDir * ROT_SPEED * dt;
         _settled = false;
         _idleTime = 0;
@@ -580,17 +654,14 @@ var MenuBox = (function () {
   function handlePointerClick() {
     if (_state !== 'open') return false;
 
-    // Nav arrow buttons take priority
+    // Nav arrow buttons take priority — snap to adjacent face
     if (_navHitLeft && _isPointerInRect(_navHitLeft)) {
-      rotateLeft();
-      // Brief rotation pulse — stop after ~90° snap
-      setTimeout(function () { stopRotation(); }, 200);
+      snapLeft();
       return true;
     }
 
     if (_navHitRight && _isPointerInRect(_navHitRight)) {
-      rotateRight();
-      setTimeout(function () { stopRotation(); }, 200);
+      snapRight();
       return true;
     }
 
@@ -642,6 +713,9 @@ var MenuBox = (function () {
     getContext: getContext,
     getCurrentFace: getCurrentFace,
     getRotAngle: getRotAngle,
+    snapToFace: snapToFace,
+    snapLeft: snapLeft,
+    snapRight: snapRight,
     rotateLeft: rotateLeft,
     rotateRight: rotateRight,
     stopRotation: stopRotation,

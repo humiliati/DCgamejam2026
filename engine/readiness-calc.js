@@ -31,7 +31,7 @@ var ReadinessCalc = (function () {
     var crateScore  = 1.0;
     var corpseScore = 1.0;
     var cleanScore  = 1.0;
-    var miscScore   = 1.0;  // Placeholder — traps/puzzles not yet tracked
+    var miscScore   = 1.0;
 
     if (typeof CrateSystem !== 'undefined' && CrateSystem.getReadinessByType) {
       var byType = CrateSystem.getReadinessByType(floorId);
@@ -42,6 +42,19 @@ var ReadinessCalc = (function () {
     if (typeof CleaningSystem !== 'undefined' && CleaningSystem.getReadiness) {
       cleanScore = CleaningSystem.getReadiness(floorId);
     }
+
+    // C7: Trap re-arm readiness + cobweb bonus (misc weight)
+    var trapReady = 1.0;
+    var cobwebBonus = 0;
+    if (typeof TrapRearm !== 'undefined') {
+      trapReady = TrapRearm.getReadiness(floorId);
+    }
+    if (typeof CobwebSystem !== 'undefined') {
+      // Cobweb bonus: each intact cobweb adds up to 0.15 (capped) to misc
+      var cobCount = CobwebSystem.getIntact(floorId).length;
+      cobwebBonus = Math.min(0.15, cobCount * 0.05);
+    }
+    miscScore = Math.min(1.0, trapReady + cobwebBonus);
 
     return crateScore  * W_CRATE +
            corpseScore * W_CORPSE +
@@ -70,6 +83,18 @@ var ReadinessCalc = (function () {
     if (typeof CleaningSystem !== 'undefined' && CleaningSystem.getReadiness) {
       cleanScore = CleaningSystem.getReadiness(floorId);
     }
+
+    // C7: Trap re-arm readiness + cobweb bonus (misc weight)
+    var trapReady = 1.0;
+    var cobwebBonus = 0;
+    if (typeof TrapRearm !== 'undefined') {
+      trapReady = TrapRearm.getReadiness(floorId);
+    }
+    if (typeof CobwebSystem !== 'undefined') {
+      var cobCount = CobwebSystem.getIntact(floorId).length;
+      cobwebBonus = Math.min(0.15, cobCount * 0.05);
+    }
+    miscScore = Math.min(1.0, trapReady + cobwebBonus);
 
     return {
       total:  crateScore * W_CRATE + corpseScore * W_CORPSE + cleanScore * W_CLEAN + miscScore * W_MISC,

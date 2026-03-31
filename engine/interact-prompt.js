@@ -57,6 +57,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
     ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
+    ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
   }
 
   /**
@@ -65,6 +66,11 @@ var InteractPrompt = (function () {
    */
   function check() {
     if (typeof FloorManager === 'undefined') { _visible = false; return; }
+
+    // Yield to CobwebNode's spider-deployment prompt to prevent overlap
+    if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
+      _visible = false; return;
+    }
 
     var floorData = FloorManager.getFloorData();
     if (!floorData) { _visible = false; return; }
@@ -114,6 +120,17 @@ var InteractPrompt = (function () {
         }
       }
       return;
+    }
+
+    // C7: Trap re-arm — consumed trap position (tile is now EMPTY)
+    if (typeof TrapRearm !== 'undefined') {
+      var trFlId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+      if (TrapRearm.canRearm(fx, fy, trFlId)) {
+        _visible = true;
+        _actionText = i18n.t('interact.rearm', 'Re-arm trap');
+        _iconText = '⚙️';
+        return;
+      }
     }
 
     // Blood tile cleaning — walkable tile with blood on it

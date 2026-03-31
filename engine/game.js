@@ -65,6 +65,14 @@ var Game = (function () {
   var _AMBIENT_BARK_MIN_MS   = 18000;
   var _AMBIENT_BARK_RANGE_MS = 10000;
 
+  // ── Sprint 2: Floor transition tracking for DayCycle ──────────────
+  var _previousFloorId = null;
+
+  // ── Curfew exit guard + home door rest state ──────────────────────
+  var _curfewExitConfirmed = false;
+  var _homeDoorRestOffered = false;
+  var _dayCyclePausedBeforeMenu = false;
+
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
@@ -189,52 +197,48 @@ var Game = (function () {
     // value instead of rotating the box (Q/E always rotate in all faces).
     // W / S navigate between sliders when Face 3 is active.
     //
-    // Strafe (Q/E) — rotate box, OR scroll inventory wheel on Face 2.
+    // Strafe (Q/E) — snap to adjacent face, OR scroll inventory wheel on Face 2.
     InputManager.on('strafe_left', function (type) {
-      if (!ScreenManager.isPaused()) return;
+      if (type !== 'press' || !ScreenManager.isPaused()) return;
       // Face 2 (Inventory): Q scrolls focused wheel left
-      if (type === 'press' && MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
+      if (MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
         MenuFaces.scrollFocused(-1);
         return;
       }
-      if (type === 'press') MenuBox.rotateLeft();
-      if (type === 'release') MenuBox.stopRotation();
+      MenuBox.snapLeft();
     });
     InputManager.on('strafe_right', function (type) {
-      if (!ScreenManager.isPaused()) return;
+      if (type !== 'press' || !ScreenManager.isPaused()) return;
       // Face 2 (Inventory): E scrolls focused wheel right
-      if (type === 'press' && MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
+      if (MenuBox.getCurrentFace() === 2 && typeof MenuFaces !== 'undefined') {
         MenuFaces.scrollFocused(+1);
         return;
       }
-      if (type === 'press') MenuBox.rotateRight();
-      if (type === 'release') MenuBox.stopRotation();
+      MenuBox.snapRight();
     });
 
-    // Turn (A/← and D/→) — rotate box OR adjust Face 3 slider.
+    // Turn (A/← and D/→) — snap to adjacent face OR adjust Face 3 slider.
     InputManager.on('turn_left', function (type) {
-      if (!ScreenManager.isPaused()) return;
+      if (type !== 'press' || !ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3) {
         // On settings face: ← decrements the selected slider
-        if (type === 'press' && typeof MenuFaces !== 'undefined') {
+        if (typeof MenuFaces !== 'undefined') {
           MenuFaces.handleSettingsAdjust(-10);
         }
         return; // Never rotate the box from Face 3 via turn keys
       }
-      if (type === 'press') MenuBox.rotateLeft();
-      if (type === 'release') MenuBox.stopRotation();
+      MenuBox.snapLeft();
     });
     InputManager.on('turn_right', function (type) {
-      if (!ScreenManager.isPaused()) return;
+      if (type !== 'press' || !ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3) {
         // On settings face: → increments the selected slider
-        if (type === 'press' && typeof MenuFaces !== 'undefined') {
+        if (typeof MenuFaces !== 'undefined') {
           MenuFaces.handleSettingsAdjust(+10);
         }
         return;
       }
-      if (type === 'press') MenuBox.rotateRight();
-      if (type === 'release') MenuBox.stopRotation();
+      MenuBox.snapRight();
     });
 
     // W / S — navigate between sliders when Face 3 is active.
@@ -347,6 +351,10 @@ var Game = (function () {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(-1);
           } else if (hit.action === 'deck_scroll_right') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(+1);
+          } else if (hit.action === 'incinerator') {
+            _incinerateFromFocus();
+          } else if (hit.action === 'warp' && hit.warpTarget) {
+            _warpToFloor(hit.warpTarget);
           }
         }
         return;
@@ -435,6 +443,12 @@ var Game = (function () {
     }
 
     if (newState === S.PAUSE) {
+      // Freeze DayCycle while paused (save pre-pause state to restore on resume)
+      if (typeof DayCycle !== 'undefined') {
+        _dayCyclePausedBeforeMenu = DayCycle.isPaused();
+        DayCycle.setPaused(true);
+      }
+
       // Open MenuBox with context based on what triggered pause
       var menuContext = _pendingMenuContext || 'pause';
       var startFace = _pendingMenuFace || 0;
@@ -464,6 +478,11 @@ var Game = (function () {
     }
 
     if (oldState === S.PAUSE && newState === S.GAMEPLAY) {
+      // Restore DayCycle to its pre-pause state (respects interior time-freeze)
+      if (typeof DayCycle !== 'undefined') {
+        DayCycle.setPaused(_dayCyclePausedBeforeMenu);
+      }
+
       // MenuBox handles its own fold-down via onClose callback.
       // Only force-close if it's still fully open (not already folding).
       if (MenuBox.isFullyOpen()) MenuBox.close();
@@ -510,6 +529,42 @@ var Game = (function () {
     });
     HazardSystem.clearBonfires();
 
+    // ── Sprint 2: Death → home rescue (replaces bonfire respawn + game over) ──
+    if (HazardSystem.setOnDeathRescue) {
+      HazardSystem.setOnDeathRescue(function (info) {
+        console.log('[Game] Death rescue from ' + info.floorId + ' (depth ' + info.depth + ')');
+
+        // Mirror debuffs into StatusEffect for HUD display
+        if (typeof StatusEffect !== 'undefined') {
+          StatusEffect.apply('GROGGY', 1);
+          StatusEffect.apply('SORE', 1);
+          StatusEffect.apply('HUMILIATED', 1);
+          if (info.depth >= 3) {
+            StatusEffect.apply('SHAKEN', 2);
+          }
+          // Clear TIRED — superseded by worse state
+          StatusEffect.remove('TIRED', 'manual');
+        }
+
+        // Show narrative Toast
+        if (typeof Toast !== 'undefined') {
+          if (info.depth >= 3) {
+            Toast.show('\uD83D\uDECF The heroes carried you home. You owe them one.', 'warning');
+          } else {
+            Toast.show('\uD83D\uDECF You stumbled home battered. Rest up, Gleaner.', 'warning');
+          }
+        }
+
+        // Close any open peek/crate UI before rescue transition
+        if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
+
+        // Transition to home floor after a brief delay (let combat log sink in)
+        setTimeout(function () {
+          FloorTransition.go('1.6', 'retreat');
+        }, 800);
+      });
+    }
+
     // Interact prompt + door/crate/chest/puzzle peek
     InteractPrompt.init();
     if (typeof DoorPeek        !== 'undefined') DoorPeek.init();
@@ -521,6 +576,8 @@ var Game = (function () {
     if (typeof PuzzlePeek    !== 'undefined') PuzzlePeek.init();
     if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
+    if (typeof BedPeek !== 'undefined') BedPeek.init();
+    if (typeof MailboxPeek !== 'undefined') MailboxPeek.init();
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
@@ -528,8 +585,580 @@ var Game = (function () {
     // Load enemy population tables from enemies.json
     if (typeof EnemyAI !== 'undefined' && EnemyAI.loadPopulation) EnemyAI.loadPopulation();
 
+    // StatusEffect system — buff/debuff registry (before DayCycle so callbacks can use it)
+    if (typeof StatusEffect !== 'undefined') StatusEffect.init();
+    if (typeof StatusEffectHUD !== 'undefined') StatusEffectHUD.init();
+
+    // Day/night cycle — game starts at dawn on Hero Day (day 0)
+    if (typeof DayCycle !== 'undefined') {
+      DayCycle.init();
+
+      // Register night-locked buildings (closed at dusk/night, muffled barks)
+      DayCycle.registerNightLock('1.1', { muffledBarkPool: 'muffled.bazaar' });   // Coral Bazaar
+      DayCycle.registerNightLock('1.2', { muffledBarkPool: 'muffled.inn' });      // Driftwood Inn
+      DayCycle.registerNightLock('1.6', { muffledBarkPool: 'muffled.house' });    // Gleaner's Home (late night)
+      DayCycle.registerNightLock('2.1', { muffledBarkPool: 'muffled.guild' });    // Dispatcher's Office
+
+      // Phase change notifications + HUD day counter refresh
+      DayCycle.setOnPhaseChange(function (newPhase, oldPhase) {
+        if (newPhase === 'dusk' && typeof BarkLibrary !== 'undefined') {
+          BarkLibrary.fire('system.curfew_warning');
+        }
+        if (newPhase === 'dawn' && typeof BarkLibrary !== 'undefined') {
+          BarkLibrary.fire('system.new_day');
+        }
+        _updateDayCounter();
+      });
+
+      DayCycle.setOnDayChange(function (newDay) {
+        _updateDayCounter();
+
+        // Tick StatusEffect durations, show expiry/transition Toasts
+        if (typeof StatusEffect !== 'undefined') {
+          var result = StatusEffect.tickDay();
+          for (var ei = 0; ei < result.expired.length; ei++) {
+            var expDef = StatusEffect.getDef(result.expired[ei]);
+            if (expDef && typeof Toast !== 'undefined') {
+              Toast.show(expDef.emoji + ' ' + expDef.label + ' wore off.', 'dim');
+            }
+          }
+          for (var ti = 0; ti < result.transitioned.length; ti++) {
+            var toDef = StatusEffect.getDef(result.transitioned[ti].to);
+            if (toDef && typeof Toast !== 'undefined') {
+              Toast.show(toDef.emoji + ' ' + toDef.label + ' kicked in.', 'warning');
+            }
+          }
+        }
+
+        // Legacy Player.tickDebuffs fallback (for SHAKEN etc. not yet migrated)
+        if (typeof Player !== 'undefined' && Player.tickDebuffs) {
+          Player.tickDebuffs();
+        }
+      });
+
+      // ── Tired trigger at 21:00 — warning + WELL_RESTED→TIRED transition ──
+      DayCycle.setOnTired(function (day) {
+        console.log('[Game] Tired trigger at 21:00 on day ' + day);
+
+        // Transition WELL_RESTED → TIRED (paired effect)
+        if (typeof StatusEffect !== 'undefined') {
+          if (StatusEffect.has('WELL_RESTED')) {
+            StatusEffect.transition('WELL_RESTED');
+          } else {
+            // No WELL_RESTED active — just apply TIRED directly
+            StatusEffect.apply('TIRED');
+          }
+        }
+
+        // Wolf howl SFX (exterior floors) or biome-specific (dungeon)
+        var currentFloor = FloorManager.getFloor();
+        var depth = currentFloor ? currentFloor.split('.').length : 1;
+        if (depth === 1) {
+          AudioSystem.play('wolf-howl', { volume: 0.5 });
+        } else if (depth >= 3) {
+          AudioSystem.play('dungeon-creak', { volume: 0.4 });
+        }
+
+        if (typeof Toast !== 'undefined') {
+          Toast.show('\uD83C\uDF19 Getting late... head home, Gleaner.', 'warning');
+        }
+
+        _updateDayCounter();
+      });
+
+      // ── Curfew collapse at 02:00 — forced home, penalties ──
+      DayCycle.setOnCurfew(function (day) {
+        console.log('[Game] Curfew collapse at 02:00 on day ' + day);
+
+        var currentFloor = FloorManager.getFloor();
+        var depth = currentFloor ? currentFloor.split('.').length : 1;
+
+        // Apply curfew debuffs via StatusEffect
+        if (typeof StatusEffect !== 'undefined') {
+          StatusEffect.apply('GROGGY', 1);
+          StatusEffect.apply('SORE', 1);
+          // Clear TIRED — it's been superseded by worse debuffs
+          StatusEffect.remove('TIRED', 'manual');
+        }
+
+        // Currency penalty (25%)
+        if (typeof Player !== 'undefined') {
+          var penalty = Math.floor(Player.state().currency * 0.25);
+          if (penalty > 0) {
+            Player.state().currency -= penalty;
+            if (typeof Toast !== 'undefined') {
+              Toast.show('\uD83D\uDCB0 -' + penalty + 'g lost in the dark', 'currency');
+            }
+          }
+        }
+
+        // Card confiscation on lethal floors (depth 3+)
+        if (depth >= 3 && typeof CardSystem !== 'undefined') {
+          var hand = CardSystem.getHand();
+          if (hand.length > 0) {
+            var confiscateIdx = Math.floor(Math.random() * hand.length);
+            var taken = CardSystem.playFromHand(confiscateIdx);
+            if (taken && typeof Toast !== 'undefined') {
+              var cardName = taken.name || taken.id || 'a card';
+              Toast.show('\uD83C\uDCCF The hero pocketed your ' + cardName + '. Fair trade for your life.', 'legendary');
+            }
+          }
+        }
+
+        // Show narrative
+        if (typeof Toast !== 'undefined') {
+          if (depth >= 3) {
+            Toast.show('\u2694\uFE0F The hero dragged you out \u2014 you\'re welcome.', 'warning');
+          } else {
+            Toast.show('\uD83C\uDF19 You collapsed in the street...', 'warning');
+          }
+        }
+
+        // Close any open peek/crate UI before curfew transition
+        if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
+
+        // Forced transition to home + sleep
+        setTimeout(function () {
+          if (typeof TransitionFX !== 'undefined') {
+            TransitionFX.begin({
+              type: 'descend',
+              duration: 1200,
+              label: 'Passing out...',
+              onMidpoint: function () {
+                // Advance time to next morning
+                if (typeof DayCycle !== 'undefined') {
+                  DayCycle.setPaused(false);
+                  DayCycle.advanceTime(DayCycle.ADVANCE.REST);
+                }
+                if (typeof Player !== 'undefined') Player.fullRestore();
+                FloorManager.setFloor('1.6');
+                FloorManager.generateCurrentFloor();
+              },
+              onComplete: function () {
+                _updateDayCounter();
+                if (typeof Toast !== 'undefined') {
+                  Toast.show('\u2615 You wake up groggy. Don\'t make a habit of this.', 'info');
+                }
+              }
+            });
+          }
+        }, 600);
+      });
+    }
+
+    // HUD day/cycle counter
+    _initDayCounter();
+
+    // Hero system — abstract Hero Day carnage + scripted encounters
+    if (typeof HeroSystem !== 'undefined') {
+      HeroSystem.init();
+
+      // Wire DayCycle Hero Day callback
+      if (typeof DayCycle !== 'undefined') {
+        DayCycle.setOnHeroDayStart(function (dayNum) {
+          HeroSystem.onHeroDayStart(dayNum);
+        });
+      }
+    }
+
+    // ── BedPeek → overnight hero run → mailbox report pipeline ──
+    if (typeof BedPeek !== 'undefined') {
+      BedPeek.setOnHeroDayRun(function (dayNum) {
+        // Execute overnight hero run and generate mailbox report
+        _executeOvernightHeroRun(dayNum);
+      });
+      BedPeek.setOnWake(function (dayNum) {
+        // Update HUD day counter on wake
+        _updateDayCounter();
+        // Fire Hero Day dawn barks if applicable
+        if (typeof DayCycle !== 'undefined' && DayCycle.isHeroDay()) {
+          if (typeof BarkLibrary !== 'undefined') {
+            setTimeout(function () {
+              BarkLibrary.fire('system.heroday_dawn');
+            }, 800);
+          }
+          if (typeof Toast !== 'undefined') {
+            Toast.show('\u2694\uFE0F HERO DAY \u2014 Heroes are in the dungeons!', 'legendary');
+          }
+        }
+        // Notify if mailbox has unread reports
+        if (typeof MailboxPeek !== 'undefined' && MailboxPeek.hasUnread()) {
+          setTimeout(function () {
+            if (typeof Toast !== 'undefined') {
+              Toast.show('\uD83D\uDCEC You have mail! Check your mailbox.', 'info');
+            }
+          }, 1500);
+        }
+      });
+    }
+
     // NPC system — register built-in populations (bark pools loaded at Layer 5)
     if (typeof NpcSystem !== 'undefined') NpcSystem.init();
+
+    // ── Register NPC dialogue trees (Morrowind-style) ──────────────
+    if (typeof NpcSystem !== 'undefined') {
+      // Ren — veteran Gleaner at Dispatcher's Office (Floor 2.1)
+      NpcSystem.registerTree('dispatch_veteran', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Another new face. You look green. What do you need?',
+            choices: [
+              { label: 'Tips for the dungeon', next: 'tips' },
+              { label: 'What\'s your story?', next: 'backstory' },
+              { label: 'Just passing through', next: null }
+            ]
+          },
+          tips: {
+            text: 'Clean inward from the entrance. Arm traps and webs on your way out. That way you never walk through your own work. Sounds obvious, but you\'d be surprised how many rookies forget.',
+            choices: [
+              { label: 'What about the Hero?', next: 'hero_warn' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          hero_warn: {
+            text: 'Don\'t get in the Hero\'s way. They move fast, hit hard, and they don\'t distinguish between monsters and bystanders. Your job is the mess they leave behind. Nothing more.',
+            choices: [
+              { label: 'That doesn\'t seem right', next: 'doubt' },
+              { label: 'Understood', next: null }
+            ]
+          },
+          doubt: {
+            text: 'Right and wrong don\'t pay the bills, kid. But... yeah. Keep your eyes open down there. Some of us have noticed things that don\'t add up.',
+            choices: [
+              { label: 'Like what?', next: 'conspiracy_hint' },
+              { label: 'I\'ll be careful', next: null }
+            ]
+          },
+          conspiracy_hint: {
+            text: 'The corpses on the deep floors. The way the Hero targets specific chambers. The scale fragments that Foundry buys at premium... Ask yourself who benefits from forty years of hero cycles.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          backstory: {
+            text: 'Twelve years cleaning dungeons. Started same as you — green, underpaid, and convinced the Hero was on our side. Experience teaches you to look closer.',
+            choices: [
+              { label: 'Tips for the dungeon', next: 'tips' },
+              { label: 'Take care', next: null }
+            ]
+          }
+        }
+      });
+
+      // Sable — guild clerk at Dispatcher's Office
+      NpcSystem.registerTree('dispatch_clerk', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Welcome to the Guild office. Need something?',
+            choices: [
+              { label: 'Check contracts', next: 'contracts' },
+              { label: 'Where\'s the supply closet?', next: 'supplies' },
+              { label: 'Who runs this place?', next: 'dispatcher_info' },
+              { label: 'Bye', next: null }
+            ]
+          },
+          contracts: {
+            text: 'Board\'s on the wall. Red pins are overdue, blue are standard, gold are bonus objectives. Readiness targets are listed per floor. Hit the target before hero day or the payout drops.',
+            choices: [
+              { label: 'What\'s the best-paying contract?', next: 'best_contract' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          best_contract: {
+            text: 'Hero\'s Wake cleanup. But nobody wants it — the deep floors are rough and the Hero leaves behind... well. You\'ll see for yourself.',
+            choices: [
+              { label: 'I\'ll take it', next: 'brave' },
+              { label: 'Maybe later', next: null }
+            ]
+          },
+          brave: {
+            text: 'Bold. Check in with the Watchman at Floor 2.2 before heading down. And file your readiness report when you come back up. If you come back up.',
+            choices: [
+              { label: '...cheerful', next: null }
+            ]
+          },
+          supplies: {
+            text: 'Northwest corner. Rags are free, trap kits cost 5g each. Mops and brushes are on the shelf — take what you need. Just sign the ledger.',
+            choices: [
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          dispatcher_info: {
+            text: 'The Dispatcher handles all Gleaner assignments for this district. Former field operative — did twenty years in the deep floors before moving to admin. Don\'t let the desk fool you.',
+            choices: [
+              { label: 'Back', next: 'greeting' }
+            ]
+          }
+        }
+      });
+
+      // Pip — rookie Gleaner
+      NpcSystem.registerTree('dispatch_rookie', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Oh! Hi! You\'re the other new Gleaner, right? I\'m Pip. First week.',
+            choices: [
+              { label: 'How\'s it going?', next: 'howsitgoing' },
+              { label: 'Any advice?', next: 'advice' },
+              { label: 'Good luck', next: null }
+            ]
+          },
+          howsitgoing: {
+            text: 'Honestly? The mop handle has blisters. The food is bad. And the veteran keeps telling me stories about things in the deep floors. But the pay is okay and... I don\'t know, there\'s something satisfying about it.',
+            choices: [
+              { label: 'Something satisfying?', next: 'satisfying' },
+              { label: 'Hang in there', next: null }
+            ]
+          },
+          satisfying: {
+            text: 'Fixing things. Making order out of chaos. The heroes charge through and break everything, and we put it back together. Maybe that\'s more important than anyone gives us credit for.',
+            choices: [
+              { label: 'Maybe it is', next: null }
+            ]
+          },
+          advice: {
+            text: 'I\'ve only been here a week, so take this with a grain of salt — but the old-timers say: don\'t skip the cobweb spots. Even if they seem pointless. The readiness bonus adds up.',
+            choices: [
+              { label: 'Thanks Pip', next: null }
+            ]
+          }
+        }
+      });
+
+      // The Watchman — Floor 2.2 (shaken NPC guarding dungeon entrance)
+      NpcSystem.registerTree('watchpost_watchman', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: '...you here for the Wake? Go ahead. Door\'s open. Just... watch yourself.',
+            choices: [
+              { label: 'What happened down there?', next: 'whathappened' },
+              { label: 'Are you okay?', next: 'okay' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          whathappened: {
+            text: 'The Hero came through. Same as always. But this time... the sounds were different. Not fighting sounds. Something else. Something that stopped. All at once.',
+            choices: [
+              { label: 'Stopped?', next: 'stopped' },
+              { label: 'I\'ll be careful', next: null }
+            ]
+          },
+          stopped: {
+            text: 'The deep floors used to have a... hum. Faint. You get used to it. After the Hero went through, it stopped. First time in the eighteen years I\'ve been posted here.',
+            choices: [
+              { label: 'A hum?', next: 'hum' },
+              { label: '...', next: null }
+            ]
+          },
+          hum: {
+            text: 'Like something breathing. Or singing very quietly. The old records call it the Resonance. I thought it was just the plumbing. Now I\'m not sure.',
+            choices: [
+              { label: 'The Resonance', next: null }
+            ]
+          },
+          okay: {
+            text: 'I\'m fine. Just tired. Eighteen years watching a door. Counting people in, counting them out. The numbers don\'t always match. You learn to stop asking why.',
+            choices: [
+              { label: 'The numbers don\'t match?', next: 'numbers' },
+              { label: 'Take care of yourself', next: null }
+            ]
+          },
+          numbers: {
+            text: 'More go in than come out. That\'s normal — some use the back exits, some get extracted by the Guild. But lately... the margin is wider. And nobody wants to talk about it.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          }
+        }
+      });
+
+      // ── Interior resident dialogue trees ─────────────────────────
+      // "Get out of my house" pattern — annoyed → angry escalation.
+      // Repeated visits push to angrier nodes.
+
+      // Innkeeper Marlo — Driftwood Inn (1.2)
+      NpcSystem.registerTree('inn_keeper', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Welcome to the Driftwood. Room or a meal?',
+            choices: [
+              { label: 'What\'s on the menu?', next: 'menu' },
+              { label: 'A room for the night', next: 'room' },
+              { label: 'Heard any rumors?', next: 'rumors' },
+              { label: 'Just browsing', next: null }
+            ]
+          },
+          menu: {
+            text: 'Seaweed stew, bread, and whatever the Cellar coughed up this morning. The stew is medicinal. The bread is not.',
+            choices: [
+              { label: 'I\'ll have the stew', next: 'buy_stew' },
+              { label: 'No thanks', next: 'greeting' }
+            ]
+          },
+          buy_stew: {
+            text: 'Five gold. Heals what ails you. Mostly.',
+            choices: [
+              { label: 'Buy stew (-5g)', next: 'stew_bought', effect: { currency: -5, heal: 3 } },
+              { label: 'Too rich for me', next: 'greeting' }
+            ]
+          },
+          stew_bought: {
+            text: 'Good choice. Take a seat anywhere — except table three. That\'s reserved for the Hero. Don\'t ask.',
+            choices: [
+              { label: 'Thanks', next: null }
+            ]
+          },
+          room: {
+            text: 'Rooms are upstairs but they\'re booked solid through hero day. Heroes get priority. Gleaners get the cot in the corner if you\'re desperate.',
+            choices: [
+              { label: 'The cot is fine', next: 'cot' },
+              { label: 'Never mind', next: null }
+            ]
+          },
+          cot: {
+            text: 'It\'s three gold for the cot. Blanket\'s extra.',
+            choices: [
+              { label: 'Rest (-3g)', next: 'rested', effect: { currency: -3, heal: 5 } },
+              { label: 'Pass', next: null }
+            ]
+          },
+          rested: {
+            text: 'Sleep well. I\'ll wake you at dawn. Or whenever the Hero starts breaking things, whichever comes first.',
+            choices: [
+              { label: 'Thanks', next: null }
+            ]
+          },
+          rumors: {
+            text: 'Rumors? This is an inn, not a spy network. But since you\'re buying...',
+            choices: [
+              { label: 'I\'m buying', next: 'rumor_detail' },
+              { label: 'Forget it', next: null }
+            ]
+          },
+          rumor_detail: {
+            text: 'The Watchman at 2.2 hasn\'t slept in three days. The Hero this cycle isn\'t normal — goes straight to the deep floors, skips everything above. And someone from the Tide Council was asking about old maps.',
+            choices: [
+              { label: 'Old maps?', next: 'maps' },
+              { label: 'Interesting. Thanks.', next: null }
+            ]
+          },
+          maps: {
+            text: 'Cave system maps from before the Compact. Pre-hero era. I\'m not supposed to know that, and you\'re definitely not supposed to know that. Enjoy your meal.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          }
+        }
+      });
+
+      // Grumpy Patron — "get out" escalation tree
+      NpcSystem.registerTree('inn_patron_grumpy', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'What? I\'m eating. Go clean something.',
+            choices: [
+              { label: 'Sorry to bother you', next: 'apologize' },
+              { label: 'Nice to meet you too', next: 'sarcasm' },
+              { label: 'Leave', next: null }
+            ]
+          },
+          apologize: {
+            text: 'Hmph. You Gleaners are always poking around where you don\'t belong. There\'s nothing here for you. The dungeon is that way.',
+            choices: [
+              { label: 'You seem upset', next: 'upset' },
+              { label: 'Right. Sorry.', next: null }
+            ]
+          },
+          sarcasm: {
+            text: 'Oh, a comedian. Great. Just what this town needs — another wise-guy with a mop. Get lost before I call the Admiralty.',
+            choices: [
+              { label: 'Easy. I\'m going.', next: null },
+              { label: 'What\'s your problem?', next: 'problem' }
+            ]
+          },
+          upset: {
+            text: 'Upset? My cellar is full of hero damage, my walls smell like smoke, and now a stranger is standing over my lunch asking about my feelings. Yes. I\'m upset.',
+            choices: [
+              { label: 'I can help with the cellar', next: 'offer_help' },
+              { label: 'Fair enough', next: null }
+            ]
+          },
+          problem: {
+            text: 'My PROBLEM is that every cycle, heroes smash through this town like it\'s made of cardboard, and the rest of us are supposed to smile and say thank you. Now get out of my face.',
+            choices: [
+              { label: 'You\'re not wrong', next: 'notwrong' },
+              { label: 'Leaving now', next: null }
+            ]
+          },
+          offer_help: {
+            text: '...you can fix cellar damage? Huh. Most Gleaners only work Guild contracts. Maybe you\'re different.',
+            choices: [
+              { label: 'Maybe I am', next: null }
+            ]
+          },
+          notwrong: {
+            text: '...no. I\'m not. But saying it out loud doesn\'t fix anything either. Go on. Do your job. At least someone\'s cleaning up.',
+            choices: [
+              { label: 'Take care', next: null }
+            ]
+          }
+        }
+      });
+
+      // Cellar Owner — Floor 1.3 (nervous, defensive)
+      NpcSystem.registerTree('cellar_resident', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Oh! You startled me. Are you from the Guild? Please tell me you\'re from the Guild.',
+            choices: [
+              { label: 'I\'m a Gleaner, yes', next: 'relief' },
+              { label: 'What\'s wrong?', next: 'whats_wrong' },
+              { label: 'Just passing through', next: 'passing' }
+            ]
+          },
+          relief: {
+            text: 'Thank goodness. The cellar below... something happened. After the last hero party came through. I sealed the door but there are sounds. Please, if you\'re going down, be careful.',
+            choices: [
+              { label: 'What kind of sounds?', next: 'sounds' },
+              { label: 'I\'ll handle it', next: null }
+            ]
+          },
+          whats_wrong: {
+            text: 'The cellar! My cellar! The hero party tore through it like a storm. Traps triggered, walls scorched, crates smashed. And now there are... noises. From below.',
+            choices: [
+              { label: 'I\'ll clean it up', next: 'relief' },
+              { label: 'Noises?', next: 'sounds' }
+            ]
+          },
+          sounds: {
+            text: 'Scraping. Like stone on stone. And sometimes... a low hum. The old folks say the cellars connect to something deeper. Something the Compact was supposed to protect.',
+            choices: [
+              { label: 'The Compact', next: 'compact' },
+              { label: 'I\'ll check it out', next: null }
+            ]
+          },
+          compact: {
+            text: 'The Dragon Compact. Old treaty between the town founders and... well, nobody reads it anymore. The Tide Council has the original. Ask them if you\'re curious. I just want my cellar back.',
+            choices: [
+              { label: 'I\'ll do what I can', next: null }
+            ]
+          },
+          passing: {
+            text: 'Just — please don\'t touch anything. And close the cellar door behind you if you go down. I don\'t want whatever\'s down there coming up here.',
+            choices: [
+              { label: 'Understood', next: null }
+            ]
+          }
+        }
+      });
+    }
 
     // NCH widget (draggable card-hand capsule)
     if (typeof NchWidget !== 'undefined') NchWidget.init();
@@ -558,7 +1187,10 @@ var Game = (function () {
 
     // Floor transition callbacks
     FloorTransition.setCallbacks({
-      onBefore: function () { MC.cancelAll(); },
+      onBefore: function () {
+        MC.cancelAll();
+        _previousFloorId = FloorManager.getFloor();
+      },
       onAfter: function () {
         // Reset per-floor ground items, breakables, and shop cache on every floor change
         WorldItems.init();
@@ -590,6 +1222,16 @@ var Game = (function () {
         _refreshPanels();
         console.log('[Game] Floor transition complete — MC callbacks re-wired, floor ' + FloorManager.getFloor());
 
+        // ── Sprint 2: DayCycle time advancement + interior time-freeze ──
+        if (typeof DayCycle !== 'undefined' && _previousFloorId) {
+          var currentFloor = FloorManager.getFloor();
+          DayCycle.onFloorTransition(_previousFloorId, currentFloor);
+
+          // Interior time-freeze: pause clock on depth-2 floors, resume otherwise
+          var curDepth = currentFloor.split('.').length;
+          DayCycle.setPaused(curDepth === 2);
+        }
+
         // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic)
         _onFloorArrive(FloorManager.getFloor());
       }
@@ -607,6 +1249,10 @@ var Game = (function () {
     // Draw initial card hand
     CardSystem.drawHand();
     HUD.updateCards(CardSystem.getHand());
+    var _initHand = CardSystem.getHand();
+    if (_initHand.length > 0 && typeof Toast !== 'undefined') {
+      Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
+    }
 
     // Start intro auto-walk sequence on Floor 0
     _startIntroWalk();
@@ -619,6 +1265,7 @@ var Game = (function () {
                CombatBridge.isPending() ||
                FloorTransition.isTransitioning() ||
                DialogBox.moveLocked() ||
+               (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive && StatusBar.isDialogueActive()) ||
                (typeof IntroWalk !== 'undefined' && IntroWalk.isActive()) ||
                (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen());
       },
@@ -746,6 +1393,11 @@ var Game = (function () {
   //   - Triggering the key-retrieval flow when player arrives at Floor 1.6
 
   function _onFloorArrive(floorId) {
+    // Interrupt any active tooltip dialogue (floor change = conversation over)
+    if (typeof StatusBar !== 'undefined' && StatusBar.clearDialogue) {
+      StatusBar.clearDialogue();
+    }
+
     // Cancel any running ambient bark timer from the previous floor
     if (_ambientBarkTimer !== null) {
       clearInterval(_ambientBarkTimer);
@@ -758,6 +1410,9 @@ var Game = (function () {
     if (typeof CardSystem !== 'undefined' && depth >= 3) {
       CardSystem.resetDeck();
       CardSystem.drawHand();
+      if (typeof Toast !== 'undefined') {
+        Toast.show('\u267B\uFE0F Deck reshuffled \u2014 drew ' + CardSystem.getHand().length, 'dim');
+      }
     }
 
     // Seed blood splatter from corpse tiles on dungeon floors (depth 3+).
@@ -769,9 +1424,53 @@ var Game = (function () {
       }
     }
 
+    // Clear world-space popups from previous floor
+    if (typeof WorldPopup !== 'undefined') WorldPopup.clear();
+
     // Wire blood floor ID to raycaster so floor tiles render blood tint
     if (typeof Raycaster !== 'undefined' && Raycaster.setBloodFloorId) {
       Raycaster.setBloodFloorId(depth >= 3 ? floorId : null);
+    }
+
+    // C7: Scan trap positions on floor load for re-arm tracking
+    if (typeof TrapRearm !== 'undefined' && depth >= 3) {
+      var trapFd = FloorManager.getFloorData();
+      if (trapFd) TrapRearm.onFloorLoad(floorId, trapFd.grid, trapFd.gridW, trapFd.gridH);
+    }
+
+    // Cobweb system: scan eligible positions on floor load (depth 3+)
+    if (typeof CobwebSystem !== 'undefined' && depth >= 3) {
+      var cobFd = FloorManager.getFloorData();
+      if (cobFd) CobwebSystem.onFloorLoad(cobFd, floorId);
+    }
+
+    // C8: Work order posting and evaluation on floor transitions
+    if (typeof WorkOrderSystem !== 'undefined') {
+      if (depth >= 3) {
+        // Arriving at a dungeon floor — post an order if none active
+        var existingOrder = WorkOrderSystem.getOrder(floorId);
+        if (!existingOrder || existingOrder.status !== 'active') {
+          WorkOrderSystem.postOrders([floorId]);
+          var newOrder = WorkOrderSystem.getOrder(floorId);
+          if (newOrder) {
+            Toast.show('📋 ' + i18n.t('work.order_posted', 'Work order posted') +
+                        ' — ' + Math.round(newOrder.target * 100) + '%', 'info');
+          }
+        }
+      } else if (depth <= 2) {
+        // Returning to surface/interior — evaluate any active dungeon orders
+        var evalResult = WorkOrderSystem.evaluate();
+        if (evalResult.completed.length > 0) {
+          var totalPay = evalResult.totalPayout;
+          Player.addCurrency(totalPay);
+          Toast.show('✅ ' + i18n.t('work.order_complete', 'Order complete!') +
+                      ' +' + totalPay + 'g', 'currency');
+          AudioSystem.play('ui-confirm', { volume: 0.6 });
+        }
+        if (evalResult.failed.length > 0) {
+          Toast.show('❌ ' + i18n.t('work.order_failed', 'Order incomplete'), 'warning');
+        }
+      }
     }
 
     // Clear NpcSystem active list — previous floor's NPC refs are stale
@@ -785,6 +1484,22 @@ var Game = (function () {
         FloorManager.getEnemies(),
         FloorManager.getFloorData().grid
       );
+    }
+
+    // Hero Day carnage — apply abstract hero destruction to dungeon floors
+    if (typeof HeroSystem !== 'undefined') {
+      var fd = FloorManager.getFloorData();
+      var carnage = HeroSystem.applyCarnageIfHeroDay(
+        floorId, fd, FloorManager.getEnemies()
+      );
+      if (carnage) {
+        // Fire post-carnage atmospheric bark
+        if (typeof BarkLibrary !== 'undefined') {
+          setTimeout(function () {
+            BarkLibrary.fire('dungeon.postcarnage');
+          }, carnage.smashed * 1200 + 2000);
+        }
+      }
     }
 
     if (floorId === '1') {
@@ -871,6 +1586,95 @@ var Game = (function () {
   }
 
   /**
+   * Dispatcher gate dialogue — 3-branch Morrowind-style conversation.
+   *
+   * Branch depends on gate state context:
+   *   1. Player hasn't been home yet → "Where's my bunk?" (standard redirect)
+   *   2. Player has keys → "I have the key" (skip fetch, unlock immediately)
+   *   3. Nudge on subsequent bumps → shorter redirect
+   */
+  var _dispatcherDialogShown = false;
+
+  function _showDispatcherGateDialog() {
+    if (typeof DialogBox === 'undefined') return;
+
+    // Build choices based on whether the player knows the route
+    var choices = [];
+    var firstTime = !_dispatcherDialogShown;
+    _dispatcherDialogShown = true;
+
+    if (firstTime) {
+      // First encounter — full introduction
+      DialogBox.show({
+        speaker:  'Dispatcher',
+        portrait: '\uD83D\uDC09',
+        text:     'Hold up, operative. Gate\'s locked till you\'re properly checked in. You need your work keys \u2014 they\'re at your bunk.',
+        choices:  [
+          { label: 'Where\'s my bunk?' },
+          { label: 'I already have the key' },
+          { label: 'I heard it\'s unlocked...' }
+        ],
+        onChoice: function (idx) {
+          if (idx === 0) {
+            // Standard redirect to home
+            DialogBox.show({
+              speaker:  'Dispatcher',
+              portrait: '\uD83D\uDC09',
+              text:     'Floor 1.6 \u2014 head east past the inn, look for the Gleaner\'s mark on the door. Keys are in the chest by the wall. Don\'t take long.',
+              onClose: function () {
+                if (typeof Toast !== 'undefined') {
+                  Toast.show('\uD83D\uDDDD Go home (1.6) and get your work keys', 'info');
+                }
+              }
+            });
+          } else if (idx === 1) {
+            // Skip fetch — unlock immediately if they somehow have the keys
+            // (edge case: they went home first via alternate path)
+            DialogBox.show({
+              speaker:  'Dispatcher',
+              portrait: '\uD83D\uDC09',
+              text:     'Let me see... huh. Right you are. Gate\'s open, Gleaner. Try not to die on your first day.',
+              onClose: function () {
+                _onPickupWorkKeys();
+              }
+            });
+          } else {
+            // Flavor skip — still sends them to get keys, with personality
+            DialogBox.show({
+              speaker:  'Dispatcher',
+              portrait: '\uD83D\uDC09',
+              text:     'Heard wrong. Rules are rules \u2014 no key, no entry. Go grab it from your bunk. East side, past the inn.'
+            });
+          }
+        }
+      });
+    } else {
+      // Return bumps — shorter nudge
+      DialogBox.show({
+        speaker:  'Dispatcher',
+        portrait: '\uD83D\uDC09',
+        text:     'Still here? Your keys are at home \u2014 Floor 1.6, east side. Get moving.',
+        choices:  [
+          { label: 'On my way' },
+          { label: 'Actually, I have them now' }
+        ],
+        onChoice: function (idx) {
+          if (idx === 1) {
+            DialogBox.show({
+              speaker:  'Dispatcher',
+              portrait: '\uD83D\uDC09',
+              text:     'About time. Gate\'s open. Watch yourself down there.',
+              onClose: function () {
+                _onPickupWorkKeys();
+              }
+            });
+          }
+        }
+      });
+    }
+  }
+
+  /**
    * Player has arrived on Floor 1.6 (Gleaner's Home).
    *
    * Fires the home-arrival bark and checks whether the work keys item
@@ -923,6 +1727,263 @@ var Game = (function () {
     console.log('[Game] Work keys collected — dungeon gate unlocked');
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  OVERNIGHT HERO RUN — executes during sleep on Hero Day eve
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Execute the overnight hero run when the player sleeps into a Hero Day.
+   * Uses HeroRun to calculate results, then delivers a report to the mailbox.
+   *
+   * @param {number} dayNum - The day number that is now a Hero Day
+   */
+  function _executeOvernightHeroRun(dayNum) {
+    if (typeof HeroRun === 'undefined') return;
+    if (typeof MailboxPeek === 'undefined') return;
+
+    // Day 0 guard: heroes already ran before the game started.
+    // Pre-existing carnage is baked into initial floor generation.
+    if (dayNum === 0) {
+      console.log('[Game] Day 0 — skipping hero run (pre-existing carnage).');
+      return;
+    }
+
+    // Determine which hero runs today
+    var heroType = HeroRun.getHeroForDay(dayNum);
+
+    // Gather floor readiness data for all known dungeon floors
+    var dungeonFloors = [];
+    var knownDungeons = ['1.3.1', '2.2.1', '2.2.2'];
+    for (var i = 0; i < knownDungeons.length; i++) {
+      var fid = knownDungeons[i];
+      var readiness = 0;
+      var crateCount = 4;     // Default estimates
+      var enemyCount = 3;
+      var trapCount = 2;
+      var puzzleCount = 1;
+
+      // Try to get actual readiness from ReadinessCalc
+      if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getReadiness) {
+        var r = ReadinessCalc.getReadiness(fid);
+        if (r && typeof r.total === 'number') readiness = Math.round(r.total * 100);
+      }
+
+      // Try to get actual counts from cached floor data
+      if (typeof FloorManager !== 'undefined' && FloorManager.getCachedFloorData) {
+        var cached = FloorManager.getCachedFloorData(fid);
+        if (cached && cached.grid) {
+          crateCount = _countTilesOfType(cached.grid, cached.gridW, cached.gridH, TILES.BREAKABLE) || 4;
+          trapCount = _countTilesOfType(cached.grid, cached.gridW, cached.gridH, TILES.TRAP) || 2;
+        }
+        if (cached && cached.enemies) {
+          enemyCount = cached.enemies.length || 3;
+        }
+      }
+
+      // Floor name lookup
+      var floorName = fid;
+      if (typeof i18n !== 'undefined' && i18n.t) {
+        floorName = i18n.t('floor.' + fid, fid);
+      }
+
+      dungeonFloors.push({
+        floorId: fid,
+        name: floorName,
+        readiness: readiness,
+        crateCount: crateCount,
+        enemyCount: enemyCount,
+        trapCount: trapCount,
+        puzzleCount: puzzleCount
+      });
+    }
+
+    // Only run if there are floors with non-zero readiness
+    var hasReadyFloor = false;
+    for (var j = 0; j < dungeonFloors.length; j++) {
+      if (dungeonFloors[j].readiness > 0) { hasReadyFloor = true; break; }
+    }
+
+    if (!hasReadyFloor && dayNum > 0) {
+      // No floors prepared — hero is disappointed
+      MailboxPeek.addReport({
+        day: dayNum,
+        heroType: heroType,
+        heroEmoji: HeroRun.getHeroEmoji(heroType),
+        floors: [],
+        totalPayout: 0,
+        chainBonus: false,
+        cardDrop: null,
+        isDeathReport: false,
+        rescueText: null
+      });
+      console.log('[Game] Hero Day ' + dayNum + ' — no floors ready. Hero disappointed.');
+      return;
+    }
+
+    // Execute the hero run
+    var report = HeroRun.executeRun(heroType, dungeonFloors);
+    report.day = dayNum;
+
+    // Deliver report to mailbox
+    MailboxPeek.addReport(report);
+
+    // Invalidate dungeon floor caches so re-entry shows carnage
+    for (var k = 0; k < knownDungeons.length; k++) {
+      if (typeof FloorManager !== 'undefined' && FloorManager.invalidateCache) {
+        FloorManager.invalidateCache(knownDungeons[k]);
+      }
+    }
+
+    console.log('[Game] Hero Day ' + dayNum + ' — ' + heroType + ' ran. Payout: ' + report.totalPayout + ' coins. Report delivered to mailbox.');
+  }
+
+  /**
+   * Count tiles of a specific type in a grid.
+   */
+  function _countTilesOfType(grid, w, h, tileType) {
+    var count = 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (grid[y] && grid[y][x] === tileType) count++;
+      }
+    }
+    return count;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  HOME DOOR REST (porch shortcut when TIRED)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Rest at the front door of home. Skips entering the house —
+   * player sleeps on the porch at depth-1 (exterior), so the clock
+   * is NOT paused and advanceTime works normally.
+   *
+   * Grants WELL_RESTED if sleeping before 23:00.
+   */
+  function _doHomeDoorRest() {
+    var sleepHour = (typeof DayCycle !== 'undefined') ? DayCycle.getHour() : 0;
+
+    if (typeof TransitionFX !== 'undefined') {
+      TransitionFX.begin({
+        type: 'descend',
+        duration: 1200,
+        label: 'Resting for the night...',
+        onMidpoint: function () {
+          // Advance time to morning
+          if (typeof DayCycle !== 'undefined') {
+            DayCycle.advanceTime(DayCycle.ADVANCE.REST);
+          }
+
+          // Clear TIRED
+          if (typeof StatusEffect !== 'undefined') {
+            StatusEffect.remove('TIRED', 'manual');
+          }
+
+          // Grant WELL_RESTED if slept before 23:00
+          if (sleepHour < 23 && typeof StatusEffect !== 'undefined') {
+            StatusEffect.apply('WELL_RESTED');
+          }
+
+          // Heal + heal particles
+          if (typeof Player !== 'undefined') Player.fullRestore();
+          if (typeof ParticleFX !== 'undefined') {
+            ParticleFX.healPulse(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.5 : 220);
+          }
+
+          // Transition into home (1.6) — wake up inside
+          FloorManager.setFloor('1.6');
+          FloorManager.generateCurrentFloor();
+        },
+        onComplete: function () {
+          _updateDayCounter();
+
+          if (sleepHour < 23 && typeof Toast !== 'undefined') {
+            Toast.show('\u2600 Well rested! Ready for the day.', 'buff');
+          } else if (typeof Toast !== 'undefined') {
+            Toast.show('\u2615 Late night... but at least you made it home.', 'info');
+          }
+
+          // Trigger overnight hero run if it's a Hero Day
+          if (typeof DayCycle !== 'undefined' && DayCycle.isHeroDay()) {
+            _executeOvernightHeroRun(DayCycle.getDay());
+          }
+
+          // Mailbox notification
+          if (typeof MailboxPeek !== 'undefined' && MailboxPeek.hasUnread()) {
+            setTimeout(function () {
+              if (typeof Toast !== 'undefined') {
+                Toast.show('\uD83D\uDCEC You have mail!', 'info');
+              }
+            }, 1500);
+          }
+        }
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  HUD DAY/CYCLE COUNTER
+  // ═══════════════════════════════════════════════════════════════
+
+  var _dayCounterEl = null;
+
+  /**
+   * Create the day counter DOM element (anchored near minimap).
+   */
+  function _initDayCounter() {
+    _dayCounterEl = document.getElementById('hud-day-counter');
+    if (!_dayCounterEl) {
+      _dayCounterEl = document.createElement('div');
+      _dayCounterEl.id = 'hud-day-counter';
+      _dayCounterEl.style.cssText =
+        'position:absolute;top:10px;right:180px;' +
+        'font:bold 14px monospace;color:#d4c8a0;' +
+        'text-shadow:0 1px 3px rgba(0,0,0,0.8);' +
+        'z-index:15;pointer-events:none;' +
+        'background:rgba(10,8,5,0.6);padding:4px 10px;' +
+        'border:1px solid rgba(180,160,120,0.3);border-radius:4px;';
+      var viewport = document.getElementById('viewport');
+      if (viewport) viewport.appendChild(_dayCounterEl);
+    }
+    _updateDayCounter();
+  }
+
+  /**
+   * Update the day counter text.
+   */
+  function _updateDayCounter() {
+    if (!_dayCounterEl) return;
+    if (typeof DayCycle === 'undefined') return;
+
+    var day = DayCycle.getDay();
+    var heroInterval = DayCycle.HERO_DAY_INTERVAL || 3;
+    var dayInCycle = (day % heroInterval) + 1;
+    var daysUntil = DayCycle.daysUntilHeroDay();
+    var isHero = DayCycle.isHeroDay();
+
+    var text = 'Day ' + (day + 1) + ' (' + dayInCycle + '/' + heroInterval + ')';
+    if (isHero) {
+      text += '  \u2694\uFE0F HERO DAY';
+      _dayCounterEl.style.color = '#f0c040';
+      _dayCounterEl.style.borderColor = 'rgba(240,192,64,0.5)';
+    } else if (daysUntil === 1) {
+      text += '  \u26A0 Heroes tomorrow';
+      _dayCounterEl.style.color = '#e0a040';
+      _dayCounterEl.style.borderColor = 'rgba(224,160,64,0.4)';
+    } else {
+      _dayCounterEl.style.color = '#d4c8a0';
+      _dayCounterEl.style.borderColor = 'rgba(180,160,120,0.3)';
+    }
+
+    // Append time string
+    if (DayCycle.getTimeString) {
+      text += '  ' + DayCycle.getTimeString();
+    }
+
+    _dayCounterEl.textContent = text;
+  }
+
   /**
    * Check whether the tile at (fx, fy) on the current floor is the
    * work-keys chest on Floor 1.6. Called from _interact().
@@ -968,6 +2029,25 @@ var Game = (function () {
     Player.setPos(x, y);
     Player.setDir(dir);
     Minimap.reveal(x, y);
+
+    // Walk-away interrupt for inline tooltip dialogue
+    if (typeof StatusBar !== 'undefined' && StatusBar.checkWalkAway) {
+      StatusBar.checkWalkAway(x, y);
+    }
+
+    // Cobweb destruction — player (or enemy) walks through standalone cobweb.
+    // The player tears their own web if they backtrack carelessly.
+    // This is the strategic cost: deploy webs after you've cleared
+    // a corridor, then path around them on the way out.
+    if (typeof CobwebSystem !== 'undefined') {
+      var cobFloorId = FloorManager.getCurrentFloorId();
+      if (CobwebSystem.onEntityMove(x, y, cobFloorId)) {
+        AudioSystem.play('sweep', { volume: 0.3 });
+        Toast.show('🕸️ ' + i18n.t('cobweb.torn', 'You tore your own cobweb!'), 'warning');
+        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕸️ Torn!', x, y, 'warning');
+        if (typeof SessionStats !== 'undefined') SessionStats.inc('cobwebsTorn');
+      }
+    }
 
     // Advance minimap click-to-move path
     if (typeof MinimapNav !== 'undefined') MinimapNav.onMoveFinish();
@@ -1052,7 +2132,7 @@ var Game = (function () {
     if (typeof MinimapNav !== 'undefined') MinimapNav.onBump();
 
     // Check whether the bumped tile is the Dispatcher gate NPC
-    if (!_gateUnlocked && typeof BarkLibrary !== 'undefined') {
+    if (!_gateUnlocked) {
       var pos = MC.getGridPos();
       var bumpX = pos.x + MC.DX[dir];
       var bumpY = pos.y + MC.DY[dir];
@@ -1060,17 +2140,7 @@ var Game = (function () {
       for (var i = 0; i < enemies.length; i++) {
         var e = enemies[i];
         if (e.id === _dispatcherSpawnId && e.x === bumpX && e.y === bumpY) {
-          // First bump: play intro + direction bark. Subsequent bumps: nudge.
-          var introKey = 'npc.dispatcher.gate.intro';
-          var bark = BarkLibrary.hasPool(introKey) ? BarkLibrary.fire(introKey) : null;
-          if (!bark) {
-            // Intro spent — fire direction hint once, then nudge
-            var dirKey = 'npc.dispatcher.gate.direction';
-            bark = BarkLibrary.hasPool(dirKey) ? BarkLibrary.fire(dirKey) : null;
-          }
-          if (!bark) {
-            BarkLibrary.fire('npc.dispatcher.gate.nudge');
-          }
+          _showDispatcherGateDialog();
           break;
         }
       }
@@ -1100,6 +2170,78 @@ var Game = (function () {
 
     if (fx < 0 || fx >= W || fy < 0 || fy >= H) return;
 
+    // ── Depth-2 exit guard: warn before leaving interior during curfew hours ──
+    if (typeof DayCycle !== 'undefined' && DayCycle.isCurfewHour && DayCycle.isCurfewHour()) {
+      var guardFloor = FloorManager.getFloor();
+      var guardDepth = guardFloor ? guardFloor.split('.').length : 1;
+      if (guardDepth === 2) {
+        var tile = floorData.grid[fy] ? floorData.grid[fy][fx] : 0;
+        var isDoorExit = (tile === TILES.DOOR_EXIT || tile === TILES.DOOR_BACK || tile === TILES.STAIRS_UP);
+        if (isDoorExit && !_curfewExitConfirmed) {
+          // Show confirmation dialog instead of transitioning
+          if (typeof DialogBox !== 'undefined') {
+            var timeStr = DayCycle.getTimeString ? DayCycle.getTimeString() : 'late';
+            DialogBox.show({
+              speaker: '\u26A0 Curfew',
+              text: 'It\'s ' + timeStr + '. Are you sure you want to go outside?',
+              choices: [
+                { label: 'Yes, go outside' },
+                { label: 'Stay inside' }
+              ],
+              onChoice: function (idx) {
+                if (idx === 0) {
+                  _curfewExitConfirmed = true;
+                  _interact();
+                  _curfewExitConfirmed = false;
+                }
+              }
+            });
+          }
+          return;
+        }
+      }
+    }
+
+    // ── Home door rest shortcut: offer rest at door when TIRED ──
+    if (typeof StatusEffect !== 'undefined' && StatusEffect.has('TIRED')) {
+      var restFloor = FloorManager.getFloor();
+      var restDepth = restFloor ? restFloor.split('.').length : 1;
+      if (restDepth === 1) {
+        var restTile = floorData.grid[fy] ? floorData.grid[fy][fx] : 0;
+        // Check if this door leads to home (1.6)
+        var doorTarget = null;
+        var fd2 = FloorManager.getFloorData();
+        if (fd2 && fd2.doorTargets) {
+          doorTarget = fd2.doorTargets[fx + ',' + fy] || null;
+        }
+        if (doorTarget === '1.6' && (restTile === TILES.DOOR || restTile === TILES.DOOR_EXIT)) {
+          if (!_homeDoorRestOffered) {
+            _homeDoorRestOffered = true;
+            if (typeof DialogBox !== 'undefined') {
+              DialogBox.show({
+                speaker: '\uD83C\uDFE0 Home',
+                text: 'You look tired. Rest for the night?',
+                choices: [
+                  { label: 'Rest for the night' },
+                  { label: 'Go inside' }
+                ],
+                onChoice: function (idx) {
+                  _homeDoorRestOffered = false;
+                  if (idx === 0) {
+                    _doHomeDoorRest();
+                  } else {
+                    FloorTransition.tryInteractDoor(fx, fy);
+                  }
+                }
+              });
+            }
+            return;
+          }
+        }
+      }
+    }
+    _homeDoorRestOffered = false;
+
     if (FloorTransition.tryInteractStairs(fx, fy)) return;
     if (FloorTransition.tryInteractDoor(fx, fy)) return;
 
@@ -1118,27 +2260,70 @@ var Game = (function () {
       }
     }
 
+    // Cobweb installation — spider deployment on eligible corridor tiles
+    if (typeof CobwebNode !== 'undefined') {
+      if (CobwebNode.tryInteract(FloorManager.getCurrentFloorId())) {
+        if (typeof SessionStats !== 'undefined') SessionStats.inc('cobwebsInstalled');
+        Toast.show('🕷️ ' + i18n.t('cobweb.installed', 'Cobweb installed'), 'loot');
+        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕷️ Deployed!', fx, fy, 'loot');
+        return;
+      }
+    }
+
     // Blood cleaning — scrub tiles near corpses
     if (typeof CleaningSystem !== 'undefined') {
       var cleanFloorId = FloorManager.getCurrentFloorId();
       if (CleaningSystem.isDirty(fx, fy, cleanFloorId)) {
-        if (CleaningSystem.scrub(fx, fy, cleanFloorId)) {
+        // C3: Pass equipped cleaning tool subtype for speed scaling
+        var _cleanTool = null;
+        var _equipped = Player.getEquipped();
+        for (var _ei = 0; _ei < _equipped.length; _ei++) {
+          if (_equipped[_ei] && _equipped[_ei].subtype &&
+              CleaningSystem.TOOL_SPEED[_equipped[_ei].subtype]) {
+            _cleanTool = _equipped[_ei].subtype;
+            break;
+          }
+        }
+        if (CleaningSystem.scrub(fx, fy, cleanFloorId, _cleanTool)) {
           AudioSystem.play('sweep', { volume: 0.5 });
           var remaining = CleaningSystem.getBlood(fx, fy, cleanFloorId);
           if (remaining <= 0) {
             Toast.show('🧹 ' + i18n.t('toast.tile_clean', 'Tile cleaned!'), 'loot');
+            if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 Clean!', fx, fy, 'loot');
             SessionStats.inc('tilesCleaned');
+          } else {
+            if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 ' + remaining + '/' + CleaningSystem.MAX_BLOOD, fx, fy, 'info');
           }
         }
         return;
       }
     }
 
+    // C7: Trap re-arm — face an EMPTY tile that was formerly a TRAP
+    if (typeof TrapRearm !== 'undefined') {
+      var rearmFloorId = FloorManager.getCurrentFloorId();
+      if (TrapRearm.canRearm(fx, fy, rearmFloorId)) {
+        if (TrapRearm.rearm(fx, fy, rearmFloorId, floorData.grid)) {
+          AudioSystem.play('ui-confirm', { volume: 0.4 });
+          Toast.show('⚙️ ' + i18n.t('toast.trap_rearmed', 'Trap re-armed!'), 'loot');
+          if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('⚙️ Armed!', fx, fy, 'loot');
+          if (typeof SessionStats !== 'undefined') SessionStats.inc('trapsRearmed');
+          return;
+        }
+      }
+    }
+
     var tile = floorData.grid[fy][fx];
     if (tile === TILES.CHEST) {
       CombatBridge.openChest(fx, fy);
-    } else if (tile === TILES.BONFIRE || tile === TILES.BED) {
-      // Rest at bonfire/bed (heal) then open the stash MenuBox
+    } else if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
+      // Home bed → BedPeek handles sleep/day-advance (Floor 1.6, position 2,2)
+      if (typeof BedPeek !== 'undefined' && FloorManager.getFloor() === '1.6' && fx === 2 && fy === 2) {
+        // BedPeek overlay is already showing via update(). The F-key interact
+        // is handled internally by BedPeek — just don't fall through to bonfire.
+        return;
+      }
+      // Non-home bonfire/bed/hearth: heal + open stash MenuBox
       HazardSystem.restAtBonfire(fx, fy);
       _pendingMenuContext = 'bonfire';
       _pendingMenuFace = 0;
@@ -1394,6 +2579,12 @@ var Game = (function () {
         'loot'
       );
       AudioSystem.play('pickup-success');
+      // Salvage spark on harvest
+      if (typeof ParticleFX !== 'undefined') {
+        var cx = _canvas ? _canvas.width / 2 : 320;
+        var cy = _canvas ? _canvas.height * 0.5 : 220;
+        ParticleFX.salvageSpark(cx, cy);
+      }
       HUD.updatePlayer(Player.state());
       SessionStats.inc('partsHarvested');
       if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('+' + item.emoji + ' ' + item.name, 'loot');
@@ -1446,6 +2637,12 @@ var Game = (function () {
         'loot'
       );
       AudioSystem.playRandom('coin');
+      // Coin burst at viewport center (coins fly UP from purchase)
+      if (typeof ParticleFX !== 'undefined') {
+        var cx = _canvas ? _canvas.width / 2 : 320;
+        var cy = _canvas ? _canvas.height * 0.55 : 240;
+        ParticleFX.coinBurst(cx, cy, Math.min(12, Math.max(4, Math.floor(result.cost / 5))));
+      }
       HUD.updatePlayer(Player.state());
       SessionStats.inc('cardsBought');
       if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Bought ' + result.card.emoji + ' -' + result.cost + 'g', 'loot');
@@ -1483,13 +2680,26 @@ var Game = (function () {
         'loot'
       );
       AudioSystem.playRandom('coin');
+      // Coin rain for sell proceeds
+      if (typeof ParticleFX !== 'undefined') {
+        var cx = _canvas ? _canvas.width / 2 : 320;
+        var cy = _canvas ? _canvas.height * 0.45 : 200;
+        if (result.amount >= 15) {
+          ParticleFX.coinRain(cx, cy, result.amount);
+        } else {
+          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
+        }
+      }
       HUD.updatePlayer(Player.state());
       if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + card.emoji + ' +' + result.amount + 'g', 'loot');
 
-      // Rep tier changed — show toast
+      // Rep tier changed — show toast + level-up particles
       if (result.repResult && result.repResult.tierChanged) {
         var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
         Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
+        if (typeof ParticleFX !== 'undefined') {
+          ParticleFX.levelUp(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.3 : 150);
+        }
       }
       _refreshPanels();
     } else {
@@ -1517,13 +2727,27 @@ var Game = (function () {
         'loot'
       );
       AudioSystem.playRandom('coin');
+      // Salvage sell — coin burst + salvage spark
+      if (typeof ParticleFX !== 'undefined') {
+        var cx = _canvas ? _canvas.width / 2 : 320;
+        var cy = _canvas ? _canvas.height * 0.5 : 220;
+        ParticleFX.salvageSpark(cx, cy);
+        if (result.amount >= 15) {
+          ParticleFX.coinRain(cx, cy - 20, result.amount);
+        } else {
+          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
+        }
+      }
       HUD.updatePlayer(Player.state());
       if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + item.emoji + ' +' + result.amount + 'g', 'loot');
 
-      // Rep tier changed — show toast
+      // Rep tier changed — show toast + level-up particles
       if (result.repResult && result.repResult.tierChanged) {
         var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
         Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
+        if (typeof ParticleFX !== 'undefined') {
+          ParticleFX.levelUp(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.3 : 150);
+        }
       }
       _refreshPanels();
     } else {
@@ -1556,6 +2780,10 @@ var Game = (function () {
       Toast.show(item.emoji + ' ' + i18n.t('inv.equipped', 'equipped'), 'info');
     }
     AudioSystem.play('pickup-success');
+    // Equip sparkle at viewport center
+    if (typeof ParticleFX !== 'undefined') {
+      ParticleFX.equipFlash(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.35 : 170);
+    }
     HUD.updatePlayer(Player.state());
     _refreshPanels();
   }
@@ -1618,6 +2846,54 @@ var Game = (function () {
 
     Toast.show(item.emoji + ' → ' + i18n.t('inv.bag', 'Bag'), 'info');
     AudioSystem.play('pickup-success');
+    HUD.updatePlayer(Player.state());
+    _refreshPanels();
+  }
+
+  // ── Bonfire warp (teleport to another floor) ─────────────────────
+
+  function _warpToFloor(targetFloorId) {
+    // Close the pause/bonfire menu first
+    ScreenManager.toGame();
+
+    // Determine direction — ascending if target is shallower
+    var srcDepth = FloorManager.getFloor().split('.').length;
+    var tgtDepth = targetFloorId.split('.').length;
+    var dir = (tgtDepth <= srcDepth) ? 'retreat' : 'advance';
+
+    Toast.show('\u2728 ' + i18n.t('bonfire.warping', 'Warping...'), 'info');
+    FloorTransition.go(targetFloorId, dir);
+  }
+
+  // ── Incinerator (burn focused item/card for small coin refund) ────
+
+  function _incinerateFromFocus() {
+    // Determine which wheel has focus in the inventory face
+    var focus = (typeof MenuFaces !== 'undefined') ? MenuFaces.getInvFocus() : 'bag';
+    var offset = (typeof MenuFaces !== 'undefined') ? MenuFaces.getBagOffset() : 0;
+
+    if (focus === 'bag') {
+      var bag = Player.getBag();
+      // Incinerate the first visible bag item (at current scroll offset)
+      var item = bag[offset];
+      if (!item) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
+      bag.splice(offset, 1);
+      var refund = item.value ? Math.max(1, Math.floor(item.value * 0.1)) : 1;
+      Player.addCurrency(refund);
+      Toast.show('\uD83D\uDD25 ' + (item.emoji || '') + ' ' + (item.name || 'Item') + ' \u2192 ' + refund + 'g', 'warning');
+    } else {
+      // Deck focus — incinerate from backup deck
+      var deckOff = (typeof MenuFaces !== 'undefined') ? MenuFaces.getDeckOffset() : 0;
+      var collection = (typeof CardSystem !== 'undefined') ? CardSystem.getCollection() : [];
+      var card = collection[deckOff];
+      if (!card) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
+      if (typeof CardSystem !== 'undefined') CardSystem.removeCard(card.id);
+      var cardRefund = card.rarity === 'rare' ? 5 : (card.rarity === 'uncommon' ? 3 : 1);
+      Player.addCurrency(cardRefund);
+      Toast.show('\uD83D\uDD25 ' + (card.emoji || '\uD83C\uDCA0') + ' ' + (card.name || 'Card') + ' \u2192 ' + cardRefund + 'g', 'warning');
+    }
+
+    AudioSystem.play('incinerator');
     HUD.updatePlayer(Player.state());
     _refreshPanels();
   }
@@ -1701,6 +2977,31 @@ var Game = (function () {
     }
 
     CombatBridge.checkEnemyAggro(p.x, p.y);
+
+    // ── Fire crackle ambient (proximity-based) ──
+    // Check tiles within 3 Manhattan distance for bonfire/hearth/bed.
+    // Play crackle at volume scaled by inverse distance.
+    _fireCrackleTimer = (_fireCrackleTimer || 0) + deltaMs;
+    if (_fireCrackleTimer >= 2000) {  // Check every 2s
+      _fireCrackleTimer = 0;
+      var px = Math.round(p.x), py = Math.round(p.y);
+      var grid = floorData.grid;
+      var gw = floorData.gridW, gh = floorData.gridH;
+      var nearestDist = 99;
+      for (var fy = Math.max(0, py - 3); fy <= Math.min(gh - 1, py + 3); fy++) {
+        for (var fx = Math.max(0, px - 3); fx <= Math.min(gw - 1, px + 3); fx++) {
+          var ft = grid[fy][fx];
+          if (ft === TILES.BONFIRE || ft === TILES.HEARTH || ft === TILES.BED) {
+            var md = Math.abs(fx - px) + Math.abs(fy - py);
+            if (md < nearestDist) nearestDist = md;
+          }
+        }
+      }
+      if (nearestDist <= 3) {
+        var vol = Math.max(0.1, 1 - nearestDist / 4);
+        AudioSystem.play('fire_crackle', { volume: vol });
+      }
+    }
   }
 
   // ── Render (every frame — input, movement, draw) ───────────────────
@@ -1753,6 +3054,11 @@ var Game = (function () {
       // Toast overlay (feedback during inventory drags)
       Toast.update(frameDt);
       Toast.render(ctx, _canvas.width, _canvas.height);
+      // Particle FX overlay (coin bursts during shop/inventory)
+      if (typeof ParticleFX !== 'undefined') {
+        ParticleFX.update();
+        ParticleFX.render(ctx);
+      }
       return;
     }
 
@@ -1786,6 +3092,9 @@ var Game = (function () {
       InteractPrompt.check();
       InteractPrompt.update(frameDt);
       InteractPrompt.render(ctx, _canvas.width, _canvas.height);
+
+      // C2: Readiness HUD bar (dungeon floors only)
+      HUD.renderReadinessBar(ctx, _canvas.width, _canvas.height, FloorManager.getCurrentFloorId());
       if (typeof DoorPeek        !== 'undefined') DoorPeek.update(frameDt);
       if (typeof LockedDoorPeek !== 'undefined') LockedDoorPeek.update(frameDt);
       if (typeof CratePeek     !== 'undefined') CratePeek.update(frameDt);
@@ -1795,6 +3104,9 @@ var Game = (function () {
       if (typeof PuzzlePeek   !== 'undefined') PuzzlePeek.update(frameDt);
       if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.update(frameDt);
       if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.update(frameDt);
+      if (typeof BedPeek !== 'undefined') BedPeek.update(frameDt);
+      if (typeof MailboxPeek !== 'undefined') MailboxPeek.update(frameDt);
+      if (typeof StatusEffectHUD !== 'undefined') StatusEffectHUD.update();
 
       // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
       if (typeof PeekSlots !== 'undefined') PeekSlots.update(frameDt);
@@ -1802,6 +3114,12 @@ var Game = (function () {
       DialogBox.render(ctx, _canvas.width, _canvas.height);
       Toast.update(frameDt);
       Toast.render(ctx, _canvas.width, _canvas.height);
+
+      // Particle FX overlay (coins, sparkles, item poof)
+      if (typeof ParticleFX !== 'undefined') {
+        ParticleFX.update();
+        ParticleFX.render(ctx);
+      }
 
       // CrateUI slot overlay (renders during PeekSlots FILLING state)
       if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
@@ -2020,6 +3338,23 @@ var Game = (function () {
     );
 
     if (combatZoom !== 1) ctx.restore();
+
+    // Cobweb rendering (after raycaster, before minimap)
+    var _cobFloorId = FloorManager.getCurrentFloorId();
+    var _cobPlayer = { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset };
+    if (typeof CobwebRenderer !== 'undefined') {
+      CobwebRenderer.render(ctx, _canvas.width, _canvas.height, _cobPlayer, _cobFloorId);
+    }
+    if (typeof CobwebNode !== 'undefined') {
+      CobwebNode.update(frameDt, _cobFloorId);
+      CobwebNode.render(ctx, _canvas.width, _canvas.height, _cobPlayer);
+    }
+
+    // World-space popups (interaction feedback at tile positions)
+    if (typeof WorldPopup !== 'undefined') {
+      WorldPopup.update(frameDt);
+      WorldPopup.render(ctx, _canvas.width, _canvas.height, _cobPlayer);
+    }
 
     // Minimap render
     Minimap.render(

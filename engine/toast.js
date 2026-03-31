@@ -38,7 +38,13 @@ var Toast = (function () {
     diamond: { bg: 'rgba(0,40,25,0.9)',     border: 'rgba(0,255,166,0.7)',   text: '#00FFA6' },
     heart:   { bg: 'rgba(50,15,25,0.9)',    border: 'rgba(255,107,157,0.7)', text: '#FF6B9D' },
     suit_adv:    { bg: 'rgba(10,10,10,0.92)',  border: 'rgba(255,220,80,0.8)',  text: '#FFE066' },
-    suit_disadv: { bg: 'rgba(10,10,10,0.92)',  border: 'rgba(180,60,60,0.8)',   text: '#ff8888' }
+    suit_disadv: { bg: 'rgba(10,10,10,0.92)',  border: 'rgba(180,60,60,0.8)',   text: '#ff8888' },
+    // Gameplay feedback presets
+    loot:     { bg: 'rgba(20,40,25,0.88)',  border: 'rgba(100,200,120,0.6)', text: '#8fd8a0' },
+    currency: { bg: 'rgba(40,35,10,0.88)',  border: 'rgba(200,170,60,0.6)',  text: '#f0d070' },
+    hp:       { bg: 'rgba(50,15,15,0.88)',  border: 'rgba(200,80,80,0.5)',   text: '#f09090' },
+    battery:  { bg: 'rgba(20,20,50,0.88)',  border: 'rgba(100,120,220,0.5)', text: '#90a0f0' },
+    dim:      { bg: 'rgba(15,15,18,0.85)',  border: 'rgba(80,80,90,0.4)',    text: '#888' }
   };
 
   // ── State ───────────────────────────────────────────────────────
@@ -49,15 +55,16 @@ var Toast = (function () {
   /**
    * Show a toast notification.
    *
+   * Two call signatures:
+   *   Toast.show({ text, icon?, color?, duration? })
+   *   Toast.show('text', 'colorPreset')  — shorthand
+   *
    * @param {Object|string} param - Toast parameters or plain text
-   * @param {string}  param.text     - Message text
-   * @param {string}  [param.icon]   - Emoji icon (rendered left of text)
-   * @param {string}  [param.color]  - Color preset key: item|quest|warning|damage|info|gold
-   * @param {number}  [param.duration] - Display duration in ms (default 2500)
+   * @param {string} [colorKey] - Color preset when param is a string
    */
-  function show(param) {
+  function show(param, colorKey) {
     if (typeof param === 'string') {
-      param = { text: param };
+      param = { text: param, color: colorKey || undefined };
     }
 
     var toast = {
@@ -75,6 +82,11 @@ var Toast = (function () {
     // Trim oldest if over max
     while (_toasts.length > MAX_VISIBLE) {
       _toasts.shift();
+    }
+
+    // Mirror to StatusBar tooltip history (persistent log)
+    if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
+      StatusBar.pushTooltip(param.text, param.color || colorKey || 'info');
     }
   }
 

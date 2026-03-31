@@ -48,10 +48,16 @@ var HazardSystem = (function () {
 
   // ── Callbacks (wired by Game orchestrator) ───────────────────────
   var _onGameOver = null;
+  var _onDeathRescue = null;
 
   function init(cbs) {
     cbs = cbs || {};
     _onGameOver = cbs.onGameOver || null;
+    _onDeathRescue = cbs.onDeathRescue || null;
+  }
+
+  function setOnDeathRescue(fn) {
+    _onDeathRescue = fn;
   }
 
   /**
@@ -147,6 +153,10 @@ var HazardSystem = (function () {
     // Consume non-persistent traps
     if (!info.persist) {
       floorData.grid[y][x] = TILES.EMPTY;
+      // C7: Notify TrapRearm so Gleaner can re-arm this position later
+      if (typeof TrapRearm !== 'undefined') {
+        TrapRearm.onTrapConsumed(x, y, FloorManager.getCurrentFloorId());
+      }
     }
 
     // HUD feedback
@@ -198,13 +208,18 @@ var HazardSystem = (function () {
   /**
    * Non-lethal environmental death (depth 1-2).
    *
-   * Adapted from CombatBridge's non-lethal defeat path:
-   *   - 25% currency penalty (lighter than combat death's 50%)
-   *   - Respawn at bonfire or stairs-up
-   *   - Full HP/energy restore
-   *   - Brief blackout message
+   * New path (as of hero cycle shift):
+   *   - 25% currency penalty
+   *   - Apply debuffs: GROGGY (1 day) + SORE (1 day) + HUMILIATED (1 day)
+   *   - Restore HP/energy
+   *   - Trigger floor transition to home ("1.6")
+   *   - Fire _onDeathRescue callback for hero cycle shift
+   *   - Show blackout message
    */
   function _nonLethalRespawn(reason) {
+    var currentFloor = FloorManager.getCurrentFloorId();
+    var depth = FloorManager.getFloorDepth();
+
     // Currency penalty (25% — less harsh than combat death's 50%)
     var penalty = Math.floor(Player.state().currency * 0.25);
     if (penalty > 0) {
@@ -214,60 +229,98 @@ var HazardSystem = (function () {
     // Restore HP/energy
     Player.fullRestore();
 
-    // Teleport to respawn point
-    var respawn = _getRespawnPos();
-    Player.setPos(respawn.x, respawn.y);
-    MC.setPosition(respawn.x, respawn.y, Player.getDir());
+    // Apply debuffs (1 day each)
+    Player.applyDebuff('GROGGY', 1);
+    Player.applyDebuff('SORE', 1);
+    Player.applyDebuff('HUMILIATED', 1);
 
     HUD.updatePlayer(Player.state());
 
-    // Build message
+    // Show immediate feedback before transition
     var reasonStr = i18n.t('hazard.death_' + reason, 'Felled by ' + reason);
     var penaltyStr = penalty > 0
       ? ' (-' + penalty + ' ' + i18n.t('hazard.currency_lost', 'gold lost') + ')'
       : '';
-    var bonfireStr = _bonfirePositions[FloorManager.getFloor()]
-      ? i18n.t('hazard.respawn_bonfire', 'Respawned at bonfire.')
-      : i18n.t('hazard.respawn_entrance', 'Returned to entrance.');
 
     HUD.showCombatLog(
-      '💀 ' + reasonStr + penaltyStr + '\n' + bonfireStr
+      '💀 You blacked out. The heroes found you.' + penaltyStr
     );
 
     SessionStats.inc('environmentalDeaths');
     AudioSystem.play('enemy-death', { volume: 0.5 });
 
-    console.log('[HazardSystem] Non-lethal respawn at (' +
-                respawn.x + ',' + respawn.y + '), penalty: ' + penalty);
+    // Fire rescue callback so game.js can shift hero cycle and handle transition
+    if (_onDeathRescue) {
+      _onDeathRescue({
+        reason: reason,
+        floorId: currentFloor,
+        depth: depth
+      });
+    }
+
+    console.log('[HazardSystem] Non-lethal death rescue triggered. Reason: ' + reason +
+                ', Current floor: ' + currentFloor + ', Depth: ' + depth +
+                ', Penalty: ' + penalty + ', Transitioning to home "1.6"');
   }
 
   /**
    * Lethal environmental death (depth 3).
    *
-   * Mirrors combat lethal defeat:
-   *   - Player.onDeath() (50% currency, inventory scatter stub)
-   *   - Game over screen
+   * New path (as of hero cycle shift):
+   *   - 50% currency penalty via Player.onDeath()
+   *   - Apply debuffs: GROGGY (1 day) + SORE (1 day) + HUMILIATED (1 day) + SHAKEN (2 days)
+   *   - Restore HP/energy
+   *   - Trigger floor transition to home ("1.6")
+   *   - Fire _onDeathRescue callback for hero cycle shift
+   *   - Show dramatic blackout message
+   *   - No longer triggers game over
    */
   function _lethalDeath(reason) {
+    var currentFloor = FloorManager.getCurrentFloorId();
+    var depth = FloorManager.getFloorDepth();
+
+    // Player.onDeath handles 50% currency penalty and inventory scatter
     var dropped = Player.onDeath();
     // TODO: FloorManager.scatterLoot(dropped, Player.getPos());
 
-    SessionStats.inc('environmentalDeaths');
+    // Restore HP/energy
+    Player.fullRestore();
 
+    // Apply heavy debuffs (depth 3 experience is traumatic)
+    Player.applyDebuff('GROGGY', 1);
+    Player.applyDebuff('SORE', 1);
+    Player.applyDebuff('HUMILIATED', 1);
+    Player.applyDebuff('SHAKEN', 2);  // Extra severity at depth 3
+
+    HUD.updatePlayer(Player.state());
+
+    // Show immediate feedback before transition
     HUD.showCombatLog(
-      '💀 ' + i18n.t('hazard.permadeath_' + reason,
-        'Killed by ' + reason + ' in the deep dungeon')
+      '💀 The heroes dragged you out. You\'ll remember this.'
     );
 
+    SessionStats.inc('environmentalDeaths');
     AudioSystem.play('explosion-big', { volume: 0.6 });
 
-    if (_onGameOver) _onGameOver();
+    // Fire rescue callback so game.js can shift hero cycle and handle transition
+    if (_onDeathRescue) {
+      _onDeathRescue({
+        reason: reason,
+        floorId: currentFloor,
+        depth: depth
+      });
+    }
+
+    console.log('[HazardSystem] Lethal death rescue triggered. Reason: ' + reason +
+                ', Current floor: ' + currentFloor + ', Depth: ' + depth +
+                ', Transitioning to home "1.6" with heavy debuffs');
   }
 
   // ── Public API ────────────────────────────────────────────────────
 
   return {
     init: init,
+    setOnDeathRescue: setOnDeathRescue,
     clearBonfires: clearBonfires,
     restAtBonfire: restAtBonfire,
     checkTile: checkTile,

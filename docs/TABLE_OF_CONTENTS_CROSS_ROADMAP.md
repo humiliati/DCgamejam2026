@@ -260,6 +260,46 @@ All five design documents, their scope, and section inventories. Each document n
 ### DOC-29: hud-ui-debugging-notes.md
 > **Scope**: Active debugging priorities — minimap embedding, floor label repositioning, battery display, NCH widget, bag menu.
 
+### DOC-30: BONFIRE_POLISH_STEPS.md
+> **Scope**: Bonfire/hearth/fire visual polish roadmap. Covers: fire emoji sprite overlay (bobbing flame above rest tiles), crackle audio proximity system, bonfire visual distinction by depth (exterior campfire vs interior hearth vs dungeon hearth), debrief incinerator drag-drop integration, day/night cycle module stub, and smoke particle post-jam goals.
+
+| Section | Content |
+|---|---|
+| §1 Exterior Campfire Blockout | C-shape shrub ring, tent emoji | ✅ DONE |
+| §2 Dungeon Hearth | HEARTH tile in gen, biome textures | ✅ DONE |
+| §3 Fire Emoji Sprite Overlay | Bobbing 🔥 sprite, glow, scatter | Post-jam |
+| §4 Crackle Audio | Proximity loop, volume scaling | Stub ✅ |
+| §5 Media Asset Encoding | ffmpeg encode from EyesOnly | Manual |
+| §6 Debrief Incinerator | Refund alignment | ✅ DONE |
+| §7 Day/Night Cycle | timeFreeze, HUD, skybox lerp | Post-jam |
+| §8 Visual Distinction by Depth | Orange/amber/blue hearth variants | Post-jam |
+
+### DOC-32: TOOLTIP_BARK_ROADMAP.md
+> **Scope**: Tooltip history system, NPC bark delivery, speech gesture rendering (KaomojiCapsule), depth-scaled bark radius, dialogue ping-pong, and post-jam tooltip space vision. References EyesOnly TOOLTIP_SPACE_CANON.md for production target.
+
+| Section | Content |
+|---|---|
+| S1–S7 (Jam) | Toast→StatusBar bridge, card/deck tooltips, depth bark radius, speech capsule, ping-pong, WorldPopup, UI polish | ✅ DONE |
+| Phase 1 | Clickable tooltip replies (inline NPC dialogue choices) | Planned |
+| Phase 2 | NPC bark content audit against narrative outline | Planned |
+| Phase 3 | Bark gesture variety (context kaomoji per NPC type) | Planned |
+| Phase 4 | Tooltip filtering & search (category tabs, text search) | Planned |
+| Phase 5 | Spatial audio bark attenuation (distance opacity, stereo pan) | Planned |
+| Phase 6 | EyesOnly Tooltip Space Canon port (full production spec) | Far future |
+
+### DOC-31: COBWEB_TRAP_STRATEGY_ROADMAP.md
+> **Scope**: Strategic design roadmap for cobweb and trap embellishment systems. Covers: the "clean inward, arm outward" loop, self-trigger penalty mechanics, economic resource costs (Silk Spider, Trap Kit), proc-gen contract bonus objectives, windsail cobweb visual upgrade with third-space rendering and hover interaction, reinforced web/trap tiers, enemy pathfinding integration, and cobweb ecology far-future vision.
+
+| Section | Content |
+|---|---|
+| Phase 1 (Jam) | Trap re-arm + cobweb deploy + self-trigger cycle | ✅ DONE |
+| Phase 2 | Economic cost — Silk Spider, Trap Kit consumables | Planned |
+| Phase 3 | Proc-gen contract bonus objectives | Planned |
+| Phase 4 | Windsail visual — third-space texture, billow anim, hover | Planned |
+| Phase 5 | Reinforced variants — web tiers, trap tiers | Planned |
+| Phase 6 | Enemy pathfinding — AI avoidance, awareness events | Planned |
+| Phase 7 | Cobweb ecology — nesting, web networks, environmental | Far future |
+
 ---
 
 ## Cross-Roadmap Execution Order
@@ -292,19 +332,19 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 
 ---
 
-### 🔴 PHASE A — Combat Finish & Stealth Extraction (Day 1: Mar 28)
+### 🟢 PHASE A — Combat Finish & Stealth Extraction (Day 1: Mar 28) ✅ COMPLETE
 > Parallel work: close remaining combat gaps while extracting stealth system.
 
 | # | Task | Source Doc | Section | Est. | Depends On |
 |---|------|-----------|---------|------|------------|
-| A1 | Enemy attack telegraph | DOC-1 GAP | T1.5 | 2h | T0 ✅ |
-| A2 | Death anim → corpse tile | DOC-1 GAP | T1.6 | 1h | T0 ✅ |
-| A3 | Extract stealth-system.js | DOC-3 GONE_ROGUE | Pass 3.9 | 2h | Pass 1-2 ✅ |
-| A4 | Extract awareness-config.js | DOC-3 GONE_ROGUE | Pass 3.10 | 30m | Pass 1-2 ✅ |
+| A1 | Enemy attack telegraph | DOC-1 GAP | T1.5 | 2h | ✅ DONE (EnemyIntent module + CombatBridge integration) |
+| A2 | Death anim → corpse tile | DOC-1 GAP | T1.6 | 1h | ✅ DONE (DeathAnim → CorpseRegistry → grid placement) |
+| A3 | Extract stealth-system.js | DOC-3 GONE_ROGUE | Pass 3.9 | 2h | ✅ DONE |
+| A4 | Extract awareness-config.js | DOC-3 GONE_ROGUE | Pass 3.10 | 30m | ✅ DONE |
 | A5 | ~~Minimap sight cones~~ | DOC-3 GONE_ROGUE | Pass 3.11 | ~~2h~~ | **✅ DONE** |
 | A6 | ~~HUD 2× scale~~ | DOC-5 AUDIT | 3.2 UI | ~~1h~~ | **✅ DONE** |
 
-**Phase A total**: ~5.5h (A5, A6 already complete)
+**Phase A total**: ALL 6 TASKS COMPLETE ✅
 **Unblocks**: Phase B (crate system needs corpse tiles for monster reassembly), Phase D (stealth extraction enables Hero AI)
 
 ---
@@ -319,11 +359,11 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 | B3 | Frame→resource color mapping + hydration + suit card slot | DOC-4 BIOME | §17.2 | 1h | ✅ |
 | B4 | Seal reward d100 table + corpse reanimation path | DOC-2 TUTORIAL | §13.2 | 30m | ✅ |
 | B4b | Corpse-peek.js (BoxAnim coffin reveal for CORPSE tiles) | DOC-4 BIOME | §17.2 | 1h | ✅ |
-| B5 | Shop round-trip: buy restock supplies | DOC-1 GAP | T2 (implicit) | 1h | — |
-| B6 | Bag inventory viewer | DOC-1 GAP | T2.1 | 2h | — |
-| B7 | Stash transfer at bonfire | DOC-1 GAP | T2.2 | 1h | — |
+| B5 | Shop round-trip: buy restock supplies | DOC-1 GAP | T2 (implicit) | 1h | ✅ |
+| B6 | Bag inventory viewer | DOC-1 GAP | T2.1 | 2h | ✅ |
+| B7 | Stash transfer at bonfire | DOC-1 GAP | T2.2 | 1h | ✅ |
 
-**B1–B4b implemented.** Corpse stocks are functionally identical to crates but:
+**Phase B: ALL TASKS COMPLETE.** B1–B4b implemented; B5–B7 verified as already built. Corpse stocks are functionally identical to crates but:
 - Yield less loot (1–2 coins/slot vs 2–3, +3 seal bonus vs +5)
 - Include a mandatory **suit card slot** requiring a matching ♠♣♦♥ combat card
 - Sealing with matched suit card enables **reanimation → friendly NPC**
@@ -332,7 +372,7 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 **New files**: `engine/crate-system.js` (Layer 1), `engine/crate-ui.js` (Layer 2), `engine/corpse-peek.js` (Layer 3)
 **Modified**: `corpse-registry.js` (auto-creates corpse stock + suit-gated reanimate), `breakable-spawner.js` (auto-creates crate containers), `interact-prompt.js` (Gleaner mode labels), `grid-gen.js` (floorId passthrough), `floor-manager.js` (floorId in opts)
 
-**Phase B total**: ~9.5h (~6.5h complete, ~4h remaining for B5–B7)
+**Phase B total**: ~9.5h — **ALL COMPLETE** ✅
 **Unblocks**: Phase C (cleaning needs working crate economy), Phase E (hero encounters need restockable dungeon)
 **Design refs**: DOC-4 §17.2 (crate slot schema), DOC-2 §13 (Gleaner pivot data structures)
 
@@ -346,34 +386,71 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 ### 🟡 PHASE C — Tile Cleaning & Dungeon Reset (Days 3–4: Mar 30–31)
 > The second and third gameplay loops. Grid-by-grid cleaning + readiness score.
 
-| # | Task | Source Doc | Section | Est. | Depends On |
-|---|------|-----------|---------|------|------------|
-| C1 | Tile condition states + cleaning-system.js | DOC-2 TUTORIAL | §16 Phase 2 | 2h | — |
-| C2 | Texture-atlas dirty/clean variants (64×64) | DOC-4 BIOME | §17.1 | 1.5h | C1 |
-| C3 | Progressive cleaning tools (Rag → Mop → Brush) | DOC-2 TUTORIAL | §15 | 1h | C1 |
-| C4 | Dungeon reset tasks: work-order-system.js | DOC-2 TUTORIAL | §16 Phase 3 | 2h | B1 |
-| C5 | Readiness score (weighted: crates 40%, clean 30%, traps 20%, puzzles 10%) | DOC-4 BIOME | §17.3 | 1h | C1, C4 |
-| C6 | Floor deck reshuffle on transition | DOC-1 GAP | T2.4 | 30m | — |
+| # | Task | Source Doc | Section | Est. | Depends On | Status |
+|---|------|-----------|---------|------|------------|--------|
+| C1 | Tile condition states + cleaning-system.js | DOC-2 TUTORIAL | §16 Phase 2 | 2h | — | ✅ DONE |
+| C2 | Blood rendering in raycaster + readiness HUD bar | DOC-4 BIOME | §17.1 | 1.5h | C1 | ✅ DONE |
+| C3 | Progressive cleaning tools (scrub speed scales with equipped tool) | DOC-2 TUTORIAL | §15 | 1h | C1 | ✅ DONE |
+| C4 | Dungeon reset tasks: work-order-system.js | DOC-2 TUTORIAL | §16 Phase 3 | 2h | B1 | ✅ DONE |
+| C5 | Readiness score (weighted: crates 40%, clean 30%, traps 20%, misc 10%) | DOC-4 BIOME | §17.3 | 1h | C1, C4 | ✅ DONE |
+| C6 | Floor deck reshuffle on transition | DOC-1 GAP | T2.4 | 30m | — | ✅ DONE |
+| C7 | Trap re-arm mechanic + cobweb module wiring | DOC-2 TUTORIAL | §16 | 30m | C1 | ✅ DONE |
+| C8 | Wire work orders into game flow (post on arrive, evaluate on return) | DOC-2 TUTORIAL | §16 Phase 3 | 45m | C4 | ✅ DONE |
 
-**Phase C total**: ~8h
+**Phase C status**: **ALL 8 TASKS COMPLETE** ✅. Blood rendering, HUD readiness bar, progressive cleaning tools, trap re-arm, cobweb system wiring, and work order game flow all operational.
 **Unblocks**: Phase E (fully maintainable dungeon for Heroes to trash), Phase F (cleaning tools need progression unlock)
-**Design refs**: DOC-4 §17.1 (cleaning), §17.3 (readiness), DOC-2 §15 (pressure wash)
+**Design refs**: DOC-4 §17.1 (cleaning), §17.3 (readiness), DOC-2 §15 (pressure wash), DOC-30 (bonfire polish), DOC-31 (cobweb/trap strategy)
 
 ---
 
-### 🟢 PHASE D — Hero AI & Patrol Routes (Days 4–5: Mar 31 – Apr 1)
-> Heroes enter the dungeon. The stealth tension begins.
+### 🔴 PHASE C.5 — Stardew Day Loop & Status Effects (Days 3–4: Mar 30–31)
+> **Critical path.** The Stardew Valley-style day loop that gives meaning to time, sleep, hero cycles, and consequences. Without this, the cleaning/restocking mechanics have no temporal pressure. Sourced from GAP_ANALYSIS.md.
+
+| # | Task | Source Doc | Section | Est. | Status |
+|---|------|-----------|---------|------|--------|
+| C5.1 | `bed-peek.js` — Sleep verb, day advancement, fade-to-black → dawn | GAP_ANALYSIS | G1/Sprint 1 | 2h | ✅ DONE |
+| C5.2 | `hero-run.js` — Overnight hero-run calculator (4 hero types, carnage, payout tiers) | GAP_ANALYSIS | G4/Sprint 1 | 2h | ✅ DONE |
+| C5.3 | `mailbox-peek.js` — Accumulated report stack, staggered payout juice | GAP_ANALYSIS | G3/Sprint 2 | 3h | ✅ DONE |
+| C5.4 | HUD day/cycle counter — "Day 2 (1/3) ⚔️ HERO DAY" with time display | GAP_ANALYSIS | G12 | 1h | ✅ DONE |
+| C5.5 | `game.js` — Sprint 1+2 wiring (BedPeek↔HeroRun↔MailboxPeek pipeline) | GAP_ANALYSIS | Sprint 1-2 | 2h | ✅ DONE |
+| C5.6 | `status-effect.js` — Modular buff/debuff registry (6 built-in effects, paired transitions, stat aggregators) | GAP_ANALYSIS | G5 | 2h | ✅ DONE |
+| C5.7 | `status-effect-hud.js` — Buff/debuff icon rows in debrief feed, flash animations, click-for-tooltip | GAP_ANALYSIS | G5 | 1.5h | ✅ DONE |
+| C5.8 | DayCycle tired/curfew split — `setOnTired` (21:00 wolf howl) + `setOnCurfew` (02:00 forced home) | GAP_ANALYSIS | G6 | 1h | ✅ DONE |
+| C5.9 | WELL_RESTED ↔ TIRED paired daily cycle — sun buff by day, moon debuff at night | DOC-7 JUICE | §5.5 | 1h | ✅ DONE |
+| C5.10 | Curfew card confiscation on lethal floors (depth 3+) — hero pockets a card | GAP_ANALYSIS | G6 | 30m | ✅ DONE |
+| C5.11 | Depth-2 exit guard — DialogBox confirmation when leaving interior during curfew hours | DOC-10 COZY | §2 | 30m | ✅ DONE |
+| C5.12 | Home door rest shortcut — rest at front door when TIRED (depth-1, no time-freeze) | DOC-7 JUICE | §5.5 | 30m | ✅ DONE |
+| C5.13 | BedPeek clock fix — unpause DayCycle for REST, grant WELL_RESTED if sleep < 23:00 | DOC-10 COZY | §2 | 30m | ✅ DONE |
+| C5.14 | Death → home rescue — both depths, StatusEffect debuffs, hero narrative Toasts | GAP_ANALYSIS | G11 | 1h | ✅ DONE |
+| C5.15 | Player.js stat delegation — `getWalkTimeMultiplier`/`getCleanEfficiencyMod` → StatusEffect | GAP_ANALYSIS | G5 | 15m | ✅ DONE |
+| C5.16 | Day 0 hero-run guard — skip overnight run on day 0 (pre-existing carnage) | GAP_ANALYSIS | Sprint 4 | 15m | ✅ DONE |
+| C5.17 | Dispatcher gate → DialogBox dialogue tree — 3-branch contextual conversation | GAP_ANALYSIS | G7/Sprint 4 | 45m | ✅ DONE |
+| C5.18 | Verify B1-B4 cooperates with day/night cycle (crate/corpse peeks, bonfire rest) | — | — | 30m | ✅ DONE (all isolated; added PeekSlots.close() to curfew + death rescue) |
+| C5.19 | B5: Shop round-trip (buy restock supplies wired to economy) | DOC-1 GAP | T2 | 0h | ✅ DONE (already built: 3-face shop MenuBox, _shopBuy/_shopSellFromHand/_shopSellPart) |
+| C5.20 | B6: Bag inventory viewer (minimal peek showing bag contents) | DOC-1 GAP | T2.1 | 0h | ✅ DONE (already built: unified inventory face with equipped/bag/hand/deck/incinerator) |
+
+**New files**: `engine/status-effect.js` (Layer 1), `engine/status-effect-hud.js` (Layer 2), `engine/bed-peek.js` (Layer 3), `engine/mailbox-peek.js` (Layer 3), `engine/hero-run.js` (Layer 1)
+**Modified**: `engine/game.js` (heavy wiring + PeekSlots close guards), `engine/day-cycle.js` (tired/curfew split, interior time-freeze), `engine/player.js` (debuff system + StatusEffect delegation), `engine/hazard-system.js` (death→home rescue), `index.html` (4 new script tags)
+
+**Phase C.5 status**: **20/20 TASKS COMPLETE** ✅ — PHASE CLOSED.
+**Unblocks**: Phase D (hero AI needs working day loop for Hero Day scheduling), Phase E (faction economy needs shop wiring), Phase F (economy tuning needs StatusEffect modifiers)
+**Design refs**: GAP_ANALYSIS.md (full gap analysis), DOC-7 §5 (day/night), §17 (death/curfew), DOC-10 §2 (time-freeze)
+
+---
+
+### 🟢 PHASE D — Hero AI & Patrol Routes (Days 4–5: Mar 31 – Apr 1) ✅ COMPLETE
+> Heroes enter the dungeon. The stealth tension begins. (Pivoted to abstract carnage model.)
 
 | # | Task | Source Doc | Section | Est. | Depends On |
 |---|------|-----------|---------|------|------------|
-| D1 | hero-system.js: 4 hero types (Seeker/Scholar/Shadow/Crusader) | DOC-2 TUTORIAL | §14, §16 Phase 4 | 2h | A3 (stealth extraction) |
-| D2 | Patrol route generation (waypoint graph on grid) | DOC-4 BIOME | §18.2 | 1.5h | D1 |
-| D3 | 60° sight cone detection + Bresenham LOS | DOC-3 GONE_ROGUE | enemy-ai.js (ported) | 1h | A3, A4 |
-| D4 | Detection state machine (stealth bonuses applied) | DOC-4 BIOME | §18.3 | 1.5h | A3, A4, D3 |
-| D5 | Hero cycle timer (10min default, escalating) | DOC-2 TUTORIAL | §14 | 30m | D1 |
-| D6 | "Wake of Carnage" — Heroes break crates, kill monsters, loot | DOC-2 TUTORIAL | §6.3 | 1.5h | D1, B1 |
+| D1 | hero-system.js: 4 hero types (Seeker/Scholar/Shadow/Crusader) | DOC-2 TUTORIAL | §14, §16 Phase 4 | 2h | ✅ DONE (full type defs, carnage signatures, visual props) |
+| D2 | Patrol route generation (waypoint graph on grid) | DOC-4 BIOME | §18.2 | 1.5h | ✅ DONE (abstract: generateCarnageManifest() replaces real-time patrol) |
+| D3 | 60° sight cone detection + Bresenham LOS | DOC-3 GONE_ROGUE | enemy-ai.js (ported) | 1h | ✅ DONE (EnemyAI + AwarenessConfig for regular enemies) |
+| D4 | Detection state machine (stealth bonuses applied) | DOC-4 BIOME | §18.3 | 1.5h | ✅ DONE (4-state UNAWARE→SUSPICIOUS→ALERTED→ENGAGED) |
+| D5 | Hero cycle timer (10min default, escalating) | DOC-2 TUTORIAL | §14 | 30m | ✅ DONE (3-day DayCycle interval, hero type cycling) |
+| D6 | "Wake of Carnage" — Heroes break crates, kill monsters, loot | DOC-2 TUTORIAL | §6.3 | 1.5h | ✅ DONE (carnage manifest + overnight hero run + mailbox reports) |
 
-**Phase D total**: ~8h
+**Phase D total**: ALL 6 TASKS COMPLETE ✅ (architectural pivot: abstract carnage instead of real-time patrol)
 **Unblocks**: Phase E (boss encounters need working Hero AI), playtest loop (stealth + maintenance = core game)
 **Design refs**: DOC-4 §18 (full hero system), DOC-2 §6 (hero reveal), §14 (hero path)
 
@@ -384,14 +461,14 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 
 | # | Task | Source Doc | Section | Est. | Depends On |
 |---|------|-----------|---------|------|------------|
-| E1 | Hero boss fight mechanics (3 stages: flee → ambush → duel) | DOC-2 TUTORIAL | §16 Phase 6 | 2h | D1–D4 |
-| E2 | Hero combat deck (Cleave ♠, Force Ward ♣, Precision Strike ♦, Dragon Slayer ♥) | DOC-4 BIOME | §9 | 1h | E1 |
-| E3 | Faction rep tier unlock feedback | DOC-1 GAP | T2.3 | 1h | B5 |
-| E4 | Faction shop inventory gating (Tide/Foundry/Admiralty) | DOC-4 BIOME | §19.2 | 1h | E3 |
-| E5 | Victory / Game Over stat summaries | DOC-1 GAP | T2.5 | 1h | — |
-| E6 | NCH widget drag-to-reorder | DOC-1 GAP | T2.6 | 1.5h | — |
+| E1 | Hero boss fight mechanics (3 stages: flee → ambush → duel) | DOC-2 TUTORIAL | §16 Phase 6 | 2h | ❌ NOT STARTED — no 3-stage encounter code |
+| E2 | Hero combat deck (Cleave ♠, Force Ward ♣, Precision Strike ♦, Dragon Slayer ♥) | DOC-4 BIOME | §9 | 1h | ❌ NOT STARTED — card data documented only |
+| E3 | Faction rep tier unlock feedback | DOC-1 GAP | T2.3 | 1h | ⚠️ PARTIAL — repTier gating works, no unlock toast |
+| E4 | Faction shop inventory gating (Tide/Foundry/Admiralty) | DOC-4 BIOME | §19.2 | 1h | ✅ DONE (getByPool + dropTier filtering) |
+| E5 | Victory / Game Over stat summaries | DOC-1 GAP | T2.5 | 1h | ✅ DONE (victory-screen.js + game-over-screen.js) |
+| E6 | NCH widget drag-to-reorder | DOC-1 GAP | T2.6 | 1.5h | ✅ DONE (widget drag-to-move + CardFan drag-to-reorder both implemented) |
 
-**Phase E total**: ~7.5h
+**Phase E status**: E4/E5/E6 complete, E3 partial (rep toast), **E1/E2 are new work** (~3h for jam-scope boss encounter)
 **Unblocks**: Phase F (economy tuning needs faction system wired)
 **Design refs**: DOC-4 §9 (bosses), §19 (faction economy), DOC-2 §6 (hero reveal)
 
@@ -438,11 +515,14 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 ```
          ┌─ A1 Telegraph ──┐
          ├─ A2 Corpse tile ─┤
-PHASE A ─┤                  ├──► PHASE B (Crate System)
+PHASE A ─┤                  ├──► PHASE B (Crate System) ─── B1-B4b ✅
          ├─ A3 Stealth.js ──┤        │
          └─ A4 Awareness ───┘        │
               │                       ▼
-              │               PHASE C (Cleaning + Reset)
+              │               PHASE C (Cleaning + Reset) ── ALL ✅
+              │                       │
+              │                       ▼
+              │               PHASE C.5 (Stardew Loop + StatusEffect) ── 20/20 ✅ CLOSED
               │                       │
               ▼                       │
          PHASE D (Hero AI) ◄──────────┘

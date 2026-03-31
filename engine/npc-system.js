@@ -314,6 +314,104 @@ var NpcSystem = (function () {
         _tickBark(npc, playerPos, dt);
       }
     }
+
+    // Dialogue ping-pong: when two NPCs are within 2 tiles, alternate
+    // the rolling ellipsis between them so it looks like conversation.
+    _tickDialoguePingPong(dt);
+  }
+
+  // ── Dialogue ping-pong state ─────────────────────────────────────
+  var _dialoguePairs = [];       // [{ a: npc, b: npc, timer: ms, beat: 0|1, active: bool }]
+  var DIALOGUE_PAIR_DIST = 2;    // Max tile distance for NPC-NPC dialogue
+  var DIALOGUE_BEAT_MS   = 1800; // Time per speech beat before switching speaker
+  var DIALOGUE_BEATS     = 6;    // Total beats before pair goes silent
+
+  function _tickDialoguePingPong(dt) {
+    if (typeof KaomojiCapsule === 'undefined') return;
+
+    // Rebuild pair list every ~2 seconds (cheap scan)
+    _dialoguePairRebuildTimer = (_dialoguePairRebuildTimer || 0) - dt;
+    if (_dialoguePairRebuildTimer <= 0) {
+      _dialoguePairRebuildTimer = 2000;
+      _rebuildDialoguePairs();
+    }
+
+    // Advance each active pair
+    for (var i = _dialoguePairs.length - 1; i >= 0; i--) {
+      var pair = _dialoguePairs[i];
+      if (!pair.active) continue;
+
+      pair.timer -= dt;
+      if (pair.timer <= 0) {
+        pair.beatCount++;
+        if (pair.beatCount >= DIALOGUE_BEATS) {
+          // Conversation over — dismiss both
+          KaomojiCapsule.stopSpeech(pair.a.id);
+          KaomojiCapsule.stopSpeech(pair.b.id);
+          pair.active = false;
+          continue;
+        }
+        // Switch speaker
+        pair.beat = 1 - pair.beat;
+        pair.timer = DIALOGUE_BEAT_MS;
+
+        var speaker = pair.beat === 0 ? pair.a : pair.b;
+        var listener = pair.beat === 0 ? pair.b : pair.a;
+        KaomojiCapsule.startSpeech(speaker.id, 'speaking');
+        KaomojiCapsule.stopSpeech(listener.id);
+      }
+    }
+  }
+
+  var _dialoguePairRebuildTimer = 0;
+
+  function _rebuildDialoguePairs() {
+    // Mark all existing pairs inactive — will be reactivated if still valid
+    for (var p = 0; p < _dialoguePairs.length; p++) {
+      _dialoguePairs[p]._checked = false;
+    }
+
+    // Find NPC pairs within DIALOGUE_PAIR_DIST
+    for (var i = 0; i < _active.length; i++) {
+      for (var j = i + 1; j < _active.length; j++) {
+        var a = _active[i], b = _active[j];
+        if (!a.barkPool || !b.barkPool) continue;
+        var dx = a.x - b.x, dy = a.y - b.y;
+        if (dx * dx + dy * dy > DIALOGUE_PAIR_DIST * DIALOGUE_PAIR_DIST) continue;
+
+        // Check if this pair already exists
+        var found = false;
+        for (var p = 0; p < _dialoguePairs.length; p++) {
+          var pp = _dialoguePairs[p];
+          if ((pp.a === a && pp.b === b) || (pp.a === b && pp.b === a)) {
+            pp._checked = true;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          // New pair — start conversation
+          _dialoguePairs.push({
+            a: a, b: b,
+            beat: 0, beatCount: 0,
+            timer: DIALOGUE_BEAT_MS,
+            active: true, _checked: true
+          });
+          if (typeof KaomojiCapsule !== 'undefined') {
+            KaomojiCapsule.startSpeech(a.id, 'speaking');
+          }
+        }
+      }
+    }
+
+    // Remove pairs that are no longer close
+    for (var p = _dialoguePairs.length - 1; p >= 0; p--) {
+      if (!_dialoguePairs[p]._checked && _dialoguePairs[p].active) {
+        KaomojiCapsule.stopSpeech(_dialoguePairs[p].a.id);
+        KaomojiCapsule.stopSpeech(_dialoguePairs[p].b.id);
+        _dialoguePairs.splice(p, 1);
+      }
+    }
   }
 
   function _tickPatrol(npc, dt, grid) {
@@ -370,20 +468,122 @@ var NpcSystem = (function () {
     }
   }
 
-  function _tickBark(npc, playerPos, dt) {
+  // ── Depth-scaled bark radius ──────────────────────────────────────
+  // Dungeon floors (depth 3+) use huge radius so all barks are audible.
+  // Exterior floors (depth 1) use small radius with forward bias:
+  //   ~3 tiles around player, ~5 tiles in player's forward direction.
+  // Interior floors (depth 2) use moderate radius (original barkRadius).
+
+  var _DIR_DX = [1, 0, -1, 0];   // EAST, SOUTH, WEST, NORTH
+  var _DIR_DY = [0, 1, 0, -1];
+
+  function _isInBarkRange(npc, playerPos, playerDir, floorId) {
     var dx = npc.x - playerPos.x;
     var dy = npc.y - playerPos.y;
     var distSq = dx * dx + dy * dy;
-    var radiusSq = npc.barkRadius * npc.barkRadius;
+    var depth = floorId ? floorId.split('.').length : 1;
 
-    var inRadius = distSq <= radiusSq;
+    if (depth >= 3) {
+      // Dungeon: huge radius — hear everything on the floor
+      return distSq <= 20 * 20;
+    }
+
+    if (depth === 1) {
+      // Exterior: small surround + larger forward cone
+      var surroundR = 3;
+      if (distSq <= surroundR * surroundR) return true;
+
+      // Forward bias: project NPC offset onto player facing
+      var fdx = _DIR_DX[playerDir] || 0;
+      var fdy = _DIR_DY[playerDir] || 0;
+      var dot = dx * fdx + dy * fdy;
+      // In front of player AND within 5 tiles forward, 2 tiles lateral
+      if (dot > 0 && dot <= 5) {
+        var cross = Math.abs(dx * fdy - dy * fdx);
+        if (cross <= 2) return true;
+      }
+      return false;
+    }
+
+    // Interior (depth 2): use NPC's native barkRadius
+    return distSq <= npc.barkRadius * npc.barkRadius;
+  }
+
+  // Speech capsule duration — how long the rolling ellipsis shows above NPC
+  var SPEECH_CAPSULE_MS = 3000;
+
+  /**
+   * Resolve the best bark pool for the current time of day.
+   * Tries time-suffixed pool first (e.g. "ambient.promenade.heroday"),
+   * then NPC-specific time pool (e.g. "npc.guild_veteran.heroday"),
+   * falling back to the base pool if no timed variant exists.
+   */
+  function _resolveTimedBarkPool(basePool) {
+    if (typeof DayCycle === 'undefined') return basePool;
+    var suffix = DayCycle.getBarkTimeSuffix();
+    if (!suffix) return basePool;
+
+    var timedPool = basePool + '.' + suffix;
+    if (BarkLibrary.hasPool(timedPool)) return timedPool;
+
+    // For NPC pools like "npc.guild_veteran.ambient", try replacing
+    // the last segment: "npc.guild_veteran.heroday"
+    var parts = basePool.split('.');
+    if (parts.length >= 3) {
+      parts[parts.length - 1] = suffix;
+      var altPool = parts.join('.');
+      if (BarkLibrary.hasPool(altPool)) return altPool;
+    }
+
+    return basePool;
+  }
+
+  function _tickBark(npc, playerPos, dt) {
+    // Use depth-aware radius check
+    var floorId = (typeof FloorManager !== 'undefined' && FloorManager.getFloor)
+      ? FloorManager.getFloor() : null;
+    var playerDir = (typeof Player !== 'undefined' && Player.getDir)
+      ? Player.getDir() : 0;
+
+    var inRadius = _isInBarkRange(npc, playerPos, playerDir, floorId);
 
     if (inRadius) {
       // Countdown the bark timer while player is in range
       npc._barkTimer -= dt;
       if (npc._barkTimer <= 0) {
-        BarkLibrary.fire(npc.barkPool);
+        // Resolve time-aware bark pool (heroday, morning, dusk, night)
+        var pool = _resolveTimedBarkPool(npc.barkPool);
+
+        // 15% chance to fire a callsign/class bark instead (personal touch)
+        // Only on exterior/guild floors where NPCs would know the player
+        if (Math.random() < 0.15 && typeof Player !== 'undefined' && Player.state) {
+          var ps = Player.state();
+          var className = (ps.avatarName || '').toLowerCase();
+          // Try class-specific pool first, then generic callsign pool
+          var classPool = 'ambient.class.' + className;
+          if (className && BarkLibrary.hasPool(classPool)) {
+            pool = classPool;
+          } else if (BarkLibrary.hasPool('ambient.callsign')) {
+            pool = 'ambient.callsign';
+          }
+          // Guild NPCs get the guild-specific callsign pool
+          if (npc.barkPool && npc.barkPool.indexOf('npc.guild') === 0 &&
+              BarkLibrary.hasPool('npc.guild.callsign')) {
+            pool = 'npc.guild.callsign';
+          }
+        }
+
+        BarkLibrary.fire(pool);
         npc._barkTimer = npc.barkInterval;
+
+        // Show rolling ellipsis speech capsule above barking NPC
+        if (typeof KaomojiCapsule !== 'undefined') {
+          KaomojiCapsule.startSpeech(npc.id);
+          // Auto-dismiss after bark duration
+          setTimeout(function () {
+            KaomojiCapsule.stopSpeech(npc.id);
+          }, SPEECH_CAPSULE_MS);
+        }
       }
     } else {
       // Out of range — reset timer so next entry fires promptly
@@ -449,6 +649,11 @@ var NpcSystem = (function () {
   }
 
   function _interactInteractive(npc) {
+    // Show speech capsule above NPC during interaction
+    if (typeof KaomojiCapsule !== 'undefined') {
+      KaomojiCapsule.startSpeech(npc.id, 'greeting');
+    }
+
     // Prefer a registered DialogBox tree over a bark pool
     var tree = _trees[npc.id];
     if (tree && typeof DialogBox !== 'undefined') {
@@ -461,8 +666,15 @@ var NpcSystem = (function () {
     // Fall back: fire the interaction bark pool
     if (npc.dialoguePool && typeof BarkLibrary !== 'undefined') {
       BarkLibrary.fire(npc.dialoguePool, { style: 'dialog' });
+      // Auto-dismiss speech capsule after bark
+      if (typeof KaomojiCapsule !== 'undefined') {
+        setTimeout(function () { KaomojiCapsule.stopSpeech(npc.id); }, SPEECH_CAPSULE_MS);
+      }
     } else if (npc.barkPool && typeof BarkLibrary !== 'undefined') {
       BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
+      if (typeof KaomojiCapsule !== 'undefined') {
+        setTimeout(function () { KaomojiCapsule.stopSpeech(npc.id); }, SPEECH_CAPSULE_MS);
+      }
     }
   }
 
@@ -709,6 +921,240 @@ var NpcSystem = (function () {
         barkInterval: 32000
       }
     ]);
+
+    // ── Floor 1.2: Driftwood Inn ─────────────────────────────────
+    // Innkeeper + a grumpy resident who doesn't want you there.
+    register('1.2', [
+      {
+        id:           'inn_keeper',
+        type:         TYPES.INTERACTIVE,
+        x: 6, y: 4,
+        facing:       'south',
+        emoji:        '🧔',
+        name:         'Innkeeper Marlo',
+        talkable:     true,
+        patrolPoints: null,  // Behind the bar
+        barkPool:     'npc.innkeeper.ambient',
+        barkRadius:   4,
+        barkInterval: 25000,
+        dialoguePool: 'npc.innkeeper.ambient'
+      },
+      {
+        id:           'inn_patron_grumpy',
+        type:         TYPES.INTERACTIVE,
+        x: 10, y: 8,
+        facing:       'west',
+        emoji:        '😤',
+        name:         'Grumpy Patron',
+        talkable:     true,
+        patrolPoints: null,  // Sitting at a table
+        barkPool:     'npc.resident.annoyed',
+        barkRadius:   3,
+        barkInterval: 20000,
+        dialoguePool: 'npc.resident.annoyed'
+      },
+      {
+        id:           'inn_patron_quiet',
+        type:         TYPES.AMBIENT,
+        x: 4, y: 8,
+        facing:       'east',
+        emoji:        '🧑',
+        name:         'Quiet Patron',
+        patrolPoints: [{ x: 4, y: 8 }, { x: 4, y: 6 }],
+        stepInterval: 2200,
+        barkPool:     'interior.inn',
+        barkRadius:   3,
+        barkInterval: 35000
+      }
+    ]);
+
+    // ── Floor 1.3: Cellar Entrance ────────────────────────────────
+    // A nervous resident guarding the cellar stairs.
+    register('1.3', [
+      {
+        id:           'cellar_resident',
+        type:         TYPES.INTERACTIVE,
+        x: 6, y: 6,
+        facing:       'south',
+        emoji:        '😰',
+        name:         'Cellar Owner',
+        talkable:     true,
+        patrolPoints: null,
+        barkPool:     'npc.resident.annoyed',
+        barkRadius:   3,
+        barkInterval: 22000,
+        dialoguePool: 'npc.resident.annoyed'
+      }
+    ]);
+
+    // ── Floor 2: Lantern Row ──────────────────────────────────────
+    register('2', [
+      {
+        id:           'floor2_citizen_1',
+        type:         TYPES.AMBIENT,
+        x: 6, y: 8,
+        facing:       'east',
+        emoji:        '🧑',
+        name:         'Shopkeeper',
+        patrolPoints: [{ x: 6, y: 8 }, { x: 10, y: 8 }],
+        stepInterval: 1500,
+        barkPool:     'ambient.lanternrow',
+        barkRadius:   3,
+        barkInterval: 25000
+      },
+      {
+        id:           'floor2_citizen_2',
+        type:         TYPES.AMBIENT,
+        x: 12, y: 6,
+        facing:       'south',
+        emoji:        '👩',
+        name:         'Courier',
+        patrolPoints: [{ x: 12, y: 6 }, { x: 12, y: 10 }],
+        stepInterval: 1200,
+        barkPool:     'ambient.lanternrow',
+        barkRadius:   3,
+        barkInterval: 28000
+      },
+      {
+        id:           'floor2_tide_1',
+        type:         TYPES.AMBIENT,
+        x: 4, y: 10,
+        facing:       'north',
+        emoji:        '🧙',
+        name:         'Tide Envoy',
+        role:         'tide_member',
+        patrolPoints: [{ x: 4, y: 10 }, { x: 8, y: 10 }],
+        stepInterval: 1600,
+        barkPool:     'faction.tide',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      {
+        id:           'floor2_admiralty_1',
+        type:         TYPES.AMBIENT,
+        x: 14, y: 6,
+        facing:       'west',
+        emoji:        '👮',
+        name:         'Admiralty Patrol',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 14, y: 6 }, { x: 14, y: 10 }],
+        stepInterval: 1400,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 26000
+      }
+    ]);
+
+    // ── Floor 2.1: Dispatcher's Office ────────────────────────────
+    // Friendly guild NPCs: a veteran Gleaner, a clerk, and a rookie.
+    // All talkable (INTERACTIVE) with dialogue trees wired at init.
+    register('2.1', [
+      {
+        id:           'dispatch_veteran',
+        type:         TYPES.INTERACTIVE,
+        x: 4, y: 6,
+        facing:       'east',
+        emoji:        '🧔',
+        name:         'Ren',
+        role:         'guild_veteran',
+        talkable:     true,
+        patrolPoints: [{ x: 4, y: 6 }, { x: 6, y: 6 }],
+        stepInterval: 2000,
+        barkPool:     'npc.guild_veteran.ambient',
+        barkRadius:   4,
+        barkInterval: 22000,
+        dialoguePool: 'npc.guild_veteran.ambient'
+      },
+      {
+        id:           'dispatch_clerk',
+        type:         TYPES.INTERACTIVE,
+        x: 10, y: 4,
+        facing:       'south',
+        emoji:        '👩‍💼',
+        name:         'Sable',
+        role:         'guild_clerk',
+        talkable:     true,
+        patrolPoints: null,  // Stationary — behind the desk
+        barkPool:     'npc.guild_clerk.ambient',
+        barkRadius:   3,
+        barkInterval: 28000,
+        dialoguePool: 'npc.guild_clerk.ambient'
+      },
+      {
+        id:           'dispatch_rookie',
+        type:         TYPES.INTERACTIVE,
+        x: 8, y: 8,
+        facing:       'west',
+        emoji:        '🧒',
+        name:         'Pip',
+        role:         'guild_rookie',
+        talkable:     true,
+        patrolPoints: [{ x: 8, y: 8 }, { x: 6, y: 8 }],
+        stepInterval: 1800,
+        barkPool:     'npc.guild_rookie.ambient',
+        barkRadius:   4,
+        barkInterval: 24000,
+        dialoguePool: 'npc.guild_rookie.ambient'
+      },
+      {
+        id:           'dispatch_ambient_1',
+        type:         TYPES.AMBIENT,
+        x: 12, y: 6,
+        facing:       'north',
+        emoji:        '🧑',
+        name:         'Gleaner',
+        patrolPoints: [{ x: 12, y: 6 }, { x: 12, y: 8 }],
+        stepInterval: 1600,
+        barkPool:     'interior.dispatch',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      {
+        id:           'dispatch_ambient_2',
+        type:         TYPES.AMBIENT,
+        x: 6, y: 10,
+        facing:       'east',
+        emoji:        '👷',
+        name:         'Gleaner',
+        patrolPoints: [{ x: 6, y: 10 }, { x: 10, y: 10 }],
+        stepInterval: 1500,
+        barkPool:     'interior.dispatch',
+        barkRadius:   3,
+        barkInterval: 32000
+      }
+    ]);
+
+    // ── Floor 2.2: Watchman's Post ────────────────────────────────
+    register('2.2', [
+      {
+        id:           'watchpost_watchman',
+        type:         TYPES.INTERACTIVE,
+        x: 6, y: 6,
+        facing:       'south',
+        emoji:        '🫡',
+        name:         'The Watchman',
+        talkable:     true,
+        patrolPoints: null,  // Stationary — on watch
+        barkPool:     'interior.watchpost',
+        barkRadius:   4,
+        barkInterval: 35000,
+        dialoguePool: 'interior.watchpost'
+      },
+      {
+        id:           'watchpost_guard',
+        type:         TYPES.AMBIENT,
+        x: 10, y: 8,
+        facing:       'west',
+        emoji:        '💂',
+        name:         'Admiralty Guard',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 10, y: 8 }, { x: 10, y: 6 }],
+        stepInterval: 1600,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 30000
+      }
+    ]);
   }
 
   // ── Utility ───────────────────────────────────────────────────────
@@ -719,6 +1165,8 @@ var NpcSystem = (function () {
    */
   function clearActive() {
     _active = [];
+    _dialoguePairs = [];
+    _dialoguePairRebuildTimer = 0;
   }
 
   /**

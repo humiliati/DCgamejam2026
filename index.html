@@ -1183,39 +1183,155 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      line-height: 1.4;
-      min-height: 22px;
+      line-height: 1.5;
+      min-height: 24px;
+      padding-right: 80px; /* room for expand button */
+      font-weight: 500;
+      text-shadow: 0 0 6px rgba(51,255,136,0.15);
+      transition: white-space 0.2s;
+    }
+    /* When dialogue is active, the latest row wraps and grows */
+    .sb-tooltip-latest.sb-dialogue-mode {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      max-height: none;
+      padding-right: 10px;
     }
     .sb-tooltip-history {
       max-height: 0;
       overflow-y: auto;
       transition: max-height 0.3s ease;
-      font-size: 14px;
-      color: var(--phosphor-dim);
-      line-height: 1.3;
+      font-size: 12px;
+      color: rgba(180,200,180,0.55);
+      line-height: 1.35;
     }
     #status-bar.sb-expanded .sb-tooltip-history {
-      max-height: 140px;
+      max-height: 320px;
     }
-    .sb-tooltip-history::-webkit-scrollbar { width: 3px; }
+    .sb-tooltip-history::-webkit-scrollbar { width: 4px; }
     .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border-radius: 2px; }
-    .sb-tooltip-history::-webkit-scrollbar-track { background: transparent; }
+    .sb-tooltip-history::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
     .sb-tooltip-entry {
-      padding: 1px 0;
+      padding: 2px 0;
       border-bottom: 1px solid rgba(51,255,136,0.04);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
     }
     .sb-tooltip-entry .sb-tt-time {
-      font-size: 12px;
-      color: rgba(51,255,136,0.4);
-      margin-right: 6px;
+      font-size: 10px;
+      color: rgba(51,255,136,0.25);
+      flex-shrink: 0;
+      min-width: 34px;
     }
-    /* Expand indicator */
+    .sb-tooltip-entry .sb-tt-text {
+      flex: 1;
+    }
+    /* New entries flash brighter then settle */
+    .sb-tooltip-entry:first-child {
+      color: rgba(200,220,200,0.7);
+    }
+    /* Category color dots for scannable history */
+    .sb-tooltip-entry .sb-tt-cat {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+    .sb-tt-cat-loot     { background: #8fd8a0; }
+    .sb-tt-cat-warning  { background: #fd8; }
+    .sb-tt-cat-currency { background: #f0d070; }
+    .sb-tt-cat-info     { background: rgba(51,255,136,0.4); }
+    .sb-tt-cat-damage   { background: #f88; }
+    .sb-tt-cat-hp       { background: #f09090; }
+    .sb-tt-cat-dim      { background: rgba(120,120,130,0.5); }
+    .sb-tt-cat-npc      { background: #a0c8f0; }
+    .sb-tt-cat-dialogue { background: #f0d070; }
+
+    /* ── Inline dialogue in tooltip (Canon Phase 1) ─────────── */
+    .sb-dialogue-entry {
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(240,208,112,0.12);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 8px;
+      background: rgba(240,208,112,0.03);
+      border-left: 2px solid rgba(240,208,112,0.3);
+      padding-left: 8px;
+      margin: 2px 0;
+    }
+    .sb-dialogue-speaker {
+      font-weight: bold;
+      color: #f0d070;
+      font-size: 15px;
+      flex-shrink: 0;
+      text-shadow: 0 0 4px rgba(240,208,112,0.2);
+    }
+    .sb-dialogue-text {
+      color: #d8d0c0;
+      font-size: 14px;
+      flex: 1 1 100%;
+      margin: 3px 0;
+      line-height: 1.45;
+    }
+    .sb-dialogue-choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+      flex: 1 1 100%;
+      padding-top: 4px;
+      border-top: 1px solid rgba(102,204,102,0.1);
+    }
+    .sb-dialogue-choice {
+      color: #6c6;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      transition: background 0.1s, color 0.1s;
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(102,204,102,0.15);
+    }
+    .sb-dialogue-choice:hover {
+      color: #afa;
+      background: rgba(102,204,102,0.15);
+      border-color: rgba(102,204,102,0.35);
+    }
+    .sb-dialogue-choice-visited {
+      color: #585;
+      text-decoration: dotted underline;
+      opacity: 0.65;
+      border-color: rgba(102,204,102,0.08);
+    }
+    .sb-dialogue-choice-visited:hover {
+      color: #8a8;
+      background: rgba(102,204,102,0.06);
+    }
+    /* Expand button — visible, legible, inviting */
     .sb-expand-hint {
-      position: absolute; right: 12px; top: 4px;
-      font-size: 12px; color: var(--phosphor-dim);
-      opacity: 0.5;
+      position: absolute; right: 10px; top: 2px;
+      font-size: 14px;
+      color: var(--phosphor);
+      opacity: 0.7;
+      padding: 2px 8px;
+      border: 1px solid rgba(51,255,136,0.15);
+      border-radius: 4px;
+      background: rgba(51,255,136,0.04);
+      transition: opacity 0.15s, transform 0.3s, background 0.15s;
+      user-select: none;
     }
-    #status-bar.sb-expanded .sb-expand-hint { transform: rotate(180deg); }
+    .sb-expand-hint:hover {
+      opacity: 1;
+      background: rgba(51,255,136,0.1);
+    }
+    #status-bar.sb-expanded .sb-expand-hint { transform: rotate(180deg); opacity: 0.9; }
     .sb-btn {
       background: none; border: 1px solid var(--phosphor-dim);
       border-radius: 6px; padding: 4px 12px;
@@ -1478,7 +1594,7 @@
         <div class="sb-tooltip-area" id="sb-tooltip-area">
           <div class="sb-tooltip-latest" id="sb-tooltip-latest">Ready.</div>
           <div class="sb-tooltip-history" id="sb-tooltip-history"></div>
-          <span class="sb-expand-hint" id="sb-expand-hint">▾</span>
+          <span class="sb-expand-hint" id="sb-expand-hint">▾ LOG</span>
         </div>
       </div>
     </div>
@@ -1502,6 +1618,7 @@
   <script src="engine/awareness-config.js"></script>
 
   <!-- Layer 1: Core systems (depend on foundations) -->
+  <script src="engine/day-cycle.js"></script>
   <script src="engine/grid-gen.js"></script>
   <script src="engine/door-contracts.js"></script>
   <script src="engine/door-contract-audio.js"></script>
@@ -1532,8 +1649,11 @@
   <script src="engine/death-anim.js"></script>
   <script src="engine/bark-library.js"></script>
   <script src="engine/cleaning-system.js"></script>
+  <script src="engine/trap-rearm.js"></script>
   <script src="engine/readiness-calc.js"></script>
   <script src="engine/work-order-system.js"></script>
+  <script src="engine/hero-run.js"></script>
+  <script src="engine/status-effect.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>
@@ -1546,10 +1666,13 @@
   <script src="engine/drag-drop.js"></script>
   <script src="engine/slot-wheel.js"></script>
   <script src="engine/debrief-feed.js"></script>
+  <script src="engine/status-effect-hud.js"></script>
   <script src="engine/status-bar.js"></script>
   <script src="engine/quick-bar.js"></script>
   <script src="engine/dialog-box.js"></script>
   <script src="engine/toast.js"></script>
+  <script src="engine/particle-fx.js"></script>
+  <script src="engine/world-popup.js"></script>
   <script src="engine/transition-fx.js"></script>
   <script src="engine/card-fan.js"></script>
   <script src="engine/nch-widget.js"></script>
@@ -1568,6 +1691,7 @@
   <script src="engine/minimap-nav.js"></script>
   <script src="engine/intro-walk.js"></script>
   <script src="engine/npc-system.js"></script>
+  <script src="engine/hero-system.js"></script>
   <script src="engine/floor-transition.js"></script>
   <script src="engine/input-poll.js"></script>
   <script src="engine/interact-prompt.js"></script>
@@ -1581,6 +1705,8 @@
   <script src="engine/puzzle-peek.js"></script>
   <script src="engine/bookshelf-peek.js"></script>
   <script src="engine/bar-counter-peek.js"></script>
+  <script src="engine/bed-peek.js"></script>
+  <script src="engine/mailbox-peek.js"></script>
   <script src="engine/cobweb-node.js"></script>
   <script src="engine/combat-fx.js"></script>
   <script src="engine/combat-bridge.js"></script>
@@ -1594,9 +1720,4 @@
   <!-- Layer 4: Orchestrator (wires everything together) -->
   <script src="engine/game.js"></script>
 
-  <!-- Layer 5: Data (loaded after all engine modules) -->
-  <script src="data/strings/en.js"></script>
-  <script src="data/barks/en.js"></script>
-</body>
-</html>
-   
+  <!-- Layer 5: Da

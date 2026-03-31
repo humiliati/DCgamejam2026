@@ -20,7 +20,16 @@ var CleaningSystem = (function () {
   var MAX_BLOOD = 3;           // Max blood layers per tile (3 scrubs to clean)
   var SPLATTER_RADIUS = 2;     // Tiles around a corpse that get blood
   var BLOOD_PER_KILL = 2;      // Default blood layers added per corpse event
-  var CLEAN_TIME_MS = 400;     // Cooldown between scrubs (ms)
+  var CLEAN_TIME_MS = 400;     // Base cooldown between scrubs (ms)
+
+  // ── Tool speed multipliers (C3) ─────────────────────────────────
+  // The equipped cleaning tool reduces scrub cooldown.
+  // Key = item.subtype (set on cleaning tool items in loot-tables).
+  var TOOL_SPEED = {
+    'rag':   1.0,    // Default (bare hands same as rag)
+    'mop':   0.6,    // 240ms cooldown
+    'brush': 0.35    // 140ms cooldown
+  };
 
   // ── State ───────────────────────────────────────────────────────
   // _bloodMap[floorId] = { "x,y": bloodLevel (1–3), ... }
@@ -84,11 +93,14 @@ var CleaningSystem = (function () {
    * @param {number} x - Tile X
    * @param {number} y - Tile Y
    * @param {string} floorId - Floor ID
+   * @param {string} [toolSubtype] - Equipped tool subtype ('rag'|'mop'|'brush')
    * @returns {boolean} True if a layer was cleaned
    */
-  function scrub(x, y, floorId) {
+  function scrub(x, y, floorId, toolSubtype) {
     var now = Date.now();
-    if (now - _lastCleanTime < CLEAN_TIME_MS) return false;
+    var mult = (toolSubtype && TOOL_SPEED[toolSubtype]) || TOOL_SPEED['rag'];
+    var cooldown = Math.round(CLEAN_TIME_MS * mult);
+    if (now - _lastCleanTime < cooldown) return false;
 
     var map = _bloodMap[floorId];
     if (!map) return false;
@@ -222,6 +234,7 @@ var CleaningSystem = (function () {
     getStats:        getStats,
     clearFloor:      clearFloor,
     seedFromCorpses: seedFromCorpses,
-    MAX_BLOOD:       MAX_BLOOD
+    MAX_BLOOD:       MAX_BLOOD,
+    TOOL_SPEED:      TOOL_SPEED
   });
 })();

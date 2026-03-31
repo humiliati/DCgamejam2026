@@ -125,13 +125,14 @@ var DebriefFeed = (function () {
 
     if (payload.type === 'card') {
       name = (payload.data && payload.data.name) || 'Card';
-      // 10% rarity base value refund
-      var baseValue = (payload.data && payload.data.value) || 10;
-      refund = Math.max(1, Math.floor(baseValue * 0.1));
+      // Rarity-based refund: rare 5g, uncommon 3g, common 1g
+      var rarity = (payload.data && payload.data.rarity) || 'common';
+      refund = rarity === 'rare' ? 5 : (rarity === 'uncommon' ? 3 : 1);
     } else if (payload.type === 'item') {
       name = (payload.data && payload.data.name) || 'Item';
-      // Items yield 0 coins (junk)
-      refund = 0;
+      // Items refund 10% of value (min 1g)
+      var itemVal = (payload.data && payload.data.value) || 0;
+      refund = itemVal > 0 ? Math.max(1, Math.floor(itemVal * 0.1)) : 1;
     }
 
     // Log the disposal

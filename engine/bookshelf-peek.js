@@ -115,6 +115,11 @@ var BookshelfPeek = (function () {
     _facingY = fy;
     _hideTimer = 0;
 
+    // Track this book as read
+    if (typeof Player !== 'undefined' && book.id) {
+      Player.setFlag('book_read_' + book.id, true);
+    }
+
     if (typeof AudioSystem !== 'undefined') AudioSystem.play('page-turn');
 
     _renderPage();
@@ -241,6 +246,8 @@ var BookshelfPeek = (function () {
     handleKey: handleKey,
     isActive: function () { return _active; },
     getBook: function () { return _currentBook; },
-    getPage: function () { return _currentPage; }
+    getPage: function () { return _currentPage; },
+    getCatalog: function () { return _catalog; },
+    getBookById: function (id) { return _catalogById[id] || null; }
   };
 })();

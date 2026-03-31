@@ -117,16 +117,41 @@ var GridGen = (function () {
       }
     }
 
-    // ── Place bonfire ──
-    // One bonfire per floor, in a mid-range room (not first, not last).
-    // Gives the player a rest/respawn point before deeper hazards.
+    // ── Place bonfire / hearth ──
+    // One rest point per floor, in a mid-range room (not first, not last).
+    // Depth 1 (exterior): campfire blockout — C-shape of shrubs around bonfire.
+    // Depth 3+ (dungeon): hearth tile — riverrock fireplace column.
+    // Depth 2 (interior): hand-authored, so this code doesn't run.
     if (rooms.length >= 3) {
       var bfIdx = Math.floor(rooms.length / 2);
       var bfRoom = rooms[bfIdx];
       var bfx = bfRoom.cx;
       var bfy = bfRoom.cy;
+      var flId = opts.floorId || '';
+      var flDepth = flId ? flId.split('.').length : 1;
+
       if (grid[bfy][bfx] === TILES.EMPTY) {
-        grid[bfy][bfx] = TILES.BONFIRE;
+        if (flDepth >= 3 && TILES.HEARTH) {
+          // Dungeon: place a hearth column (riverrock fireplace)
+          grid[bfy][bfx] = TILES.HEARTH;
+        } else {
+          // Exterior: campfire blockout — bonfire center with shrub ring
+          grid[bfy][bfx] = TILES.BONFIRE;
+          // Place C-shape shrubs around the bonfire (N, W, E — open to south)
+          var shrubOffsets = [
+            { dx: 0, dy: -1 },  // North
+            { dx: -1, dy: 0 },  // West
+            { dx: 1, dy: 0 }    // East
+          ];
+          for (var si = 0; si < shrubOffsets.length; si++) {
+            var sx = bfx + shrubOffsets[si].dx;
+            var sy = bfy + shrubOffsets[si].dy;
+            if (sx > 0 && sx < W - 1 && sy > 0 && sy < H - 1 &&
+                grid[sy][sx] === TILES.EMPTY) {
+              grid[sy][sx] = TILES.SHRUB;
+            }
+          }
+        }
       }
     }
 

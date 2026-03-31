@@ -204,10 +204,26 @@ var LockedDoorPeek = (function () {
     _shaken = false;
   }
 
+  /**
+   * Force-hide the peek overlay (called when door is unlocked externally).
+   */
+  function forceHide() {
+    _hide();
+  }
+
+  /**
+   * Whether the locked-door peek box is currently visible.
+   */
+  function isActive() {
+    return _active;
+  }
+
   // ── Public API ─────────────────────────────────────────────────
 
   return {
-    init:   init,
-    update: update
+    init:      init,
+    update:    update,
+    forceHide: forceHide,
+    isActive:  isActive
   };
 })();

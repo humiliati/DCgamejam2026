@@ -617,6 +617,8 @@ var Minimap = (function () {
     compassExpand: compassExpand,
     compassCollapse: compassCollapse,
     hitTestCompass: hitTestCompass,
-    getExplored: function () { return _explored; }
+    getExplored: function () { return _explored; },
+    getCanvas: function () { return _canvas; },
+    getSize: function () { return _size; }
   };
 })();

@@ -158,8 +158,8 @@
 - `engine/door-peek.js` ✅ — BoxAnim door reveal when facing transition tiles
 
 **Remaining (see GAP_COVERAGE_TO_DEPLOYABILITY.md):**
-- Tier 1: Combat polish (particle FX, synergy toast, card play anim, telegraph, corpse render)
-- Tier 2: Economy loop closure (stash transfer, rep feedback, deck reshuffle, victory stats)
+- Tier 1: Combat polish — telegraph ✅ (EnemyIntent), corpse render ✅ (CorpseRegistry + CorpsePeek), card play anim ✅ (CardFan fly-forward). **Still needed:** particle FX, synergy toast
+- Tier 2: Economy loop — stash transfer ✅ (bonfire stash grid), deck reshuffle ✅ (CardSystem auto-reshuffle), victory stats ✅ (SessionStats on VictoryScreen). **Still needed:** rep feedback (faction rank-up toast/dialog)
 - Playtesting + balance tuning
 - itch.io build
 

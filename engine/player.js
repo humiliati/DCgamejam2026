@@ -16,6 +16,14 @@ var Player = (function () {
 
   var MC = MovementController;
 
+  // ── Debuffs ────────────────────────────────────────────────────────
+  var DEBUFFS = {
+    GROGGY:     { emoji: '☁', label: 'Groggy',     walkTimeMult: 1.25 },  // -20% move speed (500ms → 625ms)
+    SORE:       { emoji: '🩹', label: 'Sore',       cleanEfficiency: -1 },  // Cleaning takes extra scrub
+    HUMILIATED: { emoji: '😳', label: 'Humiliated', narrative: true },      // NPCs react, no stat effect
+    SHAKEN:     { emoji: '💀', label: 'Shaken',     maxHpMult: 0.80 }       // -20% max HP
+  };
+
   // ── State ──────────────────────────────────────────────────────────
 
   // ── Container limits ──────────────────────────────────────────────
@@ -40,7 +48,8 @@ var Player = (function () {
     bag:      [],                            // ItemRef[] — max 12
     stash:    [],                            // ItemRef[] — max 20
     equipped: [null, null, null],            // [weapon, consumable, key]
-    flags:    {}                             // Quest/dialogue flags
+    flags:    {},                            // Quest/dialogue flags
+    debuffs:  []                             // Array of { id: 'GROGGY', daysRemaining: 1 }
   };
 
   // Direction name table (indexed by direction constant)
@@ -371,6 +380,144 @@ var Player = (function () {
   function getFlag(key) { return _state.flags[key]; }
   function hasFlag(key) { return !!_state.flags[key]; }
 
+  // ── Debuffs ────────────────────────────────────────────────────────
+
+  /**
+   * Apply or refresh a debuff. If already active, refresh duration to
+   * max of current/new. Apply any stat effects immediately.
+   */
+  function applyDebuff(id, days) {
+    if (!DEBUFFS[id]) return false;
+
+    // Check if debuff already active
+    var existing = null;
+    for (var i = 0; i < _state.debuffs.length; i++) {
+      if (_state.debuffs[i].id === id) {
+        existing = _state.debuffs[i];
+        break;
+      }
+    }
+
+    if (existing) {
+      // Refresh to max of current/new duration
+      existing.daysRemaining = Math.max(existing.daysRemaining, days);
+    } else {
+      // Add new debuff
+      _state.debuffs.push({ id: id, daysRemaining: days });
+
+      // Apply stat effects immediately (e.g., SHAKEN reduces maxHp)
+      var def = DEBUFFS[id];
+      if (def.maxHpMult) {
+        _state.maxHp = Math.ceil(_state.maxHp * def.maxHpMult);
+        // If HP exceeds new max, cap it
+        if (_state.hp > _state.maxHp) {
+          _state.hp = _state.maxHp;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove a debuff by id. Reverse stat effects.
+   */
+  function removeDebuff(id) {
+    for (var i = 0; i < _state.debuffs.length; i++) {
+      if (_state.debuffs[i].id === id) {
+        var debuff = _state.debuffs.splice(i, 1)[0];
+
+        // Reverse stat effects (SHAKEN restores maxHp)
+        var def = DEBUFFS[id];
+        if (def.maxHpMult) {
+          // Restore maxHp by dividing by the multiplier
+          _state.maxHp = Math.ceil(_state.maxHp / def.maxHpMult);
+        }
+
+        return debuff;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a debuff is currently active.
+   */
+  function hasDebuff(id) {
+    for (var i = 0; i < _state.debuffs.length; i++) {
+      if (_state.debuffs[i].id === id) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get the debuffs array (for HUD display).
+   */
+  function getDebuffs() {
+    return _state.debuffs;
+  }
+
+  /**
+   * Tick debuffs (called once per day advance from DayCycle).
+   * Decrements all debuff durations. Removes expired debuffs.
+   * Returns an array of expired debuff ids (for Toast notifications).
+   */
+  function tickDebuffs() {
+    var expired = [];
+
+    for (var i = _state.debuffs.length - 1; i >= 0; i--) {
+      _state.debuffs[i].daysRemaining--;
+
+      if (_state.debuffs[i].daysRemaining <= 0) {
+        var id = _state.debuffs[i].id;
+        removeDebuff(id);
+        expired.push(id);
+      }
+    }
+
+    return expired;
+  }
+
+  /**
+   * Get cumulative walk time multiplier from all active debuffs.
+   * Returns 1.0 if no debuffs with walkTimeMult.
+   */
+  function getWalkTimeMultiplier() {
+    // Delegate to StatusEffect if available (canonical source)
+    if (typeof StatusEffect !== 'undefined') {
+      return StatusEffect.getWalkTimeMultiplier();
+    }
+    // Legacy fallback
+    var mult = 1.0;
+    for (var i = 0; i < _state.debuffs.length; i++) {
+      var def = DEBUFFS[_state.debuffs[i].id];
+      if (def && def.walkTimeMult) {
+        mult *= def.walkTimeMult;
+      }
+    }
+    return mult;
+  }
+
+  /**
+   * Get cumulative cleaning efficiency modifier from all active debuffs.
+   * Returns 0 if no debuffs with cleanEfficiency.
+   */
+  function getCleanEfficiencyMod() {
+    // Delegate to StatusEffect if available (canonical source)
+    if (typeof StatusEffect !== 'undefined') {
+      return StatusEffect.getCleanEfficiencyMod();
+    }
+    // Legacy fallback
+    var mod = 0;
+    for (var i = 0; i < _state.debuffs.length; i++) {
+      var def = DEBUFFS[_state.debuffs[i].id];
+      if (def && def.cleanEfficiency) {
+        mod += def.cleanEfficiency;
+      }
+    }
+    return mod;
+  }
+
   // ── Death handler ────────────────────────────────────────────────
 
   /**
@@ -428,6 +575,7 @@ var Player = (function () {
 
   /**
    * Restore player to full HP/energy (used after non-lethal defeat).
+   * NOTE: Debuffs persist through rest. Only reset() clears debuffs.
    */
   function fullRestore() {
     _state.hp = _state.maxHp;
@@ -447,6 +595,7 @@ var Player = (function () {
     _state.stash = [];
     _state.equipped = [null, null, null];
     _state.flags = {};
+    _state.debuffs = [];
   }
 
   // ── Public API ─────────────────────────────────────────────────────
@@ -502,6 +651,16 @@ var Player = (function () {
     setFlag: setFlag,
     getFlag: getFlag,
     hasFlag: hasFlag,
+
+    // Debuffs
+    applyDebuff: applyDebuff,
+    removeDebuff: removeDebuff,
+    hasDebuff: hasDebuff,
+    getDebuffs: getDebuffs,
+    tickDebuffs: tickDebuffs,
+    getWalkTimeMultiplier: getWalkTimeMultiplier,
+    getCleanEfficiencyMod: getCleanEfficiencyMod,
+    DEBUFFS: DEBUFFS,
 
     // Lifecycle
     onDeath: onDeath,

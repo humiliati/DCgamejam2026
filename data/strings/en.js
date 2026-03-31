@@ -222,6 +222,35 @@ i18n.register('en', {
   'interact.smash':       'Smash',
   'interact.reset':       'Reset Puzzle',
 
+  // ── Bonfire / Hearth ───────────────────────────────────────────
+  'bonfire.warp_home':       'Warp Home',
+  'bonfire.warp_entrance':   'Warp to Entrance',
+  'bonfire.warping':         'Warping...',
+  'inv.nothing_burn':        'Nothing to burn',
+  'inv.bag':                 'Bag',
+
+  // ── Table quips ────────────────────────────────────────────────
+  'table.quip1':  'A mug of cold tea. Still half full.',
+  'table.quip2':  'Scattered notes — dungeon cleaning checklists.',
+  'table.quip3':  'A pressed flower between two invoice sheets.',
+  'table.quip4':  "Crumbs from this morning's flatbread.",
+  'table.quip5':  'A dull knife and a half-whittled figurine.',
+
+  // ── Cobweb system ───────────────────────────────────────────────
+  'cobweb.deploy':      'Deploy Spider',
+  'cobweb.installed':   'Cobweb installed',
+  'cobweb.destroyed':   'Cobweb torn!',
+  'cobweb.torn':        'You tore your own cobweb!',
+
+  // ── Trap re-arm ───────────────────────────────────────────────
+  'interact.rearm':     'Re-arm trap',
+  'toast.trap_rearmed': 'Trap re-armed!',
+
+  // ── Work orders ───────────────────────────────────────────────
+  'work.order_posted':   'Work order posted',
+  'work.order_complete': 'Order complete!',
+  'work.order_failed':   'Order incomplete',
+
   // ── Settings ────────────────────────────────────────────────────
   'settings.language':  'Language',
   'settings.sfx':       'SFX Volume',

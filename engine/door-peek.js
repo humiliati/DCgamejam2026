@@ -158,9 +158,25 @@ var DoorPeek = (function () {
     }
     if (!currentLabel) currentLabel = currentId;
 
+    // ── Night-lock override ─────────────────────────────────────
+    // If the target building is closed for the night, show a locked
+    // variant instead of the normal door peek. Fires muffled bark.
+    var _nightLocked = false;
+    if (targetId && typeof DayCycle !== 'undefined' && DayCycle.isNightLocked(targetId)) {
+      _nightLocked = true;
+      // Fire muffled bark (debounced by BarkLibrary cooldown)
+      var mPool = DayCycle.getMuffledBarkPool(targetId);
+      if (mPool && typeof BarkLibrary !== 'undefined') {
+        BarkLibrary.fire(mPool);
+      }
+    }
+
     // Determine glow color by direction
     var glowColor, labelColor;
-    if (tile === TILES.BOSS_DOOR) {
+    if (_nightLocked) {
+      glowColor = 'rgba(100,100,140,0.4)';
+      labelColor = '#8888aa';
+    } else if (tile === TILES.BOSS_DOOR) {
       glowColor = 'rgba(220,60,40,0.5)';
       labelColor = '#f06050';
     } else if (direction === 'advance') {
@@ -172,14 +188,19 @@ var DoorPeek = (function () {
     }
 
     // Build label: destination floor name (or direction fallback)
-    var displayLabel = targetLabel;
-    if (!displayLabel) {
-      if (tile === TILES.STAIRS_DN)   displayLabel = i18n.t('interact.descend', '▼ Descend');
-      else if (tile === TILES.STAIRS_UP) displayLabel = i18n.t('interact.ascend', '▲ Ascend');
-      else if (tile === TILES.BOSS_DOOR) displayLabel = i18n.t('interact.enter', '⚠ Boss');
-      else displayLabel = direction === 'advance'
-        ? i18n.t('interact.enter', '► Enter')
-        : i18n.t('interact.exit', '◄ Exit');
+    var displayLabel;
+    if (_nightLocked) {
+      displayLabel = '\uD83D\uDD12 Closed for the night';
+    } else {
+      displayLabel = targetLabel;
+      if (!displayLabel) {
+        if (tile === TILES.STAIRS_DN)   displayLabel = i18n.t('interact.descend', '▼ Descend');
+        else if (tile === TILES.STAIRS_UP) displayLabel = i18n.t('interact.ascend', '▲ Ascend');
+        else if (tile === TILES.BOSS_DOOR) displayLabel = i18n.t('interact.enter', '⚠ Boss');
+        else displayLabel = direction === 'advance'
+          ? i18n.t('interact.enter', '► Enter')
+          : i18n.t('interact.exit', '◄ Exit');
+      }
     }
 
     // Style the box instance
@@ -199,7 +220,13 @@ var DoorPeek = (function () {
     }
 
     // Sub-label: two-row transition text (DOM-safe, no innerHTML with user data)
-    if (_subLabel && currentLabel && targetLabel) {
+    if (_nightLocked && _subLabel) {
+      _subLabel.textContent = '';
+      _subLabel.appendChild(document.createTextNode(targetLabel || 'building'));
+      _subLabel.appendChild(document.createElement('br'));
+      _subLabel.appendChild(document.createTextNode('come back in the morning'));
+      _subLabel.style.color = 'rgba(180,170,150,0)';
+    } else if (_subLabel && currentLabel && targetLabel) {
       _subLabel.textContent = '';
       _subLabel.appendChild(document.createTextNode('exiting ' + currentLabel));
       _subLabel.appendChild(document.createElement('br'));

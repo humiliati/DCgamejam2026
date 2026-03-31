@@ -261,6 +261,11 @@ var FloorTransition = (function () {
     var direction = null;
     var targetId = null;
 
+    if (tile === TILES.LOCKED_DOOR) {
+      _tryUnlockLockedDoor(fx, fy, currentId);
+      return true;  // Always consumed — either unlocks or shows rejection
+    }
+
     if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR) {
       if (tile === TILES.BOSS_DOOR && !_tryUnlockDoor(fx, fy, currentId)) {
         return true;  // Consumed the interaction (showed locked dialog)
@@ -290,6 +295,32 @@ var FloorTransition = (function () {
     }
 
     if (!direction || !targetId) return false;
+
+    // ── Night-lock check ──────────────────────────────────────────
+    // Buildings registered with DayCycle.registerNightLock() are closed
+    // at night/dusk. The LockedDoorPeek handles the visual; here we
+    // block the transition and fire a muffled bark from inside.
+    if (typeof DayCycle !== 'undefined' && DayCycle.isNightLocked(targetId)) {
+      // Fire muffled bark through the door
+      var muffledPool = DayCycle.getMuffledBarkPool(targetId);
+      if (muffledPool && typeof BarkLibrary !== 'undefined') {
+        BarkLibrary.fire(muffledPool);
+      }
+      // Show "closed" toast
+      if (typeof Toast !== 'undefined') {
+        Toast.show('🔒 Closed for the night.', 'dim');
+      }
+      // Trigger shake animation if BoxAnim available
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('door-locked', { volume: 0.3 });
+      }
+      return true; // Consumed the interaction — door stays shut
+    }
+
+    // ── DayCycle time advancement ─────────────────────────────────
+    if (typeof DayCycle !== 'undefined') {
+      DayCycle.onFloorTransition(currentId, targetId);
+    }
 
     _startDoorAnimation(fx, fy, tile, direction, currentId, targetId);
     DoorContracts.setContract({ x: fx, y: fy }, direction, tile);
@@ -351,29 +382,71 @@ var FloorTransition = (function () {
     var keyItem = (typeof Player !== 'undefined') ? Player.hasItemType('key') : null;
 
     if (keyItem) {
-      // Consume the key
-      Player.consumeItem(keyItem.id);
-      _unlockedDoors[dk] = true;
-      Player.setFlag(flagKey, true);
+      // Tactile confirmation — player chooses to use the key
+      var keyEmoji = keyItem.emoji || '\uD83D\uDD11';
+      var keyName  = keyItem.name  || 'Key';
+      var capturedKey = keyItem;
+      var capturedDk  = dk;
+      var capturedFlag = flagKey;
+      var capturedFx  = fx;
+      var capturedFy  = fy;
 
-      // Visual + audio feedback
-      if (typeof Toast !== 'undefined') {
-        Toast.show(
-          (keyItem.emoji || '\uD83D\uDD11') + ' ' +
-          i18n.t('door.unlocked', 'Door unlocked!'),
-          'loot'
-        );
-      }
-      if (typeof AudioSystem !== 'undefined') {
-        AudioSystem.play('ui-confirm', { volume: 0.7 });
-      }
-      if (typeof HUD !== 'undefined') {
-        HUD.updatePlayer(Player.state());
-      }
+      if (typeof DialogBox !== 'undefined') {
+        DialogBox.show({
+          text: i18n.t('door.boss_unlock_confirm',
+            'A heavy lock. Your ' + keyName + ' looks like it fits.'),
+          speaker: null,
+          portrait: '\uD83D\uDD10',
+          choices: [
+            { label: keyEmoji + ' Use ' + keyName },
+            { label: 'Not yet' }
+          ],
+          priority: DialogBox.PRIORITY.DIALOGUE,
+          onChoice: function (idx) {
+            if (idx === 0) {
+              // Consume the key
+              Player.consumeItem(capturedKey.id);
+              _unlockedDoors[capturedDk] = true;
+              Player.setFlag(capturedFlag, true);
 
-      console.log('[FloorTransition] Boss door unlocked at (' + fx + ',' + fy +
-                  ') with ' + (keyItem.name || keyItem.id));
-      return true;
+              // Sound: key turning + confirmation
+              if (typeof AudioSystem !== 'undefined') {
+                AudioSystem.play('door-unlock', { volume: 0.8 });
+                setTimeout(function () {
+                  AudioSystem.play('ui-confirm', { volume: 0.5 });
+                }, 200);
+              }
+
+              // Toast + key particles
+              if (typeof ParticleFX !== 'undefined') {
+                var cvs2 = document.getElementById('viewport') || document.querySelector('canvas');
+                var px2 = cvs2 ? cvs2.width / 2 : 320;
+                var py2 = cvs2 ? cvs2.height / 2 : 200;
+                ParticleFX.keyConsume(px2, py2, keyEmoji);
+              }
+              if (typeof Toast !== 'undefined') {
+                Toast.show(keyEmoji + ' ' +
+                  i18n.t('door.unlocked', 'Key used \u2014 door unlocked!'),
+                  'loot');
+              }
+
+              // Update HUD
+              if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());
+              if (typeof NchWidget !== 'undefined') NchWidget.refresh();
+
+              console.log('[FloorTransition] Boss door unlocked at (' +
+                capturedFx + ',' + capturedFy + ') with ' +
+                (capturedKey.name || capturedKey.id));
+
+              // Brief delay then transition through the now-unlocked door
+              setTimeout(function () {
+                tryInteractDoor(capturedFx, capturedFy);
+              }, 400);
+            }
+          }
+        });
+      }
+      return false;  // Don't transition yet — waiting for dialog choice
     }
 
     // No key — show locked dialog
@@ -381,7 +454,7 @@ var FloorTransition = (function () {
       DialogBox.show({
         text: i18n.t('door.locked', 'The door is locked. You need a key.'),
         speaker: null,
-        portrait: '\uD83D\uDD12',  // 🔒
+        portrait: '\uD83D\uDD12',
         transient: true,
         transientLong: true,
         priority: DialogBox.PRIORITY.PERSISTENT
@@ -392,6 +465,190 @@ var FloorTransition = (function () {
     }
 
     return false;
+  }
+
+  // ── Tactile LOCKED_DOOR interaction ──────────────────────────────
+
+  /**
+   * Attempt to unlock a LOCKED_DOOR tile.
+   *
+   * Flow:
+   *   1. Check if already unlocked this session / previous visit → convert tile + transition
+   *   2. Search player inventory for a matching key
+   *   3. If key found → show DialogBox "Use [key name]?" with choices
+   *      - "Use key" → consume key, play unlock sequence, convert tile to DOOR
+   *      - "Not yet"  → dismiss
+   *   4. If no key → shake LockedDoorPeek, show rejection dialog
+   *
+   * The key is NOT auto-consumed. The player confirms the action.
+   * After unlock the LOCKED_DOOR tile becomes a normal DOOR tile and
+   * the transition fires immediately so the player walks through.
+   */
+  function _tryUnlockLockedDoor(fx, fy, floorId) {
+    var dk = _doorKey(floorId, fx, fy);
+
+    // Already unlocked this session
+    if (_unlockedDoors[dk]) {
+      _convertLockedToDoor(fx, fy, floorId);
+      return;
+    }
+
+    // Check flag from previous visit
+    var flagKey = 'locked_door_' + dk;
+    if (typeof Player !== 'undefined' && Player.hasFlag(flagKey)) {
+      _unlockedDoors[dk] = true;
+      _convertLockedToDoor(fx, fy, floorId);
+      return;
+    }
+
+    // Resolve key requirement from floor data
+    var floorData = FloorManager.getFloorData();
+    var keyReq = null;
+    if (floorData.lockedDoors) {
+      var posKey = fx + ',' + fy;
+      keyReq = floorData.lockedDoors[posKey] || null;
+    }
+    var requiredKeyId = keyReq ? keyReq.keyId   : null;
+    var keyDisplayName = keyReq ? keyReq.keyName : 'a key';
+
+    // Search player inventory for a matching key
+    var keyItem = null;
+    if (typeof Player !== 'undefined') {
+      if (requiredKeyId) {
+        // Specific key required — search by ID
+        var bag = Player.getBag();
+        for (var bi = 0; bi < bag.length; bi++) {
+          if (bag[bi] && bag[bi].id === requiredKeyId) { keyItem = bag[bi]; break; }
+        }
+        if (!keyItem) {
+          var eq = Player.getEquipped();
+          for (var ei = 0; ei < eq.length; ei++) {
+            if (eq[ei] && eq[ei].id === requiredKeyId) { keyItem = eq[ei]; break; }
+          }
+        }
+      } else {
+        // Any key will do
+        keyItem = Player.hasItemType('key');
+      }
+    }
+
+    if (!keyItem) {
+      // No key — rejection
+      if (typeof LockedDoorPeek !== 'undefined' && typeof BoxAnim !== 'undefined') {
+        // The peek is already showing and shaking — reinforce with dialog
+      }
+      if (typeof DialogBox !== 'undefined') {
+        DialogBox.show({
+          text: i18n.t('door.locked_no_key', 'The lock won\'t budge. You need ' + keyDisplayName + '.'),
+          speaker: null,
+          portrait: '\uD83D\uDD12',
+          transient: true,
+          transientLong: true,
+          priority: DialogBox.PRIORITY.PERSISTENT
+        });
+      }
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('ui-fail', { volume: 0.5 });
+      }
+      return;
+    }
+
+    // Key found — show confirmation dialog (tactile: player chooses to use it)
+    var keyEmoji = keyItem.emoji || '\uD83D\uDD11';
+    var keyName  = keyItem.name  || 'Key';
+    var capturedKeyItem = keyItem;
+
+    if (typeof DialogBox !== 'undefined') {
+      DialogBox.show({
+        text: i18n.t('door.unlock_confirm',
+          'The lock matches your ' + keyName + '. Use it?'),
+        speaker: null,
+        portrait: '\uD83D\uDD10',  // 🔐
+        choices: [
+          { label: keyEmoji + ' Use ' + keyName },
+          { label: 'Not yet' }
+        ],
+        priority: DialogBox.PRIORITY.DIALOGUE,
+        onChoice: function (idx) {
+          if (idx === 0) {
+            _executeUnlock(fx, fy, floorId, dk, flagKey, capturedKeyItem);
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Execute the unlock sequence after player confirms.
+   * Three-beat juice: click → turn → open.
+   */
+  function _executeUnlock(fx, fy, floorId, dk, flagKey, keyItem) {
+    // 1. Consume the key
+    if (typeof Player !== 'undefined') {
+      Player.consumeItem(keyItem.id);
+    }
+
+    // 2. Mark door unlocked
+    _unlockedDoors[dk] = true;
+    if (typeof Player !== 'undefined') {
+      Player.setFlag(flagKey, true);
+    }
+
+    // 3. Sound: key turning in lock
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('door-unlock', { volume: 0.8 });
+      // Fallback if sound ID doesn't exist — use ui-confirm
+      setTimeout(function () {
+        AudioSystem.play('ui-confirm', { volume: 0.5 });
+      }, 200);
+    }
+
+    // 4. Toast + key consume particles
+    var keyEmoji = keyItem.emoji || '\uD83D\uDD11';
+    if (typeof ParticleFX !== 'undefined') {
+      var cvs = document.getElementById('viewport') || document.querySelector('canvas');
+      var px = cvs ? cvs.width / 2 : 320;
+      var py = cvs ? cvs.height / 2 : 200;
+      ParticleFX.keyConsume(px, py, keyEmoji);
+    }
+    if (typeof Toast !== 'undefined') {
+      Toast.show(keyEmoji + ' ' + i18n.t('door.key_used', 'Key used \u2014 door unlocked!'), 'loot');
+    }
+
+    // 5. Update HUD (key removed from inventory)
+    if (typeof HUD !== 'undefined') {
+      HUD.updatePlayer(Player.state());
+    }
+    if (typeof NchWidget !== 'undefined') {
+      NchWidget.refresh();
+    }
+
+    // 6. Brief delay for the unlock to register visually, then convert + transition
+    setTimeout(function () {
+      _convertLockedToDoor(fx, fy, floorId);
+    }, 400);
+
+    console.log('[FloorTransition] Locked door unlocked at (' + fx + ',' + fy +
+                ') with ' + (keyItem.name || keyItem.id));
+  }
+
+  /**
+   * Convert a LOCKED_DOOR tile to a regular DOOR and optionally
+   * trigger the transition through it.
+   */
+  function _convertLockedToDoor(fx, fy, floorId) {
+    var floorData = FloorManager.getFloorData();
+    if (floorData && floorData.grid[fy] && floorData.grid[fy][fx] === TILES.LOCKED_DOOR) {
+      floorData.grid[fy][fx] = TILES.DOOR;
+    }
+
+    // Hide the locked-door peek overlay
+    if (typeof LockedDoorPeek !== 'undefined' && LockedDoorPeek.forceHide) {
+      LockedDoorPeek.forceHide();
+    }
+
+    // Now treat as a normal door interaction
+    tryInteractDoor(fx, fy);
   }
 
   // ── Door animation bridge ────────────────────────────────────────

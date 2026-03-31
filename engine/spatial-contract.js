@@ -132,7 +132,8 @@ var SpatialContract = (function () {
       // (e.g. TREE tiles at 2× in exterior, while buildings stay 1×).
       tileWallHeights:  opts.tileWallHeights || null,
 
-      // ── Transition rules ──
+      // ── Gameplay rules ──
+      timeFreeze:       false,   // Time passes on the surface
       canNest:          true,    // Can contain doors to floorsN.N
       maxNestDepth:     2        // Can go N → N.N → N.N.N
     });
@@ -197,7 +198,8 @@ var SpatialContract = (function () {
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,
 
-      // ── Transition rules ──
+      // ── Gameplay rules ──
+      timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
       canNest:          true,    // Can contain doors to floorsN.N.N
       maxNestDepth:     1
     });
@@ -273,7 +275,8 @@ var SpatialContract = (function () {
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,
 
-      // ── Transition rules ──
+      // ── Gameplay rules ──
+      timeFreeze:       false,   // Time ticks in the dungeons — pressure!
       canNest:          false,   // Bottom of the hierarchy
       maxNestDepth:     0
     });

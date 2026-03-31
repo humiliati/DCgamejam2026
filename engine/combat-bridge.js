@@ -167,6 +167,11 @@ var CombatBridge = (function () {
    * Actually initialize combat after the player is facing the enemy.
    */
   function _beginCombat(enemy) {
+    // Interrupt any active tooltip dialogue
+    if (typeof StatusBar !== 'undefined' && StatusBar.clearDialogue) {
+      StatusBar.clearDialogue();
+    }
+
     // ── Combat start audio (Pass 7) ──
     if (typeof AudioSystem !== 'undefined') {
       AudioSystem.play('enemy-alert', { volume: 0.6 });
@@ -177,6 +182,12 @@ var CombatBridge = (function () {
     // Draw a fresh hand
     CardSystem.drawHand();
     HUD.updateCards(CardSystem.getHand());
+    if (typeof Toast !== 'undefined') {
+      var _ch = CardSystem.getHand();
+      var _names = [];
+      for (var ci = 0; ci < _ch.length; ci++) _names.push(_ch[ci].emoji || '\uD83C\uDCA0');
+      Toast.show('\uD83C\uDCA0 Combat hand: ' + _names.join(' '), 'dim');
+    }
 
     // NCH widget → combat mode (shrink capsule)
     if (typeof NchWidget !== 'undefined') NchWidget.enterCombat();

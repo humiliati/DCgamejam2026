@@ -103,6 +103,18 @@ var Raycaster = (function () {
     var fogColor   = _contract ? _contract.fogColor : { r: 0, g: 0, b: 0 };
     var baseWallH  = _contract ? _contract.wallHeight : 1.0;
 
+    // ── DayCycle atmosphere tint (exterior floors only) ──
+    // Multiplies fog color by the time-of-day tint for dawn/dusk/night shifts.
+    if (_contract && _contract.ceilingType === 'sky' &&
+        typeof DayCycle !== 'undefined') {
+      var tint = DayCycle.getAtmosphereTint();
+      fogColor = {
+        r: Math.round(fogColor.r * tint.r),
+        g: Math.round(fogColor.g * tint.g),
+        b: Math.round(fogColor.b * tint.b)
+      };
+    }
+
     // ── Background: ceiling + floor gradients from contract ──
     // Use Skybox for exterior contracts (ceilingType === SKY)
     var useSkybox = _contract && _contract.ceilingType === 'sky' &&
@@ -187,7 +199,7 @@ var Raycaster = (function () {
           hit = true; hitTile = TILES.WALL;
         } else {
           var tile = grid[mapY][mapX];
-          if (tile === TILES.WALL || tile === TILES.PILLAR || tile === TILES.BREAKABLE || tile === TILES.TREE || tile === TILES.SHRUB) {
+          if (TILES.isOpaque(tile)) {
             hit = true; hitTile = tile;
           } else if (TILES.isDoor(tile)) {
             hit = true; hitTile = tile;
@@ -230,8 +242,7 @@ var Raycaster = (function () {
           _cDep++;
           if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
           var _cT = grid[_cMY][_cMX];
-          if (_cT === TILES.WALL || _cT === TILES.TREE || _cT === TILES.PILLAR ||
-              _cT === TILES.BREAKABLE || _cT === TILES.SHRUB || TILES.isDoor(_cT)) {
+          if (TILES.isOpaque(_cT) || TILES.isDoor(_cT)) {
             var _cH = SpatialContract.getWallHeight(_contract, _cMX, _cMY, _rooms, _cT, _cellHeights);
             // Only record if taller than everything in front — shorter or
             // equal hits are fully occluded and waste a layer slot

@@ -190,6 +190,20 @@ var BarkLibrary = (function () {
     var bark = pick(key);
     if (!bark) return null;
 
+    // Template substitution — replace {callsign} and {class} with player values
+    if (bark.text && (bark.text.indexOf('{') !== -1)) {
+      var pState = (typeof Player !== 'undefined' && Player.state) ? Player.state() : {};
+      bark = {
+        text:    bark.text
+          .replace(/\{callsign\}/g, pState.callsign || 'Gleaner')
+          .replace(/\{class\}/g, pState.avatarName || 'Gleaner'),
+        speaker: bark.speaker,
+        style:   bark.style,
+        weight:  bark.weight,
+        oneShot: bark.oneShot
+      };
+    }
+
     if (_displayFn) {
       _displayFn(bark, opts || {});
     } else {
