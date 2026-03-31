@@ -126,6 +126,12 @@ var SpatialContract = (function () {
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_cobble',
 
+      // ── Per-tile-type floor texture overrides ──
+      // Keyed by TILES constant value → TextureAtlas texture ID.
+      // Tiles matching a key here render a different floor texture
+      // (e.g. TREE and SHRUB tiles render grass instead of cobble).
+      tileFloorTextures: opts.tileFloorTextures || null,
+
       // ── Per-tile-type wall height overrides ──
       // Keyed by TILES constant value → height multiplier.
       // Used for tiles that should render taller/shorter than the contract default
@@ -194,6 +200,9 @@ var SpatialContract = (function () {
 
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_wood',
+
+      // ── Per-tile-type floor texture overrides ──
+      tileFloorTextures: opts.tileFloorTextures || null,
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,
@@ -271,6 +280,9 @@ var SpatialContract = (function () {
 
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_stone',
+
+      // ── Per-tile-type floor texture overrides ──
+      tileFloorTextures: opts.tileFloorTextures || null,
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || null,

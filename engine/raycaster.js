@@ -137,9 +137,23 @@ var Raycaster = (function () {
     var floorTex = floorTexId && typeof TextureAtlas !== 'undefined'
       ? TextureAtlas.get(floorTexId) : null;
 
+    // Resolve per-tile floor texture overrides (e.g. grass under trees)
+    var tileFloorTexArr = null;
+    if (_contract && _contract.tileFloorTextures && typeof TextureAtlas !== 'undefined') {
+      tileFloorTexArr = [];
+      var _tft = _contract.tileFloorTextures;
+      for (var _tfk in _tft) {
+        if (_tft.hasOwnProperty(_tfk)) {
+          var _tfTex = TextureAtlas.get(_tft[_tfk]);
+          if (_tfTex) tileFloorTexArr[parseInt(_tfk, 10)] = _tfTex;
+        }
+      }
+      if (tileFloorTexArr.length === 0) tileFloorTexArr = null;
+    }
+
     if (floorTex) {
       _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex,
-                   fogDist, fogColor);
+                   fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr);
     } else {
       var floorGrads = _contract ? SpatialContract.getGradients(_contract)
         : { floorTop: '#444', floorBottom: '#111' };
@@ -701,7 +715,7 @@ var Raycaster = (function () {
   // ── Floor casting — textured floor via ImageData ──
   // For each pixel below the horizon, computes the world floor position
   // and samples the floor texture. Uses a reusable ImageData buffer.
-  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor) {
+  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr) {
     var floorH = h - Math.floor(halfH);
     if (floorH <= 0) return;
 
@@ -767,20 +781,38 @@ var Raycaster = (function () {
       var rowOffset = row * w * 4;
 
       for (var col = 0; col < w; col++) {
+        // Compute grid tile coordinates (used for per-tile texture and blood)
+        var tileGX = Math.floor(floorX);
+        var tileGY = Math.floor(floorY);
+
+        // Select floor texture — per-tile override or default
+        var curTexW = texW;
+        var curTexH = texH;
+        var curTexData = texData;
+
+        if (tileFloorTexArr &&
+            tileGX >= 0 && tileGX < gridW &&
+            tileGY >= 0 && tileGY < gridH) {
+          var altTex = tileFloorTexArr[grid[tileGY][tileGX]];
+          if (altTex) {
+            curTexW = altTex.width;
+            curTexH = altTex.height;
+            curTexData = altTex.data;
+          }
+        }
+
         // Texture coordinates — wrap to tile boundaries
-        var tx = ((Math.floor(floorX * texW) % texW) + texW) % texW;
-        var ty = ((Math.floor(floorY * texH) % texH) + texH) % texH;
+        var tx = ((Math.floor(floorX * curTexW) % curTexW) + curTexW) % curTexW;
+        var ty = ((Math.floor(floorY * curTexH) % curTexH) + curTexH) % curTexH;
 
         // Sample texel
-        var texIdx = (ty * texW + tx) * 4;
-        var r = texData[texIdx]     * bright;
-        var g = texData[texIdx + 1] * bright;
-        var b = texData[texIdx + 2] * bright;
+        var texIdx = (ty * curTexW + tx) * 4;
+        var r = curTexData[texIdx]     * bright;
+        var g = curTexData[texIdx + 1] * bright;
+        var b = curTexData[texIdx + 2] * bright;
 
         // Blood splatter tint — red overlay on dirty tiles
         if (_bloodFloorId && typeof CleaningSystem !== 'undefined') {
-          var tileGX = Math.floor(floorX);
-          var tileGY = Math.floor(floorY);
           var blood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
           if (blood > 0) {
             // Blood intensity: 0.15–0.45 depending on blood level (1–3)

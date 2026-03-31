@@ -236,7 +236,11 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — 2.5× tall perimeter trees (solid treeline)
             22: 0.5                // SHRUB — half-height hedge (player sees over to buildings)
           }),
-          floorTexture: 'floor_brick_red'
+          floorTexture: 'floor_brick_red',
+          tileFloorTextures: Object.freeze({
+            21: 'floor_grass',     // TREE tiles render grass floor
+            22: 'floor_grass'      // SHRUB tiles render grass floor
+          })
         };
       case 'promenade':
         // Warm sunset marble — the town's signature palette
@@ -265,7 +269,11 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — 2.5× tall perimeter trees
             22: 0.5                // SHRUB — half-height hedge
           }),
-          floorTexture: 'floor_cobble'  // Polished stone walkway
+          floorTexture: 'floor_cobble',  // Polished stone walkway
+          tileFloorTextures: Object.freeze({
+            21: 'floor_grass',     // TREE tiles render grass floor
+            22: 'floor_grass'      // SHRUB tiles render grass floor
+          })
         };
       case 'bazaar':
         // Warm coral-gold interior — Biome Plan §6: "chrome display cases,
@@ -387,7 +395,11 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — perimeter trees
             22: 0.5                // SHRUB — half-height hedge
           }),
-          floorTexture: 'floor_cobble'
+          floorTexture: 'floor_cobble',
+          tileFloorTextures: Object.freeze({
+            21: 'floor_grass',     // TREE tiles render grass floor
+            22: 'floor_grass'      // SHRUB tiles render grass floor
+          })
         };
       case 'office':
         // Dispatcher's Office — formal institutional interior
