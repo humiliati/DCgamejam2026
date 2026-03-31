@@ -1046,11 +1046,14 @@ var FloorManager = (function () {
   // 1-2 of them to BOOKSHELF (25). Assigns biome-appropriate books.
 
   var _INTERIOR_BOOK_PRESETS = {
-    'inn':       ['tip_inn_bonfire', 'fiction_tides_of_passion', 'lore_dragon_history_1'],
-    'guild':     ['tip_dispatch_protocol', 'notice_work_order_template', 'lore_gleaner_guild_charter'],
-    'watchpost': ['manual_admiralty_handbook', 'lore_hero_arrival', 'notice_hero_registration'],
-    'dungeon':   ['tip_combat', 'lore_dragon_history_2'],
-    'bazaar':    ['tip_bazaar_shopping', 'fiction_dashing_rogue', 'lore_adventuring_economy']
+    'inn':          ['tip_inn_bonfire', 'fiction_tides_of_passion', 'lore_dragon_history_1'],
+    'guild':        ['tip_dispatch_protocol', 'notice_work_order_template', 'lore_gleaner_guild_charter'],
+    'watchpost':    ['manual_admiralty_handbook', 'lore_hero_arrival', 'notice_hero_registration'],
+    'dungeon':      ['tip_combat', 'lore_dragon_history_2'],
+    'bazaar':       ['tip_bazaar_shopping', 'fiction_dashing_rogue', 'lore_adventuring_economy'],
+    'cellar_entry': ['tip_combat', 'lore_dragon_history_2'],
+    'office':       ['tip_dispatch_protocol', 'lore_gleaner_guild_charter', 'notice_work_order_template'],
+    'home':         ['tip_home_schedule', 'fiction_love_among_crates', 'lore_gleaner_guild_charter']
   };
 
   function _placeBookshelvesInInterior(fd, floorId) {
