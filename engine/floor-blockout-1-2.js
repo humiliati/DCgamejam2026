@@ -25,8 +25,6 @@
 (function () {
   'use strict';
 
-  var T = TILES;
-
   var W = 20;
   var H = 16;
 

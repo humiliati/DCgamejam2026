@@ -23,18 +23,18 @@
 ## 1. World Graph Summary
 
 ```
-Floor "0"   The Approach     (ext, 20×16)  ← tutorial courtyard
+Floor "0"   The Approach     (ext, 40×30)  ← tutorial courtyard
   │
-  ▼ DOOR (9,6)
-Floor "1"   The Promenade    (ext, 20×16)  ← main town hub
-  ├── DOOR (5,2)   → "1.1"  Coral Bazaar       (int, 16×12)
+  ▼ DOOR (19,5)
+Floor "1"   The Promenade    (ext, 40×30)  ← main town hub
+  ├── DOOR (12,3)  → "1.1"  Coral Bazaar       (int, 16×12)
   │                           └── STAIRS_DN → "1.1.N" Coral Cellars (proc-gen)
-  ├── DOOR (14,2)  → "1.2"  Driftwood Inn       (int, 20×16) ★ NEW
-  ├── DOOR (3,7)   → "1.3"  Cellar Entrance     (int, 16×12) ★ NEW
+  ├── DOOR (27,3)  → "1.2"  Driftwood Inn       (int, 20×16) ★ NEW
+  ├── DOOR (5,9)   → "1.3"  Cellar Entrance     (int, 16×12) ★ NEW
   │                           └── STAIRS_DN → "1.3.1" Soft Cellar (proc-gen)
-  ├── DOOR (17,7)  → "1.6"  Gleaner's Home      (int, 24×20)
-  ├── EXIT (9,13)  → "0"    The Approach (back)
-  └── GATE (11,13) → "2"    Lantern Row (critical path) ★ NEW
+  ├── DOOR (34,9)  → "1.6"  Gleaner's Home      (int, 24×20)
+  ├── EXIT (18,26) → "0"    The Approach (back)
+  └── GATE (20,26) → "2"    Lantern Row (critical path) ★ NEW
                               │
 Floor "2"   Lantern Row      (ext, 32×24) ★ NEW — commercial district
   ├── DOOR (6,3)   → "2.1"  Dispatcher's Office (int, 16×12) ★ NEW

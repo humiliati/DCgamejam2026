@@ -1170,10 +1170,15 @@ var FloorManager = (function () {
     } else if (_registeredBuilders[_floorId]) {
       // External blockout file registered a builder for this floor
       _floorData = _registeredBuilders[_floorId]();
-      _floorData.contract = contract;
-      // Depth 1-2 floors are safe zones (no enemies); depth 3+ spawns enemies
-      _enemies = _depth(_floorId) >= 3 ? EnemyAI.spawnEnemies(_floorData, _floorId, null) : [];
-      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+      if (!_floorData || !_floorData.grid) {
+        console.warn('[FloorManager] Registered builder for ' + _floorId + ' returned invalid data; falling back');
+        _floorData = null;
+      } else {
+        _floorData.contract = contract;
+        // Depth 1-2 floors are safe zones (no enemies); depth 3+ spawns enemies
+        _enemies = _depth(_floorId) >= 3 ? EnemyAI.spawnEnemies(_floorData, _floorId, null) : [];
+        _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
+      }
     } else if (_floorId === '0') {
       // Hand-authored Floor 0: exterior courtyard (depth 1)
       _floorData = _buildFloor0();
