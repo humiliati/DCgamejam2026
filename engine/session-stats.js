@@ -23,6 +23,8 @@ var SessionStats = (function () {
       hazardsTriggered: 0,
       environmentalDeaths: 0,
       bonfiresUsed: 0,
+      torchesExtinguished: 0,
+      torchSlotsFilled: 0,
       timeElapsed: 0,
       startTime: performance.now()
     };

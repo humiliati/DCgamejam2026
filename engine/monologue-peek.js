@@ -104,6 +104,17 @@ var MonologuePeek = (function () {
     dispatcher_grab: [
       { attribution: '???', text: 'Hey. Hey! You\'re going the wrong way, rookie.', duration: 3000 },
       { attribution: 'REN', text: 'Briefing\'s this way. Try to keep up.', duration: 2500 }
+    ],
+
+    /**
+     * Deploy dropoff. Plays immediately after the driving cutscene
+     * deposits the player on Floor 0. The feeling: "you were just
+     * dropped off in the middle of nowhere."
+     */
+    deploy_dropoff: [
+      { attribution: 'GLEANER', text: '...and just like that, they drove off.', duration: 3000 },
+      { attribution: 'GLEANER', text: 'No map. No briefing. Just a field and a door.', duration: 3500 },
+      { attribution: 'GLEANER', text: 'Guess I should start walking.', duration: 2500 }
     ]
   };
 

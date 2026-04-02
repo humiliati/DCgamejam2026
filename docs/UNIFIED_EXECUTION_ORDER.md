@@ -112,35 +112,95 @@ Step A4: TEXTURE Layer 2 — Wall decor data model + face-hit rendering      ✅
   │  Depends: A1 (wall decor renders per-layer in back-to-front loop)
   │  Creates: wallDecor[y][x] = { n:[], s:[], e:[], w:[] } per-face sprite data
   │  Sprites: decor_torch (bracket+flame), decor_grate (iron bars),
-  │    decor_banner_red/blue (hanging pennants). 16×16 with alpha transparency.
+  │    decor_banner_red/blue (hanging pennants). 32×32 with alpha transparency.
+  │  Rendering: imageSmoothingEnabled=false for pixel-perfect scaling.
   │  Raycaster: _hitFace() face detection, _renderWallDecor() per-column overlay
   │    in both foreground and _renderBackLayer paths (before fog/shade overlays).
   │  Auto-placement: GridGen._generateWallDecor() for proc-gen floors,
   │    FloorManager._buildWallDecorFromGrid() for hand-authored floors.
   │    Torches at room entrances + ~12% of corridor walls. Grates in dungeons.
   │
-Step A5: LIGHT_AND_TORCH Phase 1 ≡ TEXTURE Layer 3 — Dynamic lights       (1.5h)
-  │  Modifies: lighting.js, raycaster.js (glow overlay pass)
-  │  Depends: none (Lighting.js is independent), but A4 defines emitter flag
-  │  Creates: addLightSource(), clearLightSources(), flicker calc, glow pass
-  │  Unblocks: TEXTURE "Future — Campfire/Bonfire" section
+Step A4.5: Cavity rendering + bonfire rework + floor tiles + fence       ✅ DONE
+  │  Source: LIGHT_AND_TORCH Phase 2.5, BLOCKOUT_ALIGNMENT
+  │  Modifies: raycaster.js, texture-atlas.js, tiles.js, spatial-contract.js,
+  │    floor-manager.js, bonfire-sprites.js, game.js
+  │  Depends: A4 (wall decor system), A5 (cavity glow uses light source API)
+  │  Result: tiles.js adds ROAD=32, PATH=33, GRASS=34, FENCE=35 with
+  │    isWalkable (ROAD/PATH/GRASS) and isOpaque (FENCE) updates.
+  │    texture-atlas.js adds 3 procedural textures: fence_wood (dark-stained
+  │    planks + posts), floor_boardwalk (weathered pier planks + gaps),
+  │    bonfire_ring (riverrock masonry + soot + inner fire glow).
+  │    spatial-contract.js: all 3 contracts get BONFIRE 0.3× wall height +
+  │    bonfire_ring texture. Exterior adds FENCE 0.4×, SHRUB 0.5×,
+  │    tileFloorTextures map (ROAD→cobble, PATH→dirt, GRASS→grass,
+  │    TREE/SHRUB→grass, FENCE→boardwalk).
+  │    raycaster.js: cavity glow system — per-pixel radial-falloff rendering
+  │    behind wall decor items flagged cavityGlow:true. Quadratic falloff
+  │    (1-r²) from glow center. Also upgraded sprite glow from flat arc to
+  │    createRadialGradient multi-stop with _parseGlowRGB() hex/rgba helper.
+  │    floor-manager.js: BONFIRE/HEARTH tiles get fire cavity decor
+  │    (decor_torch, cavityGlow warm amber). TERMINAL decor gets cavityGlow
+  │    sickly green (30,90,35). bonfire-sprites.js stripped to tent-only
+  │    (fire/shrub removed — fire is cavity glow, stone ring replaces shrubs).
+  │    game.js: bonfire sprite glow nulled (moved to cavity system).
+  │  Note: Chainlink fence + door archway depth textures are POST-JAM.
+  │    Ocean-depth skybox preset deferred to B1 (skybox presets step).
   │
-Step A6: LIGHT_AND_TORCH Phase 2 ≡ TEXTURE Layer 2 consumer — Torch tiles (2h)
+Step A5: LIGHT_AND_TORCH Phase 1 ≡ TEXTURE Layer 3 — Dynamic lights       ✅ DONE
+  │  Modifies: lighting.js, raycaster.js, floor-manager.js, game.js
+  │  Result: lighting.js rewritten with _lightSources registry, addLightSource/
+  │    removeLightSource/clearLightSources API. Flicker types: 'torch' (±15%
+  │    at ~3Hz), 'bonfire' (±10% at ~1Hz + shimmer), 'steady', 'none'.
+  │    _warmMap Float32Array channel for fire warmth (0=white, 1=amber).
+  │    Raycaster warm-tinted brightness overlays: foreground + back-layer wall
+  │    columns shift from cold black toward amber near fire sources (rgba tint
+  │    scaled by warmMap). _applyFogAndBrightness extended with warmth param.
+  │    Floor-manager _registerLightSources() scans for BONFIRE (r5, i0.9),
+  │    HEARTH (r3, i0.7), FIRE (r3, i0.6) tiles on floor setup.
+  │    game.js passes frame timestamp (now) to Lighting.calculate() for flicker.
+  │  Unblocks: TEXTURE "Future — Campfire/Bonfire" section, A4.5 cavity glow,
+  │    A6 torch tile light registration.
+  │
+Step A6: LIGHT_AND_TORCH Phase 2 ≡ TEXTURE Layer 2 consumer — Torch tiles (2h)  ✅ DONE
   │  Modifies: tiles.js (TORCH_LIT=30, TORCH_UNLIT=31), floor-manager.js,
-  │            grid-gen.js (hero damage patterns), raycaster.js (torch as wall decor)
+  │            grid-gen.js (corridor + flanking torch placement), spatial-contract.js,
+  │            texture-atlas.js (torch_bracket_lit/unlit procedural textures)
   │  Depends: A4 (wall decor model), A5 (light source registration)
   │  Creates: torch wall sprites via wallDecor, auto-registration as light sources
+  │  Result: TORCH_LIT/TORCH_UNLIT tile constants + isTorch() helper. Procedural
+  │    torch bracket textures (lit=flame+embers, unlit=charred stub). All 3 spatial
+  │    contracts wired (30→torch_bracket_lit, 31→torch_bracket_unlit). grid-gen
+  │    converts WALL→TORCH_LIT for corridor torches (70%) and room-entrance flanking.
+  │    floor-manager: TORCH_LIT gets cavity glow decor (warm amber 255/140/40, α=0.3)
+  │    + light source (radius 4, intensity 0.8, warm, torch flicker). TORCH_UNLIT gets
+  │    dim bracket decor (no glow, no light). Building entrance glow: exterior DOORs
+  │    register as steady warm light (radius 3, intensity 0.6) per roadmap §2e.
+  │  Files modified: tiles.js, texture-atlas.js, spatial-contract.js, grid-gen.js,
+  │    floor-manager.js
   │
-Step A7: LIGHT_AND_TORCH Phase 3 — Torch slot model + fuel + reset loop    (2.5h)
-     Modifies: interact-prompt.js, loot-tables.js, salvage.js, session-stats.js
+Step A7: LIGHT_AND_TORCH Phase 3 — Torch slot model + fuel + reset loop    (2.5h)  ✅ DONE
+     Modifies: interact-prompt.js, loot-tables.js, session-stats.js, game.js,
+               floor-manager.js, readiness-calc.js, index.html
+     Creates: torch-state.js (Layer 1), torch-peek.js (Layer 3)
      Depends: A6 (torch tiles exist to interact with)
-     Creates: 3-slot torch model (flame/fuel_hydrated/fuel_dry/empty),
-              TorchPeek interaction surface, biome-matched fuel items,
-              water bottle extinguish (careful method), floor readiness scoring
+     Result: 3-slot torch model (flame/fuel_hydrated/fuel_dry/empty) in TorchState.
+       Per-floor torch registry with biome→idealFuel mapping. Hero damage patterns
+       (depth ≥ 3): 40% lit / 60% unlit, corpse-adjacent always unlit, stair-adjacent
+       always lit. TorchPeek BoxAnim peek with 3 slot indicators (🔥💧🪵○). Number-key
+       slot interaction: water→flame=extinguish, water→dry=hydrate, fuel→empty=fill,
+       junk→empty=fill(0.15). ReadinessCalc rebalanced: crate 30%, corpse 15%, clean 25%,
+       torch 20%, misc 10%. Torch fuel items in loot-tables.json (per-biome pools: coral,
+       drift, deep, generic, water). LootTables.rollTorchFuel(biome) API. InteractPrompt
+       wired for TORCH_LIT (extinguish/refuel) and TORCH_UNLIT (refuel). SessionStats
+       tracks torchesExtinguished + torchSlotsFilled. Live wall decor + light source
+       updates on extinguish (cavity glow removed, Lighting.removeLightSource called).
      Unblocks: Track PW step PW-3 (torch-hit detection needs slot model)
+     Files modified: torch-state.js (new), torch-peek.js (new), interact-prompt.js,
+       loot-tables.js, loot-tables.json, session-stats.js, game.js, floor-manager.js,
+       readiness-calc.js, index.html
 ```
 
-**Total Track A jam scope: ~11.25h**
+**Total Track A jam scope: ~11.75h**
 
 ### Track B — Skybox Day/Night Cycle (~6h jam scope)
 
@@ -160,10 +220,11 @@ Step B3: SKYBOX Phase 3 — Advanced star parallax                           (1.
   │  Depends: B1 (star alpha by phase)
   │  Creates: 3-layer star field, star colors, shooting stars
   │
-Step B4: SKYBOX Phase 4 — HUD time widget                                  (1h)
+Step B4: SKYBOX Phase 4 — HUD time widget                                 (1h)
      Modifies: hud.js
      Depends: B1 (DayCycle phase reads)
-     Creates: phase icon + hour + day counter in HUD
+     Use animation like found in docs/CSS_TO_USE.md
+     Creates: phase icon + hour + day counter in HUD (remove other clock in debrief feed)
 ```
 
 **Total Track B jam scope: ~6h**
@@ -260,6 +321,11 @@ These are additive polish with no blocking dependencies on each other:
 | NLAYER Phase 7 (expanded exterior maps 40×32+) | NLAYER | TBD |
 | TEXTURE hand-pixeled PNGs (replace procedural textures) | TEXTURE | TBD |
 | TEXTURE per-biome decor sprite sheets | TEXTURE | TBD |
+| Floor tile transition blending (pre-computed Grey-Scott edge textures) | BLOCKOUT_ALIGNMENT | 4-6h |
+| Clover meadow + bee particles (5-grass cluster detection, world-anchored particles) | BLOCKOUT_ALIGNMENT | 2-3h |
+| Alpha-transparent wall textures (per-column alpha blend for fence_chain + cobweb_sail) | BLOCKOUT_ALIGNMENT + COBWEB Phase 4.2 | 2-3h |
+| Chainlink fence + metal pipe fence textures (require alpha wall path) | BLOCKOUT_ALIGNMENT | 1h |
+| LIGHT_AND_TORCH Phase 6 (ceiling light fixture sprites: casting pass + billboards) | LIGHT_AND_TORCH | 3-4h |
 
 ---
 
@@ -290,6 +356,8 @@ These are additive polish with no blocking dependencies on each other:
   │  │                           │ │  │           │ │   │                  │
   │  └→ A4 Wall Decor            │ │  ├→ B3 Stars │ │ PW-3 Spray+Torch ◄──┤
   │       │                      │ │  │           │ │   │    (needs A7)    │
+  │  A4.5 Cavity+Fence+Tiles    │ │  │           │ │   │                  │
+  │       │                      │ │  │           │ │   │                  │
   │  A5 Lights ──→ A6 Torches   │ │  └→ B4 Time  │ │ PW-4 Reel+Gate      │
   │                  │           │ │              │ │   │                  │
   │             A7 Torch Loop ───┼─┼──────────────┼─┤ PW-5 Nozzles        │
@@ -338,6 +406,7 @@ file — changes must be sequenced carefully to avoid merge conflicts:
 | 1st | NLAYER Phase 1 | DDA loop → multi-hit collector, back-to-front render |
 | 2nd | NLAYER Phase 3e | Add SHRUB to hit detection tile check |
 | 3rd | TEXTURE Layer 2 / A4 | Wall decor face-hit sprite overlay per-layer |
+| 3.5 | LIGHT_AND_TORCH Phase 2.5 / A4.5 | Cavity glow overlay in wall decor system |
 | 4th | LIGHT_AND_TORCH Phase 1 / A5 | Glow overlay pass after main wall loop |
 | 5th | LIGHT_AND_TORCH Phase 2b / A6 | Torch sprites as wall decor items |
 | 6th | PRESSURE_WASHING PW-1 | Grime tint in wall column + floor pixel loops (additive) |
@@ -355,10 +424,11 @@ structural changes, but should still sequence after A1 to avoid conflicts.
 | A1 | raycaster.js |
 | A2 | tiles.js, texture-atlas.js, spatial-contract.js, raycaster.js, floor-manager.js |
 | A3 | raycaster.js, floor-manager.js |
-| A4 | raycaster.js, floor-manager.js, grid-gen.js |
-| A5 | lighting.js, raycaster.js |
-| A6 | tiles.js, floor-manager.js, grid-gen.js, raycaster.js |
-| A7 | interact-prompt.js, loot-tables.js, salvage.js, session-stats.js |
+| A4 | raycaster.js, texture-atlas.js, floor-manager.js, grid-gen.js |
+| A4.5 | raycaster.js, texture-atlas.js, tiles.js, spatial-contract.js, floor-manager.js, bonfire-sprites.js, game.js |
+| A5 | lighting.js, raycaster.js, floor-manager.js, game.js, tiles.js, spatial-contract.js, texture-atlas.js, bookshelf-peek.js, books.json |
+| A6 | tiles.js, texture-atlas.js, spatial-contract.js, grid-gen.js, floor-manager.js |
+| A7 | torch-state.js (new), torch-peek.js (new), interact-prompt.js, loot-tables.js, loot-tables.json, session-stats.js, game.js, floor-manager.js, readiness-calc.js, index.html |
 | B1 | skybox.js, day-cycle.js |
 | B2 | skybox.js |
 | B3 | skybox.js |

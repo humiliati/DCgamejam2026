@@ -201,6 +201,12 @@ var Game = (function () {
         return;
       }
 
+      // TorchPeek intercept: ESC closes torch slot UI before pause
+      if (typeof TorchPeek !== 'undefined' && TorchPeek.isInteracting()) {
+        TorchPeek.handleKey('Escape');
+        return;
+      }
+
       // BookshelfPeek intercept: ESC closes book overlay before pause
       if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
         BookshelfPeek.handleKey('Escape');
@@ -334,6 +340,12 @@ var Game = (function () {
             if (typeof CrateUI !== 'undefined') {
               CrateUI.handleKey(String(slot + 1));
             }
+            return;
+          }
+
+          // TorchPeek intercept: number keys fill torch slots during interaction
+          if (typeof TorchPeek !== 'undefined' && TorchPeek.isInteracting()) {
+            TorchPeek.handleKey('Digit' + (slot + 1));
             return;
           }
 
@@ -668,6 +680,7 @@ var Game = (function () {
     if (typeof CorpsePeek    !== 'undefined') CorpsePeek.init();
     if (typeof MerchantPeek  !== 'undefined') MerchantPeek.init();
     if (typeof PuzzlePeek    !== 'undefined') PuzzlePeek.init();
+    if (typeof TorchPeek    !== 'undefined') TorchPeek.init();
     if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
     if (typeof BedPeek !== 'undefined') BedPeek.init();
@@ -1353,8 +1366,17 @@ var Game = (function () {
       Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
     }
 
-    // Start intro auto-walk sequence on Floor 0
-    _startIntroWalk();
+    // Play deploy dropoff monologue (player was just dropped off by the truck)
+    // then start intro auto-walk sequence on Floor 0
+    if (typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
+      MonologuePeek.play('deploy_dropoff', {
+        onComplete: function () {
+          _startIntroWalk();
+        }
+      });
+    } else {
+      _startIntroWalk();
+    }
 
     // Wire input polling
     InputPoll.init({
@@ -2584,6 +2606,16 @@ var Game = (function () {
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
     }
+    // ── TORCH: Open torch-peek slot interaction ──
+    else if (TILES.isTorch(tile)) {
+      if (typeof TorchPeek !== 'undefined') {
+        if (TorchPeek.isInteracting()) {
+          // Already interacting — pass through to handleKey
+        } else if (TorchPeek.isActive()) {
+          TorchPeek.tryInteract();
+        }
+      }
+    }
     // ── BOOKSHELF: Open book peek (autonomous peek handles display,
     //    but OK interact re-shows the current page) ──
     else if (tile === TILES.BOOKSHELF) {
@@ -3364,6 +3396,7 @@ var Game = (function () {
       if (typeof CorpsePeek   !== 'undefined') CorpsePeek.update(frameDt);
       if (typeof MerchantPeek !== 'undefined') MerchantPeek.update(frameDt);
       if (typeof PuzzlePeek   !== 'undefined') PuzzlePeek.update(frameDt);
+      if (typeof TorchPeek    !== 'undefined') TorchPeek.update(frameDt);
       if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.update(frameDt);
       if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.update(frameDt);
       if (typeof BedPeek !== 'undefined') BedPeek.update(frameDt);
@@ -3424,12 +3457,12 @@ var Game = (function () {
     var renderPos = MC.getRenderPos();
     var p = Player.state();
 
-    // Calculate lighting
-    var lightMap = Lighting.calculate(p, floorData.grid, floorData.gridW, floorData.gridH);
+    // Calculate lighting (pass timestamp for flicker animation)
+    // `now` declared at _render() entry — reuse same frame timestamp
+    var lightMap = Lighting.calculate(p, floorData.grid, floorData.gridW, floorData.gridH, now);
 
     // Build sprite list (with enemy sprite stage system)
     var enemies = FloorManager.getEnemies();
-    var now = performance.now();
     _sprites.length = 0;
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
@@ -3579,8 +3612,10 @@ var Game = (function () {
           emoji: bfs.emoji,
           scale: bfs.scale,
           bobY: bfs.bobY || 0,
-          glow: (bfs.bonfireType === 'fire') ? 'rgba(255,120,40,0.25)' : null,
-          glowRadius: (bfs.bonfireType === 'fire') ? 4 : 0
+          // A4.5: fire glow moved to wall decor cavity glow system.
+          // Tent billboard has no sprite glow — fire is inside the stone ring.
+          glow: null,
+          glowRadius: 0
         });
       }
     }

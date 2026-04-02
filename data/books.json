@@ -617,6 +617,61 @@
         "Day 30.\n\nBreakthrough! Formula 19 works. Applied in controlled conditions (two consenting volunteers from the Driftwood Inn, observed at a safe distance). Subject A told Subject B that their 'eyes were like the sea at sunset.' Subject B said 'that's the nicest thing anyone's ever said to me' and they shared a meal.\n\nFormula 19: Just regular tea with a nice biscuit.\n\nI have spent thirty days and considerable resources to discover that the most effective love potion is TEA AND BISCUITS.\n\nGerald remains narcissistic. I will continue to monitor the situation.\n\n— This journal has water stains and smells faintly of rose petals —"
       ],
       "biome": "home"
+    },
+    {
+      "id": "term_sys_status",
+      "title": "SYSTEM STATUS TERMINAL",
+      "icon": "\uD83D\uDDA5\uFE0F",
+      "category": "terminal",
+      "pages": [
+        "TIDE COUNCIL INFRASTRUCTURE v3.7.2\nNODE: BOARDWALK-EAST-04\nSTATUS: NOMINAL\n\nPOWER GRID: 94% capacity\nWATER PRESSURE: 2.4 bar (within tolerance)\nSEWER FLOW: normal\nLAST MAINTENANCE: Cycle 447, Day 3",
+        "ALERT LOG (last 7 cycles):\n- C443: Pressure spike in sector 7 (resolved)\n- C444: Unauthorized access attempt, Archive sub-basement\n- C445: Grime accumulation exceeds threshold, Floor 2 east\n- C446: REDACTED\n- C447: Gleaner dispatch confirmed. Work order #1891 issued."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "term_gleaner_dispatch",
+      "title": "GLEANER DISPATCH LOG",
+      "icon": "\uD83D\uDDA5\uFE0F",
+      "category": "terminal",
+      "pages": [
+        "DISPATCH SYSTEM v2.1\nOPERATOR: [AUTO]\n\nACTIVE CONTRACTS:\n- WO#1891: Floor 2 east wing, grime removal (ASSIGNED)\n- WO#1887: Floor 1 bonfire pit, ash disposal (COMPLETE)\n- WO#1883: Sub-level 3, corpse processing (OVERDUE)",
+        "GLEANER PERFORMANCE METRICS:\nReadiness avg: 72%\nClean exit rate: 45%\nTrap re-arm compliance: 31%\nAvg time-to-completion: 14.2 min\n\nNOTE: Performance below threshold. Recommend equipment upgrade or replacement."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "term_dungeon_monitor",
+      "title": "DUNGEON MONITORING STATION",
+      "icon": "\uD83D\uDDA5\uFE0F",
+      "category": "terminal",
+      "pages": [
+        "DUNGEON TELEMETRY FEED\nFLOOR: SUB-3 (CELLAR)\nHERO CYCLE: 447\n\nENTITY COUNT: 7 hostile, 2 neutral\nTRAP STATUS: 4/9 active (5 consumed)\nCOBWEB COVERAGE: 12%\nGRIME INDEX: 0.78 (CRITICAL)",
+        "ENVIRONMENTAL SENSORS:\nTemp: 12C (nominal)\nHumidity: 89% (high — cobweb decay risk)\nAir quality: POOR (decomposition detected)\nLighting: 3% (torch coverage minimal)\n\nRECOMMENDATION: Deploy gleaner immediately.\nHero arrival in approximately 6 hours."
+      ],
+      "biome": "cellar"
+    },
+    {
+      "id": "term_tide_memo",
+      "title": "TIDE COUNCIL INTERNAL MEMO",
+      "icon": "\uD83D\uDDA5\uFE0F",
+      "category": "terminal",
+      "pages": [
+        "CLASSIFICATION: INTERNAL\nFROM: Facilities Director\nTO: All Gleaner Supervisors\nRE: Incident Report C-446\n\nThe events of Cycle 446 are NOT to be discussed with gleaners, heroes, or civilian contractors. The sub-basement access logs have been purged. Any gleaner who reports unusual readings from the deep sensors should be reassigned to surface duty immediately.",
+        "ADDENDUM:\nThe structural damage to the east retaining wall has been classified as 'routine erosion.' The sound complaints from residents in Boardwalk Village sector 3 have been attributed to 'tidal activity.'\n\nDo NOT deploy sonar equipment below Floor 3.\nDo NOT approve work orders for the sealed wing.\n\nThis terminal will auto-purge in 48 hours."
+      ],
+      "biome": "guild"
+    },
+    {
+      "id": "term_diagnostic",
+      "title": "HARDWARE DIAGNOSTIC",
+      "icon": "\uD83D\uDD27",
+      "category": "diagnostic",
+      "pages": [
+        "SELF-TEST INITIATED...\n\nCPU: OK (Tide Systems TC-7700)\nMEMORY: 640K (should be enough)\nDISPLAY: CRT-G4 phosphor (green)\nNETWORK: HARDLINE to Boardwalk hub\nSTORAGE: Tape drive B (degraded)\n\nWARNING: Tape drive B read errors exceed threshold.\nBackup tapes may be corrupted.\nContact Facilities for replacement.",
+        "FIRMWARE NOTES (v3.7.2):\n- Fixed false positive on grime sensors\n- Increased hero detection range to 12 tiles\n- Patched dispatch queue overflow (was assigning work orders to decommissioned gleaners)\n- Known issue: terminal flickers near high-EMF sources. This is a FEATURE of the phosphor display, not a bug."
+      ],
+      "biome": "guild"
     }
   ]
 }

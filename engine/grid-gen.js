@@ -235,6 +235,10 @@ var GridGen = (function () {
     }
 
     // ── Corridor torches: every ~6 tiles along corridor walls ──
+    // A6: Replace WALL tiles with TORCH_LIT at torch sites. The torch
+    // tile's own texture (torch_bracket_lit) shows bracket+flame.
+    // Cavity glow decor is added by FloorManager._buildWallDecorFromGrid.
+    // Grates remain as wall decor on regular WALL tiles.
     for (var cy = 1; cy < H - 1; cy++) {
       for (var cx = 1; cx < W - 1; cx++) {
         // Only place on wall tiles adjacent to corridors
@@ -249,20 +253,20 @@ var GridGen = (function () {
         var h = SeededRNG.random();
         if (h > 0.12) continue; // ~12% of eligible walls get decor
 
-        var face = faces[Math.floor(SeededRNG.random() * faces.length)];
-        var spriteId = 'decor_torch';
-        // Dungeon biomes get occasional grates instead
+        // Dungeon biomes: 30% chance of grate decor instead of torch
         if (biome !== 'exterior' && SeededRNG.random() < 0.3) {
-          spriteId = 'decor_grate';
+          var face = faces[Math.floor(SeededRNG.random() * faces.length)];
+          if (!decor[cy][cx]) decor[cy][cx] = { n: [], s: [], e: [], w: [] };
+          decor[cy][cx][face].push({
+            spriteId: 'decor_grate',
+            anchorU: 0.5,
+            anchorV: 0.6,
+            scale: 0.25
+          });
+        } else {
+          // Convert WALL → TORCH_LIT tile
+          grid[cy][cx] = TILES.TORCH_LIT;
         }
-
-        if (!decor[cy][cx]) decor[cy][cx] = { n: [], s: [], e: [], w: [] };
-        decor[cy][cx][face].push({
-          spriteId: spriteId,
-          anchorU: 0.5,
-          anchorV: 0.6,  // Slightly above center (torch height)
-          scale: 0.25
-        });
       }
     }
 
@@ -324,15 +328,9 @@ var GridGen = (function () {
       var wy = oy + offsets[i][1];
       if (wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
       if (grid[wy][wx] !== TILES.WALL) continue;
-      if (decor[wy][wx]) continue; // already decorated
 
-      decor[wy][wx] = { n: [], s: [], e: [], w: [] };
-      decor[wy][wx][face].push({
-        spriteId: 'decor_torch',
-        anchorU: 0.5,
-        anchorV: 0.65,  // Upper-center (torch mounting height)
-        scale: 0.3
-      });
+      // Convert WALL → TORCH_LIT tile (floor-manager handles cavity glow + light)
+      grid[wy][wx] = TILES.TORCH_LIT;
     }
   }
 

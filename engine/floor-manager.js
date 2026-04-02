@@ -1200,7 +1200,159 @@ var FloorManager = (function () {
       }
     }
 
+    // ── Fire cavity glow on BONFIRE and HEARTH tile faces ──
+    for (var by = 0; by < H; by++) {
+      for (var bx = 0; bx < W; bx++) {
+        var bt = grid[by][bx];
+        if (bt !== T.BONFIRE && bt !== T.HEARTH) continue;
+
+        // Find walkable neighbor faces → place fire emoji as cavity decor
+        var bFaces = [];
+        if (by > 0 && T.isWalkable(grid[by - 1][bx])) bFaces.push('n');
+        if (by < H - 1 && T.isWalkable(grid[by + 1][bx])) bFaces.push('s');
+        if (bx > 0 && T.isWalkable(grid[by][bx - 1])) bFaces.push('w');
+        if (bx < W - 1 && T.isWalkable(grid[by][bx + 1])) bFaces.push('e');
+        if (bFaces.length === 0) continue;
+
+        if (!decor[by][bx]) decor[by][bx] = { n: [], s: [], e: [], w: [] };
+        for (var bf = 0; bf < bFaces.length; bf++) {
+          decor[by][bx][bFaces[bf]].push({
+            spriteId: bt === T.HEARTH ? 'decor_torch' : 'decor_torch',
+            anchorU: 0.5,
+            anchorV: 0.55,  // Centered in the upper cavity of the short wall
+            scale: bt === T.BONFIRE ? 0.3 : 0.25,
+            cavityGlow: true,  // Flag: raycaster adds warm glow overlay behind this sprite
+            glowR: 255, glowG: 120, glowB: 30, glowA: 0.35
+          });
+        }
+      }
+    }
+
+    // ── Terminal CRT screen decor on TERMINAL tile faces ──
+    for (var ty = 0; ty < H; ty++) {
+      for (var tx = 0; tx < W; tx++) {
+        if (grid[ty][tx] !== T.TERMINAL) continue;
+        // Find walkable neighbor → that's the face the player approaches from
+        var tFaces = [];
+        if (ty > 0 && T.isWalkable(grid[ty - 1][tx])) tFaces.push('n');
+        if (ty < H - 1 && T.isWalkable(grid[ty + 1][tx])) tFaces.push('s');
+        if (tx > 0 && T.isWalkable(grid[ty][tx - 1])) tFaces.push('w');
+        if (tx < W - 1 && T.isWalkable(grid[ty][tx + 1])) tFaces.push('e');
+        if (tFaces.length === 0) continue;
+
+        if (!decor[ty][tx]) decor[ty][tx] = { n: [], s: [], e: [], w: [] };
+        for (var tf = 0; tf < tFaces.length; tf++) {
+          decor[ty][tx][tFaces[tf]].push({
+            spriteId: 'decor_terminal',
+            anchorU: 0.5,
+            anchorV: 0.75,  // Upper portion (screen above desk)
+            scale: 0.35,
+            cavityGlow: true,  // CRT screen emits sickly green glow
+            glowR: 30, glowG: 90, glowB: 35, glowA: 0.25
+          });
+        }
+      }
+    }
+
+    // ── Torch tile cavity decor (TORCH_LIT warm glow, TORCH_UNLIT dim bracket) ──
+    for (var tcy = 0; tcy < H; tcy++) {
+      for (var tcx = 0; tcx < W; tcx++) {
+        var tct = grid[tcy][tcx];
+        if (!T.isTorch(tct)) continue;
+
+        // Find walkable neighbor faces → those are the faces the player sees
+        var tcFaces = [];
+        if (tcy > 0 && T.isWalkable(grid[tcy - 1][tcx])) tcFaces.push('n');
+        if (tcy < H - 1 && T.isWalkable(grid[tcy + 1][tcx])) tcFaces.push('s');
+        if (tcx > 0 && T.isWalkable(grid[tcy][tcx - 1])) tcFaces.push('w');
+        if (tcx < W - 1 && T.isWalkable(grid[tcy][tcx + 1])) tcFaces.push('e');
+        if (tcFaces.length === 0) continue;
+
+        if (!decor[tcy][tcx]) decor[tcy][tcx] = { n: [], s: [], e: [], w: [] };
+        var isLit = tct === T.TORCH_LIT;
+        for (var tcf = 0; tcf < tcFaces.length; tcf++) {
+          if (isLit) {
+            // Lit torch: fire decor with warm cavity glow
+            decor[tcy][tcx][tcFaces[tcf]].push({
+              spriteId: 'decor_torch',
+              anchorU: 0.5,
+              anchorV: 0.6,
+              scale: 0.25,
+              cavityGlow: true,
+              glowR: 255, glowG: 140, glowB: 40, glowA: 0.3
+            });
+          } else {
+            // Unlit torch: charred bracket, no glow
+            decor[tcy][tcx][tcFaces[tcf]].push({
+              spriteId: 'decor_torch',
+              anchorU: 0.5,
+              anchorV: 0.6,
+              scale: 0.2
+            });
+          }
+        }
+      }
+    }
+
     return decor;
+  }
+
+  // ── Dynamic light source registration ──────────────────────────
+  // Scans the floor grid for light-emitting tiles and registers them
+  // with Lighting so the lightmap reflects placed bonfires, hearths,
+  // fire hazards, terminals, torch tiles, and building entrances.
+  //
+  // Also auto-places electric ceiling lights for interior floors (N.N)
+  // to provide ambient coverage beyond the player torch.
+
+  function _registerLightSources(grid, gridW, gridH, contract) {
+    if (typeof Lighting === 'undefined' || !Lighting.addLightSource) return;
+    Lighting.clearLightSources();
+
+    var isExterior = contract && contract.depth === 'exterior';
+    var isInterior = contract && contract.depth === 'interior';
+    var isDungeon  = contract && contract.depth === 'nested_dungeon';
+    var electricSpacing = 4; // Tiles between auto-placed electric lights
+
+    for (var y = 0; y < gridH; y++) {
+      for (var x = 0; x < gridW; x++) {
+        var t = grid[y][x];
+
+        // ── Tile-based emitters ──
+        if (t === TILES.BONFIRE) {
+          // Large warm glow, slow pulse
+          Lighting.addLightSource(x, y, 5, 0.9, { tint: 'warm', flicker: 'bonfire' });
+        } else if (t === TILES.HEARTH) {
+          // Medium warm glow, torch flicker
+          Lighting.addLightSource(x, y, 3, 0.7, { tint: 'warm', flicker: 'torch' });
+        } else if (t === TILES.FIRE) {
+          // Environmental fire hazard — hot glow, fast flicker
+          Lighting.addLightSource(x, y, 3, 0.6, { tint: 'warm', flicker: 'torch' });
+        } else if (t === TILES.TERMINAL) {
+          // Data terminal — sickly green CRT glow
+          Lighting.addLightSource(x, y, 2, 0.45, { tint: 'sickly', flicker: 'steady' });
+        } else if (t === TILES.TORCH_LIT) {
+          // Wall-mounted torch — warm glow, standard torch flicker
+          Lighting.addLightSource(x, y, 4, 0.8, { tint: 'warm', flicker: 'torch' });
+        }
+
+        // ── Auto-placed electric ceiling lights for interiors ──
+        // Every electricSpacing tiles in walkable space, drop a neutral
+        // steady light. Creates ambient coverage so interiors feel lit
+        // by invisible overhead fixtures (Doom sector lighting model).
+        if (isInterior && TILES.isWalkable(t) &&
+            x % electricSpacing === 2 && y % electricSpacing === 2) {
+          Lighting.addLightSource(x, y, 4, 0.65, { tint: 'none', flicker: 'steady' });
+        }
+
+        // ── Building entrance glow (exterior DOORs) ──
+        // On exterior (depth-1) floors, DOOR tiles glow steadily to make
+        // building entrances visually inviting on dark streets.
+        if (isExterior && TILES.isDoor(t) && t !== TILES.BOSS_DOOR) {
+          Lighting.addLightSource(x, y, 3, 0.6, { tint: 'warm', flicker: 'steady' });
+        }
+      }
+    }
   }
 
   /**
@@ -1292,6 +1444,34 @@ var FloorManager = (function () {
       _placeBookshelvesInInterior(_floorData, _floorId);
     }
 
+    // ── Register torch tiles + apply hero damage patterns ──────────
+    // Must happen BEFORE wallDecor and lightSources so the final
+    // TORCH_LIT/TORCH_UNLIT grid state drives decor + lighting.
+    if (!fromCache && typeof TorchState !== 'undefined') {
+      var _torchBiome = _floorData.biome || getBiome(_floorId);
+      TorchState.registerFloor(
+        _floorId, _floorData.grid,
+        _floorData.gridW, _floorData.gridH, _torchBiome
+      );
+
+      // Hero damage on dungeon floors (depth ≥ 3): flip some torches to UNLIT
+      if (_depth(_floorId) >= 3) {
+        var _corpsePos = {};
+        var _stairPos  = {};
+        for (var _ty = 0; _ty < _floorData.gridH; _ty++) {
+          for (var _tx = 0; _tx < _floorData.gridW; _tx++) {
+            var _tt = _floorData.grid[_ty][_tx];
+            if (_tt === TILES.CORPSE) _corpsePos[_tx + ',' + _ty] = true;
+            if (_tt === TILES.STAIRS_DN || _tt === TILES.STAIRS_UP) _stairPos[_tx + ',' + _ty] = true;
+          }
+        }
+        TorchState.applyHeroDamage(_floorId, _floorData.grid, {
+          corpsePositions: _corpsePos,
+          stairPositions:  _stairPos
+        });
+      }
+    }
+
     // ── Auto-generate wall decor for floors that don't have it ──
     // Proc-gen floors (GridGen.generate) include wallDecor. Hand-authored
     // floors may not. This step ensures every floor gets wall decor.
@@ -1314,6 +1494,9 @@ var FloorManager = (function () {
     // Apply biome colors + contract to raycaster
     Raycaster.setBiomeColors(getBiomeColors(_floorId));
     Raycaster.setContract(contract, _floorData.rooms, _floorData.cellHeights, _floorData.wallDecor || null);
+
+    // Register dynamic light sources from fire-emitting tiles + electric ceiling lights
+    _registerLightSources(_floorData.grid, _floorData.gridW, _floorData.gridH, contract);
 
     // Set post-process profile by floor depth
     if (typeof PostProcess !== 'undefined') {

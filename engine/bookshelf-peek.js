@@ -27,6 +27,7 @@ var BookshelfPeek = (function () {
   var _catalog = [];           // Array of book objects
   var _catalogById = {};       // id → book lookup
   var _catalogByBiome = {};    // biome → [book, book, ...]
+  var _catalogByCategory = {}; // category → [book, book, ...]
   var _loaded = false;
 
   // ── State ───────────────────────────────────────────────────────
@@ -54,6 +55,10 @@ var BookshelfPeek = (function () {
           _catalogById[book.id] = book;
           if (!_catalogByBiome[book.biome]) _catalogByBiome[book.biome] = [];
           _catalogByBiome[book.biome].push(book);
+          if (book.category) {
+            if (!_catalogByCategory[book.category]) _catalogByCategory[book.category] = [];
+            _catalogByCategory[book.category].push(book);
+          }
         }
         _loaded = true;
         console.log('[BookshelfPeek] Loaded ' + _catalog.length + ' books');
@@ -82,7 +87,17 @@ var BookshelfPeek = (function () {
       }
     }
 
-    // 2. Biome-appropriate random
+    // 2. Terminal tiles prefer terminal-category entries
+    var tile = floorData.grid[fy] ? floorData.grid[fy][fx] : 0;
+    if (tile === TILES.TERMINAL && _catalogByCategory && _catalogByCategory['terminal']) {
+      var tPool = _catalogByCategory['terminal'];
+      if (tPool.length > 0) {
+        var tIdx = ((fx * 11 + fy * 17) & 0x7fffffff) % tPool.length;
+        return tPool[tIdx];
+      }
+    }
+
+    // 3. Biome-appropriate random
     var biome = floorData.biome || 'guild';
     var pool = _catalogByBiome[biome];
     if (pool && pool.length > 0) {
@@ -91,7 +106,7 @@ var BookshelfPeek = (function () {
       return pool[idx];
     }
 
-    // 3. Any book
+    // 4. Any book
     if (_catalog.length > 0) {
       var fallbackIdx = ((fx * 7 + fy * 13) & 0x7fffffff) % _catalog.length;
       return _catalog[fallbackIdx];
@@ -143,19 +158,33 @@ var BookshelfPeek = (function () {
     if (!_currentBook || typeof DialogBox === 'undefined') return;
 
     var book = _currentBook;
+    var isCRT = book.category === 'terminal' || book.category === 'diagnostic';
     var page = book.pages[_currentPage];
-    var pageLabel = '— Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' —';
+    var pageLabel;
     var navParts = [];
-    if (_currentPage > 0) navParts.push('[A] \u2190 Prev');
-    if (_currentPage < book.pages.length - 1) navParts.push('[D] Next \u2192');
-    navParts.push('[Esc] Close');
+
+    if (isCRT) {
+      // CRT terminal style: green monospace feel, record/entry numbering
+      pageLabel = '[RECORD ' + (_currentPage + 1) + '/' + book.pages.length + ']';
+      if (_currentPage > 0) navParts.push('[A] << PREV');
+      if (_currentPage < book.pages.length - 1) navParts.push('[D] NEXT >>');
+      navParts.push('[ESC] DISCONNECT');
+      page = '> ' + page.replace(/\n/g, '\n> '); // CRT prompt prefix
+    } else {
+      pageLabel = '\u2014 Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' \u2014';
+      if (_currentPage > 0) navParts.push('[A] \u2190 Prev');
+      if (_currentPage < book.pages.length - 1) navParts.push('[D] Next \u2192');
+      navParts.push('[Esc] Close');
+    }
+
     var navHint = '\n\n' + navParts.join('   ');
 
     DialogBox.show({
-      speaker: book.icon + ' ' + book.title,
+      speaker: (isCRT ? '\uD83D\uDDA5\uFE0F ' : '') + book.icon + ' ' + book.title,
       text: page + '\n\n' + pageLabel + navHint,
       instant: true,
-      priority: 2 // PERSISTENT — stays until explicitly closed
+      priority: 2, // PERSISTENT — stays until explicitly closed
+      style: isCRT ? 'terminal' : undefined
     });
   }
 
@@ -213,13 +242,13 @@ var BookshelfPeek = (function () {
 
     var tile = floorData.grid[fy][fx];
 
-    if (tile === TILES.BOOKSHELF) {
+    if (tile === TILES.BOOKSHELF || tile === TILES.TERMINAL) {
       _hideTimer = 0;
       if (_active && fx === _facingX && fy === _facingY) {
-        // Already showing this bookshelf — keep it open
+        // Already showing this bookshelf/terminal — keep it open
         return;
       }
-      // New bookshelf or not yet active — debounce
+      // New bookshelf/terminal or not yet active — debounce
       if (!_active || fx !== _facingX || fy !== _facingY) {
         _timer += dt;
         if (_timer >= SHOW_DELAY) {

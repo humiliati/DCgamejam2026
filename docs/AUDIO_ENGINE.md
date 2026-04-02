@@ -201,3 +201,4 @@ All volume setters clamp to 0.0–1.0. The three-tier bus means you can adjust g
 - `→ DOC-5 AUDIT §2.4` — Audio asset wiring (Phase G1)
 - `⊕ PHASE G.1` — Full audio asset wiring pass
 - `⊕ PHASE D.2` — Enemy patrol footstep spatial audio
+- `→ DOC-50 SPATIAL_AUDIO_BARK_ROADMAP` — Phases 0–7 extend this engine with StereoPannerNode spatial panning, directional bark UI, muffled door BGM (OoT lowpass pattern), and biome music continuity

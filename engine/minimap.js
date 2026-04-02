@@ -22,6 +22,11 @@ var Minimap = (function () {
   var _frame = null;       // #minimap-frame container
   var _expandBtn = null;   // #minimap-expand toggle
   var _floorLabelEl = null; // #minimap-floor-label
+  // Time strip DOM refs
+  var _timeStripEl  = null;  // #minimap-time-strip
+  var _tsPhaseEl    = null;  // #mts-phase
+  var _tsTimeEl     = null;  // #mts-time
+  var _tsHeadingEl  = null;  // #mts-heading
   var _expanded = false;   // false = embedded (160px), true = overlay (320px)
   var _visible = true;     // Always visible during gameplay (embedded mode)
   var _size = 160;         // Current render size (changes with expand/collapse)
@@ -97,6 +102,13 @@ var Minimap = (function () {
     _frame = document.getElementById('minimap-frame');
     _expandBtn = document.getElementById('minimap-expand');
     _floorLabelEl = document.getElementById('minimap-floor-label');
+
+    // Time strip elements
+    _timeStripEl = document.getElementById('minimap-time-strip');
+    _tsDayEl     = document.getElementById('mts-day');
+    _tsPhaseEl   = document.getElementById('mts-phase');
+    _tsTimeEl    = document.getElementById('mts-time');
+    _tsHeadingEl = document.getElementById('mts-heading');
 
     // Set initial embedded size (matches CSS #minimap-frame 200px)
     _size = 200;
@@ -506,6 +518,9 @@ var Minimap = (function () {
     // Draw compass in bottom-left corner (rotates to show north)
     _drawCompass(ctx, player.dir);
 
+    // Update time/heading strip in DOM frame
+    _updateTimeStrip(player.dir);
+
     // Update floor label in DOM frame (not drawn on canvas)
     if (_floorLabelEl) {
       _floorLabelEl.textContent = _floorLabel || '';
@@ -751,6 +766,50 @@ var Minimap = (function () {
       ctx.lineTo(cx + half, cy + half * 0.5);
     }
     ctx.stroke();
+  }
+
+  // ── Time strip (DOM-based, updates each render frame) ────────────
+
+  var _tsDayEl = null;  // #mts-day
+
+  // Cardinal heading names indexed by player direction (0=N, 1=E, 2=S, 3=W)
+  var _HEADING_LABELS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+  /**
+   * Convert a radian angle to a cardinal/intercardinal label.
+   * @param {number} radians - Player facing angle (0=E, π/2=S, π=W, -π/2=N)
+   * @returns {string} Cardinal label (N, NE, E, SE, S, SW, W, NW)
+   */
+  function _radToHeading(radians) {
+    // Normalize to 0–2π, where 0 = East in math coords
+    var a = ((radians % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    // Convert so 0 = North (subtract π/2 and invert)
+    // In our coord system: -π/2 = North, 0 = East, π/2 = South, π = West
+    // So: north-relative = (a + π/2) mod 2π, where 0=N going clockwise
+    var northRel = (a + Math.PI / 2) % (Math.PI * 2);
+    var idx = Math.round(northRel / (Math.PI / 4)) % 8;
+    return _HEADING_LABELS[idx];
+  }
+
+  /**
+   * Update the DOM time strip with current DayCycle + heading info.
+   * Called once per render frame from render().
+   * @param {number} playerAngle - Player facing angle in radians
+   */
+  function _updateTimeStrip(playerAngle) {
+    if (!_tsTimeEl) return;
+    if (typeof DayCycle === 'undefined') return;
+
+    // Day label: suit symbol on hero days, day abbreviation otherwise
+    if (_tsDayEl) {
+      _tsDayEl.textContent = DayCycle.getDayLabel();
+      var suitColor = DayCycle.getDayLabelColor();
+      _tsDayEl.style.color = suitColor || '';
+    }
+
+    _tsPhaseEl.textContent  = DayCycle.getPhaseIcon();
+    _tsTimeEl.textContent   = DayCycle.getTimeString();
+    _tsHeadingEl.textContent = '\u25B8' + _radToHeading(playerAngle);
   }
 
   // ── Compass ──────────────────────────────────────────────────────

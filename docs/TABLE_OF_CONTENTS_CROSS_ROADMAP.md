@@ -229,6 +229,8 @@ All five design documents, their scope, and section inventories. Each document n
 
 ### DOC-31: LIGHT_AND_TORCH_ROADMAP.md
 > **Scope**: Dynamic light sources in Lighting.js, torch wall sprites, extinguish/refuel game loop. Phase 1 ≡ TEXTURE Layer 3 (same implementation). Phase 2 consumes TEXTURE Layer 2 wall decor model.
+> **Phase 1 ✅ DONE**: Tint palette system (NONE/WARM/SICKLY), quadratic falloff, flicker animation (torch/bonfire/steady), per-tile tint index + intensity maps, raycaster integration with `_tintedDark()` overlay, TERMINAL tile (36) with sickly green glow + CRT wall texture + decor sprite + BookshelfPeek terminal category routing, 5 terminal books in books.json, interior auto-electric lights (Doom sector model).
+> **Phase 6 (post-jam)**: Ceiling light fixture sprites — requires ceiling casting pass or ceiling-mounted billboard system in raycaster. Seams documented in roadmap §6a–6d.
 
 ### DOC-32: UNIFIED_EXECUTION_ORDER.md (v3)
 > **Scope**: Single source of truth for implementation sequencing across ALL roadmaps. Sprint 0 (inventory/card/menu rework, 15h) as prerequisite → three parallel tracks (A: raycaster/texture/lighting, B: skybox/day-night, PW: pressure washing/hose) → Floor 3 convergence → EyesOnly convergence sprints S1–S5 (33h). Track PW cross-depends on Track A step A7 (torch slot model) for torch-hit wiring. References DOC-46, DOC-47, DOC-48.
@@ -293,6 +295,22 @@ All five design documents, their scope, and section inventories. Each document n
 | Phase 5 | Spatial audio bark attenuation (distance opacity, stereo pan) | Planned |
 | Phase 6 | EyesOnly Tooltip Space Canon port (full production spec) | Far future |
 
+### DOC-50: SPATIAL_AUDIO_BARK_ROADMAP.md
+> **Scope**: Post-jam unified directional audio + visual bark system. SpatialDir resolver (pure math), AudioSystem StereoPannerNode panning, viewport direction ring (SVG, 8-axis), directional bark popups, enemy proximity audio, ambient spatial sources, muffled door BGM (OoT BiquadFilterNode lowpass pattern), biome music continuity (same-biome adjust vs cross-biome crossfade vs dungeon hard-switch). Extends DOC-6 AUDIO_ENGINE and DOC-32 TOOLTIP_BARK_ROADMAP Phase 5.
+
+| Section | Content |
+|---|---|
+| Phase 0 | SpatialDir resolver — angle, distance, cardinal, pan from world position (1h) |
+| Phase 1 | AudioSystem StereoPannerNode panning with `position` option (2h) |
+| Phase 2 | Viewport direction ring — SVG, 8 fixed axis positions, reticle dual-purpose (2h) |
+| Phase 3 | Directional bark popups — NPC srcX/srcY forwarding, off-screen suppression (2.5h) |
+| Phase 4 | Enemy proximity audio — footstep spatial, threat ring indicators (1.5h) |
+| Phase 5 | Ambient spatial sources — bonfire, torch, ocean, door barks (1h) |
+| Phase 6 | Muffled door BGM — OoT pattern, BiquadFilterNode lowpass, bgmLeak spatial contract, crossfade on entry (1.5h) |
+| Phase 7 | Biome music continuity — same-biome adjust, cross-biome crossfade, dungeon hard-switch (1h) |
+| Design Decisions | Ring (not compass bar), exaggerated pan ×1.3, 8-axis fixed positions, reticle dual-purpose |
+| Cross-References | 16 entries linking DOC-6, DOC-7, DOC-9, DOC-10, DOC-11, DOC-30, DOC-32, engine files |
+
 ### DOC-31: COBWEB_TRAP_STRATEGY_ROADMAP.md
 > **Scope**: Strategic design roadmap for cobweb and trap embellishment systems. Covers: the "clean inward, arm outward" loop, self-trigger penalty mechanics, economic resource costs (Silk Spider, Trap Kit), proc-gen contract bonus objectives, windsail cobweb visual upgrade with third-space rendering and hover interaction, reinforced web/trap tiers, enemy pathfinding integration, and cobweb ecology far-future vision.
 
@@ -338,6 +356,12 @@ All five design documents, their scope, and section inventories. Each document n
 
 ### DOC-43: AGENT_BLOCKOUT_INSTRUCTIONS.md
 > **Scope**: Level design guidelines for creating modular, interconnected floor spaces — building archetypes, critical-path navigation, and spatial composition rules.
+
+### DOC-49: BLOCKOUT_ALIGNMENT.md
+> **Scope**: Gap analysis between floor blockout vision (Morrowind density ramp: Seyda Neen→Balmora→Vivec) and current implementation. Floor 0-3 proposed changes, density ramp, NPC counts, building archetype templates.
+> **Floor tile texture composition ✅ A4.5**: ROAD/PATH/GRASS walkable tile types with tileFloorTextures contract wiring. Transition blending (Grey-Scott) POST-JAM.
+> **Boardwalk fence rail ✅ A4.5**: FENCE tile (35), 0.4× half-wall, fence_wood + floor_boardwalk textures. Chainlink/metal POST-JAM (alpha wall path dependency).
+> **Bonfire rework ✅ A4.5**: 0.3× stone ring with cavity glow. Cross-refs LIGHT_AND_TORCH Phase 2.5.
 
 ### DOC-44: EYESONLYS_TOOLTIP_SPACE_CANON.md
 > **Scope**: Production-target reference from EyesOnly — responsive tooltip and NPC dialogue system dimensions for desktop, tablet, and mobile breakpoints.

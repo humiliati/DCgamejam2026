@@ -339,14 +339,42 @@ var MenuFaces = (function () {
       ty += Math.round(16 * S);
     }
 
-    // ── Time display (clock frozen while paused) ──
+    // ── Compass heading + Time display ──
     if (typeof DayCycle !== 'undefined') {
-      ctx.fillStyle = COL.accent;
-      ctx.font = F_BODY + 'px monospace';
-      ctx.textAlign = 'center';
       var timeStr = DayCycle.getTimeString();
       var phase = DayCycle.getPhase ? DayCycle.getPhase() : '';
-      ctx.fillText('\u23F8 ' + timeStr + (phase ? ' \u2014 ' + phase : ''), x + w / 2, ty);
+      var phaseIcon = DayCycle.getPhaseIcon ? DayCycle.getPhaseIcon() : '';
+
+      // Compass heading (player direction as cardinal)
+      var heading = '';
+      if (typeof Player !== 'undefined' && Player.getDir) {
+        var HEADINGS_MAP = ['N', 'E', 'S', 'W'];
+        heading = HEADINGS_MAP[Player.getDir()] || 'N';
+      }
+
+      // Row 1: prominent time + phase
+      ctx.fillStyle = COL.accent;
+      ctx.font = 'bold ' + F_BODY + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(phaseIcon + ' ' + timeStr + (phase ? ' \u2014 ' + phase : ''), x + w / 2, ty);
+      ty += Math.round(14 * S);
+
+      // Row 2: compass heading + day label (suit symbol on hero days)
+      var dayLabel = DayCycle.getDayLabel ? DayCycle.getDayLabel() : DayCycle.getDayOfWeek();
+      var dayColor = DayCycle.getDayLabelColor ? DayCycle.getDayLabelColor() : null;
+      ctx.font = F_SMALL + 'px monospace';
+      // Draw heading first
+      ctx.fillStyle = COL.dim;
+      var row2 = 'Facing ' + heading + '  \u00B7  ';
+      var row2W = ctx.measureText(row2).width;
+      var dayPart = dayLabel + ', Day ' + (DayCycle.getDay() + 1);
+      var totalW = row2W + ctx.measureText(dayPart).width;
+      var startX = x + w / 2 - totalW / 2;
+      ctx.textAlign = 'left';
+      ctx.fillText(row2, startX, ty);
+      ctx.fillStyle = dayColor || COL.dim;
+      ctx.fillText(dayPart, startX + row2W, ty);
+      ctx.textAlign = 'center';
     }
 
     // ── Hint ──
@@ -1123,14 +1151,44 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText('Discover lore by exploring the world', x + w / 2, ty + 2);
 
-    // ── Day/session stats + hint ──
+    // ── Day/time info + hint ──
+    if (typeof DayCycle !== 'undefined') {
+      var dayNum = DayCycle.getDay() + 1;
+      var dayLabel = DayCycle.getDayLabel ? DayCycle.getDayLabel() : DayCycle.getDayOfWeek();
+      var dayLblColor = DayCycle.getDayLabelColor ? DayCycle.getDayLabelColor() : null;
+      var dow = DayCycle.getDayOfWeekFull ? DayCycle.getDayOfWeekFull() : '';
+      var tStr = DayCycle.getTimeString();
+      var pIcon = DayCycle.getPhaseIcon ? DayCycle.getPhaseIcon() : '';
+
+      // Row 1: Day label (suit on hero days / day name) + time
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'center';
+      // Use suit color on hero days
+      if (dayLblColor) {
+        // Draw: "♠ Wednesday  ☀ 08:00" with colored suit
+        var prefix = dayLabel + ' ';
+        var rest = dow + '  ' + pIcon + ' ' + tStr;
+        var prefW = ctx.measureText(prefix).width;
+        var restW = ctx.measureText(rest).width;
+        var rowStart = x + w / 2 - (prefW + restW) / 2;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = dayLblColor;
+        ctx.fillText(prefix, rowStart, y + h - Math.round(32 * S));
+        ctx.fillStyle = COL.accent;
+        ctx.fillText(rest, rowStart + prefW, y + h - Math.round(32 * S));
+        ctx.textAlign = 'center';
+      } else {
+        ctx.fillStyle = COL.accent;
+        ctx.fillText(dow + '  ' + pIcon + ' ' + tStr, x + w / 2, y + h - Math.round(32 * S));
+      }
+
+      // Row 2: Total days survived
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillText('Day ' + dayNum + (dayNum === 1 ? '' : '  \u00B7  ' + dayNum + ' days survived'), x + w / 2, y + h - Math.round(20 * S));
+    }
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    if (typeof DayCycle !== 'undefined') {
-      ctx.fillText('Day ' + (DayCycle.getDay() + 1) + '  \u2022  ' + DayCycle.getTimeString(),
-                   x + w / 2, y + h - Math.round(20 * S));
-    }
     ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
   }

@@ -59,6 +59,8 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
     ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
+    ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
+    ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
   }
 
   /**

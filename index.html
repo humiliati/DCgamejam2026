@@ -988,6 +988,37 @@
       text-shadow: 0 0 4px rgba(46,139,87,0.3);
     }
     #minimap-frame.expanded #minimap-floor-label { font-size: 13px; bottom: 14px; }
+    /* Time/heading strip inside minimap frame — sits above floor label */
+    #minimap-time-strip {
+      position: absolute; bottom: 22px; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-crt, 'Courier New', monospace);
+      font-size: 13px; color: rgba(46,139,87,0.8);
+      letter-spacing: 0.06em;
+      pointer-events: none;
+      z-index: 5;
+      white-space: nowrap;
+      text-shadow: 0 0 5px rgba(46,139,87,0.4);
+    }
+    #minimap-time-strip #mts-day {
+      margin-right: 4px;
+      font-weight: bold;
+    }
+    #minimap-time-strip #mts-phase {
+      margin-right: 4px;
+      font-size: 14px;
+    }
+    #minimap-time-strip #mts-time {
+      color: rgba(102,255,170,0.9);
+      font-weight: bold;
+    }
+    #minimap-time-strip #mts-heading {
+      margin-left: 5px;
+      color: rgba(102,255,170,0.65);
+    }
+    #minimap-frame.expanded #minimap-time-strip {
+      font-size: 15px; bottom: 32px;
+    }
 
     /* ── D-pad movement controls — CSS monochrome arrows ──────────
      * Disembodied center-right between minimap and footer.
@@ -2001,6 +2032,12 @@
         <canvas id="minimap"></canvas>
         <div id="minimap-expand" title="Expand map">\u26F6</div>
         <button id="sb-map" class="minimap-compass-btn" title="Toggle Map (M)">N</button>
+        <div id="minimap-time-strip">
+          <span id="mts-day"></span>
+          <span id="mts-phase"></span>
+          <span id="mts-time"></span>
+          <span id="mts-heading"></span>
+        </div>
         <div id="minimap-floor-label"></div>
       </div>
 
@@ -2099,6 +2136,7 @@
   <script src="engine/bark-library.js"></script>
   <script src="engine/cleaning-system.js"></script>
   <script src="engine/trap-rearm.js"></script>
+  <script src="engine/torch-state.js"></script>
   <script src="engine/readiness-calc.js"></script>
   <script src="engine/work-order-system.js"></script>
   <script src="engine/hero-run.js"></script>
@@ -2140,6 +2178,7 @@
   <script src="engine/menu-box.js"></script>
   <script src="engine/box-anim.js"></script>
   <script src="engine/splash-screen.js"></script>
+  <script src="engine/deploy-cutscene.js"></script>
   <script src="engine/game-loop.js"></script>
 
   <!-- Layer 3: Game modules (depend on Player + core systems) -->
@@ -2165,6 +2204,7 @@
   <script src="engine/crate-peek.js"></script>
   <script src="engine/chest-peek.js"></script>
   <script src="engine/corpse-peek.js"></script>
+  <script src="engine/torch-peek.js"></script>
   <script src="engine/merchant-peek.js"></script>
   <script src="engine/peek-slots.js"></script>
   <script src="engine/puzzle-peek.js"></script>
@@ -2185,9 +2225,4 @@
 
   <!-- Layer 4: Orchestrator (wires everything together) -->
   <!-- GIF capture (debug/prototyping) -->
-  <script src="engine/vendor/gif.js"></script>
-  <script src="engine/gif-recorder.js"></script>
-
-  <script src="engine/game.js"></script>
-
-  <!-- Layer 5: Da
+  <script src="eng

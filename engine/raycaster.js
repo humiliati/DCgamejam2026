@@ -55,6 +55,8 @@ var Raycaster = (function () {
   function init(canvas) {
     _canvas = canvas;
     _ctx = canvas.getContext('2d');
+    _ctx.imageSmoothingEnabled = false;
+    if (_ctx.webkitImageSmoothingEnabled !== undefined) _ctx.webkitImageSmoothingEnabled = false;
     _resize();
     window.addEventListener('resize', _resize);
   }
@@ -106,6 +108,12 @@ var Raycaster = (function () {
     var fogDist    = _contract ? _contract.fogDistance : 12;
     var fogColor   = _contract ? _contract.fogColor : { r: 0, g: 0, b: 0 };
     var baseWallH  = _contract ? _contract.wallHeight : 1.0;
+
+    // ── Light tint maps (colored glow from dynamic light sources) ──
+    var _hasLighting = typeof Lighting !== 'undefined';
+    var tintStr = _hasLighting && Lighting.getTintStrength ? Lighting.getTintStrength() : null;
+    var tintIdx = _hasLighting && Lighting.getTintIndex ? Lighting.getTintIndex() : null;
+    var tintRGB = _hasLighting && Lighting.TINT_RGB ? Lighting.TINT_RGB : null;
 
     // ── DayCycle atmosphere tint (exterior floors only) ──
     // Multiplies fog color by the time-of-day tint for dawn/dusk/night shifts.
@@ -452,9 +460,9 @@ var Raycaster = (function () {
           ctx.fillRect(col, drawStart, 1, stripH);
         }
 
-        // Brightness / lighting overlay
+        // Brightness / lighting overlay (tint-colored near light sources)
         if (brightness < 0.95) {
-          ctx.fillStyle = 'rgba(0,0,0,' + (1 - brightness) + ')';
+          ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, 1 - brightness);
           ctx.fillRect(col, drawStart, 1, stripH);
         }
       } else {
@@ -467,7 +475,9 @@ var Raycaster = (function () {
           baseColor = (side === 1) ? _wallColors.dark : _wallColors.light;
         }
 
-        var finalColor = _applyFogAndBrightness(baseColor, fogFactor, brightness, fogColor);
+        var _tS = tintStr && tintStr[mapY] ? tintStr[mapY][mapX] : 0;
+        var _tI = tintIdx && tintIdx[mapY] ? tintIdx[mapY][mapX] : 0;
+        var finalColor = _applyFogAndBrightness(baseColor, fogFactor, brightness, fogColor, _tS, _tI, tintRGB);
         ctx.fillStyle = finalColor;
         ctx.fillRect(col, drawStart, 1, stripH);
       }
@@ -640,6 +650,26 @@ var Raycaster = (function () {
    * @param {number} stY - Step direction Y (+1 or -1)
    * @returns {string} Face key: 'n', 's', 'e', 'w'
    */
+  /**
+   * Parse a glow color string into 'r,g,b' for use in rgba() construction.
+   * Accepts '#rrggbb' hex, 'rgba(r,g,b,a)', or 'rgb(r,g,b)'.
+   * Returns '255,255,255' as fallback.
+   */
+  function _parseGlowRGB(color) {
+    if (!color) return '255,255,255';
+    if (color.charAt(0) === '#') {
+      var hex = color.length === 4
+        ? color.charAt(1) + color.charAt(1) + color.charAt(2) + color.charAt(2) + color.charAt(3) + color.charAt(3)
+        : color.substring(1);
+      return parseInt(hex.substring(0, 2), 16) + ',' +
+             parseInt(hex.substring(2, 4), 16) + ',' +
+             parseInt(hex.substring(4, 6), 16);
+    }
+    var m = color.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) return m[1] + ',' + m[2] + ',' + m[3];
+    return '255,255,255';
+  }
+
   function _hitFace(sd, stX, stY) {
     // side 0 (vertical line): ray going right (+X) hits the WEST face;
     //                          ray going left (-X) hits the EAST face
@@ -715,6 +745,48 @@ var Raycaster = (function () {
       var dTop = Math.max(drawStart, Math.floor(spriteTop));
       var dBot = Math.min(drawEnd, Math.floor(spriteBot) - 1);
       if (dTop > dBot) continue;
+
+      // ── Cavity glow: radial-falloff colored glow behind the sprite ──
+      // Renders per-pixel alpha-faded glow before the sprite texture.
+      // Uses radial distance from glow center to produce soft orb-like
+      // light spill, not a flat disc. Makes fire openings (bonfires,
+      // hearths) and CRT screens look like they emit volumetric light
+      // from inside the short wall cavity.
+      if (d.cavityGlow) {
+        var cgR = d.glowR || 255;
+        var cgG = d.glowG || 120;
+        var cgB = d.glowB || 30;
+        var cgA = d.glowA || 0.3;
+        // Extend glow region beyond sprite bounds
+        var glowPad = Math.max(3, Math.floor((dBot - dTop) * 0.35));
+        var gTop = Math.max(drawStart, dTop - glowPad);
+        var gBot = Math.min(drawEnd, dBot + glowPad);
+        var gH = gBot - gTop + 1;
+        if (gH > 0) {
+          // Glow center in screen Y (sprite vertical center)
+          var gCY = (dTop + dBot) * 0.5;
+          // Glow center in screen X (sprite horizontal center)
+          var spriteCX = drawStart + (1 - d.anchorV) * stripH; // approximate
+          // Column offset from sprite U center → horizontal falloff
+          var uCenter = d.anchorU;
+          var uDist = Math.abs(wallX - uCenter) / (d.scale * 0.5 + 0.001);
+          uDist = Math.min(uDist, 1); // 0 at center, 1 at edge
+          // Per-pixel vertical render with radial falloff
+          for (var gp = gTop; gp <= gBot; gp++) {
+            var vDist = Math.abs(gp - gCY) / (glowPad + (dBot - dTop) * 0.5 + 0.001);
+            vDist = Math.min(vDist, 1);
+            // Radial distance from center (0=center, 1=edge)
+            var rDist = Math.sqrt(uDist * uDist + vDist * vDist);
+            if (rDist >= 1) continue;
+            // Smooth falloff: bright core, soft edge
+            var falloff = 1 - rDist * rDist; // quadratic falloff
+            var pixA = cgA * falloff;
+            if (pixA < 0.01) continue;
+            ctx.fillStyle = 'rgba(' + cgR + ',' + cgG + ',' + cgB + ',' + pixA.toFixed(3) + ')';
+            ctx.fillRect(col, gp, 1, 1);
+          }
+        }
+      }
 
       // Source rect in sprite texture
       var srcY = (dTop - spriteTop) / spriteH * tex.height;
@@ -813,7 +885,9 @@ var Raycaster = (function () {
     } else {
       // Flat-color fallback
       var base = (L.sd === 1) ? _wallColors.dark : _wallColors.light;
-      ctx.fillStyle = _applyFogAndBrightness(base, fog, bri, fogColor);
+      var _bgTS = tintStr && tintStr[L.my] ? tintStr[L.my][L.mx] : 0;
+      var _bgTI = tintIdx && tintIdx[L.my] ? tintIdx[L.my][L.mx] : 0;
+      ctx.fillStyle = _applyFogAndBrightness(base, fog, bri, fogColor, _bgTS, _bgTI, tintRGB);
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
@@ -823,9 +897,9 @@ var Raycaster = (function () {
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
-    // Brightness overlay
+    // Brightness overlay (tint-colored near light sources)
     if (tex && bri < 0.95) {
-      ctx.fillStyle = 'rgba(0,0,0,' + (1 - bri) + ')';
+      ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, L.my, L.mx, 1 - bri);
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
@@ -1426,15 +1500,20 @@ var Raycaster = (function () {
       }
 
       // ── Glow halo (drawn behind sprite) ─────────────────────────
+      // Radial gradient with multi-stop falloff for soft orb-like
+      // light spill. Matches the silhouette glow pattern for visual
+      // consistency with fog-tinted creature rendering and cavity glow.
       if (s.glow && s.glowRadius && spriteH > 4) {
-        var glowR = Math.floor(spriteH * 0.5 + s.glowRadius / dist * 8);
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.35;
-        ctx.beginPath();
-        ctx.arc(screenX, spriteCenterY, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = s.glow;
-        ctx.fill();
-        ctx.restore();
+        var glowRad = Math.floor(spriteH * 0.5 + s.glowRadius / dist * 8);
+        var sgAlpha = alpha * 0.35;
+        // Parse glow color: accepts '#rrggbb' or 'rgba(r,g,b,a)'
+        var sgRGB = _parseGlowRGB(s.glow);
+        var sgGrad = ctx.createRadialGradient(screenX, spriteCenterY, 0, screenX, spriteCenterY, glowRad);
+        sgGrad.addColorStop(0, 'rgba(' + sgRGB + ',' + sgAlpha.toFixed(3) + ')');
+        sgGrad.addColorStop(0.5, 'rgba(' + sgRGB + ',' + (sgAlpha * 0.4).toFixed(3) + ')');
+        sgGrad.addColorStop(1, 'rgba(' + sgRGB + ',0)');
+        ctx.fillStyle = sgGrad;
+        ctx.fillRect(screenX - glowRad, spriteCenterY - glowRad, glowRad * 2, glowRad * 2);
       }
 
       // Horizontal squish ratio for perpendicular flattening
@@ -1743,7 +1822,30 @@ var Raycaster = (function () {
     }
   }
 
-  function _applyFogAndBrightness(hexColor, fogFactor, brightness, fogColor) {
+  // ── Tint helpers ────────────────────────────────────────────────
+  // Shared by foreground and back-layer brightness overlays.
+
+  /**
+   * Build an rgba() darkness overlay string, tinted by the light palette.
+   * @param {Array[]} tS   - tint strength map (Float32Array[])
+   * @param {Array[]} tI   - tint index map (Uint8Array[])
+   * @param {Array}   tRGB - palette: [[r,g,b], ...]
+   * @param {number}  my   - tile Y
+   * @param {number}  mx   - tile X
+   * @param {number}  alpha - overlay opacity (1-brightness)
+   * @returns {string} rgba() CSS color
+   */
+  function _tintedDark(tS, tI, tRGB, my, mx, alpha) {
+    var s = tS && tS[my] ? tS[my][mx] : 0;
+    if (s > 0.01 && tRGB) {
+      var idx = tI && tI[my] ? tI[my][mx] : 0;
+      var c = tRGB[idx] || tRGB[0];
+      return 'rgba(' + ((s * c[0]) | 0) + ',' + ((s * c[1]) | 0) + ',' + ((s * c[2]) | 0) + ',' + alpha + ')';
+    }
+    return 'rgba(0,0,0,' + alpha + ')';
+  }
+
+  function _applyFogAndBrightness(hexColor, fogFactor, brightness, fogColor, tintS, tintI, tintRGB) {
     var r = parseInt(hexColor.substr(1, 2), 16);
     var g = parseInt(hexColor.substr(3, 2), 16);
     var b = parseInt(hexColor.substr(5, 2), 16);
@@ -1751,6 +1853,15 @@ var Raycaster = (function () {
     r = Math.floor(r * brightness);
     g = Math.floor(g * brightness);
     b = Math.floor(b * brightness);
+
+    // Color tint: shift toward palette color in dim areas near tinted sources
+    if (tintS > 0.01 && tintRGB) {
+      var inv = 1 - brightness; // Stronger in darker areas
+      var tc = tintRGB[tintI] || tintRGB[0];
+      r = Math.min(255, r + Math.floor(tc[0] * tintS * inv));
+      g = Math.min(255, g + Math.floor(tc[1] * tintS * inv));
+      b = Math.max(0,   b - Math.floor(Math.max(0, 10 - tc[2]) * tintS * inv));
+    }
 
     var fr = fogColor ? fogColor.r : 0;
     var fg = fogColor ? fogColor.g : 0;

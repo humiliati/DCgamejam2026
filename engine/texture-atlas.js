@@ -290,6 +290,65 @@ var TextureAtlas = (function () {
       fabricR: 30, fabricG: 50, fabricB: 140,
       trimR: 160, trimG: 160, trimB: 170
     });
+
+    // Terminal desk wall texture (half-wall with CRT screen above)
+    _genTerminalWall('terminal_screen', {
+      deskR: 55, deskG: 52, deskB: 50,       // Grey metal desk
+      screenR: 10, screenG: 28, screenB: 12,  // Dark green CRT background
+      glowR: 30, glowG: 90, glowB: 35,        // Sickly green text glow
+      frameR: 40, frameG: 38, frameB: 36       // Monitor bezel
+    });
+
+    // CRT screen decor sprite (for wallDecor overlay on terminal face)
+    _genTerminalDecor('decor_terminal', {
+      screenR: 10, screenG: 28, screenB: 12,
+      glowR: 30, glowG: 90, glowB: 35,
+      frameR: 45, frameG: 42, frameB: 40
+    });
+
+    // ── A6 textures (torch tiles) ──────────────────────────────────
+
+    // Lit torch wall — stone wall with iron bracket and flame
+    _genTorchWall('torch_bracket_lit', {
+      stoneR: 90, stoneG: 88, stoneB: 82,       // Same stone as rough
+      bracketR: 60, bracketG: 58, bracketB: 55,  // Dark iron
+      flameR: 240, flameG: 160, flameB: 40,      // Orange flame
+      tipR: 255,   tipG: 240,   tipB: 200,       // White-yellow tip
+      embers: true
+    });
+
+    // Unlit torch wall — stone wall with charred bracket stub
+    _genTorchWall('torch_bracket_unlit', {
+      stoneR: 75, stoneG: 72, stoneB: 68,        // Slightly darker (soot)
+      bracketR: 45, bracketG: 40, bracketB: 35,   // Sooty iron
+      flameR: 30,  flameG: 25,  flameB: 20,       // Charred stub (no flame)
+      tipR: 40,    tipG: 35,    tipB: 28,          // Dark ash
+      embers: false
+    });
+
+    // ── A4.5 textures ────────────────────────────────────────────
+
+    // Wooden fence rail — boardwalk railing (Floor 1)
+    _genFenceWood('fence_wood', {
+      plankR: 75, plankG: 52, plankB: 30,      // Dark stained planks
+      postR:  55, postG:  38, postB:  20,       // Darker post verticals
+      railR:  90, railG:  65, railB:  38        // Top rail highlight
+    });
+
+    // Boardwalk planks — elevated walkway floor texture
+    _genFloorBoardwalk('floor_boardwalk', {
+      baseR: 95, baseG: 68, baseB: 40,         // Warm weathered wood
+      gapR:  35, gapG:  28, gapB:  18,         // Dark gaps between planks
+      grainDark: 0.65
+    });
+
+    // Bonfire stone ring — low cylindrical wall texture for 0.3× bonfire tile
+    _genBonfireRing('bonfire_ring', {
+      stoneR: 85, stoneG: 78, stoneB: 68,      // Warm grey river stones
+      mortarR: 40, mortarG: 35, mortarB: 28,    // Dark mortar joints
+      sootR: 25,  sootG: 20,  sootB: 15,       // Soot staining at top
+      glowR: 120, glowG: 50,  glowB: 10        // Inner fire glow at top
+    });
   }
 
   // ── Texture generators ─────────────────────────────────────────
@@ -1854,7 +1913,7 @@ var TextureAtlas = (function () {
   // with alpha=0 for transparent pixels so the wall behind shows
   // through. Used for torches, grates, banners, signage.
 
-  var DECOR_SIZE = 16;
+  var DECOR_SIZE = 32;
 
   /** Torch bracket — iron L-bracket at bottom, teardrop flame above. */
   function _genTorchBracket(id, p) {
@@ -1940,13 +1999,15 @@ var TextureAtlas = (function () {
 
   /** Wall banner — triangular pennant hanging from a rod. */
   function _genWallBanner(id, p) {
-    // 16×24 to allow the pennant to hang with a visible taper
-    _createTexture(id, DECOR_SIZE, 24, function (x, y) {
+    // 32×48 (2:3 aspect) — pennant hanging with visible taper
+    var bannerH = DECOR_SIZE * 1.5; // 48 at DECOR_SIZE=32
+    _createTexture(id, DECOR_SIZE, bannerH, function (x, y) {
       var S = DECOR_SIZE;
+      var rodH = Math.max(2, Math.floor(S / 8)); // Rod thickness scales with size
 
-      // ── Rod (top 2 rows) ──
-      if (y < 2) {
-        if (x >= 2 && x <= S - 3) {
+      // ── Rod (top rows) ──
+      if (y < rodH) {
+        if (x >= Math.floor(S * 0.1) && x <= S - Math.floor(S * 0.1) - 1) {
           var rn = (_hash(x + 7000, y + 7100) - 0.5) * 10;
           return {
             r: _clamp(p.rodR + rn), g: _clamp(p.rodG + rn),
@@ -1956,17 +2017,17 @@ var TextureAtlas = (function () {
         return { r: 0, g: 0, b: 0, a: 0 };
       }
 
-      // ── Fabric pennant (rows 2-23) ──
+      // ── Fabric pennant (below rod to bottom) ──
       // Triangle: full width at top, narrows to point at bottom
-      var bannerH = 22; // rows 2-23
-      var progress = (y - 2) / bannerH; // 0=top, 1=bottom
+      var fabricH = bannerH - rodH;
+      var progress = (y - rodH) / fabricH; // 0=top, 1=bottom
       var halfW = (1.0 - progress) * (S / 2 - 2);
       var cx = S / 2;
       var dx = Math.abs(x - cx);
 
       if (dx <= halfW) {
-        // Trim: 1px border at edges
-        var isTrim = dx > halfW - 1.2;
+        // Trim: 2px border at edges (scales with resolution)
+        var isTrim = dx > halfW - 2.0;
         var fn = (_hash(x + 7200, y + 7300) - 0.5) * 12;
         // Shading: darker toward bottom
         var shade = 1.0 - progress * 0.3;
@@ -1983,6 +2044,324 @@ var TextureAtlas = (function () {
       }
 
       return { r: 0, g: 0, b: 0, a: 0 }; // transparent outside pennant
+    });
+  }
+
+  // ── Terminal texture generators ─────────────────────────────────
+
+  /**
+   * Terminal desk wall texture (TEX_SIZE × TEX_SIZE).
+   * Lower 60% = metal desk surface. Upper 40% = CRT monitor with bezel.
+   * Scan lines across the screen for retro-futuristic CRT feel.
+   */
+  function _genTerminalWall(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var screenTop = Math.floor(S * 0.1);     // Monitor starts 10% from top
+      var screenBot = Math.floor(S * 0.55);     // Monitor ends at 55%
+      var deskTop   = Math.floor(S * 0.6);      // Desk surface starts at 60%
+      var bezel     = 2;                         // Bezel width in pixels
+      var fn = (_hash(x + 5100, y + 5200) - 0.5) * 8;
+
+      // Monitor bezel zone
+      if (y >= screenTop - bezel && y < screenBot + bezel &&
+          x >= bezel && x < S - bezel) {
+        // Inside screen (excluding bezel border)
+        if (y >= screenTop && y < screenBot && x >= bezel + 1 && x < S - bezel - 1) {
+          // CRT screen with scan lines
+          var scanLine = (y % 3 === 0) ? 0.7 : 1.0;  // Dim every 3rd row
+          // Fake text lines: horizontal bands of brighter green
+          var textBand = (y % 7 < 4 && x > S * 0.15 && x < S * 0.85) ? 1.3 : 0.6;
+          var tr = _clamp(p.screenR * scanLine * textBand + fn * 0.3);
+          var tg = _clamp(p.glowR > 0 ? p.glowG * scanLine * textBand + fn * 0.5 : p.screenG * scanLine);
+          var tb = _clamp(p.screenB * scanLine * textBand + fn * 0.3);
+          return { r: tr, g: tg, b: tb, a: 255 };
+        }
+        // Bezel frame
+        return { r: _clamp(p.frameR + fn), g: _clamp(p.frameG + fn), b: _clamp(p.frameB + fn), a: 255 };
+      }
+
+      // Desk surface (lower portion)
+      if (y >= deskTop) {
+        var dShade = 1.0 - (y - deskTop) / (S - deskTop) * 0.2;
+        return {
+          r: _clamp(p.deskR * dShade + fn),
+          g: _clamp(p.deskG * dShade + fn),
+          b: _clamp(p.deskB * dShade + fn),
+          a: 255
+        };
+      }
+
+      // Gap between monitor and desk (dark shadow)
+      if (y >= screenBot + bezel && y < deskTop) {
+        return { r: _clamp(20 + fn * 0.5), g: _clamp(18 + fn * 0.5), b: _clamp(18 + fn * 0.5), a: 255 };
+      }
+
+      // Above monitor (wall/background — dark)
+      return { r: _clamp(25 + fn), g: _clamp(24 + fn), b: _clamp(26 + fn), a: 255 };
+    });
+  }
+
+  /**
+   * Terminal CRT screen decor sprite (DECOR_SIZE × DECOR_SIZE).
+   * Floating screen with green glow, alpha-transparent background.
+   * Placed on BAR_COUNTER / TERMINAL tile faces via wallDecor.
+   */
+  function _genTerminalDecor(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var margin = Math.floor(S * 0.1);
+      var fn = (_hash(x + 6100, y + 6200) - 0.5) * 6;
+
+      // Screen area (inset by margin)
+      if (x >= margin && x < S - margin && y >= margin && y < S - margin) {
+        // Bezel: 1px border
+        if (x === margin || x === S - margin - 1 || y === margin || y === S - margin - 1) {
+          return { r: _clamp(p.frameR + fn), g: _clamp(p.frameG + fn), b: _clamp(p.frameB + fn), a: 255 };
+        }
+        // Screen interior with scan lines
+        var scanLine = (y % 2 === 0) ? 0.8 : 1.0;
+        var textBand = ((y - margin) % 5 < 3 && x > margin + 2 && x < S - margin - 2) ? 1.4 : 0.5;
+        return {
+          r: _clamp(p.screenR * scanLine * textBand + fn * 0.3),
+          g: _clamp(p.glowG * scanLine * textBand + fn * 0.5),
+          b: _clamp(p.screenB * scanLine * textBand + fn * 0.3),
+          a: 255
+        };
+      }
+
+      // Outside screen — transparent
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // ── Torch wall texture ──────────────────────────────────────────
+  // Stone wall with centered iron bracket and torch. Lit variant has
+  // orange flame + ember sparks; unlit has charred stub + soot stains.
+
+  function _genTorchWall(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = Math.floor(S / 2);
+
+      // ── Iron bracket: vertical stem + horizontal arm ──
+      var bracketW = 3;
+      var stemTop = Math.floor(S * 0.25);
+      var stemBot = Math.floor(S * 0.75);
+      var armY = Math.floor(S * 0.3);
+      var armLeft = cx - 6;
+      var armRight = cx + 6;
+
+      // Bracket stem (vertical bar at center)
+      var inStem = (x >= cx - 1 && x <= cx + 1 && y >= stemTop && y <= stemBot);
+      // Bracket arm (horizontal bar near top)
+      var inArm = (y >= armY - 1 && y <= armY + 1 && x >= armLeft && x <= armRight);
+
+      if (inStem || inArm) {
+        var bn = (_hash(x + 8100, y + 8101) - 0.5) * 8;
+        return {
+          r: _clamp(p.bracketR + bn),
+          g: _clamp(p.bracketG + bn * 0.8),
+          b: _clamp(p.bracketB + bn * 0.6)
+        };
+      }
+
+      // ── Flame or charred stub above bracket arm ──
+      var flameTop = Math.floor(S * 0.08);
+      var flameBot = armY - 2;
+      var flameHalfW = 5;
+
+      if (y >= flameTop && y <= flameBot && x >= cx - flameHalfW && x <= cx + flameHalfW) {
+        // Tapered shape: wider at bottom, narrower at top
+        var fy = (y - flameTop) / (flameBot - flameTop); // 0=top, 1=bottom
+        var maxW = flameHalfW * (0.4 + 0.6 * fy);       // Taper
+        var fx = Math.abs(x - cx);
+
+        if (fx <= maxW) {
+          // Vertical gradient: tip color at top → flame color at bottom
+          var vertBlend = fy;
+          var fn = (_hash(x + 8200, y + 8201) - 0.5) * 20;
+          return {
+            r: _clamp(p.tipR * (1 - vertBlend) + p.flameR * vertBlend + fn),
+            g: _clamp(p.tipG * (1 - vertBlend) + p.flameG * vertBlend + fn * 0.5),
+            b: _clamp(p.tipB * (1 - vertBlend) + p.flameB * vertBlend + fn * 0.2)
+          };
+        }
+      }
+
+      // ── Ember sparks (lit only): random bright pixels around flame ──
+      if (p.embers) {
+        var dx = Math.abs(x - cx);
+        var dy = Math.abs(y - Math.floor(S * 0.2));
+        if (dx < 10 && dy < 10) {
+          var emberHash = _hash(x * 7 + 8300, y * 11 + 8301);
+          if (emberHash > 0.96) {
+            return { r: 255, g: 200, b: 60 }; // Bright spark
+          }
+        }
+      }
+
+      // ── Stone wall background ──
+      // Same pattern as stone_rough: multi-frequency noise
+      var n1 = _hash(x + 8400, y + 8401);
+      var n2 = _hash(x * 3 + 8500, y * 3 + 8501);
+      var combined = n1 * 0.6 + n2 * 0.4;
+      var pn = (combined - 0.5) * 20;
+
+      // Soot darkening near the flame area (vertical gradient from top)
+      var sootY = Math.max(0, 1 - y / (S * 0.5));
+      var sootX = Math.max(0, 1 - Math.abs(x - cx) / 12);
+      var soot = sootY * sootX * 25;
+
+      return {
+        r: _clamp(p.stoneR + pn - soot),
+        g: _clamp(p.stoneG + pn * 0.9 - soot),
+        b: _clamp(p.stoneB + pn * 0.8 - soot * 0.8)
+      };
+    });
+  }
+
+  // ── Fence wood texture ───────────────────────────────────────────
+  // Horizontal planks with vertical post columns at 25% and 100% width.
+  // Top rail is 1px lighter highlight. Grain noise per plank.
+
+  function _genFenceWood(id, p) {
+    var grainDark = p.grainDark || 0.7;
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var postW = 4; // Post column width in pixels
+
+      // Two vertical posts: x=0..postW and x=75%..75%+postW
+      var post1 = x < postW;
+      var post2 = x >= Math.floor(S * 0.75) && x < Math.floor(S * 0.75) + postW;
+
+      if (post1 || post2) {
+        var pn = (_hash(x + 7000, y + 7001) - 0.5) * 8;
+        return {
+          r: _clamp(p.postR + pn),
+          g: _clamp(p.postG + pn * 0.7),
+          b: _clamp(p.postB + pn * 0.5)
+        };
+      }
+
+      // Top rail highlight (top 1-2 px)
+      if (y < 2) {
+        var rn = (_hash(x + 7100, y + 7101) - 0.5) * 6;
+        return {
+          r: _clamp(p.railR + rn),
+          g: _clamp(p.railG + rn * 0.8),
+          b: _clamp(p.railB + rn * 0.5)
+        };
+      }
+
+      // Three horizontal plank bands (each ~30% of height)
+      var plankH = Math.floor(S / 3);
+      var plankIdx = Math.floor(y / plankH);
+      var localY = y % plankH;
+
+      // Gap between planks (1px dark line)
+      if (localY === 0 && plankIdx > 0) {
+        return { r: 30, g: 22, b: 14 };
+      }
+
+      // Plank grain — horizontal streaking with per-plank noise seed
+      var grain = _hash(x, Math.floor(y / 2) + plankIdx * 1000 + 7200);
+      var plankNoise = (_hash(plankIdx + 7300, x + 7301) - 0.5) * 12;
+      var gn = (grain - 0.5) * 15 * grainDark;
+
+      return {
+        r: _clamp(p.plankR + plankNoise + gn),
+        g: _clamp(p.plankG + plankNoise * 0.7 + gn * 0.7),
+        b: _clamp(p.plankB + plankNoise * 0.5 + gn * 0.5)
+      };
+    });
+  }
+
+  // ── Floor boardwalk texture ──────────────────────────────────────
+  // Horizontal wood planks with visible gaps — weathered pier flooring.
+
+  function _genFloorBoardwalk(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var plankH = 8; // Each plank is 8px tall
+      var gapH = 1;   // 1px dark gap between planks
+      var localY = y % (plankH + gapH);
+
+      // Dark gap between planks
+      if (localY >= plankH) {
+        return { r: p.gapR, g: p.gapG, b: p.gapB };
+      }
+
+      // Plank surface — horizontal wood grain
+      var plankIdx = Math.floor(y / (plankH + gapH));
+      var grain = _hash(x, Math.floor(y / 2) + plankIdx * 500 + 7400);
+      var plankSeed = _hash(plankIdx + 7500, 0);
+      var plankShift = (plankSeed - 0.5) * 14; // Per-plank color variation
+      var gn = (grain - 0.5) * 12 * p.grainDark;
+
+      // Weathering: random dark spots
+      var weather = _hash(x + 7600, y + 7601);
+      var wearDarken = weather > 0.92 ? -15 : 0;
+
+      return {
+        r: _clamp(p.baseR + plankShift + gn + wearDarken),
+        g: _clamp(p.baseG + plankShift * 0.7 + gn * 0.7 + wearDarken * 0.8),
+        b: _clamp(p.baseB + plankShift * 0.5 + gn * 0.5 + wearDarken * 0.6)
+      };
+    });
+  }
+
+  // ── Bonfire stone ring texture ───────────────────────────────────
+  // Low cylindrical wall for the 0.3× bonfire tile. Riverrock masonry
+  // with soot blackening at top and inner fire glow along the upper edge.
+
+  function _genBonfireRing(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Soot gradient — darkens toward the top (y=0 = top of wall)
+      var sootBlend = Math.max(0, 1 - y / (S * 0.35)); // 0 at bottom, 1 at top
+      var sootSq = sootBlend * sootBlend;
+
+      // Inner fire glow at the very top edge (top 3px)
+      if (y < 3) {
+        var gn = (_hash(x + 7700, y + 7701) - 0.5) * 20;
+        return {
+          r: _clamp(p.glowR + gn),
+          g: _clamp(p.glowG + gn * 0.4),
+          b: _clamp(p.glowB + gn * 0.2)
+        };
+      }
+
+      // Riverrock masonry — same interlocking pattern as hearth
+      var stoneW = 10;
+      var stoneH = 7;
+      var rowOff = (Math.floor(y / stoneH) % 2 === 0) ? 0 : stoneW / 2;
+      var stoneCol = Math.floor((x + rowOff) / stoneW);
+      var stoneRow = Math.floor(y / stoneH);
+      var localX = (x + rowOff) - stoneCol * stoneW;
+      var localY = y - stoneRow * stoneH;
+
+      // Mortar gaps
+      if (localX < 1 || localX >= stoneW - 1 || localY < 1 || localY >= stoneH - 1) {
+        var mn = (_hash(x + 7800, y + 7801) - 0.5) * 6;
+        return {
+          r: _clamp(p.mortarR + mn - sootSq * 20),
+          g: _clamp(p.mortarG + mn - sootSq * 18),
+          b: _clamp(p.mortarB + mn - sootSq * 15)
+        };
+      }
+
+      // Stone face with per-stone color variation + soot overlay
+      var stoneHash = _hash(stoneCol + 7900, stoneRow + 7901);
+      var stoneVar = (stoneHash - 0.5) * 20;
+      var pn = (_hash(x + 8000, y + 8001) - 0.5) * 10;
+
+      return {
+        r: _clamp(p.stoneR + stoneVar + pn - sootSq * (p.stoneR - p.sootR)),
+        g: _clamp(p.stoneG + stoneVar * 0.8 + pn * 0.8 - sootSq * (p.stoneG - p.sootG)),
+        b: _clamp(p.stoneB + stoneVar * 0.6 + pn * 0.6 - sootSq * (p.stoneB - p.sootB))
+      };
     });
   }
 

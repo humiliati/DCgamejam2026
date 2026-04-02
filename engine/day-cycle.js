@@ -380,6 +380,18 @@ var DayCycle = (function () {
   //  QUERIES
   // ═══════════════════════════════════════════════════════════════
 
+  // Day-of-week names (game starts Monday — a work day for a Gleaner)
+  var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  // Suit symbols for hero-day cycle (matches game.js _DUNGEON_SUITS)
+  // Each hero day corresponds to a dungeon faction's suit.
+  var HERO_SUITS = [
+    { sym: '\u2660', color: '#8888ff', name: 'spade'   },  // ♠ blue dungeon
+    { sym: '\u2666', color: '#ff6666', name: 'diamond'  },  // ♦ red dungeon
+    { sym: '\u2663', color: '#66cc66', name: 'club'     }   // ♣ green dungeon
+  ];
+
   function getDay()     { return _day; }
   function getHour()    { return _hour; }
   function getMinute()  { return _minute; }
@@ -388,6 +400,71 @@ var DayCycle = (function () {
     var h = Math.floor(_hour);
     var m = Math.floor(_minute);
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  /**
+   * Get abbreviated day-of-week name (Mon–Sun).
+   * Day 0 = Monday (work week start, fitting for a Gleaner).
+   * @returns {string}
+   */
+  function getDayOfWeek() {
+    return DAY_NAMES[_day % 7];
+  }
+
+  /**
+   * Get full day-of-week name (Monday–Sunday).
+   * @returns {string}
+   */
+  function getDayOfWeekFull() {
+    return DAY_NAMES_FULL[_day % 7];
+  }
+
+  /**
+   * Get the suit data for a given day (hero-day cycle).
+   * On non-hero days returns null. On hero days returns { sym, color, name }.
+   * @param {number} [dayNum] - Defaults to current day
+   * @returns {Object|null}
+   */
+  function getDaySuit(dayNum) {
+    if (dayNum === undefined) dayNum = _day;
+    if (dayNum % HERO_DAY_INTERVAL !== 0) return null;
+    var idx = Math.floor(dayNum / HERO_DAY_INTERVAL) % HERO_SUITS.length;
+    return HERO_SUITS[idx];
+  }
+
+  /**
+   * Get a display label for the current day — suit symbol on hero days,
+   * abbreviated day name otherwise.
+   * @returns {string}
+   */
+  function getDayLabel() {
+    var suit = getDaySuit(_day);
+    return suit ? suit.sym : DAY_NAMES[_day % 7];
+  }
+
+  /**
+   * Get the color for the current day label — suit color on hero days,
+   * null otherwise (caller uses default color).
+   * @returns {string|null}
+   */
+  function getDayLabelColor() {
+    var suit = getDaySuit(_day);
+    return suit ? suit.color : null;
+  }
+
+  /**
+   * Get a phase icon emoji for HUD display.
+   * @returns {string}
+   */
+  function getPhaseIcon() {
+    switch (_phase) {
+      case PHASES.DAWN:      return '\u2600';  // ☀ (sunrise)
+      case PHASES.MORNING:   return '\u2600';  // ☀
+      case PHASES.AFTERNOON: return '\u2600';  // ☀
+      case PHASES.DUSK:      return '\uD83C\uDF05';  // 🌅
+      case PHASES.NIGHT:     return '\uD83C\uDF19';  // 🌙
+      default:               return '\u2600';
+    }
   }
 
   /**
@@ -494,6 +571,12 @@ var DayCycle = (function () {
     getTimeString:        getTimeString,
     getNextPhase:         getNextPhase,
     getPhaseProgress:     getPhaseProgress,
+    getDayOfWeek:         getDayOfWeek,
+    getDayOfWeekFull:     getDayOfWeekFull,
+    getDaySuit:           getDaySuit,
+    getDayLabel:          getDayLabel,
+    getDayLabelColor:     getDayLabelColor,
+    getPhaseIcon:         getPhaseIcon,
     isTiredHour:          isTiredHour,
     isCurfewHour:         isCurfewHour
   });

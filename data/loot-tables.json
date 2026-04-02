@@ -218,6 +218,39 @@
     }
   },
 
+  "torch_fuel": {
+    "_comment": "Torch fuel drop pools per biome. Rolled when crates/chests on torch-heavy floors drop fuel.",
+    "cellar": [
+      { "itemId": "torch_oil_deep",  "weight": 30 },
+      { "itemId": "torch_oil",       "weight": 50 },
+      { "itemId": "water_bottle",    "weight": 20 }
+    ],
+    "foundry": [
+      { "itemId": "torch_oil_deep",  "weight": 35 },
+      { "itemId": "torch_oil",       "weight": 40 },
+      { "itemId": "water_bottle",    "weight": 25 }
+    ],
+    "sealab": [
+      { "itemId": "torch_oil_deep",  "weight": 40 },
+      { "itemId": "torch_oil",       "weight": 30 },
+      { "itemId": "water_bottle",    "weight": 30 }
+    ],
+    "bazaar": [
+      { "itemId": "torch_oil_coral", "weight": 40 },
+      { "itemId": "torch_oil",       "weight": 35 },
+      { "itemId": "water_bottle",    "weight": 25 }
+    ],
+    "inn": [
+      { "itemId": "torch_oil_drift", "weight": 40 },
+      { "itemId": "torch_oil",       "weight": 35 },
+      { "itemId": "water_bottle",    "weight": 25 }
+    ],
+    "_default": [
+      { "itemId": "torch_oil",       "weight": 50 },
+      { "itemId": "water_bottle",    "weight": 50 }
+    ]
+  },
+
   "floor_currency_scale": {
     "_comment": "Applied to all currency rolls. Floor number is key (string), value is multiplier.",
     "1": 1.0,

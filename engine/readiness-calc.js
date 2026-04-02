@@ -2,24 +2,36 @@
  * ReadinessCalc — unified floor readiness score.
  *
  * Combines per-system readiness into a single 0.0–1.0 score:
- *   - Crate restocking  (40%)  — CrateSystem.getReadinessByType().crate
- *   - Corpse processing (20%)  — CrateSystem.getReadinessByType().corpse
- *   - Blood cleaning    (30%)  — CleaningSystem.getReadiness()
- *   - Miscellaneous     (10%)  — reserved for traps/puzzles (returns 1.0 for now)
+ *   - Crate restocking  (30%)  — CrateSystem.getReadinessByType().crate
+ *   - Corpse processing (15%)  — CrateSystem.getReadinessByType().corpse
+ *   - Blood cleaning    (25%)  — CleaningSystem.getReadiness()
+ *   - Torch prep        (20%)  — TorchState.getReadiness()
+ *   - Miscellaneous     (10%)  — traps/puzzles/cobwebs
  *
  * The work-order system will use this to evaluate contract completion.
  * The HUD can query it for a live progress bar.
  *
- * Layer 1 — depends on: CrateSystem, CleaningSystem (both Layer 1)
+ * Layer 1 — depends on: CrateSystem, CleaningSystem, TorchState (all Layer 1)
  */
 var ReadinessCalc = (function () {
   'use strict';
 
   // ── Weights (must sum to 1.0) ──────────────────────────────────
-  var W_CRATE   = 0.40;
-  var W_CORPSE  = 0.20;
-  var W_CLEAN   = 0.30;
+  var W_CRATE   = 0.30;
+  var W_CORPSE  = 0.15;
+  var W_CLEAN   = 0.25;
+  var W_TORCH   = 0.20;
   var W_MISC    = 0.10;
+
+  /**
+   * Get torch readiness score, guarded against missing module.
+   */
+  function _torchScore(floorId) {
+    if (typeof TorchState !== 'undefined' && TorchState.getReadiness) {
+      return TorchState.getReadiness(floorId);
+    }
+    return 1.0; // No torch system → fully ready (no torches to prep)
+  }
 
   /**
    * Get the unified readiness score for a floor.
@@ -31,6 +43,7 @@ var ReadinessCalc = (function () {
     var crateScore  = 1.0;
     var corpseScore = 1.0;
     var cleanScore  = 1.0;
+    var torchScore  = _torchScore(floorId);
     var miscScore   = 1.0;
 
     if (typeof CrateSystem !== 'undefined' && CrateSystem.getReadinessByType) {
@@ -59,6 +72,7 @@ var ReadinessCalc = (function () {
     return crateScore  * W_CRATE +
            corpseScore * W_CORPSE +
            cleanScore  * W_CLEAN +
+           torchScore  * W_TORCH +
            miscScore   * W_MISC;
   }
 
@@ -66,12 +80,13 @@ var ReadinessCalc = (function () {
    * Get a breakdown of each component for HUD / debug display.
    *
    * @param {string} floorId
-   * @returns {{ total: number, crate: number, corpse: number, clean: number, misc: number }}
+   * @returns {{ total: number, crate: number, corpse: number, clean: number, torch: number, misc: number }}
    */
   function getBreakdown(floorId) {
     var crateScore  = 1.0;
     var corpseScore = 1.0;
     var cleanScore  = 1.0;
+    var torchScore  = _torchScore(floorId);
     var miscScore   = 1.0;
 
     if (typeof CrateSystem !== 'undefined' && CrateSystem.getReadinessByType) {
@@ -97,10 +112,11 @@ var ReadinessCalc = (function () {
     miscScore = Math.min(1.0, trapReady + cobwebBonus);
 
     return {
-      total:  crateScore * W_CRATE + corpseScore * W_CORPSE + cleanScore * W_CLEAN + miscScore * W_MISC,
+      total:  crateScore * W_CRATE + corpseScore * W_CORPSE + cleanScore * W_CLEAN + torchScore * W_TORCH + miscScore * W_MISC,
       crate:  crateScore,
       corpse: corpseScore,
       clean:  cleanScore,
+      torch:  torchScore,
       misc:   miscScore
     };
   }
@@ -129,6 +145,6 @@ var ReadinessCalc = (function () {
     getBreakdown: getBreakdown,
     getPercent:   getPercent,
     meetsTarget:  meetsTarget,
-    WEIGHTS: Object.freeze({ crate: W_CRATE, corpse: W_CORPSE, clean: W_CLEAN, misc: W_MISC })
+    WEIGHTS: Object.freeze({ crate: W_CRATE, corpse: W_CORPSE, clean: W_CLEAN, torch: W_TORCH, misc: W_MISC })
   });
 })();

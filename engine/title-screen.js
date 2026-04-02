@@ -298,7 +298,14 @@ var TitleScreen = (function () {
       if (_deployTimer >= 1200) {
         _active = false;
         _unbindInput();
-        ScreenManager.toGameplay();
+        // Play deploy cutscene (synthwave driving animation) before gameplay
+        if (typeof DeployCutscene !== 'undefined') {
+          DeployCutscene.play(function () {
+            ScreenManager.toGameplay();
+          });
+        } else {
+          ScreenManager.toGameplay();
+        }
       }
     }
   }

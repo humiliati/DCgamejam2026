@@ -11,6 +11,7 @@
  *   LootTables.rollGold(biome, floor)              — gold amount for WorldItems
  *   LootTables.rollBattery(biome)                  — battery count for WorldItems
  *   LootTables.rollFood(pool)                      — pick food itemId from named pool
+ *   LootTables.rollTorchFuel(biome)                — pick torch fuel itemId for biome
  *   LootTables.rollEnemyLoot(profile, tier, floor) — enemy drop summary
  *
  * Layer 1 — depends on: SeededRNG (rng.js)
@@ -193,6 +194,22 @@ var LootTables = (function () {
     return picked ? (picked.itemId || picked.id || null) : null;
   }
 
+  // ── Torch fuel ───────────────────────────────────────────────────
+
+  /**
+   * Pick a torch fuel item for a given biome.
+   * Returns an itemId ('torch_oil_coral', 'water_bottle', etc.) or null.
+   * @param {string} biome - floor biome key
+   */
+  function rollTorchFuel(biome) {
+    if (!_loaded) init();
+    var pools = _data.torch_fuel || {};
+    var pool = pools[biome] || pools['_default'];
+    if (!pool || !pool.length) return null;
+    var picked = _weightedPick(pool);
+    return picked ? (picked.itemId || picked.id || null) : null;
+  }
+
   // ── Enemy loot summary ───────────────────────────────────────────
 
   /**
@@ -254,6 +271,7 @@ var LootTables = (function () {
     rollGold:          rollGold,
     rollBattery:       rollBattery,
     rollFood:          rollFood,
+    rollTorchFuel:     rollTorchFuel,
     rollEnemyLoot:     rollEnemyLoot,
     maxFloorItems:     maxFloorItems
   };

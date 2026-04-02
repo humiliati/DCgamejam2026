@@ -120,7 +120,11 @@ var SpatialContract = (function () {
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
         11: 'crate_wood',      // BREAKABLE — destructible crate
-        14: 'door_iron'        // BOSS_DOOR — iron gate
+        14: 'door_iron',       // BOSS_DOOR — iron gate
+        18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
+        30: 'torch_bracket_lit',   // TORCH_LIT — stone wall + burning torch
+        31: 'torch_bracket_unlit', // TORCH_UNLIT — stone wall + charred bracket
+        35: 'fence_wood'       // FENCE — wooden rail (0.4× half-wall)
       }),
 
       // ── Floor texture ──
@@ -128,15 +132,25 @@ var SpatialContract = (function () {
 
       // ── Per-tile-type floor texture overrides ──
       // Keyed by TILES constant value → TextureAtlas texture ID.
-      // Tiles matching a key here render a different floor texture
-      // (e.g. TREE and SHRUB tiles render grass instead of cobble).
-      tileFloorTextures: opts.tileFloorTextures || null,
+      // Walkable surface tiles (ROAD/PATH/GRASS) map to distinct floor textures.
+      // TREE/SHRUB tiles render grass underneath for natural ground.
+      tileFloorTextures: opts.tileFloorTextures || {
+        21: 'floor_grass',       // TREE — grass under trees
+        22: 'floor_grass',       // SHRUB — grass under hedges
+        32: 'floor_cobble',      // ROAD — cobblestone avenues
+        33: 'floor_dirt',        // PATH — dirt trails
+        34: 'floor_grass',       // GRASS — meadow clearings
+        35: 'floor_boardwalk'    // FENCE — boardwalk planks under railing
+      },
 
       // ── Per-tile-type wall height overrides ──
       // Keyed by TILES constant value → height multiplier.
-      // Used for tiles that should render taller/shorter than the contract default
-      // (e.g. TREE tiles at 2× in exterior, while buildings stay 1×).
-      tileWallHeights:  opts.tileWallHeights || null,
+      // Used for tiles that should render taller/shorter than the contract default.
+      tileWallHeights:  opts.tileWallHeights || {
+        18: 0.3,    // BONFIRE — low stone ring, player sees over into fire cavity
+        22: 0.5,    // SHRUB — half-height hedge
+        35: 0.4     // FENCE — railing, player sees over to skybox
+      },
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time passes on the surface
@@ -196,7 +210,11 @@ var SpatialContract = (function () {
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
         11: 'crate_wood',      // BREAKABLE — destructible crate
-        14: 'door_iron'        // BOSS_DOOR — iron archway
+        14: 'door_iron',       // BOSS_DOOR — iron archway
+        18: 'bonfire_ring',    // BONFIRE — stone ring (interior hearth variant)
+        30: 'torch_bracket_lit',   // TORCH_LIT — interior wall torch
+        31: 'torch_bracket_unlit', // TORCH_UNLIT — extinguished
+        36: 'terminal_screen'  // TERMINAL — CRT desk (retro-futuristic)
       }),
 
       // ── Floor texture ──
@@ -206,7 +224,10 @@ var SpatialContract = (function () {
       tileFloorTextures: opts.tileFloorTextures || null,
 
       // ── Per-tile-type wall height overrides ──
-      tileWallHeights:  opts.tileWallHeights || null,
+      tileWallHeights:  opts.tileWallHeights || {
+        18: 0.3,    // BONFIRE — low stone ring
+        36: 0.6     // TERMINAL — desk height, CRT screen above
+      },
 
       // ── Gameplay rules ──
       timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
@@ -277,7 +298,11 @@ var SpatialContract = (function () {
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
         11: 'crate_wood',      // BREAKABLE — destructible crate
-        14: 'door_iron'        // BOSS_DOOR — iron chamber door
+        14: 'door_iron',       // BOSS_DOOR — iron chamber door
+        18: 'bonfire_ring',    // BONFIRE — dungeon rest point
+        30: 'torch_bracket_lit',   // TORCH_LIT — dungeon wall torch
+        31: 'torch_bracket_unlit', // TORCH_UNLIT — hero's mess
+        36: 'terminal_screen'  // TERMINAL — dungeon data terminal
       }),
 
       // ── Floor texture ──
@@ -287,7 +312,10 @@ var SpatialContract = (function () {
       tileFloorTextures: opts.tileFloorTextures || null,
 
       // ── Per-tile-type wall height overrides ──
-      tileWallHeights:  opts.tileWallHeights || null,
+      tileWallHeights:  opts.tileWallHeights || {
+        18: 0.3,    // BONFIRE — low stone ring
+        36: 0.6     // TERMINAL — desk height
+      },
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time ticks in the dungeons — pressure!

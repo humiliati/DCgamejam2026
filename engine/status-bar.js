@@ -219,8 +219,12 @@ var StatusBar = (function () {
   }
 
   function updateHeading(dirIndex) {
+    // Compass heading now lives in the minimap time strip (#minimap-time-strip).
+    // StatusBar heading element is reserved for combat energy display only.
+    // No-op during normal exploration; combat mode writes to _headingEl directly.
+    if (_inCombat) return;  // Don't overwrite combat energy text
     if (_headingEl) {
-      _headingEl.textContent = HEADINGS[dirIndex] || '';
+      _headingEl.textContent = '';
     }
   }
 

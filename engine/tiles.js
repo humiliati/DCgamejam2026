@@ -35,7 +35,14 @@ var TILES = (function () {
     BAR_COUNTER: 26,  // Interior furnishing — face to tap for a small stat boost (finite uses)
     BED:         27,  // Interior furnishing — half-height, face to rest (bonfire equivalent)
     TABLE:       28,  // Interior furnishing — half-height, face for cozy inspection
-    HEARTH:      29   // Fireplace — opaque column, fire emoji, incinerator + bonfire rest
+    HEARTH:      29,  // Fireplace — opaque column, fire emoji, incinerator + bonfire rest
+    TORCH_LIT:   30,  // Wall-mounted torch, burning — opaque, warm glow, light source
+    TORCH_UNLIT: 31,  // Wall-mounted torch, extinguished — opaque, charred bracket, no glow
+    ROAD:        32,  // Walkable exterior — cobblestone floor texture (main avenues)
+    PATH:        33,  // Walkable exterior — dirt floor texture (trails, alleys)
+    GRASS:       34,  // Walkable exterior — grass floor texture (clearings, meadows)
+    FENCE:       35,  // Half-wall railing (0.4×) — blocks movement, player sees over
+    TERMINAL:    36   // Data terminal — half-wall desk + CRT screen, sickly green glow, peek overlay
   };
 
   /** Check if a tile blocks movement */
@@ -46,7 +53,8 @@ var TILES = (function () {
            tile === T.SHOP || tile === T.SPAWN || tile === T.BOSS_DOOR ||
            tile === T.FIRE || tile === T.SPIKES || tile === T.POISON ||
            tile === T.BONFIRE || tile === T.CORPSE || tile === T.COLLECTIBLE ||
-           tile === T.PUZZLE;
+           tile === T.PUZZLE || tile === T.ROAD || tile === T.PATH ||
+           tile === T.GRASS;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -57,7 +65,12 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL;
+  };
+
+  /** Check if tile is a torch (lit or unlit) */
+  T.isTorch = function (tile) {
+    return tile === T.TORCH_LIT || tile === T.TORCH_UNLIT;
   };
 
   /** Check if tile is a door of any kind */
