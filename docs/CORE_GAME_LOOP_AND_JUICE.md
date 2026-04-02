@@ -384,13 +384,73 @@ Juice moments specific to the Day 1 morning sequence (TUTORIAL_WORLD_ROADMAP §1
 | **Auto-walk across Floor 0** | Camera sway from MovementController lerp, ambient step SFX. Pre-dawn cedar sky (biome: `cedar`). |
 | **Floor 0 → 1 transition** | `enter_building` TransitionFX preset; door creak SFX; sunset sky fades in on Floor 1. |
 | **Ambient bark fires** | Toast slides in from bottom-left. 2.5s display, no dismiss needed. Font matches clipboard style. |
-| **Dispatcher first appearance** | NPC sprite renders at (5,2): 🐉 head, dark jacket, clipboard. No fanfare — environmental discovery. |
-| **Dispatcher bump** | Existing `ui-blop` bump SFX + bark fires from `npc.dispatcher.gate.intro`. |
-| **Home door discovery** | Door at (17,7) is partially obscured by east pillar — a micro-discovery. No pointer or highlight. |
-| **Entering home (Floor 1.6)** | Transition to warm amber plank room after the blue-cool Promenade. Contrast signals safety. |
+| **Dispatcher intercept** | See §6.6a below — proximity-triggered grab choreography replaces static gate block. |
+| **Home door discovery** | Door at home floor is partially obscured by nearby geometry — a micro-discovery. No pointer or highlight. |
+| **Entering home** | Transition to warm amber plank room after the blue-cool Promenade. Contrast signals safety. |
 | **Key pickup** | `pickup-success` SFX + Toast: `🗝️ Work keys. The Dispatcher will want to see these.` |
-| **Gate clears** | Dispatcher sprite vanishes (immediate, no animation — Phase 0 polish adds a dismissal walk). Dungeon DOOR is now a normal interactive tile. |
+| **Gate clears** | Dispatcher sprite vanishes (immediate, no animation — Phase 0 polish adds a dismissal walk). Gate DOOR becomes normal interactive tile. |
 | **Bark variety** | BarkLibrary weights ensure the same player never hears the same morning bark twice in a row. Anti-repeat cooldown (25s) prevents over-firing during the ~3 minute sequence. |
+
+#### 6.6a Dispatcher Grab Choreography (Blockout-Agnostic)
+
+**Updated Apr 2, 2026** — implements CinematicCamera `dispatcher_grab` preset (DOC-51)
+
+The dispatcher does NOT stand at the gate blocking passage. Instead, the dispatcher is hidden until the player approaches the gate, then intercepts from behind — regardless of floor layout or player approach angle.
+
+**State machine** (`_dispatcherPhase`):
+
+| Phase | Trigger | What happens |
+|-------|---------|--------------|
+| `idle` | Player arrives on Floor 1 | Dispatcher spawned at holding position (hidden from raycaster) |
+| `spawned` | Player within 7 tiles of gate door | Dispatcher teleports behind player (opposite facing, ~6 tiles back, clamped to walkable grid) |
+| `barking` | Spawn completes | Bark: "HEY [player class]!" + 800ms pause |
+| `rushing` | Bark delay expires | Dispatcher rush-walks toward player at 10x speed (100ms/tile). Second bark: "[CLASS]!" |
+| `grabbing` | Within 2 tiles of player | Forced 180° turn via `MC.startTurn()` + `Player.setDir()`. `CinematicCamera.start('dispatcher_grab')`: letterbox bars (15%), FOV zoom (0.88), input lock, 3s duration. NPC faces player via `NpcSystem.engageTalk()`. Dialogue opens at bar midpoint. |
+| `dialogue` | Midpoint callback | Morrowind-style branching tree (see dialogue below) |
+| `done` | Dialogue closes | CinematicCamera closes. Dispatcher stays as gatekeeper (blocksMovement enabled). Repeat bumps use shorter dialogue. |
+
+**Blockout-agnostic design:**
+- Gate door position found dynamically (scans for STAIRS_DN / BOSS_DOOR / DOOR on Floor 1)
+- Spawn position calculated from player position (opposite facing, walkable tile search)
+- Rush path uses simple grid movement with wall checks + perpendicular fallback
+- No hardcoded positions — works on any Floor 1 layout
+
+**Dialogue tree (first encounter):**
+
+```
+Dispatcher: "Oh, you don't like when I patronize your delusions
+of grandeur, [Callsign]? Go get your keys from the BnB and
+unlock the floor so the hazmat crew can get in."
+
+  [Who are you?]
+    → "I'm who the Department assigned to manage this region.
+       See that clock in the top right of your screen?"
+      [Who am I supposed to be?]
+        → "You're supposed to go home and get your keys. Your file
+           says you've been assigned [Callsign] and like to pretend
+           you're a [Class] instead of working."
+        → (redirect to keys)
+      [What keys?]
+        → (redirect to keys)
+      [Where did ♠ Guild hit this time?]
+        → "Lower floors. The usual mess. You'll see when you get
+           down there — after you get your keys."
+        → (redirect to keys)
+
+  [What keys?]
+    → (redirect to keys)
+
+  [Where did ♠ Guild hit this time?]
+    → "Lower floors. The usual mess..."
+    → (redirect to keys)
+
+Redirect: "Your keys are at the BnB. Head home, grab them,
+unlock the floor, and let the hazmat crew in. Go."
+→ Toast: 🗝️ Go home and get your work keys
+→ CinematicCamera.close()
+```
+
+**Word wrap note:** DialogBox._wrapText() handles long lines dynamically (~33 chars/line at 13px monospace, 428px available width with portrait). No manual line breaks needed.
 
 ### 6.7 Cozy Interior Juice
 

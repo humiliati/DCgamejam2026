@@ -22,7 +22,7 @@ var NpcComposer = (function () {
   var HATS    = ['','','','','⛑️','🎩','👒','🪖','👑','🧢','🎓'];
   var TORSOS  = ['🧥','👔','👕','🥼','🦺','🎽','👘','🥷'];
   var WEAPONS = ['','','','','','⚔️','🗡️','🏹','🛡️','🪓','🔧','🪄','🔱','🥍'];
-  var LEGS    = ['👖','👖','👖','🩳','🥾','👗','🦿'];
+  var LEGS    = ['👖'];  // Universal humanoid bottom — variety via tintHue
 
   // Primes used for pool indexing — spread seed bits across pools
   var P_HEAD = 1;
@@ -54,7 +54,7 @@ var NpcComposer = (function () {
 
   var VENDOR_PRESETS = {
     tide: {
-      head: '🧙', torso: '👘', legs: '🥾',
+      head: '🧙', torso: '👘', legs: '👖',
       hat: null, hatScale: 0.5, hatBehind: false,
       frontWeapon: '🥍', frontWeaponScale: 0.65, frontWeaponOffsetX: 0.25,
       backWeapon: null, backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
@@ -70,7 +70,7 @@ var NpcComposer = (function () {
       tintHue: 30, corpse: null
     },
     admiralty: {
-      head: '👩', torso: '🧥', legs: '🥾',
+      head: '👩', torso: '🧥', legs: '👖',
       hat: '🪖', hatScale: 0.5, hatBehind: false,
       frontWeapon: '🛡️', frontWeaponScale: 0.55, frontWeaponOffsetX: -0.2,
       backWeapon: '⚔️', backWeaponScale: 0.4, backWeaponOffsetX: 0.3,

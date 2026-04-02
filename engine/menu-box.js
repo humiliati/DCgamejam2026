@@ -530,7 +530,7 @@ var MenuBox = (function () {
     if (_context === 'pause') {
       label = i18n.t('menu.resume', 'PAUSED');
     } else if (_context === 'bonfire') {
-      label = '🔥 ' + i18n.t('shop.bonfire_title', 'BONFIRE');
+      label = '🐉 ' + i18n.t('shop.bonfire_title', 'DRAGONFIRE');
     } else if (_context === 'shop') {
       label = '🏪 ' + i18n.t('shop.title', 'SHOP');
     } else {

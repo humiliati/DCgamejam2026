@@ -15,11 +15,12 @@
  * ─── Integration Roadmap ───────────────────────────────────────────────────
  * Phase 1 (this file): Standalone cobweb-system module, no existing-file edits.
  *
- * Phase 2 — Wire the following hooks into existing modules (do not edit now):
- *   • FloorTransition._onFloorArrived(): call CobwebSystem.onFloorLoad(floorData, floorId)
- *   • MovementController commit hook:    call CobwebSystem.onEntityMove(x, y, floorId)
- *   • EnemyAI move step:                 call CobwebSystem.onEntityMove(x, y, floorId)
- *   • game.js _interact():               if (CobwebNode.tryInteract(floorId)) return;
+ * Phase 2 — ✅ COMPLETE (Apr 2). All hooks wired:
+ *   • game.js _onFloorArrived:           CobwebSystem.onFloorLoad(floorData, floorId)  ✅
+ *   • game.js _onPlayerMoveCommit:       CobwebSystem.onEntityMove(x, y, floorId)      ✅
+ *   • enemy-ai.js _onEnemyArrived:       CobwebSystem.onEntityMove(nx, ny, floorId)    ✅
+ *   • hero-system.js _stepScriptedPath:  CobwebSystem.onEntityMove(next.x, next.y, …)  ✅
+ *   • game.js _interact():               CobwebNode.tryInteract(floorId)               ✅
  *
  * Phase 3 — Readiness scoring integration:
  *   • session-stats.js: add cobwebsInstalled counter (SessionStats.inc('cobwebsInstalled'))

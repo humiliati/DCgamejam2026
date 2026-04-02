@@ -8,7 +8,7 @@ Each building should:
 Have a generic exterior template (several shapes "L" "#" "T" type shapes where sensible /sizes per floorN).
 Contain at least 3–5 buildings per floor for narrative structure (shop, hideout, mechanic, dungeon, etc).
 Feature a distinct exterior for its floorN layer and corresponding unique interiors as floorN.Ns (use Gleaner's house exterior/interior as templates).
-When applicable, connect to unique floorN.N.N subspaces, accentuating discovery doors.
+When applicable, connect floorN.N to unique floorN.N.N subspaces, accentuating discovery doors.
 Enhance modularity: New blockout files should be FRESH (not overwrite current ones); copy structure from existing, then "blow them up" for more space, embellish, and enrich.
 Document any NEW textures needed for the texture atlas (attach list/spec for art pass).
 Design Thinking

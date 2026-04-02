@@ -192,8 +192,8 @@ var TorchPeek = (function () {
       var slot = torch ? torch.slots[i] : { state: 'empty', item: null };
       var el = document.createElement('span');
       el.style.cssText =
-        'display:inline-block; width:36px; height:36px; line-height:36px;' +
-        'text-align:center; font-size:22px; border-radius:6px;' +
+        'display:inline-block; width:44px; height:44px; line-height:44px;' +
+        'text-align:center; font-size:24px; border-radius:6px;' +
         'border:2px solid ' + labelColor + ';' +
         'background:rgba(0,0,0,0.5);';
       el.textContent = _slotEmoji(slot);

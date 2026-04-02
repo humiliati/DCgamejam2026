@@ -410,11 +410,44 @@ var MenuFaces = (function () {
 
   function _renderBonfireRest(ctx, x, y, w, h) {
     var S = Math.min(w, h) / 400;
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.bonfire_title', 'BONFIRE'), '🔥', S);
+
+    // §9a: Animated fire emoji — 🐉 pulses with time-varying alpha + scale
+    var t = Date.now() * 0.001;
+    var fireAlpha = 0.82 + 0.18 * Math.sin(t * 4.2);
+    var fireScale = 1.0 + 0.06 * Math.sin(t * 3.1 + 0.5);
+    var titleFontSize = Math.round(16 * S);
+    if (titleFontSize < 12) titleFontSize = 12;
+    var titleY = y + Math.round(18 * S);
+
+    // Draw title text without emoji (static)
+    ctx.fillStyle = COL.title;
+    ctx.font = 'bold ' + titleFontSize + 'px monospace';
+    ctx.textAlign = 'center';
+    var titleStr = i18n.t('shop.bonfire_title', 'DRAGONFIRE');
+    var emojiW = ctx.measureText('🐉 ').width;
+    ctx.fillText(titleStr, x + w / 2 + emojiW * 0.5, titleY);
+
+    // Draw emoji with flicker
+    ctx.save();
+    ctx.globalAlpha = fireAlpha;
+    ctx.translate(x + w / 2 - ctx.measureText(titleStr).width / 2 - emojiW * 0.5, titleY);
+    ctx.scale(fireScale, fireScale);
+    ctx.fillText('🐉', 0, 0);
+    ctx.restore();
+
+    // Divider
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    var divY = titleY + Math.round(8 * S);
+    ctx.beginPath();
+    ctx.moveTo(x + 10, divY); ctx.lineTo(x + w - 10, divY);
+    ctx.stroke();
+    var ty = divY + Math.round(10 * S);
 
     var F_BODY  = Math.max(10, Math.round(14 * S));
     var F_SMALL = Math.max(9, Math.round(13 * S));
     var F_HINT  = Math.max(9, Math.round(13 * S));
+    var F_MICRO = Math.max(8, Math.round(11 * S));
 
     var ps = Player.state();
 
@@ -453,30 +486,78 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText(ps.energy + '/' + ps.maxEnergy, barX + barW / 2, ty + barH);
 
-    // Status text
-    ty += Math.round(34 * S);
-    ctx.fillStyle = COL.accent;
-    ctx.font = F_SMALL + 'px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + Math.round(10 * S));
+    // §9b: Status effects cleared/gained feedback
+    ty += Math.round(26 * S);
+    var restResult = (typeof HazardSystem !== 'undefined' && HazardSystem.getLastRestResult)
+      ? HazardSystem.getLastRestResult() : null;
+    if (restResult) {
+      ctx.font = F_MICRO + 'px monospace';
+      ctx.textAlign = 'center';
+      // Cleared effects (green checkmark)
+      for (var ci = 0; ci < restResult.cleared.length; ci++) {
+        ctx.fillStyle = 'rgba(80,220,120,0.85)';
+        ctx.fillText('✓ ' + restResult.cleared[ci] + ' cleared', x + w / 2, ty + Math.round(10 * S));
+        ty += Math.round(14 * S);
+      }
+      // Gained effects (gold star)
+      for (var gi = 0; gi < restResult.gained.length; gi++) {
+        ctx.fillStyle = 'rgba(240,208,112,0.9)';
+        ctx.fillText('★ ' + restResult.gained[gi] + ' gained', x + w / 2, ty + Math.round(10 * S));
+        ty += Math.round(14 * S);
+      }
+      // Restore confirmation
+      if (restResult.cleared.length === 0 && restResult.gained.length === 0) {
+        ctx.fillStyle = COL.accent;
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + Math.round(10 * S));
+        ty += Math.round(14 * S);
+      }
+    } else {
+      ctx.fillStyle = COL.accent;
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + Math.round(10 * S));
+      ty += Math.round(14 * S);
+    }
 
-    // Floor info
-    ty += Math.round(28 * S);
+    // §9c: Waypoint registration + floor info
+    ty += Math.round(8 * S);
+    ctx.fillStyle = 'rgba(100,200,255,0.7)';
+    ctx.font = F_MICRO + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('📍 ' + i18n.t('bonfire.waypoint_set', 'Respawn point set'),
+                 x + w / 2, ty + Math.round(10 * S));
+    ty += Math.round(16 * S);
     ctx.fillStyle = COL.dim;
+    ctx.font = F_SMALL + 'px monospace';
     ctx.fillText(FloorManager.getFloorLabel() + ' — ' + FloorManager.getCurrentFloorId(),
                  x + w / 2, ty + Math.round(10 * S));
 
     // ── Warp button (exterior → home, dungeon → entrance) ──
+    // §11c: Dungeon warp gated on floor readiness — must prep the floor first.
     var floorId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
     var depth = floorId.split('.').length;
     var warpTarget = null;
     var warpLabel  = '';
+    var warpLocked = false;
+    var WARP_READINESS_THRESHOLD = 0.6; // 60% floor readiness to extract from dungeon
+
     if (depth === 1 && floorId !== '0') {
+      // Exterior campfire: always warp home
       warpTarget = '1.6';
       warpLabel  = '\uD83C\uDFE0 ' + i18n.t('bonfire.warp_home', 'Warp Home');
     } else if (depth >= 3) {
+      // Dungeon hearth: warp to entrance gated on readiness
       warpTarget = (typeof FloorManager !== 'undefined') ? FloorManager.parentId(floorId) : null;
-      warpLabel  = '\uD83D\uDD3C ' + i18n.t('bonfire.warp_entrance', 'Warp to Entrance');
+      var readiness = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getScore)
+        ? ReadinessCalc.getScore(floorId) : 1.0;
+      if (readiness >= WARP_READINESS_THRESHOLD) {
+        warpLabel = '\uD83D\uDD3C ' + i18n.t('bonfire.warp_entrance', 'Warp to Entrance');
+      } else {
+        warpLabel = '🔒 ' + i18n.t('dragonfire.warp_locked', 'Floor not ready') +
+                    ' (' + Math.round(readiness * 100) + '%/' + Math.round(WARP_READINESS_THRESHOLD * 100) + '%)';
+        warpLocked = true;
+      }
     }
 
     if (warpTarget) {
@@ -484,17 +565,28 @@ var MenuFaces = (function () {
       var btnW = Math.min(w - Math.round(20 * S), Math.round(200 * S));
       var btnH = Math.max(24, Math.round(30 * S));
       var btnX = x + (w - btnW) / 2;
-      var isHov = (_hoverSlot === 900);
-      ctx.fillStyle = isHov ? 'rgba(100,180,255,0.2)' : 'rgba(60,120,200,0.1)';
-      _roundRectFill(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
-      ctx.strokeStyle = isHov ? '#88ccff' : 'rgba(100,160,255,0.4)';
-      ctx.lineWidth = isHov ? 2 : 1;
-      _roundRectStroke(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
-      ctx.fillStyle = isHov ? '#bbddff' : 'rgba(160,200,255,0.8)';
+      var isHov = !warpLocked && (_hoverSlot === 900);
+
+      if (warpLocked) {
+        // Locked state — dimmed, no hover, no click
+        ctx.fillStyle = 'rgba(80,60,60,0.15)';
+        _roundRectFill(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
+        ctx.strokeStyle = 'rgba(160,100,100,0.3)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
+        ctx.fillStyle = 'rgba(200,150,150,0.5)';
+      } else {
+        ctx.fillStyle = isHov ? 'rgba(100,180,255,0.2)' : 'rgba(60,120,200,0.1)';
+        _roundRectFill(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
+        ctx.strokeStyle = isHov ? '#88ccff' : 'rgba(100,160,255,0.4)';
+        ctx.lineWidth = isHov ? 2 : 1;
+        _roundRectStroke(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
+        ctx.fillStyle = isHov ? '#bbddff' : 'rgba(160,200,255,0.8)';
+        _hitZones.push({ x: btnX, y: ty, w: btnW, h: btnH, slot: 900, action: 'warp', warpTarget: warpTarget });
+      }
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(warpLabel, x + w / 2, ty + btnH * 0.65);
-      _hitZones.push({ x: btnX, y: ty, w: btnW, h: btnH, slot: 900, action: 'warp', warpTarget: warpTarget });
       ty += btnH;
     }
 
@@ -902,7 +994,14 @@ var MenuFaces = (function () {
    */
   function renderFace1(ctx, x, y, w, h, context) {
     if (context === 'bonfire') {
-      _renderStash(ctx, x, y, w, h);
+      // §11b: Dungeon hearths (depth 3+) have no stash — too deep to store safely
+      var fId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+      var fDepth = fId ? fId.split('.').length : 1;
+      if (fDepth >= 3) {
+        _renderDungeonNoStash(ctx, x, y, w, h);
+      } else {
+        _renderStash(ctx, x, y, w, h);
+      }
     } else if (context === 'shop') {
       _renderShopBuy(ctx, x, y, w, h);
     } else if (context === 'harvest') {
@@ -1312,8 +1411,39 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('[Click] Shuttle cards  [Drag→🔥] Dispose  [Q/E] Rotate', x + w / 2, y + h - 8);
+    ctx.fillText('[Click] Shuttle cards  [Drag→🐉] Dispose  [Q/E] Rotate', x + w / 2, y + h - 8);
     ctx.textAlign = 'left';
+  }
+
+  /**
+   * §11b: Dungeon hearth "no stash" panel — replaces stash grid for depth 3+.
+   * Brief flavour text explaining why stash is unavailable deep in the dungeon.
+   */
+  function _renderDungeonNoStash(ctx, x, y, w, h) {
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('dragonfire.no_stash_title', 'TOO DEEP'), '🚫', S);
+
+    var F_BODY  = Math.max(10, Math.round(14 * S));
+    var F_SMALL = Math.max(9, Math.round(13 * S));
+
+    // Flavour
+    ctx.fillStyle = COL.text;
+    ctx.font = F_BODY + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(i18n.t('dragonfire.no_stash_line1', 'Stash unavailable this deep.'),
+                 x + w / 2, ty + Math.round(16 * S));
+
+    ty += Math.round(30 * S);
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.fillText(i18n.t('dragonfire.no_stash_line2', 'Camp outside to access your stash.'),
+                 x + w / 2, ty + Math.round(10 * S));
+
+    // Hint
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = Math.max(9, Math.round(11 * S)) + 'px monospace';
+    ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
+                 x + w / 2, y + h - Math.round(6 * S));
   }
 
   function _renderStash(ctx, x, y, w, h) {
@@ -1341,55 +1471,79 @@ var MenuFaces = (function () {
     var stash = CardAuthority.getStash();
     var maxStash = 20; // CardAuthority.MAX_STASH
 
-    for (var row = 0; row < rows; row++) {
-      for (var col = 0; col < cols; col++) {
-        var idx = row * cols + col;
-        var sx = gridX + col * (slotSize + 4);
-        var sy = gridY + row * (slotSize + 4);
-        var stashItem = stash[idx];
+    // §9d: Empty stash — prominent hint instead of bare dashed grid
+    if (stash.length === 0) {
+      var emptyY = gridY + Math.round(rows * (slotSize + 4) * 0.35);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.font = Math.max(20, Math.round(28 * S)) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('📦', x + w / 2, emptyY);
+      emptyY += Math.round(22 * S);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = F_BODY + 'px monospace';
+      ctx.fillText(i18n.t('shop.stash_empty_hint', 'Drag items here — they survive death.'),
+                   x + w / 2, emptyY);
+      emptyY += Math.round(16 * S);
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.fillText('0 / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
+                   x + w / 2, emptyY);
+    } else {
+      for (var row = 0; row < rows; row++) {
+        for (var col = 0; col < cols; col++) {
+          var idx = row * cols + col;
+          var sx = gridX + col * (slotSize + 4);
+          var sy = gridY + row * (slotSize + 4);
+          var stashItem = stash[idx];
 
-        if (stashItem) {
-          var isHov = (_hoverSlot === (400 + idx));
-          ctx.fillStyle = isHov ? 'rgba(51,255,136,0.08)' : COL.slot_bg;
-          _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
-          ctx.strokeStyle = isHov ? COL.accent : 'rgba(255,255,255,0.15)';
-          ctx.lineWidth = 1;
-          _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
+          if (stashItem) {
+            var isHov = (_hoverSlot === (400 + idx));
 
-          ctx.font = '14px serif';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = '#fff';
-          ctx.fillText(stashItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
+            // §9e: Death-safe purple tint on filled stash slots
+            ctx.fillStyle = isHov ? 'rgba(140,100,220,0.12)' : 'rgba(100,70,160,0.08)';
+            _roundRectFill(ctx, sx, sy, slotSize, slotSize, 4);
+            ctx.strokeStyle = isHov ? 'rgba(180,140,255,0.6)' : 'rgba(140,100,220,0.25)';
+            ctx.lineWidth = 1;
+            _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
 
-          ctx.font = '6px monospace';
-          ctx.fillStyle = COL.text;
-          var nm = stashItem.name || '';
-          if (nm.length > 7) nm = nm.substring(0, 6) + '\u2026';
-          ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 3);
+            ctx.font = '14px serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(stashItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
 
-          // Click to move to bag (slot 400+ range)
-          _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: 400 + idx, action: 'unstash' });
-        } else {
-          ctx.setLineDash([2, 3]);
-          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-          ctx.lineWidth = 1;
-          _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
-          ctx.setLineDash([]);
+            // §9e: Death-safe shield icon (top-right corner)
+            ctx.font = Math.max(6, Math.round(slotSize * 0.22)) + 'px serif';
+            ctx.fillText('💀', sx + slotSize - 5, sy + 7);
+
+            ctx.font = '6px monospace';
+            ctx.fillStyle = COL.text;
+            var nm = stashItem.name || '';
+            if (nm.length > 7) nm = nm.substring(0, 6) + '\u2026';
+            ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 3);
+
+            _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: 400 + idx, action: 'unstash' });
+          } else {
+            ctx.setLineDash([2, 3]);
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1;
+            _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
+            ctx.setLineDash([]);
+          }
         }
       }
+
+      // Capacity
+      ctx.fillStyle = COL.dim;
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(stash.length + ' / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
+                   x + w / 2, gridY + rows * (slotSize + 4) + 12);
+
+      // Hint
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '11px monospace';
+      ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + 24);
     }
-
-    // Capacity
-    ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(stash.length + ' / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
-                 x + w / 2, gridY + rows * (slotSize + 4) + 12);
-
-    // Hint
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '11px monospace';
-    ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + 24);
   }
 
   function _renderShopBuy(ctx, x, y, w, h) {
@@ -3410,7 +3564,7 @@ var MenuFaces = (function () {
       var inc = L.incin;
       if (cx >= inc.x && cx <= inc.x + inc.w && cy >= inc.y && cy <= inc.y + inc.h) {
         CardAuthority.removeFromHand(info.cardIdx);
-        if (typeof Toast !== 'undefined') Toast.show('🔥 Card destroyed', 'warning');
+        if (typeof Toast !== 'undefined') Toast.show('🐉 Card destroyed', 'warning');
         if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
         return true;
       }

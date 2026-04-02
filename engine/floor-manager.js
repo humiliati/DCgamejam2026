@@ -1154,7 +1154,7 @@ var FloorManager = (function () {
   // adjacent to walkable tiles. Exterior floors get banners on
   // building walls; interior/dungeon floors get torches and grates.
 
-  function _buildWallDecorFromGrid(grid, rooms, W, H, biome) {
+  function _buildWallDecorFromGrid(grid, rooms, W, H, biome, contract) {
     var decor = [];
     for (var y = 0; y < H; y++) {
       decor[y] = [];
@@ -1201,6 +1201,7 @@ var FloorManager = (function () {
     }
 
     // ── Fire cavity glow on BONFIRE and HEARTH tile faces ──
+    var isDungeonDecor = contract && contract.depth === 'nested_dungeon';
     for (var by = 0; by < H; by++) {
       for (var bx = 0; bx < W; bx++) {
         var bt = grid[by][bx];
@@ -1214,15 +1215,22 @@ var FloorManager = (function () {
         if (bx < W - 1 && T.isWalkable(grid[by][bx + 1])) bFaces.push('e');
         if (bFaces.length === 0) continue;
 
+        // Dungeon hearths get cold blue-grey cavity glow; all others warm orange
+        var isDungeonHearth = bt === T.HEARTH && isDungeonDecor;
+        var cgR = isDungeonHearth ?  80 : 255;
+        var cgG = isDungeonHearth ? 100 : 120;
+        var cgB = isDungeonHearth ? 160 :  30;
+        var cgA = isDungeonHearth ? 0.25 : 0.35;
+
         if (!decor[by][bx]) decor[by][bx] = { n: [], s: [], e: [], w: [] };
         for (var bf = 0; bf < bFaces.length; bf++) {
           decor[by][bx][bFaces[bf]].push({
-            spriteId: bt === T.HEARTH ? 'decor_torch' : 'decor_torch',
+            spriteId: 'decor_torch',
             anchorU: 0.5,
             anchorV: 0.55,  // Centered in the upper cavity of the short wall
             scale: bt === T.BONFIRE ? 0.3 : 0.25,
-            cavityGlow: true,  // Flag: raycaster adds warm glow overlay behind this sprite
-            glowR: 255, glowG: 120, glowB: 30, glowA: 0.35
+            cavityGlow: true,
+            glowR: cgR, glowG: cgG, glowB: cgB, glowA: cgA
           });
         }
       }
@@ -1320,11 +1328,17 @@ var FloorManager = (function () {
 
         // ── Tile-based emitters ──
         if (t === TILES.BONFIRE) {
-          // Large warm glow, slow pulse
+          // Exterior campfire — large warm glow, steady welcoming pulse
           Lighting.addLightSource(x, y, 5, 0.9, { tint: 'warm', flicker: 'bonfire' });
         } else if (t === TILES.HEARTH) {
-          // Medium warm glow, torch flicker
-          Lighting.addLightSource(x, y, 3, 0.7, { tint: 'warm', flicker: 'torch' });
+          if (isDungeon) {
+            // Dungeon hearth — cool blue-grey base, nervous sputtering flicker.
+            // Fire barely wins against the cold stone; reads as unsafe/partial rest.
+            Lighting.addLightSource(x, y, 3, 0.65, { tint: 'dungeon_hearth', flicker: 'hearth-dungeon' });
+          } else {
+            // Interior hearth — warm glow, standard torch flicker
+            Lighting.addLightSource(x, y, 3, 0.7, { tint: 'warm', flicker: 'torch' });
+          }
         } else if (t === TILES.FIRE) {
           // Environmental fire hazard — hot glow, fast flicker
           Lighting.addLightSource(x, y, 3, 0.6, { tint: 'warm', flicker: 'torch' });
@@ -1334,6 +1348,10 @@ var FloorManager = (function () {
         } else if (t === TILES.TORCH_LIT) {
           // Wall-mounted torch — warm glow, standard torch flicker
           Lighting.addLightSource(x, y, 4, 0.8, { tint: 'warm', flicker: 'torch' });
+        } else if (t === TILES.BED && isInterior) {
+          // Home bed — golden steady glow, safest rest point in the game.
+          // Radius 5 to fill the bedroom with warm amber light.
+          Lighting.addLightSource(x, y, 5, 0.85, { tint: 'home_hearth', flicker: 'steady' });
         }
 
         // ── Auto-placed electric ceiling lights for interiors ──
@@ -1479,7 +1497,8 @@ var FloorManager = (function () {
       _floorData.wallDecor = _buildWallDecorFromGrid(
         _floorData.grid, _floorData.rooms || [],
         _floorData.gridW, _floorData.gridH,
-        _floorData.biome || getBiome(_floorId)
+        _floorData.biome || getBiome(_floorId),
+        _floorData.contract || contract
       );
     }
 

@@ -29,12 +29,70 @@ var Skybox = (function () {
     return _hash1D(i) + (_hash1D(i + 1) - _hash1D(i)) * f;
   }
 
+  // ── Color interpolation ─────────────────────────────────────────
+
+  function _lerpColor(a, b, t) {
+    return {
+      r: Math.round(a.r + (b.r - a.r) * t),
+      g: Math.round(a.g + (b.g - a.g) * t),
+      b: Math.round(a.b + (b.b - a.b) * t)
+    };
+  }
+
+  /**
+   * Resolve current zenith/horizon colors for a preset, interpolating
+   * between the current DayCycle phase and the next phase.
+   * Falls back to flat zenith/horizon if the preset has no phase table
+   * (e.g. ocean, title — time-independent presets).
+   */
+  function _getPhaseColors(preset) {
+    if (!preset.phases) return { zenith: preset.zenith, horizon: preset.horizon };
+    if (typeof DayCycle === 'undefined') {
+      return { zenith: preset.phases.morning.zenith, horizon: preset.phases.morning.horizon };
+    }
+    var phase    = DayCycle.getPhase();
+    var next     = DayCycle.getNextPhase();
+    var progress = DayCycle.getPhaseProgress();
+    var a = preset.phases[phase]  || preset.phases.morning;
+    var b = preset.phases[next]   || a;
+    return {
+      zenith:  _lerpColor(a.zenith, b.zenith, progress),
+      horizon: _lerpColor(a.horizon, b.horizon, progress)
+    };
+  }
+
+  /**
+   * Compute star visibility alpha for the current phase.
+   * Stars fade in during dusk and fade out during dawn.
+   * All exterior presets show stars at night.
+   */
+  function _getStarAlpha() {
+    if (typeof DayCycle === 'undefined') return 0;
+    var phase    = DayCycle.getPhase();
+    var progress = DayCycle.getPhaseProgress();
+    if (phase === 'night')     return 1;
+    if (phase === 'dusk')      return progress;
+    if (phase === 'dawn')      return 1 - progress;
+    return 0;
+  }
+
   // ── Presets ─────────────────────────────────────────────────────
+  //
+  // Each exterior preset has a `phases` object with per-phase
+  // zenith/horizon colors. The flat zenith/horizon kept as fallback
+  // for non-phase-aware presets (ocean, title).
 
   var PRESETS = {
     cedar: {
       zenith:  { r: 42, g: 58, b: 90 },
       horizon: { r: 90, g: 104, b: 120 },
+      phases: {
+        dawn:      { zenith: { r: 60, g: 45, b: 70 },  horizon: { r: 180, g: 120, b: 80 } },
+        morning:   { zenith: { r: 42, g: 58, b: 90 },  horizon: { r: 90, g: 104, b: 120 } },
+        afternoon: { zenith: { r: 50, g: 65, b: 100 }, horizon: { r: 110, g: 95, b: 75 } },
+        dusk:      { zenith: { r: 35, g: 25, b: 55 },  horizon: { r: 140, g: 70, b: 40 } },
+        night:     { zenith: { r: 8, g: 12, b: 25 },   horizon: { r: 15, g: 20, b: 35 } }
+      },
       clouds: [
         { y: 0.15, h: 0.12, depth: 0.3, speed: 0.0003, scale: 80, threshold: 0.42, opacity: 0.35, r: 180, g: 190, b: 210, seed: 10 }
       ],
@@ -45,6 +103,13 @@ var Skybox = (function () {
     mainst: {
       zenith:  { r: 42, g: 26, b: 24 },
       horizon: { r: 90, g: 58, b: 32 },
+      phases: {
+        dawn:      { zenith: { r: 55, g: 35, b: 40 },  horizon: { r: 170, g: 100, b: 60 } },
+        morning:   { zenith: { r: 42, g: 26, b: 24 },  horizon: { r: 90, g: 58, b: 32 } },
+        afternoon: { zenith: { r: 50, g: 35, b: 30 },  horizon: { r: 100, g: 65, b: 38 } },
+        dusk:      { zenith: { r: 30, g: 18, b: 20 },  horizon: { r: 130, g: 55, b: 25 } },
+        night:     { zenith: { r: 6, g: 8, b: 14 },    horizon: { r: 14, g: 16, b: 22 } }
+      },
       clouds: [],
       mountains: null,
       water: false,
@@ -53,6 +118,13 @@ var Skybox = (function () {
     harbor: {
       zenith:  { r: 10, g: 24, b: 48 },
       horizon: { r: 26, g: 40, b: 64 },
+      phases: {
+        dawn:      { zenith: { r: 40, g: 35, b: 60 },  horizon: { r: 150, g: 90, b: 70 } },
+        morning:   { zenith: { r: 25, g: 45, b: 80 },  horizon: { r: 60, g: 80, b: 100 } },
+        afternoon: { zenith: { r: 30, g: 50, b: 85 },  horizon: { r: 70, g: 85, b: 95 } },
+        dusk:      { zenith: { r: 20, g: 18, b: 45 },  horizon: { r: 120, g: 55, b: 35 } },
+        night:     { zenith: { r: 5, g: 10, b: 24 },   horizon: { r: 12, g: 20, b: 35 } }
+      },
       clouds: [
         { y: 0.55, h: 0.20, depth: 0.6, speed: 0.0002, scale: 60, threshold: 0.35, opacity: 0.25, r: 80, g: 90, b: 110, seed: 30 }
       ],
@@ -63,6 +135,13 @@ var Skybox = (function () {
     historic: {
       zenith:  { r: 26, g: 21, b: 37 },
       horizon: { r: 42, g: 32, b: 53 },
+      phases: {
+        dawn:      { zenith: { r: 50, g: 35, b: 55 },  horizon: { r: 140, g: 85, b: 75 } },
+        morning:   { zenith: { r: 35, g: 30, b: 55 },  horizon: { r: 60, g: 50, b: 75 } },
+        afternoon: { zenith: { r: 40, g: 35, b: 60 },  horizon: { r: 65, g: 55, b: 70 } },
+        dusk:      { zenith: { r: 25, g: 15, b: 35 },  horizon: { r: 100, g: 45, b: 40 } },
+        night:     { zenith: { r: 6, g: 6, b: 14 },    horizon: { r: 12, g: 10, b: 22 } }
+      },
       clouds: [
         { y: 0.30, h: 0.14, depth: 0.35, speed: 0.00025, scale: 90, threshold: 0.45, opacity: 0.3, r: 120, g: 100, b: 130, seed: 40 }
       ],
@@ -73,6 +152,13 @@ var Skybox = (function () {
     alpine: {
       zenith:  { r: 10, g: 21, b: 32 },
       horizon: { r: 58, g: 40, b: 24 },
+      phases: {
+        dawn:      { zenith: { r: 45, g: 35, b: 55 },  horizon: { r: 160, g: 100, b: 60 } },
+        morning:   { zenith: { r: 20, g: 40, b: 65 },  horizon: { r: 80, g: 70, b: 50 } },
+        afternoon: { zenith: { r: 25, g: 45, b: 70 },  horizon: { r: 90, g: 75, b: 55 } },
+        dusk:      { zenith: { r: 20, g: 15, b: 35 },  horizon: { r: 120, g: 50, b: 30 } },
+        night:     { zenith: { r: 4, g: 8, b: 16 },    horizon: { r: 10, g: 14, b: 22 } }
+      },
       clouds: [
         { y: 0.35, h: 0.18, depth: 0.4, speed: 0.00015, scale: 50, threshold: 0.38, opacity: 0.5, r: 100, g: 105, b: 115, seed: 50 },
         { y: 0.55, h: 0.12, depth: 0.55, speed: 0.0003, scale: 40, threshold: 0.40, opacity: 0.35, r: 80, g: 85, b: 95, seed: 55 }
@@ -84,6 +170,13 @@ var Skybox = (function () {
     dockyard: {
       zenith:  { r: 5, g: 8, b: 16 },
       horizon: { r: 16, g: 24, b: 37 },
+      phases: {
+        dawn:      { zenith: { r: 35, g: 30, b: 50 },  horizon: { r: 130, g: 80, b: 60 } },
+        morning:   { zenith: { r: 20, g: 35, b: 60 },  horizon: { r: 50, g: 60, b: 75 } },
+        afternoon: { zenith: { r: 22, g: 38, b: 65 },  horizon: { r: 55, g: 65, b: 78 } },
+        dusk:      { zenith: { r: 12, g: 10, b: 30 },  horizon: { r: 90, g: 40, b: 30 } },
+        night:     { zenith: { r: 3, g: 5, b: 12 },    horizon: { r: 8, g: 12, b: 20 } }
+      },
       clouds: [],
       mountains: null,
       water: false,
@@ -148,17 +241,34 @@ var Skybox = (function () {
     var preset = PRESETS[presetName] || PRESETS.cedar;
     if (dt) _time += dt;
 
-    // ── Sky gradient ──
-    _renderGradient(ctx, w, 0, h, preset.zenith, preset.horizon);
+    // ── Phase-interpolated sky gradient ──
+    var colors = _getPhaseColors(preset);
+    _renderGradient(ctx, w, 0, h, colors.zenith, colors.horizon);
 
-    // ── Stars (before clouds) ──
-    if (preset.stars) {
-      _renderStars(ctx, w, h, angle);
+    // ── Stars — phase-aware alpha (all exterior presets at night) ──
+    var starAlpha = _getStarAlpha();
+    if (preset.phases && starAlpha > 0.01) {
+      _renderStars(ctx, w, h, angle, starAlpha);
+    } else if (preset.stars) {
+      // Legacy: non-phase presets (ocean) use static stars
+      _renderStars(ctx, w, h, angle, 1);
     }
 
-    // ── Cloud bands ──
+    // ── Shooting star (night only, after stars) ──
+    if (preset.phases) {
+      _renderShootingStar(ctx, w, h);
+    }
+
+    // ── Celestial bodies (sun/moon) — after stars, before clouds ──
+    if (preset.phases) {
+      _renderCelestials(ctx, w, h, angle);
+    }
+
+    // ── Cloud bands — tinted by atmosphere ──
+    var tint = (preset.phases && typeof DayCycle !== 'undefined')
+             ? DayCycle.getAtmosphereTint() : null;
     for (var i = 0; i < preset.clouds.length; i++) {
-      _renderCloudBand(ctx, w, h, angle, preset.clouds[i]);
+      _renderCloudBand(ctx, w, h, angle, preset.clouds[i], tint);
     }
 
     // ── Mountain silhouette ──
@@ -212,34 +322,247 @@ var Skybox = (function () {
 
   // ── Star field ──────────────────────────────────────────────────
 
-  function _renderStars(ctx, w, h, angle) {
-    // Deterministic star placement based on hash
-    var count = Math.floor(w * 0.15);
-    ctx.fillStyle = '#fff';
-    for (var i = 0; i < count; i++) {
-      var sx = (_hash1D(i * 7 + 1) * w * 3 + angle * w * 0.05) % w;
-      var sy = _hash1D(i * 13 + 3) * h * 0.7;
-      var brightness = _hash1D(i * 19 + 5);
+  // Star color palette: 70% white/blue-white, 15% yellow, 10% orange, 5% blue
+  var _STAR_COLORS = [
+    '255,255,255',   // white
+    '220,230,255',   // blue-white
+    '240,240,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '255,255,255',   // white
+    '220,230,255',   // blue-white
+    '255,255,255',   // white
+    '255,240,200',   // pale yellow
+    '255,240,200',   // pale yellow
+    '255,200,140',   // orange
+    '255,200,140',   // orange
+    '160,190,255',   // blue
+    '255,255,255',   // white
+    '255,255,255'    // white
+  ];
 
-      // Subtle twinkle
-      var twinkle = 0.5 + 0.5 * Math.sin(_time * 0.003 + i * 2.1);
-      var alpha = brightness * 0.4 * twinkle;
+  // Multi-layer star definitions: { count, minSize, maxSize, minBright, maxBright, depth, twinkleSpeed }
+  var _STAR_LAYERS = [
+    { count: 200, minSize: 1, maxSize: 1, minBright: 0.3, maxBright: 0.5, depth: 0.02, twinkleSpeed: 0.001, seed: 0 },     // deep field
+    { count: 80,  minSize: 1, maxSize: 2, minBright: 0.5, maxBright: 0.7, depth: 0.08, twinkleSpeed: 0.003, seed: 1000 },   // mid field
+    { count: 30,  minSize: 2, maxSize: 3, minBright: 0.7, maxBright: 1.0, depth: 0.15, twinkleSpeed: 0.006, seed: 2000 }    // near field
+  ];
 
-      if (alpha > 0.05) {
-        ctx.globalAlpha = alpha;
-        var size = brightness > 0.8 ? 2 : 1;
-        ctx.fillRect(Math.floor(sx), Math.floor(sy), size, size);
+  function _renderStars(ctx, w, h, angle, phaseAlpha) {
+    var pa = phaseAlpha !== undefined ? phaseAlpha : 1;
+    if (pa < 0.01) return;
+
+    for (var L = 0; L < _STAR_LAYERS.length; L++) {
+      var layer = _STAR_LAYERS[L];
+      var parallax = angle * w * layer.depth;
+
+      for (var i = 0; i < layer.count; i++) {
+        var idx = i + layer.seed;
+        var sx = (_hash1D(idx * 7 + 1) * w * 4 + parallax) % w;
+        if (sx < 0) sx += w;
+        var sy = _hash1D(idx * 13 + 3) * h * 0.75;
+        var brightness = layer.minBright + _hash1D(idx * 19 + 5) * (layer.maxBright - layer.minBright);
+
+        // Twinkle
+        var twinkle = 0.5 + 0.5 * Math.sin(_time * layer.twinkleSpeed + idx * 2.1);
+        var alpha = brightness * twinkle * pa;
+
+        if (alpha > 0.04) {
+          // Color from palette (deterministic per star)
+          var colorIdx = Math.floor(_hash1D(idx * 31) * _STAR_COLORS.length) % _STAR_COLORS.length;
+          ctx.fillStyle = 'rgba(' + _STAR_COLORS[colorIdx] + ',' + alpha.toFixed(2) + ')';
+
+          var size = layer.minSize + Math.floor(_hash1D(idx * 41) * (layer.maxSize - layer.minSize + 1));
+          ctx.fillRect(Math.floor(sx), Math.floor(sy), size, size);
+        }
       }
     }
-    ctx.globalAlpha = 1;
+  }
+
+  // ── Shooting stars ──────────────────────────────────────────────
+
+  /**
+   * Periodic shooting star streak during night phases.
+   * ~30s interval, 0.5s duration, deterministic timing from _time.
+   */
+  function _renderShootingStar(ctx, w, h) {
+    if (typeof DayCycle === 'undefined') return;
+    if (DayCycle.getPhase() !== 'night') return;
+
+    // Fire every ~30 seconds of animation time
+    var cycle = 30000;
+    var phase = _time % cycle;
+    var duration = 500;
+    if (phase > duration) return;
+
+    var t = phase / duration;  // 0→1 over the streak
+
+    // Deterministic start/end from the cycle number
+    var seed = Math.floor(_time / cycle);
+    var x0 = _hash1D(seed * 37) * w * 0.6 + w * 0.2;
+    var y0 = _hash1D(seed * 41 + 7) * h * 0.3;
+    var dx = (_hash1D(seed * 53 + 13) - 0.3) * w * 0.35;
+    var dy = _hash1D(seed * 59 + 19) * h * 0.25 + h * 0.05;
+
+    var headX = x0 + dx * t;
+    var headY = y0 + dy * t;
+    var tailLen = 0.3;
+    var tailX = x0 + dx * Math.max(0, t - tailLen);
+    var tailY = y0 + dy * Math.max(0, t - tailLen);
+
+    // Fade in and out
+    var alpha = t < 0.15 ? (t / 0.15) : (t > 0.7 ? (1 - t) / 0.3 : 1);
+    alpha *= 0.7;
+
+    ctx.strokeStyle = 'rgba(255,255,240,' + alpha.toFixed(2) + ')';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(headX, headY);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+
+  // ── Celestial bodies (sun + moon) ────────────────────────────────
+
+  /**
+   * Render sun and moon discs along sinusoidal arcs driven by DayCycle.
+   * Sun: visible 06:00–18:00. Moon: visible 18:00–06:00.
+   * Position is player-angle-relative so they track with rotation.
+   */
+  function _renderCelestials(ctx, w, h, angle) {
+    if (typeof DayCycle === 'undefined') return;
+    var hour = DayCycle.getHour() + DayCycle.getMinute() / 60;
+
+    // ── Sun (06:00–18:00) ──
+    if (hour >= 5.5 && hour <= 18.5) {
+      var sunT = (hour - 6) / 12;                          // 0 at 06:00, 1 at 18:00
+      var sunElev = Math.sin(Math.PI * Math.max(0, Math.min(1, sunT)));  // 0→1→0 arc
+      var sunAz = sunT;                                     // east(0)→west(1)
+
+      // Screen position (angle-relative, wrapping)
+      var sunScreenX = ((sunAz - angle / (2 * Math.PI) + 0.5) % 1 + 1) % 1 * w;
+      var sunScreenY = h * (1 - sunElev * 0.85) - 10;      // near horizon at edges
+
+      // Radius — larger near horizon (atmospheric lensing)
+      var baseR = 14;
+      var sunR = baseR + (1 - sunElev) * 6;
+
+      // Horizon refraction: oval + redden when low
+      var squish = sunElev < 0.15 ? (0.6 + sunElev / 0.15 * 0.4) : 1;
+      var redden = sunElev < 0.15 ? (1 - sunElev / 0.15) : 0;
+
+      // Glow halo
+      var glowR = sunR * 3;
+      var glowAlpha = 0.12 + redden * 0.08;
+      var grad = ctx.createRadialGradient(sunScreenX, sunScreenY, sunR * 0.5, sunScreenX, sunScreenY, glowR);
+      var glowRed = Math.round(255 - redden * 20);
+      var glowGreen = Math.round(200 - redden * 60);
+      var glowBlue = Math.round(120 - redden * 60);
+      grad.addColorStop(0, 'rgba(' + glowRed + ',' + glowGreen + ',' + glowBlue + ',' + glowAlpha.toFixed(2) + ')');
+      grad.addColorStop(1, 'rgba(' + glowRed + ',' + glowGreen + ',' + glowBlue + ',0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sunScreenX - glowR, sunScreenY - glowR, glowR * 2, glowR * 2);
+
+      // Sun disc (core white → edge orange gradient)
+      ctx.save();
+      ctx.translate(sunScreenX, sunScreenY);
+      ctx.scale(1, squish);
+      var discGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, sunR);
+      discGrad.addColorStop(0, 'rgba(255,255,240,0.95)');
+      discGrad.addColorStop(0.4, 'rgba(255,230,180,0.9)');
+      discGrad.addColorStop(0.8, 'rgba(255,' + Math.round(180 - redden * 60) + ',' + Math.round(100 - redden * 50) + ',0.8)');
+      discGrad.addColorStop(1, 'rgba(255,' + Math.round(140 - redden * 60) + ',' + Math.round(60 - redden * 30) + ',0)');
+      ctx.fillStyle = discGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, sunR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // ── Horizon glow band (dawn/dusk) ──
+      if (sunElev < 0.2 && sunElev > 0) {
+        var glowIntensity = (0.2 - sunElev) / 0.2;
+        var bandH = Math.floor(h * (hour < 12 ? 0.20 : 0.15));
+        var bandY = h - bandH;
+        var isDawn = hour < 12;
+        var hGrad = ctx.createLinearGradient(0, bandY, 0, h);
+        if (isDawn) {
+          hGrad.addColorStop(0, 'rgba(255,160,100,0)');
+          hGrad.addColorStop(0.5, 'rgba(255,140,80,' + (glowIntensity * 0.15).toFixed(3) + ')');
+          hGrad.addColorStop(1, 'rgba(255,120,60,' + (glowIntensity * 0.2).toFixed(3) + ')');
+        } else {
+          hGrad.addColorStop(0, 'rgba(200,80,40,0)');
+          hGrad.addColorStop(0.5, 'rgba(180,60,30,' + (glowIntensity * 0.18).toFixed(3) + ')');
+          hGrad.addColorStop(1, 'rgba(160,40,20,' + (glowIntensity * 0.22).toFixed(3) + ')');
+        }
+        ctx.fillStyle = hGrad;
+        ctx.fillRect(0, bandY, w, bandH);
+      }
+    }
+
+    // ── Moon (18:00–06:00, offset 12h from sun) ──
+    if (hour >= 17.5 || hour <= 6.5) {
+      // Normalize to 0–12 range for the sinusoidal arc
+      var moonHour = hour >= 17.5 ? (hour - 18) : (hour + 6);
+      var moonT = moonHour / 12;                            // 0 at 18:00, 1 at 06:00
+      var moonElev = Math.sin(Math.PI * Math.max(0, Math.min(1, moonT)));
+      var moonAz = moonT;
+
+      var moonScreenX = ((moonAz - angle / (2 * Math.PI) + 0.5) % 1 + 1) % 1 * w;
+      var moonScreenY = h * (1 - moonElev * 0.8) - 8;
+      var moonR = 10 + (1 - moonElev) * 3;
+
+      // Moon glow halo (subtle blue-white)
+      var mGlowR = moonR * 2.5;
+      var mGrad = ctx.createRadialGradient(moonScreenX, moonScreenY, moonR * 0.3, moonScreenX, moonScreenY, mGlowR);
+      mGrad.addColorStop(0, 'rgba(180,200,240,0.08)');
+      mGrad.addColorStop(1, 'rgba(140,160,200,0)');
+      ctx.fillStyle = mGrad;
+      ctx.fillRect(moonScreenX - mGlowR, moonScreenY - mGlowR, mGlowR * 2, mGlowR * 2);
+
+      // Moon disc (blue-white core → pale edge)
+      var moonDiscGrad = ctx.createRadialGradient(moonScreenX, moonScreenY, 0, moonScreenX, moonScreenY, moonR);
+      moonDiscGrad.addColorStop(0, 'rgba(220,230,250,0.9)');
+      moonDiscGrad.addColorStop(0.5, 'rgba(190,200,230,0.85)');
+      moonDiscGrad.addColorStop(1, 'rgba(160,175,210,0)');
+      ctx.fillStyle = moonDiscGrad;
+      ctx.beginPath();
+      ctx.arc(moonScreenX, moonScreenY, moonR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Craters (2–3 small dark circles at fixed offsets)
+      ctx.fillStyle = 'rgba(130,140,170,0.25)';
+      ctx.beginPath();
+      ctx.arc(moonScreenX - moonR * 0.3, moonScreenY - moonR * 0.2, moonR * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(moonScreenX + moonR * 0.25, moonScreenY + moonR * 0.3, moonR * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(moonScreenX + moonR * 0.1, moonScreenY - moonR * 0.35, moonR * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // ── Cloud band ──────────────────────────────────────────────────
 
-  function _renderCloudBand(ctx, w, h, angle, params) {
+  function _renderCloudBand(ctx, w, h, angle, params, tint) {
     var bandY = Math.floor(h * params.y);
     var bandH = Math.floor(h * params.h);
     var scrollX = (angle / (2 * Math.PI)) * w * 2 * params.depth + _time * params.speed;
+
+    // Atmosphere-tinted cloud colors (dawn = pink/orange, night = dark blue)
+    var cr = params.r, cg = params.g, cb = params.b;
+    if (tint) {
+      cr = Math.round(cr * tint.r);
+      cg = Math.round(cg * tint.g);
+      cb = Math.round(cb * tint.b);
+    }
 
     for (var x = 0; x < w; x++) {
       var worldX = (x + scrollX) / params.scale;
@@ -253,7 +576,7 @@ var Skybox = (function () {
         alpha *= params.opacity;
         var cy = bandY + bandH * 0.5;
         var cloudH = Math.floor(bandH * alpha * 0.8);
-        ctx.fillStyle = 'rgba(' + params.r + ',' + params.g + ',' + params.b + ',' + (alpha * 0.6).toFixed(2) + ')';
+        ctx.fillStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (alpha * 0.6).toFixed(2) + ')';
         ctx.fillRect(x, Math.floor(cy - cloudH / 2), 1, cloudH);
       }
     }

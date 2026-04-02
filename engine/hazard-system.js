@@ -50,6 +50,12 @@ var HazardSystem = (function () {
   var _onGameOver = null;
   var _onDeathRescue = null;
 
+  // §7f: Flag for morning recap monologue after bonfire menu closes
+  var _pendingMorningRecap = false;
+
+  // §9b: Last rest result for REST face status feedback
+  var _lastRestResult = null;
+
   function init(cbs) {
     cbs = cbs || {};
     _onGameOver = cbs.onGameOver || null;
@@ -65,34 +71,149 @@ var HazardSystem = (function () {
    */
   function clearBonfires() {
     _bonfirePositions = {};
+    _pendingMorningRecap = false;
   }
 
   // ── Bonfire interaction ──────────────────────────────────────────
 
   /**
+   * Calculate minutes needed to advance from current time to 06:00 dawn.
+   * If already at 06:00, returns full 24h (sleep a whole day).
+   * @returns {number} minutes to advance
+   */
+  function _minutesUntilDawn() {
+    if (typeof DayCycle === 'undefined') return 480; // fallback 8h
+    var currentMinutes = DayCycle.getHour() * 60 + DayCycle.getMinute();
+    var dawnMinutes = 360; // 06:00
+    var advance = currentMinutes < dawnMinutes
+      ? dawnMinutes - currentMinutes           // pre-dawn same day (e.g. 01:15 → 06:00)
+      : (1440 - currentMinutes) + dawnMinutes; // next day (e.g. 14:30 → 06:00+1)
+    // Edge: exactly at 06:00 → full day
+    if (advance === 0) advance = 1440;
+    return advance;
+  }
+
+  /**
    * Rest at a bonfire tile. Called from game.js _interact when
-   * the tile in front of the player is BONFIRE.
+   * the tile in front of the player is BONFIRE/HEARTH/BED (non-home).
+   *
+   * §7d: REST UNTIL DAWN — for jam build, bonfire rest always advances
+   *      to 06:00 next dawn. This avoids waking into curfew hours
+   *      (curfew is currently an automatic failstate). Post-jam,
+   *      switch to ADVANCE.REST (480 min = 8h) when curfew softens.
+   * §7b: Grants WELL_RESTED (always, since you wake at dawn).
+   * §7c: Clears TIRED.
+   * §7f: Queues morning recap monologue for after menu close.
    *
    * @param {number} bx - Bonfire tile X
    * @param {number} by - Bonfire tile Y
    */
   function restAtBonfire(bx, by) {
     var floorId = FloorManager.getFloor();
+    var depth = floorId ? floorId.split('.').length : 1;
 
     // Save this bonfire as the respawn point for this floor
     _bonfirePositions[floorId] = { x: bx, y: by };
 
-    // Full restore
+    // ── §11a: Depth-branched rest ──────────────────────────────
+    // Depth 1 (exterior campfire): rest-until-dawn (§7d), full restore
+    // Depth 3+ (dungeon hearth):   brief 2h rest, no WELL_RESTED, no day skip
+    // Both clear TIRED and fully restore HP/energy.
+    var isDungeon = (depth >= 3);
+    var DUNGEON_REST_MIN = 120; // 2h quick rest — "coffee break, not a good night's rest"
+
+    // Capture sleep hour BEFORE advancing (for WELL_RESTED gate + logging)
+    var sleepHour = (typeof DayCycle !== 'undefined') ? DayCycle.getHour() : 0;
+    var advanceMin = isDungeon ? DUNGEON_REST_MIN : _minutesUntilDawn();
+
+    if (typeof DayCycle !== 'undefined' && DayCycle.advanceTime) {
+      // Ensure clock is not paused (depth-2 interior time-freeze).
+      // Bonfire rest always advances time regardless of location.
+      var wasPaused = DayCycle.isPaused();
+      if (wasPaused) DayCycle.setPaused(false);
+
+      DayCycle.advanceTime(advanceMin);
+
+      // ── POST-JAM: fixed 8h rest for exterior (uncomment when curfew is soft) ──
+      // if (!isDungeon) DayCycle.advanceTime(DayCycle.ADVANCE.REST);
+
+      if (wasPaused) DayCycle.setPaused(true);
+    }
+
+    // Full restore (both exterior and dungeon — rest always heals)
     Player.fullRestore();
+
+    // ── §7c: Clear TIRED status ────────────────────────────────
+    if (typeof StatusEffect !== 'undefined') {
+      StatusEffect.remove('TIRED', 'manual');
+    }
+
+    // ── §7b / §11a: WELL_RESTED — exterior only, before midnight ──
+    // Dungeon hearths never grant WELL_RESTED (too dangerous to truly
+    // sleep in the dungeon — this is a coffee break).
+    // Exterior: TIRED starts at 19:00. WELL_RESTED requires going to bed
+    // before midnight (sleepHour >= 6, i.e. not in 00:00–05:59
+    // post-midnight zone). Mirrors _doHomeDoorRest and BedPeek parity.
+    var gotWellRested = false;
+    if (!isDungeon && typeof StatusEffect !== 'undefined' && sleepHour >= 6) {
+      StatusEffect.apply('WELL_RESTED');
+      gotWellRested = true;
+    }
+
     HUD.updatePlayer(Player.state());
 
-    // Feedback
-    HUD.showCombatLog(i18n.t('hazard.bonfire_rest', '🔥 Rested at bonfire — HP & energy restored'));
+    // Feedback — show rest type
+    var sleptHours = Math.round(advanceMin / 60);
+    if (isDungeon) {
+      HUD.showCombatLog(i18n.t('hazard.dragonfire_brief',
+        '🐉 Brief rest (' + sleptHours + 'h) — HP & energy restored. Stay alert.'));
+    } else if (gotWellRested) {
+      HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_dawn',
+        '🐉 Rested until dawn (' + sleptHours + 'h) — HP & energy restored. You feel well rested.'));
+    } else {
+      HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_late',
+        '🐉 Rested until dawn (' + sleptHours + 'h) — HP & energy restored. Late night, though...'));
+    }
     AudioSystem.play('ui-confirm', { volume: 0.5 });
+
+    // ── §7f: Queue morning recap monologue (exterior only) ─────
+    // Dungeon brief rests don't trigger morning recap — you didn't sleep.
+    if (!isDungeon && typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
+      _pendingMorningRecap = true;
+    }
+
+    // §9b: Store rest result for REST face status feedback
+    _lastRestResult = {
+      isDungeon: isDungeon,
+      cleared: ['TIRED'],
+      gained: gotWellRested ? ['WELL_RESTED'] : [],
+      advanceMin: advanceMin,
+      floorId: floorId,
+      floorLabel: (typeof FloorManager !== 'undefined' && FloorManager.getFloorLabel)
+        ? FloorManager.getFloorLabel() : floorId
+    };
 
     SessionStats.inc('bonfiresUsed');
 
-    console.log('[HazardSystem] Rested at bonfire (' + bx + ',' + by + ') on floor ' + floorId);
+    console.log('[HazardSystem] Rested at ' + (isDungeon ? 'dungeon hearth' : 'campfire') +
+                ' (' + bx + ',' + by + ') on floor ' + floorId + ' (depth ' + depth + ')' +
+                ' | sleepHour=' + sleepHour + ' | advanced=' + advanceMin + 'min' +
+                (isDungeon ? ' (brief)' : ' → dawn') +
+                ' | WELL_RESTED=' + gotWellRested +
+                (isDungeon ? ' (dungeon=never)' : ' (bedtime ' + (sleepHour >= 6 ? 'before' : 'after') + ' midnight)'));
+  }
+
+  /**
+   * Check and clear pending morning recap flag.
+   * Called by game.js when bonfire menu closes to trigger MonologuePeek.
+   * @returns {boolean} true if a recap was pending
+   */
+  function consumeMorningRecap() {
+    if (_pendingMorningRecap) {
+      _pendingMorningRecap = false;
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -323,7 +444,11 @@ var HazardSystem = (function () {
     setOnDeathRescue: setOnDeathRescue,
     clearBonfires: clearBonfires,
     restAtBonfire: restAtBonfire,
+    consumeMorningRecap: consumeMorningRecap,
     checkTile: checkTile,
+
+    // §9b: REST face reads last rest outcome for status feedback
+    getLastRestResult: function () { return _lastRestResult; },
 
     // Expose for testing / debug
     HAZARD_DAMAGE: HAZARD_DAMAGE

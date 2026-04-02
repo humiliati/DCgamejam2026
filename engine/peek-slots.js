@@ -317,8 +317,8 @@ var PeekSlots = (function () {
     if (!_container || !_container.slots) return;
 
     // CrateUI slot layout constants (must match crate-ui.js)
-    var SLOT_SIZE = 48;
-    var SLOT_GAP  = 8;
+    var SLOT_SIZE = 56;
+    var SLOT_GAP  = 14;
     var PANEL_Y_FRAC = 0.38;
 
     var canvas = document.getElementById('view-canvas');

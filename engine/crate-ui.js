@@ -18,8 +18,8 @@ var CrateUI = (function () {
   'use strict';
 
   // ── Layout constants ────────────────────────────────────────────
-  var SLOT_SIZE     = 48;   // px per slot box
-  var SLOT_GAP      = 8;    // px between slots
+  var SLOT_SIZE     = 56;   // px per slot box (Magic Remote 56px minimum)
+  var SLOT_GAP      = 14;   // px between slots (gyro jitter clearance)
   var SLOT_RAD      = 6;    // Corner radius
   var PANEL_PAD     = 16;   // Padding around slot row
   var PANEL_Y_FRAC  = 0.38; // Vertical centre fraction (above middle)

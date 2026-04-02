@@ -273,6 +273,23 @@ The water band:
 
 The visual link between Floor 3's water horizon and the sealab porthole ocean view reinforces the world coherence. Same creature types (whales, jellyfish) visible in both, but from different perspectives — surface vs. submerged.
 
+### 5d. Title screen refresh (1h)
+
+The title screen currently uses the `title` preset with an `oceanFloor` porthole view as a placeholder. Once Phase 5a–5c land the `frontier` preset with a proper water horizon, day/night phase tables, and ocean creature silhouettes at the surface, the title screen should be upgraded to consume that work.
+
+**What changes:**
+
+- `renderFull()` title path switches from the static `title` preset to a cinematic mode that composites `frontier` sky (top half) with the existing `ocean` deep-sea porthole (bottom half) — surface-meets-depth duality
+- Top half: `frontier` sky with phase-cycling colors, maritime clouds, water horizon band, celestial bodies. Slow dawn-to-dusk crawl over the title idle (or lock to dusk for golden-hour drama)
+- Bottom half: keep existing `_renderOceanFloor()` ocean porthole — whales, jellyfish, caustics, seabed ridge. The glass-floor divider becomes the literal surface/depth boundary
+- Cloud bands in the top half catch dawn/dusk tint from `getAtmosphereTint()` (Phase 1 cloud tinting, already shipped)
+- Star parallax layers visible if the title crawl reaches night (Phase 3, already shipped)
+- Creature silhouettes near the water horizon line (5a `oceanHint`) echo the deep-sea silhouettes below, reinforcing world coherence before the player ever enters the game
+
+**What stays:** Mountain silhouette system (shaped zones), water reflection core logic, porthole rivet frame, caustic overlay. These are recomposed, not rewritten.
+
+**Depends on:** Phase 5a (frontier preset), Phase 5b (water horizon rendering). Phases 1–3 already shipped.
+
 ---
 
 ## Phase 6 — Weather System (2h, post-jam)
@@ -360,14 +377,15 @@ Phase 1 (Sky color cycling)
         └── Phase 4 (Time widget)
               └── HUD integration
 
-Phase 5 (Floor 3 ocean sky)
-  └── Requires Phase 1 (day/night colors) + new frontier preset
+Phase 5 (Floor 3 ocean sky + title screen refresh)
+  ├── 5a–5c: Requires Phase 1 (day/night colors) + new frontier preset
+  └── 5d: Title screen refresh — composites frontier sky + ocean porthole (requires 5a–5c)
 
 Phase 6 (Weather) — Post-jam, independent
 Phase 7 (Polish) — Post-jam, requires Phases 1–5
 ```
 
-**Jam-adjacent scope:** Phases 1–4 (~6h). Phase 5 after Floor 3 blockout.
+**Jam-adjacent scope:** Phases 1–4 (~6h) ✅ DONE. Phase 5a–5c after Floor 3 blockout (~1.5h). Phase 5d title screen refresh (~1h).
 **Post-jam:** Phases 6–7 (~3h).
 
 ---
@@ -390,7 +408,7 @@ Most of these likely already exist or are trivial to add from the existing `_hou
 
 | File | Change | Phase |
 |------|--------|-------|
-| `engine/skybox.js` | Phase tables, color interpolation, celestial body rendering, star layers | 1, 2, 3, 5 |
+| `engine/skybox.js` | Phase tables, color interpolation, celestial body rendering, star layers, title screen composite | 1, 2, 3, 5, 5d |
 | `engine/day-cycle.js` | `getNextPhase()`, `getPhaseProgress()` helpers | 1 |
 | `engine/hud.js` | Time widget rendering | 4 |
 | `engine/spatial-contract.js` | Frontier preset definition | 5 |

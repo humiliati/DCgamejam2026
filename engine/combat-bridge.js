@@ -230,6 +230,14 @@ var CombatBridge = (function () {
       CombatFX.setEnemyType(fxType);
     }
 
+    // ── Cinematic letterbox (combat_lock) ──
+    // Persistent bars + slight FOV zoom — lockInput false so cards stay playable.
+    if (typeof CinematicCamera !== 'undefined') {
+      var pp = Player.getPos();
+      var focusAngle = Math.atan2(enemy.y - pp.y, enemy.x - pp.x);
+      CinematicCamera.start('combat_lock', { focusAngle: focusAngle });
+    }
+
     CombatEngine.start(enemy, player, {
       onEnd: _onCombatEnd,
       onPhaseChange: _onPhaseChange,
@@ -373,6 +381,11 @@ var CombatBridge = (function () {
   // ── Combat end handler ────────────────────────────────────────────
 
   function _onCombatEnd(result, enemy) {
+    // ── Close cinematic letterbox ──
+    if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
+      CinematicCamera.close();
+    }
+
     HUD.hideCombat();
     HUD.setAdvantage('');
     HUD.updatePlayer(Player.state());

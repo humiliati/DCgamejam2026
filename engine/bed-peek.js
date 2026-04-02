@@ -230,8 +230,10 @@ var BedPeek = (function () {
       StatusEffect.clearByCondition('until_rest');
     }
 
-    // Grant WELL_RESTED if player slept before 23:00
-    if (sleepHour < 23 && typeof StatusEffect !== 'undefined') {
+    // Grant WELL_RESTED if in bed before midnight
+    // sleepHour >= 6 = went to bed during day/evening (good)
+    // sleepHour < 6 = post-midnight zone (stayed up too late, no buff)
+    if (sleepHour >= 6 && typeof StatusEffect !== 'undefined') {
       StatusEffect.apply('WELL_RESTED');
     }
 

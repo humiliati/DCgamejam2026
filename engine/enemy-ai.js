@@ -240,6 +240,17 @@ var EnemyAI = (function () {
     }
   }
 
+  // ── Post-move hooks (cobweb destruction, etc.) ──
+  // Friendly NPCs (reanimated corpses) respect player cobwebs.
+  function _onEnemyArrived(enemy, nx, ny) {
+    if (enemy.friendly) return;
+    if (typeof CobwebSystem !== 'undefined') {
+      var floorId = (typeof FloorManager !== 'undefined')
+        ? FloorManager.getCurrentFloorId() : '';
+      CobwebSystem.onEntityMove(nx, ny, floorId);
+    }
+  }
+
   function _moveToPoint(enemy, pt, grid, W, H) {
     if (!pt) return;
     var nx = pt.x;
@@ -256,6 +267,7 @@ var EnemyAI = (function () {
     _faceToward(enemy, pt);
     enemy.x = nx;
     enemy.y = ny;
+    _onEnemyArrived(enemy, nx, ny);
   }
 
   // ── Chase behavior ──
@@ -294,6 +306,7 @@ var EnemyAI = (function () {
     _faceToward(enemy, { x: nx, y: ny });
     enemy.x = nx;
     enemy.y = ny;
+    _onEnemyArrived(enemy, nx, ny);
     return true;
   }
 

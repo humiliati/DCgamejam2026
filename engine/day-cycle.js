@@ -135,8 +135,10 @@ var DayCycle = (function () {
       if (_onPhaseChange) _onPhaseChange(newPhase, oldPhase);
     }
 
-    // Tired check: fire once at 21:00 (9pm)
-    if (_phase === PHASES.NIGHT && _hour >= 21 && !_tiredFiredToday) {
+    // Tired check: fire once at 19:00 (7pm, night phase start)
+    // Player gets the TIRED debuff warning at dusk/night boundary.
+    // If they're not in bed by midnight, they lose the WELL_RESTED window.
+    if (_phase === PHASES.NIGHT && _hour >= 19 && !_tiredFiredToday) {
       _tiredFiredToday = true;
       if (_onTired) _onTired(_day);
     }
@@ -334,6 +336,9 @@ var DayCycle = (function () {
     _minute = 0;
     _phase = PHASES.DAWN;
     _isHeroDay = true;
+    _paused = false;
+    _tiredFiredToday = false;
+    _curfewFiredToday = false;
     _nightLockedFloors = {};
     console.log('[DayCycle] Initialized — Day 0 (Hero Day), Dawn');
   }
@@ -509,11 +514,11 @@ var DayCycle = (function () {
   }
 
   /**
-   * Is the current hour in the "tired" range (21:00–05:59)?
+   * Is the current hour in the "tired" range (19:00–05:59)?
    * @returns {boolean}
    */
   function isTiredHour() {
-    return _phase === PHASES.NIGHT && (_hour >= 21 || _hour < 6);
+    return _phase === PHASES.NIGHT;
   }
 
   /**

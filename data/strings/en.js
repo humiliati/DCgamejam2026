@@ -64,13 +64,13 @@ i18n.register('en', {
   'hazard.fire':              'FIRE',
   'hazard.spikes':            'SPIKES',
   'hazard.poison':            'POISON',
-  'hazard.bonfire_rest':      '🔥 Rested at bonfire — HP & energy restored',
+  'hazard.bonfire_rest':      '🐉 Rested at dragonfire — HP & energy restored',
   'hazard.death_trap':        'Caught in a trap',
   'hazard.death_fire':        'Burned alive',
   'hazard.death_spikes':      'Impaled on spikes',
   'hazard.death_poison':      'Succumbed to poison',
   'hazard.currency_lost':     'gold lost',
-  'hazard.respawn_bonfire':   'Respawned at bonfire.',
+  'hazard.respawn_bonfire':   'Respawned at dragonfire.',
   'hazard.respawn_entrance':  'Returned to entrance.',
   'hazard.permadeath_trap':   'Crushed by a trap in the deep dungeon',
   'hazard.permadeath_fire':   'Consumed by flame in the deep dungeon',
@@ -112,8 +112,8 @@ i18n.register('en', {
   'menu.minimap_placeholder': 'Minimap',
   'menu.journal_placeholder': 'No entries yet.',
 
-  // ── Bonfire MenuBox ────────────────────────────────────────────
-  'shop.bonfire_title':    'BONFIRE',
+  // ── Dragonfire MenuBox ─────────────────────────────────────────
+  'shop.bonfire_title':    'DRAGONFIRE',
   'shop.bonfire_restored': 'HP & Energy restored',
   'shop.bonfire_hint':     '[ESC] Close   [Q/E] Browse',
   'shop.stash_title':      'STASH',
@@ -221,11 +221,54 @@ i18n.register('en', {
   'interact.harvest':     'Harvest',
   'interact.smash':       'Smash',
   'interact.reset':       'Reset Puzzle',
+  'interact.read':        'Read',
+  'interact.refuel':      'Refuel Torch',
+  'interact.extinguish':  'Extinguish',
+  'interact.restock':     'Restock',
+  'interact.drink':       'Drink',
+  'interact.clean':       'Scrub',
 
-  // ── Bonfire / Hearth ───────────────────────────────────────────
+  // ── Interact hints (second line, shown on hover) ───────────────
+  'hint.clean':           'Remove blood to raise readiness.',
+  'hint.restock':         'Fill slots with matching items to seal.',
+  'hint.restock_sealed':  'Sealed — contributes to readiness.',
+  'hint.rearm':           'Restore trap for heroes to trigger.',
+  'hint.cobweb':          'Stretched across the corridor — slows enemies.',
+  'hint.harvest':         'Drag items from corpse stock.',
+  'hint.harvest_sealed':  'Sealed — ready to reanimate.',
+  'hint.smash':           'Break it open for loot.',
+  'hint.refuel':          'Add fuel to keep the torch lit.',
+  'hint.extinguish':      'Douse the flame (reduces readiness).',
+  'hint.read':            'Browse the shelves.',
+  'hint.rest':            'Heal, save, and advance time.',
+  'hint.camp':            'Brief rest — restores HP and energy.',
+  'hint.drink':           'Temporary stat boost.',
+  'hint.inspect':         'Look closer.',
+  'hint.enter':           'Go inside.',
+  'hint.exit':            'Return outside.',
+  'hint.browse':          'Buy and sell goods.',
+  'hint.talk':            'See what they have to say.',
+
+  // ── Dragonfire / Hearth ────────────────────────────────────────
   'bonfire.warp_home':       'Warp Home',
   'bonfire.warp_entrance':   'Warp to Entrance',
   'bonfire.warping':         'Warping...',
+
+  // §11 Dragonfire depth-branched strings
+  'interact.dragonfire_camp':    'Camp',
+  'interact.dragonfire_rest':    'Rest',
+  'dragonfire.no_stash_title':   'TOO DEEP',
+  'dragonfire.no_stash_line1':   'Stash unavailable this deep.',
+  'dragonfire.no_stash_line2':   'Camp outside to access your stash.',
+  'dragonfire.warp_locked':      'Floor not ready',
+  'dragonfire.warp_confirm_dungeon': 'Leave this dungeon? Progress will be saved.',
+  'dragonfire.warp_confirm_home':    'Warp home? You can return here later.',
+  'bonfire.waypoint_set':            'Respawn point set',
+  'ui.confirm':                      'Yes',
+  'shop.stash_empty_hint':           'Drag items here — they survive death.',
+  'hazard.dragonfire_brief':     '🐉 Brief rest — HP & energy restored. Stay alert.',
+  'hazard.dragonfire_rest_dawn': '🐉 Rested until dawn — HP & energy restored. You feel well rested.',
+  'hazard.dragonfire_rest_late': '🐉 Rested until dawn — HP & energy restored. Late night, though...',
   'inv.nothing_burn':        'Nothing to burn',
   'inv.bag':                 'Bag',
 
@@ -245,6 +288,9 @@ i18n.register('en', {
   // ── Trap re-arm ───────────────────────────────────────────────
   'interact.rearm':     'Re-arm trap',
   'toast.trap_rearmed': 'Trap re-armed!',
+  'toast.tile_clean':   'Tile cleaned!',
+  'toast.reanimate':    'The fallen rises...',
+  'toast.scrub_prog':   'Scrubbing...',
 
   // ── Work orders ───────────────────────────────────────────────
   'work.order_posted':   'Work order posted',

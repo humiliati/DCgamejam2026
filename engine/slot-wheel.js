@@ -14,7 +14,7 @@
  * Card-in-bag rendering: items with .suit or ._bagStored render as 🃏 with
  * a purple inner glow, per gone-rogue card vault pattern from EyesOnly.
  *
- * LG Magic Remote compatible: all interactions are clickable with 48×48
+ * LG Magic Remote compatible: all interactions are clickable with 56×56
  * minimum touch targets, plus scroll wheel passthrough.
  *
  * Layer 2 (after DragDrop, before PeekSlots)
@@ -26,8 +26,8 @@ var SlotWheel = (function () {
   'use strict';
 
   // ── Layout Constants ───────────────────────────────────────────────
-  var SLOT_SIZE      = 48;   // px per slot box
-  var SLOT_GAP       = 8;    // px between slots
+  var SLOT_SIZE      = 56;   // px per slot box (Magic Remote 56px minimum)
+  var SLOT_GAP       = 14;   // px between slots (gyro jitter clearance)
   var SLOT_RAD       = 6;    // Corner radius
   var VISIBLE_SLOTS  = 5;    // Always show 5 slot frames
   var CHEVRON_W      = 24;   // Chevron hit zone width

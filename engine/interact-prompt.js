@@ -16,7 +16,7 @@ var InteractPrompt = (function () {
   // ── Config ──────────────────────────────────────────────────────
   var FADE_IN   = 120;   // ms fade-in
   var FADE_OUT  = 80;    // ms fade-out
-  var BOX_H     = 52;    // Prompt box height (large, tactile)
+  var BOX_H     = 60;    // Prompt box height (Magic Remote tactile target)
   var BOX_PAD   = 24;    // Horizontal padding
   var BOX_RAD   = 10;    // Corner radius
   var BOX_Y_OFF = 200;   // Pixels from bottom — must clear status bar (120px) + card tray
@@ -37,13 +37,14 @@ var InteractPrompt = (function () {
   var _alpha      = 0;       // Current opacity (0–1)
   var _actionText = '';      // Current action label
   var _iconText   = '';      // Optional emoji prefix
+  var _hintText   = '';      // Hover-only hint line (explain the action)
   var _hitBox     = null;    // { x, y, w, h } — screen-space click zone
   var _hovered    = false;   // Pointer is over the prompt
   var _clickFlash = 0;       // Click feedback flash timer (ms remaining)
 
   function init() {
     ACTION_MAP[TILES.CHEST]     = { action: 'interact.open',   icon: '' };
-    ACTION_MAP[TILES.BONFIRE]   = { action: 'interact.rest',   icon: '🔥' };
+    ACTION_MAP[TILES.BONFIRE]   = { action: 'interact.rest',   icon: '🐉' };
     ACTION_MAP[TILES.SHOP]      = { action: 'interact.browse', icon: '' };
     ACTION_MAP[TILES.STAIRS_DN] = { action: 'interact.descend',icon: '' };
     ACTION_MAP[TILES.STAIRS_UP] = { action: 'interact.ascend', icon: '' };
@@ -58,9 +59,30 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
     ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
-    ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
+    ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🐉' };
     ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
     ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
+
+    // ── Hint map (hover-only description, keyed by i18n action key) ──
+    ACTION_MAP[TILES.CHEST].hint     = 'hint.inspect';
+    ACTION_MAP[TILES.BONFIRE].hint   = 'hint.rest';
+    ACTION_MAP[TILES.SHOP].hint      = 'hint.browse';
+    ACTION_MAP[TILES.CORPSE].hint    = 'hint.harvest';
+    ACTION_MAP[TILES.CORPSE].gleanerHint = 'hint.restock';
+    ACTION_MAP[TILES.BREAKABLE].hint = 'hint.smash';
+    ACTION_MAP[TILES.BREAKABLE].gleanerHint = 'hint.restock';
+    ACTION_MAP[TILES.PUZZLE].hint    = 'hint.inspect';
+    ACTION_MAP[TILES.BOOKSHELF].hint = 'hint.read';
+    ACTION_MAP[TILES.BAR_COUNTER].hint = 'hint.drink';
+    ACTION_MAP[TILES.BED].hint       = 'hint.rest';
+    ACTION_MAP[TILES.TABLE].hint     = 'hint.inspect';
+    ACTION_MAP[TILES.HEARTH].hint    = 'hint.rest';
+    ACTION_MAP[TILES.TORCH_LIT].hint = 'hint.extinguish';
+    ACTION_MAP[TILES.TORCH_LIT].gleanerHint = 'hint.refuel';
+    ACTION_MAP[TILES.TORCH_UNLIT].hint = 'hint.refuel';
+    ACTION_MAP[TILES.DOOR].hint      = 'hint.enter';
+    ACTION_MAP[TILES.DOOR_BACK].hint = 'hint.enter';
+    ACTION_MAP[TILES.DOOR_EXIT].hint = 'hint.exit';
   }
 
   /**
@@ -95,6 +117,21 @@ var InteractPrompt = (function () {
       _visible = true;
       _actionText = i18n.t(entry.action, entry.action.split('.')[1]);
       _iconText = entry.icon;
+      _hintText = entry.hint ? i18n.t(entry.hint, '') : '';
+
+      // §11d: Depth-based verb for bonfire/hearth tiles ("Camp" vs "Rest")
+      if (tile === TILES.BONFIRE || tile === TILES.HEARTH) {
+        var fId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+        var fDepth = fId ? fId.split('.').length : 1;
+        if (fDepth >= 3) {
+          _actionText = i18n.t('interact.dragonfire_rest', 'Rest');
+          _hintText = i18n.t('hint.camp', '');
+        } else {
+          _actionText = i18n.t('interact.dragonfire_camp', 'Camp');
+          _hintText = i18n.t('hint.rest', '');
+        }
+        _iconText = '🐉';
+      }
 
       // Gleaner mode: show restock prompt for containers that exist
       if (entry.gleaner && typeof CrateSystem !== 'undefined') {
@@ -104,9 +141,11 @@ var InteractPrompt = (function () {
           if (cont && cont.sealed) {
             _actionText = 'sealed \u2714';
             _iconText = '\u2714';
+            _hintText = i18n.t(tile === TILES.CORPSE ? 'hint.harvest_sealed' : 'hint.restock_sealed', '');
           } else {
             _actionText = i18n.t(entry.gleaner, entry.gleaner.split('.')[1]);
             _iconText = entry.gleanerIcon || entry.icon;
+            _hintText = entry.gleanerHint ? i18n.t(entry.gleanerHint, '') : '';
           }
         }
       }
@@ -132,18 +171,20 @@ var InteractPrompt = (function () {
         _visible = true;
         _actionText = i18n.t('interact.rearm', 'Re-arm trap');
         _iconText = '⚙️';
+        _hintText = i18n.t('hint.rearm', '');
         return;
       }
     }
 
     // Blood tile cleaning — walkable tile with blood on it
     if (typeof CleaningSystem !== 'undefined') {
-      var flId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
-      if (CleaningSystem.isDirty(fx, fy, flId)) {
+      var clFlId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+      if (CleaningSystem.isDirty(fx, fy, clFlId)) {
         _visible = true;
-        var bloodLvl = CleaningSystem.getBlood(fx, fy, flId);
+        var bloodLvl = CleaningSystem.getBlood(fx, fy, clFlId);
         _actionText = i18n.t('interact.clean', 'Scrub') + ' (' + bloodLvl + '/' + CleaningSystem.MAX_BLOOD + ')';
         _iconText = '🧹';
+        _hintText = i18n.t('hint.clean', '');
         return;
       }
     }
@@ -156,11 +197,13 @@ var InteractPrompt = (function () {
         _visible = true;
         _actionText = i18n.t('interact.talk', 'Talk');
         _iconText = e.emoji || '';
+        _hintText = i18n.t('hint.talk', '');
         return;
       }
     }
 
     _visible = false;
+    _hintText = '';
   }
 
   /**
@@ -255,12 +298,12 @@ var InteractPrompt = (function () {
     ctx.fillStyle = _hovered ? '#fff' : COL_ACTION;
     ctx.fillText('  ' + fullText, boxX + BOX_PAD + keyW, boxY + BOX_H / 2);
 
-    // Pointer cursor hint (clickable affordance)
-    if (_hovered) {
-      ctx.fillStyle = 'rgba(240,208,112,0.55)';
-      ctx.font = '12px monospace';
+    // Hover hint line: explain what the action does
+    if (_hovered && _hintText) {
+      ctx.fillStyle = 'rgba(200,190,170,0.65)';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('\u25b6 click', boxX + boxW / 2, boxY + BOX_H + 16);
+      ctx.fillText(_hintText, boxX + boxW / 2, boxY + BOX_H + 16);
     }
 
     ctx.restore();

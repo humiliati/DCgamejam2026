@@ -22,7 +22,7 @@ var DragDrop = (function () {
   'use strict';
 
   // ── Constants ────────────────────────────────────────────────────
-  var DEAD_ZONE     = 4;     // px before drag activates
+  var DEAD_ZONE     = 10;    // px before drag activates (Magic Remote gyro jitter tolerance)
   var GHOST_ALPHA   = 0.85;
   var GHOST_SCALE   = 1.1;
   var GHOST_FONT    = '28px monospace';

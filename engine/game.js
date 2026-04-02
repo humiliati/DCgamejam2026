@@ -54,6 +54,17 @@ var Game = (function () {
   var _gateUnlocked = false;       // Has the player retrieved their work keys?
   var _dispatcherSpawnId = 'npc_dispatcher_gate';  // Stable entity id
 
+  // ── Dispatcher choreography state (§11d / DOC-51) ────────────
+  var _dispatcherPhase = 'idle';   // idle → spawned → barking → rushing → grabbing → dialogue → done
+  var _dispatcherEntity = null;    // Reference to the dispatcher enemy entity
+  var _dispatcherRushTimer = 0;    // Ms until next rush step
+  var _dispatcherBarkTimer = 0;    // Ms until grab after bark
+  var DISPATCHER_RUSH_STEP_MS = 100;   // Move 1 tile every 100ms (10x normal speed)
+  var DISPATCHER_BARK_DELAY_MS = 800;  // Pause after bark before rushing
+  var DISPATCHER_GRAB_RANGE = 2;       // Tiles away to trigger grab
+  var DISPATCHER_TRIGGER_RANGE = 7;    // Tiles from gate door to trigger sequence
+  var DISPATCHER_SPAWN_BEHIND = 6;     // Tiles behind player to spawn
+
   // ── Ambient bark timer (Floor 1 morning) ─────────────────────────
   // When the player first arrives at Floor 1 (The Promenade) we fire
   // ambient townsperson barks on a loose interval to populate the world
@@ -412,7 +423,23 @@ var Game = (function () {
           } else if (hit.action === 'incinerator') {
             _incinerateFromFocus();
           } else if (hit.action === 'warp' && hit.warpTarget) {
-            _warpToFloor(hit.warpTarget);
+            // §9f: Confirm dialog before warping
+            var _wt = hit.warpTarget;
+            if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+              var flId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+              var dpt  = flId ? flId.split('.').length : 1;
+              var msg  = dpt >= 3
+                ? i18n.t('dragonfire.warp_confirm_dungeon', 'Leave this dungeon? Progress will be saved.')
+                : i18n.t('dragonfire.warp_confirm_home', 'Warp home? You can return here later.');
+              DialogBox.show({
+                text: msg,
+                speaker: '🐉',
+                instant: true,
+                buttons: [{ label: i18n.t('ui.confirm', 'Yes'), cb: function () { _warpToFloor(_wt); } }]
+              });
+            } else {
+              _warpToFloor(_wt);
+            }
           } else if (hit.action === 'resume') {
             // Return to Game / Close menu
             if (typeof MenuBox !== 'undefined') MenuBox.close();
@@ -587,6 +614,15 @@ var Game = (function () {
         DayCycle.setPaused(_dayCyclePausedBeforeMenu);
       }
 
+      // §7f: Morning recap monologue after bonfire rest menu closes
+      if (typeof HazardSystem !== 'undefined' && HazardSystem.consumeMorningRecap &&
+          HazardSystem.consumeMorningRecap()) {
+        if (typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
+          MonologuePeek.play('morning_recap', { delay: 800, cameraPreset: 'morning_recap' });
+        }
+        _updateDayCounter();
+      }
+
       // MenuBox handles its own fold-down via onClose callback.
       // Only force-close if it's still fully open (not already folding).
       if (MenuBox.isFullyOpen()) MenuBox.close();
@@ -743,9 +779,10 @@ var Game = (function () {
         }
       });
 
-      // ── Tired trigger at 21:00 — warning + WELL_RESTED→TIRED transition ──
+      // ── Tired trigger at 19:00 (7pm) — warning + WELL_RESTED→TIRED transition ──
+      // TIRED starts at nightfall. If player isn't in bed by midnight, no WELL_RESTED.
       DayCycle.setOnTired(function (day) {
-        console.log('[Game] Tired trigger at 21:00 on day ' + day);
+        console.log('[Game] Tired trigger at 19:00 on day ' + day);
 
         // Transition WELL_RESTED → TIRED (paired effect)
         if (typeof StatusEffect !== 'undefined') {
@@ -1676,6 +1713,22 @@ var Game = (function () {
    * hand-rolled here because it has gate-state logic (gateUnlocked flag)
    * that runs before NpcSystem is fully wired for conditional spawns.
    */
+  /**
+   * Spawn the Dispatcher gate NPC in a hidden holding position.
+   *
+   * The dispatcher does NOT block the gate passage initially. Instead,
+   * it waits until the player crosses a proximity threshold (~7 tiles
+   * from the gate door), then spawns behind the player, barks, and
+   * rush-approaches for the grab sequence.
+   *
+   * Choreography (§11d / DOC-51):
+   *   1. Player crosses proximity threshold → _dispatcherPhase = 'spawned'
+   *   2. Dispatcher appears behind player (opposite facing direction, 6 tiles back)
+   *   3. Bark: "HEY [player class]!" → _dispatcherPhase = 'barking'
+   *   4. After delay → rush toward player at 10x speed → _dispatcherPhase = 'rushing'
+   *   5. Within grab range → CinematicCamera.start('dispatcher_grab') + forced 180° turn
+   *   6. → _dispatcherPhase = 'grabbing' → dialogue tree opens
+   */
   function _spawnDispatcherGate() {
     var enemies = FloorManager.getEnemies();
     // Guard: don't double-spawn
@@ -1687,97 +1740,446 @@ var Game = (function () {
       ? NpcComposer.getVendorPreset('dispatcher')
       : null;
 
-    enemies.push({
+    // Holding position: far corner, invisible until proximity trigger activates
+    var holdX = 1;
+    var holdY = 1;
+
+    var entity = {
       id:          _dispatcherSpawnId,
-      x:           12,  // Near Coral Bazaar entrance on Floor 1 (40×30 grid)
-      y:           5,
+      x:           holdX,
+      y:           holdY,
       name:        'Dispatcher',
       emoji:       stack ? stack.head : '🐉',
       stack:       stack,
       type:        'dispatcher',
-      hp:          999,  // Invulnerable — can't be fought
+      hp:          999,
       maxHp:       999,
       str:         0,
       facing:      'south',
       awareness:   0,
       friendly:    true,
       nonLethal:   true,
-      blocksMovement: true,   // Prevents the player from stepping onto tile
+      blocksMovement: false,  // Does NOT block passage — grab sequence handles gating
+      _hidden:     true,      // Raycaster skips hidden entities
       tags:        ['gate_npc', 'dispatcher']
-    });
+    };
 
-    console.log('[Game] Dispatcher gate NPC spawned at (5,2) on Floor 1');
+    enemies.push(entity);
+    _dispatcherEntity = entity;
+    _dispatcherPhase = 'idle';
+
+    console.log('[Game] Dispatcher gate NPC spawned in holding position — awaiting proximity trigger');
   }
 
   /**
-   * Dispatcher gate dialogue — 3-branch Morrowind-style conversation.
+   * Find the gate door position on Floor 1 dynamically.
+   * Scans for STAIRS_DN or DOOR tiles. Blockout-agnostic — works on any layout.
+   * Falls back to configurable default if no suitable tile found.
+   * @returns {{x:number, y:number}|null}
+   */
+  function _findGateDoorPos() {
+    var floorData = FloorManager.getFloorData();
+    if (!floorData || !floorData.grid) return null;
+
+    // Scan grid for the gate tile (STAIRS_DN leads to Floor 2)
+    for (var gy = 0; gy < floorData.gridH; gy++) {
+      for (var gx = 0; gx < floorData.gridW; gx++) {
+        var tile = floorData.grid[gy][gx];
+        if (tile === TILES.STAIRS_DN || tile === TILES.BOSS_DOOR) {
+          return { x: gx, y: gy };
+        }
+      }
+    }
+    // Fallback: check DOOR tiles (gate might use generic door)
+    for (var dy = 0; dy < floorData.gridH; dy++) {
+      for (var dx = 0; dx < floorData.gridW; dx++) {
+        if (floorData.grid[dy][dx] === TILES.DOOR) {
+          return { x: dx, y: dy };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find a walkable tile behind the player (opposite their facing direction).
+   * Searches outward from ideal distance, falls back to nearest walkable.
+   * Blockout-agnostic — clamps to grid bounds and checks walkability.
+   * @param {number} idealDist - Desired distance behind player
+   * @returns {{x:number, y:number}}
+   */
+  function _findSpawnBehind(idealDist) {
+    var floorData = FloorManager.getFloorData();
+    var pp = Player.getPos();
+    var dir = Player.getDir();
+
+    // Opposite of player's facing direction
+    // DX/DY: 0=East(+x), 1=South(+y), 2=West(-x), 3=North(-y)
+    var oppositeDir = (dir + 2) % 4;
+    var bdx = MC.DX[oppositeDir];
+    var bdy = MC.DY[oppositeDir];
+
+    // Try ideal distance first, then shrink until walkable
+    for (var dist = idealDist; dist >= 2; dist--) {
+      var tx = pp.x + bdx * dist;
+      var ty = pp.y + bdy * dist;
+
+      // Clamp to grid
+      if (floorData && floorData.grid) {
+        tx = Math.max(1, Math.min(floorData.gridW - 2, tx));
+        ty = Math.max(1, Math.min(floorData.gridH - 2, ty));
+      }
+
+      // Check walkable
+      if (floorData && floorData.grid && floorData.grid[ty] &&
+          TILES.isWalkable(floorData.grid[ty][tx])) {
+        return { x: tx, y: ty };
+      }
+    }
+
+    // Last resort: spawn adjacent to player (any walkable neighbor)
+    var dirs = [0, 1, 2, 3];
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = pp.x + MC.DX[dirs[d]] * 2;
+      var ny = pp.y + MC.DY[dirs[d]] * 2;
+      if (floorData && floorData.grid && floorData.grid[ny] &&
+          TILES.isWalkable(floorData.grid[ny][nx])) {
+        return { x: nx, y: ny };
+      }
+    }
+
+    // Absolute fallback
+    return { x: pp.x, y: pp.y + 2 };
+  }
+
+  /**
+   * Tick the dispatcher choreography state machine.
+   * Called every frame from the gameplay update when on Floor 1 and gate is locked.
    *
-   * Branch depends on gate state context:
-   *   1. Player hasn't been home yet → "Where's my bunk?" (standard redirect)
-   *   2. Player has keys → "I have the key" (skip fetch, unlock immediately)
-   *   3. Nudge on subsequent bumps → shorter redirect
+   * Blockout-agnostic: finds gate dynamically, spawns relative to player,
+   * rush-walks using grid pathfinding with wall checks.
+   *
+   * @param {number} dt - Frame delta in milliseconds
+   */
+  function _tickDispatcherChoreography(dt) {
+    if (_gateUnlocked || !_dispatcherEntity) return;
+    if (FloorManager.getFloor() !== '1') return;
+
+    var pp = Player.getPos();
+    var floorData = FloorManager.getFloorData();
+
+    switch (_dispatcherPhase) {
+
+      case 'idle': {
+        // Check proximity to gate door
+        var gatePos = _findGateDoorPos();
+        if (!gatePos) return;
+
+        var gdx = pp.x - gatePos.x;
+        var gdy = pp.y - gatePos.y;
+        var gateDist = Math.sqrt(gdx * gdx + gdy * gdy);
+
+        if (gateDist <= DISPATCHER_TRIGGER_RANGE) {
+          // ── Activate: spawn behind player ──
+          var spawnPos = _findSpawnBehind(DISPATCHER_SPAWN_BEHIND);
+          _dispatcherEntity.x = spawnPos.x;
+          _dispatcherEntity.y = spawnPos.y;
+          _dispatcherEntity._hidden = false;
+
+          // Face toward player
+          var sdx = pp.x - spawnPos.x;
+          var sdy = pp.y - spawnPos.y;
+          if (Math.abs(sdx) >= Math.abs(sdy)) {
+            _dispatcherEntity.facing = sdx > 0 ? 'east' : 'west';
+          } else {
+            _dispatcherEntity.facing = sdy > 0 ? 'south' : 'north';
+          }
+
+          _dispatcherPhase = 'barking';
+          _dispatcherBarkTimer = DISPATCHER_BARK_DELAY_MS;
+
+          // ── Opening bark: "HEY [player class]!" ──
+          var className = '';
+          if (typeof Player !== 'undefined' && Player.state) {
+            className = Player.state().avatarName || Player.state().className || 'Gleaner';
+          }
+          if (!className) className = 'Gleaner';
+          var barkText = 'HEY! ' + className.toUpperCase() + '!';
+
+          if (typeof BarkLibrary !== 'undefined' && BarkLibrary.fire) {
+            BarkLibrary.fire('npc.dispatcher.hail', { fallback: barkText });
+          } else if (typeof Toast !== 'undefined') {
+            Toast.show('🐉 ' + barkText, 'warning');
+          }
+
+          // Voice chirp (loud, authoritative)
+          if (typeof AudioSystem !== 'undefined') {
+            AudioSystem.play('ui-blop', { volume: 0.6, playbackRate: 0.75 });
+          }
+
+          console.log('[Game] Dispatcher activated — spawned at (' + spawnPos.x + ',' + spawnPos.y +
+                      ') behind player. Gate dist=' + gateDist.toFixed(1));
+        }
+        break;
+      }
+
+      case 'barking': {
+        // Wait for bark to land, then start rushing
+        _dispatcherBarkTimer -= dt;
+        if (_dispatcherBarkTimer <= 0) {
+          _dispatcherPhase = 'rushing';
+          _dispatcherRushTimer = 0;
+
+          // Second bark while approaching
+          var className2 = '';
+          if (typeof Player !== 'undefined' && Player.state) {
+            className2 = Player.state().avatarName || Player.state().className || 'Gleaner';
+          }
+          if (!className2) className2 = 'Gleaner';
+          if (typeof BarkLibrary !== 'undefined' && BarkLibrary.fire) {
+            BarkLibrary.fire('npc.dispatcher.hail2', { fallback: className2.toUpperCase() + '!' });
+          }
+
+          console.log('[Game] Dispatcher rushing toward player');
+        }
+        break;
+      }
+
+      case 'rushing': {
+        // Rush toward player at high speed
+        _dispatcherRushTimer -= dt;
+        if (_dispatcherRushTimer > 0) break;
+        _dispatcherRushTimer = DISPATCHER_RUSH_STEP_MS;
+
+        var dx = pp.x - _dispatcherEntity.x;
+        var dy = pp.y - _dispatcherEntity.y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist <= DISPATCHER_GRAB_RANGE) {
+          // ── Within grab range — trigger cinematic ──
+          _dispatcherPhase = 'grabbing';
+          _dispatcherEntity.blocksMovement = true; // Now blocks passage
+
+          // Calculate angle from player to dispatcher (for forced turn)
+          var angleToDisp = Math.atan2(
+            _dispatcherEntity.y - pp.y,
+            _dispatcherEntity.x - pp.x
+          );
+
+          // Force player to face the dispatcher
+          var targetDir = (typeof Player !== 'undefined' && Player.radianToDir)
+            ? Player.radianToDir(angleToDisp)
+            : MC.DIR_SOUTH;
+          MC.startTurn(targetDir);
+          Player.setDir(targetDir);
+
+          // NPC faces player
+          if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
+            NpcSystem.engageTalk(_dispatcherEntity);
+          }
+
+          // ── CinematicCamera: letterbox + input lock ──
+          if (typeof CinematicCamera !== 'undefined') {
+            CinematicCamera.start('dispatcher_grab', {
+              focusAngle: angleToDisp,
+              onMidpoint: function () {
+                // Bars at full height → open dialogue
+                _showDispatcherGateDialog();
+              }
+            });
+          } else {
+            // Fallback: no camera, just show dialogue
+            _showDispatcherGateDialog();
+          }
+
+          console.log('[Game] Dispatcher grab! Player forced to face dir=' + targetDir +
+                      ' | CinematicCamera=' + (typeof CinematicCamera !== 'undefined'));
+          break;
+        }
+
+        // ── Move one step toward player (with wall checks) ──
+        var stepDx = 0, stepDy = 0;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          stepDx = dx > 0 ? 1 : -1;
+        } else {
+          stepDy = dy > 0 ? 1 : -1;
+        }
+
+        var nx = _dispatcherEntity.x + stepDx;
+        var ny = _dispatcherEntity.y + stepDy;
+
+        // Wall check
+        var blocked = false;
+        if (floorData && floorData.grid && floorData.grid[ny] && floorData.grid[ny][nx] !== undefined) {
+          if (!TILES.isWalkable(floorData.grid[ny][nx])) blocked = true;
+        }
+
+        if (!blocked) {
+          _dispatcherEntity.x = nx;
+          _dispatcherEntity.y = ny;
+
+          // Update facing
+          if      (stepDx > 0) _dispatcherEntity.facing = 'east';
+          else if (stepDx < 0) _dispatcherEntity.facing = 'west';
+          else if (stepDy > 0) _dispatcherEntity.facing = 'south';
+          else if (stepDy < 0) _dispatcherEntity.facing = 'north';
+        } else {
+          // Try perpendicular step to navigate around walls
+          var altDx = 0, altDy = 0;
+          if (stepDx !== 0) { altDy = dy > 0 ? 1 : (dy < 0 ? -1 : 0); }
+          else              { altDx = dx > 0 ? 1 : (dx < 0 ? -1 : 0); }
+
+          var ax = _dispatcherEntity.x + altDx;
+          var ay = _dispatcherEntity.y + altDy;
+          if (floorData && floorData.grid && floorData.grid[ay] &&
+              TILES.isWalkable(floorData.grid[ay][ax])) {
+            _dispatcherEntity.x = ax;
+            _dispatcherEntity.y = ay;
+            if      (altDx > 0) _dispatcherEntity.facing = 'east';
+            else if (altDx < 0) _dispatcherEntity.facing = 'west';
+            else if (altDy > 0) _dispatcherEntity.facing = 'south';
+            else if (altDy < 0) _dispatcherEntity.facing = 'north';
+          }
+        }
+        break;
+      }
+
+      case 'grabbing':
+        // Waiting for dialogue to finish (managed by _showDispatcherGateDialog onClose)
+        break;
+
+      case 'done':
+        // Sequence complete — dispatcher removed by _onPickupWorkKeys or stays as gatekeeper
+        break;
+    }
+  }
+
+  /**
+   * Dispatcher gate dialogue — full Morrowind-style branching tree.
+   *
+   * First encounter (grab sequence):
+   *   Grab bark → "Oh you don't like when I patronize..." → 3 choices
+   *   [Who are you?] → reveals Department/clock → 2 more choices
+   *   [What keys?] → explains key location
+   *   [Where did FACTION hit?] → reveals dungeon target
+   *   [Who am I supposed to be?] → callsign + class ribbing
+   *
+   * Subsequent bumps: shorter redirect with "have keys" skip option.
+   *
+   * Text wrapping: DialogBox._wrapText() handles long lines dynamically.
+   * At 13px monospace in a ~428px box, lines wrap at ~33 chars. Long
+   * dialogue is fine — it just flows to multiple lines.
    */
   var _dispatcherDialogShown = false;
 
   function _showDispatcherGateDialog() {
     if (typeof DialogBox === 'undefined') return;
 
-    // Build choices based on whether the player knows the route
-    var choices = [];
     var firstTime = !_dispatcherDialogShown;
     _dispatcherDialogShown = true;
 
-    if (firstTime) {
-      // First encounter — full introduction
+    // Player identity tokens for dialogue
+    var ps = (typeof Player !== 'undefined' && Player.state) ? Player.state() : {};
+    var playerClass = ps.avatarName || ps.className || 'Gleaner';
+    var callsign = ps.callsign || 'Operative';
+    // TODO: wire faction name + suit symbol from current hero cycle
+    var factionName = '\u2660 Guild';
+
+    // Callback to close cinematic after dialogue ends
+    var _closeCinematic = function () {
+      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
+        CinematicCamera.close();
+      }
+      _dispatcherPhase = 'done';
+    };
+
+    // ── Shared final redirect (all branches end here) ──
+    var _showKeyRedirect = function () {
       DialogBox.show({
         speaker:  'Dispatcher',
         portrait: '\uD83D\uDC09',
-        text:     'Hold up, operative. Gate\'s locked till you\'re properly checked in. You need your work keys \u2014 they\'re at your bunk.',
+        text:     'Your keys are at the BnB. Head home, grab them, unlock the floor, and let the hazmat crew in. Go.',
+        priority: 3,
+        onClose: function () {
+          _closeCinematic();
+          if (typeof Toast !== 'undefined') {
+            Toast.show('\uD83D\uDDDD Go home and get your work keys', 'info');
+          }
+        }
+      });
+    };
+
+    if (firstTime) {
+      // ── GRAB DIALOGUE — first encounter ──
+      DialogBox.show({
+        speaker:  'Dispatcher',
+        portrait: '\uD83D\uDC09',
+        text:     'Oh, you don\'t like when I patronize your delusions of grandeur, ' + callsign + '? Go get your keys from the BnB and unlock the floor so the hazmat crew can get in.',
+        priority: 3,
         choices:  [
-          { label: 'Where\'s my bunk?' },
-          { label: 'I already have the key' },
-          { label: 'I heard it\'s unlocked...' }
+          { label: 'Who are you?' },
+          { label: 'What keys?' },
+          { label: 'Where did ' + factionName + ' hit this time?' }
         ],
         onChoice: function (idx) {
           if (idx === 0) {
-            // Standard redirect to home
+            // ── [Who are you?] ──
             DialogBox.show({
               speaker:  'Dispatcher',
               portrait: '\uD83D\uDC09',
-              text:     'Floor 1.6 \u2014 head east past the inn, look for the Gleaner\'s mark on the door. Keys are in the chest by the wall. Don\'t take long.',
-              onClose: function () {
-                if (typeof Toast !== 'undefined') {
-                  Toast.show('\uD83D\uDDDD Go home (1.6) and get your work keys', 'info');
+              text:     'I\'m who the Department assigned to manage this region. See that clock in the top right of your screen?',
+              priority: 3,
+              choices:  [
+                { label: 'Who am I supposed to be?' },
+                { label: 'What keys?' },
+                { label: 'Where did ' + factionName + ' hit this time?' }
+              ],
+              onChoice: function (idx2) {
+                if (idx2 === 0) {
+                  // ── [Who am I supposed to be?] ──
+                  DialogBox.show({
+                    speaker:  'Dispatcher',
+                    portrait: '\uD83D\uDC09',
+                    text:     'You\'re supposed to go home and get your keys, unlock the door. Your file says you\'ve been assigned ' + callsign + ' and like to pretend you\'re a ' + playerClass + ' instead of working.',
+                    priority: 3,
+                    onClose: _showKeyRedirect
+                  });
+                } else if (idx2 === 1) {
+                  _showKeyRedirect();
+                } else {
+                  // ── [Where did FACTION hit?] from who-are-you branch ──
+                  DialogBox.show({
+                    speaker:  'Dispatcher',
+                    portrait: '\uD83D\uDC09',
+                    text:     'Lower floors. The usual mess. You\'ll see when you get down there \u2014 after you get your keys.',
+                    priority: 3,
+                    onClose: _showKeyRedirect
+                  });
                 }
               }
             });
           } else if (idx === 1) {
-            // Skip fetch — unlock immediately if they somehow have the keys
-            // (edge case: they went home first via alternate path)
-            DialogBox.show({
-              speaker:  'Dispatcher',
-              portrait: '\uD83D\uDC09',
-              text:     'Let me see... huh. Right you are. Gate\'s open, Gleaner. Try not to die on your first day.',
-              onClose: function () {
-                _onPickupWorkKeys();
-              }
-            });
+            // ── [What keys?] ──
+            _showKeyRedirect();
           } else {
-            // Flavor skip — still sends them to get keys, with personality
+            // ── [Where did FACTION hit this time?] ──
             DialogBox.show({
               speaker:  'Dispatcher',
               portrait: '\uD83D\uDC09',
-              text:     'Heard wrong. Rules are rules \u2014 no key, no entry. Go grab it from your bunk. East side, past the inn.'
+              text:     'Lower floors. The usual mess. You\'ll see when you get down there \u2014 after you get your keys.',
+              priority: 3,
+              onClose: _showKeyRedirect
             });
           }
         }
       });
     } else {
-      // Return bumps — shorter nudge
+      // ── RETURN BUMPS — shorter redirect ──
       DialogBox.show({
         speaker:  'Dispatcher',
         portrait: '\uD83D\uDC09',
-        text:     'Still here? Your keys are at home \u2014 Floor 1.6, east side. Get moving.',
+        text:     'Still here, ' + callsign + '? Your keys are at home. Get moving.',
+        priority: 3,
         choices:  [
           { label: 'On my way' },
           { label: 'Actually, I have them now' }
@@ -1788,10 +2190,14 @@ var Game = (function () {
               speaker:  'Dispatcher',
               portrait: '\uD83D\uDC09',
               text:     'About time. Gate\'s open. Watch yourself down there.',
+              priority: 3,
               onClose: function () {
+                _closeCinematic();
                 _onPickupWorkKeys();
               }
             });
+          } else {
+            _closeCinematic();
           }
         }
       });
@@ -1986,7 +2392,7 @@ var Game = (function () {
    * player sleeps on the porch at depth-1 (exterior), so the clock
    * is NOT paused and advanceTime works normally.
    *
-   * Grants WELL_RESTED if sleeping before 23:00.
+   * Grants WELL_RESTED if in bed before midnight (sleepHour >= 6).
    */
   function _doHomeDoorRest() {
     var sleepHour = (typeof DayCycle !== 'undefined') ? DayCycle.getHour() : 0;
@@ -2007,8 +2413,10 @@ var Game = (function () {
             StatusEffect.remove('TIRED', 'manual');
           }
 
-          // Grant WELL_RESTED if slept before 23:00
-          if (sleepHour < 23 && typeof StatusEffect !== 'undefined') {
+          // Grant WELL_RESTED if in bed before midnight
+          // sleepHour >= 6 means the player went to bed during the day/evening
+          // (not in the 00:00–05:59 post-midnight zone = stayed up too late)
+          if (sleepHour >= 6 && typeof StatusEffect !== 'undefined') {
             StatusEffect.apply('WELL_RESTED');
           }
 
@@ -2025,7 +2433,7 @@ var Game = (function () {
         onComplete: function () {
           _updateDayCounter();
 
-          if (sleepHour < 23 && typeof Toast !== 'undefined') {
+          if (sleepHour >= 6 && typeof Toast !== 'undefined') {
             Toast.show('\u2600 Well rested! Ready for the day.', 'buff');
           } else if (typeof Toast !== 'undefined') {
             Toast.show('\u2615 Late night... but at least you made it home.', 'info');
@@ -2056,8 +2464,8 @@ var Game = (function () {
   var _dayCounterEl = null;
 
   // ── Week-strip widget config ───────────────────────────────────
-  // Day abbreviations and dungeon suit symbols per hero-cycle day
-  var _WEEK_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  // Day abbreviations — Monday-first to match DayCycle (Day 0 = Monday)
+  var _WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   // Suit symbols for hero-day indicators (each dungeon gets a color+suit)
   var _DUNGEON_SUITS = [
     { sym: '\u2660', color: '#8888ff' },  // ♠ spades — blue dungeon
@@ -2088,8 +2496,14 @@ var Game = (function () {
   }
 
   /**
-   * Update the week-strip widget — [S M ♠ W T F S] style display.
-   * Current day highlighted and bobbing. Hero days show suit symbol.
+   * Update the week-strip widget — [M T ♠ T F S S] style display.
+   * Monday-first (Day 0 = Monday, matching DayCycle).
+   *
+   * Visual states per node:
+   *   Past:    dim text, no background — already lived through
+   *   Today:   bold, bright, bobbing, lit background — "you are here"
+   *   Future:  medium text, no background — days ahead
+   *   Hero:    suit symbol in suit color (past=dimmed, today=gold, future=vivid)
    */
   function _updateDayCounter() {
     if (!_dayCounterEl) return;
@@ -2100,43 +2514,71 @@ var Game = (function () {
     var weekDayIndex = day % 7;
     var isHero = DayCycle.isHeroDay();
     var timeStr = DayCycle.getTimeString ? DayCycle.getTimeString() : '06:00';
+    var phase = DayCycle.getPhase ? DayCycle.getPhase() : 'morning';
 
     var html = '';
 
-    // Build 7-day strip
+    // Build 7-day strip (Monday-first)
     for (var i = 0; i < 7; i++) {
       var dayNum = day - weekDayIndex + i; // absolute day number for this slot
       var isToday = (i === weekDayIndex);
-      var isHeroSlot = (dayNum % heroInterval === 0);
-      var dungeonIdx = Math.floor(dayNum / heroInterval) % _DUNGEON_SUITS.length;
+      var isPast = (i < weekDayIndex);
+      var isHeroSlot = (dayNum >= 0 && dayNum % heroInterval === 0);
+      var dungeonIdx = Math.floor(Math.max(0, dayNum) / heroInterval) % _DUNGEON_SUITS.length;
 
       var label = _WEEK_DAYS[i];
-      var nodeColor = '#8a8068';
-      var nodeStyle = '';
+      var nodeColor, nodeStyle, bg, fontSize, fontWeight, opacity;
 
       if (isHeroSlot) {
         // Show suit symbol instead of day letter
         label = _DUNGEON_SUITS[dungeonIdx].sym;
-        nodeColor = _DUNGEON_SUITS[dungeonIdx].color;
       }
 
       if (isToday) {
+        // ── TODAY: bright, bold, bobbing, lit background ──
         nodeColor = isHero ? '#f0c040' : '#ffe8a0';
-        nodeStyle = 'animation:day-bob 1.2s ease-in-out infinite;font-weight:900;';
+        fontWeight = '900';
+        fontSize = '14px';
+        bg = 'rgba(255,255,255,0.15)';
+        opacity = '1';
+        nodeStyle = 'animation:day-bob 1.2s ease-in-out infinite;';
+      } else if (isPast) {
+        // ── PAST: dim, struck-through feel ──
+        nodeColor = isHeroSlot ? _DUNGEON_SUITS[dungeonIdx].color : '#5a5040';
+        fontWeight = '400';
+        fontSize = '10px';
+        bg = 'transparent';
+        opacity = isHeroSlot ? '0.45' : '0.5';
+        nodeStyle = '';
+      } else {
+        // ── FUTURE: medium brightness ──
+        nodeColor = isHeroSlot ? _DUNGEON_SUITS[dungeonIdx].color : '#8a8068';
+        fontWeight = isHeroSlot ? '700' : '500';
+        fontSize = '11px';
+        bg = 'transparent';
+        opacity = isHeroSlot ? '0.85' : '0.75';
+        nodeStyle = '';
       }
 
-      var bg = isToday ? 'rgba(255,255,255,0.12)' : 'transparent';
       html += '<span style="display:inline-block;width:20px;height:22px;' +
               'text-align:center;line-height:22px;border-radius:3px;' +
               'color:' + nodeColor + ';background:' + bg + ';' +
-              'font-size:' + (isToday ? '14px' : '11px') + ';' +
-              nodeStyle + '" title="Day ' + (dayNum + 1) +
-              (isHeroSlot ? ' — HERO DAY' : '') + '">' +
+              'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
+              'opacity:' + opacity + ';' +
+              nodeStyle + '" title="' +
+              _WEEK_DAYS[i] + ' — Day ' + (dayNum + 1) +
+              (isHeroSlot ? ' (HERO DAY)' : '') +
+              (isToday ? ' [TODAY]' : '') + '">' +
               label + '</span>';
     }
 
+    // Phase-tinted separator dot
+    var dotColor = (phase === 'night' || phase === 'dusk') ? '#6688aa' : '#a09880';
+
     // Time display
-    html += '<span style="margin-left:6px;font-size:12px;color:#a09880;letter-spacing:0.05em">' +
+    html += '<span style="margin-left:4px;color:' + dotColor + ';font-size:10px">\u00B7</span>' +
+            '<span style="margin-left:4px;font-size:12px;color:#a09880;' +
+            'letter-spacing:0.05em;font-weight:600">' +
             timeStr + '</span>';
 
     _dayCounterEl.innerHTML = html;
@@ -2354,32 +2796,28 @@ var Game = (function () {
     // Cancel minimap auto-path on collision
     if (typeof MinimapNav !== 'undefined') MinimapNav.onBump();
 
-    // Check whether the bumped tile is the Dispatcher gate NPC
-    if (!_gateUnlocked) {
+    // Check whether the bumped tile is the Dispatcher gate NPC.
+    // The grab choreography handles the first encounter via proximity.
+    // Bumps only trigger dialogue for repeat encounters (phase = 'done').
+    if (!_gateUnlocked && _dispatcherEntity && _dispatcherPhase === 'done') {
       var pos = MC.getGridPos();
       var bumpX = pos.x + MC.DX[dir];
       var bumpY = pos.y + MC.DY[dir];
-      var enemies = FloorManager.getEnemies();
-      for (var i = 0; i < enemies.length; i++) {
-        var e = enemies[i];
-        if (e.id === _dispatcherSpawnId && e.x === bumpX && e.y === bumpY) {
-          // Turn dispatcher to face the player before showing dialog
-          if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
-            NpcSystem.engageTalk(e);
-          } else {
-            // Manual face-toward-player fallback
-            var pp = MC.getGridPos();
-            var ddx = pp.x - e.x;
-            var ddy = pp.y - e.y;
-            if (Math.abs(ddx) >= Math.abs(ddy)) {
-              e.facing = ddx > 0 ? 'east' : 'west';
-            } else {
-              e.facing = ddy > 0 ? 'south' : 'north';
-            }
-          }
-          _showDispatcherGateDialog();
-          break;
+      if (_dispatcherEntity.x === bumpX && _dispatcherEntity.y === bumpY) {
+        // Turn both NPC and player to face each other
+        if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
+          NpcSystem.engageTalk(_dispatcherEntity);
         }
+        // Turn player to face dispatcher
+        var ddx = _dispatcherEntity.x - pos.x;
+        var ddy = _dispatcherEntity.y - pos.y;
+        var bumpDir = (Math.abs(ddx) >= Math.abs(ddy))
+          ? (ddx > 0 ? MC.DIR_EAST : MC.DIR_WEST)
+          : (ddy > 0 ? MC.DIR_SOUTH : MC.DIR_NORTH);
+        MC.startTurn(bumpDir);
+        Player.setDir(bumpDir);
+
+        _showDispatcherGateDialog();
       }
     }
   }
@@ -3224,6 +3662,11 @@ var Game = (function () {
       );
     }
 
+    // Dispatcher grab choreography (Floor 1 gate sequence)
+    if (!_gateUnlocked && _dispatcherEntity && _dispatcherPhase !== 'done') {
+      _tickDispatcherChoreography(deltaMs);
+    }
+
     CombatBridge.checkEnemyAggro(p.x, p.y);
 
     // ── Fire crackle ambient (proximity-based) ──
@@ -3248,6 +3691,29 @@ var Game = (function () {
       if (nearestDist <= 3) {
         var vol = Math.max(0.1, 1 - nearestDist / 4);
         AudioSystem.play('fire_crackle', { volume: vol });
+      }
+    }
+
+    // ── §7e: Bonfire glow scales with time-of-day ──────────────
+    // Exterior bonfires glow brighter at night (beacon effect).
+    // Scale bonfire light intensity: base 0.9 at night → 0.4 at noon.
+    // Only on exterior floors (depth 1) where sun intensity matters.
+    _bonfireGlowTimer = (_bonfireGlowTimer || 0) + deltaMs;
+    if (_bonfireGlowTimer >= 5000) {
+      _bonfireGlowTimer = 0;
+      if (typeof DayCycle !== 'undefined' && typeof Lighting !== 'undefined') {
+        var floorDepth = floorData.floorId ? floorData.floorId.split('.').length : 1;
+        if (floorDepth === 1) {
+          var sunI = DayCycle.getSunIntensity();
+          // Night (sun=0) → intensity 0.95, Noon (sun=1) → intensity 0.4
+          var bonfireI = 0.4 + 0.55 * (1 - sunI);
+          var sources = Lighting.getSources();
+          for (var si = 0; si < sources.length; si++) {
+            if (sources[si].flickerType === 'bonfire') {
+              sources[si].intensity = bonfireI;
+            }
+          }
+        }
       }
     }
 
@@ -3467,6 +3933,7 @@ var Game = (function () {
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
       if (e.hp <= 0) continue;
+      if (e._hidden) continue;  // Dispatcher pre-grab: hidden until proximity trigger
       var aState = EnemyAI.getAwarenessState(e.awareness);
 
       // ── Smooth lerp: advance interpolation timer and compute render position ──

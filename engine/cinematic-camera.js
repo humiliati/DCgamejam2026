@@ -12,6 +12,7 @@
  *   - Morning recap (slow fade-in letterbox + text crawl)
  *   - Boss entrance (dramatic bars + camera shake)
  *   - Peek enhancement (bars during any peek interaction)
+ *   - Dragonfire dialogue (bonfire-triggered bark/dialogue/tutorialization)
  *
  * Renders directly on the game canvas AFTER raycaster, BEFORE HUD.
  * The module provides viewport insets that the raycaster can read
@@ -144,6 +145,23 @@ var CinematicCamera = (function () {
       lockInput: false,
       duration: 0,
       sfx: null
+    },
+
+    /**
+     * Dragonfire dialogue: medium bars, gentle FOV, input lock.
+     * Fired when a Dragonfire (bonfire) triggers a dialogue tree,
+     * bark dispatch, or tutorialization sequence through the fire.
+     * Camera focuses on the fire → dialogue system takes over.
+     * Similar feel to dispatcher_grab but without the forced 180 turn.
+     */
+    dragonfire_dialogue: {
+      barPct: 0.14,
+      barSpeed: 400,       // Medium slide — deliberate, not jarring
+      fovMult: 0.90,       // Slight zoom toward fire
+      focusSpeed: 1.5,     // Gentle focus drift to target
+      lockInput: true,
+      duration: 0,         // Controlled by dialogue system
+      sfx: null            // Fire crackle is already ambient
     }
   };
 

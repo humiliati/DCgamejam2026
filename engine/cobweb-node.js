@@ -263,15 +263,16 @@ var CobwebNode = (function () {
 
     ctx.save();
     ctx.globalAlpha = _promptAlpha;
-    ctx.font        = '12px monospace';
+    ctx.font        = 'bold 18px monospace';
 
     var keyW  = ctx.measureText(keyLbl).width;
+    ctx.font  = '18px monospace';
     var txtW  = ctx.measureText(' ' + full).width;
-    var PAD   = 14;
+    var PAD   = 20;
     var BOX_W = PAD * 2 + keyW + txtW;
-    var BOX_H = 28;
+    var BOX_H = 48;
     var BOX_X = (vpW - BOX_W) / 2;
-    var BOX_Y = vpH - 118;  // Sits above the standard InteractPrompt zone
+    var BOX_Y = vpH - 140;  // Sits above the standard InteractPrompt zone
 
     // Background panel
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
@@ -284,13 +285,15 @@ var CobwebNode = (function () {
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
     ctx.stroke();
 
-    // [OK] label (gold)
+    // [OK] label (gold, bold)
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
+    ctx.font         = 'bold 18px monospace';
     ctx.fillStyle    = '#f0d070';
     ctx.fillText(keyLbl, BOX_X + PAD, BOX_Y + BOX_H / 2);
 
     // Action text (pale)
+    ctx.font      = '18px monospace';
     ctx.fillStyle = '#d8d0c0';
     ctx.fillText(' ' + full, BOX_X + PAD + keyW, BOX_Y + BOX_H / 2);
 

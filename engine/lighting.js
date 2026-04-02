@@ -17,16 +17,20 @@ var Lighting = (function () {
   // Raycaster reads these via getTintRGB().
 
   var TINT = {
-    NONE:    0,   // Neutral white — player torch, electric ceiling lights
-    WARM:    1,   // Amber/orange — torches, bonfires, hearths, fire hazards
-    SICKLY:  2    // CRT green — terminals, data screens, sickly glow
+    NONE:           0,   // Neutral white — player torch, electric ceiling lights
+    WARM:           1,   // Amber/orange — torches, bonfires, hearths, fire hazards
+    SICKLY:         2,   // CRT green — terminals, data screens, sickly glow
+    DUNGEON_HEARTH: 3,   // Cool blue-grey — dungeon fire fighting cold stone
+    HOME_HEARTH:    4    // Golden amber — safe hearth, warm home glow
   };
 
   // Overlay RGB at full tint intensity (raycaster multiplies by tintMap value)
   var _TINT_RGB = [
     [0,  0,  0 ],   // NONE — darkness is pure black
     [40, 18, 4 ],   // WARM — amber shift in darkness
-    [8,  32, 12]    // SICKLY — green-tinted darkness
+    [8,  32, 12],   // SICKLY — green-tinted darkness
+    [12, 14, 28],   // DUNGEON_HEARTH — cold blue-grey base, fire barely wins
+    [50, 24, 6 ]    // HOME_HEARTH — golden amber, high R = safe/warm read
   ];
 
   // ── State ──────────────────────────────────────────────────────
@@ -46,9 +50,11 @@ var Lighting = (function () {
   function _resolveTint(v) {
     if (typeof v === 'number') return v;
     switch (v) {
-      case 'warm':    return TINT.WARM;
-      case 'sickly':  return TINT.SICKLY;
-      default:        return TINT.NONE;
+      case 'warm':           return TINT.WARM;
+      case 'sickly':         return TINT.SICKLY;
+      case 'dungeon_hearth': return TINT.DUNGEON_HEARTH;
+      case 'home_hearth':    return TINT.HOME_HEARTH;
+      default:               return TINT.NONE;
     }
   }
 
@@ -117,6 +123,12 @@ var Lighting = (function () {
         // Slow pulse ~1Hz ±10%, plus subtle fast shimmer
         return 0.90 + 0.10 * Math.sin(t * 6.28 + s)
                      + 0.03 * Math.sin(t * 31.4 + s * 2);
+      case 'hearth-dungeon':
+        // Nervous stutter — 5Hz primary + erratic secondary harmonic.
+        // Reads as a fire fighting a draft, unsafe and sputtering.
+        return 0.78 + 0.18 * Math.sin(t * 31.4 + s)
+                     + 0.06 * Math.sin(t * 47.1 + s * 3)
+                     + 0.04 * Math.sin(t * 11.0 + s * 7);
       case 'steady':
       case 'none':
       default:

@@ -450,6 +450,13 @@ var HeroSystem = (function () {
     _scriptedHero.y = next.y;
     _scriptedPathIdx++;
 
+    // Heroes smash through cobwebs
+    if (typeof CobwebSystem !== 'undefined') {
+      var cobFloor = (typeof FloorManager !== 'undefined')
+        ? FloorManager.getCurrentFloorId() : '';
+      CobwebSystem.onEntityMove(next.x, next.y, cobFloor);
+    }
+
     return null; // Still moving
   }
 

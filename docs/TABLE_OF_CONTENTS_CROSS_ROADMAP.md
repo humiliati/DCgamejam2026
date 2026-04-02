@@ -1,14 +1,164 @@
 # Dungeon Gleaner — Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-03-31
-**Jam Deadline**: April 5, 2026 (5 days remaining)
+**Created**: 2026-03-28 | **Updated**: 2026-04-02
+**Jam Deadline**: April 5, 2026 (3 days remaining)
 **Goal**: Somewhat playable prototype → debug, smooth, and raise with designer portals through final week
 
 ---
 
-## Master Document Index
+## Quick Reference — All Documents
 
-All five design documents, their scope, and section inventories. Each document now includes a **§ Cross-References** appendix that links back here and to sibling docs.
+Active and in-progress docs float to the top. Each entry links to its detailed section below.
+
+### 🔥 Active — Jam Sprint (Apr 2–5)
+
+| # | Document | Status | Folder |
+|---|----------|--------|--------|
+| DOC-32 | [UNIFIED_EXECUTION_ORDER.md (v3)](#doc-32-unified_execution_ordermd-v3) | 🟢 Sprint 0 ✅, Tracks A/B active | docs/ |
+| DOC-1 | [GAP_COVERAGE_TO_DEPLOYABILITY.md](#doc-1-gap_coverage_to_deployabilitymd) | 🟡 T0 ✅, T1 4/6, T2 0/6 | docs/ |
+| DOC-3 | [GONE_ROGUE_ASSET_UTILIZATION_ROADMAP.md](#doc-3-gone_rogue_asset_utilization_roadmapmd) | 🟢 Pass 1–3 ✅, Pass 4 post-jam | docs/ |
+| DOC-17 | [SKYBOX_ROADMAP.md (v2)](#doc-17-skybox_roadmapmd-v2) | 🟢 Ph 1–4 ✅, Ph 5 after F3 blockout | docs/ |
+| DOC-33 | [GAP_ANALYSIS.md](#doc-33-gap_analysismd) | 🟡 Living audit | docs/ |
+| DOC-35 | [DEBUG_NOTES_SCREENER.md](#doc-35-debug_notes_screenermd) | 🟡 Living checklist | docs/ |
+| DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | 🟡 Living debug log | docs/ |
+
+### 📐 Design Bibles & Core Loop
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-4 | [Biome Plan.html](#doc-4-biome-planhtml) | docs/ |
+| DOC-7 | [CORE_GAME_LOOP_AND_JUICE.md](#doc-7-core_game_loop_and_juicemd) | docs/ |
+| DOC-2 | [TUTORIAL_WORLD_ROADMAP.md](#doc-2-tutorial_world_roadmapmd) | docs/ |
+| DOC-13 | [STREET_CHRONICLES_NARRATIVE_OUTLINE.md](#doc-13-street_chronicles_narrative_outlinemd) | docs/ |
+| DOC-8 | [VISUAL_OVERHAUL.md](#doc-8-visual_overhaulmd) | docs/ |
+| DOC-34 | [UNIFIED_UI_OVERHAUL.md](#doc-34-unified_ui_overhaulmd) | docs/ |
+| DOC-27 | [JAM_COMPLIANCE.md](#doc-27-jam_compliancemd) | docs/ |
+
+### 🧱 Engine & Renderer Roadmaps
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-18 | [NLAYER_RAYCASTER_ROADMAP.md](#doc-18-nlayer_raycaster_roadmapmd) | docs/ |
+| DOC-14 | [TEXTURE_ROADMAP.md](#doc-14-texture_roadmapmd) | docs/ |
+| DOC-31a | [LIGHT_AND_TORCH_ROADMAP.md](#doc-31-light_and_torch_roadmapmd) | docs/ |
+| DOC-38 | [PLAYER_CONTROLLER_ROADMAP.md](#doc-38-player_controller_roadmapmd) | docs/ |
+| DOC-37 | [INPUT_CONTROLLER_ROADMAP.md](#doc-37-input_controller_roadmapmd) | docs/ |
+| DOC-19 | [DOOR_EFFECTS_ROADMAP.md](#doc-19-door_effects_roadmapmd) | docs/ |
+
+### 🎴 Card, Inventory & Combat
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-46 | [INVENTORY_CARD_MENU_REWORK.md](#doc-46-inventory_card_menu_reworkmd) | docs/ |
+| DOC-45 | [INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md](#doc-45-inventory_system_audit_and_roadmapmd) | docs/ |
+| DOC-26 | [UNIFIED_INVENTORY_METADATA_CONTRACT.md](#doc-26-unified_inventory_metadata_contractmd) | docs/ |
+| DOC-24 | [B5_INVENTORY_INTERACTION_DESIGN.md](#doc-24-b5_inventory_interaction_designmd) | docs/ |
+| DOC-25 | [B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md](#doc-25-b6_slot_wheel_and_transaction_layoutmd) | docs/ |
+| DOC-36 | [FACE2_INVENTORY_POLISH.md](#doc-36-face2_inventory_polishmd) | docs/ |
+| DOC-20 | [COMBAT_DRAG_SYSTEM.md](#doc-20-combat_drag_systemmd) | docs/ |
+| DOC-16 | [SUIT_SYSTEM_ROADMAP.md](#doc-16-suit_system_roadmapmd) | docs/ |
+
+### 🗺️ HUD, UI & Menus
+
+| # | Document | Folder | Status |
+|---|----------|--------|--------|
+| DOC-22 | [HUD_ROADMAP.md](#doc-22-hud_roadmapmd) | docs/ | Active |
+| DOC-23 | [UI_ROADMAP.md](#doc-23-ui_roadmapmd) | docs/ | Active |
+| DOC-21 | [GAME_FLOW_ROADMAP.md](#doc-21-game_flow_roadmapmd) | docs/ | Active |
+| DOC-32b | [TOOLTIP_BARK_ROADMAP.md](#doc-32-tooltip_bark_roadmapmd) | docs/ | Active |
+| DOC-12 | [PEEK_SYSTEM_ROADMAP.md](#doc-12-peek_system_roadmapmd) | docs/ | Active |
+| DOC-51 | [CINEMATIC_CAMERA_ROADMAP](#doc-51-cinematic-camera) | engine/cinematic-camera.js | Engine built, 3/7 presets wired |
+| DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | docs/ | Reference |
+
+**§ Cinematic Camera — cross-cutting wiring status (updated Apr 2, 2026)**
+
+CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, shake, focus angle override, input lock all coded. Turn-and-face ✅ fixed, clothes overlay ✅ fixed (per-slot tint via offscreen canvas).
+
+| Preset | Consumer | Wired? | Blocker |
+|--------|----------|--------|---------|
+| `combat_lock` | Combat encounter start | ✅ | CombatBridge._beginCombat() → start, _onCombatEnd() → close |
+| `dispatcher_grab` | NPC dispatcher → forced 180° + dialogue | ✅ | Proximity choreography + MC.startTurn() + Player.setDir() |
+| `monologue` | MonologuePeek intrusive thoughts | ❌ | Needs MonologuePeek.play() caller with specific sequence |
+| `morning_recap` | Bonfire dawn wake-up → day recap | ✅ | MonologuePeek.play() passes `cameraPreset: 'morning_recap'` (wide 22% bars, 1.05× FOV) |
+| `boss_entrance` | Boss chamber entry | ❌ | No boss rooms in jam build |
+| `peek` | Tile peek enhancement | ❌ | Needs PeekSystem integration |
+| `dragonfire_dialogue` | Dragonfire dialogue tree / bark dispatch | ⏸️ POST-JAM | Deferred — not needed for jam-submittable loop |
+
+**Jam priority (updated Apr 2):** ~~Fix turn-and-face~~ ✅ → ~~wire dispatcher_grab~~ ✅ → ~~wire morning_recap~~ ✅ → ~~combat_lock~~ ✅. 3/7 wired — remaining presets (dragonfire_dialogue, boss_entrance, peek) deferred to post-jam.
+
+### 🧹 Gleaner Systems (Cleaning, Restocking, Traps)
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-48 | [PRESSURE_WASHING_ROADMAP.md](#doc-48-pressure_washing_roadmapmd) | docs/ |
+| DOC-31b | [COBWEB_TRAP_STRATEGY_ROADMAP.md](#doc-31-cobweb_trap_strategy_roadmapmd) | docs/ |
+| DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ |
+| DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ |
+
+### 👤 NPCs, Barks & Audio
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-9 | [NPC_SYSTEM_ROADMAP.md](#doc-9-npc_system_roadmapmd) | docs/ |
+| DOC-11 | [NPC_FACTION_BOOK_AUDIT.md](#doc-11-npc_faction_book_auditmd) | docs/ |
+| DOC-10 | [COZY_INTERIORS_DESIGN.md](#doc-10-cozy_interiors_designmd) | docs/ |
+| DOC-6 | [AUDIO_ENGINE.md](#doc-6-audio_enginemd) | docs/ |
+| DOC-50 | [SPATIAL_AUDIO_BARK_ROADMAP.md](#doc-50-spatial_audio_bark_roadmapmd) | docs/ |
+| DOC-44 | [EYESONLYS_TOOLTIP_SPACE_CANON.md](#doc-44-eyesonlys_tooltip_space_canonmd) | docs/ |
+
+### 🎨 Sprites & Visual Assets
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-15 | [SPRITE_STACK_ROADMAP.md](#doc-15-sprite_stack_roadmapmd) | docs/ |
+| DOC-40 | [SPRITE_COMMISSIONING_MAP.md](#doc-40-sprite_commissioning_mapmd) | docs/ |
+| DOC-41 | [SPRITE_LIBRARY_PLAN.md](#doc-41-sprite_library_planmd) | docs/ |
+| DOC-42 | [SPRITE_STUB_ROADMAP.md](#doc-42-sprite_stub_roadmapmd) | docs/ |
+
+### 🏗️ Level Design & Blockouts
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-43 | [AGENT_BLOCKOUT_INSTRUCTIONS.md](#doc-43-agent_blockout_instructionsmd) | docs/ |
+| DOC-49 | [BLOCKOUT_ALIGNMENT.md](#doc-49-blockout_alignmentmd) | docs/ |
+| — | FLOOR0_BLOCKOUT.md | docs/ |
+| — | FLOOR1_BLOCKOUT.md | docs/ |
+| — | FLOOR2_BLOCKOUT.md | docs/ |
+| — | FLOOR3_BLOCKOUT.md | docs/ |
+
+### 🔀 EyesOnly Convergence & Legacy
+
+| # | Document | Folder |
+|---|----------|--------|
+| DOC-47 | [EYESONLY_3D_ROADMAP.md](#doc-47-eyesonly_3d_roadmapmd) | docs/ |
+| DOC-5 | [Dungeon_Gleaner_Base_Engine_Audit.docx](#doc-5-dungeon_gleaner_base_engine_auditdocx) | docs/ |
+| DOC-28 | [ROADMAP.md](#doc-28-roadmapmd) | docs/ |
+
+### 🐛 FIX_AND_BUGS/
+
+| Document | Folder |
+|----------|--------|
+| FIX_BONFIRE_BILLBOARD_SPRITES.md | docs/FIX_AND_BUGS/ |
+| FIX_CARD_DRAG_DROP.md | docs/FIX_AND_BUGS/ |
+| FIX_CARD_FAN_POSITION.md | docs/FIX_AND_BUGS/ |
+| FIX_DEBRIEF_CRT_STYLING.md | docs/FIX_AND_BUGS/ |
+| FIX_STATUS_BAR_EMOJI_AND_DECK.md | docs/FIX_AND_BUGS/ |
+| FIX_SUIT_SYMBOLS_IN_PORTHOLES.md | docs/FIX_AND_BUGS/ |
+| FIX_VIEWPORT_BLUR_SCOPING.md | docs/FIX_AND_BUGS/ |
+
+### 📦 Archive/ & Misc
+
+| Document | Folder |
+|----------|--------|
+| PRESSURE_WASHING_BRAINSTORM.md | docs/Archive/ |
+| CSS_TO_USE.md | docs/ |
+| MENU_INTERACTIONS_CATALOG.md | docs/ |
+
+---
+
+## Detailed Document Index
+
+All documents with scope summaries and section inventories. Each document now includes a **§ Cross-References** appendix that links back here and to sibling docs.
 
 ### DOC-1: GAP_COVERAGE_TO_DEPLOYABILITY.md
 > **Scope**: System inventory, bug fixes, gap analysis against EyesOnly patterns, and tiered execution to deployability.
@@ -57,7 +207,7 @@ All five design documents, their scope, and section inventories. Each document n
 | ✅ PORTED | 7 modules already running (rng, synergy, cards, enemy-ai, audio, splash, status) |
 | ✅ PORT NOW Complete | 6 extractions done (world-items, loot-tables, breakable-spawner, pickup, food, HOT) |
 | ✅ Found Complete | 3 already ported (overhead-animator, shop, loot-spill) |
-| **🔄 Pass 3 — Stealth** | stealth-system.js (2h), awareness-config.js (30min), minimap cones (✅ done) |
+| **✅ Pass 3 — Stealth** | stealth-system.js ✅, awareness-config.js ✅, minimap cones ✅ |
 | 🛠️ Post-Jam | pet-follower, puzzle-state |
 | ❌ Out of Scope | 15 modules (ARG, multiplayer, auth, constellation, etc.) |
 | Data File Status | items ✅, enemies ✅, loot-tables ✅, cards ✅, strings ✅ |
@@ -269,18 +419,23 @@ All five design documents, their scope, and section inventories. Each document n
 > **Scope**: Active debugging priorities — minimap embedding, floor label repositioning, battery display, NCH widget, bag menu.
 
 ### DOC-30: BONFIRE_POLISH_STEPS.md
-> **Scope**: Bonfire/hearth/fire visual polish roadmap. Covers: fire emoji sprite overlay (bobbing flame above rest tiles), crackle audio proximity system, bonfire visual distinction by depth (exterior campfire vs interior hearth vs dungeon hearth), debrief incinerator drag-drop integration, day/night cycle module stub, and smoke particle post-jam goals.
+> **Scope**: Bonfire & hearth interaction audit and polish roadmap. Covers: current-state audit of all bonfire interactions (waypoint, stash, rest, warp, incinerator), tile types (BONFIRE/HEARTH/BED), MenuBox bonfire context (4 faces), day/night cycle integration, visual distinction by depth tier, UI polish, waypoint/warp network expansion, and interaction differentiation (exterior campfire vs dungeon hearth vs home bed). Cross-references 10 related docs.
 
-| Section | Content |
-|---|---|
-| §1 Exterior Campfire Blockout | C-shape shrub ring, tent emoji | ✅ DONE |
-| §2 Dungeon Hearth | HEARTH tile in gen, biome textures | ✅ DONE |
-| §3 Fire Emoji Sprite Overlay | Bobbing 🔥 sprite, glow, scatter | Post-jam |
-| §4 Crackle Audio | Proximity loop, volume scaling | Stub ✅ |
-| §5 Media Asset Encoding | ffmpeg encode from EyesOnly | Manual |
-| §6 Debrief Incinerator | Refund alignment | ✅ DONE |
-| §7 Day/Night Cycle | timeFreeze, HUD, skybox lerp | Post-jam |
-| §8 Visual Distinction by Depth | Orange/amber/blue hearth variants | Post-jam |
+| Section | Content | Status |
+|---|---|---|
+| Current State Audit | Tile types, interaction flow, MenuBox faces, stash, incinerator, lighting, generation | Reference |
+| §1 Exterior Campfire Blockout | C-shape shrub ring, tent billboard, stone ring wall | ✅ DONE |
+| §2 Dungeon Hearth | HEARTH tile in gen, riverrock texture, warm glow | ✅ DONE |
+| §3 Fire Emoji Sprite Overlay | Bobbing 🔥 billboard sprite, glow, scatter sparks | Post-jam |
+| §4 Crackle Audio | `fire_crackle` proximity loop, volume scaling | Stub ✅ |
+| §5 Media Asset Encoding | ffmpeg encode from EyesOnly MEDIA_ASSETS | Manual |
+| §6 Debrief Incinerator | DragDrop zone, rarity refund, glow animation | ✅ DONE |
+| §7 Day/Night Cycle Integration | 6 tasks (7a–7f): rest-until-dawn (jam), WELL_RESTED/TIRED, glow scaling, morning recap, week-strip fix | ✅ COMPLETE |
+| §8 Visual Distinction by Depth | 6 tasks (8a–8f): 3 glow tiers (campfire/home/dungeon), nervous flicker, smoke/ember particles | Planned |
+| §9 Bonfire UI Polish | 7 tasks (9a–9g): animated fire emoji, status cleared/gained, waypoint toast, stash hints, warp confirm | Planned |
+| §10 Waypoint & Warp Network | Bonfire-to-bonfire warp, warp cost, minimap icons, discovery toast | Post-jam |
+| §11 Interaction Differentiation | Exterior vs dungeon vs home: time advance, WELL_RESTED, safety, unique verbs | Planned |
+| §12 Cross-References | 10 entries linking DOC-7, DOC-17, DOC-31a, DOC-14, DOC-21, DOC-2, DOC-10, DOC-46, DOC-6, DOC-50 | Reference |
 
 ### DOC-32: TOOLTIP_BARK_ROADMAP.md
 > **Scope**: Tooltip history system, NPC bark delivery, speech gesture rendering (KaomojiCapsule), depth-scaled bark radius, dialogue ping-pong, and post-jam tooltip space vision. References EyesOnly TOOLTIP_SPACE_CANON.md for production target.
@@ -414,6 +569,28 @@ All five design documents, their scope, and section inventories. Each document n
 | §6 Sprint 3 | Engine polish (loot, save/load, audio, proc-gen) |
 | §7 Sprint 4 | Cleaning loop wire (tool quality, torch system) |
 | §8 Sprint 5 | Narrative + ship (factions, conspiracy, Act 1 choice) |
+
+### DOC-51: CINEMATIC_CAMERA (engine/cinematic-camera.js)
+> **Scope**: OoT-inspired letterbox + focus lock system. Black bars slide in top/bottom, viewport narrows, FOV zooms, camera can shake or lock onto a target angle. Renders after raycaster, before HUD. 310 lines, 6 presets built, 0 fully wired. Cross-cutting — consumed by combat, NPC dialogue, MonologuePeek, Dragonfire bonfire, boss rooms, and peek system.
+
+| Section | Content | Status |
+|---|---|---|
+| Engine module | cinematic-camera.js — state machine, bar animation, FOV lerp, focus lerp, shake decay, auto-close | ✅ Built |
+| Preset: combat_lock | Fast bars (12%), slight FOV zoom, no input lock | ✅ Defined, ✅ **Wired** (CombatBridge._beginCombat → start, _onCombatEnd → close) |
+| Preset: dispatcher_grab | Medium bars (15%), forced turn, input lock, 3s duration | ✅ Defined, ✅ **Wired** (proximity choreography + forced turn) |
+| Preset: monologue | Thick bars (18%), slow slide, no camera move, input lock | ✅ Defined, ❌ Not wired |
+| Preset: morning_recap | Very thick bars (22%), dreamy FOV wide, input lock | ✅ Defined, ✅ Wired (game.js §7f → MonologuePeek) |
+| Preset: boss_entrance | Thick bars + shake (6px), fast slam, strong zoom | ✅ Defined, ❌ Not wired |
+| Preset: peek | Thin bars (8%), subtle FOV, no input lock | ✅ Defined, ❌ Not wired |
+| Preset: dragonfire_dialogue | **NEW** — Dragonfire triggers dialogue tree through fire | ❌ Not yet defined |
+| NPC turn-and-face | MC.startTurn() + Player.setDir() from grab choreography | ✅ **Fixed** — forced turn via MovementController, not camera focus angle |
+| NPC translucency | Clothes color overlay (per-slot tint via offscreen canvas + source-atop) | ✅ **Fixed** — per-slot tinting replaces full-stack overlay |
+
+**Blockers:** ~~NPC turn-and-face regression~~ FIXED. ~~Clothes overlay translucency~~ FIXED (per-slot tint). No remaining blockers for cinematic wiring.
+
+**Jam priority:** ~~Fix turn-and-face~~ ✅ → ~~wire dispatcher_grab to Tutorial gate 2~~ ✅ → ~~wire morning_recap to §7f flag~~ ✅ → ~~wire combat_lock~~ ✅. 3/7 wired — sufficient for jam.
+
+**Post-jam:** dragonfire_dialogue, boss_entrance, peek.
 
 ---
 

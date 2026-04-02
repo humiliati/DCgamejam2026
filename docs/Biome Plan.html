@@ -58,7 +58,7 @@
 <h1>Dungeon Gleaner &mdash; Biome Plan</h1>
 <p class="subtitle">
   Day 1 Designer Guide &mdash; DC Jam 2026 (Themes: Dragons &middot; Retrofuturism &middot; Rock-Paper-Scissors &middot; Cleaning Up the Hero's Mess)
-  <br>Repo: <code>github.com/humiliati/DCgamejam2026</code> &middot; Last updated: 2026-03-28 &middot; v5.0 (Gleaner Pivot + Suit System)
+  <br>Repo: <code>github.com/humiliati/DCgamejam2026</code> &middot; Last updated: 2026-04-02 &middot; v5.1 (Trademark scrub + Dragon lore alignment + Stale section flags)
 </p>
 
 <div class="rule">
@@ -96,18 +96,18 @@
 <!-- ================================================================ -->
 <h2 id="premise">&sect;1 &mdash; Premise: Dungeon Gleaner</h2>
 
-<p>You are a <strong>Nez-Ha</strong> &mdash; a dungeon janitor working for a Necromancer on the wrong side of a fantasy economy. Legendary Heroes storm through dungeons, slaughter monsters, smash everything, loot the place, and vanish. You arrive after to clean up the mess &mdash; scrubbing walls, restocking crates with potions and food, re-arming traps, reassembling dead monsters so the Necromancer can revive them, and scrambling puzzles back to their unsolved state. All so the dungeon can be reset and the next batch of adventurers can "discover" it. Think <strong>Power Wash Simulator</strong> meets <strong>Dungeon Keeper</strong> from a minimum-wage perspective.</p>
+<p>You are a <strong>Nez-Ha</strong> &mdash; a dungeon janitor working for a Necromancer on the wrong side of a fantasy economy. Legendary Heroes storm through dungeons, slaughter monsters, smash everything, loot the place, and vanish. You arrive after to clean up the mess &mdash; scrubbing walls, restocking crates with potions and food, re-arming traps, reassembling dead monsters so the Necromancer can revive them, and scrambling puzzles back to their unsolved state. All so the dungeon can be reset and the next batch of adventurers can "discover" it. Think pressure-washing sim meets dungeon management from a minimum-wage perspective.</p>
 
-<p>The world is a small coastal <strong>boardwalk town</strong> &mdash; think Miami Vice meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is <strong>retrofuturistic fantasy</strong>: a civilization that discovered magic before technology, and their architecture shows it.</p>
+<p>The world is a small coastal <strong>boardwalk town</strong> &mdash; think 1980s pastel-neon coastal aesthetic meets a fantasy fishing village. Chrome railings on marble promenades. Sunset gradients on stone walls. Neon sigils over old timber shop fronts. The aesthetic is <strong>retrofuturistic fantasy</strong>: a civilization that discovered magic before technology, and their architecture shows it.</p>
 
 <p>Three outdoor districts form the town. Buildings along each district are shops, inns, and guild halls. Beneath certain buildings, dungeons descend &mdash; already torn through by the Hero. Every dungeon is littered with defeated enemies (lootable corpses with serious fantasy names), environmental destruction, and the comedic living remnants the Hero didn't quite finish off (slime blobs, severed appendages, half-dead creatures).</p>
 
 <div class="note">
-  <strong>Jam scope:</strong> 3 exterior districts, 5&ndash;6 building interiors, 3 dungeons (one per district). Core loops: grid-by-grid tile cleaning, crate slot restocking (Kingdom Two Crowns coin economy), and dungeon reset work orders. Heroes patrol as environmental hazards. Late-game Hero boss encounters using combat decks earned through labor. Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
+  <strong>Jam scope:</strong> 3 exterior districts, 5&ndash;6 building interiors, 3 dungeons (one per district). Core loops: grid-by-grid tile cleaning, crate slot restocking (coin-drop economy), and dungeon reset work orders. Heroes patrol as environmental hazards. Late-game Hero boss encounters using combat decks earned through labor. Post-jam: Act 2 (dragon alliance), Act 3 (world map), LG webOS TV port.
 </div>
 
 <div class="rule">
-  <strong>Nez-Ha universe connection:</strong> Dragons are ancient allies and protectors of the world. The Hero hunts them, believing they are monsters. The Nez-Ha (player) discovers through environmental clues and NPC dialogue that the Hero is wrong &mdash; the dragons were guardians. The conspiracy reveal at the end of Act 1: the Hero is either corrupted, misguided, or working for the true villain. End-of-jam climax: confront the Hero.
+  <strong>Nez-Ha universe connection:</strong> Dragons are ancient allies and protectors of the world. The Hero hunts them, believing they are monsters. The Nez-Ha (player) is <strong>completely oblivious</strong> to the dragon conspiracy &mdash; they think they're just a janitor cleaning dungeons for a paycheck. The bonfires that serve as waypoints and rest stops are powered by residual dragon energy, but the player has no idea. Environmental clues exist (dragon murals, NPC slips, scale fragments) but the player character doesn't connect the dots within the jam scope. Post-jam: the truth gradually dawns through Act 2.
 </div>
 
 <hr>
@@ -121,7 +121,7 @@
   <tr><th>Theme</th><th>Integration</th><th>Where It Shows</th></tr>
   <tr>
     <td><strong>Dragons</strong></td>
-    <td>Core lore. Dragons are ancient protectors being hunted by the Hero. The player gradually discovers this through environmental storytelling (dragon murals, grateful NPC memories, dragon-scale artifacts). The Hero's "heroism" is the conspiracy. Post-jam: the player allies with a dragon for Act 2.</td>
+    <td>Core lore, but <strong>hidden from the player character</strong>. Dragons are ancient protectors being hunted by the Hero. Environmental clues exist (dragon murals, NPC memories, scale artifacts) but the player character is oblivious &mdash; they're just a custodian earning a wage. The bonfire system runs on residual dragon energy without the player knowing. The Hero's "heroism" is the conspiracy that everyone else knows about. Post-jam: truth dawns in Act 2.</td>
     <td>Dungeon environmental art (claw marks, scales on walls), lore items, NPC dialogue, final boss motivation, dragon-themed biome palettes in deeper dungeons</td>
   </tr>
   <tr>
@@ -136,7 +136,7 @@
   </tr>
   <tr>
     <td><strong>Cleaning Up the Hero's Mess</strong></td>
-    <td>The entire game &mdash; three interlocking loops. <strong>Cleaning:</strong> scrub dirty/damaged tiles grid-by-grid for coin rewards, progressive cleaning tools from Rag to Pressure Washer. <strong>Restocking:</strong> fill crate slots with matching items from shops, earn coins and rare combat cards on seal. <strong>Dungeon Reset:</strong> complete work orders (re-arm traps, scramble puzzles, reassemble monsters, restore secrets) to reach readiness thresholds. Combat cards are earned through labor, not combat &mdash; your deck is built crate by crate. The Skyrim dungeon keeper who refills the ancient crates with fresh cabbages? That's you.</td>
+    <td>The entire game &mdash; three interlocking loops. <strong>Cleaning:</strong> scrub dirty/damaged tiles grid-by-grid for coin rewards, progressive cleaning tools from Rag to Pressure Washer. <strong>Restocking:</strong> fill crate slots with matching items from shops, earn coins and rare combat cards on seal. <strong>Dungeon Reset:</strong> complete work orders (re-arm traps, scramble puzzles, reassemble monsters, restore secrets) to reach readiness thresholds. Combat cards are earned through labor, not combat &mdash; your deck is built crate by crate. The dungeon custodian who refills the ancient crates with fresh cabbages? That's you.</td>
     <td>Dungeon layouts (dirty tiles, half-empty crates, disarmed traps, solved puzzles), Hero patrol routes (environmental hazard that undoes your work), crate slot UI (color-coded frames matching resource colors), work order board at Gleaner's Guild, cleaning texture variants (dirty/damaged/clean per tile)</td>
   </tr>
 </table>
@@ -146,7 +146,7 @@
 <!-- ================================================================ -->
 <h2 id="renderer">&sect;3 &mdash; Renderer Fidelity &amp; Retrofuturism Visual Philosophy</h2>
 
-<p>The raycaster renders <strong>flat-colored wall strips</strong> in the Wolfenstein 3D tradition. Each biome provides 6 colors (<code>wallLight</code>, <code>wallDark</code>, <code>door</code>, <code>doorDark</code>, <code>ceil</code>, <code>floor</code>) and the raycaster shades them by distance and facing. There are no texture maps, no sprite billboards, no per-wall-tile art.</p>
+<p>The raycaster renders <strong>flat-colored wall strips</strong> in the classic ray-caster tradition. Each biome provides 6 colors (<code>wallLight</code>, <code>wallDark</code>, <code>door</code>, <code>doorDark</code>, <code>ceil</code>, <code>floor</code>) and the raycaster shades them by distance and facing. There are no texture maps, no sprite billboards, no per-wall-tile art.</p>
 
 <div class="warn">
   <strong>What we CANNOT do:</strong> Photorealistic storefronts, neon sign rendering, or individual shop art. A potion shop and an armory are both just wall columns in a specific color. Buildings are communicated through <code>DOOR</code> tile placement and the dramatic palette shift when you enter a depth-2 interior.
@@ -155,7 +155,7 @@
 <h3>What We CAN Do &mdash; Retrofuturism Through Color</h3>
 
 <ul>
-  <li><strong>Saturated palettes:</strong> The retrofuturism aesthetic lives in the <em>color choices</em>. Instead of muted realism, we lean into teal-and-magenta sunsets, chrome pinks, electric purples, and warm sunset oranges. Every biome palette should feel like a vaporwave album cover translated to Wolfenstein walls.</li>
+  <li><strong>Saturated palettes:</strong> The retrofuturism aesthetic lives in the <em>color choices</em>. Instead of muted realism, we lean into teal-and-magenta sunsets, chrome pinks, electric purples, and warm sunset oranges. Every biome palette should feel like a vaporwave album cover translated to flat-color raycaster walls.</li>
   <li><strong>Fog as atmosphere:</strong> Exterior fog colors are sunset-tinted (warm peach, cool lavender). Interior fog is warmer (amber, rose). Dungeon fog goes deep (indigo, void purple). The fog gradient IS the retrofuturism.</li>
   <li><strong>Parallax as skyline:</strong> Background bands create the boardwalk horizon &mdash; distant water shimmer, sunset gradient bands, silhouetted palm trees (as color blocks). These set the Miami-Vice-meets-fantasy tone before the player sees a single wall.</li>
   <li><strong>Ceiling/floor as mood:</strong> Sunset-pink sky above the Promenade. Deep teal sky above the Frontier Gate. Polished marble floors in the Market. Rough stone in dungeons. These two colors carry enormous tonal weight.</li>
@@ -459,7 +459,7 @@
 <h2 id="bosses">&sect;9 &mdash; Boss Encounters &amp; The Hero</h2>
 
 <div class="warn">
-  <strong>No frogger/skifree encounters.</strong> Gone Rogue's boss arenas are top-down mechanics that don't translate to first-person. Bosses use the repo's existing <code>chamberOverrides</code> pattern in <code>SpatialContract</code>.
+  <strong>No avoidance-pattern boss encounters.</strong> EyesOnly's boss arenas are top-down mechanics that don't translate to first-person. Bosses use the repo's existing <code>chamberOverrides</code> pattern in <code>SpatialContract</code>.
 </div>
 
 <h3>How Bosses Work in This Engine</h3>
@@ -612,7 +612,7 @@
 
 <p>The raycaster renders flat-colored walls tinted by the current biome palette. Each biome provides 6 colors: <code>wallLight</code>, <code>wallDark</code> (side vs. face), <code>door</code>, <code>doorDark</code>, <code>ceil</code>, and <code>floor</code>.</p>
 
-<p>The retrofuturism aesthetic drives all palette choices: <strong>saturated, warm-cool contrasts, sunset/neon tints, chrome accents via door colors</strong>. Every palette should feel like a vaporwave album cover translated to Wolfenstein walls.</p>
+<p>The retrofuturism aesthetic drives all palette choices: <strong>saturated, warm-cool contrasts, sunset/neon tints, chrome accents via door colors</strong>. Every palette should feel like a vaporwave album cover translated to flat-color raycaster walls.</p>
 
 <h3>District Biomes (depth 1) <span class="tag new">NEW</span></h3>
 
@@ -911,6 +911,10 @@
 <!-- ================================================================ -->
 <h2 id="asset-map">&sect;14 &mdash; EyesOnly Asset Map (What We Reuse)</h2>
 
+<div class="warn">
+  <strong>⚠️ STALE (Apr 2):</strong> Sprint 0 extraction is complete (16 files migrated, proxies stripped). Track A (raycaster, wall decor, lighting, torch) and Track B (bonfire, hazards, rest) are done. This section reflects pre-extraction plans and needs a pass to mark completed items. See <code>UNIFIED_EXECUTION_ORDER.md</code> and <code>TABLE_OF_CONTENTS_CROSS_ROADMAP.md</code> for current status.
+</div>
+
 <p>These are the EyesOnly source files that the DCgamejam2026 engine modules were extracted from, and the data files we import for content.</p>
 
 <h3>Already Extracted into Repo <span class="tag reuse">IN REPO</span></h3>
@@ -941,7 +945,7 @@
 
 <h3>NOT Reused</h3>
 <ul>
-  <li><code>public/data/gone-rogue/boss-biomes.json</code> &mdash; frogger/skifree mechanics are top-down only</li>
+  <li><code>public/data/gone-rogue/boss-biomes.json</code> &mdash; avoidance-pattern mechanics are top-down only</li>
   <li><code>public/data/gone-rogue/biomes.json</code> outdoor biome definitions &mdash; replaced by district-specific palettes above</li>
   <li><code>public/data/gone-rogue/interior-biomes.json</code> &mdash; props/tiles are 2D top-down; the raycaster uses wall colors not emoji scatter</li>
   <li><code>public/data/streets.json</code> &mdash; Sandpoint narrative replaced by Coralshore</li>
@@ -953,6 +957,10 @@
 
 <!-- ================================================================ -->
 <h2 id="new-work">&sect;15 &mdash; New Work for the Jam</h2>
+
+<div class="warn">
+  <strong>⚠️ STALE (Apr 2):</strong> Most items below are now complete (Sprint 0, Track A, Track B, DOC-1 T0&ndash;T1). Remaining jam work is Track PW (pressure washing, 12.5h) and readiness UI integration. See <code>UNIFIED_EXECUTION_ORDER.md</code> for current execution state.
+</div>
 
 <table>
   <tr><th>Module</th><th>Layer</th><th>Purpose</th><th>Priority</th></tr>
@@ -1040,6 +1048,10 @@
 
 <!-- ================================================================ -->
 <h2 id="wiring">&sect;16 &mdash; Module Wiring &amp; Data Flow</h2>
+
+<div class="warn">
+  <strong>⚠️ PARTIALLY STALE (Apr 2):</strong> Core wiring (floor transitions, combat, card system, bonfire rest) is implemented. Pressure washing and readiness score paths below are still spec &mdash; not yet wired.
+</div>
 
 <pre>
 Player presses F on DOOR tile (exterior)
@@ -1129,7 +1141,7 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 <!-- ================================================================ -->
 <h2 id="gleaner-systems">&sect;17 &mdash; Gleaner Maintenance Systems (Pivot)</h2>
 
-<p>The Gleaner pivot expands the Act 1 scavenging period into the <strong>core game loop</strong>. Three interlocking systems drive the experience. All three yield coins (the universal currency, Kingdom Two Crowns style) and occasional combat cards (the endgame payoff). The player builds their combat deck entirely through labor.</p>
+<p>The Gleaner pivot expands the Act 1 scavenging period into the <strong>core game loop</strong>. Three interlocking systems drive the experience. All three yield coins (the universal currency) and occasional combat cards (the endgame payoff). The player builds their combat deck entirely through labor.</p>
 
 <h3>17.1 &mdash; The Cleaning Loop (Grid-by-Grid)</h3>
 
@@ -1157,7 +1169,7 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 </table>
 
 <div class="note">
-  <strong>Pressure Washer + Magic Remote:</strong> The LG Magic Remote's gyroscope tracking lets the player aim the pressure washer nozzle at specific dirty spots on walls. This is the moment where the Power Wash Simulator influence is most direct. Point, hold, clean.
+  <strong>Pressure Washer + Magic Remote:</strong> The LG Magic Remote's gyroscope tracking lets the player aim the pressure washer nozzle at specific dirty spots on walls. This is the core cleaning interaction &mdash; point, hold, clean.
 </div>
 
 <h3>17.2 &mdash; The Restocking Loop (Crate Slots)</h3>
@@ -1354,11 +1366,11 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 <!-- ================================================================ -->
 <h2 id="faction-economy">&sect;19 &mdash; Faction Economy &amp; Narrative Depth</h2>
 
-<p>The original <code>STREET_CHRONICLES_NARRATIVE_OUTLINE.md</code> described a multi-faction conspiracy with competing agendas. The Gleaner pivot amplifies this: the player is a minimum-wage worker navigating faction politics while trying to earn a living. Every shop, every NPC, and every dungeon reset benefits a faction &mdash; and no faction is clean.</p>
+<p>The faction system uses a multi-faction conspiracy structure with competing agendas. The Gleaner pivot amplifies this: the player is a minimum-wage worker navigating faction politics while trying to earn a living. Every shop, every NPC, and every dungeon reset benefits a faction &mdash; and no faction is clean.</p>
 
 <h3>19.1 &mdash; The Three Factions</h3>
 
-<p>Adapted from the Street Chronicles outline's faction structure. Each faction operates a shop chain, controls dungeon territory, and has an agenda the player gradually uncovers.</p>
+<p>Each faction operates a shop chain, controls dungeon territory, and has an agenda the player gradually uncovers.</p>
 
 <table>
   <tr><th>Faction</th><th>Shop</th><th>Territory</th><th>Suit Alignment</th><th>Public Agenda</th><th>Hidden Agenda</th></tr>
@@ -1402,7 +1414,7 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 </table>
 
 <div class="note">
-  <strong>The economy trap:</strong> The player naturally gravitates toward one faction's shop for restock supplies (it's convenient, the items match crate frames in that faction's dungeon). But raising one faction's reputation reveals their crimes. The player realizes they've been complicit. This is the Street Chronicles moral weight translated to a work sim: <em>every paycheck comes from someone dirty</em>.
+  <strong>The economy trap:</strong> The player naturally gravitates toward one faction's shop for restock supplies (it's convenient, the items match crate frames in that faction's dungeon). But raising one faction's reputation reveals their crimes. The player realizes they've been complicit. This is the moral weight of a work sim: <em>every paycheck comes from someone dirty</em>.
 </div>
 
 <h3>19.3 &mdash; The Necromancer (Your Employer)</h3>
@@ -1416,36 +1428,41 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
   <li>The Necromancer's eventual ask: <strong>stop the Hero</strong>. The late-game boss fights aren't just the player deciding to fight back &mdash; the Necromancer has been training you this whole time through labor. Every crate restocked was a card earned. Every monster reassembled was practice for the real fight.</li>
 </ul>
 
-<h3>19.4 &mdash; The Dragon Conspiracy (Adapted from Street Chronicles)</h3>
+<h3>19.4 &mdash; The Dragon Conspiracy</h3>
 
-<p>The original Street Chronicles outline featured a multi-layer conspiracy (pandas as chimeras, Jesuits covering up organ harvesting, multiple intelligence agencies at cross-purposes). The Gleaner adaptation preserves the <strong>structural complexity</strong> while rethemeing to fantasy:</p>
+<p>A multi-layer conspiracy where every faction has a different relationship with the truth about dragons. The player is the <strong>only one who doesn't know</strong> &mdash; everyone else is either hiding it, exploiting it, or hunting it.</p>
 
 <table>
-  <tr><th>Street Chronicles</th><th>Dungeon Gleaner</th><th>Narrative Function</th></tr>
+  <tr><th>Agent</th><th>Role</th><th>Narrative Function</th></tr>
   <tr>
-    <td>Chinese MSS (The Seeker)</td>
     <td>The Hero (The Seeker)</td>
+    <td>Dragon hunter</td>
     <td>Antagonist who believes they're the protagonist. Hunts dragons thinking they're evil. Discovers truth late (or never).</td>
   </tr>
   <tr>
-    <td>Pinkertons (ancient grudge)</td>
     <td>Foundry Collective (war profiteers)</td>
+    <td>Arms supplier</td>
     <td>Saboteurs who benefit from chaos. Arm the Hero to keep the cycle going. "Accidentally" expose the truth through their greed.</td>
   </tr>
   <tr>
-    <td>Jesuits (chimera creators)</td>
     <td>Admiralty (forbidden researchers)</td>
+    <td>Secret keepers</td>
     <td>Keepers of the original secret. Created the dungeon ecosystem. Study dragon remains. Need the cover-up to continue.</td>
   </tr>
   <tr>
-    <td>Homeland Security (player's employer)</td>
     <td>The Necromancer (player's employer)</td>
+    <td>Handler</td>
     <td>Assigns the player. Has their own agenda. Eventually asks player to choose sides.</td>
   </tr>
   <tr>
-    <td>Panda chimeras (MacGuffin)</td>
     <td>Dragons (ancient protectors)</td>
-    <td>The truth everyone is hiding or hunting. Not monsters. Not weapons. Guardians.</td>
+    <td>The truth</td>
+    <td>What everyone is hiding or hunting. Not monsters. Not weapons. Guardians.</td>
+  </tr>
+  <tr>
+    <td><strong>The Player (Nez-Ha)</strong></td>
+    <td><strong>Oblivious custodian</strong></td>
+    <td>Thinks they're just cleaning dungeons for a paycheck. Uses bonfire waypoints without knowing they're powered by residual dragon energy. The last to learn the truth &mdash; if they learn it at all within the jam scope.</td>
   </tr>
 </table>
 
@@ -1515,7 +1532,7 @@ Victory --&gt; set 'hero_defeated' --&gt; Victory Screen --&gt; End of Act 1
 <tr><td>&sect;18 Hero Path &amp; Stealth</td><td>&rarr; DOC-3 GONE_ROGUE Pass 3 (stealth)</td><td>stealth-system.js + awareness-config.js extraction</td></tr>
 <tr><td>&sect;18.3 Sight Cones</td><td>&rarr; DOC-3 GONE_ROGUE Pass 3.11</td><td>Minimap cone rendering &mdash; &check; DONE</td></tr>
 <tr><td>&sect;19 Faction Economy</td><td>&rarr; DOC-1 GAP T2.3 Rep Feedback</td><td>GAP doc has the UI task for faction tier unlock</td></tr>
-<tr><td>&sect;19.4 Dragon Conspiracy</td><td>&rarr; STREET_CHRONICLES_NARRATIVE_OUTLINE.md</td><td>Original multi-faction spy conspiracy adapted</td></tr>
+<tr><td>&sect;19.4 Dragon Conspiracy</td><td>&rarr; (internal narrative outline)</td><td>Multi-faction conspiracy structure, player oblivious</td></tr>
 </tbody>
 </table>
 

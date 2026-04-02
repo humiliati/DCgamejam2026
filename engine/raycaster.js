@@ -1145,6 +1145,25 @@ var Raycaster = (function () {
   // Per-slot font scale (fraction of spriteH for each emoji)
   var _SLOT_FONT = 0.32;
 
+  // ── Per-slot tint offscreen canvas ─────────────────────────────
+  // Reusable scratch canvas for isolating individual emoji glyphs
+  // so hue tint only colors the glyph pixels (source-atop), not a
+  // bounding rect that bleeds onto transparent areas and other slots.
+  var _tintCanvas = null;
+  var _tintCtx    = null;
+  // Default tint mask: [head, torso, legs]. Only clothes slots tinted.
+  var _DEFAULT_TINT_SLOTS = [false, true, true];
+
+  function _ensureTintCanvas(size) {
+    if (!_tintCanvas || _tintCanvas.width < size || _tintCanvas.height < size) {
+      _tintCanvas = document.createElement('canvas');
+      _tintCanvas.width  = size;
+      _tintCanvas.height = size;
+      _tintCtx = _tintCanvas.getContext('2d');
+    }
+    return _tintCtx;
+  }
+
   /**
    * Render a triple emoji stack at billboard position.
    *
@@ -1250,6 +1269,13 @@ var Raycaster = (function () {
       }
 
       // ── Main slot emoji ──
+      // Determine if this slot should receive hue tint (clothes only by default)
+      var wantTint = (stack.tintHue !== null && stack.tintHue !== undefined && spriteH > 10);
+      if (wantTint) {
+        var tSlots = stack.tintSlots || _DEFAULT_TINT_SLOTS;
+        wantTint = !!tSlots[si];
+      }
+
       ctx.save();
       ctx.translate(slotX, slotY);
       var slotSx = sx;
@@ -1260,10 +1286,42 @@ var Raycaster = (function () {
         if (headSquash < 1) slotSy *= headSquash;
       }
       if (slotSx !== 1 || slotSy !== 1) ctx.scale(slotSx, slotSy);
-      ctx.font = fontSize + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(slotEmoji, 0, 0);
+
+      if (wantTint) {
+        // ── Per-glyph tint: draw emoji on offscreen canvas, color
+        //    only the glyph pixels via source-atop, then composite back.
+        var tSize = Math.ceil(fontSize * 2.5);
+        var tHalf = tSize * 0.5;
+        var tc = _ensureTintCanvas(tSize);
+        tc.clearRect(0, 0, tSize, tSize);
+
+        // 1) Draw emoji centered on scratch canvas
+        tc.globalCompositeOperation = 'source-over';
+        tc.globalAlpha = 1;
+        tc.font = fontSize + 'px serif';
+        tc.textAlign = 'center';
+        tc.textBaseline = 'middle';
+        tc.fillText(slotEmoji, tHalf, tHalf);
+
+        // 2) Paint hue ONLY on glyph pixels (source-atop)
+        tc.globalCompositeOperation = 'source-atop';
+        tc.globalAlpha = 0.22;
+        var rgb = _hueToRgb(stack.tintHue);
+        tc.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
+        tc.fillRect(0, 0, tSize, tSize);
+
+        // 3) Reset scratch state
+        tc.globalCompositeOperation = 'source-over';
+        tc.globalAlpha = 1;
+
+        // 4) Draw tinted result onto main canvas (inherits transform)
+        ctx.drawImage(_tintCanvas, -tHalf, -tHalf, tSize, tSize);
+      } else {
+        ctx.font = fontSize + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(slotEmoji, 0, 0);
+      }
       ctx.restore();
 
       // ── Front sub-layers (render over this slot) ──
@@ -1278,17 +1336,7 @@ var Raycaster = (function () {
       }
     }
 
-    // ── Hue tint overlay (subtle color variation for NPC variety) ──
-    if (stack.tintHue !== null && stack.tintHue !== undefined && spriteH > 10) {
-      var rgb = _hueToRgb(stack.tintHue);
-      ctx.save();
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.globalAlpha = 0.15;
-      ctx.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
-      ctx.fillRect(screenX - spriteW * 0.4, centerY - spriteH * 0.4,
-                   spriteW * 0.8, spriteH * 0.8);
-      ctx.restore();
-    }
+    // (Hue tint is now applied per-slot inline — see wantTint branch above)
 
     // ── Status effect hue overlay (poison green, frozen blue, etc.) ──
     if (statusHue >= 0 && statusAlpha > 0 && spriteH > 6) {

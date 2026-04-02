@@ -119,7 +119,7 @@ Completes the harvest → sell → buy → equip → fight loop.
 | T2.3 | Faction rep tier unlock feedback in shop | menu-faces.js, shop.js | T0.4 | ✅ DONE | — |
 | T2.4 | Floor transition deck reshuffle + hand redraw | game.js, card-system.js | — | ✅ DONE | — |
 | T2.5 | Victory/Game Over stat summaries from SessionStats | victory-screen.js, game-over-screen.js | — | ✅ DONE | — |
-| T2.6 | NCH widget drag-to-reorder cards | nch-widget.js | — | ❌ TODO | 2h |
+| T2.6 | NCH widget drag-to-reorder cards | nch-widget.js | — | ⏸️ POST-JAM | 2h | Only meaningful with card-color overlay on joker emojis; aesthetic only, not blocking gameplay loop |
 
 ### Tier 3 — Post-Jam / LG Content Store
 
