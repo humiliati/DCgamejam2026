@@ -36,16 +36,16 @@ var MenuFaces = (function () {
     divider:  'rgba(255,255,255,0.1)'
   };
 
-  // ── Resource color lookup (uses CardRenderer if available) ─────
+  // ── Resource color lookup (CardAuthority canonical source) ─────
   function _getCardResColor(card) {
-    if (typeof CardRenderer !== 'undefined' && CardRenderer.RES_COLORS && CardRenderer.SUIT_DATA) {
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.RES_COLORS && CardAuthority.SUIT_DATA) {
       var res = card.resource || card.costResource || null;
-      if (res && CardRenderer.RES_COLORS[res]) return CardRenderer.RES_COLORS[res];
-      if (card.suit && CardRenderer.SUIT_DATA[card.suit]) {
-        var sres = CardRenderer.SUIT_DATA[card.suit].res;
-        return CardRenderer.RES_COLORS[sres] || CardRenderer.RES_COLORS.cards;
+      if (res && CardAuthority.RES_COLORS[res]) return CardAuthority.RES_COLORS[res];
+      if (card.suit && CardAuthority.SUIT_DATA[card.suit]) {
+        var sres = CardAuthority.SUIT_DATA[card.suit].res;
+        return CardAuthority.RES_COLORS[sres] || CardAuthority.RES_COLORS.cards;
       }
-      return CardRenderer.RES_COLORS.cards;
+      return CardAuthority.RES_COLORS.cards;
     }
     return { r: 128, g: 0, b: 128 };
   }
@@ -129,29 +129,37 @@ var MenuFaces = (function () {
     }
   }
 
-  function _drawTitle(ctx, x, y, w, text, emoji) {
+  function _drawTitle(ctx, x, y, w, text, emoji, S) {
+    S = S || 1;
+    var fontSize = Math.round(16 * S);
+    if (fontSize < 12) fontSize = 12;
     ctx.fillStyle = COL.title;
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold ' + fontSize + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText((emoji ? emoji + ' ' : '') + text, x + w / 2, y + 14);
+    var titleY = y + Math.round(18 * S);
+    ctx.fillText((emoji ? emoji + ' ' : '') + text, x + w / 2, titleY);
     // Divider line
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
+    var divY = titleY + Math.round(8 * S);
     ctx.beginPath();
-    ctx.moveTo(x + 10, y + 22);
-    ctx.lineTo(x + w - 10, y + 22);
+    ctx.moveTo(x + 10, divY);
+    ctx.lineTo(x + w - 10, divY);
     ctx.stroke();
-    return y + 30; // Return Y after header
+    return divY + Math.round(10 * S); // Return Y after header
   }
 
-  function _drawStat(ctx, x, y, label, value, color) {
-    ctx.font = '11px monospace';
+  function _drawStat(ctx, x, y, label, value, color, S) {
+    S = S || 1;
+    var fontSize = Math.round(13 * S);
+    if (fontSize < 10) fontSize = 10;
+    ctx.font = fontSize + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillStyle = COL.dim;
     ctx.fillText(label, x, y);
     ctx.fillStyle = color || COL.text;
     ctx.textAlign = 'right';
-    ctx.fillText('' + value, x + 140, y);
+    ctx.fillText('' + value, x + Math.round(160 * S), y);
     ctx.textAlign = 'left';
   }
 
@@ -198,7 +206,14 @@ var MenuFaces = (function () {
   }
 
   function _renderMinimap(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face0', 'MAP'), '\uD83D\uDDFA\uFE0F');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face0', 'MAP'), '\uD83D\uDDFA\uFE0F', S);
+
+    // ── Scale-aware font sizes ──
+    var F_BODY   = Math.max(10, Math.round(14 * S));
+    var F_SMALL  = Math.max(9, Math.round(13 * S));
+    var F_HINT   = Math.max(9, Math.round(13 * S));
+    var F_COMPASS = Math.max(9, Math.round(13 * S));
 
     // ── Floor label + depth info ──
     var floorId = FloorManager.getFloor();
@@ -208,35 +223,41 @@ var MenuFaces = (function () {
     var depthName = depthNames[Math.min(depth, 3)] || 'Deep';
 
     ctx.fillStyle = COL.text;
-    ctx.font = '11px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(floorLabel, x + w / 2, ty + 4);
+    ctx.fillText(floorLabel, x + w / 2, ty + Math.round(6 * S));
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
-    ctx.fillText(depthName + ' \u2014 ' + floorId, x + w / 2, ty + 16);
-    ty += 24;
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.fillText(depthName + ' \u2014 ' + floorId, x + w / 2, ty + Math.round(20 * S));
+    ty += Math.round(28 * S);
 
     // ── Minimap canvas (live from Minimap module) ──
     var mapCanvas = (typeof Minimap !== 'undefined' && Minimap.getCanvas)
       ? Minimap.getCanvas() : null;
 
     if (mapCanvas && mapCanvas.width > 0) {
-      var mapSize = Math.min(w - 16, h - (ty - y) - 50);
-      if (mapSize < 40) mapSize = 40;
+      // Map fills most of the remaining space — reserve room for stats below
+      var statsReserve = Math.round(80 * S);
+      var mapSize = Math.min(w - Math.round(16 * S), h - (ty - y) - statsReserve);
+      if (mapSize < Math.round(60 * S)) mapSize = Math.round(60 * S);
       var mapX = x + (w - mapSize) / 2;
       var mapY = ty;
+      var framePad = Math.round(4 * S);
+      var frameRad = Math.round(6 * S);
 
       // Frame border (parchment feel)
       ctx.fillStyle = 'rgba(60,50,35,0.7)';
-      _roundRectFill(ctx, mapX - 4, mapY - 4, mapSize + 8, mapSize + 8, 6);
+      _roundRectFill(ctx, mapX - framePad, mapY - framePad,
+                     mapSize + framePad * 2, mapSize + framePad * 2, frameRad);
       ctx.strokeStyle = 'rgba(180,160,120,0.5)';
-      ctx.lineWidth = 1.5;
-      _roundRectStroke(ctx, mapX - 4, mapY - 4, mapSize + 8, mapSize + 8, 6);
+      ctx.lineWidth = Math.max(1, 1.5 * S);
+      _roundRectStroke(ctx, mapX - framePad, mapY - framePad,
+                       mapSize + framePad * 2, mapSize + framePad * 2, frameRad);
 
       // Inner bevel
       ctx.strokeStyle = 'rgba(100,90,60,0.4)';
       ctx.lineWidth = 1;
-      _roundRectStroke(ctx, mapX - 1, mapY - 1, mapSize + 2, mapSize + 2, 4);
+      _roundRectStroke(ctx, mapX - 1, mapY - 1, mapSize + 2, mapSize + 2, Math.round(4 * S));
 
       // Draw the minimap canvas scaled into the frame
       ctx.drawImage(mapCanvas, 0, 0, mapCanvas.width, mapCanvas.height,
@@ -244,22 +265,22 @@ var MenuFaces = (function () {
 
       // Corner pips (compass decoration)
       ctx.fillStyle = 'rgba(180,160,120,0.6)';
-      ctx.font = '11px monospace';
+      ctx.font = F_COMPASS + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('N', mapX + mapSize / 2, mapY - 6);
-      ctx.fillText('S', mapX + mapSize / 2, mapY + mapSize + 10);
+      ctx.fillText('N', mapX + mapSize / 2, mapY - Math.round(6 * S));
+      ctx.fillText('S', mapX + mapSize / 2, mapY + mapSize + Math.round(12 * S));
       ctx.textAlign = 'left';
-      ctx.fillText('W', mapX - 12, mapY + mapSize / 2 + 3);
+      ctx.fillText('W', mapX - Math.round(14 * S), mapY + mapSize / 2 + 3);
       ctx.textAlign = 'right';
-      ctx.fillText('E', mapX + mapSize + 12, mapY + mapSize / 2 + 3);
+      ctx.fillText('E', mapX + mapSize + Math.round(14 * S), mapY + mapSize / 2 + 3);
 
-      ty = mapY + mapSize + 14;
+      ty = mapY + mapSize + Math.round(16 * S);
     } else {
       ctx.fillStyle = COL.dim;
-      ctx.font = '13px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Map not available', x + w / 2, ty + 30);
-      ty += 50;
+      ctx.fillText('Map not available', x + w / 2, ty + Math.round(30 * S));
+      ty += Math.round(50 * S);
     }
 
     // ── Floor stack breadcrumb ──
@@ -267,11 +288,11 @@ var MenuFaces = (function () {
       var stack = Minimap.getFloorStack();
       if (stack && stack.length > 1) {
         ctx.fillStyle = COL.dim;
-        ctx.font = '12px monospace';
+        ctx.font = F_SMALL + 'px monospace';
         ctx.textAlign = 'center';
         var breadcrumb = stack.join(' \u25B8 ');
         ctx.fillText(breadcrumb, x + w / 2, ty);
-        ty += 14;
+        ty += Math.round(16 * S);
       }
     }
 
@@ -283,7 +304,7 @@ var MenuFaces = (function () {
       var tileCount = 0;
       for (var _k in explored) { if (explored.hasOwnProperty(_k)) tileCount++; }
 
-      ctx.font = '12px monospace';
+      ctx.font = F_SMALL + 'px monospace';
       ctx.textAlign = 'center';
 
       // Row 1: explored tiles + enemies
@@ -293,7 +314,7 @@ var MenuFaces = (function () {
         statLine1 += '  \u00B7  ' + stats.enemiesDefeated + ' defeated';
       }
       ctx.fillText(statLine1, x + w / 2, ty);
-      ty += 11;
+      ty += Math.round(14 * S);
 
       // Row 2: chests + bonfires + hazards
       var statParts = [];
@@ -303,25 +324,25 @@ var MenuFaces = (function () {
       if (stats.floorsExplored > 0)    statParts.push(stats.floorsExplored + ' floors');
       if (statParts.length > 0) {
         ctx.fillText(statParts.join('  \u00B7  '), x + w / 2, ty);
-        ty += 11;
+        ty += Math.round(14 * S);
       }
     }
 
     // ── Current quest objective ──
     var questText = _getQuestObjective();
     if (questText) {
-      ty += 2;
+      ty += Math.round(4 * S);
       ctx.fillStyle = 'rgba(120,220,160,0.8)';
-      ctx.font = '13px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('\u25C6 ' + questText, x + w / 2, ty);
-      ty += 14;
+      ty += Math.round(16 * S);
     }
 
     // ── Time display (clock frozen while paused) ──
     if (typeof DayCycle !== 'undefined') {
       ctx.fillStyle = COL.accent;
-      ctx.font = '13px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       var timeStr = DayCycle.getTimeString();
       var phase = DayCycle.getPhase ? DayCycle.getPhase() : '';
@@ -330,9 +351,9 @@ var MenuFaces = (function () {
 
     // ── Hint ──
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px monospace';
+    ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
+    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
   }
 
@@ -360,57 +381,62 @@ var MenuFaces = (function () {
   }
 
   function _renderBonfireRest(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.bonfire_title', 'BONFIRE'), '🔥');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.bonfire_title', 'BONFIRE'), '🔥', S);
+
+    var F_BODY  = Math.max(10, Math.round(14 * S));
+    var F_SMALL = Math.max(9, Math.round(13 * S));
+    var F_HINT  = Math.max(9, Math.round(13 * S));
 
     var ps = Player.state();
 
     // HP/Energy bars
-    var barW = Math.min(w - 40, 180);
-    var barH = 12;
+    var barW = Math.min(w - Math.round(40 * S), Math.round(220 * S));
+    var barH = Math.max(10, Math.round(14 * S));
     var barX = x + (w - barW) / 2;
 
     // HP bar
     ctx.fillStyle = COL.dim;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('HP', barX - 22, ty + 12);
+    ctx.fillText('HP', barX - Math.round(26 * S), ty + barH);
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fillRect(barX, ty + 2, barW, barH);
     var hpPct = ps.hp / ps.maxHp;
     ctx.fillStyle = hpPct > 0.6 ? COL.hp : (hpPct > 0.3 ? '#c80' : '#c44');
     ctx.fillRect(barX, ty + 2, barW * hpPct, barH);
     ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
+    ctx.font = F_SMALL + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(ps.hp + '/' + ps.maxHp, barX + barW / 2, ty + 12);
+    ctx.fillText(ps.hp + '/' + ps.maxHp, barX + barW / 2, ty + barH);
 
     // Energy bar
-    ty += 22;
+    ty += Math.round(26 * S);
     ctx.fillStyle = COL.dim;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('EN', barX - 22, ty + 12);
+    ctx.fillText('EN', barX - Math.round(26 * S), ty + barH);
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fillRect(barX, ty + 2, barW, barH);
     ctx.fillStyle = COL.energy;
     ctx.fillRect(barX, ty + 2, barW * (ps.energy / ps.maxEnergy), barH);
     ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
+    ctx.font = F_SMALL + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(ps.energy + '/' + ps.maxEnergy, barX + barW / 2, ty + 12);
+    ctx.fillText(ps.energy + '/' + ps.maxEnergy, barX + barW / 2, ty + barH);
 
     // Status text
-    ty += 30;
+    ty += Math.round(34 * S);
     ctx.fillStyle = COL.accent;
-    ctx.font = '11px monospace';
+    ctx.font = F_SMALL + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + 10);
+    ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + Math.round(10 * S));
 
     // Floor info
-    ty += 26;
+    ty += Math.round(28 * S);
     ctx.fillStyle = COL.dim;
     ctx.fillText(FloorManager.getFloorLabel() + ' — ' + FloorManager.getCurrentFloorId(),
-                 x + w / 2, ty + 10);
+                 x + w / 2, ty + Math.round(10 * S));
 
     // ── Warp button (exterior → home, dungeon → entrance) ──
     var floorId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
@@ -418,49 +444,52 @@ var MenuFaces = (function () {
     var warpTarget = null;
     var warpLabel  = '';
     if (depth === 1 && floorId !== '0') {
-      // Exterior (not tutorial) → warp home
       warpTarget = '1.6';
       warpLabel  = '\uD83C\uDFE0 ' + i18n.t('bonfire.warp_home', 'Warp Home');
     } else if (depth >= 3) {
-      // Dungeon → warp to parent interior (dungeon entrance building)
       warpTarget = (typeof FloorManager !== 'undefined') ? FloorManager.parentId(floorId) : null;
       warpLabel  = '\uD83D\uDD3C ' + i18n.t('bonfire.warp_entrance', 'Warp to Entrance');
     }
 
     if (warpTarget) {
-      ty += 26;
-      var btnW = Math.min(w - 20, 160);
-      var btnH = 24;
+      ty += Math.round(28 * S);
+      var btnW = Math.min(w - Math.round(20 * S), Math.round(200 * S));
+      var btnH = Math.max(24, Math.round(30 * S));
       var btnX = x + (w - btnW) / 2;
       var isHov = (_hoverSlot === 900);
       ctx.fillStyle = isHov ? 'rgba(100,180,255,0.2)' : 'rgba(60,120,200,0.1)';
-      _roundRectFill(ctx, btnX, ty, btnW, btnH, 4);
+      _roundRectFill(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
       ctx.strokeStyle = isHov ? '#88ccff' : 'rgba(100,160,255,0.4)';
       ctx.lineWidth = isHov ? 2 : 1;
-      _roundRectStroke(ctx, btnX, ty, btnW, btnH, 4);
+      _roundRectStroke(ctx, btnX, ty, btnW, btnH, Math.round(4 * S));
       ctx.fillStyle = isHov ? '#bbddff' : 'rgba(160,200,255,0.8)';
-      ctx.font = '11px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(warpLabel, x + w / 2, ty + 16);
+      ctx.fillText(warpLabel, x + w / 2, ty + btnH * 0.65);
       _hitZones.push({ x: btnX, y: ty, w: btnW, h: btnH, slot: 900, action: 'warp', warpTarget: warpTarget });
       ty += btnH;
     }
 
     // Hint
-    ty += 16;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '13px monospace';
+    ctx.font = F_HINT + 'px monospace';
+    ctx.textAlign = 'center';
     ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
-                 x + w / 2, ty + 10);
+                 x + w / 2, y + h - Math.round(6 * S));
   }
 
   function _renderShopInfo(ctx, x, y, w, h) {
+    var S = Math.min(w, h) / 400;
+    var F_BODY  = Math.max(10, Math.round(14 * S));
+    var F_SMALL = Math.max(9, Math.round(13 * S));
+    var F_HINT  = Math.max(9, Math.round(13 * S));
+
     // ── Faction identity ─────────────────────────────────────────
     var factionId    = (typeof Shop !== 'undefined') ? Shop.getCurrentFaction() : null;
     var factionLabel = (typeof Shop !== 'undefined') ? Shop.getFactionLabel(factionId) : i18n.t('shop.vendor_name', 'MERCHANT');
     var factionEmoji = (typeof Shop !== 'undefined') ? Shop.getFactionEmoji(factionId) : '🏪';
 
-    var ty = _drawTitle(ctx, x, y, w, factionLabel.toUpperCase(), factionEmoji);
+    var ty = _drawTitle(ctx, x, y, w, factionLabel.toUpperCase(), factionEmoji, S);
 
     // ── Rep tiers ────────────────────────────────────────────────
     var REP_NAMES = [
@@ -477,29 +506,28 @@ var MenuFaces = (function () {
       { id: 'admiralty', emoji: '🌊', label: i18n.t('faction.admiralty', 'Admiralty') }
     ];
 
-    ctx.font = '13px monospace';
+    var factionRowH = Math.round(26 * S);
     ctx.textAlign = 'left';
     for (var fi = 0; fi < factions.length; fi++) {
       var fd = factions[fi];
       var tier = allTiers[fd.id] || 0;
-      var rowY = ty + fi * 22;
+      var rowY = ty + fi * factionRowH;
       var active = (fd.id === factionId);
 
-      // Highlight active faction row
       if (active) {
         ctx.fillStyle = 'rgba(240,208,112,0.10)';
-        ctx.fillRect(x + 6, rowY - 10, w - 12, 18);
+        ctx.fillRect(x + 6, rowY - Math.round(10 * S), w - 12, Math.round(22 * S));
       }
 
-      ctx.font = '13px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.fillStyle = active ? COL.accent : COL.dim;
       ctx.textAlign = 'left';
-      ctx.fillText(fd.emoji + ' ' + fd.label, x + 10, rowY + 2);
+      ctx.fillText(fd.emoji + ' ' + fd.label, x + Math.round(10 * S), rowY + 2);
       ctx.fillStyle = REP_COLORS[tier];
       ctx.textAlign = 'right';
-      ctx.fillText(REP_NAMES[tier], x + w - 8, rowY + 2);
+      ctx.fillText(REP_NAMES[tier], x + w - Math.round(8 * S), rowY + 2);
     }
-    ty += factions.length * 22 + 10;
+    ty += factions.length * factionRowH + Math.round(12 * S);
 
     // Divider
     ctx.strokeStyle = COL.divider;
@@ -507,29 +535,29 @@ var MenuFaces = (function () {
     ctx.beginPath();
     ctx.moveTo(x + 10, ty); ctx.lineTo(x + w - 10, ty);
     ctx.stroke();
-    ty += 12;
+    ty += Math.round(14 * S);
 
     // ── Currency ─────────────────────────────────────────────────
     ctx.fillStyle = COL.currency;
-    ctx.font = 'bold 13px monospace';
+    ctx.font = 'bold ' + F_BODY + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('💰 ' + Player.state().currency + ' ' + i18n.t('shop.currency', 'gold'),
                  x + w / 2, ty);
 
     // ── Current rep tier badge ───────────────────────────────────
-    ty += 20;
+    ty += Math.round(24 * S);
     var curTier = (typeof Shop !== 'undefined') ? Shop.getRepTier() : 0;
     ctx.fillStyle = REP_COLORS[curTier];
-    ctx.font = '11px monospace';
+    ctx.font = F_SMALL + 'px monospace';
     ctx.fillText(factionEmoji + ' ' + REP_NAMES[curTier] + ' (Tier ' + curTier + ')',
                  x + w / 2, ty);
 
     // ── Hint ─────────────────────────────────────────────────────
-    ty += 24;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '13px monospace';
+    ctx.font = F_HINT + 'px monospace';
+    ctx.textAlign = 'center';
     ctx.fillText(i18n.t('shop.browse_hint', '[Q/E] Browse panes   [ESC] Leave'),
-                 x + w / 2, ty);
+                 x + w / 2, y + h - Math.round(6 * S));
   }
 
   // ── Harvest: Corpse Loot (Face 0 in harvest context) ────────
@@ -714,38 +742,47 @@ var MenuFaces = (function () {
   // ── Harvest: Corpse Loot (Face 0 in harvest context) ────────
 
   function _renderHarvestLoot(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, 'REMAINS', '💀');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, 'REMAINS', '💀', S);
+
+    var F_BODY = Math.max(10, Math.round(14 * S));
+    var F_HINT = Math.max(9, Math.round(13 * S));
 
     // Get staged loot from Salvage
     var loot = (typeof Salvage !== 'undefined') ? Salvage.getStagedLoot() : [];
 
     if (loot.length === 0) {
       ctx.fillStyle = COL.dim;
-      ctx.font = '11px monospace';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Nothing remains.', x + w / 2, ty + 40);
+      ctx.fillText('Nothing remains.', x + w / 2, ty + Math.round(40 * S));
       return;
     }
 
     // Hint text
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('harvest.hint', 'Click to take'), x + w / 2, ty + 10);
-    ty += 18;
+    ctx.fillText(i18n.t('harvest.hint', 'Click to take'), x + w / 2, ty + Math.round(10 * S));
+    ty += Math.round(20 * S);
 
-    // Grid of item tiles
+    // Grid of item tiles (tile size scales with S)
+    var tileS = Math.max(48, Math.round(TILE_SIZE * S));
+    var tileGap = Math.round(TILE_GAP * S);
     var count = Math.min(5, loot.length);
-    var positions = _gridLayout(x, ty, w, count);
+    var cols = Math.max(1, Math.floor((w + tileGap) / (tileS + tileGap)));
+    var gridW = cols * tileS + (cols - 1) * tileGap;
+    var offsetX = x + (w - gridW) / 2;
 
     for (var i = 0; i < count; i++) {
       var item = loot[i];
-      var pos = positions[i];
+      var c = i % cols;
+      var r = Math.floor(i / cols);
+      var px = offsetX + c * (tileS + tileGap);
+      var py = ty + r * (tileS + tileGap);
 
-      // Register hit zone
-      _hitZones.push({ x: pos.x, y: pos.y, w: TILE_SIZE, h: TILE_SIZE, slot: i, action: 'harvest' });
-
-      _drawItemTile(ctx, pos.x, pos.y, item, i, _hoverSlot === i, {
+      _hitZones.push({ x: px, y: py, w: tileS, h: tileS, slot: i, action: 'harvest' });
+      _drawItemTile(ctx, px, py, item, i, _hoverSlot === i, {
         priceText: item.baseValue + 'g',
         priceColor: COL.currency
       });
@@ -754,10 +791,10 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
 
     // Bottom hint
-    var lastRow = positions.length > 0 ? positions[positions.length - 1].row : 0;
-    var hintY = ty + (lastRow + 1) * (TILE_SIZE + TILE_GAP) + 8;
+    var lastRow = count > 0 ? Math.floor((count - 1) / cols) : 0;
+    var hintY = ty + (lastRow + 1) * (tileS + tileGap) + Math.round(8 * S);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px monospace';
+    ctx.font = F_HINT + 'px monospace';
     ctx.fillText('[Q/E] View bag   [ESC] Leave', x + w / 2, hintY);
     ctx.textAlign = 'left';
   }
@@ -765,37 +802,42 @@ var MenuFaces = (function () {
   // ── Harvest: Player Bag (Face 1 in harvest context) ─────────
 
   function _renderHarvestBag(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, 'BAG', '🎒');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, 'BAG', '🎒', S);
 
-    var bag = Player.getBag();
-    var maxBag = Player.MAX_BAG;
+    var F_BODY  = Math.max(10, Math.round(14 * S));
+    var F_SMALL = Math.max(9, Math.round(13 * S));
+
+    var bag = CardAuthority.getBag();
+    var maxBag = CardAuthority.MAX_BAG;
 
     // Capacity header
     ctx.fillStyle = COL.dim;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(bag.length + ' / ' + maxBag + ' slots', x + w / 2, ty + 12);
-    ty += 22;
+    ctx.fillText(bag.length + ' / ' + maxBag + ' slots', x + w / 2, ty + Math.round(12 * S));
+    ty += Math.round(24 * S);
 
     if (bag.length === 0) {
       ctx.fillStyle = COL.dim;
-      ctx.font = '11px monospace';
-      ctx.fillText('Empty', x + w / 2, ty + 20);
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.fillText('Empty', x + w / 2, ty + Math.round(20 * S));
       return;
     }
 
     // Bag grid (4 columns)
     var cols = 4;
     var rows = Math.ceil(bag.length / cols);
-    var slotSize = Math.min(Math.floor((w - 20) / cols), 36);
-    var gridW2 = cols * (slotSize + 4);
+    var slotSize = Math.max(28, Math.min(Math.floor((w - Math.round(20 * S)) / cols), Math.round(44 * S)));
+    var slotGap = Math.round(5 * S);
+    var gridW2 = cols * (slotSize + slotGap);
     var gridX = x + (w - gridW2) / 2;
 
     for (var i = 0; i < bag.length; i++) {
       var row = Math.floor(i / cols);
       var col = i % cols;
-      var sx = gridX + col * (slotSize + 4);
-      var sy = ty + row * (slotSize + 4);
+      var sx = gridX + col * (slotSize + slotGap);
+      var sy = ty + row * (slotSize + slotGap);
       var bagItem = bag[i];
 
       _drawSlot(ctx, sx, sy, slotSize, slotSize,
@@ -808,15 +850,15 @@ var MenuFaces = (function () {
     for (var j = bag.length; j < maxBag && j < bag.length + 4; j++) {
       var r2 = Math.floor(j / cols);
       var c2 = j % cols;
-      var sx2 = gridX + c2 * (slotSize + 4);
-      var sy2 = ty + r2 * (slotSize + 4);
+      var sx2 = gridX + c2 * (slotSize + slotGap);
+      var sy2 = ty + r2 * (slotSize + slotGap);
       _drawSlot(ctx, sx2, sy2, slotSize, slotSize, '', null, false);
     }
 
     // Currency
-    var curY = ty + (rows + 1) * (slotSize + 4) + 4;
+    var curY = ty + (rows + 1) * (slotSize + slotGap) + Math.round(4 * S);
     ctx.fillStyle = COL.currency;
-    ctx.font = 'bold 11px monospace';
+    ctx.font = 'bold ' + F_BODY + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('💰 ' + Player.state().currency, x + w / 2, curY);
   }
@@ -843,7 +885,14 @@ var MenuFaces = (function () {
   }
 
   function _renderJournal(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '\uD83D\uDCD6');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '\uD83D\uDCD6', S);
+
+    var F_BODY    = Math.max(10, Math.round(14 * S));
+    var F_SMALL   = Math.max(9, Math.round(13 * S));
+    var F_SECTION = Math.max(9, Math.round(12 * S));
+    var F_HINT    = Math.max(9, Math.round(13 * S));
+    var PAD       = Math.round(10 * S);
 
     // ── Section 1: Operative dossier (class, callsign, status) ──
     var ps = (typeof Player !== 'undefined') ? Player.state() : {};
@@ -852,63 +901,106 @@ var MenuFaces = (function () {
     var classEmoji = ps.classEmoji || '\uD83D\uDD27';
 
     ctx.fillStyle = COL.accent;
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold ' + F_BODY + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(classEmoji + ' ' + callsign, x + 8, ty + 4);
+    ctx.fillText(classEmoji + ' ' + callsign, x + PAD, ty + Math.round(4 * S));
     ctx.fillStyle = COL.dim;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText(className, x + w - 8, ty + 4);
-    ty += 14;
+    ctx.fillText(className, x + w - PAD, ty + Math.round(4 * S));
+    ty += Math.round(16 * S);
+
+    // ── Character stats (HP, EN, currency — quick glance) ──
+    var statRowH = Math.round(14 * S);
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = COL.hp;
+    ctx.fillText('HP ' + (ps.hp || 0) + '/' + (ps.maxHp || 0), x + PAD, ty + 2);
+    ctx.fillStyle = COL.energy;
+    var hpTextW = Math.round(w * 0.33);
+    ctx.fillText('EN ' + (ps.energy || 0) + '/' + (ps.maxEnergy || 0), x + PAD + hpTextW, ty + 2);
+    ctx.fillStyle = COL.currency;
+    ctx.textAlign = 'right';
+    ctx.fillText('💰 ' + (ps.currency || 0), x + w - PAD, ty + 2);
+    ty += statRowH + Math.round(4 * S);
 
     // ── Active status effects (detailed view) ──
     if (typeof StatusEffect !== 'undefined') {
       var active = StatusEffect.getActive();
       if (active.length > 0) {
-        ctx.fillStyle = COL.divider;
+        ctx.strokeStyle = COL.divider;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(x + 8, ty); ctx.lineTo(x + w - 8, ty);
+        ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
         ctx.stroke();
-        ty += 6;
+        ty += Math.round(6 * S);
 
         ctx.fillStyle = COL.dim;
-        ctx.font = '12px monospace';
+        ctx.font = F_SECTION + 'px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('STATUS', x + 8, ty + 6);
-        ty += 12;
+        ctx.fillText('STATUS', x + PAD, ty + Math.round(6 * S));
+        ty += Math.round(14 * S);
 
         for (var si = 0; si < active.length && si < 4; si++) {
           var eff = active[si];
           var isBuff = !eff.debuff;
           ctx.fillStyle = isBuff ? 'rgba(80,220,120,0.9)' : 'rgba(220,100,80,0.9)';
-          ctx.font = '13px monospace';
+          ctx.font = F_SMALL + 'px monospace';
           ctx.textAlign = 'left';
-          ctx.fillText((eff.emoji || '\u2B50') + ' ' + (eff.label || eff.id), x + 10, ty + 4);
+          ctx.fillText((eff.emoji || '\u2B50') + ' ' + (eff.label || eff.id), x + PAD + 2, ty + 4);
           ctx.fillStyle = COL.dim;
-          ctx.font = '12px monospace';
+          ctx.font = F_SECTION + 'px monospace';
           ctx.textAlign = 'right';
           var durText = eff.duration === 'permanent' ? 'permanent'
             : (typeof eff.duration === 'number' ? eff.duration + 'd' : String(eff.duration || ''));
-          ctx.fillText(durText, x + w - 8, ty + 4);
-          ty += 14;
+          ctx.fillText(durText, x + w - PAD, ty + 4);
+          ty += Math.round(16 * S);
         }
       }
     }
-    ty += 4;
+    ty += Math.round(4 * S);
 
-    // ── Section 2: Books read (thumbnail grid) ──
-    ctx.fillStyle = COL.divider;
+    // ── Section 2: Quest log (stub — shows current objective) ──
+    ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x + 8, ty); ctx.lineTo(x + w - 8, ty);
+    ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
     ctx.stroke();
-    ty += 8;
+    ty += Math.round(8 * S);
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
+    ctx.font = F_SECTION + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('BOOKS', x + 8, ty + 6);
+    ctx.fillText('OBJECTIVES', x + PAD, ty + Math.round(6 * S));
+    ty += Math.round(14 * S);
+
+    var questText = _getQuestObjective();
+    if (questText) {
+      ctx.fillStyle = 'rgba(120,220,160,0.8)';
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('\u25C6 ' + questText, x + PAD + 2, ty + 2);
+      ty += Math.round(16 * S);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('No active objectives', x + w / 2, ty + 2);
+      ty += Math.round(16 * S);
+    }
+
+    // ── Section 3: Books read (thumbnail grid) ──
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
+    ctx.stroke();
+    ty += Math.round(8 * S);
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('BOOKS', x + PAD, ty + Math.round(6 * S));
 
     var catalog = (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.getCatalog)
       ? BookshelfPeek.getCatalog() : [];
@@ -920,71 +1012,126 @@ var MenuFaces = (function () {
     }
 
     ctx.textAlign = 'right';
-    ctx.fillText(readBooks.length + '/' + catalog.length, x + w - 8, ty + 6);
-    ty += 14;
+    ctx.fillText(readBooks.length + '/' + catalog.length, x + w - PAD, ty + Math.round(6 * S));
+    ty += Math.round(14 * S);
+
+    var thumbS = Math.max(28, Math.min(Math.round(44 * S), Math.floor((w - PAD * 2) / 5 - Math.round(5 * S))));
+    var thumbGap = Math.round(5 * S);
 
     if (readBooks.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '13px monospace';
+      ctx.font = F_SMALL + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('No books read yet. Find a bookshelf!', x + w / 2, ty + 10);
+      ctx.fillText('No books read yet. Find a bookshelf!', x + w / 2, ty + Math.round(10 * S));
+      ty += Math.round(24 * S);
     } else {
-      // Thumbnail grid — 5 across
-      var thumbS = Math.min(36, Math.floor((w - 24) / 5 - 4));
-      var thumbGap = 4;
-      var thumbPerRow = Math.floor((w - 16) / (thumbS + thumbGap));
-      if (thumbPerRow < 1) thumbPerRow = 1;
+      var thumbPerRow = Math.max(1, Math.floor((w - PAD * 2) / (thumbS + thumbGap)));
       var maxVisible = Math.min(readBooks.length, thumbPerRow * 3);
 
       for (var rb = 0; rb < maxVisible; rb++) {
         var bk = readBooks[rb];
         var col2 = rb % thumbPerRow;
         var row2 = Math.floor(rb / thumbPerRow);
-        var bx = x + 8 + col2 * (thumbS + thumbGap);
+        var bx = x + PAD + col2 * (thumbS + thumbGap);
         var by = ty + row2 * (thumbS + thumbGap);
         var bHov = (_hoverSlot === (900 + rb));
 
-        // Book tile background
         ctx.fillStyle = bHov ? 'rgba(180,160,100,0.2)' : 'rgba(60,50,35,0.5)';
-        _roundRectFill(ctx, bx, by, thumbS, thumbS, 3);
+        _roundRectFill(ctx, bx, by, thumbS, thumbS, Math.round(3 * S));
         ctx.strokeStyle = bHov ? COL.accent : 'rgba(180,160,120,0.3)';
         ctx.lineWidth = 1;
-        _roundRectStroke(ctx, bx, by, thumbS, thumbS, 3);
+        _roundRectStroke(ctx, bx, by, thumbS, thumbS, Math.round(3 * S));
 
-        // Book emoji
-        ctx.font = (thumbS > 30 ? '18' : '14') + 'px serif';
+        var bookEmojiFont = Math.max(12, Math.round(22 * S));
+        ctx.font = bookEmojiFont + 'px serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
-        ctx.fillText(bk.emoji || '\uD83D\uDCD6', bx + thumbS / 2, by + thumbS / 2 + 4);
+        ctx.fillText(bk.emoji || '\uD83D\uDCD6', bx + thumbS / 2, by + thumbS / 2 + Math.round(4 * S));
 
-        // Hit zone for re-reading
         _hitZones.push({ x: bx, y: by, w: thumbS, h: thumbS, slot: 900 + rb, action: 'read_book' });
 
-        // Hover detail
         if (bHov) {
           _hoverDetail = { item: { name: bk.title || bk.id, emoji: bk.emoji || '\uD83D\uDCD6',
             description: bk.category || '' }, x: bx + thumbS, y: by };
         }
       }
 
+      ty += Math.ceil(maxVisible / thumbPerRow) * (thumbS + thumbGap);
+
       if (readBooks.length > maxVisible) {
-        var moreY = ty + Math.ceil(maxVisible / thumbPerRow) * (thumbS + thumbGap);
         ctx.fillStyle = COL.dim;
-        ctx.font = '12px monospace';
+        ctx.font = F_SECTION + 'px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('+' + (readBooks.length - maxVisible) + ' more', x + w / 2, moreY + 4);
+        ctx.fillText('+' + (readBooks.length - maxVisible) + ' more', x + w / 2, ty + Math.round(4 * S));
+        ty += Math.round(14 * S);
       }
     }
 
-    // ── Day/session stats ──
+    // ── Section 4: Skill tree stub ──
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
+    ctx.stroke();
+    ty += Math.round(8 * S);
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SKILLS', x + PAD, ty + Math.round(6 * S));
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillText('COMING SOON', x + w - PAD, ty + Math.round(6 * S));
+    ty += Math.round(14 * S);
+
+    // Flat stat preview (jam scope: STR, DEX, Stealth)
+    var statDefs = [
+      { label: 'STR', val: ps.str || 1, color: '#f88' },
+      { label: 'DEX', val: ps.dex || 1, color: '#8f8' },
+      { label: 'STE', val: ps.stealth || 1, color: '#88f' }
+    ];
+    var statBlockW = Math.round(w / statDefs.length);
+    ctx.font = F_SMALL + 'px monospace';
+    for (var sti = 0; sti < statDefs.length; sti++) {
+      var sd = statDefs[sti];
+      var stX = x + sti * statBlockW + statBlockW / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = sd.color;
+      ctx.fillText(sd.label + ' ' + sd.val, stX, ty + 2);
+    }
+    ty += Math.round(16 * S);
+
+    // ── Section 5: Lore stub ──
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
+    ctx.stroke();
+    ty += Math.round(8 * S);
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('LORE', x + PAD, ty + Math.round(6 * S));
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillText('0 entries', x + w - PAD, ty + Math.round(6 * S));
+    ty += Math.round(14 * S);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Discover lore by exploring the world', x + w / 2, ty + 2);
+
+    // ── Day/session stats + hint ──
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px monospace';
+    ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
     if (typeof DayCycle !== 'undefined') {
       ctx.fillText('Day ' + (DayCycle.getDay() + 1) + '  \u2022  ' + DayCycle.getTimeString(),
-                   x + w / 2, y + h - 18);
+                   x + w / 2, y + h - Math.round(20 * S));
     }
-    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
+    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
   }
 
@@ -996,14 +1143,14 @@ var MenuFaces = (function () {
   function _renderDeckSection(ctx, x, y, w, h) {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'DECK'), '🂠');
 
-    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
-    var maxHand = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
+    var hand = CardAuthority.getHand();
+    var maxHand = (typeof Player !== 'undefined') ? CardAuthority.MAX_HAND : 5;
 
-    // Suit symbols — use CardRenderer data if available, else fallback
+    // Suit symbols — use CardAuthority canonical data, else fallback
     var SUIT_EMOJI, SUIT_COLOR;
-    if (typeof CardRenderer !== 'undefined' && CardRenderer.SUIT_DATA) {
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.SUIT_DATA) {
       SUIT_EMOJI = {}; SUIT_COLOR = {};
-      var _sd = CardRenderer.SUIT_DATA;
+      var _sd = CardAuthority.SUIT_DATA;
       for (var _sk in _sd) { SUIT_EMOJI[_sk] = _sd[_sk].sym; SUIT_COLOR[_sk] = _sd[_sk].color; }
     } else {
       SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
@@ -1055,8 +1202,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = COL.dim;
     ctx.font = '12px monospace';
     ctx.textAlign = 'center';
-    var backupDeck = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
-      ? CardSystem.getCollection() : [];
+    var backupDeck = CardAuthority.getBackup();
     ctx.fillText('BACKUP DECK  (' + backupDeck.length + ')', x + w / 2, ty + 8);
     ty += 14;
 
@@ -1113,14 +1259,18 @@ var MenuFaces = (function () {
   }
 
   function _renderStash(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.stash_title', 'STASH'), '📦');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.stash_title', 'STASH'), '📦', S);
+
+    var F_BODY  = Math.max(10, Math.round(14 * S));
+    var F_SMALL = Math.max(9, Math.round(13 * S));
 
     // Stash description
     ctx.fillStyle = COL.text;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('shop.stash_desc', 'Items stored here survive death'),
-                 x + w / 2, ty + 12);
+                 x + w / 2, ty + Math.round(12 * S));
 
     // Stash grid (4×5 = 20 slots)
     var cols = 4;
@@ -1130,8 +1280,8 @@ var MenuFaces = (function () {
     var gridX = x + (w - gridW) / 2;
     var gridY = ty + 24;
 
-    var stash = Player.getStash();
-    var maxStash = 20; // Player.MAX_STASH
+    var stash = CardAuthority.getStash();
+    var maxStash = 20; // CardAuthority.MAX_STASH
 
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
@@ -1185,8 +1335,9 @@ var MenuFaces = (function () {
   }
 
   function _renderShopBuy(ctx, x, y, w, h) {
+    var S = Math.min(w, h) / 400;
     var factionEmoji = (typeof Shop !== 'undefined') ? Shop.getFactionEmoji(Shop.getCurrentFaction()) : '🛒';
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.buy_title', 'BUY CARDS'), factionEmoji);
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.buy_title', 'BUY CARDS'), factionEmoji, S);
 
     var currency = Player.state().currency;
 
@@ -1319,344 +1470,477 @@ var MenuFaces = (function () {
    * Click any slot for equip/transfer actions.
    */
   function _renderInventory(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face2', 'Inventory'), '\uD83C\uDF92');
+    // ================================================================
+    // SCALE-AWARE LAYOUT
+    // The menu face renders inside a MenuBox content area that is ~70%
+    // of the viewport on-screen. All sizes are derived from (w, h) so
+    // they fill the available space. Font sizes are bumped ~40% over
+    // what you'd normally use because perceived size ≈ 70%.
+    // ================================================================
     var ps = Player.state();
 
-    // Slot sizing — scale to fill content width
-    var SLOT_S   = Math.min(72, Math.floor((w - 40) / 5 - 6));  // 5 slots + gaps + chevrons
-    var SLOT_GAP = 6;
-    var SLOT_RAD = 4;
-    var CHEV_W   = 18;
-    var CHEV_GAP = 4;
+    // ── Global scale factors ────────────────────────────────────
+    var S  = Math.min(w, h) / 400;         // Unitless scale from content area
+    var GAP     = Math.round(6 * S);       // Universal inter-slot gap
+    var RAD     = Math.round(5 * S);       // Border radius
+    var CHEV_W  = Math.round(28 * S);      // Chevron button width
+    var CHEV_H;                            // Set per-section
+    var SECT_PAD = Math.round(4 * S);      // Vertical pad between sections
 
-    // ── Section 1: Equipped (3 across) ──────────────────────────
-    var eqSlotW = Math.min(110, Math.floor((w - 20) / 3 - 8));
-    var eqSlotH = 64;
-    var eqGap   = 8;
+    // ── Font scale helpers (px values pre-compensate for 30% shrink) ─
+    var F_TITLE   = Math.round(20 * S) + 'px monospace';
+    var F_SECTION = Math.round(16 * S) + 'px monospace';
+    var F_SECTION_B = 'bold ' + Math.round(16 * S) + 'px monospace';
+    var F_EMOJI   = Math.round(30 * S) + 'px serif';
+    var F_LABEL   = Math.round(15 * S) + 'px monospace';
+    var F_HINT    = Math.round(14 * S) + 'px monospace';
+    var F_CHEV    = Math.round(22 * S) + 'px sans-serif';
+    var F_COUNT   = Math.round(14 * S) + 'px monospace';
+    var F_CURRENCY = Math.round(16 * S) + 'px monospace';
+    var F_EXPANDER = 'bold ' + Math.round(15 * S) + 'px monospace';
+
+    // ── Vertical budget — proportional fill ─────────────────────
+    // Title:   fixed
+    // Equip:   15% of body
+    // Bag:     20%
+    // Hand:    30%
+    // Deck:    20%
+    // Footer:  15%
+    var TITLE_H = Math.round(38 * S);
+    var bodyH = h - TITLE_H;
+    var eqH    = Math.floor(bodyH * 0.14);
+    var bagH   = Math.floor(bodyH * 0.20);
+    var handH  = Math.floor(bodyH * 0.30);
+    var deckH  = Math.floor(bodyH * 0.20);
+    var footH  = bodyH - eqH - bagH - handH - deckH;
+
+    // ── Title ──────────────────────────────────────────────────
+    ctx.fillStyle = COL.title;
+    ctx.font = 'bold ' + F_TITLE;
+    ctx.textAlign = 'center';
+    ctx.fillText('\uD83C\uDF92 ' + i18n.t('menu.face2', 'Inventory'), x + w / 2, y + Math.round(24 * S));
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.round(10 * S), y + Math.round(32 * S));
+    ctx.lineTo(x + w - Math.round(10 * S), y + Math.round(32 * S));
+    ctx.stroke();
+    var ty = y + TITLE_H;
+
+    // ════════════════════════════════════════════════════════════
+    // Section 1: EQUIPPED (3 across, always visible)
+    // ════════════════════════════════════════════════════════════
+    var equipped = CardAuthority.getEquipped();
+    var eqGap   = Math.round(10 * S);
+    var eqSlotW = Math.floor((w * 0.82 - 2 * eqGap) / 3);
+    var eqSlotH = eqH - SECT_PAD;
     var eqTotalW = 3 * eqSlotW + 2 * eqGap;
     var eqX = x + (w - eqTotalW) / 2;
     var eqStartY = ty;
 
-    var equipped = Player.getEquipped();
     for (var e = 0; e < 3; e++) {
       var sx = eqX + e * (eqSlotW + eqGap);
       var item = equipped[e];
+      var eHov = (_hoverSlot === (100 + e));
       if (item) {
-        var eHov = (_hoverSlot === (100 + e));
-        ctx.fillStyle = eHov ? 'rgba(51,255,136,0.1)' : COL.slot_bg;
-        _roundRectFill(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
-        ctx.strokeStyle = eHov ? COL.accent : 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = eHov ? 2 : 1;
-        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
-        ctx.font = '20px serif';
+        ctx.fillStyle = eHov ? 'rgba(51,255,136,0.12)' : COL.slot_bg;
+        _roundRectFill(ctx, sx, ty, eqSlotW, eqSlotH, RAD);
+        ctx.strokeStyle = eHov ? COL.accent : 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = eHov ? 2.5 : 1.5;
+        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, RAD);
+        ctx.font = F_EMOJI;
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
-        ctx.fillText(item.emoji || '?', sx + eqSlotW / 2, ty + 22);
-        ctx.font = '13px monospace';
+        ctx.fillText(item.emoji || '?', sx + eqSlotW / 2, ty + eqSlotH * 0.38);
+        ctx.font = F_LABEL;
         ctx.fillStyle = COL.text;
         var iName = item.name || '';
-        if (iName.length > 9) iName = iName.substring(0, 8) + '\u2026';
-        ctx.fillText(iName, sx + eqSlotW / 2, ty + 38);
+        var maxChars = Math.max(5, Math.floor(eqSlotW / (8 * S)));
+        if (iName.length > maxChars) iName = iName.substring(0, maxChars - 1) + '\u2026';
+        ctx.fillText(iName, sx + eqSlotW / 2, ty + eqSlotH * 0.68);
         _hitZones.push({ x: sx, y: ty, w: eqSlotW, h: eqSlotH, slot: 100 + e, action: 'unequip' });
       } else {
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1.5;
+        _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, RAD);
         ctx.setLineDash([]);
-        ctx.font = '13px monospace';
+        ctx.font = F_LABEL;
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.fillText(EQUIP_LABELS[e], sx + eqSlotW / 2, ty + eqSlotH / 2 + 3);
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillText(EQUIP_LABELS[e], sx + eqSlotW / 2, ty + eqSlotH / 2 + Math.round(4 * S));
+        // Still register hit zone for empty equip slots (drop target)
+        _hitZones.push({ x: sx, y: ty, w: eqSlotW, h: eqSlotH, slot: 100 + e, action: 'unequip' });
       }
     }
-    ty += eqSlotH + 8;
+    ty += eqH;
 
-    // ── Section 2: Bag Wheel (5 visible, scrollable) ────────────
-    var bag = Player.getBag();
-    var bagMax = Player.MAX_BAG || 12;
-    _bagOffset = Math.max(0, Math.min(bag.length - 5, _bagOffset));
-    if (bag.length <= 5) _bagOffset = 0;
-
+    // ════════════════════════════════════════════════════════════
+    // Section 2: BAG (adaptive wheel + expander)
+    // ════════════════════════════════════════════════════════════
+    var bag = CardAuthority.getBag();
+    var bagMax = CardAuthority.MAX_BAG || 12;
     var bagFocused = (_invFocus === 'bag');
+    var bagHeaderH = Math.round(22 * S);
 
     // Header
     ctx.fillStyle = bagFocused ? COL.accent : COL.dim;
-    ctx.font = bagFocused ? 'bold 12px monospace' : '11px monospace';
+    ctx.font = bagFocused ? F_SECTION_B : F_SECTION;
     ctx.textAlign = 'left';
-    ctx.fillText(bagFocused ? '\u25C6 BAG' : '  BAG', x, ty + 10);
+    ctx.fillText(bagFocused ? '\u25C6 BAG' : '  BAG', x, ty + Math.round(14 * S));
     ctx.textAlign = 'right';
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
-    ctx.fillText(bag.length + '/' + bagMax, x + w, ty + 10);
-    ty += 16;
+    ctx.font = F_COUNT;
+    ctx.fillText(bag.length + '/' + bagMax, x + w, ty + Math.round(14 * S));
+    ty += bagHeaderH;
 
+    var bagSlotH = bagH - bagHeaderH - SECT_PAD;
     var bagStartY = ty;
-    var wheelTotalW = 5 * SLOT_S + 4 * SLOT_GAP;
-    var wheelRowX = x + (w - wheelTotalW - 2 * (CHEV_W + CHEV_GAP)) / 2;
-    var chevLX = wheelRowX;
-    var slotsStartX = wheelRowX + CHEV_W + CHEV_GAP;
-    var chevRX = slotsStartX + wheelTotalW + CHEV_GAP;
+    CHEV_H = bagSlotH;
+
+    // Adaptive slot count: filled + 1 placeholder + expander (if excess empties)
+    var bagEmpty = bagMax - bag.length;
+    var bagShowExpander = !_bagExpanded && bagEmpty > EMPTY_COLLAPSE_THRESHOLD;
+    var bagVisCount = bag.length + (bagEmpty > 0 ? 1 : 0) + (bagShowExpander ? 1 : 0);
+    if (_bagExpanded) bagVisCount = Math.max(bag.length + bagEmpty, 1);
+    var bagMaxVis = Math.max(2, Math.floor((w - 2 * CHEV_W - 4 * GAP) / (bagSlotH + GAP)));
+    var bagNeedScroll = bagVisCount > bagMaxVis;
+    var bagDrawCount = Math.min(bagVisCount, bagMaxVis);
+    var SLOT_S_BAG = bagSlotH;
+
+    // Clamp offset
+    var bagScrollMax = Math.max(0, bagVisCount - bagDrawCount);
+    _bagOffset = Math.max(0, Math.min(bagScrollMax, _bagOffset));
+    if (!bagNeedScroll) _bagOffset = 0;
+
+    // Layout X positions
+    var bagWheelW = bagDrawCount * SLOT_S_BAG + (bagDrawCount - 1) * GAP;
+    var bagRowX = x + (w - bagWheelW - (bagNeedScroll ? 2 * (CHEV_W + GAP) : 0)) / 2;
+    var bagChevLX = bagRowX;
+    var bagSlotsX = bagRowX + (bagNeedScroll ? CHEV_W + GAP : 0);
+    var bagChevRX = bagSlotsX + bagWheelW + GAP;
 
     // Focus ring
     if (bagFocused) {
+      var ringX = bagSlotsX - Math.round(3 * S);
+      var ringW = bagWheelW + Math.round(6 * S);
       ctx.strokeStyle = 'rgba(255,215,0,0.4)';
-      ctx.lineWidth = 1.5;
-      _roundRectStroke(ctx, chevLX - 2, ty - 2, chevRX + CHEV_W - chevLX + 4, SLOT_S + 4, 6);
+      ctx.lineWidth = 2;
+      _roundRectStroke(ctx, ringX, ty - Math.round(3 * S), ringW, SLOT_S_BAG + Math.round(6 * S), RAD + 2);
     }
 
     // Left chevron
-    var bagCanLeft = _bagOffset > 0;
-    ctx.fillStyle = bagCanLeft ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('\u25C0', chevLX + CHEV_W / 2, ty + SLOT_S / 2);
-    _hitZones.push({ x: chevLX, y: ty, w: CHEV_W, h: SLOT_S, slot: 700, action: 'bag_scroll_left' });
+    if (bagNeedScroll) {
+      var bagCanLeft = _bagOffset > 0;
+      ctx.fillStyle = bagCanLeft ? 'rgba(200,200,180,0.8)' : 'rgba(200,200,180,0.15)';
+      ctx.font = F_CHEV;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u25C0', bagChevLX + CHEV_W / 2, ty + SLOT_S_BAG / 2);
+      _hitZones.push({ x: bagChevLX, y: ty, w: CHEV_W, h: SLOT_S_BAG, slot: 700, action: 'bag_scroll_left' });
+    }
 
-    // Bag slots
-    for (var bs = 0; bs < 5; bs++) {
-      var bsx = slotsStartX + bs * (SLOT_S + SLOT_GAP);
-      var bdi = _bagOffset + bs;
-      var bagItem = (bdi < bag.length) ? bag[bdi] : null;
-      var bHov = (_hoverSlot === (200 + bdi));
-      var isCardInBag = bagItem && (bagItem._bagStored || (bagItem.suit !== undefined && bagItem.value !== undefined));
+    // Build virtual slot list: [filled items...] [empty placeholder?] [expander?]
+    // or if expanded: [filled items...] [all empty placeholders...]
+    var bagSlotData = []; // { type: 'item'|'empty'|'expander', index, item }
+    for (var _bfi = 0; _bfi < bag.length; _bfi++) {
+      bagSlotData.push({ type: 'item', index: _bfi, item: bag[_bfi] });
+    }
+    if (_bagExpanded) {
+      for (var _bei = bag.length; _bei < bagMax; _bei++) {
+        bagSlotData.push({ type: 'empty', index: _bei, item: null });
+      }
+    } else {
+      if (bagEmpty > 0 && bagEmpty <= EMPTY_COLLAPSE_THRESHOLD) {
+        for (var _bse = 0; _bse < bagEmpty; _bse++) {
+          bagSlotData.push({ type: 'empty', index: bag.length + _bse, item: null });
+        }
+      } else if (bagEmpty > 0) {
+        bagSlotData.push({ type: 'empty', index: bag.length, item: null });
+        bagSlotData.push({ type: 'expander', index: -1, item: null, count: bagEmpty - 1 });
+      }
+    }
 
-      // Slot background
-      if (bagItem) {
-        ctx.fillStyle = bHov ? 'rgba(51,255,136,0.1)' : COL.slot_bg;
-      } else {
+    // Render visible slots
+    var bagSlotBounds = [];
+    for (var bs = 0; bs < bagDrawCount; bs++) {
+      var bsx = bagSlotsX + bs * (SLOT_S_BAG + GAP);
+      var bvi = _bagOffset + bs;
+      var bSlot = (bvi < bagSlotData.length) ? bagSlotData[bvi] : null;
+
+      if (!bSlot || bSlot.type === 'empty') {
+        // Empty placeholder
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
-      }
-      _roundRectFill(ctx, bsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
-
-      // Card-in-bag glow
-      if (isCardInBag) {
-        ctx.fillStyle = 'rgba(128,0,255,0.12)';
-        _roundRectFill(ctx, bsx + 2, ty + 2, SLOT_S - 4, SLOT_S - 4, SLOT_RAD - 1);
-      }
-
-      // Border
-      if (bagItem) {
-        ctx.strokeStyle = bHov ? COL.accent : (bagFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.2)');
-        ctx.lineWidth = bHov ? 2 : 1;
+        _roundRectFill(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+        ctx.lineWidth = 1.5;
+        _roundRectStroke(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+        ctx.setLineDash([]);
+        // Placeholder label
+        ctx.font = F_LABEL;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillText('\u2500', bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG / 2 + Math.round(4 * S));
+        bagSlotBounds.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG });
+      } else if (bSlot.type === 'expander') {
+        // Expander: "+N" — clickable & droppable
+        ctx.fillStyle = 'rgba(156,39,176,0.08)';
+        _roundRectFill(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = 'rgba(156,39,176,0.35)';
+        ctx.lineWidth = 1.5;
+        _roundRectStroke(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+        ctx.setLineDash([]);
+        ctx.font = F_EXPANDER;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(156,39,176,0.6)';
+        ctx.fillText('+' + bSlot.count, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG / 2 + Math.round(5 * S));
+        _hitZones.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG, slot: 750, action: 'expand_bag' });
+        bagSlotBounds.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG });
       } else {
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.lineWidth = 1;
-      }
-      _roundRectStroke(ctx, bsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
-      ctx.setLineDash([]);
+        // Filled item slot
+        var bagItem = bSlot.item;
+        var bdi = bSlot.index;
+        var bHov = (_hoverSlot === (200 + bdi));
+        var isCardInBag = bagItem && (bagItem._bagStored || (bagItem.suit !== undefined && bagItem.value !== undefined));
 
-      // Content
-      if (bagItem) {
+        ctx.fillStyle = bHov ? 'rgba(51,255,136,0.12)' : COL.slot_bg;
+        _roundRectFill(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+        if (isCardInBag) {
+          ctx.fillStyle = 'rgba(128,0,255,0.14)';
+          _roundRectFill(ctx, bsx + 2, ty + 2, SLOT_S_BAG - 4, SLOT_S_BAG - 4, RAD - 1);
+        }
+        ctx.strokeStyle = bHov ? COL.accent : (bagFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.25)');
+        ctx.lineWidth = bHov ? 2.5 : 1.5;
+        _roundRectStroke(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
+
+        // Emoji
         var bagEmoji = isCardInBag ? '\uD83C\uDCCF' : (bagItem.emoji || '\uD83D\uDCE6');
-        ctx.font = '22px serif';
+        ctx.font = F_EMOJI;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#fff';
-        ctx.fillText(bagEmoji, bsx + SLOT_S / 2, ty + SLOT_S / 2 - 2);
+        ctx.fillText(bagEmoji, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG * 0.4);
 
-        // Name below emoji
-        ctx.font = '12px monospace';
+        // Name
+        ctx.font = F_LABEL;
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = COL.text;
         var bName = bagItem.name || '';
-        if (bName.length > 7) bName = bName.substring(0, 6) + '\u2026';
-        ctx.fillText(bName, bsx + SLOT_S / 2, ty + SLOT_S - 4);
+        var bMaxC = Math.max(4, Math.floor(SLOT_S_BAG / (9 * S)));
+        if (bName.length > bMaxC) bName = bName.substring(0, bMaxC - 1) + '\u2026';
+        ctx.fillText(bName, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG * 0.82);
 
-        _hitZones.push({ x: bsx, y: ty, w: SLOT_S, h: SLOT_S, slot: 200 + bdi, action: 'equip' });
+        _hitZones.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG, slot: 200 + bdi, action: 'equip' });
+        bagSlotBounds.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG });
       }
-
-      // Slot number
-      ctx.font = '13px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = (bagFocused && bagItem) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
-      ctx.fillText(String(bs + 1), bsx + SLOT_S / 2, ty + SLOT_S + 1);
     }
     ctx.textBaseline = 'alphabetic';
 
     // Right chevron
-    var bagCanRight = _bagOffset + 5 < bag.length;
-    ctx.fillStyle = bagCanRight ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('\u25B6', chevRX + CHEV_W / 2, ty + SLOT_S / 2);
-    ctx.textBaseline = 'alphabetic';
-    _hitZones.push({ x: chevRX, y: ty, w: CHEV_W, h: SLOT_S, slot: 701, action: 'bag_scroll_right' });
+    if (bagNeedScroll) {
+      var bagCanRight = _bagOffset + bagDrawCount < bagVisCount;
+      ctx.fillStyle = bagCanRight ? 'rgba(200,200,180,0.8)' : 'rgba(200,200,180,0.15)';
+      ctx.font = F_CHEV;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u25B6', bagChevRX + CHEV_W / 2, ty + SLOT_S_BAG / 2);
+      ctx.textBaseline = 'alphabetic';
+      _hitZones.push({ x: bagChevRX, y: ty, w: CHEV_W, h: SLOT_S_BAG, slot: 701, action: 'bag_scroll_right' });
+    }
+    ty += bagH;
 
-    ty += SLOT_S + 18;
-
-    // ── Section 3: Hand (5 card slots, full size) ───────────────
-    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
-    var maxHand = Player.MAX_HAND || 5;
+    // ════════════════════════════════════════════════════════════
+    // Section 3: HAND (5 card slots, proportional)
+    // ════════════════════════════════════════════════════════════
+    var hand = CardAuthority.getHand();
+    var maxHand = CardAuthority.MAX_HAND || 5;
+    var handHeaderH = Math.round(22 * S);
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
+    ctx.font = F_SECTION;
     ctx.textAlign = 'left';
-    ctx.fillText('  HAND', x, ty + 10);
+    ctx.fillText('  HAND', x, ty + Math.round(14 * S));
     ctx.textAlign = 'right';
-    ctx.fillText(hand.length + '/' + maxHand, x + w, ty + 10);
-    ty += 16;
+    ctx.font = F_COUNT;
+    ctx.fillText(hand.length + '/' + maxHand, x + w, ty + Math.round(14 * S));
+    ty += handHeaderH;
 
-    var cardW = Math.min(68, Math.floor((w - 20) / 5 - 6));
-    var cardH = Math.floor(cardW * 1.35);
-    var cardGap = 8;
+    var handSlotH = handH - handHeaderH - SECT_PAD;
+    var cardH = handSlotH;
+    var cardW = Math.floor(cardH / 1.35);
+    var cardGap = Math.round(8 * S);
     var handTotalW = 5 * cardW + 4 * cardGap;
+    // Clamp if too wide for content area
+    if (handTotalW > w * 0.92) {
+      cardW = Math.floor((w * 0.92 - 4 * cardGap) / 5);
+      cardH = Math.floor(cardW * 1.35);
+      handTotalW = 5 * cardW + 4 * cardGap;
+    }
     var handX = x + (w - handTotalW) / 2;
-    var handStartY = ty;  // capture for drag zone bounds
+    var handStartY = ty;
 
     for (var hi = 0; hi < 5; hi++) {
       var hcx = handX + hi * (cardW + cardGap);
       var card = hand[hi];
       if (card) {
         var hHov = (_hoverSlot === (500 + hi));
-        // Unified card rendering via CardDraw (MEDIUM LOD)
         if (typeof CardDraw !== 'undefined') {
           CardDraw.drawCardInTile(ctx, card, hcx + cardW / 2, ty + cardH / 2, cardW, cardH, hHov);
         }
         _hitZones.push({ x: hcx, y: ty, w: cardW, h: cardH, slot: 500 + hi, action: 'hand_to_backup' });
       } else {
-        ctx.setLineDash([3, 4]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-        ctx.lineWidth = 1;
-        _roundRectStroke(ctx, hcx, ty, cardW, cardH, 4);
+        ctx.setLineDash([4, 5]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1.5;
+        _roundRectStroke(ctx, hcx, ty, cardW, cardH, RAD);
         ctx.setLineDash([]);
+        // Empty hand placeholder
+        ctx.font = F_LABEL;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillText('\u2500', hcx + cardW / 2, ty + cardH / 2 + Math.round(4 * S));
       }
     }
-    ty += cardH + 8;
+    ty += handH;
 
-    // ── Section 4: Deck Wheel (5 visible, scrollable) ───────────
-    var collection = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
-      ? CardSystem.getCollection() : [];
-    _deckOffset = Math.max(0, Math.min(collection.length - 5, _deckOffset));
-    if (collection.length <= 5) _deckOffset = 0;
-
+    // ════════════════════════════════════════════════════════════
+    // Section 4: DECK (adaptive wheel + expander)
+    // ════════════════════════════════════════════════════════════
+    var collection = CardAuthority.getBackup();
     var deckFocused = (_invFocus === 'deck');
+    var deckHeaderH = Math.round(22 * S);
 
-    // Header
     ctx.fillStyle = deckFocused ? COL.accent : COL.dim;
-    ctx.font = deckFocused ? 'bold 12px monospace' : '11px monospace';
+    ctx.font = deckFocused ? F_SECTION_B : F_SECTION;
     ctx.textAlign = 'left';
-    ctx.fillText(deckFocused ? '\u25C6 DECK' : '  DECK', x, ty + 10);
+    ctx.fillText(deckFocused ? '\u25C6 DECK' : '  DECK', x, ty + Math.round(14 * S));
     ctx.textAlign = 'right';
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
-    ctx.fillText('' + collection.length, x + w, ty + 10);
-    ty += 16;
+    ctx.font = F_COUNT;
+    ctx.fillText('' + collection.length, x + w, ty + Math.round(14 * S));
+    ty += deckHeaderH;
 
-    var deckStartY = ty;  // capture for drag zone bounds
-    var deckSlotsStartX = slotsStartX;  // reuse bag wheel X alignment
+    var deckSlotH = deckH - deckHeaderH - SECT_PAD;
+    var deckStartY = ty;
+    var SLOT_S_DECK = deckSlotH;
+
+    // Deck is unbounded size — use scroll, no expander needed (deck has no "max")
+    // but we still use adaptive visible count
+    var deckDrawCount = Math.max(2, Math.floor((w - 2 * CHEV_W - 4 * GAP) / (SLOT_S_DECK + GAP)));
+    var deckVisCount = Math.max(collection.length, 1);
+    var deckNeedScroll = deckVisCount > deckDrawCount;
+    deckDrawCount = Math.min(deckVisCount, deckDrawCount);
+    var deckScrollMax = Math.max(0, deckVisCount - deckDrawCount);
+    _deckOffset = Math.max(0, Math.min(deckScrollMax, _deckOffset));
+    if (!deckNeedScroll) _deckOffset = 0;
+
+    // Layout X
+    var deckWheelW = deckDrawCount * SLOT_S_DECK + (deckDrawCount - 1) * GAP;
+    var deckRowX = x + (w - deckWheelW - (deckNeedScroll ? 2 * (CHEV_W + GAP) : 0)) / 2;
+    var deckChevLX = deckRowX;
+    var deckSlotsX = deckRowX + (deckNeedScroll ? CHEV_W + GAP : 0);
+    var deckChevRX = deckSlotsX + deckWheelW + GAP;
 
     // Focus ring
     if (deckFocused) {
       ctx.strokeStyle = 'rgba(255,215,0,0.4)';
-      ctx.lineWidth = 1.5;
-      _roundRectStroke(ctx, chevLX - 2, ty - 2, chevRX + CHEV_W - chevLX + 4, SLOT_S + 4, 6);
+      ctx.lineWidth = 2;
+      _roundRectStroke(ctx, deckSlotsX - Math.round(3 * S), ty - Math.round(3 * S),
+        deckWheelW + Math.round(6 * S), SLOT_S_DECK + Math.round(6 * S), RAD + 2);
     }
 
     // Left chevron
-    var deckCanLeft = _deckOffset > 0;
-    ctx.fillStyle = deckCanLeft ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('\u25C0', chevLX + CHEV_W / 2, ty + SLOT_S / 2);
-    _hitZones.push({ x: chevLX, y: ty, w: CHEV_W, h: SLOT_S, slot: 710, action: 'deck_scroll_left' });
+    if (deckNeedScroll) {
+      var deckCanLeft = _deckOffset > 0;
+      ctx.fillStyle = deckCanLeft ? 'rgba(200,200,180,0.8)' : 'rgba(200,200,180,0.15)';
+      ctx.font = F_CHEV;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u25C0', deckChevLX + CHEV_W / 2, ty + SLOT_S_DECK / 2);
+      _hitZones.push({ x: deckChevLX, y: ty, w: CHEV_W, h: SLOT_S_DECK, slot: 710, action: 'deck_scroll_left' });
+    }
 
     // Deck slots
-    for (var ds = 0; ds < 5; ds++) {
-      var dsx = slotsStartX + ds * (SLOT_S + SLOT_GAP);
+    var deckSlotBounds = [];
+    for (var ds = 0; ds < deckDrawCount; ds++) {
+      var dsx = deckSlotsX + ds * (SLOT_S_DECK + GAP);
       var ddi = _deckOffset + ds;
       var dCard = (ddi < collection.length) ? collection[ddi] : null;
       var dHov = (_hoverSlot === (600 + ddi));
 
-      // Slot background
       if (dCard) {
-        ctx.fillStyle = dHov ? 'rgba(100,255,100,0.1)' : 'rgba(40,35,50,0.6)';
+        ctx.fillStyle = dHov ? 'rgba(100,255,100,0.12)' : 'rgba(40,35,50,0.6)';
+        _roundRectFill(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
+        ctx.strokeStyle = dHov ? COL.accent : (deckFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.25)');
+        ctx.lineWidth = dHov ? 2.5 : 1.5;
+        _roundRectStroke(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
+        if (typeof CardDraw !== 'undefined') {
+          CardDraw.drawCardInTile(ctx, dCard, dsx + SLOT_S_DECK / 2, ty + SLOT_S_DECK / 2, SLOT_S_DECK, SLOT_S_DECK, dHov);
+        }
+        _hitZones.push({ x: dsx, y: ty, w: SLOT_S_DECK, h: SLOT_S_DECK, slot: 600 + ddi, action: 'backup_to_hand' });
       } else {
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        _roundRectFill(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+        ctx.lineWidth = 1.5;
+        _roundRectStroke(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
+        ctx.setLineDash([]);
       }
-      _roundRectFill(ctx, dsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
-
-      // Border
-      if (dCard) {
-        ctx.strokeStyle = dHov ? COL.accent : (deckFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.2)');
-        ctx.lineWidth = dHov ? 2 : 1;
-      } else {
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.lineWidth = 1;
-      }
-      _roundRectStroke(ctx, dsx, ty, SLOT_S, SLOT_S, SLOT_RAD);
-      ctx.setLineDash([]);
-
-      // Content — unified card rendering via CardDraw (SMALL LOD for deck wheel)
-      if (dCard) {
-        if (typeof CardDraw !== 'undefined') {
-          CardDraw.drawCardInTile(ctx, dCard, dsx + SLOT_S / 2, ty + SLOT_S / 2, SLOT_S, SLOT_S, dHov);
-        }
-        _hitZones.push({ x: dsx, y: ty, w: SLOT_S, h: SLOT_S, slot: 600 + ddi, action: 'backup_to_hand' });
-      }
-
-      // Slot number
-      ctx.font = '13px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = (deckFocused && dCard) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
-      ctx.fillText(String(ds + 1), dsx + SLOT_S / 2, ty + SLOT_S + 1);
+      deckSlotBounds.push({ x: dsx, y: ty, w: SLOT_S_DECK, h: SLOT_S_DECK });
     }
     ctx.textBaseline = 'alphabetic';
 
     // Right chevron
-    var deckCanRight = _deckOffset + 5 < collection.length;
-    ctx.fillStyle = deckCanRight ? 'rgba(200,200,180,0.7)' : 'rgba(200,200,180,0.15)';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('\u25B6', chevRX + CHEV_W / 2, ty + SLOT_S / 2);
-    ctx.textBaseline = 'alphabetic';
-    _hitZones.push({ x: chevRX, y: ty, w: CHEV_W, h: SLOT_S, slot: 711, action: 'deck_scroll_right' });
+    if (deckNeedScroll) {
+      var deckCanRight = _deckOffset + deckDrawCount < deckVisCount;
+      ctx.fillStyle = deckCanRight ? 'rgba(200,200,180,0.8)' : 'rgba(200,200,180,0.15)';
+      ctx.font = F_CHEV;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u25B6', deckChevRX + CHEV_W / 2, ty + SLOT_S_DECK / 2);
+      ctx.textBaseline = 'alphabetic';
+      _hitZones.push({ x: deckChevRX, y: ty, w: CHEV_W, h: SLOT_S_DECK, slot: 711, action: 'deck_scroll_right' });
+    }
+    ty += deckH;
 
-    ty += SLOT_S + 16;
-
-    // ── Incinerator + Currency row ─────────────────────────────
-    var incinW = 36, incinH = 36;
-    var incinX = x + 6;
-    var incinY = ty - 6;
+    // ════════════════════════════════════════════════════════════
+    // Footer: Incinerator + Currency + Hint
+    // ════════════════════════════════════════════════════════════
+    var incinS = Math.min(Math.round(48 * S), footH - Math.round(20 * S));
+    var incinX = x + Math.round(8 * S);
+    var incinY = ty + (footH - incinS - Math.round(16 * S)) / 2;
     var incinHov = (_hoverSlot === 800);
-    // Incinerator icon
-    ctx.fillStyle = incinHov ? 'rgba(255,60,30,0.25)' : 'rgba(60,20,10,0.5)';
-    _roundRectFill(ctx, incinX, incinY, incinW, incinH, 4);
-    ctx.strokeStyle = incinHov ? '#ff4422' : 'rgba(255,80,40,0.3)';
-    ctx.lineWidth = incinHov ? 2 : 1;
-    _roundRectStroke(ctx, incinX, incinY, incinW, incinH, 4);
-    ctx.font = '20px serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = incinHov ? '#ff6644' : 'rgba(255,100,60,0.6)';
-    ctx.fillText('\uD83D\uDD25', incinX + incinW / 2, incinY + 24);
-    _hitZones.push({ x: incinX, y: incinY, w: incinW, h: incinH, slot: 800, action: 'incinerator' });
 
-    // Currency
+    ctx.fillStyle = incinHov ? 'rgba(255,60,30,0.3)' : 'rgba(60,20,10,0.5)';
+    _roundRectFill(ctx, incinX, incinY, incinS, incinS, RAD);
+    ctx.strokeStyle = incinHov ? '#ff4422' : 'rgba(255,80,40,0.35)';
+    ctx.lineWidth = incinHov ? 2.5 : 1.5;
+    _roundRectStroke(ctx, incinX, incinY, incinS, incinS, RAD);
+    ctx.font = Math.round(28 * S) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = incinHov ? '#ff6644' : 'rgba(255,100,60,0.7)';
+    ctx.fillText('\uD83D\uDD25', incinX + incinS / 2, incinY + incinS * 0.64);
+    _hitZones.push({ x: incinX, y: incinY, w: incinS, h: incinS, slot: 800, action: 'incinerator' });
+
+    // Currency (centered)
     ctx.fillStyle = COL.currency;
-    ctx.font = '12px monospace';
+    ctx.font = F_CURRENCY;
     ctx.textAlign = 'center';
-    ctx.fillText('\uD83D\uDCB0 ' + ps.currency + 'g', x + w / 2, ty + 4);
-    ty += 18;
+    ctx.fillText('\uD83D\uDCB0 ' + ps.currency + 'g', x + w / 2, incinY + incinS / 2 + Math.round(5 * S));
 
-    // ── Bottom hint ─────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '13px monospace';
+    // Hint (bottom)
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = F_HINT;
     ctx.textAlign = 'center';
-    ctx.fillText('[Drag] Transfer  [Q/E] Scroll  [TAB] Focus', x + w / 2, y + h - 6);
+    ctx.fillText('[Drag] Transfer  [Q/E] Scroll  [TAB] Focus', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
 
     // ── Hover detail tooltip ────────────────────────────────────
     _hoverDetail = null;
     if (_hoverSlot >= 0) {
-      // Resolve hovered slot to actual item/card
       var _hovItem = null, _hovHZ = null;
       for (var _hz = 0; _hz < _hitZones.length; _hz++) {
         if (_hitZones[_hz].slot === _hoverSlot) { _hovHZ = _hitZones[_hz]; break; }
@@ -1684,23 +1968,40 @@ var MenuFaces = (function () {
       for (var _ei = 0; _ei < 3; _ei++) {
         eqSlots.push({ x: eqX + _ei * (eqSlotW + eqGap), y: eqStartY, w: eqSlotW, h: eqSlotH });
       }
-      var bagSlots = [];
+      // Pad bag/deck slot arrays to 5 (DragDrop expects 5 zones registered)
+      var _bagBounds = [];
       for (var _bi = 0; _bi < 5; _bi++) {
-        bagSlots.push({ x: slotsStartX + _bi * (SLOT_S + SLOT_GAP), y: bagStartY, w: SLOT_S, h: SLOT_S });
+        _bagBounds.push(bagSlotBounds[_bi] || { x: 0, y: 0, w: 0, h: 0 });
       }
       var handSlots = [];
       for (var _hi = 0; _hi < 5; _hi++) {
         handSlots.push({ x: handX + _hi * (cardW + cardGap), y: handStartY, w: cardW, h: cardH });
       }
-      var deckSlots = [];
+      var _deckBounds = [];
       for (var _di = 0; _di < 5; _di++) {
-        deckSlots.push({ x: deckSlotsStartX + _di * (SLOT_S + SLOT_GAP), y: deckStartY, w: SLOT_S, h: SLOT_S });
+        _deckBounds.push(deckSlotBounds[_di] || { x: 0, y: 0, w: 0, h: 0 });
+      }
+      // Determine expander bounds from hit zones (slot 750 = bag expander)
+      var _expanderBounds = null;
+      for (var _hzx = 0; _hzx < _hitZones.length; _hzx++) {
+        if (_hitZones[_hzx].slot === 750) {
+          _expanderBounds = { x: _hitZones[_hzx].x, y: _hitZones[_hzx].y,
+                              w: _hitZones[_hzx].w, h: _hitZones[_hzx].h };
+          break;
+        }
+      }
+      // Activate/deactivate expander DragDrop zone
+      if (typeof DragDrop !== 'undefined') {
+        DragDrop.setZoneActive('inv-bag-expander', !!_expanderBounds);
+        if (_expanderBounds) {
+          DragDrop.updateZone('inv-bag-expander', _expanderBounds);
+        }
       }
       _storeInvLayout({
-        eqSlots: eqSlots, bagSlots: bagSlots, handSlots: handSlots, deckSlots: deckSlots,
-        incin: { x: incinX, y: incinY, w: incinW, h: incinH }
+        eqSlots: eqSlots, bagSlots: _bagBounds, handSlots: handSlots, deckSlots: _deckBounds,
+        incin: { x: incinX, y: incinY, w: incinS, h: incinS },
+        bagExpander: _expanderBounds
       });
-      // Draw selection highlights over inventory (after layout stored)
       _drawSelectionHighlights(ctx);
     }
   }
@@ -1713,8 +2014,8 @@ var MenuFaces = (function () {
    * Interior floors (N.N) only — exterior/dungeon bonfires skip stash.
    */
   function _renderBag(ctx, x, y, w, h) {
-    var bag = Player.getBag();
-    var stash = Player.getStash();
+    var bag = CardAuthority.getBag();
+    var stash = CardAuthority.getStash();
     var hasVault = _hasVaultAccess();
 
     // ── Title ──
@@ -1743,24 +2044,24 @@ var MenuFaces = (function () {
       ctx.fillStyle = COL.accent;
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('BAG (' + bag.length + '/' + Player.MAX_BAG + ')', panelLX + halfW / 2, ty + 10);
+      ctx.fillText('BAG (' + bag.length + '/' + CardAuthority.MAX_BAG + ')', panelLX + halfW / 2, ty + 10);
 
       var bagY = ty + 16;
-      var bagRows = Math.ceil(Player.MAX_BAG / cols);
+      var bagRows = Math.ceil(CardAuthority.MAX_BAG / cols);
       var bagGridX = panelLX + (halfW - bagGridW) / 2;
-      _renderSlotGrid(ctx, bag, Player.MAX_BAG, cols, slotSize, bagGridX, bagY, bagRows,
+      _renderSlotGrid(ctx, bag, CardAuthority.MAX_BAG, cols, slotSize, bagGridX, bagY, bagRows,
                        300, 'bag-to-stash');
 
       // ── Right panel: VAULT / STASH ──
       ctx.fillStyle = '#FFD700';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('VAULT (' + stash.length + '/' + Player.MAX_STASH + ')', panelRX + halfW / 2, ty + 10);
+      ctx.fillText('VAULT (' + stash.length + '/' + CardAuthority.MAX_STASH + ')', panelRX + halfW / 2, ty + 10);
 
       var stashY = ty + 16;
-      var stashRows = Math.ceil(Player.MAX_STASH / stashCols);
+      var stashRows = Math.ceil(CardAuthority.MAX_STASH / stashCols);
       var stashGridX = panelRX + (halfW - stashGridW) / 2;
-      _renderSlotGrid(ctx, stash, Player.MAX_STASH, stashCols, stashSlotSize, stashGridX, stashY,
+      _renderSlotGrid(ctx, stash, CardAuthority.MAX_STASH, stashCols, stashSlotSize, stashGridX, stashY,
                        stashRows, 500, 'stash-to-bag');
 
       // ── Divider line ──
@@ -1787,10 +2088,10 @@ var MenuFaces = (function () {
       ctx.fillStyle = COL.dim;
       ctx.font = '12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(bag.length + ' / ' + Player.MAX_BAG + ' slots', x + w / 2, ty + 10);
+      ctx.fillText(bag.length + ' / ' + CardAuthority.MAX_BAG + ' slots', x + w / 2, ty + 10);
       ty += 16;
 
-      var totalSlots2 = Player.MAX_BAG;
+      var totalSlots2 = CardAuthority.MAX_BAG;
       var rows2 = Math.ceil(totalSlots2 / cols);
       _renderSlotGrid(ctx, bag, totalSlots2, cols, slotSize, gridX2, ty, rows2, 300, null);
 
@@ -1912,7 +2213,7 @@ var MenuFaces = (function () {
       epic: '#fa4', legendary: '#ff0'
     };
 
-    var hand = CardSystem.getHand();
+    var hand = CardAuthority.getHand();
     var positions = _gridLayout(x, ty, w, 5);
 
     for (var i = 0; i < 5; i++) {
@@ -1937,7 +2238,7 @@ var MenuFaces = (function () {
     ty += (lastCardRow + 1) * (TILE_SIZE + TILE_GAP) + 4;
 
     // ── Salvage parts sell section (bag items with type 'salvage') ──
-    var bag = Player.getBag();
+    var bag = CardAuthority.getBag();
     var salvageParts = [];
     var salvageIndices = [];
     for (var b = 0; b < bag.length; b++) {
@@ -2046,6 +2347,37 @@ var MenuFaces = (function () {
     _settingsState.row = 0;
   }
 
+  /**
+   * Toggle a settings boolean by key (screen shake, show FPS, minimap).
+   * Called by game.js when a toggle row is clicked.
+   */
+  function handleSettingsToggle(key) {
+    var toggleDefs = [
+      { key: 'screenShake', default: true },
+      { key: 'showFps', default: false },
+      { key: 'minimapVisible', default: true }
+    ];
+    for (var i = 0; i < toggleDefs.length; i++) {
+      if (toggleDefs[i].key === key) {
+        var cur = _settingsState[key] !== undefined ? _settingsState[key] : toggleDefs[i].default;
+        _settingsState[key] = !cur;
+        // Wire side effects
+        if (key === 'minimapVisible' && typeof Minimap !== 'undefined') {
+          if (_settingsState[key]) Minimap.show(); else Minimap.hide();
+        }
+        return;
+      }
+    }
+  }
+
+  /**
+   * Select a specific settings row by index.
+   * Called when a slider track is clicked.
+   */
+  function handleSettingsSelectRow(rowIdx) {
+    _settingsState.row = rowIdx;
+  }
+
   // ── Renderer ─────────────────────────────────────────────────────
 
   /**
@@ -2054,12 +2386,19 @@ var MenuFaces = (function () {
    * ←/→ and Q/E rotate the box away from this face (handled in game.js).
    */
   function renderFace3(ctx, x, y, w, h, context) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️', S);
 
-    var listX  = x + 16;
-    var trackW = w - 48;
-    var rowH   = 38;
-    var ty2    = ty + 6;
+    var F_BODY    = Math.max(10, Math.round(14 * S));
+    var F_SMALL   = Math.max(9, Math.round(13 * S));
+    var F_SECTION = Math.max(9, Math.round(12 * S));
+    var F_HINT    = Math.max(9, Math.round(13 * S));
+    var PAD       = Math.round(16 * S);
+
+    var listX  = x + PAD;
+    var trackW = w - PAD * 3;
+    var rowH   = Math.max(30, Math.round(44 * S));
+    var ty2    = ty + Math.round(6 * S);
 
     // Live volumes from AudioSystem (0–100 integers)
     var vols = (typeof AudioSystem !== 'undefined')
@@ -2076,82 +2415,94 @@ var MenuFaces = (function () {
       // Selection highlight row
       if (selected) {
         ctx.fillStyle = 'rgba(240,208,112,0.12)';
-        ctx.fillRect(x + 6, sy - 2, w - 12, rowH - 4);
+        ctx.fillRect(x + 6, sy - 2, w - 12, rowH - Math.round(4 * S));
 
-        // Selection cursor indicator
         ctx.fillStyle = COL.accent;
-        ctx.font = 'bold 12px monospace';
+        ctx.font = 'bold ' + F_BODY + 'px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('▶', x + 6, sy + 12);
+        ctx.fillText('▶', x + Math.round(6 * S), sy + Math.round(14 * S));
       }
 
       // Label
-      ctx.font = selected ? 'bold 10px monospace' : '13px monospace';
+      ctx.font = (selected ? 'bold ' : '') + F_BODY + 'px monospace';
       ctx.fillStyle = selected ? COL.accent : COL.dim;
       ctx.textAlign = 'left';
-      ctx.fillText(i18n.t(def.labelKey, def.label), listX + 12, sy + 12);
+      ctx.fillText(i18n.t(def.labelKey, def.label), listX + Math.round(14 * S), sy + Math.round(14 * S));
 
       // Value badge (right-aligned)
-      ctx.font = 'bold 10px monospace';
+      ctx.font = 'bold ' + F_BODY + 'px monospace';
       ctx.fillStyle = selected ? COL.accent : COL.text;
       ctx.textAlign = 'right';
-      ctx.fillText(val + '%', listX + trackW + 6, sy + 12);
+      ctx.fillText(val + '%', listX + trackW + Math.round(6 * S), sy + Math.round(14 * S));
 
       // Slider track
-      var trackY  = sy + 18;
-      var trackH  = 7;
+      var trackY  = sy + Math.round(22 * S);
+      var trackH  = Math.max(6, Math.round(9 * S));
       var fillW   = Math.round(trackW * (val / 100));
 
       // Track background
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(listX + 12, trackY, trackW, trackH);
+      _roundRectFill(ctx, listX + Math.round(14 * S), trackY, trackW, trackH, Math.round(3 * S));
 
       // Track fill — gradient from dim to accent when selected
-      if (selected) {
-        var grad = ctx.createLinearGradient(listX + 12, 0, listX + 12 + fillW, 0);
-        grad.addColorStop(0, 'rgba(200,160,60,0.7)');
-        grad.addColorStop(1, COL.accent);
-        ctx.fillStyle = grad;
-      } else {
-        ctx.fillStyle = 'rgba(180,140,50,0.55)';
+      if (fillW > 0) {
+        if (selected) {
+          var grad = ctx.createLinearGradient(listX + Math.round(14 * S), 0, listX + Math.round(14 * S) + fillW, 0);
+          grad.addColorStop(0, 'rgba(200,160,60,0.7)');
+          grad.addColorStop(1, COL.accent);
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = 'rgba(180,140,50,0.55)';
+        }
+        _roundRectFill(ctx, listX + Math.round(14 * S), trackY, fillW, trackH, Math.round(3 * S));
       }
-      ctx.fillRect(listX + 12, trackY, fillW, trackH);
 
       // Thumb pip at fill end
       if (selected && fillW > 0) {
+        var thumbW = Math.max(4, Math.round(5 * S));
         ctx.fillStyle = '#fff';
-        ctx.fillRect(listX + 12 + fillW - 2, trackY - 2, 4, trackH + 4);
+        _roundRectFill(ctx, listX + Math.round(14 * S) + fillW - thumbW / 2,
+                       trackY - Math.round(2 * S), thumbW, trackH + Math.round(4 * S),
+                       Math.round(2 * S));
       }
 
-      // Left / right nudge hint on selected row (only show when selected)
+      // Hit zone for slider click-to-set
+      _hitZones.push({
+        x: listX + Math.round(14 * S), y: trackY - 2,
+        w: trackW, h: trackH + 4,
+        slot: 800 + s, action: 'slider_click'
+      });
+
+      // Nudge hint on selected row
       if (selected) {
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.font = '11px monospace';
+        ctx.font = F_SECTION + 'px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('← / → adjust    scroll fine-tune', x + w / 2, trackY + trackH + 10);
+        ctx.fillText('\u2190 / \u2192 adjust    scroll fine-tune', x + w / 2, trackY + trackH + Math.round(12 * S));
       }
     }
 
     // ── Language ──────────────────────────────────────────────────
-    var langY = ty2 + _SLIDER_DEFS.length * rowH + 4;
+    var langY = ty2 + _SLIDER_DEFS.length * rowH + Math.round(6 * S);
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x + 10, langY - 4);
-    ctx.lineTo(x + w - 10, langY - 4);
+    ctx.moveTo(x + 10, langY - Math.round(4 * S));
+    ctx.lineTo(x + w - 10, langY - Math.round(4 * S));
     ctx.stroke();
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '13px monospace';
+    ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(
       i18n.t('settings.language', 'Language') + ':  ' +
       i18n.t('settings.lang_en', 'English'),
-      listX + 12, langY + 8
+      listX + Math.round(14 * S), langY + Math.round(10 * S)
     );
 
     // ── Toggle settings ───────────────────────────────────────────
-    var toggleY = langY + 22;
+    var toggleRowH = Math.max(18, Math.round(22 * S));
+    var toggleY = langY + Math.round(26 * S);
     var toggleDefs = [
       { label: 'Screen Shake', key: 'screenShake', default: true },
       { label: 'Show FPS', key: 'showFps', default: false },
@@ -2160,37 +2511,45 @@ var MenuFaces = (function () {
 
     for (var ti = 0; ti < toggleDefs.length; ti++) {
       var td = toggleDefs[ti];
-      var togY = toggleY + ti * 16;
+      var togY = toggleY + ti * toggleRowH;
       var togVal = _settingsState[td.key] !== undefined ? _settingsState[td.key] : td.default;
       var togSelected = (_settingsState.row === _SLIDER_DEFS.length + ti);
+      var togHover = (_hoverSlot === (810 + ti));
 
-      if (togSelected) {
-        ctx.fillStyle = 'rgba(240,208,112,0.08)';
-        ctx.fillRect(x + 6, togY - 2, w - 12, 14);
+      if (togSelected || togHover) {
+        ctx.fillStyle = togSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
+        ctx.fillRect(x + 6, togY - 2, w - 12, toggleRowH - 2);
       }
 
-      ctx.fillStyle = togSelected ? COL.accent : COL.dim;
-      ctx.font = '13px monospace';
+      ctx.fillStyle = (togSelected || togHover) ? COL.accent : COL.dim;
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + 12, togY + 8);
+      ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + Math.round(14 * S), togY + Math.round(10 * S));
       ctx.textAlign = 'right';
       ctx.fillStyle = togVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
-      ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + 6, togY + 8);
+      ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + Math.round(6 * S), togY + Math.round(10 * S));
+
+      // Hit zone for toggle click
+      _hitZones.push({
+        x: x + 6, y: togY - 2,
+        w: w - 12, h: toggleRowH - 2,
+        slot: 810 + ti, action: 'toggle', toggleKey: td.key
+      });
     }
 
     // ── Controls reference ────────────────────────────────────────
-    var ctrlY = toggleY + toggleDefs.length * 16 + 8;
+    var ctrlY = toggleY + toggleDefs.length * toggleRowH + Math.round(8 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
-    ctx.moveTo(x + 10, ctrlY - 4);
-    ctx.lineTo(x + w - 10, ctrlY - 4);
+    ctx.moveTo(x + 10, ctrlY - Math.round(4 * S));
+    ctx.lineTo(x + w - 10, ctrlY - Math.round(4 * S));
     ctx.stroke();
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
+    ctx.font = F_SECTION + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('CONTROLS', listX + 12, ctrlY + 6);
-    ctrlY += 12;
+    ctx.fillText('CONTROLS', listX + Math.round(14 * S), ctrlY + Math.round(6 * S));
+    ctrlY += Math.round(14 * S);
 
     var controls = [
       ['WASD / Arrows', 'Move & Turn'],
@@ -2200,45 +2559,69 @@ var MenuFaces = (function () {
       ['1-5', 'Quick-select']
     ];
 
-    ctx.font = '11px monospace';
+    var ctrlRowH = Math.max(10, Math.round(13 * S));
+    ctx.font = F_SECTION + 'px monospace';
     for (var ci = 0; ci < controls.length; ci++) {
-      var cY = ctrlY + ci * 11;
+      var cY = ctrlY + ci * ctrlRowH;
       ctx.fillStyle = 'rgba(240,208,112,0.6)';
       ctx.textAlign = 'left';
-      ctx.fillText(controls[ci][0], listX + 12, cY + 4);
+      ctx.fillText(controls[ci][0], listX + Math.round(14 * S), cY + Math.round(4 * S));
       ctx.fillStyle = COL.dim;
       ctx.textAlign = 'right';
-      ctx.fillText(controls[ci][1], listX + trackW + 6, cY + 4);
+      ctx.fillText(controls[ci][1], listX + trackW + Math.round(6 * S), cY + Math.round(4 * S));
     }
 
-    // ── Navigation hint ───────────────────────────────────────────
-    var navHintY = ctrlY + controls.length * 11 + 8;
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      i18n.t('settings.nav_hint', 'W/S  select   \u2190/\u2192  adjust   Q/E  leave'),
-      x + w / 2, navHintY
-    );
-
-    // ── Exit options ──────────────────────────────────────────────
-    var exitY = navHintY + 16;
+    // ── Exit options (clickable buttons) ──────────────────────────
+    var exitY = y + h - Math.round(50 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
-    ctx.moveTo(x + 10, exitY - 4);
-    ctx.lineTo(x + w - 10, exitY - 4);
+    ctx.moveTo(x + 10, exitY - Math.round(6 * S));
+    ctx.lineTo(x + w - 10, exitY - Math.round(6 * S));
     ctx.stroke();
 
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'center';
+    var exitBtnW = Math.min(w - Math.round(24 * S), Math.round(200 * S));
+    var exitBtnH = Math.max(20, Math.round(24 * S));
+    var exitBtnX = x + (w - exitBtnW) / 2;
+
     if (context === 'pause') {
-      ctx.fillStyle = COL.text;
-      ctx.fillText(i18n.t('menu.resume', 'Return to Game') + '  [ESC]', x + w / 2, exitY + 8);
-      ctx.fillStyle = 'rgba(200,80,80,0.8)';
-      ctx.fillText(i18n.t('menu.quit_title', 'Quit to Title'), x + w / 2, exitY + 24);
+      // Return to Game button
+      var resumeHov = (_hoverSlot === 820);
+      ctx.fillStyle = resumeHov ? 'rgba(100,200,120,0.15)' : 'rgba(100,200,120,0.06)';
+      _roundRectFill(ctx, exitBtnX, exitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.strokeStyle = resumeHov ? 'rgba(100,200,120,0.6)' : 'rgba(100,200,120,0.25)';
+      ctx.lineWidth = resumeHov ? 2 : 1;
+      _roundRectStroke(ctx, exitBtnX, exitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.fillStyle = resumeHov ? '#aaffaa' : COL.text;
+      ctx.font = F_BODY + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(i18n.t('menu.resume', 'Return to Game') + '  [ESC]', x + w / 2, exitY + exitBtnH * 0.65);
+      _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
+
+      // Quit to Title button
+      var quitY = exitY + exitBtnH + Math.round(6 * S);
+      var quitHov = (_hoverSlot === 821);
+      ctx.fillStyle = quitHov ? 'rgba(200,80,80,0.15)' : 'rgba(200,80,80,0.06)';
+      _roundRectFill(ctx, exitBtnX, quitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.strokeStyle = quitHov ? 'rgba(200,80,80,0.6)' : 'rgba(200,80,80,0.25)';
+      ctx.lineWidth = quitHov ? 2 : 1;
+      _roundRectStroke(ctx, exitBtnX, quitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.fillStyle = quitHov ? '#ff8888' : 'rgba(200,80,80,0.8)';
+      ctx.font = F_BODY + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(i18n.t('menu.quit_title', 'Quit to Title'), x + w / 2, quitY + exitBtnH * 0.65);
+      _hitZones.push({ x: exitBtnX, y: quitY, w: exitBtnW, h: exitBtnH, slot: 821, action: 'quit_title' });
     } else {
-      ctx.fillStyle = COL.text;
-      ctx.fillText('[ESC] ' + i18n.t('shop.close', 'Close'), x + w / 2, exitY + 8);
+      var closeHov = (_hoverSlot === 820);
+      ctx.fillStyle = closeHov ? 'rgba(100,200,120,0.15)' : 'rgba(100,200,120,0.06)';
+      _roundRectFill(ctx, exitBtnX, exitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.strokeStyle = closeHov ? 'rgba(100,200,120,0.6)' : 'rgba(100,200,120,0.25)';
+      ctx.lineWidth = closeHov ? 2 : 1;
+      _roundRectStroke(ctx, exitBtnX, exitY, exitBtnW, exitBtnH, Math.round(4 * S));
+      ctx.fillStyle = closeHov ? '#aaffaa' : COL.text;
+      ctx.font = F_BODY + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[ESC] ' + i18n.t('shop.close', 'Close'), x + w / 2, exitY + exitBtnH * 0.65);
+      _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
     }
 
     ctx.textAlign = 'left';
@@ -2383,11 +2766,10 @@ var MenuFaces = (function () {
     // Always rebuild — slots change every frame as items move
     unregisterDragZones();
 
-    var equipped = Player.getEquipped();
-    var bag = Player.getBag();
-    var hand = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
-    var collection = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
-      ? CardSystem.getCollection() : [];
+    var equipped = CardAuthority.getEquipped();
+    var bag = CardAuthority.getBag();
+    var hand = CardAuthority.getHand();
+    var collection = CardAuthority.getBackup();
 
     // ── Equip slots (3) — sources: drag item out. targets: accept items ──
     for (var ei = 0; ei < 3; ei++) {
@@ -2396,7 +2778,7 @@ var MenuFaces = (function () {
         DragDrop.registerZone(zid, {
           x: 0, y: 0, w: 0, h: 0,  // Updated by _renderInventory
           dragPayload: function () {
-            var cur = Player.getEquipped()[slotIdx];
+            var cur = CardAuthority.getEquipped()[slotIdx];
             if (!cur) return null;
             return { type: 'item', zone: 'equip', index: slotIdx, data: cur,
                      emoji: cur.emoji || '\uD83D\uDCE6', label: cur.name };
@@ -2412,17 +2794,17 @@ var MenuFaces = (function () {
             if (!p || !p.data) return false;
             var item2 = p.data;
             // Safety: if slot has an item and bag is full, reject the drop
-            var prev = Player.getEquipped()[slotIdx];
-            if (prev && Player.getBag().length >= (Player.MAX_BAG || 12)) {
+            var prev = CardAuthority.getEquipped()[slotIdx];
+            if (prev && CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) {
               if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDF92 Bag full \u2014 unequip something first', 'warning');
               return false;
             }
             // Remove from source
-            if (p.zone === 'bag') Player.removeFromBag(item2.id);
-            else if (p.zone === 'stash' && Player.removeFromStash) Player.removeFromStash(item2.id);
+            if (p.zone === 'bag') CardAuthority.removeFromBagById(item2.id);
+            else if (p.zone === 'stash') CardAuthority.removeFromStashById(item2.id);
             // Swap: put existing back to bag
-            if (prev) Player.addToBag(prev);
-            Player.equipDirect(slotIdx, item2);
+            if (prev) CardAuthority.addToBag(prev);
+            CardAuthority.equip(slotIdx, item2);
             _refreshAfterDrag();
             return true;
           },
@@ -2439,7 +2821,7 @@ var MenuFaces = (function () {
         DragDrop.registerZone(zid, {
           x: 0, y: 0, w: 0, h: 0,
           dragPayload: function () {
-            var b = Player.getBag();
+            var b = CardAuthority.getBag();
             var di = _bagOffset + slotIdx;
             var it = (di < b.length) ? b[di] : null;
             if (!it) return null;
@@ -2454,23 +2836,23 @@ var MenuFaces = (function () {
           accepts: function (p) {
             if (!p) return false;
             if (p.zone === 'bag') return false;  // No bag→bag
-            if (Player.getBag().length >= Player.MAX_BAG) return false;
+            if (CardAuthority.getBag().length >= CardAuthority.MAX_BAG) return false;
             return (p.type === 'item' || p.type === 'card');
           },
           onDrop: function (p) {
             if (!p || !p.data) return false;
-            if (Player.getBag().length >= Player.MAX_BAG) return false;
+            if (CardAuthority.getBag().length >= CardAuthority.MAX_BAG) return false;
             // Remove from source
-            if (p.zone === 'equip') Player.equipDirect(p.index, null);
-            else if (p.zone === 'hand') Player.removeFromHand(p.index);
+            if (p.zone === 'equip') CardAuthority.equip(p.index, null);
+            else if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
             else if (p.zone === 'deck') {
-              if (typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+              CardAuthority.removeFromBackupById(p.data.id);
             }
-            else if (p.zone === 'stash' && Player.removeFromStash) Player.removeFromStash(p.data.id);
+            else if (p.zone === 'stash') CardAuthority.removeFromStashById(p.data.id);
             // Add to bag (cards get _bagStored flag)
             var d = p.data;
             if (p.type === 'card') d._bagStored = true;
-            Player.addToBag(d);
+            CardAuthority.addToBag(d);
             _refreshAfterDrag();
             return true;
           },
@@ -2480,6 +2862,35 @@ var MenuFaces = (function () {
       })(bi);
     }
 
+    // ── Bag expander — accepts drops into first empty bag slot ──
+    DragDrop.registerZone('inv-bag-expander', {
+      x: 0, y: 0, w: 0, h: 0,
+      active: false,  // Activated by _renderInventory when expander is visible
+      accepts: function (p) {
+        if (!p) return false;
+        if (p.zone === 'bag') return false;
+        if (CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) return false;
+        return (p.type === 'item' || p.type === 'card');
+      },
+      onDrop: function (p) {
+        if (!p || !p.data) return false;
+        if (CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) return false;
+        if (p.zone === 'equip') CardAuthority.equip(p.index, null);
+        else if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
+        else if (p.zone === 'deck') CardAuthority.removeFromBackupById(p.data.id);
+        else if (p.zone === 'stash') CardAuthority.removeFromStashById(p.data.id);
+        var d = p.data;
+        if (p.type === 'card') d._bagStored = true;
+        CardAuthority.addToBag(d);
+        // Auto-expand after drop so player sees result
+        _bagExpanded = true;
+        _refreshAfterDrag();
+        return true;
+      },
+      onTap: function () { _bagExpanded = !_bagExpanded; _bagOffset = 0; }
+    });
+    _registeredZoneIds.push('inv-bag-expander');
+
     // ── Hand card slots (5) — sources + targets ──
     for (var hi = 0; hi < 5; hi++) {
       (function (slotIdx) {
@@ -2487,7 +2898,7 @@ var MenuFaces = (function () {
         DragDrop.registerZone(zid, {
           x: 0, y: 0, w: 0, h: 0,
           dragPayload: function () {
-            var h = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
+            var h = CardAuthority.getHand();
             var c = h[slotIdx];
             if (!c) return null;
             var suit = c.suit || '';
@@ -2505,28 +2916,26 @@ var MenuFaces = (function () {
           },
           onDrop: function (p) {
             if (!p || !p.data) return false;
-            var h2 = (typeof CardSystem !== 'undefined') ? CardSystem.getHand() : [];
-            var maxH = Player.MAX_HAND || 5;
+            var h2 = CardAuthority.getHand();
+            var maxH = CardAuthority.MAX_HAND || 5;
             // Push-out: if hand is full, bump last card to deck
             if (h2.length >= maxH) {
               var bumped = h2[h2.length - 1];
-              Player.removeFromHand(h2.length - 1);
-              if (typeof CardSystem !== 'undefined') {
-                CardSystem.addCard(bumped);  // Push to deck
-              }
+              CardAuthority.removeFromHand(h2.length - 1);
+              CardAuthority.addToBackup(bumped);
               if (typeof Toast !== 'undefined') {
                 Toast.show((bumped.name || 'Card') + ' \u2192 deck', 'info');
               }
             }
             // Remove from source
             if (p.zone === 'deck') {
-              if (typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
+              CardAuthority.removeFromBackupById(p.data.id);
             } else if (p.zone === 'bag') {
-              Player.removeFromBag(p.data.id);
+              CardAuthority.removeFromBagById(p.data.id);
               delete p.data._bagStored;
             }
             // Add to hand
-            Player.addToHand(p.data);
+            CardAuthority.addToHand(p.data);
             _refreshAfterDrag();
             return true;
           },
@@ -2543,8 +2952,7 @@ var MenuFaces = (function () {
         DragDrop.registerZone(zid, {
           x: 0, y: 0, w: 0, h: 0,
           dragPayload: function () {
-            var col = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
-              ? CardSystem.getCollection() : [];
+            var col = CardAuthority.getBackup();
             var idx = _deckOffset + slotIdx;
             var c = (idx < col.length) ? col[idx] : null;
             if (!c) return null;
@@ -2565,13 +2973,13 @@ var MenuFaces = (function () {
             if (!p || !p.data) return false;
             if (p.type !== 'card') return false;
             // Remove from source
-            if (p.zone === 'hand') Player.removeFromHand(p.index);
+            if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
             else if (p.zone === 'bag') {
-              Player.removeFromBag(p.data.id);
+              CardAuthority.removeFromBagById(p.data.id);
               delete p.data._bagStored;
             }
             // Add to deck
-            if (typeof CardSystem !== 'undefined') CardSystem.addCard(p.data);
+            CardAuthority.addToBackup(p.data);
             _refreshAfterDrag();
             return true;
           },
@@ -2587,12 +2995,12 @@ var MenuFaces = (function () {
       active: false,
       accepts: function (p) {
         if (!p || p.type !== 'item') return false;
-        return Player.getStash().length < (Player.MAX_STASH || 20);
+        return CardAuthority.getStash().length < (CardAuthority.MAX_STASH || 20);
       },
       onDrop: function (p) {
         if (!p || !p.data) return false;
-        if (p.zone === 'bag') Player.removeFromBag(p.data.id);
-        Player.addToStash(p.data);
+        if (p.zone === 'bag') CardAuthority.removeFromBagById(p.data.id);
+        CardAuthority.addToStash(p.data);
         _refreshAfterDrag();
         return true;
       }
@@ -2611,16 +3019,16 @@ var MenuFaces = (function () {
         var SELL_VALUE = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
         if (p.type === 'card') {
           var sv = SELL_VALUE[p.data.rarity] || 12;
-          if (p.zone === 'hand') Player.removeFromHand(p.index);
-          else if (p.zone === 'deck' && typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
-          else if (p.zone === 'bag') Player.removeFromBag(p.data.id);
-          Player.addCurrency(sv);
+          if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
+          else if (p.zone === 'deck') CardAuthority.removeFromBackupById(p.data.id);
+          else if (p.zone === 'bag') CardAuthority.removeFromBagById(p.data.id);
+          CardAuthority.addGold(sv);
           if (typeof Toast !== 'undefined') Toast.show((p.data.emoji || '\uD83C\uDCA0') + ' sold +' + sv + 'g', 'loot');
         } else {
           var price = p.data.baseValue || 1;
-          if (p.zone === 'bag') Player.removeFromBag(p.data.id);
-          else if (p.zone === 'equip') Player.equipDirect(p.index, null);
-          Player.addCurrency(price);
+          if (p.zone === 'bag') CardAuthority.removeFromBagById(p.data.id);
+          else if (p.zone === 'equip') CardAuthority.equip(p.index, null);
+          CardAuthority.addGold(price);
           if (typeof Toast !== 'undefined') Toast.show((p.data.emoji || '\uD83D\uDCE6') + ' sold +' + price + 'g', 'loot');
         }
         _refreshAfterDrag();
@@ -2654,10 +3062,10 @@ var MenuFaces = (function () {
           InventoryOverlay.incineratorBurn();
         }
         // Remove from source
-        if (p.zone === 'hand') Player.removeFromHand(p.index);
-        else if (p.zone === 'deck' && typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
-        else if (p.zone === 'bag') Player.removeFromBag(p.data.id);
-        else if (p.zone === 'equip') Player.equipDirect(p.index, null);
+        if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
+        else if (p.zone === 'deck') CardAuthority.removeFromBackupById(p.data.id);
+        else if (p.zone === 'bag') CardAuthority.removeFromBagById(p.data.id);
+        else if (p.zone === 'equip') CardAuthority.equip(p.index, null);
         if (typeof Toast !== 'undefined') {
           Toast.show('\uD83D\uDD25 ' + (p.data.name || 'Item') + ' destroyed', 'warning');
         }
@@ -2844,16 +3252,13 @@ var MenuFaces = (function () {
   // ── Inventory Wheel Scroll/Focus API ─────────────────────────────
 
   function scrollBag(delta) {
-    var bag = Player.getBag();
-    var max = Math.max(0, bag.length - 5);
-    _bagOffset = Math.max(0, Math.min(max, _bagOffset + delta));
+    // Scroll is now clamped by _renderInventory each frame based on
+    // dynamic visible count, so just apply delta and let render clamp.
+    _bagOffset = Math.max(0, _bagOffset + delta);
   }
 
   function scrollDeck(delta) {
-    var col = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
-      ? CardSystem.getCollection() : [];
-    var max = Math.max(0, col.length - 5);
-    _deckOffset = Math.max(0, Math.min(max, _deckOffset + delta));
+    _deckOffset = Math.max(0, _deckOffset + delta);
   }
 
   function scrollFocused(delta) {
@@ -2863,6 +3268,20 @@ var MenuFaces = (function () {
 
   function toggleInvFocus() {
     _invFocus = (_invFocus === 'bag') ? 'deck' : 'bag';
+  }
+
+  function setInvFocus(focus) {
+    if (focus === 'bag' || focus === 'deck') _invFocus = focus;
+  }
+
+  function toggleBagExpand() {
+    _bagExpanded = !_bagExpanded;
+    _bagOffset = 0; // Reset scroll on toggle
+  }
+
+  function toggleDeckExpand() {
+    _deckExpanded = !_deckExpanded;
+    _deckOffset = 0;
   }
 
   /**
@@ -2892,15 +3311,15 @@ var MenuFaces = (function () {
         var bs = L.bagSlots[bi];
         if (cx >= bs.x && cx <= bs.x + bs.w && cy >= bs.y && cy <= bs.y + bs.h) {
           // Card → bag (Joker Vault): store card as item in bag
-          if (typeof Player !== 'undefined' && Player.addToBag) {
+          if (typeof CardAuthority !== 'undefined') {
             var bagCard = { id: card.id, name: card.name, emoji: card.emoji || '🃏',
                            type: 'card', suit: card.suit, _bagStored: true, _cardRef: card };
-            if (!Player.addToBag(bagCard)) {
+            if (!CardAuthority.addToBag(bagCard)) {
               if (typeof Toast !== 'undefined') Toast.show('Bag full — make room first', 'warning');
               return false;
             }
             // Remove from hand
-            CardSystem.playFromHand(info.cardIdx);
+            CardAuthority.removeFromHand(info.cardIdx);
             if (typeof Toast !== 'undefined') Toast.show('🃏 Card stashed in bag', 'info');
             if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
             return true;
@@ -2915,13 +3334,13 @@ var MenuFaces = (function () {
       for (var di = 0; di < L.deckSlots.length; di++) {
         var ds = L.deckSlots[di];
         if (cx >= ds.x && cx <= ds.x + ds.w && cy >= ds.y && cy <= ds.y + ds.h) {
-          var moved = CardSystem.moveHandToCollection(info.cardIdx);
+          var moved = CardAuthority.moveHandToBackup(info.cardIdx);
           if (moved) {
             if (typeof Toast !== 'undefined') Toast.show('🃏 Card returned to deck', 'info');
             if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
             return true;
           } else {
-            if (typeof Toast !== 'undefined') Toast.show('Deck full (' + CardSystem.MAX_COLLECTION + ')', 'warning');
+            if (typeof Toast !== 'undefined') Toast.show('Deck full (' + CardAuthority.MAX_BACKUP + ')', 'warning');
             return false;
           }
         }
@@ -2932,7 +3351,7 @@ var MenuFaces = (function () {
     if (L.incin) {
       var inc = L.incin;
       if (cx >= inc.x && cx <= inc.x + inc.w && cy >= inc.y && cy <= inc.y + inc.h) {
-        CardSystem.playFromHand(info.cardIdx);
+        CardAuthority.removeFromHand(info.cardIdx);
         if (typeof Toast !== 'undefined') Toast.show('🔥 Card destroyed', 'warning');
         if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
         return true;
@@ -2951,9 +3370,11 @@ var MenuFaces = (function () {
     renderFace2:          renderFace2,
     renderFace3:          renderFace3,
     registerAll:          registerAll,
-    handleSettingsNav:    handleSettingsNav,
-    handleSettingsAdjust: handleSettingsAdjust,
-    resetSettings:        resetSettings,
+    handleSettingsNav:       handleSettingsNav,
+    handleSettingsAdjust:    handleSettingsAdjust,
+    handleSettingsToggle:    handleSettingsToggle,
+    handleSettingsSelectRow: handleSettingsSelectRow,
+    resetSettings:           resetSettings,
     clearHitZones:        clearHitZones,
     updateHover:          updateHover,
     handlePointerClick:   handlePointerClick,
@@ -2970,10 +3391,15 @@ var MenuFaces = (function () {
     scrollDeck:           scrollDeck,
     scrollFocused:        scrollFocused,
     toggleInvFocus:       toggleInvFocus,
+    setInvFocus:          setInvFocus,
+    toggleBagExpand:      toggleBagExpand,
+    toggleDeckExpand:     toggleDeckExpand,
 
-    // Incinerator state getters
+    // State getters
     getInvFocus:          function () { return _invFocus; },
     getBagOffset:         function () { return _bagOffset; },
-    getDeckOffset:        function () { return _deckOffset; }
+    getDeckOffset:        function () { return _deckOffset; },
+    isBagExpanded:        function () { return _bagExpanded; },
+    isDeckExpanded:       function () { return _deckExpanded; }
   };
 })();

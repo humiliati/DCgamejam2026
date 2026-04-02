@@ -143,8 +143,8 @@ var DebriefFeed = (function () {
     logEvent('\uD83D\uDD25 Disposed: ' + emoji + ' ' + name, 'damage');
 
     // Grant refund if any
-    if (refund > 0 && typeof Player !== 'undefined') {
-      Player.addCurrency(refund);
+    if (refund > 0 && typeof CardAuthority !== 'undefined') {
+      CardAuthority.addGold(refund);
       logEvent('  +' + refund + 'g refund', 'loot');
     }
 

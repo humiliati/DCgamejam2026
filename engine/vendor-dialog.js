@@ -181,9 +181,9 @@ var VendorDialog = (function () {
   // ── Bulk sell ──────────────────────────────────────────────────
 
   function _bulkSell() {
-    if (typeof Shop === 'undefined' || typeof Player === 'undefined') return;
+    if (typeof Shop === 'undefined' || typeof CardAuthority === 'undefined') return;
 
-    var bag = (Player.getBag) ? Player.getBag() : [];
+    var bag = CardAuthority.getBag();
 
     // Filter for sellable salvage (not quest items)
     var sellable = [];

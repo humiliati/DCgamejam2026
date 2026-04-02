@@ -11,9 +11,11 @@
 
 | # | Module | Lines | Layer | Status | EyesOnly Analogue |
 |---|--------|-------|-------|--------|-------------------|
-| 1 | `card-system.js` | ~180 | L2 | ✅ Live | CardStateAuthority + GAMESTATE card arrays |
-| 2 | `player.js` | ~440 | L1 | ✅ Live (patched) | GAMESTATE inventory containers |
-| 3 | `shop.js` | ~400 | L3 | ✅ Live (patched) | Shop + economy transactions |
+| 1 | `card-authority.js` | ~200 | L2 | ✅ Live | CardStateAuthority — SOLE card state owner |
+| 2 | `card-transfer.js` | ~150 | L2 | ✅ Live | CardTransferManager — validated cross-zone moves |
+| 3 | `card-system.js` | ~180 | L2 | ✅ Live | Pure registry: init/getById/getByPool/getBiomeDrops |
+| 4 | `player.js` | ~440 | L1 | ✅ Live (patched) | GAMESTATE inventory — useItem/hasItem/consumeItem only |
+| 5 | `shop.js` | ~400 | L3 | ✅ Live (patched) | Shop + economy transactions |
 | 4 | `salvage.js` | ~445 | L1 | ✅ Live | Loot pipeline + faction economy |
 | 5 | `combat-bridge.js` | ~250 | L3 | ✅ Live | STR combat integration layer |
 | 6 | `combat-engine.js` | ~200 | L2 | ✅ Live | Core RPS combat resolution |
@@ -49,16 +51,16 @@
 
 ### Architecture Comparison
 
-| Concept | EyesOnly | Dungeon Gleaner | Gap |
-|---------|----------|----------------|-----|
-| Single source of truth | CardStateAuthority → GAMESTATE | CardSystem (canonical hand/deck) | ⚠ No event bus — direct calls |
-| Event-driven re-render | `_emit()` → subscriber re-render | `_refreshPanels()` → NchWidget.refresh() | Functional but tightly coupled |
+| Concept | EyesOnly | Dungeon Gleaner | Status |
+|---------|----------|----------------|--------|
+| Single source of truth | CardStateAuthority → GAMESTATE | CardAuthority (canonical hand/deck/bag/stash/equipped) | ✅ Aligned |
+| Event-driven re-render | `_emit()` → subscriber re-render | CardAuthority event emitter + direct calls | ✅ Event bus in place |
+| Transfer validation | CardTransferManager — all cross-container | CardTransfer (validated moves + rollback) | ✅ Aligned |
 | Card identity | CardRef `{ id, qty, meta }` everywhere | Full card objects in hand/deck | 🔴 No ref abstraction |
 | Dynamic card persistence | CI-* instances in `cardInstances` map | None — rolled cards are ephemeral | 🔴 Cards lost on save/load |
-| Hydration | `hydrateCard(ref)` universal resolver | `CardSystem.getById(id)` — registry only | ⚠ No dynamic card hydration |
+| Hydration | `hydrateCard(ref)` universal resolver | `CardSystem.getById(id)` — registry only | ⚠ CardSystem is pure registry |
 | Zone boundaries | Hand / Backup / Vault / Active Item / Discard | Hand / Deck / Bag / Stash / Equipped | ✅ Comparable containers |
-| Transfer manager | CardTransferManager — all cross-container | Direct array mutations | ⚠ No transfer validation layer |
-| Inventory management | InventoryManagement — stash/retrieve/equip | Player.equip/unequip (not yet wired to UI) | ⚠ UI not connected |
+| Inventory management | InventoryManagement — stash/retrieve/equip | Player.useItem/hasItem/consumeItem only | ✅ CardAuthority owns transfers |
 | Policy flags | stealable/plantable/destroyable/triggerable | None | 🟡 Not needed for jam scope |
 | GC for orphaned cards | `gcCardInstances()` scans all containers | None needed (no persistent instances) | 🟡 Post-jam concern |
 
@@ -243,13 +245,15 @@ All paths that mutate player inventory and their refresh wiring:
 
 | File | Layer | Purpose | Patched? |
 |------|-------|---------|----------|
-| `engine/player.js` | L1 | Player state, inventory containers, currency | ✅ This session |
-| `engine/card-system.js` | L2 | Card registry, collection, deck, hand | — |
+| `engine/card-authority.js` | L2 | ✅ SOLE card state owner: hand/backup/deck/bag/stash/equipped/gold | Sprint 0 ✅ |
+| `engine/card-transfer.js` | L2 | ✅ Validated cross-zone transfers with rollback | Sprint 0 ✅ |
+| `engine/card-system.js` | L2 | Pure registry only: init/getById/getByPool/getBiomeDrops | Sprint 0 ✅ |
+| `engine/player.js` | L1 | Player state — useItem/hasItem/consumeItem only (no inventory proxy) | Sprint 0 ✅ |
 | `engine/shop.js` | L3 | Faction shop buy/sell + NEW sellPart | ✅ This session |
 | `engine/salvage.js` | L1 | Harvest, loot staging, faction economy | — |
-| `engine/combat-bridge.js` | L3 | Combat flow orchestrator | — |
+| `engine/combat-bridge.js` | L3 | Combat flow orchestrator (calls CardAuthority directly) | — |
 | `engine/nch-widget.js` | L2 | NCH capsule overlay | — |
-| `engine/game.js` | L4 | Orchestrator, _shopSellPart handler | ✅ This session |
+| `engine/game.js` | L4 | Orchestrator (all 16 consumer files call CardAuthority) | ✅ This session |
 | `engine/menu-faces.js` | L3 | Face content renderers | Needs T0.5/T0.6 |
 | `engine/quick-bar.js` | L2 | Equipped item quick-slots | — |
 | `engine/combat-report.js` | L2 | Post-combat overlay | — |

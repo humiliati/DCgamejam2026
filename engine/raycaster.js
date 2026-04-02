@@ -35,6 +35,7 @@ var Raycaster = (function () {
   var _bloodFloorId = null;  // Set by Game to enable blood rendering
   var _rooms = null;        // Room list for chamber height lookups
   var _cellHeights = null;  // Per-cell height overrides (door entrance caps)
+  var _wallDecor = null;    // Per-cell wall decoration sprites (set per floor)
 
   // ── N-layer compositing ──────────────────────────────────────────
   // Pre-allocated buffer for multi-hit DDA results. Avoids per-frame
@@ -75,11 +76,12 @@ var Raycaster = (function () {
     _wallColors.doorDark = biome.doorDark || '#906830';
   }
 
-  /** Set the active spatial contract, room list, and cell height overrides */
-  function setContract(contract, rooms, cellHeights) {
+  /** Set the active spatial contract, room list, cell height overrides, and wall decor */
+  function setContract(contract, rooms, cellHeights, wallDecor) {
     _contract = contract;
     _rooms = rooms || null;
     _cellHeights = cellHeights || null;
+    _wallDecor = wallDecor || null;
   }
 
   /**
@@ -434,6 +436,10 @@ var Raycaster = (function () {
         _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
                          drawStart, drawEnd, col, wallHeightMult, hitTile);
 
+        // Wall decor sprites (drawn before overlays so fog/shade affect them)
+        _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
+                         mapX, mapY, side, stepX, stepY);
+
         // Side shading (side=1 faces are darker, matching flat-color convention)
         if (side === 1) {
           ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -622,6 +628,103 @@ var Raycaster = (function () {
     }
   }
 
+  // ── Wall decor rendering ──────────────────────────────────────
+  // Draws small alpha-transparent sprites pinned to wall faces.
+  // Called after the wall texture and before fog/brightness overlays
+  // so that all post-processing applies uniformly to both wall and decor.
+
+  /**
+   * Determine which wall face was hit.
+   * @param {number} sd - DDA side (0=vertical grid line, 1=horizontal)
+   * @param {number} stX - Step direction X (+1 or -1)
+   * @param {number} stY - Step direction Y (+1 or -1)
+   * @returns {string} Face key: 'n', 's', 'e', 'w'
+   */
+  function _hitFace(sd, stX, stY) {
+    // side 0 (vertical line): ray going right (+X) hits the WEST face;
+    //                          ray going left (-X) hits the EAST face
+    // side 1 (horizontal line): ray going south (+Y) hits the NORTH face;
+    //                            ray going north (-Y) hits the SOUTH face
+    if (sd === 0) return stX > 0 ? 'w' : 'e';
+    return stY > 0 ? 'n' : 's';
+  }
+
+  /**
+   * Render wall decor sprites for one column at a specific grid cell/face.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} col - Screen column
+   * @param {number} wallX - UV coordinate along the wall face (0..1)
+   * @param {number} drawStart - Top pixel of the wall strip
+   * @param {number} drawEnd - Bottom pixel of the wall strip
+   * @param {number} lineHeight - Full height of the wall in pixels (may exceed screen)
+   * @param {number} mapX - Grid X of hit cell
+   * @param {number} mapY - Grid Y of hit cell
+   * @param {number} sd - DDA side
+   * @param {number} stX - Step X
+   * @param {number} stY - Step Y
+   */
+  function _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
+                            mapX, mapY, sd, stX, stY) {
+    if (!_wallDecor) return;
+    var row = _wallDecor[mapY];
+    if (!row) return;
+    var cell = row[mapX];
+    if (!cell) return;
+
+    var face = _hitFace(sd, stX, stY);
+    var items = cell[face];
+    if (!items || items.length === 0) return;
+
+    var stripH = drawEnd - drawStart + 1;
+    if (stripH <= 0) return;
+
+    for (var di = 0; di < items.length; di++) {
+      var d = items[di];
+      var halfW = d.scale / 2;
+      var uMin = d.anchorU - halfW;
+      var uMax = d.anchorU + halfW;
+
+      // Check if this column falls within the sprite's horizontal span
+      if (wallX < uMin || wallX >= uMax) continue;
+
+      var tex = TextureAtlas.get(d.spriteId);
+      if (!tex) continue;
+
+      // Which column of the sprite to sample
+      var texCol = Math.floor((wallX - uMin) / d.scale * tex.width);
+      if (texCol < 0) texCol = 0;
+      if (texCol >= tex.width) texCol = tex.width - 1;
+
+      // Vertical placement: anchorV 0=bottom, 1=top of wall face
+      // Sprite aspect ratio preserved: vExtent = scale * (texH / texW)
+      var vExtent = d.scale * tex.height / tex.width;
+      var vCenter = d.anchorV;
+      var vMin = vCenter - vExtent / 2;
+      var vMax = vCenter + vExtent / 2;
+
+      // Map to screen pixels within the wall strip
+      // wallV 0=top of wall, 1=bottom → sprite vMin/vMax are 0=bottom, 1=top
+      // So screenTop = drawStart + (1 - vMax) * stripH
+      var spriteTop = drawStart + (1 - vMax) * stripH;
+      var spriteBot = drawStart + (1 - vMin) * stripH;
+      var spriteH = spriteBot - spriteTop;
+      if (spriteH < 1) continue;
+
+      // Clamp to wall bounds
+      var dTop = Math.max(drawStart, Math.floor(spriteTop));
+      var dBot = Math.min(drawEnd, Math.floor(spriteBot) - 1);
+      if (dTop > dBot) continue;
+
+      // Source rect in sprite texture
+      var srcY = (dTop - spriteTop) / spriteH * tex.height;
+      var srcH = (dBot - dTop + 1) / spriteH * tex.height;
+      if (srcH < 0.5) srcH = 0.5;
+
+      ctx.drawImage(tex.canvas, texCol, srcY, 1, srcH, col, dTop, 1, dBot - dTop + 1);
+    }
+  }
+
   // ── N-layer back-wall renderer ──────────────────────────────────
   // Renders a single background wall layer for the N-layer compositing
   // system. Called for each layer behind the foreground, farthest first
@@ -697,6 +800,10 @@ var Raycaster = (function () {
 
       // Draw textured wall column — only WALL tiles tile their texture
       _drawTiledColumn(ctx, tex, texX, flatTop, lineH, drStart, drEnd, col, wh, L.tile);
+
+      // Wall decor on back layers
+      _renderWallDecor(ctx, col, wx, drStart, drEnd, lineH,
+                       L.mx, L.my, L.sd, stepX, stepY);
 
       // Side shading
       if (L.sd === 1) {

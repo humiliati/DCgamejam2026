@@ -17,10 +17,10 @@
  * Design: card data flows in as a plain object (card), not a wrapper.
  * The caller passes {card, w, h, lod, isHover, isStacked, isRejecting}.
  *
- * Depends on: CardRenderer (Layer 1) for SUIT_DATA and RES_COLORS lookups.
- *             Falls back to hardcoded values if CardRenderer is absent.
+ * Depends on: CardAuthority (Layer 1) for SUIT_DATA and RES_COLORS lookups.
+ *             Falls back to hardcoded values if CardAuthority is absent.
  *
- * Layer 1 (after CardRenderer, before CardFan/MenuFaces)
+ * Layer 1 (after CardAuthority, before CardFan/MenuFaces)
  */
 var CardDraw = (function () {
   'use strict';
@@ -50,21 +50,21 @@ var CardDraw = (function () {
   // ── Helpers ─────────────────────────────────────────────────────
 
   function _getResColor(card) {
-    if (typeof CardRenderer !== 'undefined' && CardRenderer.RES_COLORS) {
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.RES_COLORS) {
       var res = card.resource || card.costResource || null;
-      if (res && CardRenderer.RES_COLORS[res]) return CardRenderer.RES_COLORS[res];
-      if (card.suit && CardRenderer.SUIT_DATA && CardRenderer.SUIT_DATA[card.suit]) {
-        var sres = CardRenderer.SUIT_DATA[card.suit].res;
-        return CardRenderer.RES_COLORS[sres] || CardRenderer.RES_COLORS.cards;
+      if (res && CardAuthority.RES_COLORS[res]) return CardAuthority.RES_COLORS[res];
+      if (card.suit && CardAuthority.SUIT_DATA && CardAuthority.SUIT_DATA[card.suit]) {
+        var sres = CardAuthority.SUIT_DATA[card.suit].res;
+        return CardAuthority.RES_COLORS[sres] || CardAuthority.RES_COLORS.cards;
       }
-      return CardRenderer.RES_COLORS.cards;
+      return CardAuthority.RES_COLORS.cards;
     }
     return { r: 128, g: 0, b: 128 };
   }
 
   function _getSuitData(card) {
-    if (typeof CardRenderer !== 'undefined' && CardRenderer.SUIT_DATA && card.suit) {
-      return CardRenderer.SUIT_DATA[card.suit] || null;
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.SUIT_DATA && card.suit) {
+      return CardAuthority.SUIT_DATA[card.suit] || null;
     }
     // Fallback
     var fallback = {

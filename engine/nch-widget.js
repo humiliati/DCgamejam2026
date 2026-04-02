@@ -206,13 +206,13 @@ var NchWidget = (function () {
   // ── Data helpers ──────────────────────────────────────────────────
 
   function _getHand() {
-    if (typeof CardSystem !== 'undefined') return CardSystem.getHand() || [];
+    if (typeof CardAuthority !== 'undefined') return CardAuthority.getHand();
     return [];
   }
 
   function _getDeckCount() {
-    if (typeof CardSystem !== 'undefined' && CardSystem.getCollection) {
-      return CardSystem.getCollection().length;
+    if (typeof CardAuthority !== 'undefined') {
+      return CardAuthority.getBackupSize();
     }
     return 0;
   }

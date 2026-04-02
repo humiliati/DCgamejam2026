@@ -120,13 +120,22 @@ var StatusBar = (function () {
     if (_btnBag) {
       _btnBag.addEventListener('click', function (e) {
         e.stopPropagation();
-        // Toggle pause menu at Face 2 (Inventory)
+        // Toggle pause menu at Face 2 with bag focus
         if (typeof ScreenManager !== 'undefined') {
           if (ScreenManager.isPaused()) {
-            if (typeof MenuBox !== 'undefined') MenuBox.close();
+            // If already on Face 2 with bag focus, close. Otherwise navigate.
+            var onFace2 = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 2);
+            var bagFocused = (typeof MenuFaces !== 'undefined' && MenuFaces.getInvFocus() === 'bag');
+            if (onFace2 && bagFocused) {
+              MenuBox.close();
+            } else {
+              // Navigate to Face 2 and set bag focus
+              if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(2);
+              if (typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) MenuFaces.setInvFocus('bag');
+            }
           } else if (ScreenManager.isPlaying()) {
             if (typeof Game !== 'undefined' && Game.requestPause) {
-              Game.requestPause('pause', 2);
+              Game.requestPause('pause', 2, 'bag');
             } else {
               ScreenManager.toPause();
             }
@@ -135,16 +144,48 @@ var StatusBar = (function () {
       });
     }
 
-    // Deck button → opens pause menu on inventory face (face 2)
+    // Deck button → opens pause menu on inventory face (face 2) with deck focus
     if (_btnDeck) {
       _btnDeck.addEventListener('click', function (e) {
         e.stopPropagation();
         if (typeof ScreenManager !== 'undefined') {
           if (ScreenManager.isPaused()) {
-            if (typeof MenuBox !== 'undefined') MenuBox.close();
+            var onFace2d = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 2);
+            var deckFocused = (typeof MenuFaces !== 'undefined' && MenuFaces.getInvFocus() === 'deck');
+            if (onFace2d && deckFocused) {
+              MenuBox.close();
+            } else {
+              if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(2);
+              if (typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) MenuFaces.setInvFocus('deck');
+            }
           } else if (ScreenManager.isPlaying()) {
             if (typeof Game !== 'undefined' && Game.requestPause) {
-              Game.requestPause('pause', 2);
+              Game.requestPause('pause', 2, 'deck');
+            } else {
+              ScreenManager.toPause();
+            }
+          }
+        }
+      });
+    }
+
+    // Gold/Currency button → opens pause menu on Face 1 (Journal / player stats)
+    if (_goldEl) {
+      _goldEl.style.cursor = 'pointer';
+      _goldEl.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (typeof ScreenManager !== 'undefined') {
+          if (ScreenManager.isPaused()) {
+            // If already on Face 1, close. Otherwise navigate.
+            var onFace1 = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 1);
+            if (onFace1) {
+              MenuBox.close();
+            } else {
+              if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(1);
+            }
+          } else if (ScreenManager.isPlaying()) {
+            if (typeof Game !== 'undefined' && Game.requestPause) {
+              Game.requestPause('pause', 1);
             } else {
               ScreenManager.toPause();
             }
@@ -187,9 +228,9 @@ var StatusBar = (function () {
     if (!_btnBag) return;
     var count = 0;
     var max = 12;
-    if (typeof Player !== 'undefined') {
-      if (Player.getBag) count = Player.getBag().length;
-      if (Player.MAX_BAG) max = Player.MAX_BAG;
+    if (typeof CardAuthority !== 'undefined') {
+      count = CardAuthority.getBagSize();
+      max = CardAuthority.MAX_BAG;
     }
     _btnBag.textContent = '🎒 BAG ' + count + '/' + max;
 
@@ -207,14 +248,9 @@ var StatusBar = (function () {
     if (!_btnDeck) return;
     var handSize = 0;
     var deckSize = 0;
-    if (typeof CardSystem !== 'undefined') {
-      if (CardSystem.getHand) handSize = CardSystem.getHand().length;
-      if (CardSystem.getDeck) {
-        deckSize = CardSystem.getDeck().length;
-      } else if (CardSystem.getCollection) {
-        // Fallback: collection minus hand = backup deck
-        deckSize = Math.max(0, CardSystem.getCollection().length - handSize);
-      }
+    if (typeof CardAuthority !== 'undefined') {
+      handSize = CardAuthority.getHandSize();
+      deckSize = CardAuthority.getBackupSize();
     }
     _btnDeck.textContent = '🃏 DECK ' + handSize + '/' + (handSize + deckSize);
   }
@@ -482,8 +518,8 @@ var StatusBar = (function () {
 
     // Apply effects (same as DialogBox)
     if (choice.effect) {
-      if (choice.effect.currency && typeof Player !== 'undefined') {
-        Player.addCurrency(choice.effect.currency);
+      if (choice.effect.currency && typeof CardAuthority !== 'undefined') {
+        CardAuthority.addGold(choice.effect.currency);
         if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());
       }
       if (choice.effect.heal && typeof Player !== 'undefined') {
@@ -494,8 +530,8 @@ var StatusBar = (function () {
       if (choice.effect.setFlag && typeof Player !== 'undefined') {
         Player.state().flags[choice.effect.setFlag] = true;
       }
-      if (choice.effect.giveItem && typeof Player !== 'undefined' && Player.addToBag) {
-        Player.addToBag(choice.effect.giveItem);
+      if (choice.effect.giveItem && typeof CardAuthority !== 'undefined') {
+        CardAuthority.addToBag(choice.effect.giveItem);
       }
     }
 

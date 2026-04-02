@@ -232,8 +232,8 @@ var DialogBox = (function () {
    */
   function _applyEffect(effect) {
     if (!effect) return;
-    if (effect.currency && typeof Player !== 'undefined') {
-      Player.addCurrency(effect.currency);
+    if (effect.currency && typeof CardAuthority !== 'undefined') {
+      CardAuthority.addGold(effect.currency);
     }
     if (effect.heal && typeof Player !== 'undefined') {
       var ps = Player.state();

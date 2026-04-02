@@ -261,8 +261,8 @@ var MailboxPeek = (function() {
     }
 
     // Add currency
-    if (Player && Player.addCurrency) {
-      Player.addCurrency(totalCoins);
+    if (typeof CardAuthority !== 'undefined') {
+      CardAuthority.addGold(totalCoins);
     }
 
     // Play sound

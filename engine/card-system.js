@@ -1,43 +1,21 @@
 /**
  * CardSystem — READ-ONLY card definition registry.
  *
- * S0.3 REWIRE: All mutable state (hand, collection, deck, gold) has been
- * moved to CardAuthority (S0.1). All transfers go through CardTransfer (S0.2).
- * CardSystem is now a pure registry loader — no mutable state, no events.
- *
  * Loads the full card registry from data/cards.json via synchronous XHR
  * (same rationale as LootTables: avoids async cascade on webOS startup).
+ * Seeds CardAuthority's backup deck with starter cards on init().
  *
- * Public API (registry queries):
- *   CardSystem.init()                        — load JSON registry
+ * S0.5: All proxy stubs stripped. Mutable state lives in CardAuthority,
+ * transfers go through CardTransfer. This module is now a pure registry.
+ *
+ * Public API:
+ *   CardSystem.init()                        — load JSON, seed starter deck
  *   CardSystem.getById(id)                   — look up card def by ACT-### id
  *   CardSystem.getByPool(factionId, repTier) — shop inventory for faction/tier
  *   CardSystem.getBiomeDrops(biome)          — cards that drop in a biome
  *   CardSystem.getAllRegistry()              — full card registry array
  *
- * Proxy stubs (forward to CardAuthority for backward compat):
- *   CardSystem.getHand()           → CardAuthority.getHand()
- *   CardSystem.drawHand(n)         → CardAuthority.drawHand(n)
- *   CardSystem.drawToHand(n)       → CardAuthority.drawToHand(n)
- *   CardSystem.drawWithOverflow()  → CardAuthority.drawWithOverflow()
- *   CardSystem.playFromHand(i)     → CardAuthority.removeFromHand(i)
- *   CardSystem.playStack(entries)  → CardAuthority.playStack(entries)
- *   CardSystem.pushToHand(card)    → CardAuthority.addToHand(card)
- *   CardSystem.resetDeck()         → CardAuthority.resetDeck()
- *   CardSystem.addCard(c)          → CardAuthority.addToBackup(hydrated)
- *   CardSystem.removeCard(id)      → CardAuthority.removeFromBackupById(id)
- *   CardSystem.getCollection()     → CardAuthority.getBackup()
- *   CardSystem.getCollectionSize() → CardAuthority.getBackupSize()
- *   CardSystem.getDeckSize()       → CardAuthority.getDeckSize()
- *   CardSystem.failstateWipe()     → CardAuthority.failstateWipe()
- *   CardSystem.on/off(type, fn)    → CardAuthority.on/off(type, fn)
- *   CardSystem.moveHandToCollection(i) → CardAuthority.moveHandToBackup(i)
- *   CardSystem.moveCollectionToHand(i) → CardAuthority.moveBackupToHand(i)
- *
- * These proxies log deprecation warnings so callers can be tracked and
- * migrated in subsequent sprints. They will be removed in S0.5.
- *
- * Layer 1 — depends on: nothing (registry is self-contained)
+ * Layer 1 — depends on: CardAuthority (for starter deck seeding at init)
  *
  * @see engine/card-authority.js (S0.1 — state owner)
  * @see engine/card-transfer.js  (S0.2 — validated transfers)
@@ -45,26 +23,11 @@
 var CardSystem = (function () {
   'use strict';
 
-  // ── Constants (kept for backward compat — also in CardAuthority) ───
-
-  var MAX_HAND       = 5;
-  var MAX_COLLECTION = 30;
-
-  // ── Registry state (the only state this module still owns) ────────
+  // ── Registry state ────────────────────────────────────────────────
 
   var _registry = [];   // Full card definitions from JSON
   var _byId     = {};   // Fast lookup: id → card def
   var _loaded   = false;
-
-  // ── Deprecation logger ────────────────────────────────────────────
-
-  var _warned = {};
-  function _deprecate(method) {
-    if (!_warned[method]) {
-      _warned[method] = true;
-      console.warn('[CardSystem] DEPRECATED: ' + method + '() — use CardAuthority/CardTransfer instead');
-    }
-  }
 
   // ── Registry loading ──────────────────────────────────────────────
 
@@ -181,147 +144,19 @@ var CardSystem = (function () {
     return _registry;
   }
 
-  // ── Proxy stubs (forward to CardAuthority, log deprecation) ───────
-  //
-  // These exist so un-rewired callers don't break immediately.
-  // Each logs a one-time warning to aid migration tracking.
-
-  function getHand() {
-    _deprecate('getHand');
-    return CardAuthority.getHand();
-  }
-
-  function drawHand(count) {
-    _deprecate('drawHand');
-    return CardAuthority.drawHand(count);
-  }
-
-  function drawToHand(count) {
-    _deprecate('drawToHand');
-    return CardAuthority.drawToHand(count);
-  }
-
-  function drawWithOverflow(maxHand, maxCollection) {
-    _deprecate('drawWithOverflow');
-    return CardAuthority.drawWithOverflow(maxHand, maxCollection);
-  }
-
-  function playFromHand(index) {
-    _deprecate('playFromHand');
-    return CardAuthority.removeFromHand(index);
-  }
-
-  function playStack(stackEntries) {
-    _deprecate('playStack');
-    return CardAuthority.playStack(stackEntries);
-  }
-
-  function pushToHand(card) {
-    _deprecate('pushToHand');
-    return CardAuthority.addToHand(card);
-  }
-
-  function resetDeck() {
-    _deprecate('resetDeck');
-    CardAuthority.resetDeck();
-  }
-
-  function addCard(cardOrId) {
-    _deprecate('addCard');
-    var card = (typeof cardOrId === 'string') ? getById(cardOrId) : cardOrId;
-    if (!card) return false;
-    return CardAuthority.addToBackup(card);
-  }
-
-  function removeCard(cardId) {
-    _deprecate('removeCard');
-    return CardAuthority.removeFromBackupById(cardId);
-  }
-
-  function getCollection() {
-    _deprecate('getCollection');
-    return CardAuthority.getBackup();
-  }
-
-  function getCollectionSize() {
-    _deprecate('getCollectionSize');
-    return CardAuthority.getBackupSize();
-  }
-
-  function getDeckSize() {
-    _deprecate('getDeckSize');
-    return CardAuthority.getDeckSize();
-  }
-
-  function moveHandToCollection(handIndex) {
-    _deprecate('moveHandToCollection');
-    return CardAuthority.moveHandToBackup(handIndex);
-  }
-
-  function moveCollectionToHand(collectionIndex) {
-    _deprecate('moveCollectionToHand');
-    return CardAuthority.moveBackupToHand(collectionIndex);
-  }
-
-  function failstateWipe() {
-    _deprecate('failstateWipe');
-    return CardAuthority.failstateWipe();
-  }
-
-  function on(type, fn) {
-    _deprecate('on');
-    CardAuthority.on(type, fn);
-  }
-
-  function off(type, fn) {
-    _deprecate('off');
-    CardAuthority.off(type, fn);
-  }
-
-  // Also handle emitHandChanged (called by card-fan.js after reorder)
-  function emitHandChanged() {
-    _deprecate('emitHandChanged');
-    // CardAuthority events handle this — no-op proxy
-  }
-
   // ── Public API ────────────────────────────────────────────────────
+  //
+  // S0.5: All proxy stubs removed. CardSystem is now a pure registry.
+  // Mutable state lives in CardAuthority. Transfers go through CardTransfer.
 
   return {
-    // ── Constants (backward compat) ──
-    MAX_HAND:       MAX_HAND,
-    MAX_COLLECTION: MAX_COLLECTION,
-
     // ── Lifecycle ──
     init: init,
 
-    // ── Registry queries (the real API) ──
+    // ── Registry queries ──
     getById:        getById,
     getByPool:      getByPool,
     getBiomeDrops:  getBiomeDrops,
-    getAllRegistry:  getAllRegistry,
-
-    // ── Proxy stubs (deprecated — use CardAuthority/CardTransfer) ──
-    resetDeck:            resetDeck,
-    drawHand:             drawHand,
-    getHand:              getHand,
-    playFromHand:         playFromHand,
-    playStack:            playStack,
-    drawToHand:           drawToHand,
-    drawWithOverflow:     drawWithOverflow,
-    pushToHand:           pushToHand,
-    addCard:              addCard,
-    removeCard:           removeCard,
-    getCollection:        getCollection,
-    getCollectionSize:    getCollectionSize,
-    getDeckSize:          getDeckSize,
-    moveHandToCollection: moveHandToCollection,
-    moveCollectionToHand: moveCollectionToHand,
-    failstateWipe:        failstateWipe,
-    on:                   on,
-    off:                  off,
-    emitHandChanged:      emitHandChanged,
-
-    // Legacy alias
-    getAllCards: getCollection
+    getAllRegistry:  getAllRegistry
   };
 })();

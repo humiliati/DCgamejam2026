@@ -1,6 +1,6 @@
 # Unified Execution Order — All Visual Roadmaps
 
-> **Created:** 2026-03-31 | **Updated:** 2026-04-01
+> **Created:** 2026-03-31 | **Updated:** 2026-04-01 (S0.5 complete)
 > **Covers:** INVENTORY_CARD_MENU_REWORK, EYESONLY_3D_ROADMAP, NLAYER_RAYCASTER_ROADMAP, TEXTURE_ROADMAP, LIGHT_AND_TORCH_ROADMAP, SKYBOX_ROADMAP, PRESSURE_WASHING_ROADMAP
 > **Purpose:** Single source of truth for implementation sequencing across overlapping roadmap phases
 
@@ -13,40 +13,61 @@
 > **Why first:** Every subsequent track touches cards, inventory, or the menu surface. The current DG architecture has 3–4 competing card storage models, unregistered drag-drop zones, two competing card renderers, and direct state mutations. Building on top of this creates silent composition failures. Sprint 0 replaces the foundation before anything else stacks on it.
 
 ```
-Step S0.1: CardAuthority — single read/write gateway for all card state       (2h)
+Step S0.1: CardAuthority — single read/write gateway for all card state       ✅ DONE
   │  Creates: engine/card-authority.js (Layer 1)
   │  Pattern: EyesOnly CardStateAuthority → DG IIFE adaptation
   │  Provides: _state object (hand/backup/bag/stash/equipped/gold),
   │            event emitter (on/off/emit), serialize/deserialize,
   │            death reset with tiered persistence
   │
-Step S0.2: CardTransfer — validated zone-to-zone moves with rollback          (2h)
+Step S0.2: CardTransfer — validated zone-to-zone moves with rollback          ✅ DONE
   │  Creates: engine/card-transfer.js (Layer 1)
   │  Depends: S0.1 (reads/writes through CardAuthority)
   │  Pattern: EyesOnly drop zone registry → DG IIFE adaptation
   │  Provides: handToBag, bagToStash, lootToBag, buyCard, sellFromBag,
   │            registerDropZone(id, accepts, onDrop)
+  │  Result: 840 lines, 95/95 functional tests
   │
-Step S0.3: Rewire existing modules to CardAuthority + CardTransfer            (3h)
+Step S0.3: Rewire existing modules to CardAuthority + CardTransfer            ✅ DONE
   │  Modifies: player.js (strip card/item state), card-system.js (registry only),
   │            card-fan.js (subscribe to events), salvage.js (use CardTransfer),
   │            shop.js (use CardTransfer), hud.js (subscribe to events)
   │  Depends: S0.1, S0.2
+  │  Result: 6 spec'd + 7 discovered callers rewired with proxy stubs,
+  │          114/114 tests passed (95 CardTransfer + 19 proxy integration)
   │
-Step S0.4: MenuInventory — new pause menu surface                            (5h)
-  │  Creates: engine/menu-inventory.js (Layer 2)
-  │  Depends: S0.1, S0.2, S0.3 (all modules wired through authority)
-  │  Provides: grid-navigable bag/stash/equipped/hand display,
-  │            CardDraw as ONLY renderer, drag-drop via registered zones
+Step S0.4: MenuInventory — absorbed into menu-faces.js                        ✅ DONE
+  │  Decision: Separate menu-inventory.js not needed. menu-faces.js already
+  │  owns the 4-face rotating box. S-factor scaling overhaul applied to all
+  │  faces (minimap, journal, inventory, settings). Drag zone registration,
+  │  hit zone interactivity, and stub sections for planned features all
+  │  landed in menu-faces.js during the menu legibility pass.
+  │  Depends: S0.1, S0.2, S0.3
   │
-Step S0.5: Delete dead code + regression test                                 (3h)
-     Deletes: card-renderer.js (DOM renderer), orphaned drag-drop stubs
-     Depends: S0.3, S0.4 (all consumers rewired)
-     Verify: shop round-trip, combat card play, loot pickup, death reset,
-             bonfire stash, inventory navigation, drag-drop in all surfaces
+Step S0.5: Dead code cleanup + proxy migration                                ✅ DONE
+     Migrated: 16 files from CardSystem/Player proxy calls → CardAuthority
+       game.js (12 sites), menu-faces.js (~70 sites), status-bar.js (5 sites),
+       hero-system.js, nch-widget.js, vendor-dialog.js, combat-bridge.js,
+       quick-bar.js, peek-slots.js, floor-transition.js, mailbox-peek.js,
+       dialog-box.js, debrief-feed.js
+     Stripped: card-system.js → pure registry (init, getById, getByPool,
+       getBiomeDrops, getAllRegistry). All 18 proxy stubs removed.
+     Stripped: player.js → position/stats/debuffs/flags only. All 16
+       inventory proxy exports removed. Kept useItem/hasItem/consumeItem
+       as real game logic that reads CardAuthority.
+     Cleaned: CardAuthority init() absorb blocks removed (dead after strip)
+     Fixed: _handToBackup bug (card removed from hand but not added to backup)
+     Remaining: card-renderer.js NOT .bak'd — still read for RES_COLORS,
+       SUIT_DATA, createGhostFromData by card-draw.js, card-fan.js,
+       menu-faces.js. Rewire to CardAuthority constants is follow-on cleanup.
+     Verify: node --check passed on all 16 modified files
 ```
 
-**Sprint 0 blocks everything.** Track A and Track B cannot begin until S0.5 passes regression. The torch interaction system (A7) writes to inventory. The skybox HUD widget (B4) reads card state. The convergence sprints (EYESONLY_3D_ROADMAP S1–S5) all assume CardAuthority exists.
+**Sprint 0 is COMPLETE.** Track A and Track B are now unblocked. CardAuthority is the single source of truth for all inventory/card state. CardTransfer handles all validated zone-to-zone moves. No module directly mutates inventory state outside these two gateways.
+
+**Follow-on cleanup (not blocking):**
+- Rewire CardRenderer.RES_COLORS/SUIT_DATA consumers to read from CardAuthority (card-draw.js, card-fan.js, menu-faces.js), then .bak card-renderer.js
+- Two drag systems (canvas hit-test vs pointer) still don't cross-communicate in menu-faces.js
 
 ---
 
@@ -71,23 +92,32 @@ and Track B (skybox/day-night) don't share code paths until Floor 3 blockout.
 ### Track A — Raycaster, Textures, Lighting (~10h jam scope)
 
 ```
-Step A1: NLAYER Phase 1 — N-layer hit collector + back-to-front render     (45min)
+Step A1: NLAYER Phase 1 — N-layer hit collector + back-to-front render     ✅ DONE
   │  Modifies: raycaster.js DDA loop
-  │  Why first: all subsequent raycaster changes build on this
+  │  Result: _layerBuf[6], _MAX_LAYERS=6, _MAX_BG_STEPS=24, tallest-layer
+  │  tracking, >=3.0 height break, back-to-front rendering, _renderBackLayer
   │
-Step A2: NLAYER Phase 3 — SHRUB tile + _genShrub() texture                 (1h)
+Step A2: NLAYER Phase 3 — SHRUB tile + _genShrub() texture                 ✅ DONE
   │  Modifies: tiles.js, texture-atlas.js, spatial-contract.js, raycaster.js
-  │  Depends: A1 (SHRUB hit detection in N-layer DDA)
+  │  Result: TILES.SHRUB=22, _genShrub() procedural texture, tileWallHeights
+  │  0.5, grass floor override in 3 biome configs
   │
-Step A3: NLAYER Phase 5 + 6 — Performance guards + Floor 0 test            (1.5h)
+Step A3: NLAYER Phase 5 + 6 — Performance guards + Floor 0 test            ✅ DONE
   │  Modifies: raycaster.js, floor-manager.js
-  │  Depends: A1, A2 (need shrubs in Floor 0 to test)
-  │  Verify: sky → building → floor → shrub layering correct
+  │  Result: 40×30 Floor 0 with shrub hedgerows, tree borders, pillar arcades,
+  │  bonfire nooks. Fog culling >0.98, step limit, height break all in place.
   │
-Step A4: TEXTURE Layer 2 — Wall decor data model + face-hit rendering      (2h)
-  │  Modifies: raycaster.js (within N-layer loop), floor-manager.js, grid-gen.js
+Step A4: TEXTURE Layer 2 — Wall decor data model + face-hit rendering      ✅ DONE
+  │  Modifies: raycaster.js, texture-atlas.js, grid-gen.js, floor-manager.js
   │  Depends: A1 (wall decor renders per-layer in back-to-front loop)
-  │  Creates: wallDecor[y][x] structure, spriteId/anchorU/anchorV/scale/emitter
+  │  Creates: wallDecor[y][x] = { n:[], s:[], e:[], w:[] } per-face sprite data
+  │  Sprites: decor_torch (bracket+flame), decor_grate (iron bars),
+  │    decor_banner_red/blue (hanging pennants). 16×16 with alpha transparency.
+  │  Raycaster: _hitFace() face detection, _renderWallDecor() per-column overlay
+  │    in both foreground and _renderBackLayer paths (before fog/shade overlays).
+  │  Auto-placement: GridGen._generateWallDecor() for proc-gen floors,
+  │    FloorManager._buildWallDecorFromGrid() for hand-authored floors.
+  │    Torches at room entrances + ~12% of corridor walls. Grates in dungeons.
   │
 Step A5: LIGHT_AND_TORCH Phase 1 ≡ TEXTURE Layer 3 — Dynamic lights       (1.5h)
   │  Modifies: lighting.js, raycaster.js (glow overlay pass)

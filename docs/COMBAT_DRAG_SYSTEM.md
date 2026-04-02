@@ -91,8 +91,10 @@ During combat, the only items available to the player are the 3 equipped items f
 |--------|---------------|
 | CardFan | Canvas rendering, drag/reorder, fire anim, maximize/minimize |
 | CardStack | Stack building rules, synergy tag intersection, thrust calculation |
-| CardSystem | Hand/deck/collection data, drawWithOverflow, pushToHand |
-| CombatBridge | Phase orchestration, draw-per-turn, fireStack dispatch |
+| CardAuthority | ✅ SOLE owner of all card state: hand(5), backup(30), deck, bag(12), stash(20), equipped(3), gold |
+| CardTransfer | ✅ Handles all validated cross-zone transfers with rollback |
+| CardSystem | ✅ Pure registry only: init(), getById/getByPool/getBiomeDrops/getAllRegistry. NO mutable state. |
+| CombatBridge | Phase orchestration, draw-per-turn, fireStack dispatch (calls CardAuthority directly) |
 | CombatEngine | Phase state machine, enemy beat timer |
 | CombatFX | Viewport zoom, HUD flash, fan slide choreography |
 | SynergyEngine | Suit RPS advantage, mono-suit bonus |

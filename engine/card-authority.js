@@ -737,51 +737,15 @@ var CardAuthority = (function () {
   var _initialized = false;
 
   /**
-   * Initialize CardAuthority by absorbing state from legacy modules.
-   * Called once from Game.init() after CardSystem.init() and Player exist.
-   *
-   * During S0.3 (rewire), this migrates state from:
-   *   - CardSystem._hand → _state.hand
-   *   - CardSystem._collection → _state.backup
-   *   - CardSystem._deck → _state.deck
-   *   - Player._state.bag → _state.bag
-   *   - Player._state.stash → _state.stash
-   *   - Player._state.equipped → _state.equipped
-   *   - Player._state.currency → _state.gold
-   *
-   * Post-S0.3, CardSystem.init() will delegate to CardAuthority directly
-   * and this migration path becomes a no-op.
+   * Initialize CardAuthority. Called once from Game.init().
+   * CardSystem.init() seeds the starter deck via addToBackup/resetDeck.
    */
   function init() {
     if (_initialized) return;
 
-    // ── Absorb from CardSystem (if it owns state right now) ──
-    if (typeof CardSystem !== 'undefined') {
-      var csHand = CardSystem.getHand();
-      if (csHand && csHand.length > 0) {
-        _state.hand = csHand.slice();
-      }
-      var csCollection = CardSystem.getCollection();
-      if (csCollection && csCollection.length > 0) {
-        _state.backup = csCollection.slice();
-      }
-      // Deck: not publicly exposed by CardSystem, rebuild from backup
-      _state.deck = _state.backup.slice();
-      if (typeof SeededRNG !== 'undefined' && SeededRNG.shuffle) {
-        SeededRNG.shuffle(_state.deck);
-      }
-    }
-
-    // ── Absorb from Player (if it owns inventory right now) ──
-    if (typeof Player !== 'undefined') {
-      var ps = Player.state();
-      if (ps) {
-        if (ps.bag && ps.bag.length > 0) _state.bag = ps.bag.slice();
-        if (ps.stash && ps.stash.length > 0) _state.stash = ps.stash.slice();
-        if (ps.equipped) _state.equipped = ps.equipped.slice();
-        if (typeof ps.currency === 'number') _state.gold = ps.currency;
-      }
-    }
+    // S0.5: CardAuthority is the sole owner of inventory state from boot.
+    // CardSystem.init() seeds the starter deck via addToBackup/resetDeck.
+    // No absorb needed.
 
     _initialized = true;
     console.log('[CardAuthority] Initialized — hand:' + _state.hand.length +

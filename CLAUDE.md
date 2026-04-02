@@ -98,7 +98,7 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 | Layer | Purpose | Modules |
 |---|---|---|
 | 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem` |
-| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
+| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
 | 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
 | 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
 | 4 | Orchestrator | `Game` |
@@ -115,6 +115,8 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 5. If the module needs to talk to another module at the same layer, wire through callbacks set by Game (Layer 4) — never create circular references
 
 ## Key subsystems to understand
+
+**CardAuthority** — Single source of truth for all inventory/card state. Owns hand (5 cards), backup deck (30), draw deck, bag (12 items), stash (20), equipped (3 quick-slots), and gold. Event system (`on`/`off`/`_emit`) with 9 event types. All mutations go through CardAuthority methods — no module should directly splice arrays or mutate state. Constants `SUIT_DATA`, `RES_COLORS`, `QUALITY_COLORS` are canonical here (not CardRenderer). `CardTransfer` handles validated cross-zone moves with rollback. `CardSystem` is a pure card definition registry (loads cards.json, seeds starter deck). `Player` retains only position, stats, debuffs, flags, and compound item utilities (`useItem`, `hasItem`, `consumeItem`) that read from CardAuthority.
 
 **MovementController** — Queued lerp system ported from dcexjam2025. Dual-queue architecture: impulse_queue (raw input) and interp_queue (validated moves being animated). Runs at 60fps via `MC.tick(frameDt)` in the render loop. WALK_TIME=500ms, ROT_TIME=250ms. Double-time kicks in at queue depth > 3.
 

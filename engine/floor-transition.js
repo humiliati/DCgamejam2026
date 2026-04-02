@@ -513,15 +513,15 @@ var FloorTransition = (function () {
 
     // Search player inventory for a matching key
     var keyItem = null;
-    if (typeof Player !== 'undefined') {
+    if (typeof CardAuthority !== 'undefined') {
       if (requiredKeyId) {
         // Specific key required — search by ID
-        var bag = Player.getBag();
+        var bag = CardAuthority.getBag();
         for (var bi = 0; bi < bag.length; bi++) {
           if (bag[bi] && bag[bi].id === requiredKeyId) { keyItem = bag[bi]; break; }
         }
         if (!keyItem) {
-          var eq = Player.getEquipped();
+          var eq = CardAuthority.getEquipped();
           for (var ei = 0; ei < eq.length; ei++) {
             if (eq[ei] && eq[ei].id === requiredKeyId) { keyItem = eq[ei]; break; }
           }

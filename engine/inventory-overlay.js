@@ -59,6 +59,7 @@ var InventoryOverlay = (function () {
     'inv-bag-':  'zone-bag',
     'inv-hand-': 'zone-hand',
     'inv-deck-': 'zone-deck',
+    'inv-bag-expander': 'zone-bag',
     'inv-incin': 'zone-debrief'
   };
 
@@ -119,6 +120,7 @@ var InventoryOverlay = (function () {
     var ei, bi, hi, di;
     for (ei = 0; ei < 3; ei++) ids.push('inv-eq-' + ei);
     for (bi = 0; bi < 5; bi++) ids.push('inv-bag-' + bi);
+    ids.push('inv-bag-expander');
     for (hi = 0; hi < 5; hi++) ids.push('inv-hand-' + hi);
     for (di = 0; di < 5; di++) ids.push('inv-deck-' + di);
     ids.push('inv-incin');
@@ -180,6 +182,14 @@ var InventoryOverlay = (function () {
     _syncGroup('inv-bag-', layout.bagSlots, 5, cW, cH);
     _syncGroup('inv-hand-', layout.handSlots, 5, cW, cH);
     _syncGroup('inv-deck-', layout.deckSlots, 5, cW, cH);
+
+    // Bag expander
+    if (layout.bagExpander && _overlays['inv-bag-expander']) {
+      _positionDiv(_overlays['inv-bag-expander'], layout.bagExpander, cW, cH);
+    } else if (_overlays['inv-bag-expander']) {
+      // Hide off-screen when expander not visible
+      _overlays['inv-bag-expander'].style.left = '-999px';
+    }
 
     // Incinerator
     if (layout.incin && _overlays['inv-incin']) {

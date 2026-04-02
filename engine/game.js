@@ -96,6 +96,20 @@ var Game = (function () {
     InputManager.initPointer(_canvas);
     AudioSystem.init();
 
+    // Debug GIF recorder (F8 start/stop, F9 save last N seconds)
+    if (typeof GifRecorder !== 'undefined') {
+      GifRecorder.init(_canvas, {
+        fps: 12,
+        maxWidth: 480,
+        rollingEnabled: true,
+        rollingSeconds: 6,
+        quality: 10,
+        workers: 2,
+        captureConsole: true,
+        consoleMaxSeconds: 30
+      });
+    }
+
     // Wire BarkLibrary display function — routes barks to StatusBar tooltip
     // space (bottom footer) for persistent history, with DialogBox fallback
     // for dialog-style barks that need the full conversation UI.
@@ -379,10 +393,32 @@ var Game = (function () {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(-1);
           } else if (hit.action === 'deck_scroll_right') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(+1);
+          } else if (hit.action === 'expand_bag') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.toggleBagExpand();
+          } else if (hit.action === 'expand_deck') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.toggleDeckExpand();
           } else if (hit.action === 'incinerator') {
             _incinerateFromFocus();
           } else if (hit.action === 'warp' && hit.warpTarget) {
             _warpToFloor(hit.warpTarget);
+          } else if (hit.action === 'resume') {
+            // Return to Game / Close menu
+            if (typeof MenuBox !== 'undefined') MenuBox.close();
+          } else if (hit.action === 'quit_title') {
+            // Quit to title screen
+            if (typeof MenuBox !== 'undefined') MenuBox.close();
+            if (typeof ScreenManager !== 'undefined') ScreenManager.toTitle();
+          } else if (hit.action === 'toggle' && hit.toggleKey) {
+            // Face 3 toggle settings
+            if (typeof MenuFaces !== 'undefined') {
+              MenuFaces.handleSettingsToggle(hit.toggleKey);
+            }
+          } else if (hit.action === 'slider_click') {
+            // Face 3 slider click-to-set — select that slider row
+            var sliderIdx = hit.slot - 800;
+            if (typeof MenuFaces !== 'undefined' && sliderIdx >= 0 && sliderIdx < 3) {
+              MenuFaces.handleSettingsSelectRow(sliderIdx);
+            }
           }
         }
         return;
@@ -751,11 +787,11 @@ var Game = (function () {
         }
 
         // Card confiscation on lethal floors (depth 3+)
-        if (depth >= 3 && typeof CardSystem !== 'undefined') {
-          var hand = CardSystem.getHand();
+        if (depth >= 3 && typeof CardAuthority !== 'undefined') {
+          var hand = CardAuthority.getHand();
           if (hand.length > 0) {
             var confiscateIdx = Math.floor(Math.random() * hand.length);
-            var taken = CardSystem.playFromHand(confiscateIdx);
+            var taken = CardAuthority.removeFromHand(confiscateIdx);
             if (taken && typeof Toast !== 'undefined') {
               var cardName = taken.name || taken.id || 'a card';
               Toast.show('\uD83C\uDCCF The hero pocketed your ' + cardName + '. Fair trade for your life.', 'legendary');
@@ -1310,9 +1346,9 @@ var Game = (function () {
     _generateAndWire();
 
     // Draw initial card hand
-    CardSystem.drawHand();
-    HUD.updateCards(CardSystem.getHand());
-    var _initHand = CardSystem.getHand();
+    CardAuthority.drawHand();
+    HUD.updateCards(CardAuthority.getHand());
+    var _initHand = CardAuthority.getHand();
     if (_initHand.length > 0 && typeof Toast !== 'undefined') {
       Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
     }
@@ -1473,11 +1509,11 @@ var Game = (function () {
     // C6: Reshuffle deck on floor transition — fresh hand for each floor.
     // Only reshuffle when entering dungeons (depth 3+) to keep town safe.
     var depth = floorId.split('.').length;
-    if (typeof CardSystem !== 'undefined' && depth >= 3) {
-      CardSystem.resetDeck();
-      CardSystem.drawHand();
+    if (typeof CardAuthority !== 'undefined' && depth >= 3) {
+      CardAuthority.resetDeck();
+      CardAuthority.drawHand();
       if (typeof Toast !== 'undefined') {
-        Toast.show('\u267B\uFE0F Deck reshuffled \u2014 drew ' + CardSystem.getHand().length, 'dim');
+        Toast.show('\u267B\uFE0F Deck reshuffled \u2014 drew ' + CardAuthority.getHand().length, 'dim');
       }
     }
 
@@ -1528,7 +1564,7 @@ var Game = (function () {
         var evalResult = WorkOrderSystem.evaluate();
         if (evalResult.completed.length > 0) {
           var totalPay = evalResult.totalPayout;
-          Player.addCurrency(totalPay);
+          CardAuthority.addGold(totalPay);
           Toast.show('✅ ' + i18n.t('work.order_complete', 'Order complete!') +
                       ' +' + totalPay + 'g', 'currency');
           AudioSystem.play('ui-confirm', { volume: 0.6 });
@@ -2251,11 +2287,7 @@ var Game = (function () {
     if (pickup.type === 'gold') {
       var goldAmt = pickup.amount || 1;
       // Authority path — CardTransfer.lootGold fires gold:changed event
-      if (typeof CardTransfer !== 'undefined') {
-        CardTransfer.lootGold(goldAmt);
-      } else {
-        Player.addCurrency(goldAmt);
-      }
+      CardAuthority.addGold(goldAmt);
       Toast.show('💰 +' + goldAmt, 'currency');
       AudioSystem.playRandom('coin', { volume: 0.5 });
       // Coin VFX — match shop sell pattern (coinRain ≥ 15, coinBurst < 15)
@@ -2459,7 +2491,7 @@ var Game = (function () {
       if (CleaningSystem.isDirty(fx, fy, cleanFloorId)) {
         // C3: Pass equipped cleaning tool subtype for speed scaling
         var _cleanTool = null;
-        var _equipped = Player.getEquipped();
+        var _equipped = CardAuthority.getEquipped();
         for (var _ei = 0; _ei < _equipped.length; _ei++) {
           if (_equipped[_ei] && _equipped[_ei].subtype &&
               CleaningSystem.TOOL_SPEED[_equipped[_ei].subtype]) {
@@ -2763,7 +2795,7 @@ var Game = (function () {
     if (!item) return;
 
     // Try to add to player bag
-    if (Player.addToBag(item)) {
+    if (CardAuthority.addToBag(item)) {
       Toast.show(
         i18n.t('toast.harvest', 'Harvested:') + ' ' + item.emoji + ' ' + item.name,
         'loot'
@@ -2855,14 +2887,14 @@ var Game = (function () {
   function _shopSellFromHand(slot) {
     if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
 
-    var hand = CardSystem.getHand();
+    var hand = CardAuthority.getHand();
     var card = hand[slot];
     if (!card) return;
 
     var result = Shop.sell(card.id);
     if (result.ok) {
       // Also remove from displayed hand
-      CardSystem.playFromHand(slot);
+      CardAuthority.removeFromHand(slot);
 
       Toast.show(
         i18n.t('shop.sold', 'Sold') + ' ' + card.emoji + ' ' + card.name +
@@ -2962,8 +2994,11 @@ var Game = (function () {
     if (item.type === 'consumable' || item.subtype === 'food' || item.subtype === 'vice') slot = 1;
     if (item.type === 'key') slot = 2;
 
-    var prev = Player.equip(bagIndex, slot);
+    var removed = CardAuthority.removeFromBag(bagIndex);
+    if (!removed) return;
+    var prev = CardAuthority.equip(slot, removed);
     if (prev) {
+      CardAuthority.addToBag(prev);
       Toast.show(item.emoji + ' ' + i18n.t('inv.equipped', 'equipped') +
                  ' ← ' + prev.emoji, 'info');
     } else {
@@ -2983,13 +3018,15 @@ var Game = (function () {
    * @param {number} slot - 0=weapon, 1=consumable, 2=key
    */
   function _unequipSlot(slot) {
-    var item = Player.state().equipped[slot];
+    var item = CardAuthority.getEquipSlot(slot);
     if (!item) return;
 
-    if (!Player.unequip(slot)) {
+    if (CardAuthority.getBagSize() >= CardAuthority.MAX_BAG) {
       Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
       return;
     }
+    CardAuthority.unequip(slot);
+    CardAuthority.addToBag(item);
     Toast.show(item.emoji + ' ' + i18n.t('inv.unequipped', 'unequipped'), 'dim');
     AudioSystem.playRandom('coin');
     HUD.updatePlayer(Player.state());
@@ -3001,16 +3038,16 @@ var Game = (function () {
    * @param {number} bagIndex
    */
   function _bagToStash(bagIndex) {
-    var bag = Player.state().bag;
+    var bag = CardAuthority.getBag();
     var item = bag[bagIndex];
     if (!item) return;
 
-    if (!Player.addToStash(item)) {
+    if (CardAuthority.getStashSize() >= CardAuthority.MAX_STASH) {
       Toast.show(i18n.t('inv.stash_full', 'Stash is full!'), 'warning');
       return;
     }
-    // Remove from bag (splice directly — Player.removeFromBag uses id lookup)
-    bag.splice(bagIndex, 1);
+    CardAuthority.removeFromBag(bagIndex);
+    CardAuthority.addToStash(item);
 
     Toast.show(item.emoji + ' → ' + i18n.t('inv.stash', 'Stash'), 'info');
     AudioSystem.play('pickup-success');
@@ -3023,16 +3060,16 @@ var Game = (function () {
    * @param {number} stashIndex
    */
   function _stashToBag(stashIndex) {
-    var stash = Player.state().stash;
+    var stash = CardAuthority.getStash();
     var item = stash[stashIndex];
     if (!item) return;
 
-    if (!Player.addToBag(item)) {
+    if (CardAuthority.getBagSize() >= CardAuthority.MAX_BAG) {
       Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
       return;
     }
-    // Remove from stash
-    stash.splice(stashIndex, 1);
+    CardAuthority.removeFromStash(stashIndex);
+    CardAuthority.addToBag(item);
 
     Toast.show(item.emoji + ' → ' + i18n.t('inv.bag', 'Bag'), 'info');
     AudioSystem.play('pickup-success');
@@ -3063,23 +3100,23 @@ var Game = (function () {
     var offset = (typeof MenuFaces !== 'undefined') ? MenuFaces.getBagOffset() : 0;
 
     if (focus === 'bag') {
-      var bag = Player.getBag();
+      var bag = CardAuthority.getBag();
       // Incinerate the first visible bag item (at current scroll offset)
       var item = bag[offset];
       if (!item) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
-      bag.splice(offset, 1);
+      CardAuthority.removeFromBag(offset);
       var refund = item.value ? Math.max(1, Math.floor(item.value * 0.1)) : 1;
-      Player.addCurrency(refund);
+      CardAuthority.addGold(refund);
       Toast.show('\uD83D\uDD25 ' + (item.emoji || '') + ' ' + (item.name || 'Item') + ' \u2192 ' + refund + 'g', 'warning');
     } else {
       // Deck focus — incinerate from backup deck
       var deckOff = (typeof MenuFaces !== 'undefined') ? MenuFaces.getDeckOffset() : 0;
-      var collection = (typeof CardSystem !== 'undefined') ? CardSystem.getCollection() : [];
+      var collection = (typeof CardAuthority !== 'undefined') ? CardAuthority.getBackup() : [];
       var card = collection[deckOff];
       if (!card) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
-      if (typeof CardSystem !== 'undefined') CardSystem.removeCard(card.id);
+      if (typeof CardAuthority !== 'undefined') CardAuthority.removeFromBackupById(card.id);
       var cardRefund = card.rarity === 'rare' ? 5 : (card.rarity === 'uncommon' ? 3 : 1);
-      Player.addCurrency(cardRefund);
+      CardAuthority.addGold(cardRefund);
       Toast.show('\uD83D\uDD25 ' + (card.emoji || '\uD83C\uDCA0') + ' ' + (card.name || 'Card') + ' \u2192 ' + cardRefund + 'g', 'warning');
     }
 
@@ -3091,17 +3128,9 @@ var Game = (function () {
   // ── Deck management actions (B5.4) ────────────────────────────────
 
   function _handToBackup(handIndex) {
-    var hand = CardSystem.getHand();
-    var card = hand[handIndex];
+    var card = CardAuthority.removeFromHand(handIndex);
     if (!card) return;
-
-    // Remove from hand
-    Player.removeFromHand(handIndex);
-
-    // Add to collection (backup deck) via CardSystem.addCard
-    if (typeof CardSystem !== 'undefined') {
-      CardSystem.addCard(card);
-    }
+    CardAuthority.addToBackup(card);
 
     var emoji = card.emoji || '\uD83C\uDCA0';
     Toast.show(emoji + ' \u2192 Backup Deck', 'info');
@@ -3110,24 +3139,21 @@ var Game = (function () {
   }
 
   function _backupToHand(deckIndex) {
-    var hand = CardSystem.getHand();
-    if (hand.length >= Player.MAX_HAND) {
+    var hand = CardAuthority.getHand();
+    if (hand.length >= CardAuthority.MAX_HAND) {
       Toast.show(i18n.t('inv.hand_full', 'Hand is full! (5/5)'), 'warning');
       return;
     }
 
-    var collection = (typeof CardSystem !== 'undefined')
-      ? CardSystem.getCollection() : [];
-    var card = collection[deckIndex];
+    var backup = CardAuthority.getBackup();
+    var card = backup[deckIndex];
     if (!card) return;
 
-    // Remove from collection by id
-    if (typeof CardSystem !== 'undefined') {
-      CardSystem.removeCard(card.id);
-    }
+    // Remove from backup by id
+    CardAuthority.removeFromBackupById(card.id);
 
     // Add to hand
-    Player.addToHand(card);
+    CardAuthority.addToHand(card);
 
     var emoji = card.emoji || '\uD83C\uDCA0';
     Toast.show(emoji + ' \u2192 Hand', 'info');
@@ -3228,6 +3254,11 @@ var Game = (function () {
     var frameDt = now - _lastFrameTime;
     _lastFrameTime = now;
     if (frameDt > 100) frameDt = 100;
+
+    // GIF recorder capture (runs regardless of screen)
+    if (typeof GifRecorder !== 'undefined' && GifRecorder.tick) {
+      GifRecorder.tick(frameDt);
+    }
 
     // ── Non-gameplay screens: render on canvas, return early ──
 
@@ -3631,12 +3662,17 @@ var Game = (function () {
    * open the menu on a particular face.
    *
    * @param {string} context  - 'pause', 'bonfire', 'shop', 'harvest'
-   * @param {number} [face=0] - Starting face index (0-3)
+   * @param {number} [face=0]   - Starting face index (0-3)
+   * @param {string} [invFocus] - 'bag' or 'deck' — sets inventory focus on Face 2
    */
-  function requestPause(context, face) {
+  function requestPause(context, face, invFocus) {
     if (!ScreenManager.isPlaying()) return;
     _pendingMenuContext = context || 'pause';
     _pendingMenuFace = face || 0;
+    // Set inventory focus before opening menu
+    if (invFocus && typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) {
+      MenuFaces.setInvFocus(invFocus);
+    }
     ScreenManager.toPause();
   }
 

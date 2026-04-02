@@ -157,8 +157,8 @@ var PeekSlots = (function () {
     // Grant coins via authority path
     if (typeof CardTransfer !== 'undefined') {
       CardTransfer.lootGold(result.totalCoins);
-    } else if (typeof Player !== 'undefined') {
-      Player.addCurrency(result.totalCoins);
+    } else if (typeof CardAuthority !== 'undefined') {
+      CardAuthority.addGold(result.totalCoins);
     }
 
     // Coin VFX — seal is a big moment, use coinRain for ≥ 5g, burst for smaller
@@ -242,14 +242,10 @@ var PeekSlots = (function () {
             // Remove from source
             if (payload.type === 'card') {
               // Card from hand
-              if (typeof Player !== 'undefined') {
-                Player.removeFromHand(payload.index);
-              }
+              CardAuthority.removeFromHand(payload.index);
             } else if (payload.type === 'item') {
               // Item from bag
-              if (typeof Player !== 'undefined') {
-                Player.removeFromBag(item.id);
-              }
+              CardAuthority.removeFromBagById(item.id);
             }
 
             // Fill the slot via CrateSystem
@@ -269,8 +265,8 @@ var PeekSlots = (function () {
               // Authority path for per-slot coin award
               if (typeof CardTransfer !== 'undefined') {
                 CardTransfer.lootGold(result.coins);
-              } else if (typeof Player !== 'undefined') {
-                Player.addCurrency(result.coins);
+              } else if (typeof CardAuthority !== 'undefined') {
+                CardAuthority.addGold(result.coins);
               }
               // Per-slot coin burst (small amounts, keep subtle)
               if (result.coins > 0 && typeof ParticleFX !== 'undefined') {

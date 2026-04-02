@@ -475,8 +475,8 @@ var HeroSystem = (function () {
     var heroDef = _getCurrentHeroDef();
 
     var deckSize = 0;
-    if (typeof CardSystem !== 'undefined' && CardSystem.getDeck) {
-      deckSize = CardSystem.getDeck().length;
+    if (typeof CardAuthority !== 'undefined') {
+      deckSize = CardAuthority.getDeckSize();
     }
 
     if (deckSize < ENCOUNTER.EARLY_MAX + 1) {

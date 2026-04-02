@@ -279,7 +279,7 @@ var CombatBridge = (function () {
 
       // Per-turn draw from backup deck (Gone Rogue overflow cascade)
       if (CombatEngine.canDraw()) {
-        var maxH = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
+        var maxH = CardAuthority.MAX_HAND;
         var drawResult = CardAuthority.drawWithOverflow(maxH, 0);
         CombatEngine.useDraw();
         if (drawResult.drawn) {

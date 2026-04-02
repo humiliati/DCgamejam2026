@@ -263,6 +263,33 @@ var TextureAtlas = (function () {
       chainR: 90, chainG: 95, chainB: 100,   // Chain + padlock color
       lockR: 180, lockG: 160, lockB: 50      // Brass lock highlight
     });
+
+    // ── Wall decor sprites (16×16, alpha-transparent) ──────────────
+
+    // Torch bracket — iron bracket + flame. Primary consumer: A6 torch tiles.
+    _genTorchBracket('decor_torch', {
+      bracketR: 60, bracketG: 58, bracketB: 55,  // Dark iron bracket
+      flameR: 240, flameG: 160, flameB: 40,      // Orange flame body
+      tipR: 255,   tipG: 240,   tipB: 200        // White-yellow flame tip
+    });
+
+    // Iron grate — horizontal bars with gaps (dungeon vents)
+    _genWallGrate('decor_grate', {
+      barR: 70, barG: 68, barB: 65,     // Dark iron bars
+      hiR: 95,  hiG: 92,  hiB: 88      // Bar edge highlight
+    });
+
+    // Wall banner — triangular pennant hanging from rod
+    _genWallBanner('decor_banner_red', {
+      rodR: 80, rodG: 60, rodB: 35,       // Wooden rod
+      fabricR: 140, fabricG: 30, fabricB: 25,  // Red fabric
+      trimR: 180, trimG: 150, trimB: 50    // Gold trim
+    });
+    _genWallBanner('decor_banner_blue', {
+      rodR: 80, rodG: 60, rodB: 35,
+      fabricR: 30, fabricG: 50, fabricB: 140,
+      trimR: 160, trimG: 160, trimB: 170
+    });
   }
 
   // ── Texture generators ─────────────────────────────────────────
@@ -285,7 +312,7 @@ var TextureAtlas = (function () {
         d[idx]     = c.r;
         d[idx + 1] = c.g;
         d[idx + 2] = c.b;
-        d[idx + 3] = 255;
+        d[idx + 3] = c.a !== undefined ? c.a : 255;
       }
     }
 
@@ -1818,6 +1845,144 @@ var TextureAtlas = (function () {
         g: _clamp((p.stoneG + stoneHue * 0.6) * edgeDarken + pixN * 0.8),
         b: _clamp((p.stoneB + stoneHue * 0.3) * edgeDarken + pixN * 0.6)
       };
+    });
+  }
+
+  // ── Wall decor sprites (16×16, alpha-transparent) ──────────────
+  // Small sprites overlaid on wall faces by the raycaster's decor
+  // system. Unlike wall textures (64×64, opaque), these are 16×16
+  // with alpha=0 for transparent pixels so the wall behind shows
+  // through. Used for torches, grates, banners, signage.
+
+  var DECOR_SIZE = 16;
+
+  /** Torch bracket — iron L-bracket at bottom, teardrop flame above. */
+  function _genTorchBracket(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+
+      // ── Flame region (top 60%) ──
+      if (y < S * 0.6) {
+        // Teardrop shape: narrow at top, widens toward bracket
+        var flameProgress = y / (S * 0.6); // 0=top, 1=bottom of flame
+        var flameWidth = 1.0 + flameProgress * 2.5; // widens downward
+        var dx = Math.abs(x - cx);
+        if (dx <= flameWidth) {
+          var n = (_hash(x + 5000, y + 5100) - 0.5) * 25;
+          // Tip is white-yellow, body is orange
+          var tipBlend = 1.0 - flameProgress;
+          tipBlend = tipBlend * tipBlend; // sharper tip transition
+          return {
+            r: _clamp(p.flameR + (p.tipR - p.flameR) * tipBlend + n),
+            g: _clamp(p.flameG + (p.tipG - p.flameG) * tipBlend + n * 0.7),
+            b: _clamp(p.flameB + (p.tipB - p.flameB) * tipBlend + n * 0.3),
+            a: 255
+          };
+        }
+        return { r: 0, g: 0, b: 0, a: 0 }; // transparent
+      }
+
+      // ── Bracket region (bottom 40%) ──
+      var bracketTop = Math.floor(S * 0.6);
+      var by = y - bracketTop;
+      var bh = S - bracketTop;
+
+      // Vertical stem: center column 2px wide
+      if (Math.abs(x - cx) <= 1) {
+        var bn = (_hash(x + 5200, y + 5300) - 0.5) * 8;
+        return {
+          r: _clamp(p.bracketR + bn), g: _clamp(p.bracketG + bn),
+          b: _clamp(p.bracketB + bn), a: 255
+        };
+      }
+
+      // Horizontal arm: bottom 2 rows, extends 3px each side from center
+      if (by >= bh - 2 && Math.abs(x - cx) <= 3) {
+        var an = (_hash(x + 5400, y + 5500) - 0.5) * 6;
+        return {
+          r: _clamp(p.bracketR - 5 + an), g: _clamp(p.bracketG - 5 + an),
+          b: _clamp(p.bracketB - 5 + an), a: 255
+        };
+      }
+
+      return { r: 0, g: 0, b: 0, a: 0 }; // transparent
+    });
+  }
+
+  /** Iron grate — horizontal bars with gaps (dungeon air vents). */
+  function _genWallGrate(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+
+      // Frame border (1px around perimeter)
+      if (x === 0 || x === S - 1 || y === 0 || y === S - 1) {
+        return { r: p.hiR, g: p.hiG, b: p.hiB, a: 255 };
+      }
+
+      // Horizontal bars: 2px tall bars every 4px, with 2px gaps
+      var localY = (y - 1) % 4;
+      if (localY < 2) {
+        var bn = (_hash(x + 6000, y + 6100) - 0.5) * 8;
+        var isEdge = localY === 0;
+        return {
+          r: _clamp((isEdge ? p.hiR : p.barR) + bn),
+          g: _clamp((isEdge ? p.hiG : p.barG) + bn),
+          b: _clamp((isEdge ? p.hiB : p.barB) + bn),
+          a: 255
+        };
+      }
+
+      // Gaps between bars — transparent (wall shows through)
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  /** Wall banner — triangular pennant hanging from a rod. */
+  function _genWallBanner(id, p) {
+    // 16×24 to allow the pennant to hang with a visible taper
+    _createTexture(id, DECOR_SIZE, 24, function (x, y) {
+      var S = DECOR_SIZE;
+
+      // ── Rod (top 2 rows) ──
+      if (y < 2) {
+        if (x >= 2 && x <= S - 3) {
+          var rn = (_hash(x + 7000, y + 7100) - 0.5) * 10;
+          return {
+            r: _clamp(p.rodR + rn), g: _clamp(p.rodG + rn),
+            b: _clamp(p.rodB + rn), a: 255
+          };
+        }
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      // ── Fabric pennant (rows 2-23) ──
+      // Triangle: full width at top, narrows to point at bottom
+      var bannerH = 22; // rows 2-23
+      var progress = (y - 2) / bannerH; // 0=top, 1=bottom
+      var halfW = (1.0 - progress) * (S / 2 - 2);
+      var cx = S / 2;
+      var dx = Math.abs(x - cx);
+
+      if (dx <= halfW) {
+        // Trim: 1px border at edges
+        var isTrim = dx > halfW - 1.2;
+        var fn = (_hash(x + 7200, y + 7300) - 0.5) * 12;
+        // Shading: darker toward bottom
+        var shade = 1.0 - progress * 0.3;
+        if (isTrim) {
+          return {
+            r: _clamp(p.trimR * shade + fn), g: _clamp(p.trimG * shade + fn),
+            b: _clamp(p.trimB * shade + fn), a: 255
+          };
+        }
+        return {
+          r: _clamp(p.fabricR * shade + fn), g: _clamp(p.fabricG * shade + fn),
+          b: _clamp(p.fabricB * shade + fn), a: 255
+        };
+      }
+
+      return { r: 0, g: 0, b: 0, a: 0 }; // transparent outside pennant
     });
   }
 

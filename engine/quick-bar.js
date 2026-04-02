@@ -162,17 +162,17 @@ var QuickBar = (function () {
             if (item.type !== SLOT_TYPE_MAP[idx]) return false;
 
             // Remove from source by item ID
-            if (payload.zone === 'bag' && typeof Player !== 'undefined') {
-              Player.removeFromBag(item.id);
+            if (payload.zone === 'bag') {
+              CardAuthority.removeFromBagById(item.id);
             }
 
             // Swap if occupied (put old item back in bag)
-            var existing = Player.getEquipped()[idx];
+            var existing = CardAuthority.getEquipped()[idx];
             if (existing) {
-              Player.addToBag(existing);
+              CardAuthority.addToBag(existing);
             }
             // Direct equip (item already removed from source)
-            Player.equipDirect(idx, item);
+            CardAuthority.equip(idx, item);
 
             refresh();
             if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());

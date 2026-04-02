@@ -1148,6 +1148,61 @@ var FloorManager = (function () {
     }
   }
 
+  // ── Wall decor auto-generation for hand-authored floors ──────
+  // Mirrors GridGen._generateWallDecor logic for floors that don't go
+  // through the proc-gen pipeline. Places torch brackets on wall faces
+  // adjacent to walkable tiles. Exterior floors get banners on
+  // building walls; interior/dungeon floors get torches and grates.
+
+  function _buildWallDecorFromGrid(grid, rooms, W, H, biome) {
+    var decor = [];
+    for (var y = 0; y < H; y++) {
+      decor[y] = [];
+      for (var x = 0; x < W; x++) {
+        decor[y][x] = null;
+      }
+    }
+
+    var T = TILES;
+
+    // ── Torches/banners on walls adjacent to walkable tiles ──
+    for (var dy = 1; dy < H - 1; dy++) {
+      for (var dx = 1; dx < W - 1; dx++) {
+        if (grid[dy][dx] !== T.WALL) continue;
+
+        // Find faces bordering walkable tiles
+        var faces = [];
+        if (grid[dy - 1][dx] === T.EMPTY) faces.push('n');
+        if (dy < H - 1 && grid[dy + 1][dx] === T.EMPTY) faces.push('s');
+        if (grid[dy][dx - 1] === T.EMPTY) faces.push('w');
+        if (dx < W - 1 && grid[dy][dx + 1] === T.EMPTY) faces.push('e');
+        if (faces.length === 0) continue;
+
+        // Sparse placement: deterministic hash → ~10% of eligible walls
+        var h = ((dx * 374761 + dy * 668265) & 0x7fffffff) / 0x7fffffff;
+        if (h > 0.10) continue;
+
+        var face = faces[Math.floor(h * 10 * faces.length) % faces.length];
+        var sprite = 'decor_torch';
+        if (biome === 'exterior' && h < 0.04) {
+          sprite = 'decor_banner_red';
+        } else if (biome !== 'exterior' && h < 0.03) {
+          sprite = 'decor_grate';
+        }
+
+        decor[dy][dx] = { n: [], s: [], e: [], w: [] };
+        decor[dy][dx][face].push({
+          spriteId: sprite,
+          anchorU: 0.5,
+          anchorV: 0.65,
+          scale: 0.28
+        });
+      }
+    }
+
+    return decor;
+  }
+
   /**
    * Generate (or restore from cache) the current floor.
    * Sets _floorData, _enemies, applies contract to raycaster,
@@ -1237,6 +1292,17 @@ var FloorManager = (function () {
       _placeBookshelvesInInterior(_floorData, _floorId);
     }
 
+    // ── Auto-generate wall decor for floors that don't have it ──
+    // Proc-gen floors (GridGen.generate) include wallDecor. Hand-authored
+    // floors may not. This step ensures every floor gets wall decor.
+    if (!fromCache && !_floorData.wallDecor) {
+      _floorData.wallDecor = _buildWallDecorFromGrid(
+        _floorData.grid, _floorData.rooms || [],
+        _floorData.gridW, _floorData.gridH,
+        _floorData.biome || getBiome(_floorId)
+      );
+    }
+
     // Compute per-cell door height overrides (building entrance vs archway rule).
     // Stored on floorData and passed to raycaster alongside the frozen contract.
     _floorData.cellHeights = SpatialContract.computeDoorHeights(
@@ -1247,7 +1313,7 @@ var FloorManager = (function () {
 
     // Apply biome colors + contract to raycaster
     Raycaster.setBiomeColors(getBiomeColors(_floorId));
-    Raycaster.setContract(contract, _floorData.rooms, _floorData.cellHeights);
+    Raycaster.setContract(contract, _floorData.rooms, _floorData.cellHeights, _floorData.wallDecor || null);
 
     // Set post-process profile by floor depth
     if (typeof PostProcess !== 'undefined') {

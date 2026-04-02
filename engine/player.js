@@ -1,12 +1,10 @@
 /**
  * Player — owns the player entity state and direction helpers.
  *
- * S0.3 REWIRE: All inventory state (hand, bag, stash, equipped, gold)
- * has been moved to CardAuthority (S0.1). Player is now pure character
- * stats + position. Inventory methods remain as thin proxy stubs that
- * forward to CardAuthority, so un-rewired callers don't break.
- *
- * These proxies will be removed once all callers are migrated.
+ * S0.5: All inventory proxy stubs removed. Inventory state lives in
+ * CardAuthority. Player retains position, facing, stats, debuffs, flags,
+ * and compound item utilities (useItem, hasItem, consumeItem) that apply
+ * game logic across CardAuthority containers.
  *
  * Single source of truth for player position, facing, stats, and
  * look offset. Other modules read/write through the public API
@@ -31,10 +29,7 @@ var Player = (function () {
     SHAKEN:     { emoji: '💀', label: 'Shaken',     maxHpMult: 0.80 }
   };
 
-  // ── Container limits (kept for backward compat) ────────────────────
-  var MAX_HAND    = 5;
-  var MAX_BAG     = 12;
-  var MAX_STASH   = 20;
+  // ── Container limits (read from CardAuthority, kept as local alias) ──
   var EQUIP_SLOTS = 3;  // 0=active/weapon, 1=passive/consumable, 2=key
 
   // ── State (NO INVENTORY — lives in CardAuthority now) ──────────────
@@ -55,26 +50,14 @@ var Player = (function () {
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
   var FREE_LOOK_RANGE = 32 * Math.PI / 180;
 
-  // ── Deprecation logger ─────────────────────────────────────────────
-
-  var _warned = {};
-  function _deprecate(method) {
-    if (!_warned[method]) {
-      _warned[method] = true;
-      console.warn('[Player] DEPRECATED: ' + method + '() — use CardAuthority/CardTransfer instead');
-    }
-  }
-
   // ── Accessors ──────────────────────────────────────────────────────
 
   /**
    * Get state object. Inventory fields are synced from CardAuthority
-   * on each call so readers get correct values.
+   * on each call so HUD/display code gets correct values.
    *
-   * NOTE: Direct mutations to returned inventory fields (e.g.,
-   * state().currency -= X) will NOT persist — use addCurrency/
-   * spendCurrency instead. This is a known limitation of the proxy
-   * bridge; callers that mutate state() directly need rewiring.
+   * NOTE: Direct mutations to inventory fields on the returned object
+   * will NOT persist — use CardAuthority methods instead.
    */
   function state() {
     if (typeof CardAuthority !== 'undefined') {
@@ -174,145 +157,15 @@ var Player = (function () {
     return restored;
   }
 
-  // ═════════════════════════════════════════════════════════════════════
-  //  INVENTORY PROXY STUBS
-  //  Forward to CardAuthority so un-rewired callers keep working.
-  //  Each logs a one-time deprecation warning for migration tracking.
-  // ═════════════════════════════════════════════════════════════════════
-
-  // ── Currency → CardAuthority gold ──────────────────────────────────
-
-  function addCurrency(amount) {
-    _deprecate('addCurrency');
-    CardAuthority.addGold(amount);
-  }
-
-  function spendCurrency(amount) {
-    _deprecate('spendCurrency');
-    return CardAuthority.spendGold(amount);
-  }
-
-  // ── Hand (cards) → CardAuthority ───────────────────────────────────
-
-  function getHand() {
-    _deprecate('getHand');
-    return CardAuthority.getHand();
-  }
-
-  function addToHand(card) {
-    _deprecate('addToHand');
-    return CardAuthority.addToHand(card);
-  }
-
-  function removeFromHand(index) {
-    _deprecate('removeFromHand');
-    return CardAuthority.removeFromHand(index);
-  }
-
-  // ── Bag → CardAuthority ────────────────────────────────────────────
-
-  function getBag() {
-    _deprecate('getBag');
-    return CardAuthority.getBag();
-  }
-
-  function addToBag(item) {
-    _deprecate('addToBag');
-    return CardAuthority.addToBag(item);
-  }
-
-  /**
-   * Remove item from bag BY ID (legacy interface).
-   * CardAuthority.removeFromBagById(id) handles the ID lookup.
-   */
-  function removeFromBag(id) {
-    _deprecate('removeFromBag');
-    return CardAuthority.removeFromBagById(id);
-  }
-
-  // ── Stash → CardAuthority ──────────────────────────────────────────
-
-  function getStash() {
-    _deprecate('getStash');
-    return CardAuthority.getStash();
-  }
-
-  function addToStash(item) {
-    _deprecate('addToStash');
-    return CardAuthority.addToStash(item);
-  }
-
-  /**
-   * Remove item from stash BY ID (legacy interface).
-   * CardAuthority doesn't have removeFromStashById, so we do the lookup here.
-   */
-  function removeFromStash(id) {
-    _deprecate('removeFromStash');
-    var stash = CardAuthority.getStash();
-    for (var i = 0; i < stash.length; i++) {
-      if (stash[i] && stash[i].id === id) {
-        return CardAuthority.removeFromStash(i);
-      }
-    }
-    return null;
-  }
-
-  // ── Equipped → CardAuthority ───────────────────────────────────────
-
-  function getEquipped() {
-    _deprecate('getEquipped');
-    return CardAuthority.getEquipped();
-  }
-
-  /**
-   * Move an item from bag to an equipped slot.
-   * Proxies through CardAuthority: remove from bag, equip, swap back.
-   */
-  function equip(bagIndex, slot) {
-    _deprecate('equip');
-    if (slot < 0 || slot >= EQUIP_SLOTS) return null;
-    var bag = CardAuthority.getBag();
-    if (bagIndex < 0 || bagIndex >= bag.length) return null;
-
-    var item = CardAuthority.removeFromBag(bagIndex);
-    if (!item) return null;
-    var prev = CardAuthority.equip(slot, item);
-    if (prev) {
-      CardAuthority.addToBag(prev);
-    }
-    return prev;
-  }
-
-  /**
-   * Directly set an equipped slot (for DragDrop workflows where
-   * the item has already been removed from its source container).
-   */
-  function equipDirect(slot, item) {
-    _deprecate('equipDirect');
-    if (slot < 0 || slot >= EQUIP_SLOTS) return null;
-    return CardAuthority.equip(slot, item);
-  }
-
-  /**
-   * Move an equipped item back to bag.
-   */
-  function unequip(slot) {
-    _deprecate('unequip');
-    if (slot < 0 || slot >= EQUIP_SLOTS) return false;
-    var item = CardAuthority.getEquipSlot(slot);
-    if (!item) return false;
-    if (CardAuthority.getBagSize() >= MAX_BAG) return false;
-    CardAuthority.unequip(slot);
-    CardAuthority.addToBag(item);
-    return true;
-  }
+  // ── Item utility methods (read from CardAuthority) ──────────────────
+  //
+  // These are game logic that searches across containers. They read from
+  // CardAuthority but provide compound behavior that doesn't belong in CA.
 
   /**
    * Use an equipped item (consumable). Applies effects, removes if consumed.
-   * This is game logic — stays in Player, reads from CardAuthority.
    */
   function useItem(slot) {
-    _deprecate('useItem');
     if (slot < 0 || slot >= EQUIP_SLOTS) return null;
     var item = CardAuthority.getEquipSlot(slot);
     if (!item) return null;
@@ -339,7 +192,6 @@ var Player = (function () {
    * Check if the player has an item (any container).
    */
   function hasItem(id) {
-    _deprecate('hasItem');
     var hand = CardAuthority.getHand();
     for (var i = 0; i < hand.length; i++) {
       if (hand[i].id === id) return true;
@@ -359,7 +211,6 @@ var Player = (function () {
    * Check if the player has any item matching a type (bag + equipped).
    */
   function hasItemType(type) {
-    _deprecate('hasItemType');
     var bag = CardAuthority.getBag();
     for (var j = 0; j < bag.length; j++) {
       if (bag[j] && bag[j].type === type) return bag[j];
@@ -375,7 +226,6 @@ var Player = (function () {
    * Consume (remove) an item by ID from bag or equipped slots.
    */
   function consumeItem(id) {
-    _deprecate('consumeItem');
     // Check bag first
     var bag = CardAuthority.getBag();
     for (var j = 0; j < bag.length; j++) {
@@ -558,22 +408,7 @@ var Player = (function () {
     applyHOT: applyHOT,
     tickHOT: tickHOT,
 
-    // ── Inventory proxies (deprecated — use CardAuthority/CardTransfer) ──
-    addCurrency:    addCurrency,
-    spendCurrency:  spendCurrency,
-    getHand:        getHand,
-    addToHand:      addToHand,
-    removeFromHand: removeFromHand,
-    getBag:         getBag,
-    addToBag:       addToBag,
-    removeFromBag:  removeFromBag,
-    getStash:       getStash,
-    addToStash:     addToStash,
-    removeFromStash: removeFromStash,
-    getEquipped:    getEquipped,
-    equip:          equip,
-    equipDirect:    equipDirect,
-    unequip:        unequip,
+    // ── Item utilities (read from CardAuthority) ──
     useItem:        useItem,
     hasItem:        hasItem,
     hasItemType:    hasItemType,
@@ -599,12 +434,9 @@ var Player = (function () {
     fullRestore: fullRestore,
     reset:       reset,
 
-    // Constants (backward compat)
+    // Constants
     DIR_NAMES:       DIR_NAMES,
     FREE_LOOK_RANGE: FREE_LOOK_RANGE,
-    MAX_HAND:        MAX_HAND,
-    MAX_BAG:         MAX_BAG,
-    MAX_STASH:       MAX_STASH,
     EQUIP_SLOTS:     EQUIP_SLOTS
   };
 })();

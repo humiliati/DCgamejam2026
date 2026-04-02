@@ -15,15 +15,17 @@ Face 2 renders different content per MenuBox context:
 
 ### Sections in full inventory layout
 
-1. **Equipped** (3 slots) — weapon / armor / accessory. Click to unequip.
-2. **Bag Wheel** (5 visible, scrollable) — items in bag. Scroll chevrons L/R. Q/E scroll when focused. Click to equip.
-3. **Hand** (5 card slots) — active combat cards. Click to move to backup.
-4. **Deck Wheel** (5 visible, scrollable) — backup/collection cards. Click to move to hand.
-5. **Incinerator** (drop zone) — drag items/cards here to destroy.
+1. **Equipped** (3 slots) — weapon / consumable / key. Click to unequip via CardAuthority.
+2. **Bag** (12 max) — items + card-in-bag slots. Scroll via chevrons L/R or Q/E. Click to equip via CardAuthority.
+3. **Hand** (5 card slots) — active combat cards in CardAuthority.hand. Click to move to backup via CardTransfer.
+4. **Deck** (30 max) — backup/collection cards in CardAuthority.backup. Click to move to hand via CardTransfer.
+5. **Incinerator** (drop zone) — drag items/cards here via CardTransfer to destroy.
 
-### DragDrop integration
+### DragDrop integration (via CardTransfer)
 
-All slots are both drag sources and drop targets. DragDrop captures raw `pointerdown/move/up` on the canvas with a 4px dead zone. The `onTap` path (click without drag) triggers `_handleSlotTap()` for tap-to-select transfer.
+All slots are both drag sources and drop targets. CardTransfer validates all moves; DragDrop captures raw `pointerdown/move/up` on the canvas with a 4px dead zone. The `onTap` path (click without drag) triggers `_handleSlotTap()` for tap-to-select transfer via CardTransfer.
+
+**Authority**: All mutations go through CardAuthority → CardTransfer for validation and rollback.
 
 Known concern: DragDrop's `pointerdown` listener fires on the same canvas as MenuBox nav buttons. Currently mitigated by `wasRecentPointerSession(200)` guard, but event ordering is fragile.
 

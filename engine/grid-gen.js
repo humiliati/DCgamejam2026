@@ -191,6 +191,9 @@ var GridGen = (function () {
       }
     }
 
+    // ── Generate wall decor (torches, grates, banners) ──
+    var wallDecor = _generateWallDecor(grid, rooms, W, H, opts.biome || 'cellar');
+
     return {
       grid: grid,
       rooms: rooms,
@@ -198,8 +201,152 @@ var GridGen = (function () {
       gridW: W,
       gridH: H,
       biome: opts.biome || 'cellar',
-      shops: shops
+      shops: shops,
+      wallDecor: wallDecor
     };
+  }
+
+  // ── Wall decor auto-placement ──────────────────────────────────
+  // Scans the grid and places torch brackets at room entrances and
+  // along corridor walls. Grates go on dungeon walls for variety.
+  // Returns a sparse 2D array: wallDecor[y][x] = { n:[], s:[], e:[], w:[] }
+  // or null for cells with no decor.
+
+  function _generateWallDecor(grid, rooms, W, H, biome) {
+    var decor = [];
+    for (var y = 0; y < H; y++) {
+      decor[y] = [];
+      for (var x = 0; x < W; x++) {
+        decor[y][x] = null;
+      }
+    }
+
+    var placed = 0;
+
+    // ── Torch brackets flanking room entrances ──
+    // For each room, find doorway/corridor openings in the room perimeter
+    // and place a torch on the wall tile adjacent to the opening.
+    for (var ri = 0; ri < rooms.length; ri++) {
+      var rm = rooms[ri];
+
+      // Scan room perimeter for wall tiles adjacent to walkable tiles outside
+      _scanPerimeter(grid, decor, rm, W, H, biome);
+      placed++;
+    }
+
+    // ── Corridor torches: every ~6 tiles along corridor walls ──
+    for (var cy = 1; cy < H - 1; cy++) {
+      for (var cx = 1; cx < W - 1; cx++) {
+        // Only place on wall tiles adjacent to corridors
+        if (grid[cy][cx] !== TILES.WALL) continue;
+        if (decor[cy][cx]) continue; // already decorated
+
+        // Check if this wall borders a walkable tile (corridor)
+        var faces = _getAdjacentWalkableFaces(grid, cx, cy, W, H);
+        if (faces.length === 0) continue;
+
+        // Sparse placement: seeded hash determines if this wall gets decor
+        var h = SeededRNG.random();
+        if (h > 0.12) continue; // ~12% of eligible walls get decor
+
+        var face = faces[Math.floor(SeededRNG.random() * faces.length)];
+        var spriteId = 'decor_torch';
+        // Dungeon biomes get occasional grates instead
+        if (biome !== 'exterior' && SeededRNG.random() < 0.3) {
+          spriteId = 'decor_grate';
+        }
+
+        if (!decor[cy][cx]) decor[cy][cx] = { n: [], s: [], e: [], w: [] };
+        decor[cy][cx][face].push({
+          spriteId: spriteId,
+          anchorU: 0.5,
+          anchorV: 0.6,  // Slightly above center (torch height)
+          scale: 0.25
+        });
+      }
+    }
+
+    return decor;
+  }
+
+  /**
+   * Scan room perimeter and place torches on walls flanking entrances.
+   */
+  function _scanPerimeter(grid, decor, rm, W, H, biome) {
+    // Check each side of the room for openings
+    var dirs = [
+      { face: 's', dx: 0, dy: -1, scanX: true },  // North wall: entrances from north
+      { face: 'n', dx: 0, dy: 1, scanX: true },   // South wall: entrances from south
+      { face: 'e', dx: -1, dy: 0, scanX: false },  // West wall: entrances from west
+      { face: 'w', dx: 1, dy: 0, scanX: false }    // East wall: entrances from east
+    ];
+
+    for (var di = 0; di < dirs.length; di++) {
+      var d = dirs[di];
+      if (d.scanX) {
+        // Scan horizontal edge
+        var ey = d.dy < 0 ? rm.y - 1 : rm.y + rm.h;
+        if (ey < 0 || ey >= H) continue;
+        for (var ex = rm.x; ex < rm.x + rm.w; ex++) {
+          if (ex < 0 || ex >= W) continue;
+          // Is this an opening (walkable tile at room edge)?
+          if (grid[ey][ex] === TILES.EMPTY || TILES.isDoor(grid[ey][ex])) {
+            // Place torches on the wall tiles flanking this opening
+            _placeFlanking(grid, decor, ex, ey, true, d.face, W, H);
+          }
+        }
+      } else {
+        // Scan vertical edge
+        var wx = d.dx < 0 ? rm.x - 1 : rm.x + rm.w;
+        if (wx < 0 || wx >= W) continue;
+        for (var wy = rm.y; wy < rm.y + rm.h; wy++) {
+          if (wy < 0 || wy >= H) continue;
+          if (grid[wy][wx] === TILES.EMPTY || TILES.isDoor(grid[wy][wx])) {
+            _placeFlanking(grid, decor, wx, wy, false, d.face, W, H);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Place torch brackets on wall tiles flanking an opening.
+   * @param {boolean} horizontal - True if opening is on a horizontal edge
+   * @param {string} face - Which face of the wall tile faces the room
+   */
+  function _placeFlanking(grid, decor, ox, oy, horizontal, face, W, H) {
+    // For a horizontal opening at (ox, oy), flanking walls are at (ox-1, oy) and (ox+1, oy)
+    // For a vertical opening, flanking walls are at (ox, oy-1) and (ox, oy+1)
+    var offsets = horizontal ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
+
+    for (var i = 0; i < offsets.length; i++) {
+      var wx = ox + offsets[i][0];
+      var wy = oy + offsets[i][1];
+      if (wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
+      if (grid[wy][wx] !== TILES.WALL) continue;
+      if (decor[wy][wx]) continue; // already decorated
+
+      decor[wy][wx] = { n: [], s: [], e: [], w: [] };
+      decor[wy][wx][face].push({
+        spriteId: 'decor_torch',
+        anchorU: 0.5,
+        anchorV: 0.65,  // Upper-center (torch mounting height)
+        scale: 0.3
+      });
+    }
+  }
+
+  /**
+   * Return an array of face keys ('n','s','e','w') for faces of a wall tile
+   * that border walkable tiles.
+   */
+  function _getAdjacentWalkableFaces(grid, x, y, W, H) {
+    var faces = [];
+    if (y > 0 && grid[y - 1][x] === TILES.EMPTY) faces.push('n');
+    if (y < H - 1 && grid[y + 1][x] === TILES.EMPTY) faces.push('s');
+    if (x > 0 && grid[y][x - 1] === TILES.EMPTY) faces.push('w');
+    if (x < W - 1 && grid[y][x + 1] === TILES.EMPTY) faces.push('e');
+    return faces;
   }
 
   // ── Hazard pool by biome ──
