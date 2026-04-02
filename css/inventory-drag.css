@@ -1,0 +1,521 @@
+/* ============================================================
+   DUNGEON GLEANER — Inventory Drag-Drop Visual Feedback
+   Ported from EyesOnly commerce-drag-drop.css for DG's
+   canvas-overlay hybrid architecture.
+
+   Layer: DOM overlay on top of canvas (#view-canvas).
+   DragDrop.js creates/destroys .drag-ghost elements;
+   zone containers add context-* classes on hover.
+
+   Depends on: DragDrop.js (ghost lifecycle), menu-inventory.js
+   ============================================================ */
+
+/* ========== DOM GHOST CURSOR ========== */
+
+/*
+ * Created by DragDrop._createGhost(), positioned at pointer via
+ * transform: translate(). Fixed so it follows the cursor across
+ * the full viewport regardless of scroll or canvas offset.
+ *
+ * 12 px dead-zone threshold before ghost appears (matches
+ * EyesOnly card-disposal-system.js pattern).
+ */
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999999;
+  font-size: 2.2em;
+  line-height: 1;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 8px rgba(255, 120, 0, 0.6));
+  transition: transform 80ms ease-out, opacity 120ms ease-out;
+  will-change: transform;
+  white-space: nowrap;
+}
+
+/* Label beneath the ghost emoji (item name / card rank) */
+.drag-ghost-label {
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Price tag shown when dragging over a commerce zone */
+.drag-ghost-price {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: bold;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.drag-ghost-price.visible {
+  opacity: 1;
+}
+
+.drag-ghost-price.price-buy  { color: #FFD700; }
+.drag-ghost-price.price-sell { color: #FF6B35; }
+
+
+/* ========== DROP ZONE BASE ========== */
+
+/*
+ * Applied to any DOM overlay element registered as a DragDrop zone.
+ * Transparent by default — only visible during active drags.
+ */
+.drop-zone-overlay {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+/* Gentle pulse while a drag is active and this zone can accept */
+.drop-zone-active {
+  animation: gentle-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.82; }
+}
+
+
+/* ========== ZONE CONTEXT CLASSES ========== */
+
+/*
+ * Applied to zone overlays based on what dropping here would do.
+ * DragDrop hover logic adds the class; leave removes it.
+ */
+
+/* ── BUYING (shop card → bag/hand) ── */
+.context-buying {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.15) 0%,
+    rgba(255, 180, 0, 0.10) 100%
+  );
+  border: 2px solid #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.context-buying::before {
+  content: '\1F4B0'; /* 💰 */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  opacity: 0.5;
+  animation: money-bob 1.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.context-buying::after {
+  content: 'DROP TO BUY';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #FFD700;
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+  animation: pulse-text 1s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes money-bob {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+  50%      { transform: translate(-50%, -50%) translateY(-8px); }
+}
+
+/* ── SELLING (hand/bag card → sell zone) ── */
+.context-selling {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 53, 0.15) 0%,
+    rgba(255, 69, 0, 0.10) 100%
+  );
+  border: 2px solid #FF6B35;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+}
+
+.context-selling::before {
+  content: '\1F525'; /* 🔥 */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  opacity: 0.5;
+  animation: fire-flicker 0.3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.context-selling::after {
+  content: 'DROP TO SELL';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #FF6B35;
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── DISPOSING (incinerator — debrief feed drop zone) ── */
+.context-disposing {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 53, 0.10) 0%,
+    rgba(200, 80, 30, 0.08) 100%
+  );
+  border: 2px solid rgba(255, 107, 53, 0.45);
+  box-shadow: 0 0 14px rgba(255, 107, 53, 0.25);
+  transition: all 0.2s ease;
+}
+
+.context-disposing::before {
+  content: '\267B\FE0F'; /* ♻️ */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 42px;
+  opacity: 0.55;
+  animation: recycle-bob 1.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.context-disposing::after {
+  content: 'DROP TO DISPOSE';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #FF6B35;
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.7;
+}
+
+@keyframes recycle-bob {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(0px) rotate(0deg);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-5px) rotate(8deg);
+    opacity: 0.7;
+  }
+}
+
+/* ── GAMBLING (slot machine zone) ── */
+.context-gambling {
+  background: linear-gradient(
+    135deg,
+    rgba(156, 39, 176, 0.15) 0%,
+    rgba(103, 58, 183, 0.10) 100%
+  );
+  border: 2px solid #9C27B0;
+  box-shadow: 0 0 20px rgba(156, 39, 176, 0.4);
+}
+
+.context-gambling::before {
+  content: '\1F3B0'; /* 🎰 */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  opacity: 0.5;
+  animation: slot-spin 0.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.context-gambling::after {
+  content: 'DROP TO GAMBLE';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #9C27B0;
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes slot-spin {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ── DISABLED (combat lock — entire menu read-only) ── */
+.context-disabled {
+  background: rgba(64, 64, 64, 0.10);
+  border: 1px dashed #606060;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.context-disabled::before {
+  content: '\26D4'; /* ⛔ */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 36px;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 10;
+}
+
+
+/* ========== INCINERATOR TWO-PHASE ========== */
+
+/*
+ * Phase 1 — TEASE: applied when ghost hovers over debrief feed.
+ * Rapid fire-flicker hints at what will happen on drop.
+ */
+.incinerator-tease {
+  animation: fire-flicker 0.3s ease-in-out infinite;
+}
+
+@keyframes fire-flicker {
+  0%, 100% { opacity: 0.5; filter: hue-rotate(0deg); }
+  25%      { opacity: 0.6; filter: hue-rotate(10deg); }
+  50%      { opacity: 0.4; filter: hue-rotate(-10deg); }
+  75%      { opacity: 0.7; filter: hue-rotate(5deg); }
+}
+
+/*
+ * Phase 2 — BURN: applied on successful drop.
+ * Orange→red scale pulse + rumble-1 SFX (triggered by JS).
+ * Auto-removes after animation completes (600ms).
+ */
+.incinerator-active {
+  animation: incinerator-burn 0.6s ease-out forwards;
+}
+
+@keyframes incinerator-burn {
+  0% {
+    background: rgba(255, 107, 53, 0.3);
+    transform: scale(1);
+  }
+  30% {
+    background: rgba(255, 69, 0, 0.7);
+    transform: scale(1.08);
+  }
+  60% {
+    background: rgba(255, 140, 0, 0.5);
+  }
+  100% {
+    background: transparent;
+    transform: scale(1);
+  }
+}
+
+
+/* ========== SUCCESS ANIMATIONS ========== */
+
+/* Money bag pulse on successful purchase */
+.money-bag-active {
+  animation: money-bag-success 0.6s ease-out;
+}
+
+@keyframes money-bag-success {
+  0%   { background: rgba(255, 215, 0, 0.3); transform: scale(1); }
+  50%  { background: rgba(255, 215, 0, 0.6); transform: scale(1.05); }
+  100% { background: transparent; transform: scale(1); }
+}
+
+/* Slot machine roll on successful gamble */
+.slot-active {
+  animation: slot-machine-roll 0.6s ease-out;
+}
+
+@keyframes slot-machine-roll {
+  0%   { background: rgba(156, 39, 176, 0.3); }
+  25%  { background: rgba(103, 58, 183, 0.5); transform: rotate(2deg); }
+  50%  { background: rgba(156, 39, 176, 0.7); transform: rotate(-2deg); }
+  75%  { background: rgba(103, 58, 183, 0.5); transform: rotate(1deg); }
+  100% { background: transparent; transform: rotate(0deg); }
+}
+
+
+/* ========== FAILURE ANIMATION ========== */
+
+.transaction-failed {
+  animation: transaction-shake 0.4s ease-out;
+  background: rgba(255, 0, 0, 0.2);
+}
+
+@keyframes transaction-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-8px); }
+  75%      { transform: translateX(8px); }
+}
+
+
+/* ========== TEXT PULSE (shared) ========== */
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 0.7; transform: translateX(-50%) scale(1.05); }
+}
+
+
+/* ========== DRAG SOURCE STATES ========== */
+
+/* Applied to the source element while being dragged */
+.card-dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+/* Sell-mode highlight on hand cards when sell zone is active */
+.card-sell-mode {
+  border-color: #FF6B35 !important;
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.5);
+  cursor: grab;
+}
+
+.card-sell-mode:active {
+  cursor: grabbing;
+}
+
+
+/* ========== PER-ZONE BORDER HIGHLIGHTS ========== */
+
+/*
+ * Applied to specific inventory zone overlays when a compatible
+ * item is being dragged. Colors match the zone's role.
+ */
+
+/* Bag zone — purple (matches inventory theme) */
+.zone-bag.drop-zone-active {
+  border: 2px solid #9C27B0 !important;
+  box-shadow: 0 0 10px rgba(156, 39, 176, 0.3);
+}
+
+/* Equipped slots — orange (action/equip) */
+.zone-equipped.drop-zone-active {
+  border: 2px solid #FF9800 !important;
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.3);
+}
+
+/* Hand fan — green (card play) */
+.zone-hand.drop-zone-active {
+  border: 2px solid #4CAF50 !important;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+/* Deck zone — blue (card storage) */
+.zone-deck.drop-zone-active {
+  border: 2px solid #2196F3 !important;
+  box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+}
+
+/* Stash zone — teal (bonfire-gated vault) */
+.zone-stash.drop-zone-active {
+  border: 2px solid #009688 !important;
+  box-shadow: 0 0 10px rgba(0, 150, 136, 0.3);
+}
+
+/* Active item slot in HUD */
+.zone-active-item.drop-zone-active {
+  border: 2px solid #FF9800 !important;
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.3);
+}
+
+/* Debrief feed (incinerator target) */
+.zone-debrief.drop-zone-active {
+  border: 2px solid rgba(255, 107, 53, 0.45) !important;
+  box-shadow: 0 0 14px rgba(255, 107, 53, 0.25);
+}
+
+
+/* ========== COMBAT LOCK OVERLAY ========== */
+
+/*
+ * When CombatBridge.isInCombat() is true, the menu-inventory
+ * container gets .combat-locked. All drag interactions are
+ * suppressed by JS; this CSS provides the visual cue.
+ *
+ * DG is stricter than Gone Rogue: entire menu is read-only
+ * during combat. Only hand sorting (reorder within hand fan)
+ * remains allowed.
+ */
+.combat-locked {
+  position: relative;
+}
+
+.combat-locked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Hand fan is exempt from combat lock (sorting still allowed) */
+.combat-locked .zone-hand {
+  position: relative;
+  z-index: 101;
+}
+
+
+/* ========== MOBILE OPTIMIZATIONS ========== */
+
+@media (max-width: 768px) {
+  .drag-ghost {
+    font-size: 1.8em;
+  }
+
+  .context-buying::before,
+  .context-selling::before,
+  .context-gambling::before,
+  .context-disposing::before {
+    font-size: 36px;
+  }
+
+  .context-buying::after,
+  .context-selling::after,
+  .context-gambling::after,
+  .context-disposing::after {
+    font-size: 8px;
+    bottom: 4px;
+  }
+}

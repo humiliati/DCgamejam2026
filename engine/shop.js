@@ -28,7 +28,12 @@
  *   Shop.getFactionEmoji(id)     — emoji for a faction id
  *   Shop.isOpen()                — true while shop MenuBox is shown
  *
- * Layer 3 — depends on: CardSystem, Salvage, Player, SeededRNG, LootTables
+ * S0.3 REWIRE: buy/sell/sellPart now use CardTransfer for all inventory
+ * mutations instead of directly calling Player.spendCurrency/addCurrency
+ * and CardSystem.addCard/removeCard.
+ *
+ * Layer 3 — depends on: CardSystem (registry), CardAuthority, CardTransfer,
+ *           Salvage, Player (flags only), SeededRNG, LootTables
  */
 var Shop = (function () {
   'use strict';
@@ -216,16 +221,15 @@ var Shop = (function () {
       return { ok: false, reason: 'sold_out' };
     }
 
-    var ps = Player.state();
-    if (ps.currency < slot.price) {
-      return { ok: false, reason: 'no_gold', needed: slot.price - ps.currency };
+    // Use CardTransfer for atomic buy (gold deduction + card add + rollback)
+    var result = CardTransfer.buyCard(slot.card.id, slot.price);
+    if (!result.success) {
+      var reason = result.reason;
+      if (reason === 'insufficient_gold') {
+        return { ok: false, reason: 'no_gold', needed: slot.price - CardAuthority.getGold() };
+      }
+      return { ok: false, reason: reason };
     }
-
-    // Deduct gold
-    Player.spendCurrency(slot.price);
-
-    // Add card to player's collection
-    CardSystem.addCard(slot.card.id);
 
     // Mark slot as sold
     var bought = slot.card;
@@ -251,12 +255,10 @@ var Shop = (function () {
     var card = (typeof CardSystem !== 'undefined') ? CardSystem.getById(cardId) : null;
     if (!card) return { ok: false, reason: 'unknown_card' };
 
-    // Remove from collection
-    var removed = CardSystem.removeCard(cardId);
-    if (!removed) return { ok: false, reason: 'not_in_collection' };
-
+    // Use CardTransfer for atomic sell (card removal + gold award)
     var amount = _calcSellPrice(card);
-    Player.addCurrency(amount);
+    var result = CardTransfer.sellFromBackup(cardId, amount);
+    if (!result.success) return { ok: false, reason: result.reason || 'not_in_collection' };
 
     // Record sale for faction reputation (card sales count toward rep too)
     var repResult = null;
@@ -287,13 +289,11 @@ var Shop = (function () {
     if (!_open) return { ok: false, reason: 'shop_closed' };
     if (!_factionId) return { ok: false, reason: 'no_faction' };
 
-    // Find item in player bag
-    var bag = Player.state().bag;
-    var itemIdx = -1;
+    // Find item in bag via CardAuthority (read-only copy)
+    var bag = CardAuthority.getBag();
     var item = null;
     for (var i = 0; i < bag.length; i++) {
       if (bag[i] && bag[i].id === itemId) {
-        itemIdx = i;
         item = bag[i];
         break;
       }
@@ -305,11 +305,9 @@ var Shop = (function () {
       ? Salvage.getSellPrice(item, _factionId)
       : (item.baseValue || 1);
 
-    // Remove from bag
-    bag.splice(itemIdx, 1);
-
-    // Award gold
-    Player.addCurrency(amount);
+    // Use CardTransfer for atomic sell (bag removal + gold award)
+    var result = CardTransfer.sellFromBagById(itemId, amount);
+    if (!result.success) return { ok: false, reason: result.reason || 'sell_failed' };
 
     // Record sale for faction reputation
     var repResult = null;

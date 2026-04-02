@@ -462,3 +462,60 @@ Phase 4 (Verify ceiling gaps — likely no-op)
 
 Phase 2 (per-column floor casting) is **deferred** — only needed if
 empirical testing reveals floor pre-pass inadequacy.
+
+---
+
+## 7. Cross-References to Other Roadmaps
+
+### Phase 1 (N-layer DDA) ↔ TEXTURE_ROADMAP Layer 2 (Wall Decor)
+
+Both modify the raycaster wall column rendering loop. N-layer refactors
+the DDA to collect multiple hits and render back-to-front. Layer 2 adds
+wall decor sprite overlays per rendered wall strip. **N-layer must land
+first** — Layer 2's face-hit sprite rendering needs to operate within
+the back-to-front loop, drawing decor on each layer independently.
+
+If Layer 2 ships on the current single-hit DDA, it will need refactoring
+when N-layer lands. Recommended: implement Phase 1 before Layer 2.
+
+### Phase 1 (N-layer DDA) ↔ LIGHT_AND_TORCH_ROADMAP Phase 2b (Torch Wall Rendering)
+
+LIGHT_AND_TORCH Phase 2b adds torch sprite overlays in the raycaster
+wall column loop (check tile type, draw fire emoji + glow). This is
+a specific case of TEXTURE Layer 2 wall decor. Same sequencing applies:
+N-layer DDA refactor first, then torch overlays operate per-layer.
+
+### Phase 3 (SHRUB tile) ↔ TEXTURE_ROADMAP
+
+Phase 3b explicitly depends on TextureAtlas for `_genShrub()` procedural
+texture generation. The shrub texture follows the same pattern as existing
+procedural generators (64×64, noise-based). Two variants needed:
+
+- `shrub` — dense tangled branches (brown/dark green base, leafy canopy top)
+- `shrub_flower` — same base + pink/white dot scatter for visual variety
+
+Phase 3d adds `textures: { 22: 'shrub' }` and `tileWallHeights: { 22: 0.5 }`
+to exterior biome overrides in SpatialContract — standard texture wiring.
+
+### Phase 5 (Performance guards) ↔ LIGHT_AND_TORCH_ROADMAP
+
+N-layer rendering adds per-column cost. Dynamic light sources (LIGHT_AND_TORCH
+Phase 1) add per-tile cost in Lighting.calculate(). Both affect frame budget
+on webOS. Phase 5e's adaptive MAX_LAYERS should be tested with dynamic lights
+active (worst case: 4 wall layers × 8 light sources × 320 columns).
+
+### Phase 6 (Floor 0 test) ↔ SKYBOX_ROADMAP
+
+Floor 0 is exterior (depth 1) — skybox renders as the background. N-layer
+see-over tiles (shrubs) will show sky above distant buildings. Skybox
+rendering is a separate pre-pass and doesn't interact with N-layer
+compositing, but the visual result should be verified: sky → building
+wall → floor → shrub layering looks correct with the active sky preset.
+
+### Phase 7 (Expanded exteriors) ↔ SKYBOX_ROADMAP Phase 5 (Floor 3)
+
+Larger exterior maps with shrub-guided paths are the same technique
+needed for Floor 3 (Frontier Gate). Floor 3's open ocean views require
+both the N-layer raycaster (see-over fences/low walls toward the harbor)
+and the `frontier` sky preset. These can share the same implementation
+and testing pass.

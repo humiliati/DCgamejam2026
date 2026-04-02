@@ -1,9 +1,11 @@
 # B5 — Inventory Interaction Design (Expanded Scope)
 
 **Created**: 2026-03-29
+**Updated**: 2026-04-01 (S0.3.9 audit complete, EyesOnly visual patterns documented)
 **Cross-Roadmap**: Phase B, Task B5 (expanded from "Shop round-trip" to full inventory interaction audit)
-**Depends on**: B1–B4b (crate/corpse slot system), CardSystem, Player, CardFan, NCH Widget, Shop, MenuBox
+**Depends on**: S0.4 MenuInventory (provides surface + drop zones), CardAuthority, CardTransfer, DragDrop, CrateSystem
 **Design refs**: EyesOnly CARD_ZONE_AUDIT.md, HAND_FAN_AND_CARD_DEPLOYMENT.md, HAND_FAN_NONCOMBAT_AND_CARD_DEPLOYMENT.md
+**EyesOnly refs**: commerce-drag-drop.css, card-disposal-system.js, nch-overlay.css (visual source of truth)
 
 ---
 
@@ -96,16 +98,93 @@ Every legal zone-to-zone transfer. Transfers not listed are NOT allowed.
 
 ---
 
+## EyesOnly Visual Reference (Source of Truth)
+
+DG's menu inventory must match Gone Rogue's NCH overlay interaction feel. The following
+patterns from EyesOnly are canonical — we port the visual language, adapted for DG's
+canvas-overlay hybrid rendering.
+
+### Ghost Cursor (card-disposal-system.js)
+
+Touch drag creates a floating emoji ghost at the finger/pointer position:
+- 12px movement threshold before ghost appears (prevents accidental drags on tap)
+- Ghost: `position:fixed; z-index:999999; pointer-events:none; font-size:2.2em; opacity:0.85`
+- Drop shadow: `filter:drop-shadow(0 0 8px rgba(255,120,0,0.6))`
+- Smooth follow: `transition:transform 80ms ease`
+- Source element gets `.card-dragging` class (opacity:0.5, scale:0.95)
+- On release: ghost removed, source class cleaned, drop zone hit-tested via bounding rect
+
+DG adaptation: DragDrop.js already has pointer capture + zone hit-testing. Add ghost
+element creation to `DragDrop.startDrag()` using same CSS. Canvas items need a DOM
+ghost overlay since canvas elements aren't draggable.
+
+### Drop Zone Highlighting (commerce-drag-drop.css)
+
+Each zone type has a context-dependent visual state when a drag hovers over it:
+
+| Context | CSS Class | Border | Glow | Icon | Animation |
+|---------|-----------|--------|------|------|-----------|
+| Buying | `context-buying` | 2px solid #FFD700 | gold 20px | 💰 48px | money-bob (1.5s bounce) |
+| Selling/Incinerator | `context-selling` | 2px solid #FF6B35 | orange 20px | 🔥 48px | fire-flicker (0.3s) |
+| Disposing | `context-disposing` | 2px solid rgba(255,107,53,0.45) | orange 14px | ♻️ 42px | recycle-bob (1.2s) |
+| Disabled (combat) | `context-disabled` | 1px dashed #606060 | none | ⛔ 36px | none, opacity:0.6 |
+
+Applicable drop zones: `drop-zone-active` with `gentle-pulse` animation (1.5s opacity oscillation).
+Each target type gets its own highlight color: bag=purple, equip=orange, hand=green, debrief=red/orange.
+
+DG adaptation: These map directly to CSS classes on overlay DOM elements positioned
+above the canvas. MenuInventory renders grids on canvas but each zone has a transparent
+DOM overlay div registered with DragDrop for hit-testing + CSS feedback.
+
+### Incinerator Tease → Burn Sequence (card-disposal-system.js + commerce-drag-drop.css)
+
+Two-phase visual feedback:
+
+**Phase 1 — Hover tease**: While dragging over debrief feed, `context-selling` class applied.
+Orange gradient background, 🔥 emoji at 48px with fire-flicker keyframes (0.3s infinite,
+hue-rotate oscillation ±10deg, opacity 0.4–0.7). "DROP TO SELL" label at bottom in
+monospace. The fire-flicker is the "tease" — it signals danger without committing.
+
+**Phase 2 — Burn commit**: On drop, `incinerator-active` class triggers `incinerator-burn`
+keyframes (0.6s ease-out): orange→deep red→orange→transparent with 1.08 scale pulse.
+Simultaneously: `AudioSystem.play('rumble-1', { volume: 0.4 })` for the bass rumble SFX.
+After 400ms timeout, `incinerator-active` class removed.
+
+DG adaptation: DebriefFeed panel is already a DOM element. Wire as DragDrop zone.
+On hover: apply `context-disposing` (we use disposing, not selling — DG disposal is
+permanent destruction, not a sale). On drop: apply `incinerator-active` + rumble SFX.
+We already have `AudioSystem.play()` and `ParticleFX` — add a `ParticleFX.incinerateBurst()`
+for ember particles rising from the debrief panel on commit.
+
+### Combat Lock (card-disposal-system.js)
+
+Gone Rogue checks `GoneRogue.isStrCombatActive()` to change debrief behavior in combat.
+During STR combat: debrief becomes discard-to-backup (not destroy), self-cast cards get
+a separate green glow path.
+
+DG's combat lock is stricter: during combat, the entire menu inventory is read-only.
+Player enters pause menu during combat → all zones render with `context-disabled` styling
+(dashed border, ⛔ icon, 0.6 opacity). The ONLY allowed interaction is hand card sorting
+within the CardFan (drag to reorder). No bag access, no equip changes, no disposal.
+Rationale: combat uses 1+itemN card draw after each attack — allowing menu access to
+draw cards would break the combat economy.
+
+Gate: `CombatBridge.isInCombat()` — checked by MenuInventory on open AND by DragDrop
+zone `accepts()` callbacks.
+
+---
+
 ## Debrief Feed as Incinerator
 
-The Debrief Feed (existing right-side scrolling log) doubles as a disposal/incinerator drop zone:
+The Debrief Feed (existing right-side scrolling log) doubles as a disposal/incinerator drop zone.
+Visual treatment matches EyesOnly `commerce-drag-drop.css` patterns described above.
 
 ### Disposal Mechanics
-- Drag any card or item over the debrief feed panel → visual "burn" affordance (orange glow, 🔥 emoji pulse)
-- Release → confirmation prompt: "Dispose of [item]? (Y/N)"
-- On confirm: item destroyed permanently, small coin refund for cards (10% rarity base), nothing for junk items
+- Drag any card or item over the debrief feed panel → Phase 1 tease (fire-flicker + orange glow)
+- Release → Phase 2 burn (incinerator-burn 0.6s + rumble-1 SFX + ember particles)
+- On burn: item destroyed permanently via CardTransfer, small coin refund for cards (10% rarity base), nothing for junk items
 - Disposed items log to debrief feed as: `"🔥 Disposed: [emoji] [name]"`
-- Savage shortcut: hold Shift + click item in any zone = instant dispose (no drag needed)
+- Savage shortcut: hold Shift + click item in any zone = instant dispose (no drag needed, skips tease)
 
 ### Auto-Dispose on Pickup Overflow
 When a new card is picked up and hand is full:
@@ -114,12 +193,13 @@ When a new card is picked up and hand is full:
 3. No auto-dispose — player always chooses what to cut
 
 ### Death Drops vs Stash
-On death (Player.onDeath()):
-- HAND cards scattered as floor pickups (recoverable next run)
-- BAG items scattered as floor pickups
-- EQUIPPED items scattered
-- STASH survives intact (death-safe)
-- BACKUP DECK (collection) survives intact
+On death (Player.onDeath() → CardAuthority.failstateWipe()):
+- HAND cards lost (Tier 1 vulnerable)
+- BAG items lost (Tier 1 vulnerable)
+- EQUIPPED items lost (Tier 1 vulnerable)
+- STASH survives intact (Tier 3 death-safe)
+- BACKUP DECK (collection) survives intact (Tier 3 death-safe)
+- Joker Vault tagged cards in bag survive (special Tier 3 tag)
 
 ---
 
@@ -154,11 +234,12 @@ On death (Player.onDeath()):
 - Future: drag from bag/hand directly to slot boxes
 
 ### 4. Combat (CardFan Active)
-- All inventory transfers LOCKED except:
-  - Card selection/stacking within hand
-  - Card fire (swipe up or stack commit)
-  - No bag access, no equip changes, no disposal
-  - QuickBar consumable use still allowed (slot 1)
+- All inventory transfers LOCKED — menu zones render `context-disabled`
+  - Card sorting within hand (drag to reorder) is the ONLY allowed interaction
+  - Card fire (swipe-drop pairing for synergies) happens in the combat UI, not the menu
+  - No bag access, no equip changes, no disposal, no deck draws from menu
+  - QuickBar consumable use still allowed (slot 1 — does not go through menu)
+  - Rationale: combat draws 1+itemN cards per attack; menu draw access breaks economy
 
 ### 5. Shop (MenuBox Shop Face)
 - Browse 5 faction cards, click to buy
@@ -168,71 +249,93 @@ On death (Player.onDeath()):
 
 ---
 
+## S0.4 → B5 Dependency Chain
+
+S0.4 builds the MenuInventory surface and combat lock. B5 wires all the interaction
+pathways on top of it. B5 is scheduled for the jam after mechanics prototyping.
+
+**S0.4 delivers (before B5 can start):**
+- S0.4a: `inventory-drag.css` — ghost cursor, zone glow, incinerator tease/burn, combat-disabled CSS
+- S0.4b: `menu-inventory.js` — new IIFE replacing menu-faces.js Face 2, canvas grids + DOM overlay zones
+- S0.4c: Incinerator drop zone wired to DebriefFeed panel
+- S0.4d: Combat lock gate (`CombatBridge.isInCombat()` disables all menu interactions)
+
+**B5 builds on S0.4:**
+- B5.1–B5.7 wire zone-to-zone transfers using the surface S0.4 provides
+- B5.8 test launcher validates the whole system end-to-end
+
+---
+
 ## Implementation Phases (B5 Breakdown)
 
-### B5.1 — Drag-Drop Infrastructure (3h)
-New `engine/drag-drop.js` (Layer 2): unified pointer-based drag system.
-- Ghost element rendering (card or item emoji at pointer)
-- Drop zone registration (debrief feed, equip slots, crate slots, sell zone, etc.)
-- Hit testing against registered zones
-- Accept/reject feedback (green glow vs red shake)
-- Long-press detection for mobile (300ms threshold)
-- Used by: CardFan, MenuBox faces, CrateUI, NCH Widget
+All phases assume S0.4 is complete (MenuInventory surface exists, DragDrop ghost cursor
+works, incinerator CSS is ported, combat lock gate is in place).
 
-### B5.2 — Debrief Incinerator Zone (1.5h)
-Extend `engine/debrief-feed.js`:
-- Register as drag-drop target zone
-- Burn affordance animation (glow + 🔥)
-- Dispose confirmation prompt
-- Coin refund logic (cards = 10% rarity base, items = 0)
-- Shift+click shortcut for instant dispose
+### B5.1 — Wire All DragDrop Zones (2h)
+Register every zone with DragDrop using CardTransfer for validation:
+- Bag slots (12): accepts items from equipped/stash/floor, drag-out to equip/stash/debrief
+- Equipped slots (3): accepts items from bag, drag-out to bag/debrief
+- Deck grid: accepts cards from hand, drag-out to hand/debrief
+- Hand preview (5): accepts cards from deck, drag-out to deck/debrief/corpse-suit-slot
+- Stash panel (bonfire only, 20): accepts items from bag, drag-out to bag
+- Each zone's `accepts()` callback checks CardTransfer context gates
 
-### B5.3 — MenuBox Inventory Face Rebuild (3h)
-Rewrite `engine/menu-faces.js` inventory face:
-- Bag grid (4×3 = 12 slots) with drag-out support
-- Equipped row (3 slots) with drag-in/out
-- Visual: item emoji + rarity border color + quantity badge
-- Drag to equip slot = equip, drag out = unequip
-- Drag to debrief = dispose
-- Context switching: bonfire shows stash panel alongside bag
+### B5.2 — Debrief Incinerator Wiring (1h)
+Wire the incinerator drop zone that S0.4c created:
+- Card disposal: `CardTransfer.disposeCard(cardId)` → 10% rarity base coin refund via `CardTransfer.lootGold()`
+- Item disposal: `CardAuthority.removeFromBagById(id)` → 0 coin refund (junk)
+- Equipped disposal: `CardTransfer.equipToBag()` first → then destroy from bag
+- Shift+click shortcut: bypass drag, instant dispose with same burn animation
+- Key item guard: `item.equipSlot === 'key'` → reject with shake animation
 
-### B5.4 — Deck Management Face (2h)
-New MenuBox face for backup deck:
-- Scrollable card grid showing collection
-- Hand preview row (5 slots) above
-- Click to shuttle cards between backup ↔ hand
-- Drag to debrief to dispose
-- Sort buttons: by suit, by rarity, by cost
+### B5.3 — Inventory Face Interaction Polish (2h)
+Wire click and drag interactions on the S0.4b MenuInventory surface:
+- Click bag item → `CardTransfer.bagToEquip(index, slotIndex)` (auto-match slot type)
+- Click equipped → `CardTransfer.equipToBag(slotIndex)` (swap if bag has matching)
+- Drag bag item to equipped slot → validate slot match, swap if occupied
+- Drag equipped to bag → unequip
+- Bonfire context: show stash panel, enable bag↔stash transfers
+- All transfers fire CardAuthority events → MenuInventory re-renders reactively
+
+### B5.4 — Deck Management Interactions (1.5h)
+Wire click and drag on the deck grid / hand preview:
+- Click backup card → `CardTransfer.backupToHand(cardId)` (fails if hand full)
+- Click hand card → `CardTransfer.handToBackup(index)` (returns to collection)
+- Drag backup card to hand slot → same as click but with ghost + zone glow
+- Sort buttons: by suit, by rarity, by cost (reads from CardAuthority, re-renders grid)
+- Deck count badge updates via `CardAuthority.on('backup:changed', ...)`
 
 ### B5.5 — Shop Round-Trip Polish (1.5h)
 Extend shop MenuBox face:
-- Drag-to-sell zone (bag items + backup cards)
-- Visual sell price preview on hover
-- Rep tier progress bar
-- "Buy restock supplies" — shop stocks frame-appropriate items
-  (hp_food items when Cellar rep tier ≥ 1, etc.)
+- Drag bag items to sell zone → `CardTransfer.sellFromBagById(id, price)` + coin VFX
+- Drag backup cards to sell zone → `CardTransfer.sellFromBackup(cardId, price)` + coin VFX
+- Visual sell price preview on hover (faction multiplier applied)
+- Rep tier progress bar (reads Salvage.getRepTier())
+- Restock supplies: shop stocks frame-appropriate items by biome + rep tier
 
 ### B5.6 — CrateUI Drag Integration (1h)
-Extend CrateUI:
-- Register slot boxes as drag-drop targets
-- Drag from bag → resource slot (instead of number keys only)
-- Drag from hand → suit card slot
-- Visual: slot highlights when compatible drag hovers
+Extend CrateUI (already has PeekSlots DragDrop wiring from S0.3):
+- Validate: S0.3 drag path works via PeekSlots onDrop → CardAuthority
+- Validate: S0.3.9 number-key path works via CrateUI._fillFromBag → CardAuthority
+- Add visual: compatible slots highlight with `drop-zone-active` when drag hovers
+- Add visual: incompatible slots dim with context-disabled when drag hovers
 
 ### B5.7 — NCH Card Shuttle (1h)
 Extend NCH Widget:
-- Drag card from CardFan → NCH deck badge = return to backup
-- Drag from NCH → open space = deal to hand
-- Badge updates on every transfer
+- Drag card from CardFan → NCH deck badge = `CardTransfer.handToBackup(index)`
+- Drag from NCH → open space = `CardTransfer.backupToHand(cardId)`
+- Badge updates via `CardAuthority.on('hand:changed')` + `CardAuthority.on('backup:changed')`
 
 ### B5.8 — Test Launcher (2h)
 New `tests/inventory-test.html`:
-- Standalone page that loads all engine modules
-- Pre-populates: 5 cards in hand, 8 items in bag, 3 equipped, mock shop, mock crate
-- Visual zone layout matching the zone map diagram above
-- Drag between all zones, verify transfers
+- Standalone page that loads all Layer 0-2 engine modules via script tags
+- Pre-populates via CardAuthority: 5 cards in hand, 3 in backup, 8 items in bag, 3 equipped, 4 in stash
+- Mock CrateSystem container at (5,5), mock corpse at (7,7) with ♠ suit slot
+- Mock shop with 5 faction cards
+- Visual zone layout matching the zone map diagram
+- Drag between all zones, verify CardTransfer validates and CardAuthority state updates
 - Console log of every zone-to-zone transfer with before/after state
-- Agent-testable: can be driven by Kapture/Chrome automation
+- Agent-testable: `data-testid` attributes on all zones, `window.__transferLog[]`, `window.__inventoryState()`
 
 ---
 
@@ -240,8 +343,9 @@ New `tests/inventory-test.html`:
 
 ```
 tests/inventory-test.html
-├── Loads: all Layer 0-2 engine modules via <script> tags
-├── Mock data:
+├── Loads: all Layer 0-3 engine modules via <script> tags
+│   (card-authority, card-transfer, drag-drop, menu-inventory, debrief-feed)
+├── Mock data (seeded via CardAuthority):
 │   ├── 5 starter cards (ACT-001 through ACT-005) in hand
 │   ├── 3 cards in backup deck (ACT-006, ACT-007, ACT-008)
 │   ├── 8 items in bag (2 food, 2 battery, 2 salvage, 1 weapon, 1 key)
@@ -258,9 +362,10 @@ tests/inventory-test.html
 │   ├── Bottom right: Shop cards + sell zone
 │   └── Top: Stash panel (bonfire context toggle)
 ├── Interactions:
-│   ├── Drag-drop between all zones
+│   ├── Drag-drop between all zones (ghost cursor, zone glow)
 │   ├── Click fallbacks for every transfer
-│   ├── Visual feedback (ghost, glow, shake)
+│   ├── Incinerator: tease on hover, burn on drop, rumble SFX
+│   ├── Combat lock toggle button (simulates CombatBridge.isInCombat)
 │   └── Console transfer log
 └── Agent testing:
     ├── All zones have data-testid attributes
@@ -272,19 +377,19 @@ tests/inventory-test.html
 
 ## Total Estimate
 
-| Sub-task | Hours | Priority |
-|----------|-------|----------|
-| B5.1 Drag-drop infrastructure | 3h | JAM (needed for all interactions) |
-| B5.2 Debrief incinerator | 1.5h | JAM (disposal is core loop) |
-| B5.3 Inventory face rebuild | 3h | JAM (bag management is core) |
-| B5.4 Deck management face | 2h | JAM (card shuffling is core) |
-| B5.5 Shop round-trip | 1.5h | JAM (economy loop) |
-| B5.6 CrateUI drag integration | 1h | POLISH (number keys work for jam) |
-| B5.7 NCH card shuttle | 1h | POLISH (click fallback works) |
-| B5.8 Test launcher | 2h | JAM (enables agent testing) |
+| Sub-task | Hours | Timing | Prereq |
+|----------|-------|--------|--------|
+| B5.1 Wire all DragDrop zones | 2h | JAM (first) | S0.4a+b |
+| B5.2 Debrief incinerator wiring | 1h | JAM | S0.4c |
+| B5.3 Inventory face interaction polish | 2h | JAM | B5.1 |
+| B5.4 Deck management interactions | 1.5h | JAM | B5.1 |
+| B5.5 Shop round-trip polish | 1.5h | JAM | B5.1 |
+| B5.6 CrateUI drag integration | 1h | JAM (validate only) | S0.3.9 ✓ |
+| B5.7 NCH card shuttle | 1h | POLISH | B5.4 |
+| B5.8 Test launcher | 2h | JAM (early) | S0.4 |
 
-**JAM total**: ~12h (B5.1–B5.5 + B5.8)
-**Full total**: ~15h
+**JAM total**: ~11h (B5.1–B5.6 + B5.8)
+**Full total**: ~12h
 
 ---
 
@@ -300,8 +405,13 @@ Players must sacrifice a card matching the corpse's suit to enable reanimation �
 
 - **DO NOT** auto-stack items in bag (each item is individual, no quantity merge)
 - **DO NOT** auto-sort inventory (player arranges deliberately)
-- **DO NOT** allow transfers during combat (except consumable use)
-- **DO NOT** allow re-opening sealed crates
-- **DO NOT** dispose of key items (gated check in disposal confirm)
+- **DO NOT** allow transfers during combat (except hand card sorting within CardFan)
+  - Combat uses 1+itemN card draw after each attack. Menu access to draw cards breaks economy.
+  - All menu zones render with `context-disabled` (⛔, dashed border, 0.6 opacity)
+  - Gate: `CombatBridge.isInCombat()` checked at zone `accepts()` AND MenuInventory open
+- **DO NOT** allow re-opening sealed crates (CrateSystem.sealed is permanent)
+- **DO NOT** dispose of key items (`equipSlot === 'key'` → reject with shake animation)
 - **DO NOT** auto-dispose backup deck cards on pickup overflow
 - **DO NOT** bypass disposal confirmation (except Shift+click shortcut)
+- **DO NOT** use Player.addCurrency/removeFromBag/removeFromHand directly — all transfers through CardTransfer/CardAuthority (S0.3.9 uniformity audit enforced this)
+- **DO NOT** duplicate the incinerator icon in the menu — the HUD's debrief panel IS the incinerator (no redundant menu button)

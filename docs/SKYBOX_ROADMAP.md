@@ -1,438 +1,453 @@
-# Skybox Roadmap — Parallax Sky, Clouds, and Water Reflections
+# Skybox Roadmap v2 — Day/Night Cycle, Celestial Bodies, Ocean, and Time Widget
 
-> Pre-jam engine work. The skybox replaces the current flat gradient +
-> band-based parallax system with a layered atmospheric renderer that
-> gives each biome a distinct sky identity and provides the dramatic
-> title screen backdrop.
-
----
-
-## Current State
-
-The raycaster's background is two linear gradients (ceiling half and
-floor half) with optional parallax bands drawn as solid-color horizontal
-strips. SpatialContract defines `ceilColor`, `floorColor`, and a
-`parallax` array of `{ depth, color, height }` objects.
-
-This works for dungeon interiors (VOID/SOLID ceilings) but exterior
-streets look flat. All 6 streets share the same visual grammar for
-"sky" — a gradient and some colored bands. The Biome Plan calls for
-each street to be identifiable within 3 seconds; sky is one of the
-strongest distance signals and it's currently wasted.
+> **v1:** Pre-jam engine work (March 2026). Per-biome parallax sky with clouds, mountains, water, ocean portholes.
+> **v2:** Post-jam polish roadmap (March 31 2026). Day/night-aware sky cycling, celestial body traversal, star parallax, HUD time widget, Floor 3 ocean integration.
+> **Status:** v1 fully implemented. v2 phases below.
 
 ---
 
-## Target: Per-Biome Skybox with Parallax Layers
+## What Shipped (v1) — All Complete
 
-### What the Player Sees (Exteriors)
+Everything from the original roadmap is live and integrated:
 
-Standing on Cedar Street, looking east: the upper half of the
-viewport shows a cool blue-gray sky with thin layered clouds drifting
-slowly left. Near the horizon, a distant treeline silhouette. Below
-the horizon, the floor gradient.
-
-Standing on Waterfront Avenue, looking south: deep navy sky, almost
-black. No clouds — just a faint star field. Near the horizon, a wide
-dark band of water with distant boat lights as bright pixel dots.
-Industrial fog creeps upward from the horizon.
-
-Standing on North 3rd, looking north: alpine twilight. The sky
-grades from deep indigo at zenith to cold orange at the horizon.
-Selkirk mountain ridgeline as a jagged silhouette. Clouds are thick
-and low, layered in slate gray.
-
-Each biome's sky is a stack of parallax layers that scroll with the
-player's facing angle, creating rotational parallax — the sky feels
-like it extends around you in all directions, not just a flat backdrop.
-
-### What the Player Sees (Title Screen)
-
-Lake Pend Oreille at twilight. The full viewport is a skybox scene
-with no dungeon geometry. The upper half: gradient sky with cloud
-layers drifting. The lower half: water surface reflecting the sky
-(vertically flipped + ripple distortion). Mountains at the horizon.
-The menu box floats in the center of this scene.
-
-The sky slowly animates: clouds drift, colors cycle gently (simulating
-the last 20 minutes of sunset in a loop). This creates the "Square
-Enix title screen stare" — the player wants to just watch for a
-moment before pressing start.
+- Per-biome sky gradient with parallax scrolling (8 presets)
+- Procedural 1D noise cloud bands (1–4 layers per preset)
+- Mountain silhouette generation (alpine + title presets, shaped zones)
+- Star field with deterministic placement and subtle twinkle
+- Water reflection with ripple distortion (title screen)
+- Ocean preset with sea creature silhouettes (whale/jellyfish bands)
+- Animated sealab porthole textures (wall + ceiling, per-frame compositing)
+- Title screen cinematic lake scene (Skybox.renderFull)
+- SpatialContract `skyPreset` field per biome
+- Raycaster integration (exterior floors call Skybox.render)
+- DayCycle module (phase-based time, atmosphere tint, sun intensity)
+- Raycaster reads DayCycle tint to multiply fog color on exteriors
 
 ---
 
-## New Module: Skybox
+## What's Missing (v2 Scope)
 
-```
-engine/skybox.js  (Layer 2, before Raycaster — Raycaster calls Skybox)
-```
+### The gap
 
-IIFE module. Renders a multi-layer parallax sky scene to the canvas.
-Called by the raycaster for exterior floors and by the title screen
-background renderer.
+DayCycle tracks in-game time and provides atmosphere tint multipliers, but the skybox itself is static — each preset has fixed zenith/horizon colors and a fixed star flag. A `harbor` sky is always navy-black with stars; `cedar` is always morning blue. The sky doesn't change as the day progresses. DayCycle tints the fog and wall brightness, but the actual sky gradient, cloud opacity, star visibility, and celestial body positions don't respond to time.
 
-### Layer Stack
+The player has no visual indicator of time-of-day other than subtle fog tinting. There's no sun, moon, or constellation system. No clock widget.
 
-Each skybox preset is a stack of layers rendered back-to-front:
+### The target
 
-```
-Layer 0: SKY GRADIENT           ← always present
-         Vertical gradient fill, zenith color → horizon color
+Standing on the Promenade at dawn: the sky is pink-orange at the horizon, warming to gold. A sun disc sits just above the horizon line, climbing slowly. Clouds catch the golden light. No stars visible.
 
-Layer 1: STAR FIELD             ← optional (night biomes)
-         Sparse random dots, very subtle twinkle
+Same spot at midnight: deep indigo gradient. Dense star field with layered parallax (near stars drift faster than distant ones). A moon disc at ~60° elevation, casting a subtle blue-white glow halo. The Promenade's sodium lamps are the only warm color. The player's HUD shows a small clock icon with the current phase.
 
-Layer 2: CLOUD BAND (far)       ← optional
-         Wide horizontal band of color, slow parallax scroll
-         Represents high-altitude clouds or atmospheric haze
+Entering Floor 3 (Frontier Gate): the exterior sky shows open ocean to the south. The lower third of the sky gradient transitions into a water horizon band. Cloud reflections shimmer below the horizon line. The ocean preset's creature silhouettes are visible at extreme distance, establishing that the deep ocean from sealab portholes is the same body of water.
 
-Layer 3: CLOUD BAND (mid)       ← optional
-         Narrower band, faster parallax than Layer 2
-         More defined cloud shapes (procedural edge noise)
+---
 
-Layer 4: MOUNTAIN SILHOUETTE    ← optional
-         Jagged horizontal profile near horizon line
-         Darkest layer — reads as solid terrain cutout
+## Phase 1 — Sky Color Cycling (1.5h)
 
-Layer 5: CLOUD BAND (low)       ← optional
-         Below mountain line — fog/mist that overlaps terrain
-         Fastest parallax (closest to camera)
+Make each skybox preset respond to DayCycle phase. Instead of a single fixed `zenith`/`horizon`, each preset defines per-phase color palettes and the renderer interpolates between them.
 
-Layer 6: HORIZON LINE           ← always present
-         Sharp or soft edge between sky and ground
-         Color matches the biome's floor gradient top
+### 1a. Per-phase color tables
 
-Layer 7: WATER REFLECTION       ← optional (harbor, lake biomes)
-         Vertically flipped sky layers rendered below horizon
-         Ripple distortion: horizontal sine wave offset per scanline
-         Alpha fade — reflections dim toward the bottom
-```
-
-### Parallax Scrolling
-
-Each layer scrolls horizontally based on the player's facing angle:
+Each preset gains a `phases` object:
 
 ```javascript
-var scrollX = (playerAngle / (2 * Math.PI)) * layer.scrollWidth * layer.depth;
-```
-
-`depth` controls parallax intensity: 1.0 = moves 1:1 with camera
-(foreground), 0.1 = barely moves (deep background). Mountains at 0.95,
-far clouds at 0.3, star field at 0.05.
-
-The scroll wraps seamlessly. Each layer's visual pattern tiles
-horizontally (procedural generation ensures left edge matches right).
-
-### Cloud Generation
-
-Clouds are NOT sprites or images. They're procedurally rendered
-horizontal noise bands:
-
-```javascript
-function _renderCloudBand(ctx, w, bandY, bandH, scrollX, params) {
-  for (var x = 0; x < w; x++) {
-    var worldX = (x + scrollX) / params.scale;
-    // Layered noise: large shapes + small detail
-    var n1 = _noise1D(worldX * 0.3 + params.seed) * 0.6;
-    var n2 = _noise1D(worldX * 1.2 + params.seed + 100) * 0.3;
-    var n3 = _noise1D(worldX * 3.0 + params.seed + 200) * 0.1;
-    var density = n1 + n2 + n3;
-
-    if (density > params.threshold) {
-      var alpha = (density - params.threshold) / (1 - params.threshold);
-      alpha *= params.opacity;
-      var cy = bandY + bandH * 0.5;
-      var cloudH = bandH * alpha * 0.8;
-      ctx.fillStyle = 'rgba(' + params.r + ',' + params.g + ',' + params.b + ',' + (alpha * 0.6) + ')';
-      ctx.fillRect(x, cy - cloudH / 2, 1, cloudH);
-    }
-  }
+cedar: {
+  phases: {
+    dawn:      { zenith: { r: 60, g: 45, b: 70 },  horizon: { r: 180, g: 120, b: 80 } },
+    morning:   { zenith: { r: 42, g: 58, b: 90 },  horizon: { r: 90, g: 104, b: 120 } },
+    afternoon: { zenith: { r: 50, g: 65, b: 100 },  horizon: { r: 110, g: 95, b: 75 } },
+    dusk:      { zenith: { r: 35, g: 25, b: 55 },  horizon: { r: 140, g: 70, b: 40 } },
+    night:     { zenith: { r: 8, g: 12, b: 25 },   horizon: { r: 15, g: 20, b: 35 } }
+  },
+  // Existing: clouds, mountains, water, stars
 }
 ```
 
-This renders per-column (same as the raycaster), so it integrates
-naturally into the column-based render pipeline without any
-architecture mismatch.
+The current flat `zenith`/`horizon` becomes the fallback (treated as `morning` phase) for backward compatibility.
 
-### Mountain Silhouette Generation
-
-A 1D noise function generates the ridgeline profile. The profile is
-the same for a given biome seed — deterministic but organic:
+### 1b. Phase interpolation in render()
 
 ```javascript
-function _renderMountains(ctx, w, horizonY, scrollX, params) {
-  ctx.fillStyle = params.color;
-  ctx.beginPath();
-  ctx.moveTo(0, horizonY);
-  for (var x = 0; x <= w; x++) {
-    var worldX = (x + scrollX * params.depth) / params.scale;
-    var h = _noise1D(worldX + params.seed) * params.maxHeight;
-    h += _noise1D(worldX * 3 + params.seed + 50) * params.maxHeight * 0.3;
-    ctx.lineTo(x, horizonY - h);
-  }
-  ctx.lineTo(w, horizonY);
-  ctx.closePath();
-  ctx.fill();
+function _getPhaseColors(preset) {
+  if (!preset.phases) return { zenith: preset.zenith, horizon: preset.horizon };
+  var phase = DayCycle.getPhase();
+  var nextPhase = DayCycle.getNextPhase();
+  var progress = DayCycle.getPhaseProgress(); // 0–1 within current phase
+  var a = preset.phases[phase] || preset.phases.morning;
+  var b = preset.phases[nextPhase] || a;
+  return {
+    zenith:  _lerpColor(a.zenith, b.zenith, progress),
+    horizon: _lerpColor(a.horizon, b.horizon, progress)
+  };
 }
 ```
 
-### Water Reflection
+DayCycle needs two new helpers: `getNextPhase()` and `getPhaseProgress()` (0–1 fraction through current phase based on hour).
 
-The reflection is a vertically flipped re-render of sky layers 0-5
-below the horizon line. Each scanline is offset horizontally by a
-sine wave that varies over time (ripple):
+### 1c. Star visibility by phase
+
+Stars fade in during dusk (alpha ramp 0→1 over dusk hours) and fade out during dawn. Replace the boolean `stars: true` with a computed alpha:
 
 ```javascript
-function _renderWaterReflection(ctx, skyCanvas, horizonY, w, h, time) {
-  for (var y = horizonY; y < h; y++) {
-    var reflectY = horizonY - (y - horizonY); // Flip
-    var rippleOffset = Math.sin((y - horizonY) * 0.15 + time * 2) * 3;
-    var alpha = 1 - (y - horizonY) / (h - horizonY) * 0.7; // Fade
-
-    ctx.globalAlpha = alpha * 0.6;
-    ctx.drawImage(
-      skyCanvas,
-      rippleOffset, reflectY, w, 1,   // source: 1 scanline, offset by ripple
-      0, y, w, 1                       // dest: current scanline
-    );
-  }
-  ctx.globalAlpha = 1;
-}
+var starAlpha = 0;
+if (phase === 'night') starAlpha = 1;
+else if (phase === 'dusk') starAlpha = phaseProgress;
+else if (phase === 'dawn') starAlpha = 1 - phaseProgress;
 ```
+
+All exterior presets show stars at night, not just harbor and dockyard.
+
+### 1d. Cloud color shift
+
+Cloud band colors tint toward the current atmosphere tint. Dawn clouds catch pink/orange; night clouds are near-invisible dark blue. Multiply cloud RGB by `DayCycle.getAtmosphereTint()`.
 
 ---
 
-## Biome Sky Presets
+## Phase 2 — Celestial Bodies (2h)
 
-| Biome | Zenith | Horizon | Clouds | Mountains | Water | Feel |
-|-------|--------|---------|--------|-----------|-------|------|
-| `cedar` | `#2a3a5a` cool blue | `#5a6878` pale gray | Thin, high, wispy | None (buildings) | None | Morning light, open |
-| `mainst` | `#2a1a18` dark amber | `#5a3a20` warm orange | None (clear) | None | None | Sodium lamp evening |
-| `harbor` | `#0a1830` deep navy | `#1a2840` cold blue | Low fog bank | None | Subtle reflection | Cold ocean night |
-| `historic` | `#1a1525` mauve-black | `#2a2035` dusty purple | Thin mid-layer | None | None | Lamplit dusk |
-| `alpine` | `#0a1520` deep indigo | `#3a2818` cold orange | Thick, layered, low | Selkirk ridgeline | None | Mountain twilight |
-| `dockyard` | `#050810` near-black | `#101825` steel blue | None (industrial haze) | None | Dark water band | Industrial night |
-| `title` | `#0a1530` → `#4a3020` cycling | `#5a4030` warm gold | All layers, animated | Full ridgeline | Full lake reflection | Dramatic, cinematic |
+Sun and moon as rendered disc sprites in the sky gradient. They move along a sinusoidal arc (rise at horizon → peak at zenith → set at horizon) based on DayCycle hour.
+
+### 2a. Sun disc
+
+- Visible during dawn, morning, afternoon, dusk phases
+- Position: `elevation = sin(π * (hour - 6) / 12)` for 06:00–18:00
+  - 06:00 (dawn): elevation = 0 (horizon)
+  - 12:00 (noon): elevation = 1 (zenith)
+  - 18:00 (dusk): elevation = 0 (horizon again)
+- Horizontal position: `azimuth = (hour - 6) / 12` mapped to screen x
+  - Rises in the east (left of screen facing south), sets in the west
+  - Player-angle-relative: `screenX = azimuth * w - angle * w / (2π)`
+- Radius: 12–18px (scales with elevation — larger at horizon for atmospheric lensing)
+- Color: warm gradient disc (core white → edge orange)
+- Glow halo: soft radial gradient, 3× disc radius, low opacity
+- Horizon refraction: when elevation < 0.15, disc is oval (squished vertically) and reddened
+
+### 2b. Moon disc
+
+- Visible during dusk, night, dawn phases
+- Same sinusoidal arc but offset 12 hours from sun: `elevation = sin(π * (hour - 18) / 12)` for 18:00–06:00
+- Radius: 8–12px (slightly smaller than sun)
+- Color: cool blue-white core → pale edge
+- Glow halo: subtle blue-white, 2× disc radius
+- Moon phase: cosmetic detail — optional crescent mask based on in-game day number
+- Surface detail: 2–3 dark circle "craters" at fixed offsets within disc
+
+### 2c. Celestial rendering order
+
+Render celestial bodies after sky gradient but before cloud bands. Clouds partially occlude low-elevation celestial bodies (natural effect — sun/moon peek through cloud gaps).
+
+```
+1. Sky gradient (Phase 1)
+2. Star field (Phase 1)
+3. Sun / Moon disc + glow (Phase 2)
+4. Cloud bands (existing)
+5. Mountain silhouette (existing)
+```
+
+### 2d. Horizon glow
+
+When the sun is near the horizon (elevation < 0.2), a wide diffuse glow band appears at the horizon:
+- Dawn: warm orange-pink gradient, 20% of sky height
+- Dusk: deep orange-red gradient, 15% of sky height
+- Intensity = `(0.2 - elevation) / 0.2`
 
 ---
 
-## Raycaster Integration
+## Phase 3 — Advanced Star Parallax (1.5h)
 
-The raycaster currently draws ceiling/floor gradients in lines 86-99.
-The skybox replaces the ceiling gradient for exterior contracts:
+Replace the current flat star field with a multi-layer parallax star system. Distant stars barely move; near stars drift noticeably with player rotation.
+
+### 3a. Star layers
+
+| Layer | Count | Size | Brightness | Depth | Twinkle |
+|-------|-------|------|------------|-------|---------|
+| Deep field | 200 | 1px | 0.3–0.5 | 0.02 | Slow, subtle |
+| Mid field | 80 | 1–2px | 0.5–0.7 | 0.08 | Medium |
+| Near field | 30 | 2–3px | 0.7–1.0 | 0.15 | Fast, pronounced |
+
+Each layer scrolls at `angle * w * depth`, creating rotational parallax. The deep field barely moves; the near field shifts noticeably.
+
+### 3b. Star color
+
+Not all white. Distribute star colors:
+- 70% white/blue-white (hot stars)
+- 15% pale yellow (sun-type)
+- 10% orange (cool giants)
+- 5% blue (hot dwarfs)
+
+Color is deterministic per star index: `color = STAR_COLORS[_hash1D(i * 31) * 4 | 0]`
+
+### 3c. Constellation patterns (post-jam cosmetic)
+
+Optional: define 3–4 named constellation patterns as coordinate arrays. When the player faces specific angles, constellation lines connect certain stars with faint lines. Pure cosmetic — could tie to narrative (dragon constellations that hint at the conspiracy).
+
+### 3d. Shooting stars
+
+Random event: every ~30 seconds of night time, a single bright line streaks across the sky over 0.5 seconds. Deterministic timing based on `_time` modulo. Low priority but high visual impact.
+
+---
+
+## Phase 4 — HUD Time Widget (1h)
+
+A small, always-visible time indicator so the player knows the phase without guessing from sky color.
+
+### 4a. Widget design
+
+Position: top-left corner, 48×48px area. Minimal, non-intrusive.
+
+Elements:
+- **Phase icon**: emoji or small symbol
+  - Dawn: 🌅
+  - Morning: ☀️
+  - Afternoon: 🌤️
+  - Dusk: 🌇
+  - Night: 🌙
+- **Hour display**: "14:00" in small monospace text below icon
+- **Day counter**: "Day 3" in dim text
+
+### 4b. Rendering
+
+Canvas-rendered in HUD layer (after game canvas, same z-layer as status bar). Reads `DayCycle.getHour()`, `DayCycle.getPhase()`, `DayCycle.getDay()`.
+
+Pulse animation on phase change: icon briefly scales up 1.2× and glows for 0.5s when phase transitions (dawn→morning, etc).
+
+### 4c. Integration
+
+Add to `hud.js` render pass. Read from DayCycle module. No new module needed — the HUD already renders per-frame.
 
 ```javascript
-// In Raycaster.render(), replace:
-if (_contract && _contract.ceilingType === 'sky') {
-  Skybox.render(ctx, w, halfH, player.dir, _contract.skyPreset);
-} else {
-  // Existing gradient path for SOLID/VOID ceilings
-}
-```
-
-Skybox renders into the TOP HALF of the viewport only (0 to halfH).
-Walls render on top of it. The floor gradient remains unchanged
-(floor textures are a separate future feature).
-
-For the title screen, Skybox renders FULL VIEWPORT (sky in top half,
-water reflection in bottom half), then the menu box composites on top.
-
-### SpatialContract Addition
-
-Each exterior contract gets a `skyPreset` key:
-
-```javascript
-function exterior(opts) {
-  return Object.freeze({
-    ...existing fields...
-    skyPreset: opts.skyPreset || 'cedar',  // Skybox preset name
-  });
+// In HUD.render():
+if (typeof DayCycle !== 'undefined') {
+  _renderTimeWidget(ctx, vpW, vpH);
 }
 ```
 
 ---
 
-## Title Screen Animation
+## Phase 5 — Floor 3 Ocean Sky (1.5h)
 
-At the title screen, the skybox runs in animated mode:
+Floor 3 (Frontier Gate) is the exterior frontier at the edge of town, facing the open ocean. Its sky preset needs a water horizon that connects the surface world to the sealab depths.
 
-```javascript
-Skybox.renderAnimated(ctx, w, h, time, 'title');
-```
-
-- Cloud layers drift continuously (different speeds per layer)
-- Sky gradient cycles slowly (sunset → dusk → back to sunset, 60s loop)
-- Water ripple animates
-- Star field twinkles (random alpha variation)
-- No player angle input — the camera slowly pans (0.5°/sec rotation)
-
-During gameplay, clouds still drift (time-based) but the gradient
-and mountains are static. The parallax scrolls with player facing.
-
----
-
-## Public API
+### 5a. New preset: `frontier`
 
 ```javascript
-Skybox.init()                              // Generate all presets
-Skybox.render(ctx, w, h, angle, preset)    // Render sky (half viewport)
-Skybox.renderFull(ctx, w, h, angle, time, preset) // Sky + water (full viewport)
-Skybox.getPreset(name)                     // → preset config object
-Skybox.registerPreset(name, config)        // Add custom sky
-```
-
----
-
-## Module Load Order
-
-Skybox loads in Layer 2, BEFORE Raycaster (raycaster calls Skybox):
-
-```html
-<!-- Layer 2: Rendering + UI -->
-<script src="engine/skybox.js"></script>       <!-- NEW -->
-<script src="engine/raycaster.js"></script>
-```
-
-Skybox depends on nothing except basic canvas 2D API.
-
----
-
-## 1D Noise Function
-
-Both clouds and mountains need a simple 1D noise function. Not
-Perlin — just a hash-based value noise with smoothstep interpolation:
-
-```javascript
-function _noise1D(x) {
-  var i = Math.floor(x);
-  var f = x - i;
-  f = f * f * (3 - 2 * f); // smoothstep
-  var a = _hash1D(i);
-  var b = _hash1D(i + 1);
-  return a + (b - a) * f;
-}
-
-function _hash1D(n) {
-  n = ((n << 13) ^ n) & 0x7fffffff;
-  return (1.0 - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0) * 0.5 + 0.5;
+frontier: {
+  phases: {
+    dawn:    { zenith: { r: 55, g: 40, b: 65 }, horizon: { r: 160, g: 100, b: 70 } },
+    morning: { zenith: { r: 40, g: 55, b: 85 }, horizon: { r: 80, g: 95, b: 110 } },
+    // ... full day cycle
+    night:   { zenith: { r: 5, g: 10, b: 22 },  horizon: { r: 10, g: 18, b: 32 } }
+  },
+  clouds: [
+    // Maritime clouds — low, gray, sea spray feel
+    { y: 0.40, h: 0.15, depth: 0.45, speed: 0.0004, ... }
+  ],
+  mountains: null,
+  water: true,          // ENABLE water reflection in bottom portion
+  waterHorizon: 0.65,   // Water starts at 65% of sky height (low horizon)
+  stars: true,           // Computed alpha from phase
+  oceanHint: true        // Show distant ocean creature silhouettes near horizon
 }
 ```
 
-This is the same deterministic noise strategy as TextureAtlas — no
-randomness, just hash-based. Same seed = same sky every time.
+### 5b. Water horizon rendering
+
+Unlike the title screen (full reflection below midline), the frontier sky renders water as a narrow band at the bottom of the sky region (below the cloud line but above where walls start):
+
+```javascript
+if (preset.water && preset.waterHorizon) {
+  var waterY = Math.floor(h * preset.waterHorizon);
+  _renderWaterBand(ctx, w, waterY, h, angle, preset);
+}
+```
+
+The water band:
+- Dark blue-green gradient (matches ocean preset palette)
+- Subtle horizontal ripple (sine offset per scanline, slower than title screen)
+- Distant wave crests as bright pixel dots near the horizon line
+- At night: bioluminescent hints (very faint cyan specks)
+- Whale shadows occasionally visible at extreme distance (reuse ocean cloud band at very low opacity)
+
+### 5c. Ocean connectivity
+
+The visual link between Floor 3's water horizon and the sealab porthole ocean view reinforces the world coherence. Same creature types (whales, jellyfish) visible in both, but from different perspectives — surface vs. submerged.
 
 ---
 
-## Estimated Size
+## Phase 6 — Weather System (2h, post-jam)
 
-| Component | Lines |
-|-----------|-------|
-| Noise function | ~15 |
-| Sky gradient render | ~20 |
-| Cloud band render | ~40 |
-| Mountain silhouette | ~30 |
-| Water reflection | ~25 |
-| Star field | ~20 |
-| Preset definitions (7 biomes + title) | ~60 |
-| Public API + init | ~20 |
-| Raycaster integration | ~10 |
-| SpatialContract `skyPreset` field | ~5 |
-| **Total** | **~245** |
+Overlays that modify the sky state beyond time-of-day.
 
----
+### 6a. Rain
 
-## What This Replaces
+- Additional cloud layers at high opacity (overcast)
+- Rain particle overlay: vertical lines falling at slight angle
+- Muffled ambient sound (AudioSystem integration)
+- Reduced sun intensity (DayCycle modifier)
+- Wet ground reflections (future raycaster floor enhancement)
 
-- `Raycaster._renderParallax()` — replaced by `Skybox.render()` for
-  exterior contracts. Interior/dungeon contracts continue using the
-  gradient-only path (no sky visible underground).
-- `SpatialContract.parallax` — deprecated for exteriors (skybox presets
-  encode all sky layer data). Still used for dungeon contracts (subtle
-  dark background bands in long corridors).
-- Title screen background — currently nonexistent. Skybox provides
-  the cinematic lake-mirror scene.
+### 6b. Fog
 
----
+- Increased fog density (SpatialContract modifier)
+- Cloud bands descend to horizon level
+- Reduced render distance
+- Muffled sounds
 
-## Ocean Skybox & Sealab Portholes ✅ IMPLEMENTED
+### 6c. Storm
 
-### Ocean Preset
+- Dark overcast + rain
+- Lightning flash: full-screen white flash (100ms) at random intervals
+- Thunder sound delayed by distance
+- Screen shake via CinematicCamera
 
-A deep underwater ocean scene designed to be viewed through sealab
-porthole windows. Uses the existing cloud band system where "clouds"
-are ghostly sea creature silhouettes:
+### 6d. Clear night
 
-| Band | Role | Speed | Scale | Threshold |
-|------|------|-------|-------|-----------|
-| Whale silhouettes | Large, slow, sparse shapes at mid-depth | 0.00008 | 150 | 0.55 |
-| Jellyfish band | Smaller, numerous, faster drift | 0.00018 | 40 | 0.48 |
-| Jellyfish tentacle trails | Thin trailing lines below main band | 0.00018 | 40 | 0.58 |
-| Caustic light ripples | Fast, subtle, near top | 0.0006 | 25 | 0.52 |
-
-Seabed ridge at the horizon (mountain layer with organic shape, low
-maxHeight). Deep blue-green zenith-to-horizon gradient. No stars,
-no water reflection.
-
-### Porthole Textures (Animated)
-
-Two new TextureAtlas textures with per-frame animation:
-
-**`porthole_wall`** — Metal frame with riveted ring surrounding a
-circular glass window. Each frame, the window pixels are composited
-with an animated ocean scene: deep water gradient, caustic light
-patterns, whale shadows drifting horizontally, jellyfish with
-bioluminescent glow.
-
-**`porthole_ceil`** — Same frame structure but the interior shows
-looking up at the ocean surface: bright caustic light pools from
-surface refraction, jellyfish silhouettes from below, lighter
-blue-green palette.
-
-### Animation Architecture
-
-TextureAtlas gained a `tick(dt)` method called once per frame from
-the game loop. Porthole textures maintain:
-
-- `frameData` — original metal frame pixel data (generated once)
-- `mask` — boolean array marking which pixels are window (glass)
-- `lookUp` flag — wall (horizontal view) vs ceiling (upward view)
-
-Each frame, for each masked pixel, the ocean color is computed
-procedurally from time-based noise (caustics, creature silhouettes)
-and written directly into the texture's `data` array. The canvas is
-then updated via `putImageData`. The raycaster draws the texture
-normally — no special porthole handling needed.
-
-Cost: 2 × 64×64 × ~4096 pixel writes per frame ≈ 8192 operations.
-Negligible at 60fps.
-
-### Sealab Integration
-
-In FloorManager's biome texture overrides, sealab assigns
-`porthole_wall` to PILLAR tiles (TILES constant 10). Only pillar
-walls in sealab become portholes — regular WALL tiles stay
-`concrete_dark`. This creates visual variety: long corridors of
-concrete with occasional riveted porthole windows showing the deep
-ocean.
+- Maximum star visibility
+- Enhanced moon glow
+- Reduced fog distance
+- Cricket ambient
 
 ---
 
-## Jam Scope vs Post-Jam
+## Phase 7 — Visual Polish (1h, additive)
 
-### Jam (April 5)
-- Sky gradient + 1-2 cloud layers per biome preset ✅
-- Mountain silhouette for alpine + title presets ✅
-- Water reflection for title screen ✅
-- Title screen animated sky (cloud drift + slow color cycle) ✅
-- 7 biome presets + title + ocean preset ✅
-- Sealab porthole textures with animated ocean composite ✅
+### 7a. God rays / crepuscular beams
 
-### Post-Jam
-- Full cloud stack (3 layers per biome)
-- Water reflections on harbor/waterfront during gameplay
-- Time-of-day cycle (sky changes as player explores)
-- Weather system (rain overlay, fog density, lightning flash)
-- Dynamic cloud shadows on floor plane
-- Per-biome ambient sound tied to sky state (wind intensity, rain)
-- Animated porthole ceiling casting (ocean through ceiling glass)
-- Porthole as standalone skybox viewport (render full Skybox.render
-  into porthole window for parallax-correct ocean view)
+During dawn and dusk, when sun elevation is 0.05–0.15, render 3–5 angled bright lines emanating from the sun disc downward through the cloud layer. Simple: bright triangles with low alpha (0.08) drawn after clouds.
+
+### 7b. Sun/moon reflection on water
+
+When Floor 3's water horizon is visible and the sun/moon is near the horizon, render a vertical bright streak on the water surface below the celestial body. Shimmer via horizontal sine offset.
+
+### 7c. Aurora (special event)
+
+Rare night event (hero day nights): green/purple wavy bands across the upper sky. Procedural sine waves with color cycling. Ties to narrative — dragon energy visible in the sky.
+
+### 7d. Skybox PostProcess integration
+
+PostProcess module can apply a warm grade during dusk and a cool grade at night, matching the sky state. Wire `PostProcess.setColorGrade()` to DayCycle phase changes:
+
+```javascript
+DayCycle.setOnPhaseChange(function(phase) {
+  var grades = {
+    dawn:      { r: 255, g: 180, b: 140, a: 0.04 },
+    morning:   null,
+    afternoon: { r: 255, g: 220, b: 160, a: 0.03 },
+    dusk:      { r: 200, g: 100, b: 60, a: 0.06 },
+    night:     { r: 60, g: 80, b: 140, a: 0.05 }
+  };
+  PostProcess.setColorGrade(grades[phase] || null);
+});
+```
+
+---
+
+## Dependency Graph
+
+```
+Phase 1 (Sky color cycling)
+  ├── DayCycle.getNextPhase() + getPhaseProgress() helpers
+  └── All preset phase tables
+        │
+        ├── Phase 2 (Celestial bodies)
+        │     ├── Sun disc + horizon glow
+        │     └── Moon disc + phase
+        │
+        ├── Phase 3 (Star parallax)
+        │     └── Multi-layer depth + star color
+        │
+        └── Phase 4 (Time widget)
+              └── HUD integration
+
+Phase 5 (Floor 3 ocean sky)
+  └── Requires Phase 1 (day/night colors) + new frontier preset
+
+Phase 6 (Weather) — Post-jam, independent
+Phase 7 (Polish) — Post-jam, requires Phases 1–5
+```
+
+**Jam-adjacent scope:** Phases 1–4 (~6h). Phase 5 after Floor 3 blockout.
+**Post-jam:** Phases 6–7 (~3h).
+
+---
+
+## DayCycle API Additions Required
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `getNextPhase()` | string | Phase that follows current (dawn→morning→...) |
+| `getPhaseProgress()` | 0–1 | Fraction through current phase |
+| `getHour()` | number | Current hour (0–23.99) |
+| `getDay()` | number | Current day count |
+| `getPhase()` | string | Current phase name |
+
+Most of these likely already exist or are trivial to add from the existing `_hour` and `_phase` state.
+
+---
+
+## Files to Modify
+
+| File | Change | Phase |
+|------|--------|-------|
+| `engine/skybox.js` | Phase tables, color interpolation, celestial body rendering, star layers | 1, 2, 3, 5 |
+| `engine/day-cycle.js` | `getNextPhase()`, `getPhaseProgress()` helpers | 1 |
+| `engine/hud.js` | Time widget rendering | 4 |
+| `engine/spatial-contract.js` | Frontier preset definition | 5 |
+| `engine/floor-manager.js` | Floor 3 biome → frontier preset mapping | 5 |
+| `engine/post-process.js` | DayCycle-aware color grade wiring | 7d |
+
+---
+
+## Integration with Other Roadmaps
+
+### Phase 1 (Sky color cycling) ↔ LIGHT_AND_TORCH_ROADMAP Phase 2e
+
+DayCycle phase drives building entrance light visibility. Phase 2e of the
+torch roadmap registers exterior DOOR tiles as steady light sources (radius 3,
+intensity 0.6). These should scale with DayCycle phase — full intensity at
+night, near-zero during daytime when ambient sunlight overwhelms them. Sky
+color cycling (Phase 1 here) must ship first so phase-aware light registration
+works.
+
+### Phase 5 (Floor 3 ocean) ↔ TEXTURE_ROADMAP
+
+Floor 3 blockout needs BOTH the `frontier` sky preset (defined here in Phase 5)
+AND frontier-biome wall/floor textures in TextureAtlas. The sky provides the
+upper half; textures provide the ground. Suggested frontier textures (to be
+added to TextureAtlas inventory):
+
+- `wall_weathered` — salt-worn stone or timber, maritime atmosphere
+- `floor_planks_wet` — dock planking with moisture
+- `door_heavy` — reinforced gate/portcullis style
+
+Neither skybox nor textures alone complete Floor 3. Both are prerequisites.
+
+### Phase 5 (Floor 3 ocean) ↔ NLAYER_RAYCASTER_ROADMAP Phase 7
+
+Floor 3 exterior benefits from N-layer see-over tiles — low harbor walls
+and fences the player looks over toward the ocean horizon. NLAYER Phase 7
+(expanded exterior maps) describes the same technique for larger floor layouts.
+Floor 3 can share the shrub/fence tile system from NLAYER Phase 3 for
+harbor-side wayfinding.
+
+### Phase 6-7 (Weather + Polish) ↔ LIGHT_AND_TORCH_ROADMAP Phase 4d
+
+Phase 4d of the torch roadmap describes day/night cycle interaction where
+exterior ambient brightness replaces the lightmap and building lights only
+show at night. Phase 6 here (weather) adds overcast/rain/fog that modify
+the same ambient brightness. These are complementary — weather modifies the
+base DayCycle atmosphere that building lights already respond to.
+
+### CinematicCamera integration
+
+Morning monologue (MonologuePeek.play('morning_recap')) should trigger
+during dawn phase. Wire: `DayCycle.setOnPhaseChange(function(p) { if (p === 'dawn') MonologuePeek.play('morning_recap', { cameraPreset: 'morning_recap' }); })`.
+
+### PostProcess integration
+
+Phase 7d explicitly wires PostProcess color grading to DayCycle phase
+transitions for atmosphere consistency between sky and world rendering.
+LIGHT_AND_TORCH Phase 4d (day/night interaction) is thematically aligned
+but operates on the lightmap, not PostProcess — they're independent systems
+that both respond to DayCycle phase.

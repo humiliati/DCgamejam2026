@@ -1,92 +1,72 @@
 /**
- * CardSystem — card registry loader, collection management, hand draw.
+ * CardSystem — READ-ONLY card definition registry.
+ *
+ * S0.3 REWIRE: All mutable state (hand, collection, deck, gold) has been
+ * moved to CardAuthority (S0.1). All transfers go through CardTransfer (S0.2).
+ * CardSystem is now a pure registry loader — no mutable state, no events.
  *
  * Loads the full card registry from data/cards.json via synchronous XHR
  * (same rationale as LootTables: avoids async cascade on webOS startup).
  *
- * Terminology:
- *   _registry   — all cards parsed from JSON (read-only reference data)
- *   _collection — cards the player currently owns (starts as starter deck)
- *   _deck       — shuffled draw pile built from _collection
- *   _hand       — cards drawn and available to play this turn
- *
- * Public API:
- *   CardSystem.init()                        — load JSON, build starter deck
- *   CardSystem.resetDeck()                   — reshuffle _collection into _deck
- *   CardSystem.drawHand([count])             — draw N cards (default 5)
- *   CardSystem.getHand()                     — current hand array
- *   CardSystem.playFromHand(index)           — remove & return card from hand
- *   CardSystem.addCard(cardId|cardObj)       — add card to player collection
- *   CardSystem.removeCard(cardId)            — remove one copy from collection
- *   CardSystem.getCollection()               — player's owned cards
- *   CardSystem.getById(id)                   — look up registry entry by ACT-### id
- *   CardSystem.getByPool(factionId, repTier) — shop inventory: cards for this faction/tier
- *   CardSystem.getBiomeDrops(biome)          — cards that can drop in a biome (chests/enemies)
+ * Public API (registry queries):
+ *   CardSystem.init()                        — load JSON registry
+ *   CardSystem.getById(id)                   — look up card def by ACT-### id
+ *   CardSystem.getByPool(factionId, repTier) — shop inventory for faction/tier
+ *   CardSystem.getBiomeDrops(biome)          — cards that drop in a biome
  *   CardSystem.getAllRegistry()              — full card registry array
  *
- * Layer 2 — depends on: SeededRNG (rng.js)
+ * Proxy stubs (forward to CardAuthority for backward compat):
+ *   CardSystem.getHand()           → CardAuthority.getHand()
+ *   CardSystem.drawHand(n)         → CardAuthority.drawHand(n)
+ *   CardSystem.drawToHand(n)       → CardAuthority.drawToHand(n)
+ *   CardSystem.drawWithOverflow()  → CardAuthority.drawWithOverflow()
+ *   CardSystem.playFromHand(i)     → CardAuthority.removeFromHand(i)
+ *   CardSystem.playStack(entries)  → CardAuthority.playStack(entries)
+ *   CardSystem.pushToHand(card)    → CardAuthority.addToHand(card)
+ *   CardSystem.resetDeck()         → CardAuthority.resetDeck()
+ *   CardSystem.addCard(c)          → CardAuthority.addToBackup(hydrated)
+ *   CardSystem.removeCard(id)      → CardAuthority.removeFromBackupById(id)
+ *   CardSystem.getCollection()     → CardAuthority.getBackup()
+ *   CardSystem.getCollectionSize() → CardAuthority.getBackupSize()
+ *   CardSystem.getDeckSize()       → CardAuthority.getDeckSize()
+ *   CardSystem.failstateWipe()     → CardAuthority.failstateWipe()
+ *   CardSystem.on/off(type, fn)    → CardAuthority.on/off(type, fn)
+ *   CardSystem.moveHandToCollection(i) → CardAuthority.moveHandToBackup(i)
+ *   CardSystem.moveCollectionToHand(i) → CardAuthority.moveBackupToHand(i)
+ *
+ * These proxies log deprecation warnings so callers can be tracked and
+ * migrated in subsequent sprints. They will be removed in S0.5.
+ *
+ * Layer 1 — depends on: nothing (registry is self-contained)
+ *
+ * @see engine/card-authority.js (S0.1 — state owner)
+ * @see engine/card-transfer.js  (S0.2 — validated transfers)
  */
 var CardSystem = (function () {
   'use strict';
 
-  // ── Constants ──────────────────────────────────────────────────────
+  // ── Constants (kept for backward compat — also in CardAuthority) ───
 
   var MAX_HAND       = 5;
-  var MAX_COLLECTION = 30;  // D1: expandable via equip items post-jam
+  var MAX_COLLECTION = 30;
 
-  // ── Internal state ────────────────────────────────────────────────
+  // ── Registry state (the only state this module still owns) ────────
 
-  var _registry   = [];   // Full card definitions from JSON
-  var _byId       = {};   // Fast lookup: id → card def
-  var _collection = [];   // Player's owned card copies
-  var _deck       = [];   // Shuffled draw pile
-  var _hand       = [];   // Cards in current hand
-  var _loaded     = false;
+  var _registry = [];   // Full card definitions from JSON
+  var _byId     = {};   // Fast lookup: id → card def
+  var _loaded   = false;
 
-  // ── Lightweight event system (D4: CSA pattern) ────────────────────
-  var _listeners  = {};   // { 'hand:changed': [fn, fn], ... }
+  // ── Deprecation logger ────────────────────────────────────────────
 
-  function _emit(type, payload) {
-    var fns = _listeners[type];
-    if (fns) {
-      for (var i = 0; i < fns.length; i++) {
-        try { fns[i](payload); } catch (e) { console.warn('[CardSystem] listener error:', e); }
-      }
-    }
-    // Wildcard listeners
-    var wild = _listeners['*'];
-    if (wild) {
-      for (var w = 0; w < wild.length; w++) {
-        try { wild[w]({ type: type, payload: payload }); } catch (e2) { /* ignore */ }
-      }
+  var _warned = {};
+  function _deprecate(method) {
+    if (!_warned[method]) {
+      _warned[method] = true;
+      console.warn('[CardSystem] DEPRECATED: ' + method + '() — use CardAuthority/CardTransfer instead');
     }
   }
 
-  function on(type, fn) {
-    if (!_listeners[type]) _listeners[type] = [];
-    _listeners[type].push(fn);
-  }
-
-  function off(type, fn) {
-    var fns = _listeners[type];
-    if (!fns) return;
-    for (var i = fns.length - 1; i >= 0; i--) {
-      if (fns[i] === fn) fns.splice(i, 1);
-    }
-  }
-
-  // ── Lifecycle ─────────────────────────────────────────────────────
-
-  /**
-   * Load data/cards.json via synchronous XHR and seed the player's
-   * starter deck from cards flagged { starterDeck: true }.
-   * Safe to call multiple times — re-entrant guard via _loaded.
-   */
-  function init() {
-    _loadRegistry();
-    _buildStarterCollection();
-    resetDeck();
-  }
+  // ── Registry loading ──────────────────────────────────────────────
 
   function _loadRegistry() {
     if (_loaded) return;
@@ -96,7 +76,6 @@ var CardSystem = (function () {
       xhr.send();
       if (xhr.status === 200) {
         var parsed = JSON.parse(xhr.responseText);
-        // Accept either a bare array or { cards: [...] } envelope
         _registry = Array.isArray(parsed) ? parsed
                   : (Array.isArray(parsed.cards) ? parsed.cards : []);
         _buildIndex();
@@ -123,21 +102,6 @@ var CardSystem = (function () {
     }
   }
 
-  function _buildStarterCollection() {
-    _collection = [];
-    for (var i = 0; i < _registry.length; i++) {
-      if (_registry[i].starterDeck) {
-        _collection.push(_registry[i]);
-      }
-    }
-    // Guarantee at least one playable card if JSON is empty or malformed
-    if (_collection.length === 0) {
-      _collection = _fallbackRegistry();
-    }
-  }
-
-  // ── Fallback (bare minimum if JSON unavailable) ───────────────────
-
   function _fallbackRegistry() {
     return [
       { id: 'ACT-001', name: 'Slash',   emoji: '⚔️',  suit: 'spade', rarity: 'common',
@@ -163,254 +127,38 @@ var CardSystem = (function () {
     ];
   }
 
-  // ── Deck & hand management ────────────────────────────────────────
-
-  /** Reshuffle the player's collection into a fresh draw pile. */
-  function resetDeck() {
-    _deck = _collection.slice();
-    SeededRNG.shuffle(_deck);
-    _hand = [];
-  }
+  // ── Lifecycle ─────────────────────────────────────────────────────
 
   /**
-   * Draw N cards into _hand (default 5). Recycles deck when exhausted.
-   * @param {number} [count=5]
-   * @returns {Array} The new hand.
+   * Load data/cards.json registry. Seed CardAuthority's backup deck
+   * from cards flagged { starterDeck: true }.
    */
-  function drawHand(count) {
-    count = count || 5;
-    _hand = [];
-    for (var i = 0; i < count; i++) {
-      if (_deck.length === 0) {
-        // Reshuffle — don't clear _hand, just replenish _deck
-        _deck = _collection.slice();
-        SeededRNG.shuffle(_deck);
-      }
-      if (_deck.length > 0) _hand.push(_deck.pop());
-    }
-    _emit('hand:changed', { hand: _hand });
-    return _hand;
-  }
+  function init() {
+    _loadRegistry();
 
-  /** Return the current hand without modifying it. */
-  function getHand() { return _hand; }
-
-  /** Return the number of cards remaining in the draw pile. */
-  function getDeckSize() { return _deck.length; }
-
-  /**
-   * Remove and return the card at hand[index], or null if out of bounds.
-   * @param {number} index
-   * @returns {Object|null}
-   */
-  function playFromHand(index) {
-    if (index < 0 || index >= _hand.length) return null;
-    var card = _hand.splice(index, 1)[0];
-    _emit('hand:changed', { hand: _hand });
-    return card;
-  }
-
-  /**
-   * Resolve a stack of cards from hand — stack-based combat play.
-   * Persistent cards return to hand; expendable cards are consumed.
-   *
-   * @param {Array} stackEntries - [{ card, handIndex }] from CardStack
-   * @returns {{ expended: Array, retained: Array }}
-   */
-  function playStack(stackEntries) {
-    // Sort by hand index descending so splices don't shift earlier indices
-    var sorted = stackEntries.slice().sort(function (a, b) {
-      return b.handIndex - a.handIndex;
-    });
-
-    var expended = [];
-    var retained = [];
-
-    for (var i = 0; i < sorted.length; i++) {
-      var entry = sorted[i];
-      var card = entry.card;
-      var isPersist = card.persistent === true ||
-                      (card.cost && card.cost.persistent === true);
-
-      if (isPersist) {
-        // Persistent: card stays in hand (don't splice)
-        retained.push(card);
-      } else {
-        // Expendable: remove from hand
-        if (entry.handIndex >= 0 && entry.handIndex < _hand.length) {
-          _hand.splice(entry.handIndex, 1);
-        }
-        expended.push(card);
-      }
-    }
-
-    return { expended: expended, retained: retained };
-  }
-
-  /**
-   * Draw N cards from the deck into hand (top-up, not replace).
-   * Used for per-turn draw during combat (Gone Rogue pattern).
-   *
-   * @param {number} [count=1]
-   * @returns {Array} Newly drawn cards
-   */
-  function drawToHand(count) {
-    count = count || 1;
-    var drawn = [];
-    for (var i = 0; i < count; i++) {
-      if (_deck.length === 0) {
-        // Reshuffle collection into deck (minus cards currently in hand)
-        var handIds = {};
-        for (var h = 0; h < _hand.length; h++) {
-          handIds[_hand[h].id] = (handIds[_hand[h].id] || 0) + 1;
-        }
-        _deck = [];
-        for (var c = 0; c < _collection.length; c++) {
-          var cid = _collection[c].id;
-          if (handIds[cid] && handIds[cid] > 0) {
-            handIds[cid]--;
-          } else {
-            _deck.push(_collection[c]);
-          }
-        }
-        SeededRNG.shuffle(_deck);
-        if (_deck.length === 0) break;  // Collection exhausted
-      }
-      var card = _deck.pop();
-      _hand.push(card);
-      drawn.push(card);
-    }
-    return drawn;
-  }
-
-  /**
-   * Draw a card with overflow cascade (Gone-Rogue pattern):
-   *   1. If hand < MAX_HAND: draw normally
-   *   2. If hand is full: bump last card in hand → deck (collection)
-   *   3. If deck (collection) is also full (MAX_COLLECTION): incinerate the bumped card
-   *   4. Draw the new card into the freed hand slot
-   *
-   * Returns { drawn: card|null, bumped: card|null, incinerated: card|null }
-   * Callers use this for Toast feedback.
-   *
-   * @param {number} [maxHand=5] — hand capacity (Player.MAX_HAND)
-   * @param {number} [maxCollection=30] — collection cap (0 = unlimited)
-   * @returns {Object}
-   */
-  function drawWithOverflow(maxHand, maxCollection) {
-    maxHand = maxHand || 5;
-    maxCollection = maxCollection || 0;  // 0 = unlimited
-
-    var result = { drawn: null, bumped: null, incinerated: null };
-
-    // Refill deck if empty
-    if (_deck.length === 0) {
-      var handIds = {};
-      for (var h = 0; h < _hand.length; h++) {
-        handIds[_hand[h].id] = (handIds[_hand[h].id] || 0) + 1;
-      }
-      _deck = [];
-      for (var c = 0; c < _collection.length; c++) {
-        var cid = _collection[c].id;
-        if (handIds[cid] && handIds[cid] > 0) {
-          handIds[cid]--;
-        } else {
-          _deck.push(_collection[c]);
+    // Seed CardAuthority backup with starter deck if available
+    if (typeof CardAuthority !== 'undefined') {
+      var starters = [];
+      for (var i = 0; i < _registry.length; i++) {
+        if (_registry[i].starterDeck) {
+          starters.push(_registry[i]);
         }
       }
-      SeededRNG.shuffle(_deck);
-    }
-
-    if (_deck.length === 0) return result;  // Nothing to draw
-
-    // Overflow cascade: hand full → bump last card
-    if (_hand.length >= maxHand) {
-      var bumped = _hand.pop();
-      result.bumped = bumped;
-
-      // Try to push bumped card to collection
-      if (maxCollection > 0 && _collection.length >= maxCollection) {
-        // Collection also full — incinerate the bumped card
-        result.incinerated = bumped;
-      } else {
-        _collection.push(bumped);
+      if (starters.length === 0) starters = _fallbackRegistry();
+      for (var s = 0; s < starters.length; s++) {
+        CardAuthority.addToBackup(starters[s]);
       }
+      CardAuthority.resetDeck();
     }
-
-    // Draw new card
-    var card = _deck.pop();
-    _hand.push(card);
-    result.drawn = card;
-
-    _emit('hand:changed', { hand: _hand });
-    if (result.bumped || result.incinerated) {
-      _emit('collection:changed', { collection: _collection });
-    }
-    return result;
   }
 
-  // ── Collection mutation ───────────────────────────────────────────
+  // ── Registry queries (the real API) ───────────────────────────────
 
-  /**
-   * Add a card to the player's collection.
-   * Accepts a card id string (ACT-###) or a full card object.
-   * @param {string|Object} cardOrId
-   * @returns {boolean} True if the card was found and added.
-   */
-  function addCard(cardOrId) {
-    var card = (typeof cardOrId === 'string') ? _byId[cardOrId] : cardOrId;
-    if (!card) {
-      console.warn('[CardSystem] addCard: unknown id', cardOrId);
-      return false;
-    }
-    if (_collection.length >= MAX_COLLECTION) {
-      _emit('collection:full', { card: card, max: MAX_COLLECTION });
-      return false;
-    }
-    _collection.push(card);
-    _emit('collection:changed', { collection: _collection });
-    return true;
-  }
-
-  /**
-   * Remove one copy of a card (by id) from the player's collection.
-   * Does not affect the current _deck or _hand mid-combat.
-   * @param {string} cardId
-   * @returns {boolean} True if a copy was removed.
-   */
-  function removeCard(cardId) {
-    for (var i = 0; i < _collection.length; i++) {
-      if (_collection[i].id === cardId) {
-        _collection.splice(i, 1);
-        _emit('collection:changed', { collection: _collection });
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Return the player's owned card array (live reference — do not mutate). */
-  function getCollection() { return _collection; }
-
-  // ── Registry queries ──────────────────────────────────────────────
-
-  /**
-   * Look up a card definition by ACT-### id.
-   * @param {string} id
-   * @returns {Object|null}
-   */
   function getById(id) {
+    if (!_loaded) _loadRegistry();
     return _byId[id] || null;
   }
 
-  /**
-   * Return all cards available in a faction's shop at a given reputation tier.
-   * Filters: shopPool includes factionId AND dropTier <= repTier.
-   *
-   * @param {string} factionId - 'tide' | 'foundry' | 'admiralty'
-   * @param {number} repTier   - 0–3 (player's current rep with this faction)
-   * @returns {Array}          Array of card definitions
-   */
   function getByPool(factionId, repTier) {
     if (!_loaded) _loadRegistry();
     repTier = repTier || 0;
@@ -421,11 +169,6 @@ var CardSystem = (function () {
     });
   }
 
-  /**
-   * Return cards that can drop in a given biome (from chests or enemy kills).
-   * @param {string} biome - 'cellar' | 'foundry' | 'sealab'
-   * @returns {Array}
-   */
   function getBiomeDrops(biome) {
     if (!_loaded) _loadRegistry();
     return _registry.filter(function (c) {
@@ -433,124 +176,152 @@ var CardSystem = (function () {
     });
   }
 
-  /**
-   * Push a card directly into _hand (e.g. from inventory drag).
-   * Does NOT draw from deck — the card object is inserted as-is.
-   * @param {Object} card
-   * @returns {boolean} True if added (hand not full).
-   */
-  function pushToHand(card) {
-    if (!card) return false;
-    _hand.push(card);
-    _emit('hand:changed', { hand: _hand });
-    return true;
-  }
-
-  /** Return the full raw registry (for editor / debug overlays). */
   function getAllRegistry() {
     if (!_loaded) _loadRegistry();
     return _registry;
   }
 
-  /** Return collection size. */
-  function getCollectionSize() { return _collection.length; }
+  // ── Proxy stubs (forward to CardAuthority, log deprecation) ───────
+  //
+  // These exist so un-rewired callers don't break immediately.
+  // Each logs a one-time warning to aid migration tracking.
 
-  // ── Transfer methods (inventory drag-drop support) ────────────────
+  function getHand() {
+    _deprecate('getHand');
+    return CardAuthority.getHand();
+  }
 
-  /**
-   * Move a card from hand back to collection (backup deck).
-   * @param {number} handIndex
-   * @returns {Object|null} The moved card, or null on failure.
-   */
+  function drawHand(count) {
+    _deprecate('drawHand');
+    return CardAuthority.drawHand(count);
+  }
+
+  function drawToHand(count) {
+    _deprecate('drawToHand');
+    return CardAuthority.drawToHand(count);
+  }
+
+  function drawWithOverflow(maxHand, maxCollection) {
+    _deprecate('drawWithOverflow');
+    return CardAuthority.drawWithOverflow(maxHand, maxCollection);
+  }
+
+  function playFromHand(index) {
+    _deprecate('playFromHand');
+    return CardAuthority.removeFromHand(index);
+  }
+
+  function playStack(stackEntries) {
+    _deprecate('playStack');
+    return CardAuthority.playStack(stackEntries);
+  }
+
+  function pushToHand(card) {
+    _deprecate('pushToHand');
+    return CardAuthority.addToHand(card);
+  }
+
+  function resetDeck() {
+    _deprecate('resetDeck');
+    CardAuthority.resetDeck();
+  }
+
+  function addCard(cardOrId) {
+    _deprecate('addCard');
+    var card = (typeof cardOrId === 'string') ? getById(cardOrId) : cardOrId;
+    if (!card) return false;
+    return CardAuthority.addToBackup(card);
+  }
+
+  function removeCard(cardId) {
+    _deprecate('removeCard');
+    return CardAuthority.removeFromBackupById(cardId);
+  }
+
+  function getCollection() {
+    _deprecate('getCollection');
+    return CardAuthority.getBackup();
+  }
+
+  function getCollectionSize() {
+    _deprecate('getCollectionSize');
+    return CardAuthority.getBackupSize();
+  }
+
+  function getDeckSize() {
+    _deprecate('getDeckSize');
+    return CardAuthority.getDeckSize();
+  }
+
   function moveHandToCollection(handIndex) {
-    if (handIndex < 0 || handIndex >= _hand.length) return null;
-    if (_collection.length >= MAX_COLLECTION) return null;
-    var card = _hand.splice(handIndex, 1)[0];
-    _collection.push(card);
-    _emit('hand:changed', { hand: _hand });
-    _emit('collection:changed', { collection: _collection });
-    return card;
+    _deprecate('moveHandToCollection');
+    return CardAuthority.moveHandToBackup(handIndex);
   }
 
-  /**
-   * Move a card from collection to hand.
-   * @param {number} collectionIndex
-   * @returns {Object|null} The moved card, or null on failure.
-   */
   function moveCollectionToHand(collectionIndex) {
-    if (collectionIndex < 0 || collectionIndex >= _collection.length) return null;
-    if (_hand.length >= MAX_HAND) return null;
-    var card = _collection.splice(collectionIndex, 1)[0];
-    _hand.push(card);
-    // Also remove from draw pile if present
-    for (var d = _deck.length - 1; d >= 0; d--) {
-      if (_deck[d] === card) { _deck.splice(d, 1); break; }
-    }
-    _emit('hand:changed', { hand: _hand });
-    _emit('collection:changed', { collection: _collection });
-    return card;
+    _deprecate('moveCollectionToHand');
+    return CardAuthority.moveBackupToHand(collectionIndex);
   }
 
-  /**
-   * Clear hand and backup deck (failstate wipe).
-   * Cards in bag (Joker Vault) are preserved by Player, not here.
-   * @returns {{ hand: Array, collection: Array }} The wiped contents.
-   */
   function failstateWipe() {
-    var wipedHand = _hand.slice();
-    var wipedCollection = _collection.slice();
-    _hand = [];
-    _deck = [];
-    _collection = [];
-    _emit('hand:changed', { hand: _hand });
-    _emit('collection:changed', { collection: _collection });
-    return { hand: wipedHand, collection: wipedCollection };
+    _deprecate('failstateWipe');
+    return CardAuthority.failstateWipe();
+  }
+
+  function on(type, fn) {
+    _deprecate('on');
+    CardAuthority.on(type, fn);
+  }
+
+  function off(type, fn) {
+    _deprecate('off');
+    CardAuthority.off(type, fn);
+  }
+
+  // Also handle emitHandChanged (called by card-fan.js after reorder)
+  function emitHandChanged() {
+    _deprecate('emitHandChanged');
+    // CardAuthority events handle this — no-op proxy
   }
 
   // ── Public API ────────────────────────────────────────────────────
+
   return {
-    // Constants
+    // ── Constants (backward compat) ──
     MAX_HAND:       MAX_HAND,
     MAX_COLLECTION: MAX_COLLECTION,
 
-    // Lifecycle
-    init:          init,
-    resetDeck:     resetDeck,
+    // ── Lifecycle ──
+    init: init,
 
-    // Hand operations
-    drawHand:      drawHand,
-    getHand:       getHand,
-    playFromHand:  playFromHand,
-    playStack:     playStack,
-    drawToHand:    drawToHand,
-    drawWithOverflow: drawWithOverflow,
-    pushToHand:    pushToHand,
+    // ── Registry queries (the real API) ──
+    getById:        getById,
+    getByPool:      getByPool,
+    getBiomeDrops:  getBiomeDrops,
+    getAllRegistry:  getAllRegistry,
 
-    // Collection operations
-    addCard:       addCard,
-    removeCard:    removeCard,
-    getCollection: getCollection,
-    getCollectionSize: getCollectionSize,
-    getDeckSize:   getDeckSize,
-
-    // Transfer methods (inventory drag-drop)
+    // ── Proxy stubs (deprecated — use CardAuthority/CardTransfer) ──
+    resetDeck:            resetDeck,
+    drawHand:             drawHand,
+    getHand:              getHand,
+    playFromHand:         playFromHand,
+    playStack:            playStack,
+    drawToHand:           drawToHand,
+    drawWithOverflow:     drawWithOverflow,
+    pushToHand:           pushToHand,
+    addCard:              addCard,
+    removeCard:           removeCard,
+    getCollection:        getCollection,
+    getCollectionSize:    getCollectionSize,
+    getDeckSize:          getDeckSize,
     moveHandToCollection: moveHandToCollection,
     moveCollectionToHand: moveCollectionToHand,
+    failstateWipe:        failstateWipe,
+    on:                   on,
+    off:                  off,
+    emitHandChanged:      emitHandChanged,
 
-    // Failstate
-    failstateWipe: failstateWipe,
-
-    // Registry
-    getById:       getById,
-    getByPool:     getByPool,
-    getBiomeDrops: getBiomeDrops,
-    getAllRegistry: getAllRegistry,
-
-    // Event system
-    on:  on,
-    off: off,
-
-    // Legacy alias kept for any caller that used getAllCards()
-    getAllCards:    getCollection
+    // Legacy alias
+    getAllCards: getCollection
   };
 })();

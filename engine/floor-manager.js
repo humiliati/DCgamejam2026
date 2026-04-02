@@ -1249,6 +1249,21 @@ var FloorManager = (function () {
     Raycaster.setBiomeColors(getBiomeColors(_floorId));
     Raycaster.setContract(contract, _floorData.rooms, _floorData.cellHeights);
 
+    // Set post-process profile by floor depth
+    if (typeof PostProcess !== 'undefined') {
+      var ppDepth = _floorId.split('.').length;
+      if (ppDepth >= 3) {
+        PostProcess.setProfile('dungeon');
+        PostProcess.setColorGrade({ r: 20, g: 40, b: 60, a: 0.04 });
+      } else if (ppDepth === 1) {
+        PostProcess.setProfile('exterior');
+        PostProcess.setColorGrade({ r: 255, g: 220, b: 160, a: 0.03 });
+      } else {
+        PostProcess.setProfile('default');
+        PostProcess.setColorGrade(null);
+      }
+    }
+
     // Resolve player spawn
     var spawn, spawnDir;
     if (_floorId === '0' && !fromCache) {

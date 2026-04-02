@@ -154,9 +154,23 @@ var PeekSlots = (function () {
       Toast.show(msg, 'loot');
     }
 
-    // Grant coins
-    if (typeof Player !== 'undefined') {
+    // Grant coins via authority path
+    if (typeof CardTransfer !== 'undefined') {
+      CardTransfer.lootGold(result.totalCoins);
+    } else if (typeof Player !== 'undefined') {
       Player.addCurrency(result.totalCoins);
+    }
+
+    // Coin VFX — seal is a big moment, use coinRain for ≥ 5g, burst for smaller
+    var _sealCanvas = document.getElementById('view-canvas');
+    if (typeof ParticleFX !== 'undefined' && _sealCanvas) {
+      var scx = _sealCanvas.width / 2;
+      var scy = _sealCanvas.height * 0.4;
+      if (result.totalCoins >= 5) {
+        ParticleFX.coinRain(scx, scy, result.totalCoins);
+      } else if (result.totalCoins > 0) {
+        ParticleFX.coinBurst(scx, scy, Math.max(3, result.totalCoins));
+      }
     }
 
     // Transition to SEALED state
@@ -252,8 +266,22 @@ var PeekSlots = (function () {
                   'loot'
                 );
               }
-              if (typeof Player !== 'undefined') {
+              // Authority path for per-slot coin award
+              if (typeof CardTransfer !== 'undefined') {
+                CardTransfer.lootGold(result.coins);
+              } else if (typeof Player !== 'undefined') {
                 Player.addCurrency(result.coins);
+              }
+              // Per-slot coin burst (small amounts, keep subtle)
+              if (result.coins > 0 && typeof ParticleFX !== 'undefined') {
+                var _slotCanvas = document.getElementById('view-canvas');
+                if (_slotCanvas) {
+                  ParticleFX.coinBurst(
+                    _slotCanvas.width / 2,
+                    _slotCanvas.height * 0.4,
+                    Math.max(2, result.coins)
+                  );
+                }
               }
               if (typeof AudioSystem !== 'undefined') {
                 AudioSystem.play('pickup-success');

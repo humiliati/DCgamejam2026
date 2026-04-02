@@ -391,6 +391,47 @@ var DayCycle = (function () {
   }
 
   /**
+   * Get the phase that follows the current one in the day cycle.
+   * @returns {string} Next phase name
+   */
+  function getNextPhase() {
+    for (var i = 0; i < PHASE_BOUNDS.length; i++) {
+      if (PHASE_BOUNDS[i].phase === _phase) {
+        return PHASE_BOUNDS[(i + 1) % PHASE_BOUNDS.length].phase;
+      }
+    }
+    return PHASES.DAWN;
+  }
+
+  /**
+   * Get fractional progress (0–1) through the current phase.
+   * Used by skybox for smooth color interpolation between phases.
+   * @returns {number} 0 at phase start, 1 at phase end
+   */
+  function getPhaseProgress() {
+    var startHour = 0;
+    var endHour = 24;
+    for (var i = 0; i < PHASE_BOUNDS.length; i++) {
+      if (PHASE_BOUNDS[i].phase === _phase) {
+        startHour = PHASE_BOUNDS[i].start;
+        var nextIdx = (i + 1) % PHASE_BOUNDS.length;
+        endHour = PHASE_BOUNDS[nextIdx].start;
+        break;
+      }
+    }
+    // Handle night wrapping (19–6 spans midnight)
+    var phaseLen, elapsed;
+    if (endHour <= startHour) {
+      phaseLen = (24 - startHour) + endHour;
+      elapsed = _hour >= startHour ? (_hour - startHour) : (24 - startHour + _hour);
+    } else {
+      phaseLen = endHour - startHour;
+      elapsed = _hour - startHour;
+    }
+    return phaseLen > 0 ? Math.max(0, Math.min(1, elapsed / phaseLen)) : 0;
+  }
+
+  /**
    * Is the current hour in the "tired" range (21:00–05:59)?
    * @returns {boolean}
    */
@@ -451,6 +492,8 @@ var DayCycle = (function () {
     getMinute:            getMinute,
     getPhase:             getPhase,
     getTimeString:        getTimeString,
+    getNextPhase:         getNextPhase,
+    getPhaseProgress:     getPhaseProgress,
     isTiredHour:          isTiredHour,
     isCurfewHour:         isCurfewHour
   });

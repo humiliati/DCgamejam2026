@@ -213,7 +213,7 @@ All five design documents, their scope, and section inventories. Each document n
 > **Scope**: Core narrative structure — MSS operative cover, three-faction conspiracy (Tide Council, Foundry Collective, Admiralty), dragon compact, and the Gleaner's role in the conspiracy.
 
 ### DOC-14: TEXTURE_ROADMAP.md
-> **Scope**: 3-layer visual upgrade plan — flat-colored Wolfenstein walls → Octopath Traveller-style pixel-art textures. Procedural 64×64 texture generation and caching.
+> **Scope**: 3-layer visual upgrade plan — flat-colored Wolfenstein walls → Octopath Traveller-style pixel-art textures. Procedural 64×64 texture generation and caching. Layer 2 (wall decor) and Layer 3 (sprite light emitters) are shared implementations with LIGHT_AND_TORCH_ROADMAP — see cross-references section at bottom of doc.
 
 ### DOC-15: SPRITE_STACK_ROADMAP.md
 > **Scope**: Triple-emoji sprite composition system (head/torso/legs) with layered accessories, replacing single-emoji rendering for NPCs and enemies.
@@ -221,11 +221,17 @@ All five design documents, their scope, and section inventories. Each document n
 ### DOC-16: SUIT_SYSTEM_ROADMAP.md
 > **Scope**: Playing card suit element system — RPS combat triangle (♣>♦>♠>♣), ♥ as rule-breaker/healing, biome suit alignment.
 
-### DOC-17: SKYBOX_ROADMAP.md
-> **Scope**: Parallax sky, cloud layers, and water reflections replacing flat gradient backgrounds on exterior floors.
+### DOC-17: SKYBOX_ROADMAP.md (v2)
+> **Scope**: v1 parallax sky complete. v2 adds day/night cycle (sky color cycling, celestial bodies, star parallax, time widget), Floor 3 ocean sky, weather system. Cross-references LIGHT_AND_TORCH for building entrance glow, TEXTURE for frontier biome.
 
 ### DOC-18: NLAYER_RAYCASTER_ROADMAP.md
-> **Scope**: N-layer compositing for half-height see-over tiles, floor visibility, and exterior map depth. Replaces 2-layer background hack.
+> **Scope**: N-layer compositing for half-height see-over tiles, floor visibility, and exterior map depth. Replaces 2-layer background hack. Cross-references TEXTURE Layer 2 (shared raycaster loop) and LIGHT_AND_TORCH (shared frame budget).
+
+### DOC-31: LIGHT_AND_TORCH_ROADMAP.md
+> **Scope**: Dynamic light sources in Lighting.js, torch wall sprites, extinguish/refuel game loop. Phase 1 ≡ TEXTURE Layer 3 (same implementation). Phase 2 consumes TEXTURE Layer 2 wall decor model.
+
+### DOC-32: UNIFIED_EXECUTION_ORDER.md (v3)
+> **Scope**: Single source of truth for implementation sequencing across ALL roadmaps. Sprint 0 (inventory/card/menu rework, 15h) as prerequisite → three parallel tracks (A: raycaster/texture/lighting, B: skybox/day-night, PW: pressure washing/hose) → Floor 3 convergence → EyesOnly convergence sprints S1–S5 (33h). Track PW cross-depends on Track A step A7 (torch slot model) for torch-hit wiring. References DOC-46, DOC-47, DOC-48.
 
 ### DOC-19: DOOR_EFFECTS_ROADMAP.md
 > **Scope**: Three-phase visual door transition effects (approach/pass/exit) replacing hard-cut black loading screens.
@@ -338,6 +344,52 @@ All five design documents, their scope, and section inventories. Each document n
 
 ### DOC-45: INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md
 > **Scope**: Comprehensive audit mapping DG containers to EyesOnly, 9 confirmed bugs, 6-phase fix plan, transfer matrix, consistency checklist, decision log.
+
+### DOC-48: PRESSURE_WASHING_ROADMAP.md
+> **Scope**: Pressure washing system — hose pickup from cleaning truck (hero day spawn), sub-tile grime grids (4×4 floor, 16×16 wall), brush/spray interaction with nozzle items, hose path recording with kink detection (0.7× pressure stacking), "roll up hose" backward-walk auto-exit via repurposed MinimapNav, minimap click distance gate (5+itemN), torch extinguish via spray (zero fuel hydration — intentionally inferior to TorchPeek careful method), cleaning truck as BPRD-style vehicle with bobbing 🧵 cutout. EyesOnly RopeManager explicitly rejected in favor of MinimapNav + MC movement queue.
+
+| Section | Content |
+|---|---|
+| §1 Design Vision | Core fantasy, hose-as-optional-upgrade |
+| §2 Hose Object | Truck spawn, HosePeek, HoseState lifecycle, building validation, energy cost |
+| §3 Hose Path | Trail recording, kink detection, minimap overlay |
+| §4 Roll Up Hose | Reel-in auto-exit, backward walk, MinimapNav distance gate |
+| §5 Sub-Tile Grime Grid | Dual resolution (4×4 floor, 16×16 wall), rendering as translucent tint |
+| §6 Beam/Spray Interaction | Aiming, brush kernels, nozzle modifiers, pressure/kink effect |
+| §7 Torch Extinguish | Hose spray extinguish (zero hydration), adjacent splash, dependency on LIGHT_AND_TORCH Phase 3 |
+| §8 Nozzle Items | Fan nozzle, Cyclone nozzle, equip slot |
+| §9 Readiness Integration | GrimeGrid fractional cleanliness → CleaningSystem |
+| §10 Module Plan | 6 new modules, 9 modified modules, RopeManager rejection |
+| §11 Execution Plan | PW-1 through PW-5 (~12.5h), Track A cross-dependency at PW-3 |
+| §12 Post-Jam Vision | Saddle mirror, volumetrics, gyroscope, phase-locked grime |
+| §13 Cross-References | LIGHT_AND_TORCH, INVENTORY_CARD_MENU_REWORK, UNIFIED_EXECUTION_ORDER |
+
+### DOC-46: INVENTORY_CARD_MENU_REWORK.md
+> **Scope**: Full architecture rework replacing DG's fragmented card/inventory/menu systems. Audit of 3–4 competing storage models, two card renderers (CardDraw canvas vs CardRenderer DOM), unregistered drag-drop zones, and direct state mutations. Ports EyesOnly's CardStateAuthority pattern → CardAuthority (single read/write gateway, event emitter, serialize/deserialize, death reset with tiered persistence). CardTransfer (validated zone-to-zone moves with rollback, drop zone registry). MenuInventory (new pause menu surface, grid navigation, CardDraw as sole renderer). 5-step execution plan (~15h): build authority+transfer → rewire existing → build MenuInventory → delete dead code → regression test. Bug-to-fix mapping traces every visible bug to architectural root cause. **Sprint 0 prerequisite** — blocks all visual roadmap tracks and EyesOnly convergence sprints.
+
+| Section | Content |
+|---|---|
+| §1 Audit | Storage fragmentation analysis, drag-drop ghost code, renderer duplication |
+| §2 CardAuthority | State shape, event system, serialization, death reset, EyesOnly pattern source |
+| §3 CardTransfer | Zone-to-zone validation, rollback, drop zone registry, transfer functions |
+| §4 MenuInventory | ASCII layout mockup, grid navigation, CardDraw rendering, zone registration |
+| §5 Refactor Specs | Player.js, CardSystem.js, CardFan.js, Salvage.js, Shop.js, HUD.js rewire |
+| §6 Execution Plan | 5 steps, 15h total, load order update, deleted files list |
+| §7 Bug Mapping | Each visible bug → architectural root cause → rework fix |
+
+### DOC-47: EYESONLY_3D_ROADMAP.md
+> **Scope**: Convergence roadmap — DG's engine (raycaster, skybox, minimap, movement, camera, inputs, N-layer) + DG's narrative (conspiracy, factions, Gleaner pivot, cleaning loops) + EyesOnly's proven game systems (LightingSystem, TagSynergyEngine, EnemyIntentSystem, StatusEffects, card quality tiers, loot scatter, save/load, audio stems). Only ONE DG module replaced (lighting.js 63 lines → EyesOnly LightingSystem 1,106 lines); everything else additive. Sprint structure: S0 (15h inventory/card/menu rework) → S1 (7h EyesOnly extractions) → S2 (7h combat rewire) → S3 (10h engine polish) → S4 (5h cleaning loop wire) → S5 (4h narrative + ship) = 48h total.
+
+| Section | Content |
+|---|---|
+| §1 What Stays from DG | 16 engine modules (raycaster, skybox, minimap, movement, etc.) |
+| §2 What Comes from EyesOnly | LightingSystem, TagSynergyEngine, EnemyIntentSystem, card quality, loot scatter, save/load, audio |
+| §3 Sprint 0 | Inventory/Card/Menu Rework (prerequisite, references DOC-46) |
+| §4 Sprint 1 | EyesOnly system extractions (IIFE adaptation, API mapping) |
+| §5 Sprint 2 | Combat rewire (intent→telegraph→resolve, synergy combos) |
+| §6 Sprint 3 | Engine polish (loot, save/load, audio, proc-gen) |
+| §7 Sprint 4 | Cleaning loop wire (tool quality, torch system) |
+| §8 Sprint 5 | Narrative + ship (factions, conspiracy, Act 1 choice) |
 
 ---
 

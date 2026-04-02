@@ -4,7 +4,7 @@ This file tells Claude (and future contributors) how to work in this codebase.
 
 ## Project identity
 
-**Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your job: clean up after the heroes and adventurers who storm through the dungeons beneath the town — scrub the walls, restock the crates, re-arm the traps, reset the floors. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
+**Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your job: clean up after the heroes and adventurers who storm through the dungeons beneath the town — scrub the walls, exstinguish torches, restock the crates, re-arm the traps, reset the floors. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
 
 The **conspiracy layer** (contributor knowledge — revealed to the player gradually): Dragons are ancient protectors — not monsters. The hero you're cleaning up after is systematically eliminating them on behalf of factions with hidden agendas (a crooked detective agency, a religious order protecting a 400-year-old secret, a handler at the agency that sent you). As Gleaner cleans deeper floors, environmental evidence and NPC dialogue expose the truth. By the end of Act 1, Gleaner must choose a side.
 
@@ -22,6 +22,8 @@ The living design document is `docs/Biome Plan.html` (v5). It defines the world 
 - **IIFE module pattern.** Every engine file is `var ModuleName = (function() { 'use strict'; ... return { publicAPI }; })();` attaching to a single global. No ES modules, no require, no import.
 - **Script load order is the dependency graph.** `index.html` loads scripts in 5 layers (0-4). A module can only reference globals defined by scripts loaded before it. Adding a new module means inserting it in the correct layer.
 - **No external CDN dependencies at runtime.** Everything ships in the project folder. The game must work offline (webOS apps are local).
+- **Never scope-compromise the correct solution.** If the right answer is X, build X. Do not substitute a cheaper/simpler Z "for jam scope" or "for now." Scope-compromised implementations create layers of low-fidelity code that fail silently when composed together. A correct implementation that takes longer is always preferable to a shortcut that passes syntax checks but doesn't actually work. If the timeline is tight, cut features — don't cut corners on the features you do build.
+- **Never fabricate when EyesOnly has a reference implementation.** EyesOnly is ALWAYS available at `EyesOnly/` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there.
 
 ## Direction convention
 
@@ -40,7 +42,7 @@ Turn left = `(dir + 3) % 4` (CCW). Turn right = `(dir + 1) % 4` (CW). The raycas
 
 String floor IDs are the primary identifier throughout the codebase. There is NO integer `floorNum` — the string IS the identity.
 
-- `"N"` = depth 1, **exterior** — skybox (no ceiling), 2× tall walls, FADE fog
+- `"N"` = depth 1, **exterior** — skybox (no ceiling), .5-3× tall walls, FADE fog
 - `"N.N"` = depth 2, **interior** — solid ceiling, 2× tall walls, CLAMP fog
 - `"N.N.N"` = depth 3, **nested dungeon** — void ceiling, 1× tall walls, DARKNESS fog
 

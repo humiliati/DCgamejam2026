@@ -273,25 +273,27 @@ var CrateUI = (function () {
    */
   function _fillFromBag(slotIdx, container) {
     if (typeof Player === 'undefined') return;
+    var hasAuthority = (typeof CardAuthority !== 'undefined');
 
     var slot = container.slots[slotIdx];
     if (!slot || slot.filled) return;
 
-    var pState = Player.state();
-
     // Suit card slot: search hand for matching suit card
     if (slot.frameTag === CrateSystem.FRAME.SUIT_CARD) {
-      var hand = pState.hand;
+      var hand = hasAuthority ? CardAuthority.getHand() : Player.state().hand;
       for (var h = 0; h < hand.length; h++) {
         if (hand[h] && hand[h].suit === slot.suit) {
-          var card = hand[h];
-          // Remove card from hand
-          pState.hand.splice(h, 1);
-          CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+          // Remove card from hand via authority (mutates real state + fires event)
+          var card = hasAuthority
+            ? CardAuthority.removeFromHand(h)
+            : hand.splice(h, 1)[0];
+          if (card) {
+            CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+          }
           return;
         }
       }
-      // No matching suit card found — could show toast here
+      // No matching suit card found
       if (typeof Toast !== 'undefined') {
         var suitName = slot.suit || '?';
         Toast.show('Need a ' + (CrateSystem.SUIT_EMOJI[suitName] || '?') + ' card', 'info');
@@ -300,15 +302,19 @@ var CrateUI = (function () {
     }
 
     // Resource slot: take first bag item
-    var bag = pState.bag;
+    var bag = hasAuthority ? CardAuthority.getBag() : Player.state().bag;
     if (bag.length === 0) {
       if (typeof Toast !== 'undefined') Toast.show('Bag is empty', 'info');
       return;
     }
 
-    var item = bag[0];
-    pState.bag.splice(0, 1);
-    CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+    // Remove first bag item via authority (mutates real state + fires event)
+    var item = hasAuthority
+      ? CardAuthority.removeFromBag(0)
+      : bag.splice(0, 1)[0];
+    if (item) {
+      CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────

@@ -102,9 +102,9 @@ Improves the combat loop to feel complete. Not strictly blocking but affects jam
 | T1.1 | Enemy sprite particle FX (CSS/canvas) | enemy-sprites.js, raycaster.js, game.js | — | ✅ DONE | — |
 | T1.2 | Suit-based synergy system (♣>♦>♠>♣ RPS + ♥ rule-breaker) | synergy-engine.js, combat-engine.js, card-fan.js, data/*.json | — | ✅ DONE | — |
 | T1.3 | Drag-to-reorder + drag-drop-to-stack + swipe-to-fire | card-fan.js, card-stack.js, combat-bridge.js | — | ✅ DONE | — |
-| T1.4 | Suit advantage toast + visual feedback during resolution | combat-bridge.js, hud.js | T1.2 | ❌ TODO | 1h |
-| T1.5 | Enemy attack telegraph (intent display) | combat-bridge.js, hud.js | — | ❌ TODO | 2h |
-| T1.6 | Death anim corpse tile rendering in raycaster | death-anim.js, raycaster.js | — | ❌ TODO | 1h |
+| T1.4 | Suit advantage toast + visual feedback during resolution | suit-toast.js, combat-bridge.js | T1.2 | ✅ DONE | — |
+| T1.5 | Enemy attack telegraph (intent display) | enemy-intent.js, raycaster.js | — | ✅ DONE | — |
+| T1.6 | Death anim corpse tile rendering in raycaster | death-anim.js, combat-bridge.js | — | ✅ DONE | — |
 
 ### Tier 2 — Economy Loop Closure (Playable End-to-End)
 
@@ -112,11 +112,11 @@ Completes the harvest → sell → buy → equip → fight loop.
 
 | # | Work Item | Module(s) | Depends On | Status | Est. |
 |---|-----------|-----------|------------|--------|------|
-| T2.1 | Bag inventory viewer (Face 2 sub-pane) | menu-faces.js | T0.5 | ❌ TODO | 2h |
-| T2.2 | Stash transfer at bonfire tiles | game.js, player.js | T2.1 | ❌ TODO | 1h |
-| T2.3 | Faction rep tier unlock feedback in shop | menu-faces.js, shop.js | T0.4 | ❌ TODO | 1h |
-| T2.4 | Floor transition deck reshuffle + hand redraw | game.js, card-system.js | — | ❌ TODO | 30m |
-| T2.5 | Victory/Game Over stat summaries from SessionStats | victory-screen.js, game-over-screen.js | — | ❌ TODO | 1h |
+| T2.1 | Bag inventory viewer (Face 2 sub-pane) | menu-faces.js | T0.5 | ✅ DONE | — |
+| T2.2 | Stash transfer at bonfire tiles | menu-faces.js, player.js | T2.1 | ✅ DONE | — |
+| T2.3 | Faction rep tier unlock feedback in shop | menu-faces.js, shop.js | T0.4 | ✅ DONE | — |
+| T2.4 | Floor transition deck reshuffle + hand redraw | game.js, card-system.js | — | ✅ DONE | — |
+| T2.5 | Victory/Game Over stat summaries from SessionStats | victory-screen.js, game-over-screen.js | — | ✅ DONE | — |
 | T2.6 | NCH widget drag-to-reorder cards | nch-widget.js | — | ❌ TODO | 2h |
 
 ### Tier 3 — Post-Jam / LG Content Store

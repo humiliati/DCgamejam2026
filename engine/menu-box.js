@@ -435,7 +435,7 @@ var MenuBox = (function () {
 
     // ── Blur border (outer frame) ──
     // Semi-transparent tinted border
-    var borderPct = 0.12;
+    var borderPct = 0.06;
     ctx.fillStyle = 'rgba(20,18,25,0.6)';
     ctx.fillRect(x, y, w, h);
 

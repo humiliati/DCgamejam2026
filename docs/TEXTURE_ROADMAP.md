@@ -631,6 +631,79 @@ DoorPeek loads in Layer 3 (after InteractPrompt, BoxAnim):
 
 ---
 
+## Cross-References to Other Roadmaps
+
+### Layer 2 ↔ LIGHT_AND_TORCH_ROADMAP Phase 2
+
+**These are the same system.** The `wallDecor[y][x]` data model defined
+here in Layer 2 is the mounting mechanism for wall torches defined in
+LIGHT_AND_TORCH Phase 2. Torch sprites are wall decor items with
+`emitter: true`. Implementation should be unified:
+
+- Build the wall decor data model and raycaster face-hit rendering (Layer 2)
+- TORCH_LIT / TORCH_UNLIT tiles use this system for their wall sprite overlay
+- Auto-placement rules in GridGen place torches at room entrances and corridors
+- LIGHT_AND_TORCH Phase 2b (torch wall rendering) becomes a consumer of Layer 2
+
+**Execution order:** Layer 2 wall decor model FIRST → then LIGHT_AND_TORCH
+Phase 2 torch tiles as a specific use case of wall decor.
+
+### Layer 3 ↔ LIGHT_AND_TORCH_ROADMAP Phase 1
+
+**These are the same implementation.** Both define the identical light source
+format `{ x, y, color, radius, intensity, flicker }` extending Lighting.js.
+The point light calculation, glow overlay pass, and flicker functions described
+in Layer 3 here are the same system as LIGHT_AND_TORCH Phase 1's dynamic
+light source registry. Merge into a single implementation:
+
+- `Lighting.addLightSource()` / `clearLightSources()` / `calculate()` extension
+- Glow overlay pass in Raycaster (Layer 3 here)
+- Flicker functions (torch 3Hz, neon dropout, steady) — shared by both docs
+- Wall decor items with `emitter: true` auto-register via this unified API
+
+**Execution order:** Implement once as LIGHT_AND_TORCH Phase 1 (since that
+doc has the more detailed spec), then Layer 3 here is satisfied automatically.
+
+### "Future — Campfire/Bonfire" ↔ LIGHT_AND_TORCH_ROADMAP Phase 2d
+
+The bonfire glow section above says "Blocked on: Layer 3 implementation."
+LIGHT_AND_TORCH Phase 1 IS Layer 3. Once dynamic light sources ship,
+bonfire registration (Phase 2d: radius 5, intensity 0.9, slow pulse) unblocks
+this future section with zero additional work.
+
+### Layer 2 wall decor ↔ NLAYER_RAYCASTER_ROADMAP
+
+N-layer raycaster (Phase 1) modifies the wall column DDA loop — the same
+loop where Layer 2 adds face-hit sprite rendering. Implementation order matters:
+
+1. NLAYER Phase 1: refactor DDA to N-layer hit collector + back-to-front render
+2. THEN Layer 2: add wall decor sprite overlay per-layer in the new render loop
+
+If Layer 2 ships before N-layer, it must be refactored when N-layer lands.
+Recommended: do NLAYER Phase 1 first if both are in the same sprint.
+
+### Shrub texture ↔ NLAYER_RAYCASTER_ROADMAP Phase 3b
+
+NLAYER Phase 3b explicitly depends on TextureAtlas for a `_genShrub()`
+procedural texture (SHRUB tile 22). This is a new texture addition to the
+atlas — same pattern as existing procedural generators. Add `shrub` and
+`shrub_flower` to the texture inventory when NLAYER Phase 3 ships.
+
+### Frontier biome textures ↔ SKYBOX_ROADMAP Phase 5
+
+Floor 3 (Frontier Gate) needs biome-specific wall and floor textures for
+the frontier/maritime setting. SKYBOX Phase 5 provides the sky (`frontier`
+preset); TextureAtlas provides the ground. Both needed for Floor 3 to feel
+complete. Suggested frontier textures:
+
+- `wall_weathered` — salt-worn stone or timber
+- `floor_planks_wet` — dock planking with moisture
+- `door_heavy` — reinforced gate/portcullis style
+
+These should be added to the texture inventory when Floor 3 blockout begins.
+
+---
+
 ## What This Does NOT Include
 
 - Ceiling textures (textured ceiling plane). Similar to floor casting

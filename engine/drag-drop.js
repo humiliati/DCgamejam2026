@@ -69,6 +69,14 @@ var DragDrop = (function () {
   var _feedback = null;
 
   /**
+   * DOM ghost element (null when idle).
+   * Created by _createGhost(), positioned via CSS transform,
+   * destroyed by _destroyGhost(). Provides drop-shadow and CSS
+   * animation support that the canvas ghost cannot.
+   */
+  var _ghostEl = null;
+
+  /**
    * Transfer log (exposed for testing).
    * Array of { from, to, payload, timestamp, accepted }
    */
@@ -79,6 +87,94 @@ var DragDrop = (function () {
    * Used to suppress click handlers that would interfere.
    */
   var _lastPointerSessionEnd = 0;
+
+  // ── DOM Ghost Lifecycle ──────────────────────────────────────────
+
+  /**
+   * Create the DOM ghost element and append to document.body.
+   * Uses .drag-ghost from inventory-drag.css for drop-shadow,
+   * transitions, and animation hooks.
+   *
+   * @param {string} emoji   Emoji to display (font-size set by CSS)
+   * @param {string} [label] Small label below the emoji
+   * @param {number} cx      Initial clientX (viewport coords)
+   * @param {number} cy      Initial clientY (viewport coords)
+   */
+  function _createGhost(emoji, label, cx, cy) {
+    _destroyGhost(); // Ensure clean slate
+
+    var el = document.createElement('div');
+    el.className = 'drag-ghost';
+    el.textContent = emoji || '\uD83D\uDCE6';
+    el.style.left = '0px';
+    el.style.top = '0px';
+    el.style.transform = 'translate(' + cx + 'px, ' + cy + 'px) translate(-50%, -50%)';
+
+    // Label sub-element
+    if (label) {
+      var lbl = document.createElement('span');
+      lbl.className = 'drag-ghost-label';
+      lbl.textContent = label;
+      el.appendChild(lbl);
+    }
+
+    // Price tag (hidden by default, shown via showGhostPrice)
+    var price = document.createElement('span');
+    price.className = 'drag-ghost-price';
+    el.appendChild(price);
+
+    document.body.appendChild(el);
+    _ghostEl = el;
+  }
+
+  /**
+   * Move the DOM ghost to follow the pointer.
+   * Uses transform for GPU-accelerated positioning.
+   *
+   * @param {number} cx  clientX (viewport coords)
+   * @param {number} cy  clientY (viewport coords)
+   */
+  function _moveGhost(cx, cy) {
+    if (!_ghostEl) return;
+    _ghostEl.style.transform = 'translate(' + cx + 'px, ' + cy + 'px) translate(-50%, -50%)';
+  }
+
+  /**
+   * Remove the DOM ghost from the document.
+   */
+  function _destroyGhost() {
+    if (_ghostEl) {
+      if (_ghostEl.parentNode) _ghostEl.parentNode.removeChild(_ghostEl);
+      _ghostEl = null;
+    }
+  }
+
+  /**
+   * Show a price tag above the ghost emoji.
+   * Called by zone onHover callbacks when hovering a commerce zone.
+   *
+   * @param {string} text   Price text (e.g. "-5g", "+3g")
+   * @param {string} type   'buy' or 'sell' — sets color class
+   */
+  function showGhostPrice(text, type) {
+    if (!_ghostEl) return;
+    var priceEl = _ghostEl.querySelector('.drag-ghost-price');
+    if (!priceEl) return;
+    priceEl.textContent = text;
+    priceEl.className = 'drag-ghost-price visible price-' + (type || 'buy');
+  }
+
+  /**
+   * Hide the price tag on the ghost.
+   * Called by zone onLeave callbacks.
+   */
+  function hideGhostPrice() {
+    if (!_ghostEl) return;
+    var priceEl = _ghostEl.querySelector('.drag-ghost-price');
+    if (!priceEl) return;
+    priceEl.className = 'drag-ghost-price';
+    priceEl.textContent = '';
+  }
 
   // ── Init ─────────────────────────────────────────────────────────
 
@@ -177,12 +273,17 @@ var DragDrop = (function () {
    * Start a drag programmatically from a consumer module.
    *
    * @param {object} payload    { type, zone, index, data }
-   * @param {object} opts       { ghostEmoji, ghostLabel, ghostColor, sourceZone, onCancel }
-   * @param {number} x          Pointer x at drag start
-   * @param {number} y          Pointer y at drag start
+   * @param {object} opts       { ghostEmoji, ghostLabel, ghostColor, sourceZone, onCancel, clientX, clientY }
+   * @param {number} x          Pointer x at drag start (canvas-local)
+   * @param {number} y          Pointer y at drag start (canvas-local)
    */
   function beginDrag(payload, opts, x, y) {
     if (_drag) cancelDrag();
+
+    var cX = (opts && opts.clientX != null) ? opts.clientX : 0;
+    var cY = (opts && opts.clientY != null) ? opts.clientY : 0;
+    var emoji = (opts && opts.ghostEmoji) || '\uD83D\uDCE6';
+    var label = (opts && opts.ghostLabel) || '';
 
     _drag = {
       payload:    payload,
@@ -190,24 +291,36 @@ var DragDrop = (function () {
       startY:     y,
       curX:       x,
       curY:       y,
+      clientX:    cX,
+      clientY:    cY,
       started:    true,  // Programmatic drags skip dead zone
       pointerId:  null,
-      ghostEmoji: (opts && opts.ghostEmoji) || '📦',
-      ghostLabel: (opts && opts.ghostLabel) || '',
+      ghostEmoji: emoji,
+      ghostLabel: label,
       ghostColor: (opts && opts.ghostColor) || '#fff',
       sourceZone: (opts && opts.sourceZone) || '',
       hoverZone:  null,
       onCancel:   (opts && opts.onCancel) || null
     };
+
+    // Create DOM ghost immediately (programmatic drags skip dead zone)
+    _createGhost(emoji, label, cX, cY);
   }
 
   /**
    * Update drag position externally (if not using pointer capture).
+   * @param {number} x         Canvas-local X
+   * @param {number} y         Canvas-local Y
+   * @param {number} [clientX] Viewport X (for DOM ghost)
+   * @param {number} [clientY] Viewport Y (for DOM ghost)
    */
-  function updateDragPos(x, y) {
+  function updateDragPos(x, y, clientX, clientY) {
     if (!_drag) return;
     _drag.curX = x;
     _drag.curY = y;
+    if (clientX != null) _drag.clientX = clientX;
+    if (clientY != null) _drag.clientY = clientY;
+    _moveGhost(_drag.clientX, _drag.clientY);
     _updateHover(x, y);
   }
 
@@ -231,6 +344,7 @@ var DragDrop = (function () {
       _zones[_drag.hoverZone].onLeave(_zones[_drag.hoverZone]);
     }
     if (_drag.onCancel) _drag.onCancel();
+    _destroyGhost();
     _drag = null;
   }
 
@@ -273,6 +387,8 @@ var DragDrop = (function () {
           startY:     y,
           curX:       x,
           curY:       y,
+          clientX:    e.clientX,
+          clientY:    e.clientY,
           started:    false,  // Wait for dead zone
           pointerId:  e.pointerId || null,
           ghostEmoji: payload.emoji || (payload.data && payload.data.emoji) || '\uD83D\uDCE6',
@@ -298,15 +414,23 @@ var DragDrop = (function () {
 
     _drag.curX = x;
     _drag.curY = y;
+    _drag.clientX = e.clientX;
+    _drag.clientY = e.clientY;
 
     if (!_drag.started) {
       var dx = x - _drag.startX;
       var dy = y - _drag.startY;
       if (Math.sqrt(dx * dx + dy * dy) >= DEAD_ZONE) {
         _drag.started = true;
+        // Create DOM ghost on dead-zone crossing (matches 12px EyesOnly pattern
+        // at DEAD_ZONE=4 canvas px — close enough for DG's viewport scale)
+        _createGhost(_drag.ghostEmoji, _drag.ghostLabel, e.clientX, e.clientY);
       }
       return;
     }
+
+    // Move DOM ghost to follow pointer
+    _moveGhost(e.clientX, e.clientY);
 
     _updateHover(x, y);
   }
@@ -429,6 +553,7 @@ var DragDrop = (function () {
       _drag.onCancel();
     }
 
+    _destroyGhost();
     _drag = null;
   }
 
@@ -590,6 +715,11 @@ var DragDrop = (function () {
     // Rendering
     render:          render,
     renderDebug:     renderDebug,
+
+    // DOM ghost helpers (for zone callbacks)
+    showGhostPrice:  showGhostPrice,
+    hideGhostPrice:  hideGhostPrice,
+    getGhostEl:      function () { return _ghostEl; },
 
     // Logging / testing
     getTransferLog:  getTransferLog,

@@ -100,7 +100,7 @@ var MenuFaces = (function () {
 
     // Rarity
     if (it.rarity) {
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.fillStyle = INV_RARITY_COL[it.rarity] || COL.dim;
       ctx.fillText(it.rarity.toUpperCase(), tx + 6, cy);
       cy += 12;
@@ -109,7 +109,7 @@ var MenuFaces = (function () {
     if (isCard) {
       // Suit + power
       var suit = it.suit || '';
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.fillStyle = INV_SUIT_COLOR[suit] || COL.dim;
       ctx.fillText((INV_SUIT_EMOJI[suit] || '') + ' ' + suit, tx + 6, cy);
       ctx.fillStyle = COL.text;
@@ -121,7 +121,7 @@ var MenuFaces = (function () {
 
     // Description (truncated)
     if (it.description) {
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.fillStyle = COL.dim;
       var desc = it.description;
       if (desc.length > 24) desc = desc.substring(0, 23) + '\u2026';
@@ -169,7 +169,7 @@ var MenuFaces = (function () {
       ctx.fillText(emoji, x + w / 2, y + 22);
     }
     if (label) {
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = COL.dim;
       ctx.fillText(label, x + w / 2, y + h - 4);
@@ -212,7 +212,7 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText(floorLabel, x + w / 2, ty + 4);
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.fillText(depthName + ' \u2014 ' + floorId, x + w / 2, ty + 16);
     ty += 24;
 
@@ -244,7 +244,7 @@ var MenuFaces = (function () {
 
       // Corner pips (compass decoration)
       ctx.fillStyle = 'rgba(180,160,120,0.6)';
-      ctx.font = '8px monospace';
+      ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('N', mapX + mapSize / 2, mapY - 6);
       ctx.fillText('S', mapX + mapSize / 2, mapY + mapSize + 10);
@@ -256,7 +256,7 @@ var MenuFaces = (function () {
       ty = mapY + mapSize + 14;
     } else {
       ctx.fillStyle = COL.dim;
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('Map not available', x + w / 2, ty + 30);
       ty += 50;
@@ -267,7 +267,7 @@ var MenuFaces = (function () {
       var stack = Minimap.getFloorStack();
       if (stack && stack.length > 1) {
         ctx.fillStyle = COL.dim;
-        ctx.font = '9px monospace';
+        ctx.font = '12px monospace';
         ctx.textAlign = 'center';
         var breadcrumb = stack.join(' \u25B8 ');
         ctx.fillText(breadcrumb, x + w / 2, ty);
@@ -283,7 +283,7 @@ var MenuFaces = (function () {
       var tileCount = 0;
       for (var _k in explored) { if (explored.hasOwnProperty(_k)) tileCount++; }
 
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.textAlign = 'center';
 
       // Row 1: explored tiles + enemies
@@ -312,7 +312,7 @@ var MenuFaces = (function () {
     if (questText) {
       ty += 2;
       ctx.fillStyle = 'rgba(120,220,160,0.8)';
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('\u25C6 ' + questText, x + w / 2, ty);
       ty += 14;
@@ -321,7 +321,7 @@ var MenuFaces = (function () {
     // ── Time display (clock frozen while paused) ──
     if (typeof DayCycle !== 'undefined') {
       ctx.fillStyle = COL.accent;
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       var timeStr = DayCycle.getTimeString();
       var phase = DayCycle.getPhase ? DayCycle.getPhase() : '';
@@ -330,7 +330,7 @@ var MenuFaces = (function () {
 
     // ── Hint ──
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - 6);
     ctx.textAlign = 'left';
@@ -371,7 +371,7 @@ var MenuFaces = (function () {
 
     // HP bar
     ctx.fillStyle = COL.dim;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('HP', barX - 22, ty + 12);
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
@@ -380,14 +380,14 @@ var MenuFaces = (function () {
     ctx.fillStyle = hpPct > 0.6 ? COL.hp : (hpPct > 0.3 ? '#c80' : '#c44');
     ctx.fillRect(barX, ty + 2, barW * hpPct, barH);
     ctx.fillStyle = '#fff';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(ps.hp + '/' + ps.maxHp, barX + barW / 2, ty + 12);
 
     // Energy bar
     ty += 22;
     ctx.fillStyle = COL.dim;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('EN', barX - 22, ty + 12);
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
@@ -395,7 +395,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = COL.energy;
     ctx.fillRect(barX, ty + 2, barW * (ps.energy / ps.maxEnergy), barH);
     ctx.fillStyle = '#fff';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(ps.energy + '/' + ps.maxEnergy, barX + barW / 2, ty + 12);
 
@@ -449,7 +449,7 @@ var MenuFaces = (function () {
     // Hint
     ty += 16;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
                  x + w / 2, ty + 10);
   }
@@ -477,7 +477,7 @@ var MenuFaces = (function () {
       { id: 'admiralty', emoji: '🌊', label: i18n.t('faction.admiralty', 'Admiralty') }
     ];
 
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'left';
     for (var fi = 0; fi < factions.length; fi++) {
       var fd = factions[fi];
@@ -491,7 +491,7 @@ var MenuFaces = (function () {
         ctx.fillRect(x + 6, rowY - 10, w - 12, 18);
       }
 
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.fillStyle = active ? COL.accent : COL.dim;
       ctx.textAlign = 'left';
       ctx.fillText(fd.emoji + ' ' + fd.label, x + 10, rowY + 2);
@@ -527,7 +527,7 @@ var MenuFaces = (function () {
     // ── Hint ─────────────────────────────────────────────────────
     ty += 24;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.fillText(i18n.t('shop.browse_hint', '[Q/E] Browse panes   [ESC] Leave'),
                  x + w / 2, ty);
   }
@@ -538,9 +538,9 @@ var MenuFaces = (function () {
   // Shared by harvest, shop buy, shop sell — grid of clickable tiles
   // with emoji icon, name label, and optional value/price tag.
 
-  var TILE_SIZE = 56;     // px square (fits 3 across in ~230px content)
-  var TILE_GAP  = 6;      // gap between tiles
-  var TILE_RAD  = 4;      // corner radius
+  var TILE_SIZE = 72;     // px square (scaled up for readability)
+  var TILE_GAP  = 8;      // gap between tiles
+  var TILE_RAD  = 5;      // corner radius
 
   /**
    * Draw an empty placeholder tile (EyesOnly dashed-border pattern).
@@ -617,7 +617,7 @@ var MenuFaces = (function () {
     ctx.textBaseline = 'alphabetic';
 
     // Item name (truncated, below icon)
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.fillStyle = isHover ? '#fff' : COL.text;
     var name = item.name || '';
     if (name.length > 8) name = name.substring(0, 7) + '…';
@@ -657,7 +657,7 @@ var MenuFaces = (function () {
       _roundRectStroke(ctx, tx, ty, ts, ts, TILE_RAD);
       ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '8px monospace';
+      ctx.font = '11px monospace';
       ctx.fillText('SOLD', tx + ts / 2, ty + ts / 2 + 3);
     }
 
@@ -729,7 +729,7 @@ var MenuFaces = (function () {
 
     // Hint text
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('harvest.hint', 'Click to take'), x + w / 2, ty + 10);
     ty += 18;
@@ -757,7 +757,7 @@ var MenuFaces = (function () {
     var lastRow = positions.length > 0 ? positions[positions.length - 1].row : 0;
     var hintY = ty + (lastRow + 1) * (TILE_SIZE + TILE_GAP) + 8;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.fillText('[Q/E] View bag   [ESC] Leave', x + w / 2, hintY);
     ctx.textAlign = 'left';
   }
@@ -772,7 +772,7 @@ var MenuFaces = (function () {
 
     // Capacity header
     ctx.fillStyle = COL.dim;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(bag.length + ' / ' + maxBag + ' slots', x + w / 2, ty + 12);
     ty += 22;
@@ -856,7 +856,7 @@ var MenuFaces = (function () {
     ctx.textAlign = 'left';
     ctx.fillText(classEmoji + ' ' + callsign, x + 8, ty + 4);
     ctx.fillStyle = COL.dim;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'right';
     ctx.fillText(className, x + w - 8, ty + 4);
     ty += 14;
@@ -873,7 +873,7 @@ var MenuFaces = (function () {
         ty += 6;
 
         ctx.fillStyle = COL.dim;
-        ctx.font = '9px monospace';
+        ctx.font = '12px monospace';
         ctx.textAlign = 'left';
         ctx.fillText('STATUS', x + 8, ty + 6);
         ty += 12;
@@ -882,11 +882,11 @@ var MenuFaces = (function () {
           var eff = active[si];
           var isBuff = !eff.debuff;
           ctx.fillStyle = isBuff ? 'rgba(80,220,120,0.9)' : 'rgba(220,100,80,0.9)';
-          ctx.font = '10px monospace';
+          ctx.font = '13px monospace';
           ctx.textAlign = 'left';
           ctx.fillText((eff.emoji || '\u2B50') + ' ' + (eff.label || eff.id), x + 10, ty + 4);
           ctx.fillStyle = COL.dim;
-          ctx.font = '9px monospace';
+          ctx.font = '12px monospace';
           ctx.textAlign = 'right';
           var durText = eff.duration === 'permanent' ? 'permanent'
             : (typeof eff.duration === 'number' ? eff.duration + 'd' : String(eff.duration || ''));
@@ -906,7 +906,7 @@ var MenuFaces = (function () {
     ty += 8;
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('BOOKS', x + 8, ty + 6);
 
@@ -925,7 +925,7 @@ var MenuFaces = (function () {
 
     if (readBooks.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('No books read yet. Find a bookshelf!', x + w / 2, ty + 10);
     } else {
@@ -970,7 +970,7 @@ var MenuFaces = (function () {
       if (readBooks.length > maxVisible) {
         var moreY = ty + Math.ceil(maxVisible / thumbPerRow) * (thumbS + thumbGap);
         ctx.fillStyle = COL.dim;
-        ctx.font = '9px monospace';
+        ctx.font = '12px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('+' + (readBooks.length - maxVisible) + ' more', x + w / 2, moreY + 4);
       }
@@ -978,7 +978,7 @@ var MenuFaces = (function () {
 
     // ── Day/session stats ──
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     if (typeof DayCycle !== 'undefined') {
       ctx.fillText('Day ' + (DayCycle.getDay() + 1) + '  \u2022  ' + DayCycle.getTimeString(),
@@ -1016,14 +1016,14 @@ var MenuFaces = (function () {
 
     // ── Hand preview (5 slots across top) ──────────────────────
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('HAND  ' + hand.length + '/' + maxHand, x + w / 2, ty + 10);
     ty += 16;
 
-    var cardW = 36;
-    var cardH = 50;
-    var cardGap = 4;
+    var cardW = 52;
+    var cardH = 72;
+    var cardGap = 6;
     var handTotalW = 5 * cardW + 4 * cardGap;
     var handX = x + (w - handTotalW) / 2;
 
@@ -1053,7 +1053,7 @@ var MenuFaces = (function () {
 
     // ── Backup deck grid (scrollable, 4 cols) ──────────────────
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     var backupDeck = (typeof CardSystem !== 'undefined' && CardSystem.getCollection)
       ? CardSystem.getCollection() : [];
@@ -1062,7 +1062,7 @@ var MenuFaces = (function () {
 
     if (backupDeck.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.fillText('Empty — pick up cards to build your deck', x + w / 2, ty + 20);
     } else {
       var bCols = 4;
@@ -1097,7 +1097,7 @@ var MenuFaces = (function () {
       // Overflow indicator
       if (bRows > maxVisible) {
         ctx.fillStyle = COL.dim;
-        ctx.font = '8px monospace';
+        ctx.font = '11px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('▼ ' + (backupDeck.length - maxVisible * bCols) + ' more cards', x + w / 2, ty + 6);
         ty += 14;
@@ -1106,7 +1106,7 @@ var MenuFaces = (function () {
 
     // ── Bottom hint ─────────────────────────────────────────────
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('[Click] Shuttle cards  [Drag→🔥] Dispose  [Q/E] Rotate', x + w / 2, y + h - 8);
     ctx.textAlign = 'left';
@@ -1117,7 +1117,7 @@ var MenuFaces = (function () {
 
     // Stash description
     ctx.fillStyle = COL.text;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('shop.stash_desc', 'Items stored here survive death'),
                  x + w / 2, ty + 12);
@@ -1125,7 +1125,7 @@ var MenuFaces = (function () {
     // Stash grid (4×5 = 20 slots)
     var cols = 4;
     var rows = 5;
-    var slotSize = Math.min(Math.floor((w - 20) / cols), Math.floor((h - 80) / rows), 36);
+    var slotSize = Math.min(Math.floor((w - 20) / cols), Math.floor((h - 80) / rows), 52);
     var gridW = cols * (slotSize + 4);
     var gridX = x + (w - gridW) / 2;
     var gridY = ty + 24;
@@ -1173,14 +1173,14 @@ var MenuFaces = (function () {
 
     // Capacity
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(stash.length + ' / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
                  x + w / 2, gridY + rows * (slotSize + 4) + 12);
 
     // Hint
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + 24);
   }
 
@@ -1192,12 +1192,12 @@ var MenuFaces = (function () {
 
     // Currency display
     ctx.fillStyle = COL.currency;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'right';
     ctx.fillText('💰 ' + currency, x + w - 8, ty + 12);
     ctx.textAlign = 'center';
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.fillText(i18n.t('shop.buy_hint', 'Click to buy'), x + w / 2, ty + 12);
     ty += 22;
 
@@ -1258,7 +1258,7 @@ var MenuFaces = (function () {
     var lastRow = positions.length > 0 ? positions[positions.length - 1].row : 0;
     var hintY = ty + (lastRow + 1) * (TILE_SIZE + TILE_GAP) + 8;
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, hintY);
     ctx.textAlign = 'left';
   }
@@ -1288,9 +1288,12 @@ var MenuFaces = (function () {
   var EQUIP_LABELS = ['\u2694\uFE0F Weapon', '\uD83E\uDDEA Item', '\uD83D\uDD11 Key'];
 
   // ── Inventory scroll state (persists while menu is open) ──────
-  var _bagOffset  = 0;   // Bag wheel scroll offset
-  var _deckOffset = 0;   // Deck wheel scroll offset
-  var _invFocus   = 'bag'; // Which wheel has focus: 'bag' | 'deck'
+  var _bagOffset    = 0;     // Bag wheel scroll offset
+  var _deckOffset   = 0;     // Deck wheel scroll offset
+  var _invFocus     = 'bag'; // Which wheel has focus: 'bag' | 'deck'
+  var _bagExpanded  = false; // Bag expander toggled open
+  var _deckExpanded = false; // Deck expander toggled open
+  var EMPTY_COLLAPSE_THRESHOLD = 2; // Hide empties behind expander if > this many
 
   // Suit / rarity display helpers
   var INV_SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
@@ -1320,15 +1323,15 @@ var MenuFaces = (function () {
     var ps = Player.state();
 
     // Slot sizing — scale to fill content width
-    var SLOT_S   = Math.min(56, Math.floor((w - 40) / 5 - 6));  // 5 slots + gaps + chevrons
+    var SLOT_S   = Math.min(72, Math.floor((w - 40) / 5 - 6));  // 5 slots + gaps + chevrons
     var SLOT_GAP = 6;
     var SLOT_RAD = 4;
     var CHEV_W   = 18;
     var CHEV_GAP = 4;
 
     // ── Section 1: Equipped (3 across) ──────────────────────────
-    var eqSlotW = Math.min(80, Math.floor((w - 20) / 3 - 8));
-    var eqSlotH = 48;
+    var eqSlotW = Math.min(110, Math.floor((w - 20) / 3 - 8));
+    var eqSlotH = 64;
     var eqGap   = 8;
     var eqTotalW = 3 * eqSlotW + 2 * eqGap;
     var eqX = x + (w - eqTotalW) / 2;
@@ -1349,7 +1352,7 @@ var MenuFaces = (function () {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
         ctx.fillText(item.emoji || '?', sx + eqSlotW / 2, ty + 22);
-        ctx.font = '10px monospace';
+        ctx.font = '13px monospace';
         ctx.fillStyle = COL.text;
         var iName = item.name || '';
         if (iName.length > 9) iName = iName.substring(0, 8) + '\u2026';
@@ -1361,7 +1364,7 @@ var MenuFaces = (function () {
         ctx.lineWidth = 1;
         _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, SLOT_RAD);
         ctx.setLineDash([]);
-        ctx.font = '10px monospace';
+        ctx.font = '13px monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
         ctx.fillText(EQUIP_LABELS[e], sx + eqSlotW / 2, ty + eqSlotH / 2 + 3);
@@ -1455,7 +1458,7 @@ var MenuFaces = (function () {
         ctx.fillText(bagEmoji, bsx + SLOT_S / 2, ty + SLOT_S / 2 - 2);
 
         // Name below emoji
-        ctx.font = '9px monospace';
+        ctx.font = '12px monospace';
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = COL.text;
         var bName = bagItem.name || '';
@@ -1466,7 +1469,7 @@ var MenuFaces = (function () {
       }
 
       // Slot number
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = (bagFocused && bagItem) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
@@ -1498,9 +1501,9 @@ var MenuFaces = (function () {
     ctx.fillText(hand.length + '/' + maxHand, x + w, ty + 10);
     ty += 16;
 
-    var cardW = Math.min(50, Math.floor((w - 20) / 5 - 6));
+    var cardW = Math.min(68, Math.floor((w - 20) / 5 - 6));
     var cardH = Math.floor(cardW * 1.35);
-    var cardGap = 6;
+    var cardGap = 8;
     var handTotalW = 5 * cardW + 4 * cardGap;
     var handX = x + (w - handTotalW) / 2;
     var handStartY = ty;  // capture for drag zone bounds
@@ -1599,7 +1602,7 @@ var MenuFaces = (function () {
       }
 
       // Slot number
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = (deckFocused && dCard) ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.15)';
@@ -1645,7 +1648,7 @@ var MenuFaces = (function () {
 
     // ── Bottom hint ─────────────────────────────────────────────
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('[Drag] Transfer  [Q/E] Scroll  [TAB] Focus', x + w / 2, y + h - 6);
     ctx.textAlign = 'left';
@@ -1770,7 +1773,7 @@ var MenuFaces = (function () {
 
       // ── Keyboard hint ──
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '8px monospace';
+      ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
 
@@ -1782,7 +1785,7 @@ var MenuFaces = (function () {
       var gridX2 = x + (w - gridW2) / 2;
 
       ctx.fillStyle = COL.dim;
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(bag.length + ' / ' + Player.MAX_BAG + ' slots', x + w / 2, ty + 10);
       ty += 16;
@@ -1792,7 +1795,7 @@ var MenuFaces = (function () {
       _renderSlotGrid(ctx, bag, totalSlots2, cols, slotSize, gridX2, ty, rows2, 300, null);
 
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '8px monospace';
+      ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
     }
@@ -1887,18 +1890,18 @@ var MenuFaces = (function () {
 
     // Currency display
     ctx.fillStyle = COL.currency;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'right';
     ctx.fillText('💰 ' + Player.state().currency, x + w - 8, ty + 12);
     ctx.textAlign = 'center';
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.fillText(i18n.t('shop.sell_hint', 'Click to sell'), x + w / 2, ty + 12);
     ty += 20;
 
     // ── Card sell row (hand cards) ──────────────────────────────
     ctx.fillStyle = COL.dim;
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('CARDS', x + 8, ty + 8);
     ty += 12;
@@ -1954,7 +1957,7 @@ var MenuFaces = (function () {
     ty += 6;
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('SALVAGE PARTS', x + 8, ty + 8);
     if (factionId) {
@@ -1967,7 +1970,7 @@ var MenuFaces = (function () {
     if (salvageParts.length === 0) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '9px monospace';
+      ctx.font = '12px monospace';
       ctx.fillText(i18n.t('shop.no_parts', 'No salvage parts in bag'), x + w / 2, ty + 10);
     } else {
       var partPositions = _gridLayout(x, ty, w, salvageParts.length);
@@ -1994,7 +1997,7 @@ var MenuFaces = (function () {
     // Bottom hint
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     ctx.fillText('[W/S] Select   [Scroll] Adjust   [←/→] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
     ctx.textAlign = 'left';
   }
@@ -2083,7 +2086,7 @@ var MenuFaces = (function () {
       }
 
       // Label
-      ctx.font = selected ? 'bold 10px monospace' : '10px monospace';
+      ctx.font = selected ? 'bold 10px monospace' : '13px monospace';
       ctx.fillStyle = selected ? COL.accent : COL.dim;
       ctx.textAlign = 'left';
       ctx.fillText(i18n.t(def.labelKey, def.label), listX + 12, sy + 12);
@@ -2123,7 +2126,7 @@ var MenuFaces = (function () {
       // Left / right nudge hint on selected row (only show when selected)
       if (selected) {
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.font = '8px monospace';
+        ctx.font = '11px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('← / → adjust    scroll fine-tune', x + w / 2, trackY + trackH + 10);
       }
@@ -2139,7 +2142,7 @@ var MenuFaces = (function () {
     ctx.stroke();
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '10px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(
       i18n.t('settings.language', 'Language') + ':  ' +
@@ -2167,7 +2170,7 @@ var MenuFaces = (function () {
       }
 
       ctx.fillStyle = togSelected ? COL.accent : COL.dim;
-      ctx.font = '10px monospace';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'left';
       ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + 12, togY + 8);
       ctx.textAlign = 'right';
@@ -2184,7 +2187,7 @@ var MenuFaces = (function () {
     ctx.stroke();
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('CONTROLS', listX + 12, ctrlY + 6);
     ctrlY += 12;
@@ -2197,7 +2200,7 @@ var MenuFaces = (function () {
       ['1-5', 'Quick-select']
     ];
 
-    ctx.font = '8px monospace';
+    ctx.font = '11px monospace';
     for (var ci = 0; ci < controls.length; ci++) {
       var cY = ctrlY + ci * 11;
       ctx.fillStyle = 'rgba(240,208,112,0.6)';
@@ -2211,7 +2214,7 @@ var MenuFaces = (function () {
     // ── Navigation hint ───────────────────────────────────────────
     var navHintY = ctrlY + controls.length * 11 + 8;
     ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.font = '9px monospace';
+    ctx.font = '12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(
       i18n.t('settings.nav_hint', 'W/S  select   \u2190/\u2192  adjust   Q/E  leave'),
@@ -2632,8 +2635,24 @@ var MenuFaces = (function () {
       accepts: function (p) {
         return p && (p.type === 'card' || p.type === 'item');
       },
+      onHover: function () {
+        // Phase 1 — tease: fire-flicker on hover
+        if (typeof InventoryOverlay !== 'undefined') {
+          InventoryOverlay.incineratorTease();
+        }
+      },
+      onLeave: function () {
+        // Cancel tease if drag leaves without dropping
+        if (typeof InventoryOverlay !== 'undefined') {
+          InventoryOverlay.incineratorCancelTease();
+        }
+      },
       onDrop: function (p) {
         if (!p || !p.data) return false;
+        // Phase 2 — burn: scale pulse + rumble SFX
+        if (typeof InventoryOverlay !== 'undefined') {
+          InventoryOverlay.incineratorBurn();
+        }
         // Remove from source
         if (p.zone === 'hand') Player.removeFromHand(p.index);
         else if (p.zone === 'deck' && typeof CardSystem !== 'undefined') CardSystem.removeCard(p.data.id);
@@ -2648,6 +2667,11 @@ var MenuFaces = (function () {
       onTap: function () { _handleSlotTap(ZONE_INCIN, null); }
     });
     _registeredZoneIds.push(ZONE_INCIN);
+
+    // ── Mount inventory overlay (DOM companion layer) ──
+    if (typeof InventoryOverlay !== 'undefined') {
+      InventoryOverlay.mount();
+    }
 
     _dragZonesRegistered = true;
   }
@@ -2664,6 +2688,10 @@ var MenuFaces = (function () {
    * Unregister all inventory drag-drop zones.
    */
   function unregisterDragZones() {
+    // Unmount DOM overlay companion
+    if (typeof InventoryOverlay !== 'undefined') {
+      InventoryOverlay.unmount();
+    }
     if (typeof DragDrop === 'undefined') return;
     for (var i = 0; i < _registeredZoneIds.length; i++) {
       DragDrop.removeZone(_registeredZoneIds[i]);
@@ -2686,6 +2714,11 @@ var MenuFaces = (function () {
   function _storeInvLayout(layout) {
     _lastInvLayout = layout;
     _syncDragZoneBounds();
+    // Sync DOM overlay positions + combat lock check
+    if (typeof InventoryOverlay !== 'undefined' && InventoryOverlay.isMounted()) {
+      InventoryOverlay.sync(layout);
+      InventoryOverlay.updateCombatLock();
+    }
   }
 
   function _syncDragZoneBounds() {

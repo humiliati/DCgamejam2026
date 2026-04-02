@@ -3,7 +3,11 @@
  *
  * Translates high-level events (enemy proximity, card clicks,
  * chest opens) into the correct sequence of CombatEngine,
- * CardSystem, LootTables, and HUD calls.
+ * CardAuthority, CardTransfer, LootTables, and HUD calls.
+ *
+ * S0.3 REWIRE: CardSystem.getHand/drawHand/playFromHand/etc replaced
+ * with CardAuthority equivalents. Player.addCurrency → CardAuthority.addGold.
+ * Chest loot uses CardTransfer.lootToBackup/lootGold.
  *
  * Combat init sequence (adapted from EyesOnly StrCombatEngine):
  *
@@ -180,10 +184,10 @@ var CombatBridge = (function () {
     }
 
     // Draw a fresh hand
-    CardSystem.drawHand();
-    HUD.updateCards(CardSystem.getHand());
+    CardAuthority.drawHand();
+    HUD.updateCards(CardAuthority.getHand());
     if (typeof Toast !== 'undefined') {
-      var _ch = CardSystem.getHand();
+      var _ch = CardAuthority.getHand();
       var _names = [];
       for (var ci = 0; ci < _ch.length; ci++) _names.push(_ch[ci].emoji || '\uD83C\uDCA0');
       Toast.show('\uD83C\uDCA0 Combat hand: ' + _names.join(' '), 'dim');
@@ -276,7 +280,7 @@ var CombatBridge = (function () {
       // Per-turn draw from backup deck (Gone Rogue overflow cascade)
       if (CombatEngine.canDraw()) {
         var maxH = (typeof Player !== 'undefined') ? Player.MAX_HAND : 5;
-        var drawResult = CardSystem.drawWithOverflow(maxH, 0);
+        var drawResult = CardAuthority.drawWithOverflow(maxH, 0);
         CombatEngine.useDraw();
         if (drawResult.drawn) {
           HUD.showCombatLog('\uD83D\uDCE5 Drew ' + drawResult.drawn.emoji + ' ' + drawResult.drawn.name);
@@ -293,7 +297,7 @@ var CombatBridge = (function () {
         }
       }
 
-      HUD.updateCards(CardSystem.getHand());
+      HUD.updateCards(CardAuthority.getHand());
       HUD.showCombatLog(
         enemy.emoji + ' ' + enemy.name +
         ' — ' + i18n.t('combat.stack_cards', 'Stack cards, then fire!')
@@ -301,7 +305,7 @@ var CombatBridge = (function () {
 
       // Open the card fan for stacking interaction
       if (typeof CardFan !== 'undefined') {
-        CardFan.open(CardSystem.getHand(), {
+        CardFan.open(CardAuthority.getHand(), {
           onPlay: function (idx) { _onCardStackOrPlay(idx); }
         });
       }
@@ -314,7 +318,7 @@ var CombatBridge = (function () {
     if (newPhase === 'selecting') {
       // Should not normally reach here in new flow, but safety
       if (typeof CardFan !== 'undefined' && !CardFan.isOpen()) {
-        CardFan.open(CardSystem.getHand(), {
+        CardFan.open(CardAuthority.getHand(), {
           onPlay: function (idx) { _onCardStackOrPlay(idx); }
         });
       }
@@ -541,7 +545,7 @@ var CombatBridge = (function () {
    * @param {number} index - Hand slot index
    */
   function _onCardStackOrPlay(index) {
-    var hand = CardSystem.getHand();
+    var hand = CardAuthority.getHand();
     if (index < 0 || index >= hand.length) return;
     var card = hand[index];
 
@@ -605,14 +609,14 @@ var CombatBridge = (function () {
 
     // Resolve card persistence — remove expendable, keep persistent
     var partition = CardStack.partitionAfterFire();
-    CardSystem.playStack(CardStack.getStack());
+    CardAuthority.playStack(CardStack.getStack());
 
     // Close fan during resolution
     if (typeof CardFan !== 'undefined' && CardFan.isOpen()) {
       CardFan.close();
     }
 
-    HUD.updateCards(CardSystem.getHand());
+    HUD.updateCards(CardAuthority.getHand());
     HUD.updatePlayer(player);
 
     // Build log message
@@ -694,7 +698,7 @@ var CombatBridge = (function () {
 
     // Update NCH widget
     if (typeof NchWidget !== 'undefined') {
-      NchWidget.updateCombat({ cards: CardSystem.getHand(), selectedIdx: -1 });
+      NchWidget.updateCombat({ cards: CardAuthority.getHand(), selectedIdx: -1 });
     }
   }
 
@@ -709,14 +713,14 @@ var CombatBridge = (function () {
     var phase = CombatEngine.getPhase();
     if (phase !== 'selecting' && phase !== 'stacking') return;
 
-    var card = CardSystem.playFromHand(index);
+    var card = CardAuthority.removeFromHand(index);
     if (!card) return;
 
     var player = Player.state();
     var result = CombatEngine.playCard(card, player);
     if (!result) return;
 
-    HUD.updateCards(CardSystem.getHand());
+    HUD.updateCards(CardAuthority.getHand());
     HUD.updatePlayer(player);
     HUD.showCombatLog(
       card.emoji + ' ' + card.name + ' → ' + result.playerDmg + ' dmg! ' +
@@ -775,7 +779,7 @@ var CombatBridge = (function () {
 
     // Update NCH widget (hand shrank by one card)
     if (typeof NchWidget !== 'undefined') {
-      NchWidget.updateCombat({ cards: CardSystem.getHand(), selectedIdx: -1 });
+      NchWidget.updateCombat({ cards: CardAuthority.getHand(), selectedIdx: -1 });
     }
   }
 
@@ -809,10 +813,10 @@ var CombatBridge = (function () {
 
     var loot = LootTables.generateDrop('standard', floorId);
     if (loot.type === 'card' && loot.card) {
-      CardSystem.addCard(loot.card);
+      CardTransfer.lootToBackup(loot.card);
       HUD.showCombatLog('Found card: ' + loot.card.emoji + ' ' + loot.card.name);
     } else {
-      Player.addCurrency(loot.amount);
+      CardTransfer.lootGold(loot.amount);
       HUD.showCombatLog('Found ' + loot.amount + ' gold!');
     }
 

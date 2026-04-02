@@ -1,6 +1,13 @@
 /**
  * Player — owns the player entity state and direction helpers.
  *
+ * S0.3 REWIRE: All inventory state (hand, bag, stash, equipped, gold)
+ * has been moved to CardAuthority (S0.1). Player is now pure character
+ * stats + position. Inventory methods remain as thin proxy stubs that
+ * forward to CardAuthority, so un-rewired callers don't break.
+ *
+ * These proxies will be removed once all callers are migrated.
+ *
  * Single source of truth for player position, facing, stats, and
  * look offset. Other modules read/write through the public API
  * rather than holding their own copies.
@@ -18,53 +25,67 @@ var Player = (function () {
 
   // ── Debuffs ────────────────────────────────────────────────────────
   var DEBUFFS = {
-    GROGGY:     { emoji: '☁', label: 'Groggy',     walkTimeMult: 1.25 },  // -20% move speed (500ms → 625ms)
-    SORE:       { emoji: '🩹', label: 'Sore',       cleanEfficiency: -1 },  // Cleaning takes extra scrub
-    HUMILIATED: { emoji: '😳', label: 'Humiliated', narrative: true },      // NPCs react, no stat effect
-    SHAKEN:     { emoji: '💀', label: 'Shaken',     maxHpMult: 0.80 }       // -20% max HP
+    GROGGY:     { emoji: '☁', label: 'Groggy',     walkTimeMult: 1.25 },
+    SORE:       { emoji: '🩹', label: 'Sore',       cleanEfficiency: -1 },
+    HUMILIATED: { emoji: '😳', label: 'Humiliated', narrative: true },
+    SHAKEN:     { emoji: '💀', label: 'Shaken',     maxHpMult: 0.80 }
   };
 
-  // ── State ──────────────────────────────────────────────────────────
-
-  // ── Container limits ──────────────────────────────────────────────
+  // ── Container limits (kept for backward compat) ────────────────────
   var MAX_HAND    = 5;
   var MAX_BAG     = 12;
   var MAX_STASH   = 20;
-  var EQUIP_SLOTS = 3;  // 0=weapon, 1=consumable, 2=key
+  var EQUIP_SLOTS = 3;  // 0=active/weapon, 1=passive/consumable, 2=key
+
+  // ── State (NO INVENTORY — lives in CardAuthority now) ──────────────
 
   var _state = {
     x: 5, y: 5,
     dir: MC.DIR_NORTH,
-    lookOffset: 0,              // Mouse free-look offset (radians)
+    lookOffset: 0,
     hp: 10, maxHp: 10,
     energy: 5, maxEnergy: 5,
-    battery: 3, maxBattery: 10,  // ◈ Battery — powers card abilities (RPS trinity)
+    battery: 3, maxBattery: 10,
     str: 2, dex: 2, stealth: 1,
-    currency: 0,
     lastMoveDirection: 'north',
-
-    // ── Inventory containers (HUD_ROADMAP §Inventory Data Model) ──
-    hand:     [],                            // CardRef[] — max 5
-    bag:      [],                            // ItemRef[] — max 12
-    stash:    [],                            // ItemRef[] — max 20
-    equipped: [null, null, null],            // [weapon, consumable, key]
-    flags:    {},                            // Quest/dialogue flags
-    debuffs:  []                             // Array of { id: 'GROGGY', daysRemaining: 1 }
+    flags:    {},
+    debuffs:  []
   };
 
-  // Direction name table (indexed by direction constant)
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
+  var FREE_LOOK_RANGE = 32 * Math.PI / 180;
 
-  // Free-look limits
-  // ±32° (~64° total free FOV) — prevents diagonal-walk illusion
-  // Reduced from ±45° which gave too much peripheral range for a
-  // grid-locked dungeon crawler where diagonal movement isn't allowed.
-  var FREE_LOOK_RANGE = 32 * Math.PI / 180; // ±32 degrees (~0.559 rad)
+  // ── Deprecation logger ─────────────────────────────────────────────
+
+  var _warned = {};
+  function _deprecate(method) {
+    if (!_warned[method]) {
+      _warned[method] = true;
+      console.warn('[Player] DEPRECATED: ' + method + '() — use CardAuthority/CardTransfer instead');
+    }
+  }
 
   // ── Accessors ──────────────────────────────────────────────────────
 
-  /** Get raw state object (for passing to systems that need it). */
-  function state() { return _state; }
+  /**
+   * Get state object. Inventory fields are synced from CardAuthority
+   * on each call so readers get correct values.
+   *
+   * NOTE: Direct mutations to returned inventory fields (e.g.,
+   * state().currency -= X) will NOT persist — use addCurrency/
+   * spendCurrency instead. This is a known limitation of the proxy
+   * bridge; callers that mutate state() directly need rewiring.
+   */
+  function state() {
+    if (typeof CardAuthority !== 'undefined') {
+      _state.currency = CardAuthority.getGold();
+      _state.hand     = CardAuthority.getHand();
+      _state.bag      = CardAuthority.getBag();
+      _state.stash    = CardAuthority.getStash();
+      _state.equipped = CardAuthority.getEquipped();
+    }
+    return _state;
+  }
 
   function getPos()  { return { x: _state.x, y: _state.y }; }
   function getDir()  { return _state.dir; }
@@ -87,10 +108,6 @@ var Player = (function () {
   function resetLookOffset() { _state.lookOffset = 0; }
 
   // ── Direction conversion ───────────────────────────────────────────
-  // DoorContracts returns radians (atan2). We need direction indices.
-  //
-  // Radian convention: EAST=0, SOUTH=π/2, WEST=π, NORTH=-π/2 (3π/2)
-  // MC indices:        EAST=0, SOUTH=1,   WEST=2, NORTH=3
 
   function radianToDir(angle) {
     var a = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -126,21 +143,6 @@ var Player = (function () {
     _state.energy = Math.min(_state.maxEnergy, _state.energy + amount);
   }
 
-  function addCurrency(amount) {
-    _state.currency += amount;
-  }
-
-  /**
-   * Deduct currency from the player. Returns false if insufficient funds.
-   * @param {number} amount
-   * @returns {boolean}
-   */
-  function spendCurrency(amount) {
-    if (_state.currency < amount) return false;
-    _state.currency -= amount;
-    return true;
-  }
-
   function isAlive() { return _state.hp > 0; }
 
   function addBattery(amount) {
@@ -153,15 +155,12 @@ var Player = (function () {
     return true;
   }
 
-  // ── HOT (Heal-Over-Time) — from health-system.js §HOT ─────────────
-  // Food items with HOT effect call applyHOT(amount, ticks).
-  // Each player move ticks down; restores 1 HP per tick until exhausted.
+  // ── HOT (Heal-Over-Time) ──────────────────────────────────────────
 
-  var _hotAmount = 0;  // HP per tick
-  var _hotTicks  = 0;  // Ticks remaining
+  var _hotAmount = 0;
+  var _hotTicks  = 0;
 
   function applyHOT(amount, ticks) {
-    // Stack with existing HOT (take whichever is larger)
     _hotAmount = Math.max(_hotAmount, amount || 1);
     _hotTicks  = Math.max(_hotTicks, ticks || 3);
   }
@@ -175,92 +174,111 @@ var Player = (function () {
     return restored;
   }
 
-  // ── Inventory: Hand (cards) ────────────────────────────────────────
-  // CANONICAL HAND lives in CardSystem._hand.
-  // Player proxies to CardSystem so NchWidget / HUD have one source of truth
-  // (matches EyesOnly CardStateAuthority → GAMESTATE pattern).
+  // ═════════════════════════════════════════════════════════════════════
+  //  INVENTORY PROXY STUBS
+  //  Forward to CardAuthority so un-rewired callers keep working.
+  //  Each logs a one-time deprecation warning for migration tracking.
+  // ═════════════════════════════════════════════════════════════════════
+
+  // ── Currency → CardAuthority gold ──────────────────────────────────
+
+  function addCurrency(amount) {
+    _deprecate('addCurrency');
+    CardAuthority.addGold(amount);
+  }
+
+  function spendCurrency(amount) {
+    _deprecate('spendCurrency');
+    return CardAuthority.spendGold(amount);
+  }
+
+  // ── Hand (cards) → CardAuthority ───────────────────────────────────
 
   function getHand() {
-    if (typeof CardSystem !== 'undefined' && CardSystem.getHand) {
-      return CardSystem.getHand();
-    }
-    return _state.hand; // fallback if CardSystem not loaded yet
+    _deprecate('getHand');
+    return CardAuthority.getHand();
   }
 
   function addToHand(card) {
-    if (typeof CardSystem !== 'undefined' && CardSystem.pushToHand) {
-      return CardSystem.pushToHand(card);
-    }
-    if (_state.hand.length >= MAX_HAND) return false;
-    _state.hand.push(card);
-    return true;
+    _deprecate('addToHand');
+    return CardAuthority.addToHand(card);
   }
 
   function removeFromHand(index) {
-    if (typeof CardSystem !== 'undefined' && CardSystem.playFromHand) {
-      return CardSystem.playFromHand(index);
-    }
-    if (index < 0 || index >= _state.hand.length) return null;
-    return _state.hand.splice(index, 1)[0];
+    _deprecate('removeFromHand');
+    return CardAuthority.removeFromHand(index);
   }
 
-  // ── Inventory: Bag ─────────────────────────────────────────────────
+  // ── Bag → CardAuthority ────────────────────────────────────────────
 
-  function getBag()   { return _state.bag; }
+  function getBag() {
+    _deprecate('getBag');
+    return CardAuthority.getBag();
+  }
 
   function addToBag(item) {
-    if (_state.bag.length >= MAX_BAG) return false;
-    _state.bag.push(item);
-    return true;
+    _deprecate('addToBag');
+    return CardAuthority.addToBag(item);
   }
 
+  /**
+   * Remove item from bag BY ID (legacy interface).
+   * CardAuthority.removeFromBagById(id) handles the ID lookup.
+   */
   function removeFromBag(id) {
-    for (var i = 0; i < _state.bag.length; i++) {
-      if (_state.bag[i].id === id) {
-        return _state.bag.splice(i, 1)[0];
-      }
-    }
-    return null;
+    _deprecate('removeFromBag');
+    return CardAuthority.removeFromBagById(id);
   }
 
-  // ── Inventory: Stash (survives death) ──────────────────────────────
+  // ── Stash → CardAuthority ──────────────────────────────────────────
 
-  function getStash()  { return _state.stash; }
+  function getStash() {
+    _deprecate('getStash');
+    return CardAuthority.getStash();
+  }
 
   function addToStash(item) {
-    if (_state.stash.length >= MAX_STASH) return false;
-    _state.stash.push(item);
-    return true;
+    _deprecate('addToStash');
+    return CardAuthority.addToStash(item);
   }
 
+  /**
+   * Remove item from stash BY ID (legacy interface).
+   * CardAuthority doesn't have removeFromStashById, so we do the lookup here.
+   */
   function removeFromStash(id) {
-    for (var i = 0; i < _state.stash.length; i++) {
-      if (_state.stash[i].id === id) {
-        return _state.stash.splice(i, 1)[0];
+    _deprecate('removeFromStash');
+    var stash = CardAuthority.getStash();
+    for (var i = 0; i < stash.length; i++) {
+      if (stash[i] && stash[i].id === id) {
+        return CardAuthority.removeFromStash(i);
       }
     }
     return null;
   }
 
-  // ── Inventory: Equipped (3 quick-slots) ────────────────────────────
+  // ── Equipped → CardAuthority ───────────────────────────────────────
 
-  function getEquipped() { return _state.equipped; }
+  function getEquipped() {
+    _deprecate('getEquipped');
+    return CardAuthority.getEquipped();
+  }
 
   /**
    * Move an item from bag to an equipped slot.
-   * Returns the previously equipped item (or null).
+   * Proxies through CardAuthority: remove from bag, equip, swap back.
    */
   function equip(bagIndex, slot) {
+    _deprecate('equip');
     if (slot < 0 || slot >= EQUIP_SLOTS) return null;
-    if (bagIndex < 0 || bagIndex >= _state.bag.length) return null;
+    var bag = CardAuthority.getBag();
+    if (bagIndex < 0 || bagIndex >= bag.length) return null;
 
-    var item = _state.bag.splice(bagIndex, 1)[0];
-    var prev = _state.equipped[slot];
-    _state.equipped[slot] = item;
-
-    // If there was something in the slot, put it back in bag
+    var item = CardAuthority.removeFromBag(bagIndex);
+    if (!item) return null;
+    var prev = CardAuthority.equip(slot, item);
     if (prev) {
-      _state.bag.push(prev);
+      CardAuthority.addToBag(prev);
     }
     return prev;
   }
@@ -268,37 +286,35 @@ var Player = (function () {
   /**
    * Directly set an equipped slot (for DragDrop workflows where
    * the item has already been removed from its source container).
-   * Returns the previously equipped item (or null).
    */
   function equipDirect(slot, item) {
+    _deprecate('equipDirect');
     if (slot < 0 || slot >= EQUIP_SLOTS) return null;
-    var prev = _state.equipped[slot];
-    _state.equipped[slot] = item;
-    return prev;
+    return CardAuthority.equip(slot, item);
   }
 
   /**
    * Move an equipped item back to bag.
-   * Returns false if bag is full.
    */
   function unequip(slot) {
+    _deprecate('unequip');
     if (slot < 0 || slot >= EQUIP_SLOTS) return false;
-    var item = _state.equipped[slot];
+    var item = CardAuthority.getEquipSlot(slot);
     if (!item) return false;
-    if (_state.bag.length >= MAX_BAG) return false;
-
-    _state.equipped[slot] = null;
-    _state.bag.push(item);
+    if (CardAuthority.getBagSize() >= MAX_BAG) return false;
+    CardAuthority.unequip(slot);
+    CardAuthority.addToBag(item);
     return true;
   }
 
   /**
    * Use an equipped item (consumable). Applies effects, removes if consumed.
-   * Returns the item used, or null if slot is empty.
+   * This is game logic — stays in Player, reads from CardAuthority.
    */
   function useItem(slot) {
+    _deprecate('useItem');
     if (slot < 0 || slot >= EQUIP_SLOTS) return null;
-    var item = _state.equipped[slot];
+    var item = CardAuthority.getEquipSlot(slot);
     if (!item) return null;
 
     // Apply effects
@@ -307,13 +323,13 @@ var Player = (function () {
         var fx = item.effects[i];
         if (fx.type === 'hp')     heal(fx.value);
         if (fx.type === 'energy') restoreEnergy(fx.value);
-        if (fx.type === 'damage') damage(fx.value); // self-damage (poison etc.)
+        if (fx.type === 'damage') damage(fx.value);
       }
     }
 
     // Consumables are removed after use; equipment stays
     if (item.type === 'consumable') {
-      _state.equipped[slot] = null;
+      CardAuthority.unequip(slot);
     }
 
     return item;
@@ -323,52 +339,55 @@ var Player = (function () {
    * Check if the player has an item (any container).
    */
   function hasItem(id) {
-    for (var i = 0; i < _state.hand.length; i++) {
-      if (_state.hand[i].id === id) return true;
+    _deprecate('hasItem');
+    var hand = CardAuthority.getHand();
+    for (var i = 0; i < hand.length; i++) {
+      if (hand[i].id === id) return true;
     }
-    for (var j = 0; j < _state.bag.length; j++) {
-      if (_state.bag[j].id === id) return true;
+    var bag = CardAuthority.getBag();
+    for (var j = 0; j < bag.length; j++) {
+      if (bag[j].id === id) return true;
     }
     for (var k = 0; k < EQUIP_SLOTS; k++) {
-      if (_state.equipped[k] && _state.equipped[k].id === id) return true;
+      var eq = CardAuthority.getEquipSlot(k);
+      if (eq && eq.id === id) return true;
     }
     return false;
   }
 
   /**
-   * Check if the player has any item matching a type (any container).
-   * @param {string} type - Item type to match (e.g. 'key')
-   * @returns {Object|null} First matching item, or null
+   * Check if the player has any item matching a type (bag + equipped).
    */
   function hasItemType(type) {
-    for (var j = 0; j < _state.bag.length; j++) {
-      if (_state.bag[j] && _state.bag[j].type === type) return _state.bag[j];
+    _deprecate('hasItemType');
+    var bag = CardAuthority.getBag();
+    for (var j = 0; j < bag.length; j++) {
+      if (bag[j] && bag[j].type === type) return bag[j];
     }
     for (var k = 0; k < EQUIP_SLOTS; k++) {
-      if (_state.equipped[k] && _state.equipped[k].type === type) return _state.equipped[k];
+      var eq = CardAuthority.getEquipSlot(k);
+      if (eq && eq.type === type) return eq;
     }
     return null;
   }
 
   /**
    * Consume (remove) an item by ID from bag or equipped slots.
-   * Used for key items that are spent on use (e.g., boss door key).
-   * @param {string} id - Item ID to consume
-   * @returns {Object|null} The consumed item, or null if not found
    */
   function consumeItem(id) {
+    _deprecate('consumeItem');
     // Check bag first
-    for (var j = 0; j < _state.bag.length; j++) {
-      if (_state.bag[j] && _state.bag[j].id === id) {
-        return _state.bag.splice(j, 1)[0];
+    var bag = CardAuthority.getBag();
+    for (var j = 0; j < bag.length; j++) {
+      if (bag[j] && bag[j].id === id) {
+        return CardAuthority.removeFromBag(j);
       }
     }
     // Check equipped slots
     for (var k = 0; k < EQUIP_SLOTS; k++) {
-      if (_state.equipped[k] && _state.equipped[k].id === id) {
-        var item = _state.equipped[k];
-        _state.equipped[k] = null;
-        return item;
+      var eq = CardAuthority.getEquipSlot(k);
+      if (eq && eq.id === id) {
+        return CardAuthority.unequip(k);
       }
     }
     return null;
@@ -382,14 +401,9 @@ var Player = (function () {
 
   // ── Debuffs ────────────────────────────────────────────────────────
 
-  /**
-   * Apply or refresh a debuff. If already active, refresh duration to
-   * max of current/new. Apply any stat effects immediately.
-   */
   function applyDebuff(id, days) {
     if (!DEBUFFS[id]) return false;
 
-    // Check if debuff already active
     var existing = null;
     for (var i = 0; i < _state.debuffs.length; i++) {
       if (_state.debuffs[i].id === id) {
@@ -399,17 +413,12 @@ var Player = (function () {
     }
 
     if (existing) {
-      // Refresh to max of current/new duration
       existing.daysRemaining = Math.max(existing.daysRemaining, days);
     } else {
-      // Add new debuff
       _state.debuffs.push({ id: id, daysRemaining: days });
-
-      // Apply stat effects immediately (e.g., SHAKEN reduces maxHp)
       var def = DEBUFFS[id];
       if (def.maxHpMult) {
         _state.maxHp = Math.ceil(_state.maxHp * def.maxHpMult);
-        // If HP exceeds new max, cap it
         if (_state.hp > _state.maxHp) {
           _state.hp = _state.maxHp;
         }
@@ -419,30 +428,20 @@ var Player = (function () {
     return true;
   }
 
-  /**
-   * Remove a debuff by id. Reverse stat effects.
-   */
   function removeDebuff(id) {
     for (var i = 0; i < _state.debuffs.length; i++) {
       if (_state.debuffs[i].id === id) {
         var debuff = _state.debuffs.splice(i, 1)[0];
-
-        // Reverse stat effects (SHAKEN restores maxHp)
         var def = DEBUFFS[id];
         if (def.maxHpMult) {
-          // Restore maxHp by dividing by the multiplier
           _state.maxHp = Math.ceil(_state.maxHp / def.maxHpMult);
         }
-
         return debuff;
       }
     }
     return null;
   }
 
-  /**
-   * Check if a debuff is currently active.
-   */
   function hasDebuff(id) {
     for (var i = 0; i < _state.debuffs.length; i++) {
       if (_state.debuffs[i].id === id) return true;
@@ -450,44 +449,25 @@ var Player = (function () {
     return false;
   }
 
-  /**
-   * Get the debuffs array (for HUD display).
-   */
-  function getDebuffs() {
-    return _state.debuffs;
-  }
+  function getDebuffs() { return _state.debuffs; }
 
-  /**
-   * Tick debuffs (called once per day advance from DayCycle).
-   * Decrements all debuff durations. Removes expired debuffs.
-   * Returns an array of expired debuff ids (for Toast notifications).
-   */
   function tickDebuffs() {
     var expired = [];
-
     for (var i = _state.debuffs.length - 1; i >= 0; i--) {
       _state.debuffs[i].daysRemaining--;
-
       if (_state.debuffs[i].daysRemaining <= 0) {
         var id = _state.debuffs[i].id;
         removeDebuff(id);
         expired.push(id);
       }
     }
-
     return expired;
   }
 
-  /**
-   * Get cumulative walk time multiplier from all active debuffs.
-   * Returns 1.0 if no debuffs with walkTimeMult.
-   */
   function getWalkTimeMultiplier() {
-    // Delegate to StatusEffect if available (canonical source)
     if (typeof StatusEffect !== 'undefined') {
       return StatusEffect.getWalkTimeMultiplier();
     }
-    // Legacy fallback
     var mult = 1.0;
     for (var i = 0; i < _state.debuffs.length; i++) {
       var def = DEBUFFS[_state.debuffs[i].id];
@@ -498,16 +478,10 @@ var Player = (function () {
     return mult;
   }
 
-  /**
-   * Get cumulative cleaning efficiency modifier from all active debuffs.
-   * Returns 0 if no debuffs with cleanEfficiency.
-   */
   function getCleanEfficiencyMod() {
-    // Delegate to StatusEffect if available (canonical source)
     if (typeof StatusEffect !== 'undefined') {
       return StatusEffect.getCleanEfficiencyMod();
     }
-    // Legacy fallback
     var mod = 0;
     for (var i = 0; i < _state.debuffs.length; i++) {
       var def = DEBUFFS[_state.debuffs[i].id];
@@ -518,64 +492,28 @@ var Player = (function () {
     return mod;
   }
 
-  // ── Death handler ────────────────────────────────────────────────
+  // ── Death handler ──────────────────────────────────────────────────
 
   /**
-   * Handle player death — prepare inventory for scatter.
+   * Handle player death — delegates to CardAuthority.failstateWipe()
+   * which handles the 50% gold penalty, scatters hand/bag/equipped,
+   * preserves stash and Joker Vault cards.
    *
-   * Returns an object describing what was lost so the caller
-   * (CombatBridge → FloorManager) can place loot tiles.
-   * Applies 50% currency penalty.
-   *
-   * When the full inventory system is built (HUD_ROADMAP.md), this
-   * will clear hand/bag/equipped and return them as dropped items.
-   * For now it's a stub that handles currency.
+   * Returns { currency, cards, items } for scatter placement.
    */
   function onDeath() {
-    var dropped = {
-      currency: 0,
-      cards: [],
-      items: []
+    var caDropped = CardAuthority.failstateWipe();
+
+    // Remap to legacy return format (callers expect 'currency' not 'gold')
+    return {
+      currency: caDropped.gold || 0,
+      cards:    caDropped.cards || [],
+      items:    caDropped.items || []
     };
-
-    // 50% currency penalty
-    var penalty = Math.floor(_state.currency * 0.5);
-    dropped.currency = penalty;
-    _state.currency -= penalty;
-
-    // Scatter hand cards (canonical hand is in CardSystem)
-    var hand = getHand();
-    for (var c = 0; c < hand.length; c++) {
-      dropped.cards.push(hand[c]);
-    }
-    _state.hand = [];
-    // Clear CardSystem hand too (resetDeck will rebuild on respawn)
-    if (typeof CardSystem !== 'undefined' && CardSystem.resetDeck) {
-      CardSystem.resetDeck();
-    }
-
-    // Scatter bag items
-    for (var b = 0; b < _state.bag.length; b++) {
-      dropped.items.push(_state.bag[b]);
-    }
-    _state.bag = [];
-
-    // Scatter equipped items
-    for (var e = 0; e < EQUIP_SLOTS; e++) {
-      if (_state.equipped[e]) {
-        dropped.items.push(_state.equipped[e]);
-        _state.equipped[e] = null;
-      }
-    }
-
-    // Stash survives death — untouched
-
-    return dropped;
   }
 
   /**
    * Restore player to full HP/energy (used after non-lethal defeat).
-   * NOTE: Debuffs persist through rest. Only reset() clears debuffs.
    */
   function fullRestore() {
     _state.hp = _state.maxHp;
@@ -587,15 +525,15 @@ var Player = (function () {
   function reset() {
     _state.hp = _state.maxHp;
     _state.energy = _state.maxEnergy;
-    _state.currency = 0;
     _state.lookOffset = 0;
     _state.lastMoveDirection = 'north';
-    _state.hand = [];
-    _state.bag = [];
-    _state.stash = [];
-    _state.equipped = [null, null, null];
     _state.flags = {};
     _state.debuffs = [];
+
+    // Reset inventory in CardAuthority
+    if (typeof CardAuthority !== 'undefined') {
+      CardAuthority.reset();
+    }
   }
 
   // ── Public API ─────────────────────────────────────────────────────
@@ -614,38 +552,32 @@ var Player = (function () {
     damage: damage,
     spendEnergy: spendEnergy,
     restoreEnergy: restoreEnergy,
-    addCurrency: addCurrency,
-    spendCurrency: spendCurrency,
+    isAlive: isAlive,
     addBattery: addBattery,
     spendBattery: spendBattery,
-    isAlive: isAlive,
     applyHOT: applyHOT,
     tickHOT: tickHOT,
 
-    // Inventory: hand (cards)
-    getHand: getHand,
-    addToHand: addToHand,
+    // ── Inventory proxies (deprecated — use CardAuthority/CardTransfer) ──
+    addCurrency:    addCurrency,
+    spendCurrency:  spendCurrency,
+    getHand:        getHand,
+    addToHand:      addToHand,
     removeFromHand: removeFromHand,
-
-    // Inventory: bag
-    getBag: getBag,
-    addToBag: addToBag,
-    removeFromBag: removeFromBag,
-
-    // Inventory: stash (survives death)
-    getStash: getStash,
-    addToStash: addToStash,
+    getBag:         getBag,
+    addToBag:       addToBag,
+    removeFromBag:  removeFromBag,
+    getStash:       getStash,
+    addToStash:     addToStash,
     removeFromStash: removeFromStash,
-
-    // Inventory: equipped (quick-slots)
-    getEquipped: getEquipped,
-    equip: equip,
-    equipDirect: equipDirect,
-    unequip: unequip,
-    useItem: useItem,
-    hasItem: hasItem,
-    hasItemType: hasItemType,
-    consumeItem: consumeItem,
+    getEquipped:    getEquipped,
+    equip:          equip,
+    equipDirect:    equipDirect,
+    unequip:        unequip,
+    useItem:        useItem,
+    hasItem:        hasItem,
+    hasItemType:    hasItemType,
+    consumeItem:    consumeItem,
 
     // Flags
     setFlag: setFlag,
@@ -653,26 +585,26 @@ var Player = (function () {
     hasFlag: hasFlag,
 
     // Debuffs
-    applyDebuff: applyDebuff,
-    removeDebuff: removeDebuff,
-    hasDebuff: hasDebuff,
-    getDebuffs: getDebuffs,
-    tickDebuffs: tickDebuffs,
+    applyDebuff:          applyDebuff,
+    removeDebuff:         removeDebuff,
+    hasDebuff:            hasDebuff,
+    getDebuffs:           getDebuffs,
+    tickDebuffs:          tickDebuffs,
     getWalkTimeMultiplier: getWalkTimeMultiplier,
     getCleanEfficiencyMod: getCleanEfficiencyMod,
     DEBUFFS: DEBUFFS,
 
     // Lifecycle
-    onDeath: onDeath,
+    onDeath:     onDeath,
     fullRestore: fullRestore,
-    reset: reset,
+    reset:       reset,
 
-    // Constants
-    DIR_NAMES: DIR_NAMES,
+    // Constants (backward compat)
+    DIR_NAMES:       DIR_NAMES,
     FREE_LOOK_RANGE: FREE_LOOK_RANGE,
-    MAX_HAND: MAX_HAND,
-    MAX_BAG: MAX_BAG,
-    MAX_STASH: MAX_STASH,
-    EQUIP_SLOTS: EQUIP_SLOTS
+    MAX_HAND:        MAX_HAND,
+    MAX_BAG:         MAX_BAG,
+    MAX_STASH:       MAX_STASH,
+    EQUIP_SLOTS:     EQUIP_SLOTS
   };
 })();

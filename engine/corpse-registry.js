@@ -77,10 +77,7 @@ var CorpseRegistry = (function () {
       pileSeed: seed,                      // Scatter direction seed
       // Loot tracking
       lootState: LOOT_STATE.FULL,
-      // Hydration / restock slots (Phase B stub — mirrors crate system)
-      hydrationSlots: [],
-      maxHydrationSlots: 3,
-      // Reanimation
+      // Reanimation (validated via CrateSystem sealed + suit card match)
       reanimated: false,
       friendly: false,                     // When reanimated: friendly to player
       reanimHp: Math.max(1, Math.floor((enemy.maxHp || 5) * 0.5)),
@@ -181,37 +178,13 @@ var CorpseRegistry = (function () {
     return corpse.displayEmoji;
   }
 
-  // ── Hydration / Restock (Phase B stubs) ────────────────────────────
-
-  /**
-   * Add a hydration item to a corpse's restock slots.
-   * @param {number} x
-   * @param {number} y
-   * @param {string} floorId
-   * @param {Object} item - Item to add to hydration slot
-   * @returns {boolean} true if slot was available
-   */
-  function addHydration(x, y, floorId, item) {
-    var corpse = _corpses[_key(x, y, floorId)];
-    if (!corpse) return false;
-    if (corpse.hydrationSlots.length >= corpse.maxHydrationSlots) return false;
-    corpse.hydrationSlots.push(item);
-    return true;
-  }
-
-  /**
-   * Check if corpse is fully hydrated (all slots filled).
-   */
-  function isFullyHydrated(x, y, floorId) {
-    var corpse = _corpses[_key(x, y, floorId)];
-    if (!corpse) return false;
-    return corpse.hydrationSlots.length >= corpse.maxHydrationSlots;
-  }
+  // ── Reanimation ────────────────────────────────────────────────────
 
   /**
    * Reanimate a corpse as a friendly NPC.
-   * Requires the CrateSystem container to be sealed with a matching suit card.
-   * Falls back to legacy hydration slot check if CrateSystem is unavailable.
+   * Requires the CrateSystem corpse stock container to be sealed with a
+   * matched suit card. CrateSystem is the single authority for restock
+   * state — no legacy hydration path remains.
    *
    * @returns {Object|null} The reanimated entity data, or null if not ready
    */
@@ -220,23 +193,19 @@ var CorpseRegistry = (function () {
     if (!corpse) return null;
     if (corpse.reanimated) return null;
 
-    // Primary path: CrateSystem corpse stock must be sealed with suit card match
-    if (typeof CrateSystem !== 'undefined') {
-      var container = CrateSystem.getContainer(x, y, floorId);
-      if (!container || !container.sealed) return null;
-      // Check suit card slot was matched
-      var hasSuitMatch = false;
-      for (var i = 0; i < container.slots.length; i++) {
-        if (container.slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD && container.slots[i].matched) {
-          hasSuitMatch = true;
-          break;
-        }
+    // CrateSystem corpse stock must be sealed with suit card match
+    if (typeof CrateSystem === 'undefined') return null;
+    var container = CrateSystem.getContainer(x, y, floorId);
+    if (!container || !container.sealed) return null;
+
+    var hasSuitMatch = false;
+    for (var i = 0; i < container.slots.length; i++) {
+      if (container.slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD && container.slots[i].matched) {
+        hasSuitMatch = true;
+        break;
       }
-      if (!hasSuitMatch) return null;
-    } else {
-      // Legacy fallback: hydration slots
-      if (corpse.hydrationSlots.length < corpse.maxHydrationSlots) return null;
     }
+    if (!hasSuitMatch) return null;
 
     corpse.reanimated = true;
     corpse.friendly = true;
@@ -363,8 +332,6 @@ var CorpseRegistry = (function () {
     hasCorpse:        hasCorpse,
     setLootState:     setLootState,
     getDisplayEmoji:  getDisplayEmoji,
-    addHydration:     addHydration,
-    isFullyHydrated:  isFullyHydrated,
     reanimate:        reanimate,
     remove:           remove,
     clearFloor:       clearFloor,

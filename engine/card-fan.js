@@ -679,7 +679,6 @@ var CardFan = (function () {
 
     if (_inCombat() && typeof CardStack !== 'undefined') {
       var c = _cards[idx];
-      var hand = CardSystem.getHand();
 
       if (CardStack.isInStack(c.handIndex)) {
         // Tap stacked card → un-stack
@@ -806,10 +805,8 @@ var CardFan = (function () {
     _playAudio('card-snap', { volume: 0.3 });
     _buildFan();
 
-    // Notify CardSystem that hand order changed (if API exists)
-    if (typeof CardSystem !== 'undefined' && CardSystem.emitHandChanged) {
-      CardSystem.emitHandChanged();
-    }
+    // S0.3: CardAuthority events handle hand state changes reactively.
+    // Visual reorder in the fan's _hand copy is local to rendering.
   }
 
   // ── Stack change notification ───────────────────────────────────

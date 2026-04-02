@@ -2249,9 +2249,26 @@ var Game = (function () {
    */
   function _applyPickup(pickup) {
     if (pickup.type === 'gold') {
-      Player.addCurrency(pickup.amount || 1);
-      Toast.show('💰 +' + (pickup.amount || 1), 'currency');
+      var goldAmt = pickup.amount || 1;
+      // Authority path — CardTransfer.lootGold fires gold:changed event
+      if (typeof CardTransfer !== 'undefined') {
+        CardTransfer.lootGold(goldAmt);
+      } else {
+        Player.addCurrency(goldAmt);
+      }
+      Toast.show('💰 +' + goldAmt, 'currency');
       AudioSystem.playRandom('coin', { volume: 0.5 });
+      // Coin VFX — match shop sell pattern (coinRain ≥ 15, coinBurst < 15)
+      if (typeof ParticleFX !== 'undefined' && _canvas) {
+        var gcx = _canvas.width / 2;
+        var gcy = _canvas.height * 0.5;
+        if (goldAmt >= 15) {
+          ParticleFX.coinRain(gcx, gcy, goldAmt);
+        } else if (goldAmt >= 3) {
+          ParticleFX.coinBurst(gcx, gcy, Math.max(3, Math.floor(goldAmt / 2)));
+        }
+        // 1-2 gold: no VFX (too small, would feel noisy on every walk-over)
+      }
     } else if (pickup.type === 'battery') {
       Player.addBattery(pickup.amount || 1);
       Toast.show('◈ +' + (pickup.amount || 1), 'battery');
@@ -2669,8 +2686,15 @@ var Game = (function () {
     var floorId = FloorManager.getCurrentFloorId();
     var biome = FloorManager.getBiome();
 
-    // ── Reanimation check: fully hydrated corpse stands back up ──
-    if (typeof CorpseRegistry !== 'undefined' && CorpseRegistry.isFullyHydrated(fx, fy, floorId)) {
+    // ── Reanimation check: sealed corpse container stands back up ──
+    // CorpseRegistry.reanimate() validates CrateSystem seal + suit card match internally.
+    // Gate on container.sealed here so we skip the reanimate path for unsealed corpses
+    // without calling into CorpseRegistry unnecessarily.
+    var _corpseContainer = (typeof CrateSystem !== 'undefined')
+      ? CrateSystem.getContainer(fx, fy, floorId) : null;
+    var _corpseSealed = _corpseContainer && _corpseContainer.sealed;
+
+    if (typeof CorpseRegistry !== 'undefined' && _corpseSealed) {
       var reanimData = CorpseRegistry.reanimate(fx, fy, floorId);
       if (reanimData) {
         // Clear corpse tile
@@ -3261,10 +3285,27 @@ var Game = (function () {
       }
       _renderGameplay(frameDt);
 
-      // UI overlays (after world, before HUD z-layer)
+      // Post-processing pixel shaders (after world, before overlays)
       var ctx = _canvas.getContext('2d');
+      if (typeof PostProcess !== 'undefined') {
+        PostProcess.apply(ctx, _canvas.width, _canvas.height, frameDt);
+      }
+
+      // UI overlays (after post-process, before HUD z-layer)
       TransitionFX.update(frameDt);
       TransitionFX.render(ctx, _canvas.width, _canvas.height);
+
+      // Cinematic letterbox bars (after transition, before HUD)
+      if (typeof CinematicCamera !== 'undefined') {
+        CinematicCamera.tick(frameDt);
+        CinematicCamera.render(ctx, _canvas.width, _canvas.height);
+      }
+
+      // Monologue text on letterbox bars
+      if (typeof MonologuePeek !== 'undefined') {
+        MonologuePeek.tick(frameDt);
+        MonologuePeek.render(ctx, _canvas.width, _canvas.height);
+      }
 
       // Door transition text overlay (destination label + exit text)
       if (typeof DoorAnimator !== 'undefined' && DoorAnimator.isAnimating()) {
@@ -3336,7 +3377,9 @@ var Game = (function () {
     if (!floorData) return;
 
     // Poll input → drives MovementController
-    if (ScreenManager.isPlaying()) {
+    // Skip input when cinematic camera has locked controls
+    if (ScreenManager.isPlaying() &&
+        !(typeof CinematicCamera !== 'undefined' && CinematicCamera.isInputLocked())) {
       InputPoll.poll();
     }
 
