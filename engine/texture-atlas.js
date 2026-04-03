@@ -244,9 +244,7 @@ var TextureAtlas = (function () {
     // Hearth — riverrock column with fire opening (dark archway center)
     _genHearth('hearth_riverrock', {
       stoneR: 95,  stoneG: 88,  stoneB: 78,    // Warm grey-brown river stones
-      mortarR: 50, mortarG: 45, mortarB: 38,    // Dark mortar between stones
-      fireR: 180,  fireG: 80,   fireB: 20,     // Orange fire glow at opening edges
-      openR: 10,   openG: 5,    openB: 2        // Near-black fire opening
+      mortarR: 50, mortarG: 45, mortarB: 38     // Dark mortar between stones
     });
 
     // Stash — reinforced chest with iron bands and latch
@@ -271,6 +269,13 @@ var TextureAtlas = (function () {
       bracketR: 60, bracketG: 58, bracketB: 55,  // Dark iron bracket
       flameR: 240, flameG: 160, flameB: 40,      // Orange flame body
       tipR: 255,   tipG: 240,   tipB: 200        // White-yellow flame tip
+    });
+
+    // Hearth fire — flame + dragon silhouette for porthole cavity
+    _genHearthFire('decor_hearth_fire', {
+      coreR: 255, coreG: 230, coreB: 120,     // Bright yellow-white core
+      outerR: 210, outerG: 100, outerB: 25,    // Deep orange outer flame
+      dragonR: 60,  dragonG: 30,  dragonB: 15  // Dark ember dragon silhouette
     });
 
     // Iron grate — horizontal bars with gaps (dungeon vents)
@@ -1830,48 +1835,29 @@ var TextureAtlas = (function () {
     });
   }
 
-  // ── Hearth texture (riverrock masonry with arched fire opening) ──
+  // ── Hearth texture (riverrock masonry with transparent porthole) ──
+  //
+  // The porthole is alpha-transparent (a=0) so the raycaster's cavity
+  // pre-fill and cavity glow show through. This is the "sprite-inside-wall"
+  // technique: opaque stone frame → transparent porthole → dark cavity fill
+  // behind → cavity glow → fire+dragon decor sprite inside the opening.
+  // Reusable pattern for: hearth, bonfire, truck hose bay, interactive walls.
 
   function _genHearth(id, p) {
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      var S = TEX_SIZE;
-      var cx = S / 2;
+      var S = TEX_SIZE; // 64
+      var cx = S / 2;   // 32
 
-      // ── Fire opening: arched doorway shape in center ──
-      // Arch: half-ellipse top, rectangular bottom
-      var openLeft  = cx - 12;
-      var openRight = cx + 12;
-      var openTop   = 14;
-      var openBot   = S - 6;
-      var archCY    = openTop + 6;
-      var archRX    = 12;
-      var archRY    = 8;
+      // ── Fully opaque riverrock masonry ──────────────────────────
+      // The fire cavity is created by the step-fill (Doom rule) system
+      // via a negative tileHeightOffset — the lip above the displaced
+      // wall column reads as the hearth opening. No alpha porthole needed.
 
-      var inOpenX = (x >= openLeft && x <= openRight);
-      var inOpenRect = inOpenX && (y >= archCY && y <= openBot);
-
-      // Arch ellipse test
-      var dx = (x - cx) / archRX;
-      var dy = (y - archCY) / archRY;
-      var inArch = inOpenX && (y < archCY) && (dx * dx + dy * dy <= 1.0);
-
-      if (inOpenRect || inArch) {
-        // Inside the fire opening — dark with subtle fire glow at edges
-        var edgeDist = Math.min(
-          Math.abs(x - openLeft), Math.abs(x - openRight),
-          Math.abs(y - openBot), inArch ? 2 : Math.abs(y - archCY)
-        );
-        var glowFade = Math.max(0, 1 - edgeDist / 5);
-        var flicker = (_hash(x + 900, y + 901) - 0.5) * 30 * glowFade;
-        return {
-          r: _clamp(p.openR + p.fireR * glowFade + flicker),
-          g: _clamp(p.openG + p.fireG * glowFade * 0.4 + flicker * 0.3),
-          b: _clamp(p.openB + p.fireB * glowFade * 0.1)
-        };
-      }
+      // ── Soot gradient — darkens toward the top (chimney staining) ──
+      var sootBlend = Math.max(0, 1 - y / (S * 0.25));
+      var sootDarken = 1 - sootBlend * sootBlend * 0.4;
 
       // ── Riverrock masonry — irregular rounded stones ──
-      // Use offset grid to create interlocking stone pattern
       var stoneW = 10;
       var stoneH = 7;
       var rowOff = (Math.floor(y / stoneH) % 2 === 0) ? 0 : stoneW / 2;
@@ -1884,9 +1870,9 @@ var TextureAtlas = (function () {
       if (localX < 1 || localX >= stoneW - 1 || localY < 1 || localY >= stoneH - 1) {
         var mNoise = (_hash(x + 1000, y + 1001) - 0.5) * 6;
         return {
-          r: _clamp(p.mortarR + mNoise),
-          g: _clamp(p.mortarG + mNoise * 0.8),
-          b: _clamp(p.mortarB + mNoise * 0.6)
+          r: _clamp((p.mortarR + mNoise) * sootDarken),
+          g: _clamp((p.mortarG + mNoise * 0.8) * sootDarken),
+          b: _clamp((p.mortarB + mNoise * 0.6) * sootDarken)
         };
       }
 
@@ -1896,13 +1882,13 @@ var TextureAtlas = (function () {
       var edgeX = Math.min(localX - 1, stoneW - 2 - localX) / (stoneW / 2 - 1);
       var edgeY = Math.min(localY - 1, stoneH - 2 - localY) / (stoneH / 2 - 1);
       var edgeDarken = Math.min(edgeX, edgeY);
-      edgeDarken = 0.7 + 0.3 * Math.min(1, edgeDarken * 2); // Rounded falloff
+      edgeDarken = 0.7 + 0.3 * Math.min(1, edgeDarken * 2);
       var pixN = (_hash(x + 1100, y + 1101) - 0.5) * 8;
 
       return {
-        r: _clamp((p.stoneR + stoneHue) * edgeDarken + pixN),
-        g: _clamp((p.stoneG + stoneHue * 0.6) * edgeDarken + pixN * 0.8),
-        b: _clamp((p.stoneB + stoneHue * 0.3) * edgeDarken + pixN * 0.6)
+        r: _clamp((p.stoneR + stoneHue) * edgeDarken * sootDarken + pixN),
+        g: _clamp((p.stoneG + stoneHue * 0.6) * edgeDarken * sootDarken + pixN * 0.8),
+        b: _clamp((p.stoneB + stoneHue * 0.3) * edgeDarken * sootDarken + pixN * 0.6)
       };
     });
   }
@@ -1966,6 +1952,77 @@ var TextureAtlas = (function () {
       }
 
       return { r: 0, g: 0, b: 0, a: 0 }; // transparent
+    });
+  }
+
+  /** Hearth fire — flame composition with dragon silhouette for porthole.
+   *  Renders inside the transparent porthole of hearth_riverrock via the
+   *  wall decor system. Larger and rounder than decor_torch (fills the
+   *  elliptical porthole). This is the canonical "sprite-inside-wall" fire
+   *  sprite — reusable for any cavity that needs visible fire. */
+  function _genHearthFire(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE; // 32
+      var cx = S / 2;     // 16
+      var cy = S * 0.48;  // ~15, slightly above center
+
+      // ── Flame envelope: oval shape filling most of the sprite ──
+      var fRX = S * 0.42; // ~13.4 — fills porthole width
+      var fRY = S * 0.46; // ~14.7 — slightly taller than wide
+      var fdx = (x - cx) / fRX;
+      var fdy = (y - cy) / fRY;
+
+      // Flame tapers at top: pinch the horizontal radius for upper pixels
+      var taperFactor = y < cy ? (1 - Math.pow(1 - y / cy, 1.5) * 0.55) : 1.0;
+      fdx = fdx / taperFactor;
+      var flameDist = fdx * fdx + fdy * fdy;
+
+      if (flameDist > 1.0) {
+        return { r: 0, g: 0, b: 0, a: 0 }; // transparent outside flame
+      }
+
+      // ── Dragon silhouette: small dark shape in the center ──
+      // Crude whelp-shaped mask: oval body + triangular wing hints
+      var drX = (x - cx) / 4.5;  // small body
+      var drY = (y - cy - 1) / 3.5;
+      var drDist = drX * drX + drY * drY;
+      // Wing extensions (triangular)
+      var wingL = (x < cx - 2 && y > cy - 2 && y < cy + 2) ?
+        Math.max(0, 1 - Math.abs(x - (cx - 5)) / 3 - Math.abs(y - cy) / 3) : 0;
+      var wingR = (x > cx + 2 && y > cy - 2 && y < cy + 2) ?
+        Math.max(0, 1 - Math.abs(x - (cx + 5)) / 3 - Math.abs(y - cy) / 3) : 0;
+      var isDragon = (drDist < 1.0) || (wingL > 0.3) || (wingR > 0.3);
+
+      // ── Fire color gradient ──
+      // Core (center-bottom): bright yellow-white
+      // Middle: warm orange
+      // Outer edge: deep red-orange
+      // Dragon silhouette: dark ember with subtle red glow
+      var edgeFade = Math.sqrt(flameDist); // 0=center, 1=edge
+      var heightFade = Math.max(0, (y - 2) / (S - 4)); // 0=top, 1=bottom
+      var coreness = (1 - edgeFade) * (0.4 + 0.6 * heightFade);
+      coreness = coreness * coreness; // sharpen the core
+
+      var fn = (_hash(x + 8800, y + 8801) - 0.5) * 20; // noise
+
+      if (isDragon) {
+        // Dragon: dark red-brown ember with shimmer potential
+        return {
+          r: _clamp(p.dragonR + fn * 0.5),
+          g: _clamp(p.dragonG + fn * 0.3),
+          b: _clamp(p.dragonB + fn * 0.2),
+          a: _clamp(200 + fn)
+        };
+      }
+
+      // Flame pixels
+      var flameA = _clamp(255 * (1 - edgeFade * edgeFade * 0.3)); // slight fade at edge
+      return {
+        r: _clamp(p.outerR + (p.coreR - p.outerR) * coreness + fn),
+        g: _clamp(p.outerG + (p.coreG - p.outerG) * coreness + fn * 0.6),
+        b: _clamp(p.outerB + (p.coreB - p.outerB) * coreness + fn * 0.2),
+        a: flameA
+      };
     });
   }
 
@@ -2315,9 +2372,17 @@ var TextureAtlas = (function () {
   // Low cylindrical wall for the 0.3× bonfire tile. Riverrock masonry
   // with soot blackening at top and inner fire glow along the upper edge.
 
+  // Bonfire ring texture with alpha-transparent porthole (sprite-inside-wall).
+  // The porthole lets the raycaster's cavity pre-fill and cavity glow show
+  // Bonfire stone ring — fully opaque riverrock masonry. The fire cavity
+  // is created by the step-fill (Doom rule) system via a negative
+  // tileHeightOffset — the lip above the displaced wall reads as the
+  // campfire opening. No alpha porthole needed.
+
   function _genBonfireRing(id, p) {
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      var S = TEX_SIZE;
+      var S = TEX_SIZE; // 64
+      var cx = S / 2;   // 32
 
       // Soot gradient — darkens toward the top (y=0 = top of wall)
       var sootBlend = Math.max(0, 1 - y / (S * 0.35)); // 0 at bottom, 1 at top

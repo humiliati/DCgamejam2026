@@ -227,6 +227,7 @@ var SpatialContract = (function () {
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights:  opts.tileWallHeights || {
+        1:  2.5,    // WALL — extends above ceiling plane for close-up immersion
         18: 0.3,    // BONFIRE — low stone ring
         36: 0.6     // TERMINAL — desk height, CRT screen above
       },

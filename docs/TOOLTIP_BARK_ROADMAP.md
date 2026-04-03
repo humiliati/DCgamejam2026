@@ -98,6 +98,27 @@ now also applied to StatusBar HTML entries.
 
 ---
 
+## S8. Cinematic Camera / Tooltip Coordination (2026-04-03)
+
+**Shipped.** `StatusBar.setCinematicMode(cinemaActive, monologueActive, barPx)`
+handles three-state coordination between CinematicCamera, MonologuePeek, and
+the tooltip footer:
+
+- **Monologue active → tooltip hidden** (canvas-rendered text on bars must be readable)
+- **Cinema active, no monologue → tooltip visible, lifted above bottom bar** (dialogue choices clickable)
+- **Neither → normal positioning**
+
+Called every frame from the game render loop after MonologuePeek.render().
+See EYESONLYS_TOOLTIP_SPACE_CANON.md §Cinematic Camera / Tooltip Mutual Exclusivity
+for the full state matrix and per-preset behavior table.
+
+**Key constraint:** Never require player clicks on hidden elements. Monologue
+sequences must complete before interactive dialogue choices appear. If a
+cinematic preset needs `pushDialogue()`, it must NOT coincide with active
+monologue rendering.
+
+---
+
 ## What Shipped (Jam Scope)
 
 ### S1. Toast -> StatusBar Bridge

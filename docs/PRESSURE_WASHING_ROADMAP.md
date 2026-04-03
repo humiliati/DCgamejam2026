@@ -435,7 +435,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 ### Phase PW-2: Hose State + Truck Spawn (2.5h)
 
 1. `hose-state.js` — attach/detach, path recording, kink detection, energy drain calc, building validation
-2. `cleaning-truck.js` — hero day spawn logic, TRUCK/TRUCK_HOSE tiles, bobbing 🧵 sprite (BonfireSprites pattern)
+2. `cleaning-truck.js` — hero day spawn logic, TRUCK/TRUCK_HOSE tiles, bobbing 🧵 sprite inside truck panel using the **sprite-inside-wall technique** (see LIGHT_AND_TORCH_ROADMAP §2.5a): alpha-transparent cutout in `truck_panel` texture + cavity pre-fill + hose decor sprite with faint blue-white glow when pressurized
 3. `hose-peek.js` — interaction prompt, attach confirmation
 4. `tiles.js` + `interact-prompt.js` updates
 5. Wire `MC.onMoveFinish` → `HoseState.recordStep` in game.js

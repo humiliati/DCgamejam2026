@@ -1481,14 +1481,7 @@
       flex-shrink: 0;
       position: relative;
     }
-    /* When dialogue is active, the latest row wraps and grows */
-    .sb-tooltip-latest.sb-dialogue-mode {
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      max-height: none;
-      padding-right: 10px;
-    }
+    /* (sb-dialogue-mode removed — dialogue now renders in history panel) */
     /* ── History panel (inline within tooltip area, above latest row) ── */
     .sb-tooltip-history {
       max-height: 0;
@@ -1505,7 +1498,6 @@
     #status-bar.sb-expanded .sb-tooltip-history {
       max-height: 320px;
       padding: 4px 16px;
-      border-top: 1px solid rgba(107,91,74,0.15);
       flex: 1;
     }
     /* Hide preview rows when expanded (full history replaces them) */
@@ -1526,10 +1518,13 @@
     .sb-tooltip-history::-webkit-scrollbar-track { background: rgba(107,91,74,0.08); }
     .sb-tooltip-entry {
       padding: 2px 0;
-      border-bottom: 1px solid rgba(107,91,74,0.08);
       display: flex;
       align-items: baseline;
       gap: 6px;
+    }
+    /* Single rule between entries — only top border on non-first entries */
+    .sb-tooltip-entry + .sb-tooltip-entry {
+      border-top: 1px solid rgba(107,91,74,0.08);
     }
     .sb-tooltip-entry .sb-tt-time {
       font-size: 13px;
@@ -1542,10 +1537,17 @@
       flex: 1;
       font-size: 15px;
     }
-    /* New entries are darker ink */
-    .sb-tooltip-entry:first-child {
+    /* Newest entry (bottom of panel) is prominent — bold, bigger font */
+    .sb-tooltip-entry:last-child,
+    .sb-tooltip-entry-current {
+      font-size: 16px;
+      font-weight: 600;
       color: var(--ink);
     }
+    /* Older entries fade progressively upward */
+    .sb-tooltip-entry:nth-last-child(2) { opacity: 0.85; }
+    .sb-tooltip-entry:nth-last-child(3) { opacity: 0.7; }
+    .sb-tooltip-entry:nth-last-child(n+4) { opacity: 0.55; }
     /* Category color dots for scannable history */
     .sb-tooltip-entry .sb-tt-cat {
       display: inline-block;
@@ -1567,7 +1569,6 @@
     /* ── Inline dialogue in tooltip (Canon Phase 1) ─────────── */
     .sb-dialogue-entry {
       padding: 5px 0;
-      border-bottom: 1px solid rgba(107,91,74,0.1);
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
@@ -1576,6 +1577,11 @@
       border-left: 3px solid var(--hazmat-yellow);
       padding-left: 8px;
       margin: 2px 0;
+    }
+    /* Active dialogue node (bottommost) — full opacity, prominent */
+    .sb-dialogue-active {
+      opacity: 1 !important;
+      font-size: 16px;
     }
     .sb-dialogue-speaker {
       font-weight: bold;

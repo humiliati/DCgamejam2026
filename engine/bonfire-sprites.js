@@ -1,17 +1,18 @@
 /**
- * BonfireSprites — Spawns billboard tent sprite for BONFIRE tiles.
+ * BonfireSprites — Spawns dragonfire emoji billboard for BONFIRE tiles.
  *
  * When a floor is generated with BONFIRE tiles (TILES.BONFIRE = 18),
- * this module creates a tent (⛺) emoji sprite positioned at the tile center.
+ * this module creates a 🔥+🐉 dragonfire emoji sprite at the tile center.
+ * The billboard sits above the short stone ring wall (0.3× height), matching
+ * the mailbox composition pattern: opaque short wall + emoji billboard above.
  *
- * A4.5 REWORK: Fire (🔥) is now handled by the wall decor cavity glow system
- * in the raycaster — the bonfire tile renders as a 0.3× short stone ring wall
- * with a fire emoji cavity decor item and warm glow overlay. Shrubs (🌿)
- * removed — the stone ring texture reads as self-contained without them.
- * The tent billboard sits above the short wall, visible as the camp marker.
+ * The dragon emoji (🐉) renders as a translucent overlay on top of the flame
+ * via the raycaster's emojiOverlay system. This is the canonical "Dragonfire"
+ * visual — same composition on all fire source tiles, container wall varies
+ * by biome depth.
  *
  * The sprite objects are returned in the same format the raycaster
- * expects: { x, y, emoji, scale, groundLevel, facing, ... }
+ * expects: { x, y, emoji, emojiOverlay, scale, glow, ... }
  *
  * Game.js calls buildSprites(floorId) each frame in the sprite
  * compilation loop, after enemies and corpses. The result is cached
@@ -23,12 +24,24 @@ var BonfireSprites = (function () {
   'use strict';
 
   // ── Sprite config ──────────────────────────────────────────────
-  var TENT = {
-    emoji: '\u26FA',     // ⛺
-    scale: 0.50,         // Half-wall height billboard
-    offX: 0,
-    offY: 0
+  var FIRE = {
+    emoji: '\uD83D\uDD25',  // 🔥
+    scale: 0.45,             // Billboard size relative to wall height
+    glow: '#ff7830',         // Warm orange glow halo
+    glowRadius: 4            // Glow extent in world units
   };
+
+  var DRAGON_OVERLAY = {
+    emoji: '\uD83D\uDC09',  // 🐉
+    opacity: 0.40,           // Translucent — visible silhouette, fire shows through
+    scale: 1.15,             // Slightly larger than flame to frame it
+    offX: 0,
+    offY: -1                 // Nudge up slightly — dragon perches above flame center
+  };
+
+  // ── Bob animation ──────────────────────────────────────────────
+  var BOB_AMP    = 0.6;      // Gentle vertical bob amplitude (pixels)
+  var BOB_PERIOD = 1200;     // Bob cycle ms (slow flame drift)
 
   // ── Cache ───────────────────────────────────────────────────────
   var _cachedFloorId = null;
@@ -60,14 +73,19 @@ var BonfireSprites = (function () {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
         if (grid[gy][gx] === bonfireTile) {
-          // Tent billboard centered on tile
+          // Position at grid index — _renderSprites adds 0.5 to center
           _cachedSprites.push({
-            x: gx + 0.5 + TENT.offX,
-            y: gy + 0.5 + TENT.offY,
-            emoji: TENT.emoji,
-            scale: TENT.scale,
+            x: gx,
+            y: gy,
+            emoji: FIRE.emoji,
+            emojiOverlay: DRAGON_OVERLAY,
+            scale: FIRE.scale,
+            glow: FIRE.glow,
+            glowRadius: FIRE.glowRadius,
             bonfire: true,
-            bonfireType: 'tent'
+            bonfireType: 'dragonfire',
+            noFogFade: true,
+            bobY: 0   // Set by animate() each frame
           });
         }
       }
@@ -78,19 +96,24 @@ var BonfireSprites = (function () {
 
   /**
    * Animate bonfire sprites (call each render frame).
-   * Tent is static — no animation needed after fire/shrub removal.
-   * Kept as no-op for API compatibility with Game.js call site.
+   * Gentle vertical bob for flame drift effect.
    *
    * @param {number} now — performance.now() or Date.now()
    */
   function animate(now) {
-    // No-op: tent is static. Fire flicker is now handled by
-    // Lighting.js flicker system on the bonfire light source.
+    if (_cachedSprites.length === 0) return;
+
+    var phase = (now % BOB_PERIOD) / BOB_PERIOD;
+    var offset = Math.sin(phase * Math.PI * 2) * BOB_AMP;
+
+    for (var i = 0; i < _cachedSprites.length; i++) {
+      _cachedSprites[i].bobY = offset;
+    }
   }
 
   /**
    * Get the animated world X for a sprite (accounts for sway).
-   * Returns 0 — tent doesn't sway.
+   * Returns 0 — fire doesn't sway horizontally.
    */
   function getAnimatedX(sprite) {
     return 0;

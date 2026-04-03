@@ -719,13 +719,18 @@ var NpcSystem = (function () {
 
     switch (npc.npcType) {
       case TYPES.AMBIENT:
-        // Ambient NPCs don't advertise interaction, but if somehow
-        // activated, fire a bark rather than silently doing nothing.
+        // OK-interact on AMBIENT NPCs cycles their bark pool into the
+        // tooltip footer. Speech capsule plays briefly then fades.
+        if (typeof KaomojiCapsule !== 'undefined') {
+          KaomojiCapsule.startSpeech(npc.id, 'speaking');
+        }
         if (npc.barkPool && typeof BarkLibrary !== 'undefined') {
           BarkLibrary.fire(npc.barkPool, { style: 'bubble' });
         }
-        // Release after short delay (ambient barks are brief)
-        setTimeout(function () { _releaseTalk(npc); }, SPEECH_CAPSULE_MS);
+        setTimeout(function () {
+          if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+          _releaseTalk(npc);
+        }, SPEECH_CAPSULE_MS);
         break;
 
       case TYPES.INTERACTIVE:
@@ -743,10 +748,11 @@ var NpcSystem = (function () {
         break;
 
       case TYPES.DISPATCHER:
-        // Dispatcher interactions are handled by game.js _onBump() via
-        // BarkLibrary cascade. On direct interact (player presses OK while
-        // facing a stationary Dispatcher), fire the nudge pool if intro spent.
-        if (typeof BarkLibrary !== 'undefined') {
+        // Dispatchers with dialogue trees use the inline tooltip system
+        // (same as INTERACTIVE). Falls back to bark cascade if no tree.
+        if (_trees[npc.id]) {
+          _interactInteractive(npc);
+        } else if (typeof BarkLibrary !== 'undefined') {
           var introPool = 'npc.dispatcher.gate.intro';
           var b = BarkLibrary.hasPool(introPool) ? BarkLibrary.fire(introPool) : null;
           if (!b) {
@@ -792,42 +798,21 @@ var NpcSystem = (function () {
     }
 
     // ── Dialogue tree path ─────────────────────────────────────────
-    // OoT-style lock-on: smooth freelook pan to NPC + letterbox bars.
-    // DialogBox.moveLocked() blocks movement input. The speech capsule
-    // persists continuously until the tree closes.
+    // Renders inline in the StatusBar tooltip footer per
+    // EYESONLYS_TOOLTIP_SPACE_CANON. No canvas overlay, no camera lock,
+    // no letterbox bars — player retains free-look but tile traversal
+    // and facing changes are blocked by StatusBar.isDialogueActive().
     var tree = _trees[npc.id];
-    if (tree && typeof DialogBox !== 'undefined') {
-      // Lock camera on NPC via smooth freelook pan
-      var lockYaw = _computeNpcYaw(npc);
-      if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
-        MouseLook.lockOn(lockYaw, 0);
-      }
-      // Slide in cinematic letterbox bars
-      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.start) {
-        CinematicCamera.start('npc_dialogue');
-      }
-
-      DialogBox.startConversation(
-        { id: npc.id, name: npc.name, emoji: npc.emoji },
-        tree
-      );
-
-      // Watch for dialog close to dismiss everything
-      var _pollClose = setInterval(function () {
-        if (!DialogBox.isOpen()) {
-          clearInterval(_pollClose);
+    if (tree && typeof StatusBar !== 'undefined' && StatusBar.pushDialogue) {
+      StatusBar.pushDialogue(
+        { id: npc.id, name: npc.name, emoji: npc.emoji, x: npc.x, y: npc.y },
+        tree,
+        function () {
+          // onEnd callback — conversation finished or interrupted
           if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
-          // Release camera lock (smooth decay back to mouse position)
-          if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) {
-            MouseLook.releaseLock();
-          }
-          // Slide out letterbox bars
-          if (typeof CinematicCamera !== 'undefined' && CinematicCamera.close) {
-            CinematicCamera.close();
-          }
           _releaseTalk(npc);
         }
-      }, 200);
+      );
       return;
     }
 
@@ -876,283 +861,231 @@ var NpcSystem = (function () {
   function _registerBuiltinPopulations() {
 
     // ── Floor 0: The Approach ──────────────────────────────────────
-    // Campground vibes: cozy NPCs hanging out by bonfires, a worker
-    // sweeping the courtyard, and an old-timer who knows things.
+    //
+    // Design intent: player spawns ALONE at (4,17) facing east. The
+    // first 10+ tiles of road are empty — eerie silence after the
+    // deploy cutscene. The first NPC encounter is around the NC/SC
+    // pod junction (~col 18). NPCs progressively reveal setting via
+    // dialogue trees: the encampment, the industries, the homelessness
+    // crisis, and one unhinged hermit ranting about pandas and dragons.
+    //
+    // ┌─ spawn buffer ─┐  ┌─ first encounters ─┐  ┌─ deep pods ─┐
+    // cols 4-12: EMPTY    cols 14-22: 2 NPCs       cols 25-37: 3 NPCs
+    //
     register('0', [
-      // ── Courtyard worker (dirt path sweeper) ──
+      // ── 1. Campfire Drifter — first NPC the player encounters ────
+      //    Sitting on the NC pod path stub (col 18, row 14) just north
+      //    of the road. Player walks right past them. Talkable.
+      //    Dialogue tree: the settlement, the environment, why people
+      //    camp here instead of going through the arch.
       {
-        id:           'floor0_worker_1',
-        type:         TYPES.AMBIENT,
-        x: 15, y: 7,
+        id:           'floor0_drifter',
+        type:         TYPES.INTERACTIVE,
+        x: 18, y: 14,
+        facing:       'south',
+        emoji:        '\uD83E\uDDD1',
+        name:         'Campfire Drifter',
+        talkable:     true,
+        barkPool:     'ambient.approach',
+        barkRadius:   4,
+        barkInterval: 30000
+      },
+      // ── 2. Laid-off Laborer — SC pod bonfire (20,25) ─────────────
+      //    Visible from the road at the SC path stub. Player can see
+      //    the bonfire glow and walk south to find them. Talkable.
+      //    Dialogue tree: the local industries, the factories behind
+      //    the facade, the homelessness crisis, who is responsible.
+      {
+        id:           'floor0_laborer',
+        type:         TYPES.INTERACTIVE,
+        x: 19, y: 25,
         facing:       'east',
-        emoji:        '\uD83E\uDDF9',
-        name:         'Groundskeeper',
-        patrolPoints: [{ x: 15, y: 7 }, { x: 24, y: 7 }],
-        stepInterval: 1400,
+        emoji:        '\uD83E\uDDD1\u200D\uD83D\uDD27',
+        name:         'Laid-off Laborer',
+        talkable:     true,
         barkPool:     'ambient.approach',
         barkRadius:   4,
         barkInterval: 22000
       },
-      // ── North-west campfire sitter ──
+      // ── 3. Unhinged Hermit — NE pod near shack (bonfire 29,11) ──
+      //    Deeper in. Player has to detour north off the road at the
+      //    NE pod gap (cols 28-29). Muttering to himself. Talkable.
+      //    Dialogue tree: incoherent rambling about pandas, dragon
+      //    elites, existential crisis, conspiracy-tinged word salad.
       {
-        id:           'floor0_camper_nw',
+        id:           'floor0_hermit',
         type:         TYPES.INTERACTIVE,
-        x: 14, y: 9,
-        facing:       'north',
-        emoji:        '\uD83E\uDDD1',
-        name:         'Resting Traveler',
-        talkable:     true,
-        dialoguePool: 'npc.approach.camper',
-        barkPool:     'ambient.approach',
-        barkRadius:   3,
-        barkInterval: 30000
-      },
-      // ── North-east campfire sitter ──
-      {
-        id:           'floor0_camper_ne',
-        type:         TYPES.AMBIENT,
-        x: 25, y: 9,
+        x: 30, y: 11,
         facing:       'west',
         emoji:        '\uD83D\uDC74',
-        name:         'Old Camper',
-        barkPool:     'ambient.approach',
-        barkRadius:   3,
-        barkInterval: 25000
-      },
-      // ── Central bonfire — stationary NPC warming hands ──
-      {
-        id:           'floor0_camper_center',
-        type:         TYPES.INTERACTIVE,
-        x: 18, y: 12,
-        facing:       'east',
-        emoji:        '\uD83E\uDDD1\u200D\uD83D\uDD27',
-        name:         'Off-duty Gleaner',
+        name:         'Raving Hermit',
         talkable:     true,
-        dialoguePool: 'npc.approach.gleaner',
         barkPool:     'ambient.approach',
         barkRadius:   4,
-        barkInterval: 20000
+        barkInterval: 18000
       },
-      // ── West campfire alcove (row 18) ──
+      // ── 4. Dozing Vagrant — SW pod near house (9,24) ─────────────
+      //    Off the beaten path. Player would have to backtrack west
+      //    and turn south. Ambient — does not have a dialogue tree,
+      //    just proximity barks. Sells the "people sleeping rough" vibe.
       {
-        id:           'floor0_camper_w',
+        id:           'floor0_vagrant',
         type:         TYPES.AMBIENT,
-        x: 5, y: 18,
-        facing:       'east',
+        x: 9, y: 24,
+        facing:       'north',
         emoji:        '\uD83E\uDDD3',
         name:         'Dozing Vagrant',
         barkPool:     'ambient.approach',
         barkRadius:   3,
         barkInterval: 35000
       },
-      // ── East campfire alcove (row 18) ──
+      // ── 5. Groundskeeper — patrols east half of road shoulder ────
+      //    Starts far from spawn (col 22), patrols east toward facade.
+      //    Ambient with proximity barks only. Sells that someone
+      //    maintains this place, barely.
       {
-        id:           'floor0_camper_e',
+        id:           'floor0_worker',
         type:         TYPES.AMBIENT,
-        x: 34, y: 18,
-        facing:       'west',
+        x: 22, y: 16,
+        facing:       'east',
+        emoji:        '\uD83E\uDDF9',
+        name:         'Groundskeeper',
+        patrolPoints: [{ x: 22, y: 16 }, { x: 35, y: 16 }],
+        stepInterval: 1400,
+        barkPool:     'ambient.approach',
+        barkRadius:   4,
+        barkInterval: 22000
+      },
+      // ── 6. Facade Loiterer — near the arch approach (37,17) ──────
+      //    Last NPC before the player enters Floor 1. Ambient barks
+      //    about the arch, the town beyond, rumors. Positioned on the
+      //    road so the player walks past on approach to the door.
+      {
+        id:           'floor0_loiterer',
+        type:         TYPES.AMBIENT,
+        x: 37, y: 17,
+        facing:       'east',
         emoji:        '\uD83D\uDC69',
-        name:         'Campfire Cook',
+        name:         'Facade Loiterer',
         barkPool:     'ambient.approach',
         barkRadius:   3,
         barkInterval: 28000
-      },
-      // ── South campfire near spawn ──
-      {
-        id:           'floor0_camper_south',
-        type:         TYPES.INTERACTIVE,
-        x: 19, y: 25,
-        facing:       'north',
-        emoji:        '\uD83E\uDDD1',
-        name:         'Waiting Operative',
-        talkable:     true,
-        dialoguePool: 'npc.approach.operative',
-        barkPool:     'ambient.approach',
-        barkRadius:   4,
-        barkInterval: 18000
       }
     ]);
 
-    // ── Floor 1: The Promenade ─────────────────────────────────────
-    // 12 NPCs: 5 faction (2 Tide, 1 Foundry, 2 Admiralty) + 7 citizen.
-    // Tide is dominant here (temple is nearby on this floor).
+    // ── Floor 1: The Promenade (50×36, E-W orientation) ──────────
+    //
+    // Low-density residential boardwalk village. 5 ambient NPCs +
+    // 1 Dispatcher who intercepts the player near the east gate
+    // and redirects them to 1.6 (Gleaner's Home) for work keys.
+    //
+    // Perimeter: tree(W) → shrub(mid) → fence(E)
+    // Buildings: Bazaar(NW), Inn(NC), Cellar(SW), Home(SC)
+    // Landmarks: Noticeboard(NE), Well(SE)
+    //
     register('1', [
-      // ── Citizens (7) ───────────────────────────────────────────
+      // ── 1. Bazaar Vendor — outside Coral Bazaar (NW pod) ─────
       {
-        id:           'floor1_citizen_1',
-        type:         TYPES.AMBIENT,
-        x: 8, y: 10,
+        id:           'floor1_bazaar_vendor',
+        type:         TYPES.INTERACTIVE,
+        x: 10, y: 10,
         facing:       'south',
-        emoji:        '🧑',
-        name:         'Townsperson',
-        patrolPoints: [{ x: 8, y: 10 }, { x: 12, y: 10 }],
-        stepInterval: 1500,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 22000
-      },
-      {
-        id:           'floor1_citizen_2',
-        type:         TYPES.AMBIENT,
-        x: 4, y: 6,
-        facing:       'east',
-        emoji:        '👩',
-        name:         'Townsperson',
-        patrolPoints: [{ x: 4, y: 6 }, { x: 4, y: 10 }],
-        stepInterval: 1300,
+        emoji:        '\uD83D\uDC69',
+        name:         'Market Vendor',
+        talkable:     true,
+        dialoguePool: 'npc.promenade.vendor',
         barkPool:     'ambient.promenade',
         barkRadius:   4,
-        barkInterval: 28000
+        barkInterval: 22000
       },
-      {
-        id:           'floor1_citizen_3',
-        type:         TYPES.AMBIENT,
-        x: 14, y: 8,
-        facing:       'west',
-        emoji:        '🧓',
-        name:         'Elder',
-        patrolPoints: [{ x: 14, y: 6 }, { x: 14, y: 11 }],
-        stepInterval: 1800,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 35000
-      },
-      {
-        id:           'floor1_citizen_4',
-        type:         TYPES.AMBIENT,
-        x: 10, y: 6,
-        facing:       'west',
-        emoji:        '👧',
-        name:         'Stall Keeper',
-        patrolPoints: [{ x: 10, y: 6 }, { x: 12, y: 6 }],
-        stepInterval: 1600,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 26000
-      },
-      {
-        id:           'floor1_citizen_5',
-        type:         TYPES.AMBIENT,
-        x: 6, y: 11,
-        facing:       'north',
-        emoji:        '🧑',
-        name:         'Dockworker',
-        patrolPoints: [{ x: 6, y: 11 }, { x: 6, y: 8 }],
-        stepInterval: 1400,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 30000
-      },
-      {
-        id:           'floor1_citizen_6',
-        type:         TYPES.AMBIENT,
-        x: 16, y: 10,
-        facing:       'south',
-        emoji:        '👴',
-        name:         'Fisherman',
-        patrolPoints: [{ x: 16, y: 10 }, { x: 16, y: 6 }],
-        stepInterval: 2000,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 40000
-      },
-      {
-        id:           'floor1_citizen_7',
-        type:         TYPES.AMBIENT,
-        x: 2, y: 8,
-        facing:       'east',
-        emoji:        '👨',
-        name:         'Lamplighter',
-        patrolPoints: [{ x: 2, y: 8 }, { x: 2, y: 4 }],
-        stepInterval: 1700,
-        barkPool:     'ambient.promenade',
-        barkRadius:   3,
-        barkInterval: 32000
-      },
-      // ── Tide Council (2) — dominant on Floor 1 ─────────────────
+      // ── 2. Tide Scholar — near Inn courtyard (NC pod) ────────
       {
         id:           'floor1_tide_1',
         type:         TYPES.AMBIENT,
-        x: 7, y: 4,
+        x: 22, y: 10,
         facing:       'south',
-        emoji:        '🧙',
+        emoji:        '\uD83E\uDDD9',
         name:         'Tide Scholar',
         role:         'tide_member',
-        patrolPoints: [{ x: 7, y: 4 }, { x: 11, y: 4 }],
+        patrolPoints: [{ x: 22, y: 10 }, { x: 26, y: 10 }],
         stepInterval: 1600,
         barkPool:     'faction.tide',
         barkRadius:   3,
         barkInterval: 25000
       },
-      {
-        id:           'floor1_tide_2',
-        type:         TYPES.AMBIENT,
-        x: 3, y: 10,
-        facing:       'north',
-        emoji:        '🧝',
-        name:         'Tide Acolyte',
-        role:         'tide_member',
-        patrolPoints: [{ x: 3, y: 10 }, { x: 7, y: 10 }],
-        stepInterval: 1400,
-        barkPool:     'faction.tide',
-        barkRadius:   3,
-        barkInterval: 28000
-      },
-      // ── The Foundry (1) ────────────────────────────────────────
+      // ── 3. Foundry Rep — near Noticeboard (NE cluster) ───────
       {
         id:           'floor1_foundry_1',
         type:         TYPES.AMBIENT,
-        x: 15, y: 6,
-        facing:       'south',
-        emoji:        '👨',
+        x: 38, y: 10,
+        facing:       'west',
+        emoji:        '\uD83D\uDC68',
         name:         'Foundry Rep',
         role:         'foundry_member',
-        patrolPoints: [{ x: 15, y: 6 }, { x: 15, y: 10 }],
+        patrolPoints: [{ x: 36, y: 10 }, { x: 40, y: 10 }],
         stepInterval: 1500,
         barkPool:     'faction.foundry',
         barkRadius:   3,
         barkInterval: 30000
       },
-      // ── The Admiralty (2) ──────────────────────────────────────
+      // ── 4. Admiralty Officer — south road arcade patrol ───────
       {
         id:           'floor1_admiralty_1',
         type:         TYPES.AMBIENT,
-        x: 12, y: 8,
-        facing:       'west',
-        emoji:        '👩',
+        x: 20, y: 22,
+        facing:       'east',
+        emoji:        '\uD83D\uDC69',
         name:         'Admiralty Officer',
         role:         'admiralty_member',
-        patrolPoints: [{ x: 12, y: 8 }, { x: 8, y: 8 }],
+        patrolPoints: [{ x: 14, y: 22 }, { x: 26, y: 22 }],
         stepInterval: 1300,
         barkPool:     'faction.admiralty',
         barkRadius:   3,
         barkInterval: 26000
       },
+      // ── 5. Lamplighter — road shoulder patrol ────────────────
       {
-        id:           'floor1_admiralty_2',
+        id:           'floor1_lamplighter',
         type:         TYPES.AMBIENT,
-        x: 17, y: 4,
-        facing:       'south',
-        emoji:        '🧑',
-        name:         'Admiralty Ensign',
-        role:         'admiralty_member',
-        patrolPoints: [{ x: 17, y: 4 }, { x: 17, y: 8 }],
-        stepInterval: 1500,
-        barkPool:     'faction.admiralty',
+        x: 30, y: 16,
+        facing:       'east',
+        emoji:        '\uD83D\uDC68',
+        name:         'Lamplighter',
+        patrolPoints: [{ x: 24, y: 16 }, { x: 38, y: 16 }],
+        stepInterval: 1700,
+        barkPool:     'ambient.promenade',
         barkRadius:   3,
         barkInterval: 32000
+      },
+      // ── 6. Dispatcher — near east gate, intercepts player ────
+      //    Positioned on the road near the east gate. When the
+      //    player approaches, the existing choreography system in
+      //    game.js triggers: rushes, grabs, dialogue tree opens.
+      //    Redirects player to 1.6 (Gleaner's Home) for keys.
+      {
+        id:           'floor1_dispatcher',
+        type:         TYPES.DISPATCHER,
+        x: 42, y: 17,
+        facing:       'west',
+        emoji:        '\uD83E\uDDD1\u200D\uD83D\uDCBC',
+        name:         'Dispatcher',
+        blocksMovement: true,
+        barkPool:     'npc.dispatcher.gate',
+        barkRadius:   5,
+        barkInterval: 15000
       }
     ]);
 
     // ── Floor 1.1: Coral Bazaar ────────────────────────────────────
     register('1.1', [
       {
-        id:           'bazaar_patron_1',
-        type:         TYPES.AMBIENT,
+        id:           'bazaar_merchant',
+        type:         TYPES.INTERACTIVE,
+        talkable:     true,
         x: 4, y: 8,
         facing:       'north',
-        emoji:        '🧑‍🤝‍🧑',
-        name:         'Market Patron',
+        emoji:        '\uD83E\uDDD1\u200D\uD83C\uDF73',
+        name:         'Coral Merchant',
         patrolPoints: [{ x: 4, y: 7 }, { x: 4, y: 9 }],
         stepInterval: 2000,
         barkPool:     'interior.bazaar',
@@ -1160,12 +1093,13 @@ var NpcSystem = (function () {
         barkInterval: 30000
       },
       {
-        id:           'bazaar_patron_2',
-        type:         TYPES.AMBIENT,
+        id:           'bazaar_archivist',
+        type:         TYPES.INTERACTIVE,
+        talkable:     true,
         x: 10, y: 8,
         facing:       'south',
-        emoji:        '🧕',
-        name:         'Market Patron',
+        emoji:        '\uD83E\uDDD3',
+        name:         'Bazaar Archivist',
         patrolPoints: [{ x: 10, y: 7 }, { x: 10, y: 9 }],
         stepInterval: 1900,
         barkPool:     'interior.bazaar',

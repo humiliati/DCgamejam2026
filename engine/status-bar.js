@@ -215,6 +215,52 @@ var StatusBar = (function () {
     if (_el) _el.style.display = 'none';
   }
 
+  // ── Cinematic / monologue coordination ─────────────────────────
+  //
+  // Three states:
+  //   1. Normal       — tooltip visible, bottom: 0
+  //   2. Monologue    — tooltip HIDDEN (canvas bar text must be readable)
+  //   3. Cinema+dlg   — tooltip VISIBLE, lifted above bar (dialogue choices clickable)
+  //
+  // setCinematicMode() is called every frame from the render loop.
+  //
+  var _cinemaState = 'normal';  // 'normal' | 'monologue' | 'cinema'
+
+  /**
+   * @param {boolean} cinemaActive  - CinematicCamera.isActive()
+   * @param {boolean} monologueActive - MonologuePeek.isActive()
+   * @param {number}  [barPx]       - CinematicCamera.getBarHeight(vpH)
+   */
+  function setCinematicMode(cinemaActive, monologueActive, barPx) {
+    var newState;
+    if (monologueActive) {
+      newState = 'monologue';
+    } else if (cinemaActive) {
+      newState = 'cinema';
+    } else {
+      newState = 'normal';
+    }
+
+    if (newState === _cinemaState) return;
+    _cinemaState = newState;
+
+    if (!_tooltipArea) return;
+
+    if (newState === 'monologue') {
+      // Hide tooltip so canvas monologue text on bars is readable
+      _tooltipArea.style.visibility = 'hidden';
+      _tooltipArea.style.transform  = '';
+    } else if (newState === 'cinema') {
+      // Tooltip visible and lifted above cinema bottom bar
+      _tooltipArea.style.visibility = '';
+      _tooltipArea.style.transform  = barPx ? 'translateY(-' + barPx + 'px)' : '';
+    } else {
+      // Normal — reset
+      _tooltipArea.style.visibility = '';
+      _tooltipArea.style.transform  = '';
+    }
+  }
+
   // ── Update methods ──────────────────────────────────────────────
 
   function updateFloor(floorNum, biome) {
@@ -352,9 +398,12 @@ var StatusBar = (function () {
     _history.unshift({ text: text, time: time, category: category });
     if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
 
-    // If dialogue is active, don't overwrite the latest line — just log
+    // If dialogue is active, log to history and rebuild — the bark appears
+    // inline above the active dialogue node in the history panel.
     if (_dialogueActive) {
       _rebuildHistory();
+      // Scroll to bottom so both the bark and active dialogue stay visible
+      if (_tooltipHistory) _tooltipHistory.scrollTop = _tooltipHistory.scrollHeight;
       return;
     }
 
@@ -443,7 +492,7 @@ var StatusBar = (function () {
    */
   function pushDialogue(npc, tree, onEnd) {
     if (!tree || !tree.nodes || !tree.root) return;
-    if (!_tooltipLatest) return;
+    if (!_tooltipHistory) return;
 
     // Cancel any pending auto-collapse
     if (_autoCollapseId) { clearTimeout(_autoCollapseId); _autoCollapseId = null; }
@@ -459,17 +508,31 @@ var StatusBar = (function () {
     // Store NPC position for walk-away detection
     _dialogueNpcPos = (npc.x != null && npc.y != null) ? { x: npc.x, y: npc.y } : null;
 
-    // Auto-expand so choices are visible
+    // Auto-expand so the history panel is visible
     _setExpanded(true);
 
-    // Add dialogue-mode class for CSS wrapping
-    if (_tooltipLatest) _tooltipLatest.classList.add('sb-dialogue-mode');
+    // Hide the latest row — dialogue lives entirely in history panel
+    if (_tooltipLatest) _tooltipLatest.style.display = 'none';
+
+    // Wire click delegation on history panel (once)
+    if (_tooltipHistory && !_tooltipHistory._dialogueWired) {
+      _tooltipHistory._dialogueWired = true;
+      _tooltipHistory.addEventListener('click', function (e) {
+        var choiceEl = e.target.closest('.sb-dialogue-choice');
+        if (!choiceEl || !_dialogueActive) return;
+        e.stopPropagation();
+        var idx = parseInt(choiceEl.getAttribute('data-choice-idx'), 10);
+        if (!isNaN(idx)) _onDialogueChoice(idx);
+      });
+    }
 
     _renderDialogueNode(tree.root);
   }
 
   /**
-   * Render a specific dialogue node into the tooltip latest area.
+   * Render a dialogue node into the history panel as the bottommost entry.
+   * The active node (with clickable choices) is always last. All prior
+   * exchanges, barks, and game tooltips appear above it chronologically.
    */
   function _renderDialogueNode(nodeId) {
     if (!_dialogueTree || !_dialogueTree.nodes) return;
@@ -480,8 +543,31 @@ var StatusBar = (function () {
     var npc = _dialogueNpc || {};
     var speaker = (npc.emoji || '') + ' ' + (npc.name || '');
 
-    // Build HTML
-    var html = '<div class="sb-dialogue-entry" data-npc="' + _escHtml(npc.id || '') + '">';
+    // Log NPC speech to history as plain text (for scroll-back after close)
+    var histText = speaker.trim() + ': \u201c' + (node.text || '') + '\u201d';
+    _history.unshift({ text: histText, time: _timestamp(), category: 'dialogue' });
+    if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
+
+    // Rebuild the full history panel — _rebuildHistory appends the active
+    // dialogue node at the bottom when _dialogueActive is true.
+    _dialogueActiveHtml = _buildDialogueNodeHtml(npc, node);
+    _rebuildHistory();
+
+    // Scroll history to bottom so the active dialogue node is visible
+    if (_tooltipHistory) {
+      _tooltipHistory.scrollTop = _tooltipHistory.scrollHeight;
+    }
+  }
+
+  // Cached HTML for the active dialogue node (appended by _rebuildHistory)
+  var _dialogueActiveHtml = '';
+
+  /**
+   * Build the HTML for a dialogue node (speaker + text + choices).
+   */
+  function _buildDialogueNodeHtml(npc, node) {
+    var speaker = (npc.emoji || '') + ' ' + (npc.name || '');
+    var html = '<div class="sb-dialogue-entry sb-dialogue-active" data-npc="' + _escHtml(npc.id || '') + '">';
     html += '<span class="sb-dialogue-speaker">' + _escHtml(speaker.trim()) + '</span>';
     html += '<span class="sb-dialogue-text">' + _escHtml(node.text || '') + '</span>';
 
@@ -496,37 +582,7 @@ var StatusBar = (function () {
       html += '</span>';
     }
     html += '</div>';
-
-    // Render into latest area (CSS class sb-dialogue-mode handles wrapping)
-    // Preserve LOG button reference before replacing innerHTML
-    if (_tooltipLatest) {
-      var logBtn = _tooltipLatest.querySelector('.sb-expand-hint');
-      _tooltipLatest.innerHTML = html;
-      // Re-append LOG button so expand still works
-      if (logBtn) _tooltipLatest.appendChild(logBtn);
-    }
-
-    // Also log to history as plain text
-    var histText = speaker.trim() + ': \u201c' + (node.text || '') + '\u201d';
-    _history.unshift({ text: histText, time: _timestamp(), category: 'dialogue' });
-    if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
-    _rebuildHistory();
-    _rebuildPreview();
-
-    // Wire click handlers (delegation)
-    if (_tooltipLatest) {
-      // Remove old listener, add fresh one
-      _tooltipLatest.onclick = function (e) {
-        var choiceEl = e.target.closest('.sb-dialogue-choice');
-        if (!choiceEl) return;
-        e.stopPropagation();
-        var idx = parseInt(choiceEl.getAttribute('data-choice-idx'), 10);
-        if (!isNaN(idx)) _onDialogueChoice(idx);
-      };
-    }
-
-    // Auto-scroll history to top so latest exchange is visible
-    if (_tooltipHistory) _tooltipHistory.scrollTop = 0;
+    return html;
   }
 
   /**
@@ -561,7 +617,7 @@ var StatusBar = (function () {
       }
     }
 
-    // Log choice to history
+    // Log player choice to history
     _history.unshift({ text: '\u25B8 ' + (choice.label || 'Continue'), time: _timestamp(), category: 'dialogue' });
     if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
 
@@ -580,16 +636,16 @@ var StatusBar = (function () {
    */
   function clearDialogue() {
     _dialogueActive = false;
+    _dialogueActiveHtml = '';
     _dialogueTree   = null;
     _dialogueNpc    = null;
     _dialogueNodeId = null;
     _dialogueNpcPos = null;
     _activePriority = PRIORITY.NORMAL;
 
+    // Restore the latest row
     if (_tooltipLatest) {
-      _tooltipLatest.classList.remove('sb-dialogue-mode');
-      _tooltipLatest.onclick = null;
-      // Restore: text + LOG button
+      _tooltipLatest.style.display = '';
       _setLatestText(_history.length > 0 ? _history[0].text : 'Ready.');
     }
 
@@ -650,20 +706,32 @@ var StatusBar = (function () {
 
   /** Rebuild history HTML (shared by pushTooltip and dialogue).
    *  Renders oldest at top, newest at bottom (closest to the current row).
-   *  History array is newest-first (via unshift), so iterate in reverse. */
+   *  History array is newest-first (via unshift), so iterate in reverse.
+   *  When dialogue is active, the active node (with choices) is appended
+   *  as the bottommost entry — all barks/tooltips appear above it. */
   function _rebuildHistory() {
     if (!_tooltipHistory) return;
     var html = '';
-    var end = _dialogueActive ? 0 : 1; // Skip index 0 unless in dialogue (latest row shows it)
+    // During dialogue: render ALL history (index 0 is the NPC's current line).
+    // Outside dialogue: skip index 0 (the latest row shows it).
+    var end = _dialogueActive ? 0 : 1;
     for (var i = _history.length - 1; i >= end; i--) {
       var h = _history[i];
       var catClass = 'sb-tt-cat-' + (h.category || 'info');
-      html += '<div class="sb-tooltip-entry">' +
+      // Last entry (i === 0, rendered last) gets prominent styling
+      var entryCls = 'sb-tooltip-entry' + (i === 0 && _dialogueActive ? ' sb-tooltip-entry-current' : '');
+      html += '<div class="' + entryCls + '">' +
               '<span class="sb-tt-cat ' + catClass + '"></span>' +
               '<span class="sb-tt-time">' + h.time + '</span>' +
               '<span class="sb-tt-text">' + _escHtml(h.text) + '</span>' +
               '</div>';
     }
+
+    // Append active dialogue node (with clickable choices) at the bottom
+    if (_dialogueActive && _dialogueActiveHtml) {
+      html += _dialogueActiveHtml;
+    }
+
     _tooltipHistory.innerHTML = html;
   }
 
@@ -764,6 +832,7 @@ var StatusBar = (function () {
     updateBag:         updateBag,
     updateDeck:        updateDeck,
     setCombat:         setCombat,
+    setCinematicMode:  setCinematicMode,
     refresh:           refresh,
     pushTooltip:       pushTooltip,
     pushDialogue:      pushDialogue,

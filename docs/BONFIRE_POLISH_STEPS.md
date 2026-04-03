@@ -1,7 +1,7 @@
 # Bonfire & Hearth — Interaction Audit & Polish Roadmap
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-02
-**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §10, §12 are expansion passes.
+**Created**: 2026-03-28 | **Updated**: 2026-04-03
+**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. §10, §12 are expansion passes.
 *** REBRANDED PLAYER FACING BONFIRE TO DRAGONFIRE ***
 ---
 
@@ -15,8 +15,8 @@ The bonfire/hearth is the game's **waypoint + stash + rest station** — the Dar
 
 | Tile | Constant | Where | Visual |
 |------|----------|-------|--------|
-| BONFIRE (18) | `TILES.BONFIRE` | Exterior floors (depth 1) | 0.3× stone ring wall + 🔥 cavity decor + warm glow + ⛺ tent billboard |
-| HEARTH (29) | `TILES.HEARTH` | Dungeon floors (depth 3+) | 1.0× riverrock column + 🔥 cavity decor + warm glow |
+| BONFIRE (18) | `TILES.BONFIRE` | Exterior floors (depth 1) | 0.3× stone ring wall + step-fill cavity (offset -0.25) + `decor_hearth_fire` in lip band + warm glow + ⛺ tent billboard |
+| HEARTH (29) | `TILES.HEARTH` | Home + Interior interiors | 1.6× riverrock column + step-fill cavity (offset -0.18) + `decor_hearth_fire` in lip band + cavity glow. See LIGHT_AND_TORCH_ROADMAP §2.5a-b. |
 | BED (28) | `TILES.BED` | Home only (Floor 1.6, pos 2,2) | BedPeek overlay — sleep/day-advance, NOT bonfire context |
 
 ### Interaction flow (game.js → HazardSystem → MenuBox)
@@ -278,3 +278,91 @@ Full contextual contracts architecture — replaces depth branching with proximi
 | §9f Warp | → engine/dialog-box.js | Confirm dialog before warp (depth-branched prompt) |
 | §9b Status | → engine/hazard-system.js | getLastRestResult() API for REST face feedback |
 | Morning Recap | → DOC-51 CINEMATIC_CAMERA | morning_recap preset now wired via MonologuePeek |
+| §13 Step-fill cavity | → LIGHT_AND_TORCH_ROADMAP §2.5a | Technique documentation, recipe for new cavity tiles |
+| §14 Unification | → engine/floor-manager.js biome data | Container texture + wallHeight varies per depth |
+
+---
+
+## §13 Step-fill Cavity Technique — ✅ IMPLEMENTED (Apr 3)
+
+Replaced the alpha-porthole sprite-inside-wall technique with step-fill (Doom rule) cavities. The porthole approach (transparent pixels in texture + cavity pre-fill + wallDecor fire sprite on wall face) produced flat "painted-on" fire with no perceived depth. The step-fill approach creates genuine geometric displacement — the wall column sinks via `tileHeightOffset`, and the gap above becomes a visible cavity with parallax on player movement.
+
+**How it works**: A negative `tileHeightOffset` displaces the wall column downward. The raycaster's step-fill code fills the lip above with: dark cavity base → fire sprite (drawImage from `decor_hearth_fire` canvas) → warm glow overlay. The lip band is geometrically separate from the wall face, so it reads as depth, not paint.
+
+**What changed**:
+
+| File | Change |
+|------|--------|
+| `engine/texture-atlas.js` | hearth_riverrock + bonfire_ring reverted to fully opaque (no porthole alpha) |
+| `engine/raycaster.js` | Removed cavity pre-fill + back-face injection. Added fire cavity rendering in sunken step-fill section. Added `cavityBand` skip in `_renderWallDecor` |
+| `engine/floor-manager.js` | HEARTH offset -0.18, BONFIRE offset -0.25 in all biomes. `cavityBand: true` on fire wallDecor items |
+| `engine/spatial-contract.js` | Interior WALL tiles now 2.5× (close-up immersion, matches exterior tower behavior) |
+
+**Tuning knobs**: `tileHeightOffset` controls cavity height (more negative = taller opening). `tileWallHeight` controls the stone column size. The fire sprite is `decor_hearth_fire` (32×32 procedural flame with dragon whelp silhouette). Glow is `rgba(255,120,30)` at 18% × brightness.
+
+**Discovery**: The technique was found accidentally — PILLARs with `tileHeightOffset: 1.0` had the most convincing depth cavity in the engine. The step-fill gap looked like a real opening. Applied intentionally to HEARTH/BONFIRE with negative offsets.
+
+---
+
+## §14 Bonfire / Hearth Visual Unification — ROADMAP
+
+One conceptual "Dragonfire source" with three visual containers, determined by floor depth. The fire itself is always the same (🔥 flame + 🐉 translucent dragon), but the stone container that houses it changes to match the biome. Two tile types (BONFIRE 18, HEARTH 29) remain separate for gameplay differentiation (§11) but share the same rendering pipeline.
+
+### 14a. Unified fire sprite composition
+
+All fire sources use the same sprite: 🔥 flame emoji overlaid with a semi-transparent 🐉 dragon emoji. This replaces the current procedural `decor_hearth_fire` (32×32 flame with baked dragon silhouette).
+
+**Implementation options** (pick one):
+1. **Pre-render emoji to canvas**: At TextureAtlas init, render `🔥` and `🐉` to offscreen canvases at 32×32, composite into a single `decor_dragonfire` texture. Step-fill cavity drawImage uses this canvas. Simplest, matches existing pipeline.
+2. **Live emoji composite**: Render emoji via `ctx.fillText('🔥', x, y)` directly into the step-fill band per frame. Enables dynamic scaling but is slower (text rendering per column per frame). Not recommended for LG webOS.
+3. **Hybrid**: Pre-render flame at multiple scales (16, 32, 64). Step-fill picks nearest size for distance-appropriate detail. Most polish, moderate complexity.
+
+**Recommendation**: Option 1. Pre-render emoji at init, single 32×32 texture, drop-in replacement for `decor_hearth_fire`. The dragon transparency is controlled by the emoji's alpha channel — on most platforms 🐉 renders with partial transparency already. If not, composite at 40-50% alpha over the flame.
+
+| # | Task | Est. | Depends on | Status |
+|---|------|------|------------|--------|
+| 14a.1 | Create `_genDragonfireEmoji(id)` in texture-atlas.js: render 🔥 + 🐉 at 50% alpha to 32×32 canvas | 30m | — | — |
+| 14a.2 | Replace `decor_hearth_fire` reference in step-fill cavity code with `decor_dragonfire` | 5m | 14a.1 | — |
+| 14a.3 | Update wallDecor spriteId in floor-manager.js for HEARTH/BONFIRE entries | 5m | 14a.1 | — |
+| 14a.4 | Verify emoji rendering on LG webOS canvas (emoji font availability, glyph size) | 15m | 14a.1 | — |
+
+### 14b. Container varies by depth
+
+The stone structure around the fire changes per biome depth tier. Both BONFIRE and HEARTH tiles resolve their texture and wallHeight from the biome's SpatialContract data, so this is a floor-manager biome data change — no rendering code needed.
+
+| Depth | Tile | Container texture | wallHeight | tileHeightOffset | Visual read |
+|-------|------|-------------------|------------|------------------|-------------|
+| **exteriorN** | BONFIRE (18) | `bonfire_ring` — grey riverrock ring | 0.3× | -0.25 | Low campfire stone circle, tent nearby |
+| **interiorN.N** | HEARTH (29) | `hearth_riverrock` — warm masonry column | 1.6× | -0.18 | Tall fireplace built into wall |
+| **interiorN.N.N** | BONFIRE (18) | `bonfire_scrap` (NEW) — improvised debris ring | 0.3× | -0.20 | Rough campfire, hostile environment |
+
+**Note**: interiorN.N.N (nested dungeons) currently use HEARTH for the rest point. Switching to BONFIRE here requires a grid-gen change: place BONFIRE instead of HEARTH in dungeon mid-rooms. This also changes the gameplay contract (BONFIRE and HEARTH have different interaction rules per §11).
+
+**Alternative** (no tile-type change): keep HEARTH in dungeons but add a biome-specific texture variant: `hearth_scrap` — rough cobbled stone instead of polished riverrock. The step-fill cavity still works (same rendering path). HEARTH keeps its dungeon interaction rules (limited stash, no WELL_RESTED, etc. per §11).
+
+| # | Task | Est. | Depends on | Status |
+|---|------|------|------------|--------|
+| 14b.1 | Create `bonfire_scrap` texture in texture-atlas.js: irregular piled stones, charred edges, improvised look | 30m | — | — |
+| 14b.2 | Add `bonfire_scrap` to nestedDungeon biome textures for BONFIRE (18) if switching, or `hearth_scrap` for HEARTH (29) if keeping current tile types | 5m | 14b.1 | — |
+| 14b.3 | Verify step-fill cavity renders for dungeon fire tiles (offset + wallHeight tuning) | 15m | 14b.2 | — |
+| 14b.4 | Decide: switch dungeon rest tile from HEARTH to BONFIRE (gameplay impact per §11), or keep HEARTH with scrap texture (visual-only change) | Design decision | §11 | — |
+
+### 14c. Biome-specific glow tinting (already implemented in §8)
+
+Lighting tints already vary by depth (§8a-8d). No additional work needed — the glow color is set per wallDecor entry in floor-manager.js:
+- Exterior: warm orange `(255,120,30)` α=0.35
+- Home: amber/golden `(255,180,60)` α=0.30
+- Dungeon: cold blue-grey `(80,100,160)` α=0.25
+
+### 14d. Summary — what changes where
+
+| System | exteriorN (BONFIRE) | interiorN.N (HEARTH) | interiorN.N.N (TBD) |
+|--------|--------------------|--------------------|---------------------|
+| Tile type | BONFIRE (18) | HEARTH (29) | HEARTH (29) or BONFIRE (18) — §14b.4 |
+| Container texture | `bonfire_ring` | `hearth_riverrock` | `bonfire_scrap` or `hearth_scrap` (NEW) |
+| Fire sprite | `decor_dragonfire` (NEW, §14a) | `decor_dragonfire` | `decor_dragonfire` |
+| wallHeight | 0.3× | 1.6× | 0.3× (campfire) or 1.2× (hearth) |
+| tileHeightOffset | -0.25 | -0.18 | -0.20 |
+| Glow tint | Warm orange | Amber/golden | Cold blue-grey |
+| Billboard sprite | ⛺ tent | — | — |
+| Gameplay contract | §11 exterior | §11 interior | §11 dungeon |

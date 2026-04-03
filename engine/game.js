@@ -44,6 +44,11 @@ var Game = (function () {
   var _pendingMenuContext = null;
   var _pendingMenuFace = null;
 
+  // Bonfire interaction cooldown — prevents re-triggering rest+menu loop
+  // when player is still facing bonfire after closing the menu. Without
+  // this, every OK press immediately re-opens the bonfire menu (trap).
+  var _bonfireCooldownMs = 0;
+
   // ── Bark / Gate NPC state ─────────────────────────────────────────
   // Tracks whether the Day-1 Dispatcher gate encounter has been resolved.
   // Before resolution the dungeon entrance tiles are logically locked —
@@ -618,6 +623,10 @@ var Game = (function () {
           if (typeof Shop !== 'undefined') Shop.close();
           if (typeof MenuFaces !== 'undefined') MenuFaces.unregisterDragZones();
           if (typeof QuickBar !== 'undefined' && QuickBar.unregisterDragZones) QuickBar.unregisterDragZones();
+          // Bonfire cooldown: 800ms grace period after closing the bonfire
+          // menu so that the next OK press doesn't immediately re-trigger
+          // rest. Player can still turn/walk away during cooldown.
+          if (menuContext === 'bonfire') _bonfireCooldownMs = 800;
           ScreenManager.resumeGameplay();
         }
       });
@@ -748,7 +757,24 @@ var Game = (function () {
     if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
     if (typeof BedPeek !== 'undefined') BedPeek.init();
-    if (typeof MailboxPeek !== 'undefined') MailboxPeek.init();
+    if (typeof MailboxPeek !== 'undefined') {
+      MailboxPeek.init();
+
+      // ── Starter mail: rent notice for new players ────────────
+      MailboxPeek.addReport({
+        systemNotice: true,
+        emoji: '\uD83C\uDFE0',  // 🏠
+        label: 'Rent Notice — Gleaner\u2019s Home',
+        body: 'Welcome, Gleaner.<br/><br/>' +
+          'Your rent is due in <strong>14 days</strong>. ' +
+          'The Dispatcher has work for you \u2014 clean the dungeons, ' +
+          'restock the crates, and collect your pay from the mailbox ' +
+          'after each hero run.<br/><br/>' +
+          'Sincerely,<br/>' +
+          'The Promenade Housing Authority',
+        footer: 'Sincerely, your friendly neighborhood Promenade landlord.'
+      });
+    }
 
     // Enemy sprite stage system
     if (typeof EnemySprites !== 'undefined') EnemySprites.initDefaults();
@@ -1026,6 +1052,753 @@ var Game = (function () {
 
     // ── Register NPC dialogue trees (Morrowind-style) ──────────────
     if (typeof NpcSystem !== 'undefined') {
+
+      // ════════════════════════════════════════════════════════════════
+      // Floor 0 — The Approach (first encounters after deploy cutscene)
+      // ════════════════════════════════════════════════════════════════
+
+      // ── Campfire Drifter ──────────────────────────────────────────
+      // First talkable NPC. Explains the settlement, the setting,
+      // why people live here outside the arch. Tone: weary, helpful,
+      // matter-of-fact. Not hostile, not cheerful — resigned.
+      NpcSystem.registerTree('floor0_drifter', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'You just get dropped off? ...Yeah. Truck comes through once a week. One way trip.',
+            choices: [
+              { label: 'Where am I?', next: 'where' },
+              { label: 'What is this place?', next: 'settlement' },
+              { label: 'I need to get through that arch', next: 'arch' },
+              { label: 'Never mind', next: null }
+            ]
+          },
+          where: {
+            text: 'The Approach. It\'s what they call the strip between the overpass and the town wall. Used to be a service road. Now it\'s... this.',
+            choices: [
+              { label: 'What happened?', next: 'history' },
+              { label: 'The overpass behind me?', next: 'overpass' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          overpass: {
+            text: 'Highway 9 overpass. They fenced the on-ramps years ago. Only way out is through. Through the arch, through the town, through... whatever\'s past that.',
+            choices: [
+              { label: 'What is this place?', next: 'settlement' },
+              { label: 'I\'ll figure it out', next: null }
+            ]
+          },
+          settlement: {
+            text: 'People camp here because the town won\'t let everyone through the arch. Not enough housing. Not enough work. So you wait. Set up a tent. Find a bonfire. Try not to think too hard about it.',
+            choices: [
+              { label: 'How long have you been here?', next: 'how_long' },
+              { label: 'Who runs things here?', next: 'who_runs' },
+              { label: 'That\'s rough', next: null }
+            ]
+          },
+          history: {
+            text: 'Factories closed, one by one. You can see the old buildings through the facade wall — boarded up, rusted. People who worked there had nowhere to go. The overpass camps became the meadow camps became... permanent.',
+            choices: [
+              { label: 'Who runs things here?', next: 'who_runs' },
+              { label: 'Factories? What kind?', next: 'factories' },
+              { label: 'I see', next: null }
+            ]
+          },
+          factories: {
+            text: 'Processing plants, mostly. Dungeon salvage. The Heroes bring back materials and someone has to sort, clean, package it all. Used to employ half the district. Now the Foundry runs automated lines and three guys in a control booth.',
+            choices: [
+              { label: 'The Foundry?', next: 'foundry' },
+              { label: 'Thanks for telling me', next: null }
+            ]
+          },
+          foundry: {
+            text: 'Big outfit. Runs the smelters, the warehouses, most of the money. They\'re the reason the town exists at all. Also the reason half of us are out here instead of in there. Funny how that works.',
+            choices: [
+              { label: 'Back', next: 'greeting' },
+              { label: 'I appreciate you talking to me', next: null }
+            ]
+          },
+          how_long: {
+            text: 'Six months? Seven? You stop counting. Some folks here have been camped for years. The house down south — that family actually built something. Most of us just... sit.',
+            choices: [
+              { label: 'Is there anything to do here?', next: 'what_to_do' },
+              { label: 'I should keep moving', next: null }
+            ]
+          },
+          what_to_do: {
+            text: 'Walk. Think. Tend the fire. Talk to the old man in the shack up north if you want stories. Don\'t mind if he sounds crazy — he\'s been here longer than anyone.',
+            choices: [
+              { label: 'Crazy how?', next: 'hermit_hint' },
+              { label: 'I\'ll check it out', next: null }
+            ]
+          },
+          hermit_hint: {
+            text: 'Talks about pandas, dragons, the "elites." Conspiracy stuff. People keep their distance. But he\'s harmless. And... some of what he says, I dunno. After enough time out here, you start wondering too.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          who_runs: {
+            text: 'Nobody, really. There\'s a Groundskeeper who sweeps the road — I think the town pays him a stipend so the Approach doesn\'t look too bad from the arch. But governance? Laws? That\'s on the other side of the wall.',
+            choices: [
+              { label: 'The arch leads to the town?', next: 'arch' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          arch: {
+            text: 'The Promenade. Real town. Shops, homes, a guild office. If you can get work, you can get in. That\'s the deal. Go through, find the Dispatcher, sign up as a Gleaner. That\'s your ticket.',
+            choices: [
+              { label: 'What\'s a Gleaner?', next: 'gleaner' },
+              { label: 'I\'ll head that way', next: null }
+            ]
+          },
+          gleaner: {
+            text: 'Dungeon janitor. The Heroes go in and fight monsters. The Gleaners go in after and clean up the mess. Restock traps, mop blood, reset the floors for the next cycle. It\'s not glamorous, but it pays.',
+            choices: [
+              { label: 'Sounds like my kind of work', next: 'work_affirm' },
+              { label: 'That sounds terrible', next: 'work_deny' }
+            ]
+          },
+          work_affirm: {
+            text: 'Ha. Sure. Head through the arch. Talk to the Dispatcher in the guild office. They\'ll sort you out. ...Good luck in there.',
+            choices: [
+              { label: 'Thanks for everything', next: null }
+            ]
+          },
+          work_deny: {
+            text: 'It is. But it\'s the only work going. The alternative is...' + ' *gestures at the encampment* ' + '...this. Your call.',
+            choices: [
+              { label: 'I\'ll think about it', next: null }
+            ]
+          }
+        }
+      });
+
+      // ── Laid-off Laborer ──────────────────────────────────────────
+      // Second encounter (SC pod). Talks about the local economy,
+      // the industries, the homelessness crisis directly. Angrier tone
+      // than the Drifter — this person lost a specific job and blames
+      // specific people.
+      NpcSystem.registerTree('floor0_laborer', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'What. ...Oh. New arrival. Don\'t sit too close to the fire, the smoke gets in your lungs.',
+            choices: [
+              { label: 'What happened to you?', next: 'story' },
+              { label: 'Why are there so many people camping out here?', next: 'homelessness' },
+              { label: 'Sorry to bother you', next: null }
+            ]
+          },
+          story: {
+            text: 'Worked the salvage line at Foundry Plant 6 for eleven years. Sorting hero loot. One day the machines show up. Next week, layoff notices. Three hundred people. Just like that.',
+            choices: [
+              { label: 'Where did everyone go?', next: 'displacement' },
+              { label: 'Can\'t you find other work?', next: 'other_work' },
+              { label: 'That\'s awful', next: 'awful' }
+            ]
+          },
+          displacement: {
+            text: 'Here. The meadow. The overpass camps. Some went further out, past the highway. The ones with connections got guild work — Gleaner positions, courier routes. The rest of us just... stayed.',
+            choices: [
+              { label: 'Nobody helped?', next: 'nobody_helped' },
+              { label: 'What about the houses?', next: 'housing' },
+              { label: 'I see', next: null }
+            ]
+          },
+          nobody_helped: {
+            text: 'The Admiralty posted a notice about "workforce transition support." One meeting. One pamphlet. That was it. The Foundry sent severance for two months. Two months to replace eleven years. And the Tide temple offered prayers.',
+            choices: [
+              { label: 'The Admiralty? The Tide?', next: 'factions' },
+              { label: 'That\'s not enough', next: 'not_enough' }
+            ]
+          },
+          factions: {
+            text: 'The powers that be. Admiralty runs the government — permits, taxes, the wall. The Tide runs the temples — blessings, morale, "spiritual guidance." And the Foundry runs everything else. Three legs of a stool that doesn\'t have a seat.',
+            choices: [
+              { label: 'Who\'s responsible for all this?', next: 'responsible' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          not_enough: {
+            text: 'No. It\'s not. But what are you gonna do? Protest? They\'ll send a Hero. Strike? They\'ll hire scabs from two districts over. The system works exactly how it\'s supposed to. Just not for us.',
+            choices: [
+              { label: 'Send a Hero?', next: 'hero_threat' },
+              { label: '...', next: null }
+            ]
+          },
+          hero_threat: {
+            text: 'Figure of speech. Mostly. The Heroes are supposed to fight dungeon monsters. But the Admiralty has... broad definitions of what constitutes a threat to public order. Makes people think twice about pushing back.',
+            choices: [
+              { label: 'That\'s messed up', next: 'messed_up' },
+              { label: 'I need to go', next: null }
+            ]
+          },
+          messed_up: {
+            text: 'Yeah. It is. ...Look, I\'m not trying to scare you. Just keep your eyes open in there. The town looks nice from the outside. Pretty sunsets, cobblestone streets. But under it? Same rot. Just better lighting.',
+            choices: [
+              { label: 'Thanks for the warning', next: null }
+            ]
+          },
+          other_work: {
+            text: 'As what? The only jobs left are Gleaner contracts and the Foundry won\'t hire anyone they already fired. Says it\'s "policy." Really it\'s because we organized once. Seven years ago. They don\'t forget.',
+            choices: [
+              { label: 'You organized?', next: 'organized' },
+              { label: 'Gleaner contracts?', next: 'gleaner_work' },
+              { label: 'I understand', next: null }
+            ]
+          },
+          organized: {
+            text: 'We asked for safety gear. That\'s it. Dungeon salvage has corrosive residue, cursed fragments, biological hazards. We wanted gloves and respirators. They called it "insubordination" and blacklisted everyone who signed.',
+            choices: [
+              { label: 'Over safety gear?', next: 'safety' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          safety: {
+            text: 'It was never about the gloves. It was about control. You let workers ask for one thing, next they want fair wages, shift limits, a say in operations. Can\'t have that. Not when the Hero cycle depends on cheap labor.',
+            choices: [
+              { label: 'The Hero cycle?', next: 'hero_cycle' },
+              { label: 'I hear you', next: null }
+            ]
+          },
+          hero_cycle: {
+            text: 'Heroes go in, kill monsters, bring out loot. Gleaners go in, clean up, reset the floors so monsters come back. Repeat forever. The whole economy runs on it. And at the bottom of that stack? People like us. Expendable.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          gleaner_work: {
+            text: 'Dungeon cleaning. You go in after the Hero and mop up. Dangerous, disgusting, and the pay is barely enough to keep a roof over your head. But at least you get a roof. More than I can say for the meadow.',
+            choices: [
+              { label: 'I might sign up for that', next: 'sign_up' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          sign_up: {
+            text: 'Then go through the arch. Find the Dispatcher. Just... don\'t let them fool you into thinking the work is noble. It\'s survival. Same as out here, just with a mop.',
+            choices: [
+              { label: 'Noted', next: null }
+            ]
+          },
+          awful: {
+            text: 'Don\'t pity me. Pity the families. Kids growing up in tents. No school on this side. The Tide runs a charity kitchen on Sundays but it\'s gruel and sermons. Not exactly a safety net.',
+            choices: [
+              { label: 'Why are there so many people camping out here?', next: 'homelessness' },
+              { label: 'I should go', next: null }
+            ]
+          },
+          homelessness: {
+            text: 'Because the town can\'t hold everyone and won\'t build for everyone. Simple as that. They built the wall, the arch, the checkpoints — all to control who gets in. The rest of us wait in the meadow.',
+            choices: [
+              { label: 'How many people live out here?', next: 'how_many' },
+              { label: 'Who decided that?', next: 'responsible' },
+              { label: 'That can\'t be legal', next: 'legal' }
+            ]
+          },
+          how_many: {
+            text: 'Hard to count. Sixty? Eighty? More come every season. Fewer leave. Some die quiet — cold, sickness, sometimes just... giving up. The bonfires are the only thing keeping people going. Literally and otherwise.',
+            choices: [
+              { label: 'Who decided that?', next: 'responsible' },
+              { label: 'I\'m sorry', next: null }
+            ]
+          },
+          responsible: {
+            text: 'Foundry shut the plants. Admiralty drew the wall. Tide said it was "the natural order." Pick your villain. Or better yet, ask yourself why three factions that disagree on everything all agree that we should stay out here.',
+            choices: [
+              { label: 'They agree on that?', next: 'agree' },
+              { label: 'Heavy stuff', next: null }
+            ]
+          },
+          agree: {
+            text: 'Only thing they agree on. Cheap labor has to come from somewhere. And desperate people don\'t negotiate. The meadow isn\'t an accident. It\'s a feature.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          legal: {
+            text: 'Legal? Hah. Legal is whatever the Admiralty writes on a piece of paper. Out here, past the wall, we\'re technically "unincorporated territory." No bylaws, no protections, no obligations. Convenient, right?',
+            choices: [
+              { label: 'Who decided that?', next: 'responsible' },
+              { label: 'Yeah. Convenient', next: null }
+            ]
+          },
+          housing: {
+            text: 'The house down south? That family\'s been here three years. Built it themselves from salvage. Technically illegal — the Admiralty calls it "unauthorized construction." But nobody enforces it. Not worth their time to demolish a shack.',
+            choices: [
+              { label: 'At least they have walls', next: 'walls' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          walls: {
+            text: 'Walls and a mailbox. Like they\'re waiting for a letter that\'s never coming. I respect it though. Building something when nobody tells you that you can? That\'s the most defiant thing you can do out here.',
+            choices: [
+              { label: 'I like that', next: null }
+            ]
+          }
+        }
+      });
+
+      // ── Raving Hermit ─────────────────────────────────────────────
+      // NE pod shack. Incoherent muttering about pandas and dragon
+      // elites. Existential crisis delivered as conspiracy word salad.
+      // Funny on the surface, unsettling underneath. Every branch
+      // spirals deeper. There is no "normal" exit — only trailing off.
+      NpcSystem.registerTree('floor0_hermit', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'THEY\'RE USING THE PANDAS. You have to understand. The PANDAS. They\'re not animals. They\'re... they\'re SIGILS. Living sigils. Walking contracts written in black and white fur.',
+            choices: [
+              { label: 'Are you okay?', next: 'okay' },
+              { label: 'Pandas?', next: 'pandas' },
+              { label: 'I\'m going to leave now', next: 'leave' }
+            ]
+          },
+          okay: {
+            text: 'Okay? OKAY? I was okay before I saw the patterns. Before I counted the stripes. Thirteen bamboo stalks in every mural. Thirteen council seats. Thirteen floors in the deep dungeon. You think that\'s coincidence?',
+            choices: [
+              { label: 'What patterns?', next: 'patterns' },
+              { label: 'Yes, that\'s coincidence', next: 'coincidence' },
+              { label: '...I\'m going to go', next: 'leave' }
+            ]
+          },
+          pandas: {
+            text: 'Not REAL pandas. The idea of pandas. The CONCEPT. Black and white. Binary. Either you\'re inside the wall or outside. Either you\'re a Hero or you\'re nobody. The panda is the symbol of the false choice. Don\'t you SEE?',
+            choices: [
+              { label: 'I don\'t see, no', next: 'dont_see' },
+              { label: 'Tell me about the dragons', next: 'dragons' },
+              { label: 'This is a lot', next: 'a_lot' }
+            ]
+          },
+          a_lot: {
+            text: '*nods rapidly* IT IS. It\'s a LOT. Most people can\'t handle the lot-ness of it. They walk away. They go through the arch and eat soup and forget the pandas ever existed. But you\'re still here. Why are you still here?',
+            choices: [
+              { label: 'Morbid curiosity', next: 'dragons' },
+              { label: 'I don\'t know', next: 'silence' },
+              { label: 'I\'m leaving', next: null }
+            ]
+          },
+          dont_see: {
+            text: 'Of course you don\'t. That\'s the point. The panda sits in the bamboo grove and everyone says "how cute, how peaceful." Nobody asks WHY it sits there. Nobody asks who PLANTED the bamboo. Nobody asks who benefits from the sitting.',
+            choices: [
+              { label: 'Who planted the bamboo?', next: 'bamboo' },
+              { label: 'I think you need rest', next: 'need_rest' }
+            ]
+          },
+          bamboo: {
+            text: 'THE DRAGON ELITES. Who else? They grow the bamboo. They breed the pandas. They engineer the ENTIRE ECOSYSTEM so that a black and white bear sits still and eats and produces nothing and EVERYONE THINKS THAT\'S FINE.',
+            choices: [
+              { label: 'Are we still talking about pandas?', next: 'still_pandas' },
+              { label: 'Who are the Dragon Elites?', next: 'dragons' }
+            ]
+          },
+          still_pandas: {
+            text: '...Are we? I don\'t... *stares at hands* ...Sometimes I can\'t tell where the metaphor ends and the... the THING starts. Is the panda the system or am I the panda? Am I sitting in bamboo RIGHT NOW?',
+            choices: [
+              { label: 'You\'re sitting in a shack', next: 'shack' },
+              { label: 'Maybe we\'re all pandas', next: 'all_pandas' }
+            ]
+          },
+          shack: {
+            text: 'A shack. A cage. A... designated enclosure for a specimen that has been... catalogued and... *trails off* ...I used to be an accountant. Did you know that? I used to have a desk.',
+            choices: [
+              { label: 'What happened?', next: 'what_happened' },
+              { label: 'An accountant?', next: 'accountant' }
+            ]
+          },
+          accountant: {
+            text: 'Numbers. I was good at numbers. But then the numbers started showing me things. Patterns in the ledgers. The Foundry\'s quarterly reports. The dungeon loot manifests. It all... it all pointed at the same thing.',
+            choices: [
+              { label: 'What thing?', next: 'the_thing' },
+              { label: 'I think the numbers were just numbers', next: 'just_numbers' }
+            ]
+          },
+          the_thing: {
+            text: 'That NONE OF THIS IS REAL. Not the dungeon, not the town, not the Heroes. It\'s a... a LOOP. A constructed cycle designed to keep resources flowing upward while we sit in the bamboo grove and eat and PRODUCE NOTHING.',
+            choices: [
+              { label: '...', next: 'silence' },
+              { label: 'You sound like you need to talk to someone', next: 'need_rest' }
+            ]
+          },
+          just_numbers: {
+            text: '*long pause* ...Maybe. Maybe the numbers were just numbers and the pandas are just pandas and I\'m just a man in a shack who looked at a spreadsheet too long. ...But then why do I still see the patterns when I close my eyes?',
+            choices: [
+              { label: 'I don\'t know', next: 'silence' },
+              { label: 'Take care of yourself', next: null }
+            ]
+          },
+          what_happened: {
+            text: 'I found a discrepancy. Dungeon reset costs versus Foundry intake volume. The numbers didn\'t match. Thirty percent of hero loot was... unaccounted for. I reported it. Next day, my desk was empty. Week later, I was out here.',
+            choices: [
+              { label: 'You were fired for finding fraud?', next: 'fired' },
+              { label: 'That could just be a clerical error', next: 'clerical' }
+            ]
+          },
+          fired: {
+            text: 'Fired. Blacklisted. And then the dreams started. The pandas. Every night, a panda looking at me through bamboo bars. Watching. Chewing. Patient. Like it KNOWS what they did to me. Like it was THERE.',
+            choices: [
+              { label: 'The panda was in your dreams?', next: 'panda_dream' },
+              { label: 'I\'m sorry that happened to you', next: 'sorry' }
+            ]
+          },
+          panda_dream: {
+            text: 'Every. Night. Sitting. Chewing. Black eyes. No expression. Just... existing at me. And behind the panda, a dragon. But not a monster-dragon. A SUIT-dragon. Briefcase. Cufflinks. The kind of dragon that signs your termination papers with a fountain pen.',
+            choices: [
+              { label: 'A dragon in a suit', next: 'suit_dragon' },
+              { label: 'Have you talked to anyone about this?', next: 'need_rest' }
+            ]
+          },
+          suit_dragon: {
+            text: 'THE DRAGON ELITE. That\'s what they ARE. Not beasts. Executives. They wear the skin of monsters because it makes people think they\'re part of the dungeon. Natural. Inevitable. But they\'re just PEOPLE with SCALES and BAD INTENTIONS.',
+            choices: [
+              { label: 'I think this is metaphorical', next: 'metaphorical' },
+              { label: 'I don\'t think I can help you', next: 'cant_help' }
+            ]
+          },
+          metaphorical: {
+            text: '*grabs your arm* Is a metaphor LESS TRUE than the thing it points at? When I say dragon, and you feel FEAR — is the fear metaphorical? When the Foundry takes your livelihood, is the fire that burns you FIGURATIVE?',
+            choices: [
+              { label: '...', next: 'silence' }
+            ]
+          },
+          cant_help: {
+            text: 'Nobody can. That\'s... *sits back down slowly* ...that\'s the insight, isn\'t it. The pandas can\'t help each other. We just sit in our enclosures and chew. Individual bamboo stalks. Alone.',
+            choices: [
+              { label: 'You\'re not alone', next: 'not_alone' },
+              { label: 'Goodbye', next: null }
+            ]
+          },
+          not_alone: {
+            text: '*looks up, eyes wet* ...You\'re kind. The drifter by the campfire said someone new would come through. Said they always do. Come through, pass through, keep going. Nobody stays. Not by choice.',
+            choices: [
+              { label: 'I have to keep going too', next: 'keep_going' },
+              { label: 'Maybe things can change', next: 'change' }
+            ]
+          },
+          keep_going: {
+            text: 'I know. Everyone does. Through the arch, into the town, down into the dungeons. The cycle. *mutters* ...panda goes in, panda comes out. Dragon counts the bamboo. World keeps turning.',
+            choices: [
+              { label: '...take care', next: null }
+            ]
+          },
+          change: {
+            text: '*hollow laugh* Change. You know what the panda says about change? ...Nothing. The panda says nothing. Because the panda doesn\'t have a VOICE. That\'s the whole POINT.',
+            choices: [
+              { label: 'Then maybe we should be something other than pandas', next: 'other' },
+              { label: 'I have to go', next: null }
+            ]
+          },
+          other: {
+            text: '...Huh. *long silence* Nobody ever said that before. They usually just leave. ...I don\'t know what else to be. I\'ve been a panda so long I forgot. ...What are you?',
+            choices: [
+              { label: 'A Gleaner, apparently', next: 'gleaner_answer' },
+              { label: 'I don\'t know yet', next: 'dont_know' }
+            ]
+          },
+          gleaner_answer: {
+            text: 'A janitor for a system that doesn\'t care about you. ...But at least you chose it. The panda never chose the bamboo. ...Go on. Through the arch. Maybe you\'ll find something I couldn\'t.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          dont_know: {
+            text: '*something shifts behind his eyes* ...Good. Don\'t know. Stay not-knowing as long as you can. The moment you accept a label, the bamboo grows around you. *waves vaguely* ...The dragons are counting.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          all_pandas: {
+            text: '*STOPS.* *stares at you.* ...Yes. Yes. That\'s what I\'ve been trying to... we\'re ALL pandas. Every single one of us. Eating bamboo we didn\'t plant in a grove we didn\'t choose while the dragons write the reports.',
+            choices: [
+              { label: 'Who are the Dragon Elites?', next: 'dragons' },
+              { label: 'I was joking', next: 'joking' }
+            ]
+          },
+          joking: {
+            text: 'Joking. HA. The dragon elites are ALSO joking. That\'s the meta-joke. The whole world is a joke told by a dragon to a panda. And the punchline is... *gestures at everything* ...THIS.',
+            choices: [
+              { label: '...', next: 'silence' }
+            ]
+          },
+          dragons: {
+            text: 'The ones at the TOP. Not the dungeon dragons — those are puppets, spectacles. I mean the REAL dragons. The ones who designed the Hero cycle. Who decided that some people fight and some people clean. The ones writing the STORY.',
+            choices: [
+              { label: 'Writing the story?', next: 'story' },
+              { label: 'I think you\'ve been alone too long', next: 'alone' }
+            ]
+          },
+          story: {
+            text: 'You ever feel like you\'re in a script? Like your choices were written before you made them? Like there\'s a... a THING above all of this, looking down, arranging the tiles? ...That\'s the dragon. That\'s what the dragon IS.',
+            choices: [
+              { label: '...', next: 'silence' }
+            ]
+          },
+          alone: {
+            text: 'Ha... yeah. Maybe. But loneliness is just... clarity with nobody to dilute it. Out here, in the meadow, with the wind and the shrubs and the bonfires... I can see the edges of the world. And I\'m telling you — they\'re RENDERED.',
+            choices: [
+              { label: 'Rendered?', next: 'rendered' },
+              { label: 'Okay, I\'m leaving', next: null }
+            ]
+          },
+          rendered: {
+            text: 'Look at the trees. LOOK at them. Same tree. Same tree. Same TREE. Copy-pasted across the border like someone filled a spreadsheet. The grass? Flat texture. The sky? A PRESET. Cedar, they call it. CEDAR. Why cedar? WHO CHOSE CEDAR?',
+            choices: [
+              { label: '...', next: 'silence' }
+            ]
+          },
+          patterns: {
+            text: 'The shrubs are all the same height. Every. Single. One. Half a wall. Not natural. DESIGNED. And the bonfire light — it doesn\'t cast real shadows. It APPROXIMATES them. Because the engine can\'t— *catches himself* ...the WORLD can\'t render them properly.',
+            choices: [
+              { label: 'Are you talking about the world or...', next: 'meta' },
+              { label: 'I think those are just shrubs', next: 'just_shrubs' }
+            ]
+          },
+          meta: {
+            text: '*whispers* Both. That\'s the secret. The world IS the engine. The dungeon IS the loop. The panda IS the player. We\'re all just... data. Running. In a cycle. Until someone pulls the plug.',
+            choices: [
+              { label: '...I have to go', next: null }
+            ]
+          },
+          just_shrubs: {
+            text: '*sad smile* ...Yeah. Maybe they\'re just shrubs. And maybe I\'m just a man who stared at numbers too long and broke. ...But the pandas, kid. The pandas are REAL. I\'ll die on that hill.',
+            choices: [
+              { label: 'I believe you', next: 'believe' },
+              { label: 'Take care of yourself', next: null }
+            ]
+          },
+          believe: {
+            text: '*eyes go wide, then soften* ...Nobody\'s said that to me in... *long pause* ...Don\'t let them make you a panda. Whatever you do in that town. Don\'t. Sit. Down.',
+            choices: [
+              { label: 'I won\'t', next: null }
+            ]
+          },
+          need_rest: {
+            text: 'Rest. *laughs bitterly* Rest is what the bonfire offers. Rest is what the bamboo grove offers. Rest is the panda\'s FUNCTION. I don\'t want rest. I want to WAKE UP.',
+            choices: [
+              { label: '...', next: 'silence' }
+            ]
+          },
+          sorry: {
+            text: '...Don\'t be sorry. Be AWARE. That\'s all I ask. When you go through the arch and everything looks pretty — remember the people out here. Remember that someone counted the bamboo and the numbers didn\'t add up.',
+            choices: [
+              { label: 'I\'ll remember', next: null }
+            ]
+          },
+          leave: {
+            text: 'THAT\'S WHAT THE PANDA WANTS. Walk away. Don\'t engage. Stay in your lane. Eat your bamboo. *voice cracks* ...Everyone leaves. The arch swallows them and they forget. They forget the meadow. They forget ME.',
+            choices: [
+              { label: '...I\'ll stay a minute', next: 'stay' },
+              { label: 'I\'m sorry', next: null }
+            ]
+          },
+          stay: {
+            text: '*visibly surprised* ...You will? *sits down, calmer* ...Nobody stays. The road goes east and everyone follows it. Like there\'s a... a pull. A direction built into the floor.',
+            choices: [
+              { label: 'Tell me about the pandas', next: 'pandas' },
+              { label: 'Tell me about the dragons', next: 'dragons' }
+            ]
+          },
+          coincidence: {
+            text: 'THERE ARE NO COINCIDENCES. Only patterns too big for small eyes to see! The dragon elites DESIGNED the thirteen-fold structure! Why do you think there are thirteen flavors at the Coral Bazaar? THIRTEEN. TYPES. OF SOUP.',
+            choices: [
+              { label: 'Soup?', next: 'soup' },
+              { label: 'Okay I really need to go', next: null }
+            ]
+          },
+          soup: {
+            text: 'Each soup represents a FLOOR of the dungeon! Mushroom broth = Floor 1, natural, earthy. Blood pudding = deep floors, viscera and death. And the thirteenth soup? SECRET MENU. Nobody orders it. Because it\'s not FOR us. It\'s for THE DRAGONS.',
+            choices: [
+              { label: 'I haven\'t even been to the Bazaar yet', next: 'bazaar' },
+              { label: '...I\'m going to leave you to your soups', next: null }
+            ]
+          },
+          bazaar: {
+            text: 'Good. GOOD. When you get there, COUNT THE SOUPS. Then come back and tell me I\'m crazy. *leans forward* ...You won\'t come back though. They never come back. The arch is a one-way throat.',
+            choices: [
+              { label: 'If I find thirteen soups, I\'ll remember you', next: 'remember' },
+              { label: 'Goodbye', next: null }
+            ]
+          },
+          remember: {
+            text: '*tears up* ...That\'s... *wipes face* ...The panda remembers who feeds it. Even in the grove. Even in the dark. *mutters* ...thirteen soups... thirteen floors... thirteen bamboo stalks...',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          clerical: {
+            text: 'THIRTY PERCENT. Thirty percent is not a clerical error. Thirty percent is a POLICY. Thirty percent is a dragon taking its cut while the pandas count bamboo and call it INDUSTRY.',
+            choices: [
+              { label: 'What happened after you reported it?', next: 'fired' },
+              { label: 'Okay', next: null }
+            ]
+          },
+          silence: {
+            text: '*long silence* ...The bonfire is warm, at least. The bonfire doesn\'t lie. The bonfire doesn\'t have a BOARD OF DIRECTORS. *stares into the flames* ...Sometimes I think the fire is the only honest thing left.',
+            choices: [
+              { label: 'Hang in there', next: null },
+              { label: '...', next: null }
+            ]
+          }
+        }
+      });
+
+      // ════════════════════════════════════════════════════════════════
+      // Floor 1 — The Promenade (Dispatcher + key NPCs)
+      // ════════════════════════════════════════════════════════════════
+
+      // ── Dispatcher ────────────────────────────────────────────────
+      // Intercepts the player near the east gate. Blocks passage to
+      // Floor 2 until the player has visited 1.6 (Gleaner's Home)
+      // and collected their work keys. Redirects player south to
+      // the SC pod where their bunk is.
+      NpcSystem.registerTree('floor1_dispatcher', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'HEY. Hold it. You can\'t go through yet. You the new hire?',
+            choices: [
+              { label: 'I think so?', next: 'confirm' },
+              { label: 'Who are you?', next: 'who' },
+              { label: 'Let me through', next: 'letme' }
+            ]
+          },
+          confirm: {
+            text: 'Thought so. Got a notice about you. Listen — you can\'t access Lantern Row until you\'re on the books. Need your keys, your assignment card, all of it.',
+            choices: [
+              { label: 'Where do I get those?', next: 'where' },
+              { label: 'This seems like a lot of paperwork', next: 'paperwork' }
+            ]
+          },
+          who: {
+            text: 'I\'m the Dispatcher for this district. I manage Gleaner assignments, handle logistics, make sure nobody goes into the dungeons without proper clearance. And right now, you don\'t have clearance.',
+            choices: [
+              { label: 'How do I get clearance?', next: 'where' },
+              { label: 'I just got here', next: 'just_arrived' }
+            ]
+          },
+          letme: {
+            text: '*blocks the arch* No. Policy. I don\'t care if you walked all the way from the overpass — nobody enters Lantern Row without being processed. Go get your keys.',
+            choices: [
+              { label: 'Where do I get keys?', next: 'where' },
+              { label: 'Fine', next: 'fine' }
+            ]
+          },
+          just_arrived: {
+            text: 'I know. The truck drops off a new one every week. Look, here\'s what you need to do — head to your assigned bunk, pick up your keys and your assignment card. Then come back. Simple.',
+            choices: [
+              { label: 'Where\'s my bunk?', next: 'where' },
+              { label: 'Okay', next: 'fine' }
+            ]
+          },
+          where: {
+            text: 'Your bunk is at the Gleaner\'s Home. South side of the road — go back west a bit, take the path south at the second junction. Look for the mailbox. Door\'s unlocked. Your keys should be on the table.',
+            choices: [
+              { label: 'South, second junction, mailbox. Got it.', next: 'gotit' },
+              { label: 'Can you be more specific?', next: 'specific' }
+            ]
+          },
+          specific: {
+            text: 'From here, head WEST along the road. You\'ll pass the bonfire in the middle. At the second path branch going south — around where you see a bonfire to the south — turn. The house with the mailbox out front is yours. Can\'t miss it.',
+            choices: [
+              { label: 'Thanks', next: 'gotit' },
+              { label: 'What if I can\'t find it?', next: 'cantfind' }
+            ]
+          },
+          cantfind: {
+            text: '...It\'s the only building on the south side with a mailbox. If you can\'t find a building with a mailbox, Gleaner work might not be for you.',
+            choices: [
+              { label: 'Fair point', next: 'gotit' }
+            ]
+          },
+          paperwork: {
+            text: 'Paperwork keeps people alive. A Gleaner goes into a dungeon without proper clearance, gets hurt, and nobody knows they\'re down there. No rescue, no recovery. You want to be that person?',
+            choices: [
+              { label: 'No', next: 'where' },
+              { label: 'People get hurt doing this?', next: 'danger' }
+            ]
+          },
+          danger: {
+            text: 'Dungeons aren\'t safe. That\'s the whole point — the Hero goes through and makes a mess, and the Gleaner goes in after. Most floors are just dirty. But the deep ones... the deep ones still have teeth.',
+            choices: [
+              { label: 'Teeth?', next: 'teeth' },
+              { label: 'I\'ll get my keys', next: 'fine' }
+            ]
+          },
+          teeth: {
+            text: 'Monsters don\'t always die when the Hero hits them. Some play dead. Some regenerate. And some are built into the walls. Your keys include a whistle — two short blasts means "send help." Don\'t lose it.',
+            choices: [
+              { label: 'Noted. I\'ll get my keys.', next: 'gotit' }
+            ]
+          },
+          gotit: {
+            text: 'Good. Once you\'ve got your keys, come back here. I\'ll process your card and you can head through to Lantern Row. Welcome aboard, Gleaner.',
+            choices: [
+              { label: 'Thanks, Dispatcher', next: null }
+            ]
+          },
+          fine: {
+            text: 'Your bunk\'s in the south pod. Look for the mailbox. Get your keys. Come back. I\'ll be here.',
+            choices: [
+              { label: 'Got it', next: null }
+            ]
+          }
+        }
+      });
+
+      // ── Market Vendor — Coral Bazaar approach ─────────────────────
+      NpcSystem.registerTree('floor1_bazaar_vendor', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Welcome to the Bazaar! Well — the front of it, anyway. The good stuff\'s inside. Fresh supplies, dungeon gear, the usual.',
+            choices: [
+              { label: 'What do you sell?', next: 'sell' },
+              { label: 'Tell me about this place', next: 'about' },
+              { label: 'Just browsing', next: null }
+            ]
+          },
+          sell: {
+            text: 'Trap kits, cleaning solution, light sticks, ration packs. Everything a Gleaner needs to survive a shift. Prices are fair — the Guild subsidizes the basics.',
+            choices: [
+              { label: 'Where\'s the entrance?', next: 'entrance' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          entrance: {
+            text: 'Door\'s right behind me. You\'ll need to go inside to browse the full stock. I just handle the overflow out here when the weather\'s nice. Which... is always, actually. Strange, that.',
+            choices: [
+              { label: 'Always nice weather?', next: 'weather' },
+              { label: 'I\'ll check inside', next: null }
+            ]
+          },
+          weather: {
+            text: '*looks up at the sky* Same sunset. Every day. You\'d think someone would comment on it more, but people just... don\'t. Anyway! Trap kits! Buy some!',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          about: {
+            text: 'The Promenade\'s been here as long as anyone can remember. Boarding houses, a tavern, the Bazaar. Not a big town, but it\'s ours. Well — theirs. I\'m just a vendor. But it feels like home after a while.',
+            choices: [
+              { label: 'Who lives here?', next: 'who_lives' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          who_lives: {
+            text: 'Gleaners, mostly. Some retired ones, some active. A few Tide clergy, an Admiralty officer or two keeping things orderly. And the Foundry has a rep who checks in. Everyone\'s polite enough. It\'s the kind of quiet you learn not to question.',
+            choices: [
+              { label: 'Back', next: 'greeting' },
+              { label: 'Take care', next: null }
+            ]
+          }
+        }
+      });
+
+      // ════════════════════════════════════════════════════════════════
+      // Floor 2+ — Deeper NPCs
+      // ════════════════════════════════════════════════════════════════
+
       // Ren — veteran Gleaner at Dispatcher's Office (Floor 2.1)
       NpcSystem.registerTree('dispatch_veteran', {
         root: 'greeting',
@@ -1216,10 +1989,46 @@ var Game = (function () {
           greeting: {
             text: 'Welcome to the Driftwood. Room or a meal?',
             choices: [
+              { label: 'What is this place?', next: 'building' },
               { label: 'What\'s on the menu?', next: 'menu' },
               { label: 'A room for the night', next: 'room' },
               { label: 'Heard any rumors?', next: 'rumors' },
               { label: 'Just browsing', next: null }
+            ]
+          },
+          building: {
+            text: 'The Driftwood Inn. Oldest standing building on the Promenade. Built from shipwreck timber before the Compact was even signed. I\'m Marlo. Third generation innkeeper. My grandmother opened the bar. I inherited the debt.',
+            choices: [
+              { label: 'Shipwreck timber?', next: 'timber' },
+              { label: 'What\u2019s on the shelves?', next: 'bookshelf' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          timber: {
+            text: 'The founding fleet. Three ships made it into the cove. None of them left. The Driftwood is literally built from their hulls. You can see the old rivet lines if you look at the ceiling beams.',
+            choices: [
+              { label: 'Why didn\u2019t they leave?', next: 'didnt_leave' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          didnt_leave: {
+            text: 'That\u2019s the question, isn\u2019t it? Official story is the cove entrance collapsed. Natural rockfall. Convenient rockfall, if you ask the conspiracy crowd. Either way, the settlers adapted. Built a town in a cave system. Here we are.',
+            choices: [
+              { label: 'Conspiracy crowd?', next: 'conspiracy' },
+              { label: 'Huh', next: null }
+            ]
+          },
+          conspiracy: {
+            text: 'Every settlement has them. Ours say the cave-in wasn\u2019t natural; it was part of the Compact. The dragons sealed us in so we\u2019d have to maintain the caves. The Archivist at the Bazaar feeds this stuff. Check the bookshelves there if you want to go down that rabbit hole.',
+            choices: [
+              { label: 'Interesting...', next: null }
+            ]
+          },
+          bookshelf: {
+            text: 'Guest journals, mostly. Travelers write their stories. Some are funny, some are sad, some are suspiciously detailed about the cave layout. There\u2019s also a few volumes of local history. The Dragon Compact chapter is dog-eared. Popular reading.',
+            choices: [
+              { label: 'I\u2019ll check them out', next: null },
+              { label: 'Back', next: 'greeting' }
             ]
           },
           menu: {
@@ -1340,7 +2149,226 @@ var Game = (function () {
         }
       });
 
-      // Cellar Owner — Floor 1.3 (nervous, defensive)
+      // ── Coral Bazaar NPCs (Floor 1.1) ────────────────────────────
+
+      // Coral Merchant — market vendor, building explainer, scale trade
+      NpcSystem.registerTree('bazaar_merchant', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Fresh coral, scale fragments, hero salvage. Best prices on the Promenade. What brings you to the Bazaar?',
+            choices: [
+              { label: 'What is this place?', next: 'building' },
+              { label: 'What do you sell?', next: 'wares' },
+              { label: 'Heard anything interesting?', next: 'lore' },
+              { label: 'Just looking', next: null }
+            ]
+          },
+          building: {
+            text: 'The Coral Bazaar. Only licensed market in the settlement. We deal in everything the heroes drag up and the Gleaners haul out. Tide Council regulates prices. Admiralty taxes the rest.',
+            choices: [
+              { label: 'Who runs it?', next: 'who_runs' },
+              { label: 'What are the bookshelves for?', next: 'bookshelf' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          who_runs: {
+            text: 'Officially? The Tide Council holds the charter. Practically? Whoever has scale fragments to trade sets the market. Before the Compact the merchants ran themselves. Now everything goes through the Council first.',
+            choices: [
+              { label: 'The Compact again...', next: 'compact' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          bookshelf: {
+            text: 'Import records, price histories, vendor catalogs. Dry reading unless you care about where the money goes. Check the shelves if you want to understand the economy here. Tells you more than anyone will say out loud.',
+            choices: [
+              { label: 'I\'ll take a look', next: null },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          wares: {
+            text: 'Scale fragments for crafting, dried coral for alchemy, hero salvage for the ambitious. I also buy dungeon scrap if your pockets are heavy. Everything is priced by the piece.',
+            choices: [
+              { label: 'Scale fragments?', next: 'scales' },
+              { label: 'Hero salvage?', next: 'salvage' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          scales: {
+            text: 'Dragon scales. Fragment-sized, mostly. The deeper floors shed them. Nobody knows why. The Tide Council claims mineral deposits; the Foundry says it\u2019s something alive down there. Either way, they\u2019re valuable.',
+            choices: [
+              { label: 'Something alive?', next: 'alive' },
+              { label: 'Interesting', next: null }
+            ]
+          },
+          alive: {
+            text: 'I don\u2019t get paid to speculate. But the scales are warm when they come up fresh. Make of that what you will.',
+            choices: [
+              { label: '...noted', next: null }
+            ]
+          },
+          salvage: {
+            text: 'Broken weapons, torn armor, singed pouches. Heroes leave a trail. The Guild labels it "hazardous waste" and the Gleaners are supposed to dispose of it, but between you and me... some of it\u2019s perfectly usable.',
+            choices: [
+              { label: 'I\u2019ll keep that in mind', next: null }
+            ]
+          },
+          lore: {
+            text: 'Interesting? In this town? Ha. Well... the Foundry\u2019s been buying triple their usual scale order. And someone at the Admiralty is asking about the old cave surveys. The ones from before the Compact.',
+            choices: [
+              { label: 'Before the Compact?', next: 'compact' },
+              { label: 'The Foundry is stockpiling?', next: 'foundry' },
+              { label: 'Hmm', next: null }
+            ]
+          },
+          compact: {
+            text: 'The Dragon Compact. Treaty that established the hero cycle, the Guild, the whole system. Couple hundred years old. Nobody reads it anymore but it\u2019s the legal foundation for everything. The Archivist over there knows more.',
+            choices: [
+              { label: 'I\u2019ll ask them', next: null },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          foundry: {
+            text: 'Three times the usual quantity of scale fragments. Whatever they\u2019re building, it isn\u2019t small. The Admiralty\u2019s nervous. When the Admiralty gets nervous, prices go up. Bad for business.',
+            choices: [
+              { label: 'Sounds political', next: null }
+            ]
+          }
+        }
+      });
+
+      // Bazaar Archivist — lore keeper, bookshelf champion, Compact expert
+      NpcSystem.registerTree('bazaar_archivist', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: 'Hmm? Oh. Hello. I was cataloguing the import manifests. Do you need something, or are you here to browse the records?',
+            choices: [
+              { label: 'What do you do here?', next: 'role' },
+              { label: 'Tell me about the bookshelves', next: 'bookshelves' },
+              { label: 'What is the Dragon Compact?', next: 'compact_intro' },
+              { label: 'Sorry to interrupt', next: null }
+            ]
+          },
+          role: {
+            text: 'I maintain the Bazaar\u2019s records. Trade volumes, price histories, council minutes. Everything that passes through this market gets documented. The Tide Council requires it. I happen to find it fascinating.',
+            choices: [
+              { label: 'The Tide Council?', next: 'tide' },
+              { label: 'You enjoy record-keeping?', next: 'enjoy' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          enjoy: {
+            text: 'Records don\u2019t lie. People do, heroes do, the Council certainly does. But the numbers tell you what actually happened. Trends reveal intent. If you want to understand this settlement, read the ledgers.',
+            choices: [
+              { label: 'Where can I read them?', next: 'bookshelves' },
+              { label: 'Fair point', next: null }
+            ]
+          },
+          bookshelves: {
+            text: 'The shelves along the walls hold everything. Import records sorted by season, price indexes by commodity, vendor licenses. The older volumes near the back door date to the early Compact period. Those are the interesting ones.',
+            choices: [
+              { label: 'Early Compact? How so?', next: 'early_compact' },
+              { label: 'I\u2019ll browse them', next: null }
+            ]
+          },
+          early_compact: {
+            text: 'The first century of trade records shows a settlement that was genuinely afraid. Prices for fortification materials were astronomical. Scale fragment trade didn\u2019t exist yet. The dragons were still... present. Not just an echo in the deep floors.',
+            choices: [
+              { label: 'Dragons were here?', next: 'dragons' },
+              { label: 'When did scale trade begin?', next: 'scale_trade' },
+              { label: 'Fascinating', next: null }
+            ]
+          },
+          dragons: {
+            text: 'The Compact exists for a reason. It was a treaty of coexistence. The settlement founders negotiated access to the cave system in exchange for... something. The terms are sealed in the Council vault. I\u2019ve only seen summaries.',
+            choices: [
+              { label: 'In exchange for what?', next: 'exchange' },
+              { label: 'Where is the original?', next: 'vault' },
+              { label: 'Heavy stuff', next: null }
+            ]
+          },
+          exchange: {
+            text: 'That\u2019s the question, isn\u2019t it? The summaries say "custodial obligations." The hero cycle, the cleaning, the readiness system\u2014it might all be part of the bargain. We maintain the caves and in return...',
+            choices: [
+              { label: 'In return?', next: 'in_return' }
+            ]
+          },
+          in_return: {
+            text: 'In return, we\u2019re allowed to live here. That\u2019s one reading. The Admiralty\u2019s reading is different. They say the Compact grants dominion, not tenancy. The distinction matters rather a lot.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          vault: {
+            text: 'The Tide Council building. Supposedly in a fire-proof vault below the council chamber. I\u2019ve applied for research access six times. Denied each time. The Archivist before me? Also denied. Make of that what you will.',
+            choices: [
+              { label: 'Suspicious', next: null }
+            ]
+          },
+          scale_trade: {
+            text: 'About eighty years after the Compact. The first Gleaners started finding fragments during routine cleaning. The Foundry figured out they had useful properties. Within a decade, scales were the settlement\u2019s primary export. The economy shifted overnight.',
+            choices: [
+              { label: 'Useful properties?', next: 'properties' },
+              { label: 'Thanks', next: null }
+            ]
+          },
+          properties: {
+            text: 'Heat resistance, structural integrity, some say mild luminescence under pressure. The Foundry guards the specifics. What I know is that demand outstrips supply by a factor of three and the deep floors are the only source.',
+            choices: [
+              { label: 'The deep floors...', next: null }
+            ]
+          },
+          compact_intro: {
+            text: 'The founding treaty of this settlement. Signed approximately two hundred years ago between the original settlers and... well, the other party is variously described as "the cave custodians," "the fire council," or simply "them." Euphemisms.',
+            choices: [
+              { label: 'Dragons', next: 'dragons' },
+              { label: 'What does the Compact say?', next: 'compact_terms' },
+              { label: 'Who has the original?', next: 'vault' }
+            ]
+          },
+          compact_terms: {
+            text: 'Three pillars, as summarised in the council minutes. First: the settlement may occupy the surface and upper cave levels. Second: the hero cycle operates on a fixed schedule as an "inspection protocol." Third: custodial maintenance is the settlement\u2019s obligation.',
+            choices: [
+              { label: 'Custodial maintenance... that\u2019s us', next: 'thats_us' },
+              { label: 'Inspection protocol?', next: 'inspection' }
+            ]
+          },
+          thats_us: {
+            text: 'Precisely. Gleaners. We clean, restock, repair. The heroes "inspect." Whether they\u2019re inspecting on behalf of the settlement or on behalf of the other party depends on which faction you ask.',
+            choices: [
+              { label: 'Heavy', next: null }
+            ]
+          },
+          inspection: {
+            text: 'The hero cycle. Every few days, designated combatants enter the caves and... test the defenses. Readiness. If the dungeon passes inspection, the cycle continues peacefully. If it doesn\u2019t...',
+            choices: [
+              { label: 'If it doesn\u2019t?', next: 'if_not' }
+            ]
+          },
+          if_not: {
+            text: 'Nobody alive has seen a failed Compact cycle. The records from the early period suggest the consequences were... significant. Structural. The older ledgers mention "subsidence events." I suspect that\u2019s a polite word for cave-ins.',
+            choices: [
+              { label: '...I should get back to work', next: null }
+            ]
+          },
+          tide: {
+            text: 'One of the three factions. They control trade, the market charter, and the vault where the original Compact is kept. Merchant-political class. The Foundry builds, the Admiralty governs, and the Tide... manages the money.',
+            choices: [
+              { label: 'Three factions', next: 'factions' },
+              { label: 'Got it', next: null }
+            ]
+          },
+          factions: {
+            text: 'Tide Council, Foundry Guild, and the Admiralty. They share power. Barely. The hero cycle keeps the balance because all three need the caves maintained. Without Gleaners, the system collapses. That\u2019s your leverage, by the way.',
+            choices: [
+              { label: 'Good to know', next: null }
+            ]
+          }
+        }
+      });
+
+      // Cellar Owner — Floor 1.3 (nervous, defensive, building explainer)
       NpcSystem.registerTree('cellar_resident', {
         root: 'greeting',
         nodes: {
@@ -1348,8 +2376,43 @@ var Game = (function () {
             text: 'Oh! You startled me. Are you from the Guild? Please tell me you\'re from the Guild.',
             choices: [
               { label: 'I\'m a Gleaner, yes', next: 'relief' },
+              { label: 'What is this building?', next: 'building' },
               { label: 'What\'s wrong?', next: 'whats_wrong' },
               { label: 'Just passing through', next: 'passing' }
+            ]
+          },
+          building: {
+            text: 'It\u2019s the storm shelter. Civic infrastructure. When the hero cycle goes bad and the tremors start, everyone comes down here. The cellar beneath connects to the cave system. Used to be a storage depot before the Guild repurposed it.',
+            choices: [
+              { label: 'The tremors?', next: 'tremors' },
+              { label: 'What\u2019s on those shelves?', next: 'bookshelf' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          tremors: {
+            text: 'When readiness drops too low, the deep floors respond. Subtle at first\u2014loose stones, dust from the ceiling. The old-timers say a full failure would collapse the upper levels entirely. That\u2019s why the Guild exists. That\u2019s why YOU exist.',
+            choices: [
+              { label: 'No pressure', next: 'no_pressure' },
+              { label: 'Has it ever happened?', next: 'ever_happened' }
+            ]
+          },
+          no_pressure: {
+            text: 'Ha. Right. No pressure. Just the structural integrity of the entire settlement riding on whether you mopped the floors properly. Welcome to public service.',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          ever_happened: {
+            text: 'Not in living memory. But the records mention "subsidence events" in the early Compact period. Whole sections of cave system sealed off. The Archivist at the Bazaar can tell you more. I just want my walls to stop cracking.',
+            choices: [
+              { label: 'I\u2019ll look into it', next: null }
+            ]
+          },
+          bookshelf: {
+            text: 'Guild manuals. Maintenance protocols, trap disarmament guides, cleaning solvent recipes. Dry but useful. There\u2019s also a copy of the emergency procedures charter. Read it. Seriously. If the tremors start, you need to know the evacuation routes.',
+            choices: [
+              { label: 'I\u2019ll read them', next: null },
+              { label: 'Back', next: 'greeting' }
             ]
           },
           relief: {
@@ -3255,10 +4318,11 @@ var Game = (function () {
       return;
     }
 
-    // Talkable NPC interaction — delegate to NpcSystem
+    // NPC interaction — delegate to NpcSystem. All NPC types respond:
+    // INTERACTIVE/DISPATCHER use dialogue trees, AMBIENT cycles barks.
     if (typeof NpcSystem !== 'undefined') {
       var npcAtTile = NpcSystem.findAtTile(fx, fy, FloorManager.getEnemies());
-      if (npcAtTile && npcAtTile.talkable) {
+      if (npcAtTile && npcAtTile.npcType) {
         NpcSystem.interact(npcAtTile, FloorManager.getFloor());
         return;
       }
@@ -3335,6 +4399,10 @@ var Game = (function () {
         // is handled internally by BedPeek — just don't fall through to bonfire.
         return;
       }
+      // Cooldown gate: after closing a bonfire menu, ignore re-interact for
+      // 800ms. Prevents the OK-button trap where every press re-triggers
+      // rest+menu while the player is still facing the bonfire tile.
+      if (_bonfireCooldownMs > 0) return;
       // Non-home bonfire/bed/hearth: heal + open stash MenuBox
       HazardSystem.restAtBonfire(fx, fy);
       _pendingMenuContext = 'bonfire';
@@ -3997,6 +5065,9 @@ var Game = (function () {
     if (state !== ScreenManager.STATES.GAMEPLAY || !_gameplayReady) return;
     if (CombatEngine.isActive() || FloorTransition.isTransitioning()) return;
 
+    // Bonfire interaction cooldown — drain timer each tick
+    if (_bonfireCooldownMs > 0) _bonfireCooldownMs -= deltaMs;
+
     var floorData = FloorManager.getFloorData();
     var enemies = FloorManager.getEnemies();
     var p = Player.state();
@@ -4200,6 +5271,18 @@ var Game = (function () {
       if (typeof MonologuePeek !== 'undefined') {
         MonologuePeek.tick(frameDt);
         MonologuePeek.render(ctx, _canvas.width, _canvas.height);
+      }
+
+      // Cinematic/tooltip coordination:
+      //   monologue active → hide tooltip (canvas bar text must be readable)
+      //   cinema active, no monologue → lift tooltip above bar (dialogue clickable)
+      //   neither → normal positioning
+      if (typeof StatusBar !== 'undefined' && StatusBar.setCinematicMode) {
+        var _cinActive = typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive();
+        var _monoActive = typeof MonologuePeek !== 'undefined' && MonologuePeek.isActive();
+        var _barPx = _cinActive && typeof CinematicCamera !== 'undefined'
+          ? CinematicCamera.getBarHeight(_canvas.height) : 0;
+        StatusBar.setCinematicMode(_cinActive, _monoActive, _barPx);
       }
 
       // Door transition text overlay (destination label + exit text)
@@ -4443,12 +5526,11 @@ var Game = (function () {
           x: bfs.x + (bfs._swayX || 0),
           y: bfs.y,
           emoji: bfs.emoji,
+          emojiOverlay: bfs.emojiOverlay || null,
           scale: bfs.scale,
           bobY: bfs.bobY || 0,
-          // A4.5: fire glow moved to wall decor cavity glow system.
-          // Tent billboard has no sprite glow — fire is inside the stone ring.
-          glow: null,
-          glowRadius: 0
+          glow: bfs.glow || null,
+          glowRadius: bfs.glowRadius || 0
         });
       }
     }

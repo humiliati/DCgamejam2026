@@ -93,8 +93,8 @@ var MailboxPeek = (function () {
 
   function _getFacingPos() {
     if (typeof Player === 'undefined') return null;
-    var pos = Player.getGridPos();
-    var dir = Player.getDirection();
+    var pos = Player.getPos();
+    var dir = Player.getDir();
     var fx = pos.x;
     var fy = pos.y;
     if (dir === 0) fx += 1;       // EAST
@@ -260,6 +260,22 @@ var MailboxPeek = (function () {
    */
   function _buildReportCard(report) {
     if (!report) return '';
+
+    // ── System notices (rent, welcome, announcements) ──────────
+    if (report.systemNotice) {
+      var sysBorder = 'border:2px solid rgba(120,160,200,0.5);';
+      var sysHtml = '<div style="' + sysBorder + 'border-radius:6px;padding:12px;margin-bottom:8px;">';
+      sysHtml += '<div style="font-weight:bold;font-size:16px;margin-bottom:8px;">' +
+        (report.emoji || '\uD83D\uDCE8') + ' ' + (report.label || 'Notice') + '</div>';
+      sysHtml += '<div style="margin-bottom:6px;line-height:1.5;">' +
+        (report.body || '') + '</div>';
+      if (report.footer) {
+        sysHtml += '<div style="margin-top:8px;font-style:italic;color:#b0a880;font-size:13px;">' +
+          report.footer + '</div>';
+      }
+      sysHtml += '</div>';
+      return sysHtml;
+    }
 
     var onSchedule = report.onSchedule !== false;
     var shifted = !onSchedule;

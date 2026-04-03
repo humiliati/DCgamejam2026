@@ -191,14 +191,27 @@ var InteractPrompt = (function () {
       }
     }
 
-    // Check for friendly talkable NPCs on the facing tile
+    // Check for NPC entities on the facing tile — both INTERACTIVE
+    // (talkable, dialogue trees) and AMBIENT (bark cycling on OK)
     var enemies = FloorManager.getEnemies();
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
-      if (e.hp > 0 && e.x === fx && e.y === fy && e.friendly && e.talkable) {
+      if (e.hp > 0 && e.x === fx && e.y === fy && e.npcType) {
+        _visible = true;
+        _actionText = i18n.t(e.talkable ? 'interact.talk' : 'interact.listen', e.talkable ? 'Talk' : 'Listen');
+        _iconText = e.emoji || '';
+        _hintText = i18n.t('hint.talk', '');
+        return;
+      }
+    }
+
+    // Fallback: friendly talkable non-NPC entities (e.g. enemy with friendly flag)
+    for (var j = 0; j < enemies.length; j++) {
+      var ef = enemies[j];
+      if (ef.hp > 0 && ef.x === fx && ef.y === fy && ef.friendly && ef.talkable && !ef.npcType) {
         _visible = true;
         _actionText = i18n.t('interact.talk', 'Talk');
-        _iconText = e.emoji || '';
+        _iconText = ef.emoji || '';
         _hintText = i18n.t('hint.talk', '');
         return;
       }

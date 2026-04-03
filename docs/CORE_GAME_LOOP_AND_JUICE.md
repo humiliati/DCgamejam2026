@@ -473,6 +473,28 @@ Interior interactions (depth-2 floors only) use a distinct juice palette — war
 
 Detailed juice specifications and per-building interaction inventories are in DOC-10 (COZY_INTERIORS_DESIGN.md).
 
+### 6.8 Loot & Currency Pickup Juice
+
+Walk-over collectibles (corpse loot, spilled crate contents, ground drops) need four coordinated FX layers to feel satisfying. Every gold/battery/food pickup should hit all four; the intensity scales with amount.
+
+| Layer | Spec | Implementation Notes |
+|-------|------|---------------------|
+| **1. Tile-positioned particle burst** | `coinBurst` spawns at the **world tile center** projected to screen-space (not canvas center). 3–8 coin sprites fan upward in a tight cone. Clears on walk-over — particles should already be mid-flight by the time the player reaches the tile. | Requires world→screen projection: use the raycaster's column-projection math to find the tile's screen X, and `drawStart` for screen Y. Pass projected coords to `ParticleFX.coinBurst(sx, sy, count)`. |
+| **2. Tooltip print** | `StatusBar.pushTooltip('💰 +N', 'loot')` logs the pickup to the tooltip history. Replaces Toast for currency — tooltip is persistent, scrollable, and doesn't fight other toasts. | Category `'loot'` enables future filtering. Battery pickups use `'battery'`, food uses `'food'`. |
+| **3. HUD counter flash** | The StatusBar gold display (`#sb-gold`) pulses with a brief amber highlight (`background: rgba(240,200,48,0.25)` → transparent over 400ms). Signals "your money changed" without requiring the player to read the number. | CSS class `.sb-gold-flash` with a 400ms animation. `StatusBar.flashGold()` adds class, `animationend` removes it. |
+| **4. Counter spin (tick-up)** | Gold number animates from old value → new value over 300ms with `requestAnimationFrame` easing. Each tick plays a quiet `ui-blop` SFX at 0.15 volume with ±5% pitch variance. Large amounts (≥15) use logarithmic steps to avoid long animations. | `StatusBar._updateGoldWheel(newValue)` already exists — extend it with a tween state and SFX hooks. |
+
+**Scaling by amount:**
+
+| Amount | Particle Count | Counter Spin | Extra FX |
+|--------|---------------|-------------|----------|
+| 1–2 | 3 coins (subtle) | Instant (no spin) | Tooltip only, no flash |
+| 3–9 | 5 coins | 200ms spin | Flash |
+| 10–14 | 8 coins | 300ms spin | Flash + brighter pulse |
+| 15+ | `coinRain` (staggered bursts) | 500ms spin with SFX | Flash + floating `+N` counter above tile |
+
+**Battery & food pickups** follow the same four-layer pattern but with their own particle sprites (◈ for battery, heart for food) and tooltip categories.
+
 ---
 
 ## 7. The Pressure Gradient — Difficulty as Readiness Targets

@@ -162,17 +162,18 @@ var HazardSystem = (function () {
 
     HUD.updatePlayer(Player.state());
 
-    // Feedback — show rest type
+    // Feedback — show rest type (🔥 prefix — dragonfire rest, not bed rest)
     var sleptHours = Math.round(advanceMin / 60);
+    var restPrefix = '\uD83D\uDD25 ';  // 🔥
     if (isDungeon) {
-      HUD.showCombatLog(i18n.t('hazard.dragonfire_brief',
-        '🐉 Brief rest (' + sleptHours + 'h); HP & energy restored. Stay alert.'));
+      HUD.showCombatLog(restPrefix + i18n.t('hazard.dragonfire_brief',
+        'Brief rest (' + sleptHours + 'h); HP & energy restored. Stay alert.'));
     } else if (gotWellRested) {
-      HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_dawn',
-        '🐉 Rested until dawn (' + sleptHours + 'h); HP & energy restored. You feel well rested.'));
+      HUD.showCombatLog(restPrefix + i18n.t('hazard.dragonfire_rest_dawn',
+        'Rested until dawn (' + sleptHours + 'h); HP & energy restored. You feel well rested.'));
     } else {
-      HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_late',
-        '🐉 Rested until dawn (' + sleptHours + 'h); HP & energy restored. Late night, though...'));
+      HUD.showCombatLog(restPrefix + i18n.t('hazard.dragonfire_rest_late',
+        'Rested until dawn (' + sleptHours + 'h); HP & energy restored. Late night, though...'));
     }
     AudioSystem.play('ui-confirm', { volume: 0.5 });
 

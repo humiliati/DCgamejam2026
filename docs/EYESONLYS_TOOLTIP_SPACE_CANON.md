@@ -230,6 +230,80 @@ Choices break to a separate line with larger tap targets (min-height: 24px):
 3. **Choice links** → Inline `[text]` spans with click handlers. Desktop: all on one line. Mobile: wrapped to separate line.
 4. **Touch targets** → 24px min-height on mobile portrait, 6px horizontal padding.
 
+## Cinematic Camera / Tooltip Mutual Exclusivity
+
+**Updated 2026-04-03** — `StatusBar.setCinematicMode()` now handles three states:
+
+### State Machine
+
+| State | Condition | Tooltip Area | Position |
+|-------|-----------|-------------|----------|
+| **Normal** | No cinematic active | Visible | `bottom: 0` (default) |
+| **Monologue** | `MonologuePeek.isActive()` | **Hidden** (`visibility: hidden`) | — |
+| **Cinema + Dialogue** | `CinematicCamera.isActive()` && NOT monologue | Visible | Lifted above bar: `translateY(-barPx)` |
+
+### Rules
+
+1. **Monologue always wins.** When MonologuePeek renders text on the letterbox bars, the tooltip MUST be hidden so canvas-rendered monologue text is readable. The DOM tooltip naturally overlays the canvas and would obscure it.
+
+2. **Dialogue cinematics keep the tooltip.** CinematicCamera presets like `npc_dialogue`, `dragonfire_dialogue`, and `dispatcher_grab` may need interactive dialogue choices. The tooltip stays visible but lifts above the bottom bar so it sits inside the cinematic frame.
+
+3. **Never require clicks on hidden elements.** If a cinematic needs clickable `[choice]` spans, it MUST NOT be in monologue state. Monologue sequences should complete before dialogue choices appear.
+
+4. **Log everything.** Even when the tooltip is hidden (monologue mode), `StatusBar.pushTooltip()` still logs to `_history`. Barks and game events that fire during a monologue appear in the scrollable history when the tooltip returns.
+
+### API
+
+```javascript
+// Called every frame from game render loop (after MonologuePeek.render)
+StatusBar.setCinematicMode(
+  CinematicCamera.isActive(),   // cinemaActive
+  MonologuePeek.isActive(),     // monologueActive
+  CinematicCamera.getBarHeight(vpH)  // barPx (for tooltip lift offset)
+);
+```
+
+### Cinematic Presets & Tooltip Behavior
+
+| Preset | Bars | Input Lock | Tooltip | Notes |
+|--------|------|-----------|---------|-------|
+| `dispatcher_grab` | 15% | Yes | Lifted (dialogue via DialogBox currently) | Will migrate to pushDialogue |
+| `monologue` | 18% | Yes | Hidden (monologue text on bars) | Text renders on canvas bars |
+| `morning_recap` | 22% | Yes | Hidden (monologue text on bars) | Slow fade-in letterbox |
+| `npc_dialogue` | 10% | No | Lifted (dialogue choices clickable) | Future: inline tooltip dialogue |
+| `dragonfire_dialogue` | 14% | Yes | Lifted (dialogue choices clickable) | Bonfire tutorialization |
+| `combat_lock` | 8% | No | Lifted (combat tooltips visible) | Tight framing during combat |
+
+---
+
+## Interior NPC Dialogue Trees — Content Guide
+
+**Updated 2026-04-03** — Trees registered for all interior interactive NPCs.
+
+Every interior NPC dialogue tree should cover three mandatory topics and one optional topic:
+
+1. **Building explanation** — What is this place? Who runs it? What happens here?
+2. **Bookshelf hint** — Direct player to check bookshelves for deeper lore/records.
+3. **World narrative** — Faction politics, Dragon Compact lore, settlement history. Each NPC's perspective is shaped by their role and building.
+4. *(Optional)* **Setting verbs** — Actions the NPC can perform (serve food, offer rest, sell wares). These use `effect` on choices.
+
+### Registered Trees (as of 2026-04-03)
+
+| NPC ID | Floor | Building | Topics |
+|--------|-------|----------|--------|
+| `bazaar_merchant` | 1.1 | Coral Bazaar | Market wares, scale trade, Tide Council politics, bookshelf hint |
+| `bazaar_archivist` | 1.1 | Coral Bazaar | Dragon Compact deep-dive, faction explainer, bookshelf champion |
+| `inn_keeper` | 1.2 | Driftwood Inn | Menu/room/cot, shipwreck history, conspiracy, bookshelf hint |
+| `inn_patron_grumpy` | 1.2 | Driftwood Inn | Hero damage complaints, cellar help offer, emotional escalation |
+| `cellar_resident` | 1.3 | Storm Shelter | Tremors, emergency procedures, Guild manuals, bookshelf hint |
+| `floor1_bazaar_vendor` | 1.1 | Coral Bazaar | Vendor approach dialogue |
+| `dispatch_veteran` | 2.1 | Dispatcher's Office | Guild operations, protocol |
+| `dispatch_clerk` | 2.1 | Dispatcher's Office | Administrative, bureaucratic |
+| `dispatch_rookie` | 2.1 | Dispatcher's Office | Nervous newcomer, player kinship |
+| `watchpost_watchman` | 2.2 | Watchpost | Dungeon entrance guard, shaken |
+
+---
+
 ## Future Work
 
 1. **Quest-aware dialogue branches** — DialogueSystem checks `player.flags` to show/hide choices based on quest state (e.g. show "Return hammer" choice only if player has BLACKSMITH_HAMMER)
@@ -237,3 +311,4 @@ Choices break to a separate line with larger tap targets (min-height: 24px):
 3. **Proc gen NPC dialogue** — Generate contextual dialogue trees for non-tutorial NPCs based on floor biome, nearby items, player stats
 4. **Dialogue history in panel** — Render full conversation transcript in the history panel (not just plain text summaries)
 5. **Portrait/avatar column** — Add small emoji avatar in history entries for NPC speech (distinct from game action tooltips)
+6. **Dispatcher → pushDialogue migration** — Reroute `_showDispatcherGateDialog()` from DialogBox.show() to StatusBar.pushDialogue() (requires converting procedural callback branching to `{ root, nodes }` tree format)

@@ -266,9 +266,9 @@ i18n.register('en', {
   'bonfire.waypoint_set':            'Respawn point set',
   'ui.confirm':                      'Yes',
   'shop.stash_empty_hint':           'Drag items here; they survive death.',
-  'hazard.dragonfire_brief':     '🐉 Brief rest; HP & energy restored. Stay alert.',
-  'hazard.dragonfire_rest_dawn': '🐉 Rested until dawn; HP & energy restored. You feel well rested.',
-  'hazard.dragonfire_rest_late': '🐉 Rested until dawn; HP & energy restored. Late night, though...',
+  'hazard.dragonfire_brief':     'Brief rest; HP & energy restored. Stay alert.',
+  'hazard.dragonfire_rest_dawn': 'Rested until dawn; HP & energy restored. You feel well rested.',
+  'hazard.dragonfire_rest_late': 'Rested until dawn; HP & energy restored. Late night, though...',
   'inv.nothing_burn':        'Nothing to burn',
   'inv.bag':                 'Bag',
 

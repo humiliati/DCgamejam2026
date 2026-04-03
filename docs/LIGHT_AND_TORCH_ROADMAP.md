@@ -254,83 +254,120 @@ GridGen generates hero-stormed torch states:
 Wall decor items with `cavityGlow: true` get per-pixel radial-falloff glow rendering
 (quadratic 1-r², computed from horizontal U-offset + vertical distance to glow center).
 BONFIRE tiles: 0.3× stone ring (bonfire_ring texture), fire decor_torch with warm amber
-glow (255,120,30, α=0.35). HEARTH tiles: same cavity decor, smaller scale. TERMINAL tiles:
-sickly green cavity glow (30,90,35, α=0.25). Sprite glow also upgraded from flat ctx.arc()
-to createRadialGradient multi-stop with _parseGlowRGB() hex/rgba parser. BonfireSprites.js
-stripped to tent-only. Door depth + interactivity hover highlight deferred to post-jam.
+glow (255,120,30, α=0.35). TERMINAL tiles: sickly green cavity glow (30,90,35, α=0.25).
+Sprite glow also upgraded from flat ctx.arc() to createRadialGradient multi-stop with
+_parseGlowRGB() hex/rgba parser. BonfireSprites.js stripped to tent-only. Door depth +
+interactivity hover highlight deferred to post-jam.
 
-Wall-column tile types that have hollow interiors (hearth, cleaning truck
-hose bay, potentially doors) need a shared rendering approach: a "cavity"
-region within the wall texture where an emoji or sprite composites into
-a dark interior, with glow and interactivity.
+**Update (Apr 3, pass 1):** Initial "sprite-inside-wall" attempt used alpha-
+transparent portholes in textures (hearth_riverrock, bonfire_ring) with
+cavity pre-fill in the raycaster. The fire sprite rendered on the wall face
+via wallDecor. Result: flat "painted-on" fire with no depth — the porthole
+was invisible because the wallDecor sprite covered it entirely.
 
-### 2.5a. Cavity rendering model
+**Update (Apr 3, pass 2 — CURRENT):** Replaced with step-fill cavity
+technique. Accidentally discovered via PILLAR tiles that the step-fill
+(Doom rule) creates a far more convincing depth illusion than alpha
+portholes. A negative `tileHeightOffset` sinks the wall column, and
+the step-fill lip above becomes the cavity opening. Fire + glow are
+composited directly into the lip band in the raycaster step-fill code.
 
-A cavity is a rectangular region of the wall texture where the texture's
-dark archway pixels are treated as a window into an interior. The
-raycaster renders:
+### 2.5a. Step-fill cavity technique ✅ IMPLEMENTED
 
-1. Base wall texture (hearth_riverrock, truck_panel, etc.) — already works
-2. Cavity sprite overlay: emoji or procedural sprite composited into the
-   archway area, using the same wall decor system from A4 but with a
-   dedicated rendering mode:
-   - **Lit cavities** (hearth with fire, lit torch): draw emoji/sprite +
-     radial glow overlay (warm orange, radius scaled by distance)
-   - **Unlit cavities** (empty hearth, drained hose bay): dark void with
-     subtle depth gradient, no glow
-3. Interactivity: when player faces the tile within interact range,
-   the cavity gets a hover highlight (subtle brightness pulse).
-   InteractPrompt already detects facing tile — extend to trigger
-   cavity highlight state on the raycaster.
+A reusable rendering pattern for tiles that have hollow interiors visible
+from outside (hearth, bonfire, cleaning truck hose bay). Uses the existing
+step-fill (Doom rule) system — no alpha-channel textures needed.
 
-### 2.5b. Hearth fire rendering
+**How it works:**
+A negative `tileHeightOffset` in the SpatialContract displaces the wall
+column downward. The raycaster fills the gap above (lipTop to drawStart)
+with a "step" color. For cavity tiles, this step region becomes the fire
+opening: dark cavity base → fire sprite → warm glow overlay.
 
-HEARTH (29) is already opaque with `hearth_riverrock` texture (dark
-archway center). Extend with:
-- Wall decor entry: `{ spriteId: 'emoji_fire', anchorU: 0.5, anchorV: 0.45, scale: 0.35, emitter: true, cavityGlow: { r: 255, g: 140, b: 40, radius: 3 } }`
-- Glow overlay: after rendering the emoji, draw a radial gradient
-  in the cavity region with the fire's warm color
-- Audio: `AudioSystem.play('fire-crackle')` with proximity falloff —
-  loop while player is within radius 5. Volume = `1 - (dist / 5)`.
-  Existing AudioSystem supports `play(id, { loop, volume })`.
-- Interactivity: facing a hearth opens HearthPeek (same pattern as
-  TorchPeek in Phase 3b). Rest / incinerator / cook interaction.
+```
+Rendering order (per column, sunken HEARTH/BONFIRE):
+
+  ┌─────────────────────┐  ← flatTop (where wall WOULD be)
+  │ Step-fill lip band   │  lipTop..lipBot (= drawStart)
+  │  1. Dark cavity fill │  #0a0502, dimmed by fog+brightness
+  │  2. Fire sprite      │  decor_hearth_fire via drawImage
+  │  3. Warm glow overlay│  rgba(255,120,30, 0.18×brightness)
+  ├─────────────────────┤  ← drawStart (actual wall top)
+  │ Wall texture         │  Fully opaque hearth_riverrock
+  │ (shifted down)       │  or bonfire_ring — no porthole
+  ├─────────────────────┤  ← drawEnd (actual wall bottom)
+  │ Floor pre-pass       │  Normal floor rendering
+  └─────────────────────┘
+```
+
+**How to add a new step-fill cavity tile:**
+1. In floor-manager.js: set a negative `tileHeightOffset` for the tile
+   (e.g., -0.35 for hearth, -0.25 for bonfire). Include in ALL biomes
+   that override `tileHeightOffsets` to avoid erasure.
+2. In raycaster.js step-fill section: add the tile to the fire cavity
+   check (`if (hitTile === TILES.HEARTH || hitTile === TILES.NEW_TILE)`)
+3. In floor-manager.js `_buildWallDecorFromGrid`: add a wallDecor entry
+   with `cavityBand: true` (skips normal wall-face rendering) and
+   `cavityGlow: true` with appropriate glow color
+4. The texture is fully opaque — no alpha channel needed
+
+**Advantages over alpha-porthole approach:**
+- Genuine depth: the lip band is geometrically displaced from the wall
+  face, creating parallax as the player moves
+- No alpha compositing performance cost in the texture
+- Simpler textures — fully opaque, no porthole geometry
+- Reuses existing step-fill infrastructure (no new rendering path)
+
+### 2.5b. Hearth fire rendering ✅ IMPLEMENTED
+
+HEARTH (29) renders as a 1.6× riverrock column with a step-fill cavity:
+
+- **Texture**: `hearth_riverrock` — fully opaque riverrock masonry. Warm
+  grey-brown stones with dark mortar and chimney soot gradient at top.
+- **tileHeightOffset**: -0.35 in home biome. The column sinks, creating
+  a lip band above that reads as the hearth opening.
+- **Cavity rendering** (in raycaster step-fill):
+  - Dark fill: `#0a0502` dimmed by fog+brightness
+  - Fire sprite: `decor_hearth_fire` (32×32 oval flame with dragon whelp
+    silhouette) stretched into the lip band via drawImage
+  - Glow: warm orange `rgba(255,120,30)` at 18% × brightness
+  - Wobble: subtle vertical source offset at ~0.5Hz (sin wave)
+- **wallDecor**: `cavityBand: true` flag — sprite skipped on wall face,
+  only rendered in the step-fill band. `cavityGlow: true` retained for
+  future use if wall-face glow halo is desired.
+- **Audio**: fire-crackle loop with proximity falloff (spec unchanged).
+- **Interactivity**: HearthPeek planned (spec unchanged, post-jam).
 
 ### 2.5c. Cleaning truck hose bay
 
 The pressure washing truck (PW-2) has a tile face with a hose reel.
-Same cavity model: dark recess in truck_panel texture with a hose
-thread emoji (🧵 or custom sprite) inside. Glows faintly blue-white
-when pressurized. Interactivity: facing the truck hose bay opens
-HosePeek (already spec'd in PRESSURE_WASHING_ROADMAP PW-2).
+Same step-fill cavity technique: give the truck tile a negative
+`tileHeightOffset` to create a lip band, and render the hose sprite +
+faint blue-white glow in the band. See §2.5a for the recipe.
+Interactivity: facing the truck hose bay opens HosePeek (already spec'd
+in PRESSURE_WASHING_ROADMAP PW-2).
 
-### 2.5d. Bonfire rework (replacing BonfireSprites)
+### 2.5d. Bonfire rework ✅ IMPLEMENTED
 
-The current BonfireSprites module (emoji billboards floating in space)
-is replaced with a proper tile-based composition:
+BONFIRE tile (18) renders as a 0.3× short stone ring with a step-fill
+cavity. Same technique as HEARTH:
 
-**New approach:**
-- BONFIRE tile (18) becomes a short-height opaque column (0.3× via
-  tileWallHeights, like SHRUB). Texture: `bonfire_ring` — a stone
-  fire ring (procedural: grey river stones in a circle).
-- Fire rendering uses the cavity model: dark interior of the stone
-  ring has a 🔥 emoji or procedural flame sprite composited in.
-- Glow: warm orange, radius 5, intensity 0.9, slow pulse flicker.
+- **Texture**: `bonfire_ring` — fully opaque riverrock masonry. Grey
+  stone with soot gradient, matching hearth pattern.
+- **tileHeightOffset**: -0.25 in all exterior biomes. The short ring
+  sinks, creating a visible cavity above.
+- **Cavity rendering**: same pipeline as HEARTH (dark fill + fire sprite
+  + glow), composited in the step-fill lip band.
+- **Billboard sprite**: BonfireSprites.js emits only the tent (⛺)
+  billboard. Fire + shrub sprites removed — fire is the cavity, shrubs
+  are actual SHRUB tiles in the grid.
+- **Glow**: warm orange, radius 5, intensity 0.9, slow pulse flicker.
   Registered as a light source via Phase 1's API.
-- Audio: fire-crackle loop at proximity, louder than hearth (outdoor).
-- Surrounding SHRUB tiles (already placed by GridGen in C-shape)
-  create the meadow camp perimeter.
-- The tent sprite (⛺) remains as a billboard sprite at adjacent tile,
-  rendered by the existing sprite system (not wall decor).
+- **Audio**: fire-crackle loop at proximity, louder than hearth (outdoor).
 
-**BonfireSprites.js**: Stripped to only emit the tent sprite. Fire +
-shrub sprites removed — fire is now the bonfire tile's cavity, shrubs
-are actual SHRUB tiles already placed in the grid.
-
-**Floor 0 impact**: The 40×30 courtyard already has BONFIRE tiles at
-camp positions with SHRUB C-shapes around them. Adding the stone ring
-texture and cavity fire rendering makes these read as proper campfires
-without any grid changes.
+**Floor 0 impact**: The courtyard already has BONFIRE tiles with SHRUB
+C-shapes around them. The stone ring texture + cavity fire rendering
+makes these read as proper campfires without grid changes.
 
 ### 2.5e. Door depth enhancement (texture polish, not architecture)
 

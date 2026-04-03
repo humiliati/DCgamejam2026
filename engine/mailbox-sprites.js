@@ -22,8 +22,8 @@ var MailboxSprites = (function () {
 
   // ── Sprite config ────────────────────────────────────────────────
   var SPRITE_SCALE = 0.50;  // Half-wall height billboard (matches bonfire tent)
-  var BOB_AMP      = 2;     // Flag bob pixels amplitude
-  var BOB_PERIOD   = 400;   // Flag bob period ms (sin wave)
+  var BOB_AMP      = 0.8;   // Flag bob pixels amplitude (gentle nod)
+  var BOB_PERIOD   = 1000;  // Flag bob period ms (sin wave)
 
   // ── State ────────────────────────────────────────────────────────
   var _cachedFloorId = null;
@@ -55,12 +55,14 @@ var MailboxSprites = (function () {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
         if (grid[gy][gx] === mailboxTile) {
+          // Position at grid index — _renderSprites adds 0.5 to center
           _cachedSprites.push({
-            x: gx + 0.5,
-            y: gy + 0.5,
+            x: gx,
+            y: gy,
             emoji: _getCurrentEmoji(),
             scale: SPRITE_SCALE,
             mailbox: true,
+            noFogFade: true,
             _bobOffset: 0
           });
         }

@@ -260,6 +260,13 @@ var Raycaster = (function () {
         // them and keep searching for something taller.
         var _maxH = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
 
+        // ── Mailbox back-face injection flag ──────────────────────
+        // MAILBOX platforms are very short (0.25×) and need their inner
+        // face visible so the player can see the platform from behind.
+        // Only MAILBOX gets this — furniture (TABLE, BED) must NOT get
+        // inner faces as it breaks the floor-pre-pass "tabletop" illusion.
+        var _needBackFace = (hitTile === TILES.MAILBOX);
+
         // Continue DDA to collect up to MAX_LAYERS total hits
         var _cSdX = sideDistX, _cSdY = sideDistY;
         var _cMX = mapX, _cMY = mapY, _cSd = 0;
@@ -271,6 +278,17 @@ var Raycaster = (function () {
             _cSdY += deltaDistY; _cMY += stepY; _cSd = 1;
           }
           _cDep++;
+
+          // Inject back-face for MAILBOX on first step past the tile
+          if (_needBackFace && _lc < _MAX_LAYERS) {
+            _layerBuf[_lc].mx = _cMX;
+            _layerBuf[_lc].my = _cMY;
+            _layerBuf[_lc].sd = _cSd;
+            _layerBuf[_lc].tile = hitTile;
+            _lc++;
+            _needBackFace = false;
+          }
+
           if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
           var _cT = grid[_cMY][_cMX];
           if (TILES.isOpaque(_cT) || TILES.isDoor(_cT)) {
@@ -326,13 +344,19 @@ var Raycaster = (function () {
       // arbitrarily large lineHeight correctly; this clamp is only
       // needed to prevent numeric instability in 1/perpDist.
       if (perpDist < 0.2) perpDist = 0.2;
-      _zBuffer[col] = perpDist;
 
       // ── Wall height: contract tileWallHeights → chamber override → base ──
       var wallHeightMult = baseWallH;
       if (_contract) {
         wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
       }
+
+      // Z-buffer: very short walls (platforms, rings) don't occlude sprites.
+      // Billboard sprites behind these tiles (mailbox emoji, bonfire tent)
+      // float above them and must remain visible. The wall still renders
+      // normally — we write renderDist so sprite culling sees "no wall"
+      // for these columns.
+      _zBuffer[col] = (wallHeightMult > 0.35) ? perpDist : renderDist;
       // No cap on lineHeight — proper texture UV clipping handles
       // close-range walls. Removing the cap fixes the stretch bug where
       // nearby walls widen (more columns) without getting proportionally
@@ -522,7 +546,45 @@ var Raycaster = (function () {
           var lipTop = Math.max(0, flatTop);
           var lipBot = drawStart;
           if (lipBot > lipTop) {
-            ctx.fillRect(col, lipTop, 1, lipBot - lipTop);
+            var lipH = lipBot - lipTop;
+
+            // ── Fire cavity for HEARTH/BONFIRE ─────────────────────
+            // The step-fill lip reads as a cavity opening above the
+            // sunken stone column. Dark fill + warm glow + fire sprite
+            // composited into the band — the "Doom rule" depth illusion.
+            if ((hitTile === TILES.HEARTH || hitTile === TILES.BONFIRE) && lipH >= 2) {
+              // 1. Dark cavity base
+              var cavDark = _applyFogAndBrightness(
+                '#0a0502', fogFactor, brightness * 0.4, fogColor
+              );
+              ctx.fillStyle = cavDark;
+              ctx.fillRect(col, lipTop, 1, lipH);
+
+              // 2. Fire sprite — blit 1px column of decor_hearth_fire
+              var fireTex = TextureAtlas.get('decor_hearth_fire');
+              if (fireTex && fireTex.canvas && lipH >= 3) {
+                var fSrcX = Math.floor(wallX * fireTex.width);
+                if (fSrcX >= fireTex.width) fSrcX = fireTex.width - 1;
+                // Wobble: subtle vertical phase shift for flame animation
+                var fWobble = Math.sin(Date.now() * 0.003) * 0.04;
+                var fSrcY = Math.max(0, Math.floor(fWobble * fireTex.height));
+                var fSrcH = fireTex.height - fSrcY;
+                ctx.drawImage(fireTex.canvas,
+                  fSrcX, fSrcY, 1, fSrcH,
+                  col, lipTop, 1, lipH
+                );
+              }
+
+              // 3. Warm glow overlay — single semi-transparent pass
+              var glowA = 0.18 * brightness;
+              if (glowA > 0.01) {
+                ctx.fillStyle = 'rgba(255,120,30,' + glowA.toFixed(3) + ')';
+                ctx.fillRect(col, lipTop, 1, lipH);
+              }
+            } else {
+              // Normal sunken step fill (doors, stairs, etc.)
+              ctx.fillRect(col, lipTop, 1, lipH);
+            }
           }
         }
       }
@@ -712,6 +774,11 @@ var Raycaster = (function () {
 
     for (var di = 0; di < items.length; di++) {
       var d = items[di];
+
+      // Skip items rendered in the step-fill cavity band (fire sprites
+      // for HEARTH/BONFIRE — already composited into the lip region)
+      if (d.cavityBand) continue;
+
       var halfW = d.scale / 2;
       var uMin = d.anchorU - halfW;
       var uMax = d.anchorU + halfW;
@@ -731,6 +798,10 @@ var Raycaster = (function () {
       // Sprite aspect ratio preserved: vExtent = scale * (texH / texW)
       var vExtent = d.scale * tex.height / tex.width;
       var vCenter = d.anchorV;
+      // Wobble: slow vertical bobbing for fire-inside-wall sprites
+      if (d.wobble) {
+        vCenter += Math.sin(Date.now() * 0.003) * d.wobble;
+      }
       var vMin = vCenter - vExtent / 2;
       var vMax = vCenter + vExtent / 2;
 
@@ -1532,7 +1603,9 @@ var Raycaster = (function () {
       var fogFactor = _contract
         ? SpatialContract.getFogFactor(_contract, dist)
         : Math.min(1, dist / fogDist);
-      var alpha = Math.max(0.1, 1 - fogFactor);
+      // Interactive/solid sprites (mailbox, bonfire ring) stay opaque —
+      // fog fade on close-range interactables looks like a rendering bug.
+      var alpha = s.noFogFade ? 1.0 : Math.max(0.1, 1 - fogFactor);
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -1615,6 +1688,17 @@ var Raycaster = (function () {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(s.emoji, 0, 0);
+        // Overlay emoji (e.g. translucent 🐉 over 🔥 for dragonfire)
+        if (s.emojiOverlay) {
+          var ov = s.emojiOverlay;
+          var prevAlpha = ctx.globalAlpha;
+          ctx.globalAlpha = prevAlpha * (ov.opacity || 0.5);
+          var ovScale = ov.scale || 1.0;
+          if (ovScale !== 1.0) ctx.scale(ovScale, ovScale);
+          ctx.font = Math.floor(spriteH * 0.8 / ovScale) + 'px serif';
+          ctx.fillText(ov.emoji, ov.offX || 0, ov.offY || 0);
+          ctx.globalAlpha = prevAlpha;
+        }
         ctx.restore();
       } else if (s.color) {
         ctx.fillStyle = s.color;
