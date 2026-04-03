@@ -99,7 +99,12 @@ var Raycaster = (function () {
     var ctx = _ctx;
     var w = _width;
     var h = _height;
-    var halfH = h / 2;
+    // Horizon line — shifted by lookPitch for vertical free look.
+    // Negative pitch = look down (horizon moves up, more floor visible).
+    // Positive pitch = look up (horizon moves down, more ceiling/sky).
+    var rawHalfH = h / 2;
+    var pitchShift = (player.pitch || 0) * rawHalfH;
+    var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
     var fov = Math.PI / 3;
     var halfFov = fov / 2;
 
@@ -320,7 +325,7 @@ var Raycaster = (function () {
       // rays can get very shallow. The UV clipping below handles
       // arbitrarily large lineHeight correctly; this clamp is only
       // needed to prevent numeric instability in 1/perpDist.
-      if (perpDist < 0.12) perpDist = 0.12;
+      if (perpDist < 0.2) perpDist = 0.2;
       _zBuffer[col] = perpDist;
 
       // ── Wall height: contract tileWallHeights → chamber override → base ──
@@ -370,13 +375,6 @@ var Raycaster = (function () {
       if (lightMap && lightMap[mapY] && lightMap[mapY][mapX] !== undefined) {
         brightness = lightMap[mapY][mapX];
       }
-      // Sun intensity boost for exterior floors — torch-only is too dark for daytime
-      if (_contract && _contract.ceilingType === 'sky' &&
-          typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
-        var sunI = DayCycle.getSunIntensity();
-        // Blend: max of torch light vs ambient sun (sun lifts the floor, doesn't replace torches)
-        brightness = Math.max(brightness, 0.25 + sunI * 0.7);
-      }
 
       // ── Back-to-front N-layer wall rendering ────────────────
       // Render background layers (farthest first, skipping layer 0
@@ -389,7 +387,8 @@ var Raycaster = (function () {
           _renderBackLayer(
             ctx, col, _layerBuf[_li], h, halfH, baseWallH,
             px, py, rayDirX, rayDirY, stepX, stepY,
-            fogDist, fogColor, lightMap
+            fogDist, fogColor, lightMap,
+            tintStr, tintIdx, tintRGB
           );
         }
       }
@@ -454,15 +453,17 @@ var Raycaster = (function () {
           ctx.fillRect(col, drawStart, 1, stripH);
         }
 
-        // Fog overlay
-        if (fogFactor > 0.01) {
-          ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
-          ctx.fillRect(col, drawStart, 1, stripH);
-        }
-
-        // Brightness / lighting overlay (tint-colored near light sources)
-        if (brightness < 0.95) {
-          ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, 1 - brightness);
+        // Fog + brightness combined overlay — single pass to avoid alpha-stacking flicker.
+        // Compute both fog and brightness darkening, then draw the dominant one.
+        var _fgDark = (brightness < 0.95) ? (1 - brightness) : 0;
+        if (fogFactor > 0.05 || _fgDark > 0.05) {
+          if (fogFactor >= _fgDark) {
+            // Fog dominates — draw fog-colored overlay
+            ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+          } else {
+            // Brightness/tint dominates — draw tint-colored darkness
+            ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, _fgDark);
+          }
           ctx.fillRect(col, drawStart, 1, stripH);
         }
       } else {
@@ -808,7 +809,8 @@ var Raycaster = (function () {
   // lock check, no Doom-rule step fill. Back layers are static scenery.
   function _renderBackLayer(ctx, col, L, h, halfH, baseWallH,
                             px, py, rayDirX, rayDirY, stepX, stepY,
-                            fogDist, fogColor, lightMap) {
+                            fogDist, fogColor, lightMap,
+                            tintStr, tintIdx, tintRGB) {
     // Perpendicular distance
     var pd;
     if (L.sd === 0) {
@@ -817,7 +819,7 @@ var Raycaster = (function () {
       pd = (L.my - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
     }
     pd = Math.abs(pd);
-    if (pd < 0.12) pd = 0.12;
+    if (pd < 0.2) pd = 0.2;
 
     // Wall height from contract
     var wh = SpatialContract.getWallHeight(_contract, L.mx, L.my, _rooms, L.tile, _cellHeights);
@@ -842,12 +844,6 @@ var Raycaster = (function () {
     var bri = 1.0;
     if (lightMap && lightMap[L.my] && lightMap[L.my][L.mx] !== undefined) {
       bri = lightMap[L.my][L.mx];
-    }
-    // Sun intensity boost for exterior background layers
-    if (_contract && _contract.ceilingType === 'sky' &&
-        typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
-      var sunBG = DayCycle.getSunIntensity();
-      bri = Math.max(bri, 0.25 + sunBG * 0.7);
     }
 
     // Wall UV
@@ -891,15 +887,14 @@ var Raycaster = (function () {
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
-    // Fog overlay
-    if (fog > 0.01) {
-      ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fog + ')';
-      ctx.fillRect(col, drStart, 1, stripH);
-    }
-
-    // Brightness overlay (tint-colored near light sources)
-    if (tex && bri < 0.95) {
-      ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, L.my, L.mx, 1 - bri);
+    // Fog + brightness combined overlay — single pass to avoid alpha-stacking flicker.
+    var _blDark = (bri < 0.95) ? (1 - bri) : 0;
+    if (fog > 0.05 || _blDark > 0.05) {
+      if (fog >= _blDark) {
+        ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fog + ')';
+      } else {
+        ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, L.my, L.mx, _blDark);
+      }
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
@@ -1218,6 +1213,8 @@ var Raycaster = (function () {
     // Layer visibility based on facing
     var showFrontWeapon = faceDot > -0.1;
     var showBackWeapon  = faceDot < 0.2;
+    // When NPC faces away, back weapon renders ON TOP (highest z) instead of behind
+    var backWeaponOnTop = faceDot < -0.3;
     var headDim = faceDot < -0.3 ? 0.6 : 1.0;
     // Head Y-squash when facing away (back-of-head foreshortening)
     var headSquash = faceDot < -0.3 ? 0.94 : 1.0;
@@ -1230,6 +1227,9 @@ var Raycaster = (function () {
       var fv2 = _FACE_VEC[facing];
       if (fv2) hatShiftX = fv2[0] * fontSize * 0.12;
     }
+    // Back weapon squish: weapon is perpendicular to body plane, so it
+    // foreshortens LESS than the body at side angles. Lerp toward 1.0.
+    var bwSx = sx + (1 - sx) * 0.6;
 
     var slots = [stack.head, stack.torso, stack.legs];
     var mods  = [stack.headMods, stack.torsoMods, null];
@@ -1249,12 +1249,14 @@ var Raycaster = (function () {
       // ── Back sub-layers (render behind this slot) ──
       if (si === 0 && stack.hat && stack.hat.behind) {
         _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
-                        fontSize * stack.hat.scale, sx, ySquish);
+                        fontSize * stack.hat.scale * 1.5, sx, ySquish);
       }
-      if (si === 1 && stack.backWeapon && showBackWeapon) {
-        var bwX = slotX + spriteW * stack.backWeapon.offsetX;
-        _renderSubLayer(ctx, stack.backWeapon.emoji, bwX, slotY,
-                        fontSize * stack.backWeapon.scale * weaponFore, sx, ySquish);
+      if (si === 1 && stack.backWeapon && showBackWeapon && !backWeaponOnTop) {
+        // Position with offsetX (fraction of spriteW) — mirrors frontWeapon pattern.
+        // bwSx reduces Euler squish (weapon perpendicular to body plane).
+        var bwBehindX = slotX + spriteW * (stack.backWeapon.offsetX || 0.3);
+        _renderSubLayer(ctx, stack.backWeapon.emoji, bwBehindX, slotY,
+                        fontSize * (stack.backWeapon.scale || 0.4), bwSx, ySquish);
       }
 
       // ── Slot modifiers (behind main emoji) ──
@@ -1314,8 +1316,12 @@ var Raycaster = (function () {
         tc.globalCompositeOperation = 'source-over';
         tc.globalAlpha = 1;
 
-        // 4) Draw tinted result onto main canvas (inherits transform)
-        ctx.drawImage(_tintCanvas, -tHalf, -tHalf, tSize, tSize);
+        // 4) Draw tinted result onto main canvas (inherits transform).
+        //    Use 9-arg drawImage to sample only the tSize×tSize region —
+        //    _tintCanvas may be larger from a prior sprite, and the 4-arg
+        //    form maps the FULL canvas into the destination, shifting the
+        //    emoji off-center.
+        ctx.drawImage(_tintCanvas, 0, 0, tSize, tSize, -tHalf, -tHalf, tSize, tSize);
       } else {
         ctx.font = fontSize + 'px serif';
         ctx.textAlign = 'center';
@@ -1327,7 +1333,7 @@ var Raycaster = (function () {
       // ── Front sub-layers (render over this slot) ──
       if (si === 0 && stack.hat && !stack.hat.behind) {
         _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
-                        fontSize * stack.hat.scale, sx, ySquish);
+                        fontSize * stack.hat.scale * 1.5, sx, ySquish);
       }
       if (si === 1 && stack.frontWeapon && showFrontWeapon) {
         var fwX = slotX + spriteW * stack.frontWeapon.offsetX;
@@ -1336,7 +1342,14 @@ var Raycaster = (function () {
       }
     }
 
-    // (Hue tint is now applied per-slot inline — see wantTint branch above)
+    // ── Back weapon ON TOP pass (NPC facing away → weapon at highest z) ──
+    if (stack.backWeapon && showBackWeapon && backWeaponOnTop) {
+      var bwTopY = centerY + _SLOT_Y[1] * spriteH + (baseBob * _SLOT_BOB[1]);
+      var bwTopX = screenX + travelSpring * _SPRING_SCALE[1] * fontSize * 0.5
+                 + spriteW * (stack.backWeapon.offsetX || 0.3);
+      _renderSubLayer(ctx, stack.backWeapon.emoji, bwTopX, bwTopY,
+                      fontSize * (stack.backWeapon.scale || 0.4), bwSx, ySquish);
+    }
 
     // ── Status effect hue overlay (poison green, frozen blue, etc.) ──
     if (statusHue >= 0 && statusAlpha > 0 && spriteH > 6) {
@@ -1520,13 +1533,6 @@ var Raycaster = (function () {
         ? SpatialContract.getFogFactor(_contract, dist)
         : Math.min(1, dist / fogDist);
       var alpha = Math.max(0.1, 1 - fogFactor);
-      // Sun boost: sprites are more visible in daylight on exterior floors
-      if (_contract && _contract.ceilingType === 'sky' &&
-          typeof DayCycle !== 'undefined' && DayCycle.getSunIntensity) {
-        var sunSprite = DayCycle.getSunIntensity();
-        // Reduce fog effect proportional to sun — at full sun, fog drops by 60%
-        alpha = Math.max(alpha, Math.min(1, alpha + sunSprite * 0.6));
-      }
 
       ctx.save();
       ctx.globalAlpha = alpha;

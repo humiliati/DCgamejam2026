@@ -145,7 +145,7 @@ var CombatEngine = (function () {
     // Beat 1 — Readiness
     var hpPct = player.hp / player.maxHp;
     if (hpPct < 0.3) {
-      beats.push('❗ ' + i18n.t('combat.beat_critical', 'Critical HP — fight carefully'));
+      beats.push('❗ ' + i18n.t('combat.beat_critical', 'Critical HP - fight carefully'));
     } else if (player.energy < 2) {
       beats.push('⚡ ' + i18n.t('combat.beat_low_energy', 'Low energy'));
     } else {

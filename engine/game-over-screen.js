@@ -121,19 +121,52 @@ var GameOverScreen = (function () {
 
     var cx = w / 2;
 
-    // Death header
-    _ctx.fillStyle = '#c44';
+    // Header — changes based on whether this is arc-end reassignment or combat death
+    var isReassignment = _stats.arcSummary && _stats.endingVariant === 'bad';
+
+    _ctx.fillStyle = isReassignment ? '#c84' : '#c44';
     _ctx.font = 'bold 28px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
-    _ctx.fillText(i18n.t('gameover.header', 'YOU HAVE FALLEN'), cx, h * 0.2);
 
-    // Skull
-    _ctx.font = '40px serif';
-    _ctx.fillText('💀', cx, h * 0.3);
+    if (isReassignment) {
+      _ctx.fillText('REASSIGNED', cx, h * 0.18);
+      _ctx.font = '36px serif';
+      _ctx.fillText('\uD83D\uDCCB', cx, h * 0.27); // 📋
+      _ctx.fillStyle = '#a86';
+      _ctx.font = '16px "Courier New", monospace';
+      _ctx.fillText('"The Guild has reassigned you. Better luck next posting."', cx, h * 0.34);
+    } else {
+      _ctx.fillText(i18n.t('gameover.header', 'YOU HAVE FALLEN'), cx, h * 0.2);
+      _ctx.font = '40px serif';
+      _ctx.fillText('\uD83D\uDC80', cx, h * 0.3); // 💀
+    }
 
-    // Stats summary
+    // Arc summary (if reassignment)
     var statsY = h * 0.42;
+    if (isReassignment && _stats.arcSummary) {
+      var arc = _stats.arcSummary;
+      _ctx.font = '14px "Courier New", monospace';
+      for (var g = 0; g < arc.groups.length; g++) {
+        var grp = arc.groups[g];
+        var statusIcon = grp.passed ? '\u2713' : '\u2717';
+        var schedIcon = grp.onSchedule ? '' : ' \u26A0';
+        _ctx.fillStyle = grp.passed ? '#8a8' : '#a66';
+        _ctx.textAlign = 'left';
+        _ctx.fillText(statusIcon + ' ' + (grp.label || grp.groupId) + schedIcon, cx - 110, statsY);
+        _ctx.textAlign = 'right';
+        _ctx.fillText(Math.round((grp.readiness || 0) * 100) + '%', cx + 110, statsY);
+        statsY += 20;
+      }
+      statsY += 8;
+      _ctx.fillStyle = '#c88';
+      _ctx.textAlign = 'center';
+      _ctx.font = 'bold 14px "Courier New", monospace';
+      _ctx.fillText('Combo: BROKEN  |  Total: ' + arc.totalPayout + ' coin', cx, statsY);
+      statsY += 24;
+    }
+
+    // Classic stats
     var statLines = [
       [i18n.t('gameover.floors', 'Floors explored'), _stats.floorsExplored || 0],
       [i18n.t('gameover.enemies', 'Enemies defeated'), _stats.enemiesDefeated || 0],
@@ -142,9 +175,9 @@ var GameOverScreen = (function () {
       [i18n.t('gameover.damage_taken', 'Damage taken'), _stats.damageTaken || 0]
     ];
 
-    _ctx.font = '12px "Courier New", monospace';
+    _ctx.font = '14px "Courier New", monospace';
     for (var i = 0; i < statLines.length; i++) {
-      var sy = statsY + i * 20;
+      var sy = statsY + i * 22;
       _ctx.fillStyle = '#888';
       _ctx.textAlign = 'right';
       _ctx.fillText(statLines[i][0], cx - 10, sy);

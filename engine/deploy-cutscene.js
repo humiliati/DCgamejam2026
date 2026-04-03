@@ -119,7 +119,8 @@ var DeployCutscene = (function () {
         'width: 600px;' +
         'height: 500px;' +
         'background-color: #2e0d3f;' +
-        'transform: scale(1);' +
+        'overflow: hidden;' +
+        'transform: scale(0.9);' +
       '}' +
       '#sunReflection {' +
         'background-color: yellow;' +
@@ -276,11 +277,13 @@ var DeployCutscene = (function () {
         'background-color: rgba(255, 255, 0, 0.46);' +
         'position: relative;' +
       '}' +
-      '#tailLight0 {' +
-        'clip-path: polygon(2% 100%, 100% 100%, 100% 0%, 20% 0%);' +
-      '}' +
       '#tailLight1 {' +
+        'grid-column: 1;' +
         'clip-path: polygon(0% 100%, 98% 100%, 80% 0%, 0% 0%);' +
+      '}' +
+      '#tailLight0 {' +
+        'grid-column: 3;' +
+        'clip-path: polygon(2% 100%, 100% 100%, 100% 0%, 20% 0%);' +
       '}' +
       '#lights1 {' +
         'position: absolute;' +
@@ -397,7 +400,6 @@ var DeployCutscene = (function () {
       '}' +
       '#bumperSection, #lightsSection, #windowsSection {' +
         'position: relative;' +
-        'perspective: 1600px;' +
       '}' +
       '#car {' +
         'display: grid;' +
@@ -412,27 +414,26 @@ var DeployCutscene = (function () {
         'animation: dcMovingCar infinite 4s;' +
       '}' +
       '@keyframes dcMovingCar {' +
-        '0% { bottom: 0; transform: translate(-50%) scale(1); left: 50%; }' +
-        '19% { bottom: 80px; transform: translate(-50%) scale(0); left: 23%; }' +
-        '20% { bottom: -1200px; transform: translate(-50%) scale(2); left: 80%; }' +
-        '30% { bottom: 0; transform: translate(-50%) scale(1); left: 50%; }' +
+        '0% { bottom: 0; transform: translate(-50%) scale(1); }' +
+        '19% { bottom: 190px; transform: translate(-50%) scale(0); }' +
+        '20% { bottom: -1200px; transform: translate(-50%) scale(2); }' +
+        '30% { bottom: 0; transform: translate(-50%) scale(1); }' +
       '}' +
       '#cutout {' +
-        'background-color: transparent;' +
-        'width: 100%;' +
-        'height: 100%;' +
         'position: absolute;' +
+        'top: 0; left: 0; right: 0; bottom: 0;' +
         'overflow: hidden;' +
-        'top: 0; left: 0;' +
+        'pointer-events: none;' +
+        'z-index: 10;' +
       '}' +
       '#cutout::before {' +
         'content: "";' +
         'position: absolute;' +
-        'top: 50%;' +
+        'top: 48%;' +
         'left: 50%;' +
         'transform: translate(-50%, -50%);' +
-        'width: 520px;' +
-        'height: 450px;' +
+        'width: 540px;' +
+        'height: 490px;' +
         'background-color: transparent;' +
         'border-radius: 40px;' +
         'box-shadow: 0 0 0 2000px rgb(19, 19, 19);' +
@@ -593,6 +594,7 @@ var DeployCutscene = (function () {
         'border: solid #2afce0 6px;' +
         'width: 100%;' +
         'height: 100%;' +
+        'background-color: black;' +
         'background: linear-gradient(to right, #2afce0 2px, transparent 2px) 0 0 / 40px 40px,' +
                     'linear-gradient(to bottom, #2afce0 2px, #120b12 2px) 0 0 / 40px 40px;' +
         'transform: rotateX(85deg) rotateZ(10deg);' +
@@ -617,6 +619,7 @@ var DeployCutscene = (function () {
         'border: solid #2afce0 4px;' +
         'width: 100%;' +
         'height: 100%;' +
+        'background-color: black;' +
         'background: linear-gradient(to right, #2afce0 2px, transparent 2px) 0 0 / 40px 40px,' +
                     'linear-gradient(to bottom, #2afce0 2px, #120b12 2px) 0 0 / 40px 40px;' +
         'transform: rotateX(85deg) rotateZ(-10deg);' +
@@ -661,16 +664,32 @@ var DeployCutscene = (function () {
       document.addEventListener('click', _skipHandler);
     }, 1500);
 
-    // Schedule fade + teardown
+    // Schedule crossfade: start gameplay FIRST, then fade cutscene overlay out
+    // so the 3D world bleeds through while the car drives off
     _timer = setTimeout(function () {
-      // Begin fade out
-      _overlay.style.opacity = '0';
+      // Fire gameplay init underneath the overlay (guard against double-call)
+      if (_onComplete) {
+        var cb = _onComplete;
+        _onComplete = null;
+        cb();
+      }
+
+      // Car drives off into the distance (shrinks + fades)
+      var car = _overlay ? _overlay.querySelector('#car') : null;
+      if (car) {
+        car.style.animation = 'none'; // stop driving wobble
+        car.style.transition = 'transform 1.6s ease-in, opacity 1.4s ease-in';
+        car.style.transform = 'translate(-50%) scale(0.15)';
+        car.style.opacity = '0';
+      }
+
+      // Fade the rest of the scene out (road, sky, etc.)
+      if (_overlay) _overlay.style.opacity = '0';
 
       setTimeout(function () {
         _teardown();
         _active = false;
-        _onComplete();
-      }, FADE_DURATION);
+      }, FADE_DURATION + 400);
     }, CUTSCENE_DURATION);
   }
 
@@ -680,9 +699,14 @@ var DeployCutscene = (function () {
   function skip() {
     if (!_active) return;
     if (_timer) clearTimeout(_timer);
+    // Start gameplay immediately on skip
+    if (_onComplete) {
+      var cb = _onComplete;
+      _onComplete = null;
+      cb();
+    }
     _teardown();
     _active = false;
-    if (_onComplete) _onComplete();
   }
 
   function _teardown() {

@@ -124,7 +124,7 @@ var QuickBar = (function () {
       // Key item — enter targeting mode (future: reticle on viewport)
       if (typeof Toast !== 'undefined') {
         Toast.show(
-          i18n.t('quick.target', 'Use') + ' ' + item.emoji + ' ' + item.name + ' — face target & press [F]',
+          i18n.t('quick.target', 'Use') + ' ' + item.emoji + ' ' + item.name + ' - face target & press [F]',
           'info'
         );
       }
@@ -154,11 +154,20 @@ var QuickBar = (function () {
             if (!payload || payload.type !== 'item') return false;
             var data = payload.data;
             if (!data) return false;
+            // Reject cards — cards have suit, _bagStored, _cardRef, or cardId
+            if (data._bagStored || data.suit !== undefined ||
+                data._cardRef || data.cardId !== undefined) return false;
             return data.type === SLOT_TYPE_MAP[idx];
           },
           onDrop: function (payload) {
             if (!payload || !payload.data) return false;
             var item = payload.data;
+            // Hard reject cards
+            if (item._bagStored || item.suit !== undefined ||
+                item._cardRef || item.cardId !== undefined) {
+              if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDCCF Cards can\u2019t be equipped', 'warning');
+              return false;
+            }
             if (item.type !== SLOT_TYPE_MAP[idx]) return false;
 
             // Remove from source by item ID

@@ -203,12 +203,8 @@ var DebriefFeed = (function () {
   function render() {
     if (!_visible || !_contentEl || !_headerEl) return;
 
-    // Smartwatch header: callsign + time
-    var timeStr = '';
-    if (typeof DayCycle !== 'undefined' && DayCycle.getTimeString) {
-      timeStr = ' ' + DayCycle.getTimeString();
-    }
-    _headerEl.textContent = _escape(_mokCallsign) + timeStr;
+    // Smartwatch header: callsign only (time lives in weekly day counter)
+    _headerEl.textContent = _escape(_mokCallsign);
 
     // Single unified page — avatar + gauges + stats
     _renderUnified();

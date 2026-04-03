@@ -238,8 +238,13 @@ var FloorManager = (function () {
           }),
           floorTexture: 'floor_brick_red',
           tileFloorTextures: Object.freeze({
-            21: 'floor_grass',     // TREE tiles render grass floor
-            22: 'floor_grass'      // SHRUB tiles render grass floor
+            21: 'floor_grass',       // TREE — grass under trees
+            22: 'floor_grass',       // SHRUB — grass under hedges
+            32: 'floor_cobble',      // ROAD — cobblestone avenues
+            33: 'floor_dirt',        // PATH — dirt trails
+            34: 'floor_grass',       // GRASS — meadow clearings
+            35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
+            37: 'floor_grass'        // MAILBOX — grass under mailbox
           })
         };
       case 'promenade':
@@ -271,8 +276,13 @@ var FloorManager = (function () {
           }),
           floorTexture: 'floor_cobble',  // Polished stone walkway
           tileFloorTextures: Object.freeze({
-            21: 'floor_grass',     // TREE tiles render grass floor
-            22: 'floor_grass'      // SHRUB tiles render grass floor
+            21: 'floor_grass',       // TREE — grass under trees
+            22: 'floor_grass',       // SHRUB — grass under hedges
+            32: 'floor_cobble',      // ROAD — cobblestone avenues
+            33: 'floor_dirt',        // PATH — dirt trails
+            34: 'floor_grass',       // GRASS — meadow clearings
+            35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
+            37: 'floor_grass'        // MAILBOX — grass under mailbox
           })
         };
       case 'bazaar':
@@ -397,8 +407,13 @@ var FloorManager = (function () {
           }),
           floorTexture: 'floor_cobble',
           tileFloorTextures: Object.freeze({
-            21: 'floor_grass',     // TREE tiles render grass floor
-            22: 'floor_grass'      // SHRUB tiles render grass floor
+            21: 'floor_grass',       // TREE — grass under trees
+            22: 'floor_grass',       // SHRUB — grass under hedges
+            32: 'floor_cobble',      // ROAD — cobblestone avenues
+            33: 'floor_dirt',        // PATH — dirt trails
+            34: 'floor_grass',       // GRASS — meadow clearings
+            35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
+            37: 'floor_grass'        // MAILBOX — grass under mailbox
           })
         };
       case 'office':
@@ -777,57 +792,67 @@ var FloorManager = (function () {
 
   var _FLOOR0_W = 40;
   var _FLOOR0_H = 30;
-  // Legend: 0=EMPTY (path floor), 1=WALL (3.5× building), 2=DOOR, 10=PILLAR (1.5×),
-  //         18=BONFIRE, 21=TREE (2.5×, grass floor), 22=SHRUB (0.5×, grass floor)
+  // Legend: 0=EMPTY, 1=WALL, 2=DOOR, 10=PILLAR, 18=BONFIRE, 21=TREE, 22=SHRUB,
+  //         32=ROAD, 33=PATH, 34=GRASS, 35=FENCE, 37=MAILBOX
   //
-  // 40×30 exterior — The Approach. Double-thick tree perimeter with inner shrub
-  // corridors. Building facade at north houses the gate to Floor 1. A central
-  // path lined with alternating shrub borders, pillar waypoints, and tree clusters
-  // funnels the player from south spawn to the building entrance. TREE and SHRUB
-  // tiles render grass floor; walkable (0) tiles render brick/path floor, creating
-  // visible texture alternation between grassy areas and paved walkways.
+  // 40×30 exterior — The Approach. Interstate exit ramp campground.
+  //
+  // Layout: ROAD spine (cols 18-20) runs N-S from overpass to gate arcade.
+  // West meadow = encampment zone (2 shacks, campfires, tree clusters).
+  // East meadow = residential zone (1 house with fence yard, mailbox).
+  // North: Roman-arch gate facade (thin wall + wide arch) to Floor 1.
+  // South: Concrete overpass wall — player was just dropped off here.
+  // GRASS dominant, PATH dirt trails branch to structures, ROAD for spine.
+  //
+  // NPC placement (not tile-driven):
+  //   - 1-2 idle at encampment campfires (west)
+  //   - 1 resident near house (east) — barks about "those people" camping
   var _FLOOR0_GRID = [
     //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 0  tree border
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], // 1  tree border
-    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 2  building facade top
-    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 3  building body
-    [21,21,22,22, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,22,22,21,21], // 4  building body
-    [21,21,22,22, 0, 0, 0,10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,10, 0, 0, 0,22,22,21,21], // 5  DOOR(19,5) + pillar arcades
-    [21,21,22, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 6  pillar arcade row
-    [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 7  courtyard dirt path
-    [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0,22,18,22, 0, 0, 0, 0, 0, 0, 0, 0,22,18,22, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], // 8  tree + 2 campfire nooks
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0, 0, 0,22, 0,22, 0, 0, 0, 0, 0, 0, 0, 0,22, 0,22, 0, 0, 0, 0,22,22, 0,21, 0, 0,22,21,21], // 9  shrub seats around camps
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0,21, 0, 0,22,21,21], //10
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0,21, 0, 0,22,21,21], //11
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0,21, 0, 0, 0, 0, 0, 0, 0,18, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,22, 0,21, 0, 0,22,21,21], //12  central BONFIRE(19,12) + tree columns
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0,21, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0,21, 0, 0,22,22, 0,21, 0, 0,22,21,21], //13  shrubs around central fire
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0,21, 0, 0,22,21,21], //14
-    [21,21,22, 0, 0,21, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0,21, 0, 0,22,21,21], //15
-    [21,21,22, 0, 0, 0, 0, 0, 0, 0,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22, 0, 0, 0, 0, 0, 0, 0,22,21,21], //16  tree columns in clearing
-    [21,21,22, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0,22,21,21], //17
-    [21,21,22, 0, 0, 0,18,22, 0, 0, 0,22, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0,22, 0, 0, 0,22,18, 0, 0, 0,22,21,21], //18  W+E campfire alcoves + pillars
-    [21,21,22, 0, 0, 0, 0,22, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0,22, 0, 0, 0, 0,22,21,21], //19  shrub backs to alcoves
-    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //20  tree + shrub funnel tightens
-    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //21
-    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0, 0,22, 0, 0, 0,10, 0, 0, 0, 0,10, 0, 0, 0,22, 0, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //22  narrowest funnel + pillars
-    [21,21,22, 0, 0, 0,21, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0, 0, 0, 0, 0, 0,21, 0, 0, 0,22,21,21], //23
-    [21,21,22,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,18,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,22,21,21], //24  south campfire near spawn
-    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22, 0,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //25  shrub seating
-    [21,21,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,21,21], //26  spawn row
-    [21,21,22,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22,22,21,21], //27  south shrub border
-    [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21], //28  tree border
+    [21,21,34,34,34,34,34,34,10, 1, 1, 1, 1, 1, 1,10,34,34,32,32,32,34,34,10, 1, 1, 1, 1, 1, 1,10,34,34,34,34,34,34,34,21,21], // 2  gate arcade — pillar+wall wings, road passes through
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], // 3  open approach — road + path shoulders
+    [21,21,34,34,34,34,34,34,34,34,10,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,10,34,34,34,34,34,34,34,34,21,21], // 4  pillar avenue — road continues south
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32, 2,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], // 5  DOOR(19,5) in the road — gate threshold
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], // 6  open meadow — road continues
+    [21,21,34,34,34,33,33,34,34,34,21,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,21,34,34,34,33,33,34,34,34,34,34,21,21], // 7  PATH branches W + E, scattered trees
+    [21,21,34,34,33, 1, 1, 1, 1,34,21,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,21,34,34,34,34,33,34,34,34,34,34,21,21], // 8  west shack 1 top (cols 5-8)
+    [21,21,34,34,33, 1,34,34, 1,34,34,34,34,34,18,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,18,34,34,34,34,34,34,21,21], // 9  shack interior + campfire(14,9) + campfire(31,9)
+    [21,21,34,34,33, 1,34, 2, 1,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], //10  shack 1 door at (7,10) facing south
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], //11  open meadow
+    [21,21,34,34,34,34,34,34,34,34,34,21,34,34,34,18,34,33,32,32,32,33,34,34,34,34,21,34,34,34,34,34,34,34,34,34,34,34,21,21], //12  central campfire(15,12) + trees
+    [21,21,34,34,34,34,34,34,34,34,34,21,34,34,34,34,34,33,32,32,32,33,33,33,33,34,21,34,34,34,34,34,34,34,34,34,34,34,21,21], //13  PATH branches east to house zone
+    [21,21,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,35, 1, 1, 1, 1, 1,35,34,34,34,34,21,21], //14  east house top (cols 28-32) + fence(27,33)
+    [21,21,34,34,33, 1, 1, 1, 1,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,37,35, 1,34,34,34, 1,35,34,34,34,34,21,21], //15  west shack 2 top (cols 5-8) + house int + mailbox(26,15)
+    [21,21,34,34,33, 1,34,34, 1,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,35, 1,34,34,34, 1,35,34,34,34,34,21,21], //16  shack 2 interior + house interior
+    [21,21,34,34,33, 1,34, 2, 1,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,33,33,33,35, 1, 1, 2, 1, 1,35,34,34,34,34,21,21], //17  shack 2 door(7,17) + house door(30,17) + PATH to house
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,33,34,34,34,34,34,34,34,21,21], //18  open meadow — path from house
+    [21,21,34,34,34,34,34,18,34,34,34,21,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,21,34,34,34,21,21], //19  west campfire(7,19) + scattered trees
+    [21,21,34,34,34,34,34,34,34,34,34,21,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,21,34,34,34,21,21], //20  meadow + trees
+    [21,21,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,21,21], //21  open meadow
+    [21,21,22,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,22,21,21], //22  shrub border starts tightening
+    [21,21,22,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,22,21,21], //23  meadow narrows
+    [21,21,22,34,34,34,34,34,34,34,34,34,34,34,34,34,34,33,32,32,32,33,34,18,34,34,34,34,34,34,34,34,34,34,34,34,34,22,21,21], //24  south campfire(23,24) east of road
+    [21,21,22,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,32,32,32,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,22,21,21], //25  road approach to spawn
+    [21,21,22,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,32,32,32,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,22,21,21], //26  ★ SPAWN ROW (19,26) — road
+    [21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,10,32,32,32,10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21], //27  overpass wall — road gap + pillar columns
+    [21,21, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,32,32,32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,21,21], //28  overpass depth — thick concrete
     [21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21]  //29  tree border
   ];
 
   var _FLOOR0_SPAWN = { x: 19, y: 26, dir: 3 }; // facing NORTH
   var _FLOOR0_ROOMS = [
-    // Building courtyard (north)
-    { x: 3, y: 6, w: 34, h: 4, cx: 19, cy: 8 },
-    // Central path corridor
-    { x: 10, y: 10, w: 20, h: 14, cx: 19, cy: 17 },
-    // Spawn area (south)
-    { x: 4, y: 24, w: 32, h: 4, cx: 19, cy: 26 }
+    // Gate arcade approach (north)
+    { x: 3, y: 2, w: 34, h: 5, cx: 19, cy: 4 },
+    // West encampment zone
+    { x: 3, y: 7, w: 14, h: 14, cx: 8, cy: 14 },
+    // East residential zone
+    { x: 21, y: 7, w: 15, h: 14, cx: 29, cy: 14 },
+    // Central meadow spine
+    { x: 15, y: 7, w: 10, h: 18, cx: 19, cy: 16 },
+    // Spawn approach (south)
+    { x: 4, y: 22, w: 32, h: 6, cx: 19, cy: 25 }
   ];
 
   function _buildFloor0() {
@@ -865,6 +890,16 @@ var FloorManager = (function () {
   //   E:  Gleaner's Home (DOOR 34,9 → 1.6)  — west-facing, approach from col 33
   //
   // South gate: EXIT(18,26)→"0" + GATE(20,26)→"2" (Lantern Row critical path)
+  //
+  // Landmarks:
+  //   BONFIRE(19,13) — central plaza rest point
+  //   MAILBOX(33,8)  — north of home door approach (33,9).
+  //                     Blockout-agnostic: MailboxPeek._findMailboxTile() scans
+  //                     for TILES.MAILBOX rather than hardcoding position.
+  //                     If the blockout moves the house door, move the MAILBOX
+  //                     tile to remain 1 tile N of the new approach tile.
+  //                     Candidate alt positions: (33,10) S of approach,
+  //                     or any EMPTY adjacent to the door approach path.
 
   var _FLOOR1_W = 40;
   var _FLOOR1_H = 30;
@@ -878,7 +913,7 @@ var FloorManager = (function () {
     [21,21,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,21,21], // 5  open walk
     [21,21,22, 0, 0,21, 0, 0,10, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 0, 0,10, 0, 0,21, 0, 0,22,21,21], // 6  pillar arcade + tree accents
     [21,21,22, 0, 0,21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,21, 0, 0,22,21,21], // 7  open plaza
-    [21,21, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,21,21], // 8  W cellar bldg top + E home bldg top
+    [21,21, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,37, 1, 1, 1, 1,21,21], // 8  W cellar bldg top + E home bldg top + MAILBOX(33,8)
     [21,21, 1, 1, 1, 2, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 2, 1, 1, 1,21,21], // 9  Cellar DOOR(5,9) + Home DOOR(34,9) + shrub
     [21,21, 1, 1, 1, 1, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0, 1, 1, 1, 1,21,21], //10  building bottoms + shrub borders
     [21,21,22, 0, 0,21, 0, 0, 0,22,22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,22,22, 0, 0, 0,21, 0, 0,22,21,21], //11  tree + shrub borders
@@ -1076,6 +1111,7 @@ var FloorManager = (function () {
       gridH: _FLOOR16_H,
       biome: 'home',
       shops: [],
+      mailboxHistory: { x: 19, y: 6 },  // PILLAR in storage room — mailbox history peek (§14)
       books: [
         { x: 1,  y: 1,  bookId: 'fiction_love_among_crates' },  // Bedroom shelf — personal fiction
         { x: 9,  y: 2,  bookId: 'tip_home_schedule' },          // Living room — work schedule

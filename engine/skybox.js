@@ -443,7 +443,10 @@ var Skybox = (function () {
     if (hour >= 5.5 && hour <= 18.5) {
       var sunT = (hour - 6) / 12;                          // 0 at 06:00, 1 at 18:00
       var sunElev = Math.sin(Math.PI * Math.max(0, Math.min(1, sunT)));  // 0→1→0 arc
-      var sunAz = sunT;                                     // east(0)→west(1)
+      // Sun azimuth in panorama space (0–1 = full 360°).
+      // East = 0, South = 0.25, West = 0.5 — the sun arc is 180° (half
+      // the panorama), NOT the full circle. sunT 0→1 maps to az 0→0.5.
+      var sunAz = sunT * 0.5;                               // east(0)→west(0.5)
 
       // Screen position (angle-relative, wrapping)
       var sunScreenX = ((sunAz - angle / (2 * Math.PI) + 0.5) % 1 + 1) % 1 * w;
@@ -511,7 +514,9 @@ var Skybox = (function () {
       var moonHour = hour >= 17.5 ? (hour - 18) : (hour + 6);
       var moonT = moonHour / 12;                            // 0 at 18:00, 1 at 06:00
       var moonElev = Math.sin(Math.PI * Math.max(0, Math.min(1, moonT)));
-      var moonAz = moonT;
+      // Moon arc: west(0.5) → north(0.75) → east(1.0/0.0).
+      // Offset by 0.5 from the sun so it rises in the west, sets in the east.
+      var moonAz = 0.5 + moonT * 0.5;
 
       var moonScreenX = ((moonAz - angle / (2 * Math.PI) + 0.5) % 1 + 1) % 1 * w;
       var moonScreenY = h * (1 - moonElev * 0.8) - 8;

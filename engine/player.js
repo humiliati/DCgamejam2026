@@ -38,6 +38,7 @@ var Player = (function () {
     x: 5, y: 5,
     dir: MC.DIR_NORTH,
     lookOffset: 0,
+    lookPitch:  0,
     hp: 10, maxHp: 10,
     energy: 5, maxEnergy: 5,
     battery: 3, maxBattery: 10,
@@ -49,6 +50,9 @@ var Player = (function () {
 
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
   var FREE_LOOK_RANGE = 32 * Math.PI / 180;
+  // Vertical pitch range: more down (floor inspection) than up
+  var PITCH_DOWN_MAX = 0.35;   // fraction of halfH to shift horizon down
+  var PITCH_UP_MAX   = 0.10;   // fraction of halfH to shift horizon up
 
   // ── Accessors ──────────────────────────────────────────────────────
 
@@ -88,7 +92,16 @@ var Player = (function () {
     _state.lookOffset = Math.max(-FREE_LOOK_RANGE, Math.min(FREE_LOOK_RANGE, offset));
   }
 
-  function resetLookOffset() { _state.lookOffset = 0; }
+  /**
+   * Set vertical pitch offset.
+   * @param {number} pitch - Negative = look down, positive = look up.
+   *   Clamped to [-PITCH_DOWN_MAX, +PITCH_UP_MAX].
+   */
+  function setLookPitch(pitch) {
+    _state.lookPitch = Math.max(-PITCH_DOWN_MAX, Math.min(PITCH_UP_MAX, pitch));
+  }
+
+  function resetLookOffset() { _state.lookOffset = 0; _state.lookPitch = 0; }
 
   // ── Direction conversion ───────────────────────────────────────────
 
@@ -376,6 +389,7 @@ var Player = (function () {
     _state.hp = _state.maxHp;
     _state.energy = _state.maxEnergy;
     _state.lookOffset = 0;
+    _state.lookPitch = 0;
     _state.lastMoveDirection = 'north';
     _state.flags = {};
     _state.debuffs = [];
@@ -396,6 +410,7 @@ var Player = (function () {
     setPos: setPos,
     setDir: setDir,
     setLookOffset: setLookOffset,
+    setLookPitch: setLookPitch,
     resetLookOffset: resetLookOffset,
     radianToDir: radianToDir,
     heal: heal,
@@ -437,6 +452,8 @@ var Player = (function () {
     // Constants
     DIR_NAMES:       DIR_NAMES,
     FREE_LOOK_RANGE: FREE_LOOK_RANGE,
+    PITCH_DOWN_MAX:  PITCH_DOWN_MAX,
+    PITCH_UP_MAX:    PITCH_UP_MAX,
     EQUIP_SLOTS:     EQUIP_SLOTS
   };
 })();

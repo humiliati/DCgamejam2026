@@ -47,6 +47,10 @@ var GifRecorder = (function () {
 
   var _captureTimer = 0;
 
+  // Blob URL for worker script (created lazily). Allows GIF encoding on
+  // file:// protocol where new Worker('path.js') throws SecurityError.
+  var _workerBlobUrl = null;
+
   function init(canvas, opts) {
     _canvas = canvas;
     opts = opts || {};
@@ -196,7 +200,13 @@ var GifRecorder = (function () {
       return { imageData: imageData, w: w, h: h, t: performance.now() };
     } catch (e) {
       // If the canvas becomes tainted (cross-origin draw), getImageData throws.
-      console.warn('[GifRecorder] snapshot failed:', e);
+      // Auto-disable to stop spamming the console every frame.
+      if (e.name === 'SecurityError') {
+        console.warn('[GifRecorder] Canvas tainted — auto-disabling gif capture.');
+        _enabled = false;
+      } else {
+        console.warn('[GifRecorder] snapshot failed:', e);
+      }
       return null;
     }
   }
@@ -217,12 +227,26 @@ var GifRecorder = (function () {
       return;
     }
 
+    // On file:// protocol, new Worker('path.js') throws SecurityError
+    // because file:// URLs don't satisfy same-origin. Work around this by
+    // reading the worker script source via sync XHR, wrapping it in a
+    // Blob URL, and passing that as workerScript. Blob URLs are always
+    // same-origin. The Blob URL is cached — built once, reused forever.
+    if (!_workerBlobUrl) {
+      try {
+        _workerBlobUrl = _buildWorkerBlobUrl();
+      } catch (blobErr) {
+        console.warn('[GifRecorder] Could not create worker Blob URL:', blobErr);
+      }
+    }
+    var workerScript = _workerBlobUrl || 'engine/vendor/gif.worker.js';
+
     var gif = new GIF({
       workers: _workers,
       quality: _quality,
       width: first.w,
       height: first.h,
-      workerScript: 'engine/vendor/gif.worker.js',
+      workerScript: workerScript,
       repeat: 0
     });
 
@@ -372,7 +396,7 @@ var GifRecorder = (function () {
       if (typeof endT !== 'number') endT = now;
 
       var lines = [];
-      lines.push('Dungeon Gleaner — console snapshot');
+      lines.push('Dungeon Gleaner - console snapshot');
       lines.push('window: ' + Math.round(startT) + 'ms .. ' + Math.round(endT) + 'ms (performance.now)');
       lines.push('---');
 
@@ -401,6 +425,34 @@ var GifRecorder = (function () {
         if (_consoleOrig && _consoleOrig.error) _consoleOrig.error('[GifRecorder] log download failed:', e2);
       } catch (_) {}
     }
+  }
+
+  /**
+   * Build a Blob URL containing the gif.worker.js source.
+   * Uses synchronous XHR to read the script text, wraps it in a Blob,
+   * and returns a URL.createObjectURL. This sidesteps the Worker
+   * same-origin restriction on file:// protocol — Blob URLs are always
+   * considered same-origin.
+   *
+   * Synchronous XHR to file:// works in Chromium/Brave (same-origin
+   * file access). Workers from file:// paths do not.
+   */
+  function _buildWorkerBlobUrl() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'engine/vendor/gif.worker.js', false); // synchronous
+    xhr.send();
+    if (xhr.status !== 200 && xhr.status !== 0) {
+      // status 0 is normal for file:// protocol success
+      throw new Error('XHR status ' + xhr.status);
+    }
+    var src = xhr.responseText;
+    if (!src || src.length < 100) {
+      throw new Error('Worker source too short (' + (src ? src.length : 0) + ')');
+    }
+    var blob = new Blob([src], { type: 'application/javascript' });
+    var url = URL.createObjectURL(blob);
+    console.log('[GifRecorder] created worker Blob URL (' + src.length + ' bytes)');
+    return url;
   }
 
   function clamp(n, lo, hi) {

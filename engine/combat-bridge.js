@@ -259,7 +259,7 @@ var CombatBridge = (function () {
     // Show initial combat log with enemy info
     HUD.showCombatLog(
       '⚔️ ' + enemy.emoji + ' ' + enemy.name +
-      ' — ' + CombatEngine.getAdvantage().toUpperCase()
+      ' - ' + CombatEngine.getAdvantage().toUpperCase()
     );
     HUD.setAdvantage(CombatEngine.getAdvantage().toUpperCase());
 
@@ -308,7 +308,7 @@ var CombatBridge = (function () {
       HUD.updateCards(CardAuthority.getHand());
       HUD.showCombatLog(
         enemy.emoji + ' ' + enemy.name +
-        ' — ' + i18n.t('combat.stack_cards', 'Stack cards, then fire!')
+        ' - ' + i18n.t('combat.stack_cards', 'Stack cards, then fire!')
       );
 
       // Open the card fan for stacking interaction
@@ -510,6 +510,14 @@ var CombatBridge = (function () {
         var dropped = Player.onDeath();
         // TODO: Pass dropped to FloorManager for loot scatter tiles
         // FloorManager.scatterLoot(dropped, Player.getPos());
+
+        // §10: Death-shift — shift this group's hero day before game over
+        // POST-JAM: Convert combat death to rescue (like HazardSystem) so
+        // death-shift is meaningful. For now, game-over ends the run.
+        if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onPlayerDeath) {
+          DungeonSchedule.onPlayerDeath(FloorManager.getCurrentFloorId());
+        }
+
         _gameOver();
       }
 
@@ -586,7 +594,7 @@ var CombatBridge = (function () {
           emojis + ' ' +
           i18n.t('combat.stack_preview', 'Combo') +
           (tags.length > 0 ? ' [' + tags.join('+') + ']' : '') +
-          ' — ' + i18n.t('combat.thrust_to_fire', 'thrust to fire!')
+          ' - ' + i18n.t('combat.thrust_to_fire', 'thrust to fire!')
         );
       }
     } else {
@@ -824,13 +832,25 @@ var CombatBridge = (function () {
     floorData.grid[cy][cx] = TILES.EMPTY;
     SessionStats.inc('chestsOpened');
 
-    var loot = LootTables.generateDrop('standard', floorId);
-    if (loot.type === 'card' && loot.card) {
-      CardTransfer.lootToBackup(loot.card);
-      HUD.showCombatLog('Found card: ' + loot.card.emoji + ' ' + loot.card.name);
+    var drops = LootTables.rollBreakableLoot('breakable_default', floorId);
+    if (drops.length === 0) {
+      // Fallback — always give at least a small gold reward
+      CardTransfer.lootGold(1);
+      HUD.showCombatLog('Found 1 gold!');
     } else {
-      CardTransfer.lootGold(loot.amount);
-      HUD.showCombatLog('Found ' + loot.amount + ' gold!');
+      for (var di = 0; di < drops.length; di++) {
+        var loot = drops[di];
+        if (loot.type === 'gold') {
+          CardTransfer.lootGold(loot.amount);
+          HUD.showCombatLog('Found ' + loot.amount + ' gold!');
+        } else if (loot.type === 'battery') {
+          HUD.showCombatLog('Found a battery!');
+        } else if (loot.type === 'food' && loot.itemId) {
+          HUD.showCombatLog('Found food: ' + loot.itemId);
+        } else if (loot.type === 'salvage' && loot.partId) {
+          HUD.showCombatLog('Found salvage: ' + loot.partId);
+        }
+      }
     }
 
     setTimeout(function () { HUD.hideCombat(); }, 1500);

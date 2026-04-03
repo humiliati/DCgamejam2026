@@ -1,7 +1,7 @@
 # Cozy Interiors Design — Building Havens & Time-Freeze Sanctuaries
 > **DOC-10** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-03-29
 >
-> **⚠ Partial alignment note (v2.0):** The world graph was restructured in Tutorial_world_roadmap.md v2.0. Floor 0.1 (Entry Lobby) no longer exists — the player goes directly from Floor 0 to Floor 1 (The Promenade). References to "Entry Lobby" and "Floor 0.1" in this document should be read as Floor 1 interiors. The interior design principles and time-freeze rules remain valid.
+> **⚠ Alignment note (v2.2, April 2 2026):** The world graph was restructured in Tutorial_world_roadmap.md v2.0+. Floor 0.1 (Entry Lobby) no longer exists — the player goes directly from Floor 0 to Floor 1 (The Promenade). References to "Entry Lobby" and "Floor 0.1" in this document should be read as Floor 1 interiors. The interior design principles and time-freeze rules remain valid. As of v2.2: DayCycle.setPaused() is implemented, BedPeek and MailboxPeek are live, bookshelves are auto-placed in all proc-gen interiors via `_placeBookshelvesInInterior()`, and Floor 1.6 has 7 hand-placed bookshelves. See §11 for full status.
 
 ---
 
@@ -54,13 +54,13 @@ This is the Safety Contract. It is reinforced through four channels:
 |-------------|-----------|---------------|----------|
 | **Depth 1** (exterior) | `"N"` | Time advances normally | The Approach (`"0"`), The Promenade (`"1"`), Lantern Row (`"2"`) |
 | **Depth 2** (interior) | `"N.N"` | **Time frozen** — world clock paused | Coral Bazaar (`"1.1"`), Driftwood Inn (`"1.2"`), Gleaner's Guild (`"1.3"`), Home (`"1.6"`) |
-| **Depth 3** (dungeon) | `"N.N.N"` | Time advances normally | Cellar B1 (`"0.1.1"`), Guild Dungeon (`"1.3.1"`) |
+| **Depth 3** (dungeon) | `"N.N.N"` | Time advances normally | Soft Cellar (`"1.3.1"`), Hero's Wake B1 (`"2.2.1"`) |
 
 **The rule is simple:** Depth-2 floors freeze the world timer. Depth-1 and depth-3 floors do not.
 
-### 2.2 Implementation Spec
+### 2.2 Implementation Spec ✅ Implemented
 
-The day/night cycle system (Phase B) will expose a `DayCycle.setPaused(bool)` method. The wiring is straightforward:
+The day/night cycle system exposes `DayCycle.setPaused(bool)`. The wiring:
 
 ```javascript
 // In Game._onFloorArrive(floorId):
@@ -266,17 +266,21 @@ The 3-tap limit prevents exploitation while still rewarding the player for visit
 
 **The Guild is the tip hub.** Every bookshelf contains a gameplay manual. New players who explore the Guild before heading to the dungeon will have learned movement, restocking, cleaning, and combat. This is environmental tutorialisation — no forced tutorial sequence, just books on shelves.
 
-### 6.5 Gleaner's Home (Floor 1.6)
+### 6.5 Gleaner's Home (Floor 1.6) ✅ Implemented (24×20 multi-room)
 
-| Tile | Position | Content |
-|------|----------|---------|
-| BONFIRE | (2, 2) | Bed — sleep/advance day (bed-peek.js, Phase B) |
-| PILLAR | (2, 5) | Mailbox — hero run reports (mailbox-peek.js, Phase B) |
-| BOOKSHELF × 1 | (7, 1) | `letter_anonymous_tip` (conspiracy), personal journal |
-| BAR_COUNTER × 1 | (8, 2) | Water / Leftover Stew (home menu — humble, 2 drinks only) |
-| DOOR | (5, 3) | Work keys chest (Day 1 only — reverts to EMPTY after pickup) |
+| Tile | Position | Content | Status |
+|------|----------|---------|--------|
+| BED × 2 | (2,3) + (3,3) | Bedroom — sleep/advance day via `bed-peek.js` | ✅ |
+| PILLAR | (19, 6) | Mailbox history — hero run reports via `mailbox-peek.js` | ✅ |
+| CHEST | (19, 3) | Work keys stash (Day 1 only — reverts to EMPTY after pickup) | ✅ |
+| HEARTH | (11, 7) | Decorative fireplace in living room | ✅ |
+| TABLE × 2 | (11,5) + (12,5) | Living room table pair | ✅ |
+| TABLE × 1 | (4, 7) | Nightstand in bedroom | ✅ |
+| BOOKSHELF × 7 | (1,1), (9,2), (14,2), (21,1), (20,8), (9,15), (14,15) | Personal fiction, work schedule, guild lore, dragon history, adventure novel, shopping guide, ghost story | ✅ |
 
-**Home is the emotional anchor.** The bookshelf and bar counter are small comforts — the player's own space, with personal items. The anonymous letter on the bookshelf is the first direct conspiracy hook. The stew on the counter is the game's smallest, most human reward.
+> **Note:** The home grid was expanded from the spec's 10×8 to 24×20 — a multi-room dwelling with bedroom (west), living room (center), storage (east), and entry hall (south). See Tutorial_world_roadmap.md §5.6 for full layout. The exterior mailbox is TILES.MAILBOX (37) on Floor 1 at (33,8), scanned by `_findMailboxTile()`.
+
+**Home is the emotional anchor.** The bookshelves and hearth are small comforts — the player's own space, with personal items. The anonymous letter on the bedroom shelf is the first direct conspiracy hook. The multi-room layout rewards exploration with 7 distinct books.
 
 ### 6.6 Watchman's Post (Floor 2.2) — Planned
 
@@ -505,23 +509,29 @@ If no explicit assignment exists, BookshelfPeek selects a biome-appropriate book
 | ESC intercept for BookshelfPeek | `engine/game.js` | ✅ |
 | Script tags in index.html | `index.html` | ✅ |
 
-### 🟡 Phase B — Day Cycle + Home Interactions
+### ✅ Implemented (Phase B — Day Cycle + Home Interactions)
+
+| Item | File | Status |
+|------|------|--------|
+| `engine/day-cycle.js` — 8-phase world clock + `setPaused(bool)` | `engine/day-cycle.js` | ✅ |
+| Time-freeze wiring in `_onFloorArrive()` | `engine/game.js` | ✅ |
+| `bed-peek.js` — sleep verb, day advance | `engine/bed-peek.js` | ✅ |
+| `mailbox-peek.js` — hero run reports, parchment UI, history | `engine/mailbox-peek.js` | ✅ |
+| `mailbox-sprites.js` — mailbox emoji states (📫/📬/📪) | `engine/mailbox-sprites.js` | ✅ |
+| BOOKSHELF auto-placement in proc-gen interiors | `engine/floor-manager.js` `_placeBookshelvesInInterior()` | ✅ |
+| Per-biome book presets (inn, guild, watchpost, dungeon, bazaar, cellar_entry, office, home) | `engine/floor-manager.js` | ✅ |
+| `floorData.books[]` explicit assignments for Floor 1.1 (3 books) and 1.6 (7 books) | `engine/floor-manager.js` | ✅ |
+| `engine/dungeon-schedule.js` — per-group hero day state machine | `engine/dungeon-schedule.js` | ✅ |
+| `engine/hero-run.js` — hero run simulation per-group | `engine/hero-run.js` | ✅ |
+| `engine/morning-report.js` — dawn Toast sequence | `engine/morning-report.js` | ✅ |
+| TILES.MAILBOX (37) — exterior mailbox tile on Floor 1 | `engine/tiles.js` | ✅ |
+
+### 🟡 Phase C — Interior Polish (Remaining)
 
 | Item | File | Est. | Depends On |
 |------|------|------|------------|
-| `engine/day-cycle.js` — world clock + `setPaused(bool)` | New | 2h | — |
-| Time-freeze wiring in `_onFloorArrive()` | `engine/game.js` | 15m | day-cycle.js |
-| HUD clock widget (snowflake icon for freeze) | `engine/hud.js` | 30m | day-cycle.js |
-| `bed-peek.js` — sleep verb, day advance, debuff preview | New | 1.5h | day-cycle.js |
-| `mailbox-peek.js` — hero run reports, parchment UI | New | 2h | hero-system.js |
-| Place BOOKSHELF + BAR_COUNTER tiles in Floor 1.1/1.2/1.3/1.6 grids | `engine/floor-manager.js` | 30m | — |
-| `floorData.books[]` explicit assignments for key lore books | `engine/floor-manager.js` | 15m | — |
-
-### 🔵 Phase C — Interior Polish
-
-| Item | File | Est. | Depends On |
-|------|------|------|------------|
-| `job-board-peek.js` — work order display | New | 1.5h | day-cycle.js |
+| HUD clock widget (snowflake icon for freeze) | `engine/hud.js` | 30m | day-cycle.js ✅ |
+| `job-board-peek.js` — work order display | New | 1.5h | day-cycle.js ✅ |
 | `taskmaster-peek.js` — hero dispatch registry | New | 1.5h | hero-system.js |
 | Interior ambient audio (warm hum, muffled steps) | `data/audio-manifest.json` | 30m | — |
 | Bookshelf wall texture in TextureAtlas | `engine/texture-atlas.js` | 30m | — |

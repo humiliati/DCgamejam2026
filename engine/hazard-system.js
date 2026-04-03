@@ -166,13 +166,13 @@ var HazardSystem = (function () {
     var sleptHours = Math.round(advanceMin / 60);
     if (isDungeon) {
       HUD.showCombatLog(i18n.t('hazard.dragonfire_brief',
-        '🐉 Brief rest (' + sleptHours + 'h) — HP & energy restored. Stay alert.'));
+        '🐉 Brief rest (' + sleptHours + 'h); HP & energy restored. Stay alert.'));
     } else if (gotWellRested) {
       HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_dawn',
-        '🐉 Rested until dawn (' + sleptHours + 'h) — HP & energy restored. You feel well rested.'));
+        '🐉 Rested until dawn (' + sleptHours + 'h); HP & energy restored. You feel well rested.'));
     } else {
       HUD.showCombatLog(i18n.t('hazard.dragonfire_rest_late',
-        '🐉 Rested until dawn (' + sleptHours + 'h) — HP & energy restored. Late night, though...'));
+        '🐉 Rested until dawn (' + sleptHours + 'h); HP & energy restored. Late night, though...'));
     }
     AudioSystem.play('ui-confirm', { volume: 0.5 });
 

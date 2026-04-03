@@ -113,7 +113,8 @@ var MonologuePeek = (function () {
      */
     deploy_dropoff: [
       { attribution: 'GLEANER', text: '...and just like that, they drove off.', duration: 3000 },
-      { attribution: 'GLEANER', text: 'No map. No briefing. Just a field and a door.', duration: 3500 },
+      { attribution: 'GLEANER', text: "I can't believe I have to meet the dispatcher smelling like stale cigarette smoke.", duration: 4000 },
+      { attribution: 'GLEANER', text: 'No map. No briefing. Just a road and a door.', duration: 3500 },
       { attribution: 'GLEANER', text: 'Guess I should start walking.', duration: 2500 }
     ]
   };

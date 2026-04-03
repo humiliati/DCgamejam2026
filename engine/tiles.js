@@ -42,7 +42,8 @@ var TILES = (function () {
     PATH:        33,  // Walkable exterior — dirt floor texture (trails, alleys)
     GRASS:       34,  // Walkable exterior — grass floor texture (clearings, meadows)
     FENCE:       35,  // Half-wall railing (0.4×) — blocks movement, player sees over
-    TERMINAL:    36   // Data terminal — half-wall desk + CRT screen, sickly green glow, peek overlay
+    TERMINAL:    36,  // Data terminal — half-wall desk + CRT screen, sickly green glow, peek overlay
+    MAILBOX:     37   // Exterior mailbox — solid, interactable, emoji-on-platform (📫/📬/📪)
   };
 
   /** Check if a tile blocks movement */
@@ -65,7 +66,7 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL || tile === T.MAILBOX;
   };
 
   /** Check if tile is a torch (lit or unlit) */

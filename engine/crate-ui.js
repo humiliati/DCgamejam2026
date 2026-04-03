@@ -113,7 +113,7 @@ var CrateUI = (function () {
     ctx.textBaseline = 'top';
     ctx.fillStyle = c.type === CrateSystem.TYPE.CORPSE ? '#d88' : '#d8c8a0';
     var title = c.type === CrateSystem.TYPE.CORPSE ? 'CORPSE STOCK' : 'CRATE';
-    if (c.sealed) title += ' — SEALED';
+    if (c.sealed) title += ' - SEALED';
     ctx.fillText(title, vpW / 2, panelY + 8);
 
     // Slot row

@@ -242,6 +242,13 @@ var CardTransfer = (function () {
     if (bagIndex < 0 || bagIndex >= bag.length) return _fail('invalid_index');
 
     var item = bag[bagIndex];
+
+    // Reject cards — cards should never be equippable
+    if (item && (item._bagStored || item.suit !== undefined ||
+        item._cardRef || item.cardId !== undefined)) {
+      return _fail('card_not_equippable');
+    }
+
     var slot = (typeof slotOverride === 'number') ? slotOverride : resolveEquipSlot(item);
     if (slot < 0) return _fail('not_equippable');
 

@@ -110,8 +110,8 @@ var Minimap = (function () {
     _tsTimeEl    = document.getElementById('mts-time');
     _tsHeadingEl = document.getElementById('mts-heading');
 
-    // Set initial embedded size (matches CSS #minimap-frame 200px)
-    _size = 200;
+    // Set initial embedded size — render at 2× for sharper menu map
+    _size = 400;
     _expanded = false;
     _visible = true;
     _canvas.width = _size;
@@ -248,7 +248,7 @@ var Minimap = (function () {
 
   function _toggleExpand() {
     _expanded = !_expanded;
-    _size = _expanded ? 480 : 200;
+    _size = _expanded ? 640 : 400;
     _canvas.width = _size;
     _canvas.height = _size;
     if (_frame) {
@@ -317,8 +317,8 @@ var Minimap = (function () {
     if (!_ctx) return;
     var ctx = _ctx;
     var baseTileSize = Math.max(2, Math.floor(_size / Math.max(gridW, gridH)));
-    // 1.7× zoom for content legibility (user feedback: 70% larger)
-    var tileSize = Math.max(3, Math.floor(baseTileSize * 1.7));
+    // 1.1× zoom — tighter view centered on player (~30% closer than 0.85×)
+    var tileSize = Math.max(2, Math.floor(baseTileSize * 1.1));
     // Center on player position instead of centering the whole grid
     var offsetX = Math.floor(_size / 2 - player.x * tileSize - tileSize / 2);
     var offsetY = Math.floor(_size / 2 - player.y * tileSize - tileSize / 2);
@@ -373,7 +373,7 @@ var Minimap = (function () {
         }
 
         // Draw directional chevrons on stair tiles + bonfire glow marker
-        if (tileSize >= 4) {
+        if (tileSize >= 2) {
           if (tile === TILES.BONFIRE && isLit) {
             // Bonfire: pulsing glow dot + flame chevron for visibility
             ctx.fillStyle = '#ff4';
@@ -394,7 +394,7 @@ var Minimap = (function () {
     }
 
     // ── Pass 2: Event icon overlays (shops, boss doors, bonfires) ──
-    if (tileSize >= 5) {
+    if (tileSize >= 3) {
       _drawEventIcons(ctx, grid, gridW, gridH, tileSize, offsetX, offsetY);
     }
 
@@ -451,7 +451,7 @@ var Minimap = (function () {
 
     // ── Orientation grid: draw subtle grid lines on tiles near the player ──
     // Helps the player see exactly which tile they're on and what's adjacent.
-    if (tileSize >= 4) {
+    if (tileSize >= 3) {
       var gridR = 3; // radius of grid overlay in tiles
       ctx.strokeStyle = 'rgba(51,255,136,0.12)';
       ctx.lineWidth = 1;
@@ -791,8 +791,18 @@ var Minimap = (function () {
     return _HEADING_LABELS[idx];
   }
 
+  // §9: Group-to-suit map (mirrors game.js _GROUP_SUITS)
+  var _MTS_GROUP_SUITS = {
+    soft_cellar: { sym: '\u2660', color: '#8888ff' },  // ♠
+    heros_wake:  { sym: '\u2666', color: '#ff6666' },  // ♦
+    heart:       { sym: '\u2665', color: '#ff5588' }   // ♥
+  };
+
   /**
    * Update the DOM time strip with current DayCycle + heading info.
+   * §9 DungeonSchedule-aware: when multiple hero groups converge on
+   * today, mts-day shows stacked suit symbols (NCH cascade style).
+   *
    * Called once per render frame from render().
    * @param {number} playerAngle - Player facing angle in radians
    */
@@ -800,15 +810,51 @@ var Minimap = (function () {
     if (!_tsTimeEl) return;
     if (typeof DayCycle === 'undefined') return;
 
-    // Day label: suit symbol on hero days, day abbreviation otherwise
+    // Day label: check DungeonSchedule for groups landing today
     if (_tsDayEl) {
-      _tsDayEl.textContent = DayCycle.getDayLabel();
-      var suitColor = DayCycle.getDayLabelColor();
-      _tsDayEl.style.color = suitColor || '';
+      var todayDay = DayCycle.getDay();
+      var todaySuits = null;
+
+      if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getSchedule) {
+        var sched = DungeonSchedule.getSchedule();
+        todaySuits = [];
+        for (var si = 0; si < sched.length; si++) {
+          if (sched[si].actualDay === todayDay && !sched[si].resolved) {
+            var gs = _MTS_GROUP_SUITS[sched[si].groupId];
+            if (gs) todaySuits.push(gs);
+          }
+        }
+        if (todaySuits.length === 0) todaySuits = null;
+      }
+
+      if (todaySuits && todaySuits.length > 1) {
+        // Multi-group convergence: stacked suits with cascade offset
+        var stackHtml = '';
+        for (var sj = 0; sj < todaySuits.length; sj++) {
+          var offsetPx = sj * 5;
+          stackHtml += '<span style="position:relative;left:' + (sj > 0 ? '-' + (sj * 3) + 'px' : '0') +
+                       ';color:' + todaySuits[sj].color + ';font-weight:bold;' +
+                       'filter:drop-shadow(0 0 3px ' + todaySuits[sj].color + ');">' +
+                       todaySuits[sj].sym + '</span>';
+        }
+        _tsDayEl.innerHTML = stackHtml;
+        _tsDayEl.style.color = '';
+      } else if (todaySuits && todaySuits.length === 1) {
+        // Single hero group today
+        _tsDayEl.textContent = todaySuits[0].sym;
+        _tsDayEl.style.color = todaySuits[0].color;
+      } else {
+        // No hero groups today — fall back to DayCycle label
+        _tsDayEl.textContent = DayCycle.getDayLabel();
+        var suitColor = DayCycle.getDayLabelColor();
+        _tsDayEl.style.color = suitColor || '';
+      }
     }
 
     _tsPhaseEl.textContent  = DayCycle.getPhaseIcon();
-    _tsTimeEl.textContent   = DayCycle.getTimeString();
+    // Time moved to weekly day counter (single source) — minimap shows
+    // phase icon + compass heading only.
+    _tsTimeEl.textContent   = '';
     _tsHeadingEl.textContent = '\u25B8' + _radToHeading(playerAngle);
   }
 

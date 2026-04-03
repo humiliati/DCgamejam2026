@@ -140,7 +140,8 @@ var SpatialContract = (function () {
         32: 'floor_cobble',      // ROAD — cobblestone avenues
         33: 'floor_dirt',        // PATH — dirt trails
         34: 'floor_grass',       // GRASS — meadow clearings
-        35: 'floor_boardwalk'    // FENCE — boardwalk planks under railing
+        35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
+        37: 'bonfire_ring'       // MAILBOX — reuse stone ring base texture
       },
 
       // ── Per-tile-type wall height overrides ──
@@ -149,7 +150,8 @@ var SpatialContract = (function () {
       tileWallHeights:  opts.tileWallHeights || {
         18: 0.3,    // BONFIRE — low stone ring, player sees over into fire cavity
         22: 0.5,    // SHRUB — half-height hedge
-        35: 0.4     // FENCE — railing, player sees over to skybox
+        35: 0.4,    // FENCE — railing, player sees over to skybox
+        37: 0.5     // MAILBOX — half-height post, emoji billboard sits above
       },
 
       // ── Gameplay rules ──

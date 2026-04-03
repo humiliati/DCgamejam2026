@@ -251,12 +251,6 @@ var PostProcess = (function () {
   function apply(ctx, w, h, dt) {
     if (!_enabled || _effects.length === 0) return;
 
-    // Adaptive frame skipping
-    if (_skipFrames > 0) {
-      _skipFrames--;
-      return;
-    }
-
     var t0 = performance.now();
 
     // Refresh grain texture periodically
@@ -266,7 +260,9 @@ var PostProcess = (function () {
       _generateGrain(w, h);
     }
 
-    // Run pipeline
+    // Run pipeline — no frame skipping. The vignette/colorgrade are
+    // cheap fillRect calls; skipping them causes visible corner flash
+    // as the darkening overlay disappears for 2 frames then reappears.
     for (var i = 0; i < _effects.length; i++) {
       var fn = EFFECT_MAP[_effects[i]];
       if (fn) fn(ctx, w, h);
@@ -274,11 +270,6 @@ var PostProcess = (function () {
 
     _lastFrameMs = performance.now() - t0;
     _frameCount++;
-
-    // Budget enforcement: if over budget, skip next 2 frames
-    if (_lastFrameMs > _budget) {
-      _skipFrames = 2;
-    }
   }
 
   /** Get last frame processing time in ms */

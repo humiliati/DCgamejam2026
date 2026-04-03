@@ -179,18 +179,31 @@
       border: 1px solid rgba(120,120,255,0.12);
     }
 
-    /* ── Interior glow (visible through open face) ── */
+    /* ── Interior glow — 3 intersecting planes simulate 3D orb ── */
     .box3d-glow {
       position: absolute;
-      width: 120%; height: 120%;
-      top: -10%; left: -10%;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(140,140,255,0.6) 0%, rgba(96,96,232,0.3) 40%, rgba(80,80,200,0.1) 70%, transparent 100%);
+      width: 100%; height: 100%;
+      top: 0; left: 0;
+      transform-style: preserve-3d;
       transform: translateZ(0px);
       opacity: 0.4;
       transition: opacity 0.5s ease, transform 0.5s ease;
       pointer-events: none;
+      /* Default orb color — variants override this; glow-planes inherit */
+      background: radial-gradient(circle,
+        rgba(140,140,255,0.6) 0%, rgba(96,96,232,0.3) 40%,
+        rgba(80,80,200,0.1) 70%, transparent 100%);
     }
+    .glow-plane {
+      position: absolute;
+      width: 108%; height: 108%;
+      top: -4%; left: -4%;
+      border-radius: 50%;
+      background: inherit;
+    }
+    .glow-plane.gp0 { transform: rotateY(0deg); }
+    .glow-plane.gp1 { transform: rotateY(60deg); }
+    .glow-plane.gp2 { transform: rotateY(120deg); }
 
     /* ── 5 solid faces (back, left, right, top, bottom) ── */
     .bf-back   { border-radius: 14px; filter: blur(1.5px);
@@ -321,7 +334,7 @@
         ),
         linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8));
     }
-    /* Splash interior glow: richer, layered */
+    /* Splash interior glow: richer, layered — orb planes inherit this */
     .box3d-wrap.splash-variant .box3d-glow {
       background:
         radial-gradient(circle, rgba(180,180,255,0.7) 0%, rgba(140,140,255,0.4) 30%, rgba(96,96,232,0.15) 60%, transparent 100%);
@@ -1396,6 +1409,7 @@
       color: #1a1510;
       text-shadow: none;
       z-index: 12;
+      transition: height 0.3s ease, max-height 0.3s ease;
     }
     /* Top row: buttons + floor info */
     .sb-row {
@@ -1412,7 +1426,7 @@
        Expands upward into scrollable history on click. */
     .sb-tooltip-area {
       flex: 1;
-      overflow: visible;
+      overflow: hidden;
       border-top: 1px solid rgba(107,91,74,0.15);
       padding: 0 16px;
       cursor: pointer;
@@ -1422,6 +1436,7 @@
       display: flex;
       flex-direction: column;
       justify-content: flex-end; /* pack rows to bottom */
+      min-height: 0;
     }
     /* ── Preview rows (previous + older) — scotch tape fade ── */
     .sb-tooltip-preview {
@@ -1474,11 +1489,8 @@
       max-height: none;
       padding-right: 10px;
     }
-    /* ── History panel (expands upward) ───────────────────── */
+    /* ── History panel (inline within tooltip area, above latest row) ── */
     .sb-tooltip-history {
-      position: absolute;
-      bottom: 100%;
-      left: 0; right: 0;
       max-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
@@ -1486,18 +1498,28 @@
       font-size: 16px;
       color: var(--ink);
       line-height: 1.5;
-      background: var(--paper);
-      border-top: 2px solid var(--desk-brown);
       padding: 0 16px;
-      z-index: 13;
+      flex-shrink: 1;
+      min-height: 0;
     }
     #status-bar.sb-expanded .sb-tooltip-history {
       max-height: 320px;
-      padding: 8px 16px;
+      padding: 4px 16px;
+      border-top: 1px solid rgba(107,91,74,0.15);
+      flex: 1;
     }
-    /* Hide preview rows when expanded (full history is showing) */
+    /* Hide preview rows when expanded (full history replaces them) */
     #status-bar.sb-expanded .sb-tooltip-preview {
       display: none;
+    }
+    /* Hide the button row when expanded — history fills that space */
+    #status-bar.sb-expanded .sb-row {
+      display: none;
+    }
+    /* Grow status bar to accommodate history when expanded */
+    #status-bar.sb-expanded {
+      height: auto;
+      max-height: 50vh;
     }
     .sb-tooltip-history::-webkit-scrollbar { width: 4px; }
     .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--desk-brown); border-radius: 2px; }
@@ -1944,8 +1966,12 @@
     <div class="box3d-wrap splash-variant" id="splash-box">
       <div class="box3d-scene">
         <div class="box3d-spin spinning">
-          <!-- Interior glow (visible through open face) -->
-          <div class="box3d-glow"></div>
+          <!-- Interior glow — 3 intersecting planes simulate orb -->
+          <div class="box3d-glow">
+            <div class="glow-plane gp0"></div>
+            <div class="glow-plane gp1"></div>
+            <div class="glow-plane gp2"></div>
+          </div>
           <!-- 5 solid faces -->
           <div class="box3d-face bf-back"></div>
           <div class="box3d-face bf-left"></div>
@@ -2140,10 +2166,12 @@
   <script src="engine/readiness-calc.js"></script>
   <script src="engine/work-order-system.js"></script>
   <script src="engine/hero-run.js"></script>
+  <script src="engine/dungeon-schedule.js"></script>
   <script src="engine/status-effect.js"></script>
   <script src="engine/card-renderer.js"></script>
   <script src="engine/card-draw.js"></script>
   <script src="engine/bonfire-sprites.js"></script>
+  <script src="engine/mailbox-sprites.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>
@@ -2167,6 +2195,7 @@
   <script src="engine/particle-fx.js"></script>
   <script src="engine/world-popup.js"></script>
   <script src="engine/post-process.js"></script>
+  <script src="engine/viewport-ring.js"></script>
   <script src="engine/transition-fx.js"></script>
   <script src="engine/cinematic-camera.js"></script>
   <script src="engine/monologue-peek.js"></script>
@@ -2192,7 +2221,10 @@
   <script src="engine/floor-blockout-2-1.js"></script>
   <script src="engine/floor-blockout-2-2.js"></script>
   <script src="engine/minimap-nav.js"></script>
-  <script src="engine/intro-walk.js"></script>
+  <!-- IntroWalk disabled — standalone module preserved for post-jam re-enable.
+       See engine/intro-walk.js header for API docs. To restore: uncomment
+       this tag and the _startIntroWalk() call in game.js _initGameplay(). -->
+  <!-- <script src="engine/intro-walk.js"></script> -->
   <script src="engine/npc-system.js"></script>
   <script src="engine/hero-system.js"></script>
   <script src="engine/floor-transition.js"></script>
@@ -2222,7 +2254,20 @@
   <script src="engine/title-screen.js"></script>
   <script src="engine/game-over-screen.js"></script>
   <script src="engine/victory-screen.js"></script>
+  <script src="engine/morning-report.js"></script>
 
   <!-- Layer 4: Orchestrator (wires everything together) -->
   <!-- GIF capture (debug/prototyping) -->
-  <script src="eng
+  <script src="engine/vendor/gif.js"></script>
+  <script src="engine/gif-recorder.js"></script>
+
+  <script src="engine/game.js"></script>
+
+  <!-- Layer 5: Data (loaded after all engine modules) -->
+  <script src="data/strings/en.js"></script>
+  <script src="data/strings/es.js"></script>
+  <script src="data/strings/hi.js"></script>
+  <script src="data/strings/ps.js"></script>
+  <script src="data/barks/en.js"></script>
+</body>
+</html>

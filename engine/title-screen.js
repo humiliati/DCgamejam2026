@@ -56,12 +56,18 @@ var TitleScreen = (function () {
   // ── Avatar data ───────────────────────────────────────────────────
 
   var AVATARS = [
-    { id: 'AVA-01', emoji: '\uD83D\uDDE1\uFE0F', name: 'Blade',     desc: 'High STR. Hits hard, takes hard.', stat: 'str' },
-    { id: 'AVA-02', emoji: '\uD83C\uDFF9', name: 'Ranger',    desc: 'High DEX. Fast and precise.',       stat: 'dex' },
-    { id: 'AVA-03', emoji: '\uD83D\uDD75\uFE0F', name: 'Shadow',    desc: 'High Stealth. Unseen advantage.',   stat: 'stealth' },
-    { id: 'AVA-04', emoji: '\uD83D\uDEE1\uFE0F', name: 'Sentinel',  desc: 'Balanced. Endures everything.',     stat: 'hp' },
-    { id: 'AVA-05', emoji: '\uD83D\uDD2E', name: 'Seer',      desc: 'High Energy. More card plays.',     stat: 'energy' },
-    { id: 'AVA-06', emoji: '\uD83C\uDCCF', name: 'Wildcard',  desc: 'Random stats. Chaos run.',          stat: 'random' }
+    { id: 'AVA-01', emoji: '\uD83D\uDDE1\uFE0F', name: 'Blade',     desc: 'High STR. Hits hard, takes hard.', stat: 'str',
+      lore: 'Back in the day you ran point on breach teams - first through the door, last one standing. These days the only thing you breach is supply closets, but the muscle memory never left. Every mop handle still feels like a hilt.' },
+    { id: 'AVA-02', emoji: '\uD83C\uDFF9', name: 'Ranger',    desc: 'High DEX. Fast and precise.',       stat: 'dex',
+      lore: 'You used to place shots through keyholes at forty meters. Now you place trash bags into dumpsters from across the loading dock. The precision is the same; the stakes are just... different. You tell yourself that.' },
+    { id: 'AVA-03', emoji: '\uD83D\uDD75\uFE0F', name: 'Shadow',    desc: 'High Stealth. Unseen advantage.',   stat: 'stealth',
+      lore: 'Nobody notices the janitor. That was true in the field and it is true now. You learned to move through occupied rooms without displacing the air. Coworkers jump when you speak; they never heard you arrive.' },
+    { id: 'AVA-04', emoji: '\uD83D\uDEE1\uFE0F', name: 'Sentinel',  desc: 'Balanced. Endures everything.',     stat: 'hp',
+      lore: 'You have been shot, stabbed, burned, poisoned, and once hit by a municipal bus on an op gone sideways. You are still here. The overnight shift with its leaking pipes and hostile fauna is honestly a vacation by comparison.' },
+    { id: 'AVA-05', emoji: '\uD83D\uDD2E', name: 'Seer',      desc: 'High Energy. More card plays.',     stat: 'energy',
+      lore: 'Pattern recognition was your thing. You could read a room before the door finished opening. Dispatch says you are "overqualified" for janitorial. You say a building this strange needs someone who can see what is coming.' },
+    { id: 'AVA-06', emoji: '\uD83C\uDCCF', name: 'Wildcard',  desc: 'Random stats. Chaos run.',          stat: 'random',
+      lore: 'Your file is mostly redacted. Even you are not sure what half those missions were about. The agency put you here because you are "unpredictable" - their word, not yours. Every shift is a new you. That keeps things interesting.' }
   ];
 
   var _avatarIndex = 0;
@@ -116,6 +122,12 @@ var TitleScreen = (function () {
       }
     }
     _canvas.style.cursor = _hoveredZoneIdx >= 0 ? 'pointer' : 'default';
+
+    // Phase 2 (avatar): hovering a class card moves keyboard selection to match.
+    // Avatar cards are the first AVATARS.length hit zones in the avatar render.
+    if (_phase === 2 && _hoveredZoneIdx >= 0 && _hoveredZoneIdx < AVATARS.length) {
+      _avatarIndex = _hoveredZoneIdx;
+    }
   }
 
   function _onKey(e) {
@@ -378,6 +390,23 @@ var TitleScreen = (function () {
    *               0 0 4em 1em var(--glow-spread-color),
    *               inset 0 0 .05em .25em var(--glow-color);
    */
+  function _wrapText(ctx, text, maxWidth) {
+    var words = text.split(' ');
+    var lines = [];
+    var current = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = current ? current + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = words[i];
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
   function _drawGlowButton(ctx, x, y, w, h, opts) {
     var hovered = opts && opts.hovered;
     var selected = opts && opts.selected;
@@ -444,20 +473,59 @@ var TitleScreen = (function () {
   function _renderTitle(w, h) {
     var cx = w / 2;
 
-    // Game title — large, with glow
+    // ── Paper scroll backdrop behind title ──
+    var scrollW = Math.min(w * 0.85, 720);
+    var scrollH = 140;
+    var scrollX = cx - scrollW / 2;
+    var scrollY = h * 0.20 - 64;
+
     _ctx.save();
-    _ctx.shadowColor = GLOW_DIM;
-    _ctx.shadowBlur = 20;
-    _ctx.fillStyle = TEXT_WARM;
+    // Scroll body — warm parchment with torn-edge feel
+    var scrollGrad = _ctx.createLinearGradient(scrollX, scrollY, scrollX, scrollY + scrollH);
+    scrollGrad.addColorStop(0, 'rgba(62,52,38,0.85)');
+    scrollGrad.addColorStop(0.1, 'rgba(48,40,28,0.92)');
+    scrollGrad.addColorStop(0.9, 'rgba(48,40,28,0.92)');
+    scrollGrad.addColorStop(1, 'rgba(62,52,38,0.85)');
+    _roundRect(_ctx, scrollX, scrollY, scrollW, scrollH, 6);
+    _ctx.fillStyle = scrollGrad;
+    _ctx.fill();
+    // Scroll border — warm gold accent
+    _ctx.strokeStyle = 'rgba(200,170,80,0.45)';
+    _ctx.lineWidth = 1.5;
+    _roundRect(_ctx, scrollX, scrollY, scrollW, scrollH, 6);
+    _ctx.stroke();
+    // Ruled lines (paper feel)
+    _ctx.strokeStyle = 'rgba(200,180,120,0.08)';
+    _ctx.lineWidth = 1;
+    for (var rl = 0; rl < 5; rl++) {
+      var rlY = scrollY + 20 + rl * 22;
+      _ctx.beginPath();
+      _ctx.moveTo(scrollX + 20, rlY);
+      _ctx.lineTo(scrollX + scrollW - 20, rlY);
+      _ctx.stroke();
+    }
+    _ctx.restore();
+
+    // Game title — large, with layered glow for high contrast
+    _ctx.save();
+    // Outer glow halo
+    _ctx.shadowColor = GLOW_SPREAD;
+    _ctx.shadowBlur = 35;
+    _ctx.fillStyle = 'rgba(176,255,189,0.04)';
     _ctx.font = 'bold 72px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('title.game_name', 'DUNGEON GLEANER'), cx, h * 0.20);
+    // Core text
+    _ctx.shadowColor = GLOW_COLOR;
+    _ctx.shadowBlur = 12;
+    _ctx.fillStyle = '#fff';
+    _ctx.fillText(i18n.t('title.game_name', 'DUNGEON GLEANER'), cx, h * 0.20);
     _ctx.shadowBlur = 0;
     _ctx.restore();
 
-    // Subtitle
-    _ctx.fillStyle = TEXT_DIM;
+    // Subtitle — slightly brighter
+    _ctx.fillStyle = TEXT_WARM;
     _ctx.font = '26px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
@@ -525,19 +593,26 @@ var TitleScreen = (function () {
   function _renderCallsign(w, h) {
     var cx = w / 2;
 
-    // Header
-    _ctx.fillStyle = TEXT_DIM;
+    // Header — brighter with glow
+    _ctx.save();
+    _ctx.shadowColor = GLOW_DIM;
+    _ctx.shadowBlur = 8;
+    _ctx.fillStyle = TEXT_WARM;
     _ctx.font = 'bold 28px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('create.callsign_header', 'CHOOSE YOUR CALLSIGN'), cx, h * 0.13);
+    _ctx.shadowBlur = 0;
+    _ctx.restore();
 
-    // Current callsign — large with glow
+    // Current callsign — large with layered glow for high contrast
     _ctx.save();
-    _ctx.shadowColor = GLOW_DIM;
-    _ctx.shadowBlur = 18;
+    _ctx.shadowColor = GLOW_SPREAD;
+    _ctx.shadowBlur = 25;
     _ctx.fillStyle = '#fff';
     _ctx.font = 'bold 72px "Courier New", monospace';
+    _ctx.textAlign = 'center';
+    _ctx.textBaseline = 'middle';
     _ctx.fillText(_callsign, cx, h * 0.32);
     _ctx.shadowBlur = 0;
     _ctx.restore();
@@ -642,16 +717,23 @@ var TitleScreen = (function () {
   function _renderAvatar(w, h) {
     var cx = w / 2;
 
-    // Header
-    _ctx.fillStyle = TEXT_DIM;
+    // Header — brighter with glow
+    _ctx.save();
+    _ctx.shadowColor = GLOW_DIM;
+    _ctx.shadowBlur = 8;
+    _ctx.fillStyle = TEXT_WARM;
     _ctx.font = 'bold 28px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('create.avatar_header', 'CHOOSE YOUR CLASS'), cx, h * 0.05);
+    _ctx.shadowBlur = 0;
+    _ctx.restore();
 
-    // Callsign reminder
-    _ctx.fillStyle = TEXT_MUTED;
+    // Callsign reminder — warm tint
+    _ctx.fillStyle = GLOW_DIM;
     _ctx.font = '20px "Courier New", monospace';
+    _ctx.textAlign = 'center';
+    _ctx.textBaseline = 'middle';
     _ctx.fillText('Agent ' + _callsign, cx, h * 0.10);
 
     // Avatar grid (2 columns x 3 rows) — large cards for readability
@@ -709,47 +791,84 @@ var TitleScreen = (function () {
       _ctx.fillText(statLabel, ax + cardW - 12, ay + 82);
       _ctx.textAlign = 'left';
 
-      // Hit zone
+      // Hit zone — click to SELECT + DEPLOY (hover already browsed to this card)
       (function (idx) {
         _hitZones.push({
           x: ax, y: ay, w: cardW, h: cardH,
-          action: function () { _avatarIndex = idx; _confirm(); }
+          action: function () { _avatarIndex = idx; _deploy(); }
         });
       })(i);
     }
 
-    // Selected avatar detail (larger preview below grid)
-    var ava = AVATARS[_avatarIndex];
-    var detailY = startY + 3 * (cardH + gapY) + 16;
+    // Determine which avatar to preview: hovered card takes priority over selected
+    var previewIdx = _avatarIndex;
+    if (_hoveredZoneIdx >= 0 && _hoveredZoneIdx < AVATARS.length) {
+      previewIdx = _hoveredZoneIdx;
+    }
+    var ava = AVATARS[previewIdx];
+    var isPreviewHovered = previewIdx !== _avatarIndex;
+
+    // Detail section below grid — expanded with lore
+    var detailY = startY + 3 * (cardH + gapY) + 8;
 
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
 
-    // Emoji
+    // Emoji + Name on same row
     _ctx.save();
-    _ctx.shadowColor = GLOW_SPREAD;
-    _ctx.shadowBlur = 15;
-    _ctx.font = '56px serif';
+    _ctx.shadowColor = isPreviewHovered ? GLOW_DIM : GLOW_SPREAD;
+    _ctx.shadowBlur = isPreviewHovered ? 8 : 15;
+    _ctx.font = '44px serif';
     _ctx.fillStyle = '#fff';
-    _ctx.fillText(ava.emoji, cx, detailY);
+    _ctx.fillText(ava.emoji, cx - 120, detailY + 6);
     _ctx.shadowBlur = 0;
     _ctx.restore();
 
-    // Name
-    _ctx.font = 'bold 30px "Courier New", monospace';
-    _ctx.fillStyle = TEXT_WARM;
-    _ctx.fillText(ava.name, cx, detailY + 42);
+    _ctx.font = 'bold 28px "Courier New", monospace';
+    _ctx.fillStyle = isPreviewHovered ? TEXT_DIM : TEXT_WARM;
+    _ctx.textAlign = 'left';
+    _ctx.fillText(ava.name, cx - 80, detailY);
 
-    // Desc
-    _ctx.font = '20px "Courier New", monospace';
-    _ctx.fillStyle = TEXT_DIM;
-    _ctx.fillText(ava.desc, cx, detailY + 70);
+    // Short desc
+    _ctx.font = '17px "Courier New", monospace';
+    _ctx.fillStyle = isPreviewHovered ? TEXT_MUTED : TEXT_DIM;
+    _ctx.fillText(ava.desc, cx - 80, detailY + 26);
 
-    // Back button (bottom left area)
+    // Lore text — word-wrapped
+    _ctx.font = '14px "Courier New", monospace';
+    _ctx.fillStyle = isPreviewHovered ? 'rgba(136,128,112,0.7)' : 'rgba(200,180,120,0.6)';
+    var loreLines = _wrapText(_ctx, ava.lore || '', gridW - 40);
+    var loreY = detailY + 48;
+    for (var li = 0; li < loreLines.length && li < 4; li++) {
+      _ctx.fillText(loreLines[li], cx - gridW / 2 + 20, loreY + li * 18);
+    }
+
+    _ctx.textAlign = 'center';
+
+    // DEPLOY button (centered below lore)
+    var deployBtnW = 240;
+    var deployBtnH = 48;
+    var deployBtnX = cx - deployBtnW / 2;
+    var deployBtnY = loreY + 4 * 18 + 8;
+    var deployZoneIdx = _hitZones.length;
+    var isDeployHovered = _isZoneHovered(deployZoneIdx);
+
+    _drawGlowButton(_ctx, deployBtnX, deployBtnY, deployBtnW, deployBtnH, {
+      selected: true, hovered: isDeployHovered, radius: 8
+    });
+    _ctx.font = 'bold 22px "Courier New", monospace';
+    _ctx.fillStyle = isDeployHovered ? '#fff' : GLOW_COLOR;
+    _ctx.fillText('DEPLOY \u25B6', cx, deployBtnY + deployBtnH / 2);
+    _hitZones.push({
+      x: deployBtnX, y: deployBtnY, w: deployBtnW, h: deployBtnH,
+      action: function () { _deploy(); }
+    });
+
+    // Back button (bottom center — matches callsign layout)
     var backBtnW = 160;
     var backBtnH = 44;
     var backX = cx - backBtnW / 2;
-    var backY = h - 52;
+    var backY = h * 0.80;
     var backZoneIdx = _hitZones.length;
 
     _drawGlowButton(_ctx, backX, backY, backBtnW, backBtnH, {
@@ -759,7 +878,7 @@ var TitleScreen = (function () {
     _ctx.font = '20px "Courier New", monospace';
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
-    _ctx.fillText('\u25C0 BACK', cx, backY + backBtnH / 2);
+    _ctx.fillText('\u25C0 BACK', backX + backBtnW / 2, backY + backBtnH / 2);
     _hitZones.push({
       x: backX, y: backY, w: backBtnW, h: backBtnH,
       action: function () { _back(); }
@@ -769,7 +888,7 @@ var TitleScreen = (function () {
     _ctx.fillStyle = TEXT_MUTED;
     _ctx.font = '16px "Courier New", monospace';
     _ctx.textAlign = 'center';
-    _ctx.fillText(i18n.t('create.avatar_hint', '[\u2191 \u2193] Browse   [Enter] Deploy   [Esc] Back'), cx, h - 12);
+    _ctx.fillText(i18n.t('create.avatar_hint', '[\u2190 \u2192 \u2191 \u2193] Browse   [Enter] Deploy   [Esc] Back'), cx, h - 12);
   }
 
   function _renderDeploy(w, h) {
@@ -827,10 +946,12 @@ var TitleScreen = (function () {
   var SETTINGS_ITEMS = [
     { key: 'sfx',    label: 'Sound Effects', type: 'toggle' },
     { key: 'music',  label: 'Music',         type: 'toggle' },
-    { key: 'screen', label: 'Screen Shake',  type: 'toggle' }
+    { key: 'screen', label: 'Screen Shake',  type: 'toggle' },
+    { key: 'invertY', label: 'Invert Free Look', type: 'toggle' },
+    { key: 'lang',   label: 'Language',  type: 'toggle' }
   ];
 
-  var _settings = { sfx: true, music: true, screen: true };
+  var _settings = { sfx: true, music: true, screen: true, invertY: false, lang: true };
 
   function _loadSettings() {
     try {
@@ -840,6 +961,11 @@ var TitleScreen = (function () {
         for (var k in parsed) {
           if (_settings.hasOwnProperty(k)) _settings[k] = !!parsed[k];
         }
+      }
+      // Restore saved language
+      var savedLang = localStorage.getItem('dg_lang');
+      if (savedLang && typeof i18n !== 'undefined') {
+        i18n.setLocale(savedLang);
       }
     } catch (e) { /* no localStorage — use defaults */ }
   }
@@ -852,12 +978,26 @@ var TitleScreen = (function () {
   function _toggleSetting(idx) {
     var item = SETTINGS_ITEMS[idx];
     if (!item) return;
+    // Language cycles through available locales
+    if (item.key === 'lang') {
+      var _codes = ['en', 'es', 'hi', 'ps'];
+      var _cur = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
+      var _idx = _codes.indexOf(_cur);
+      var _next = _codes[(_idx + 1) % _codes.length];
+      if (typeof i18n !== 'undefined') i18n.setLocale(_next);
+      try { localStorage.setItem('dg_lang', _next); } catch (e2) {}
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-select', { volume: 0.5 });
+      return;
+    }
     _settings[item.key] = !_settings[item.key];
     _saveSettings();
 
     if (typeof AudioSystem !== 'undefined') {
       if (item.key === 'music') AudioSystem.setMusicVolume(_settings.music ? 1 : 0);
       if (item.key === 'sfx')   AudioSystem.setMasterVolume(_settings.sfx ? 1 : 0);
+    }
+    if (item.key === 'invertY' && typeof MouseLook !== 'undefined' && MouseLook.setInvertY) {
+      MouseLook.setInvertY(_settings.invertY);
     }
     if (typeof AudioSystem !== 'undefined') {
       AudioSystem.play('ui-select', { volume: 0.5 });
@@ -871,7 +1011,7 @@ var TitleScreen = (function () {
 
     var cx = w / 2;
     var panelW = 480;
-    var panelH = 380;
+    var panelH = 500;
     var panelX = cx - panelW / 2;
     var panelY = h / 2 - panelH / 2;
 
@@ -919,11 +1059,19 @@ var TitleScreen = (function () {
       _ctx.textBaseline = 'middle';
       _ctx.fillText(item.label, rowX + 16, y);
 
-      // Toggle indicator
+      // Toggle indicator (language shows locale name, others show ON/OFF)
       _ctx.textAlign = 'right';
-      _ctx.fillStyle = isOn ? GLOW_COLOR : '#c44';
-      _ctx.font = 'bold 24px "Courier New", monospace';
-      _ctx.fillText(isOn ? 'ON' : 'OFF', rowX + rowW - 16, y);
+      if (item.key === 'lang') {
+        var _langLabels = { en: 'English', es: 'Español', hi: 'हिन्दी', ps: 'پښتو' };
+        var _curLang = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
+        _ctx.fillStyle = GLOW_COLOR;
+        _ctx.font = 'bold 24px "Courier New", monospace';
+        _ctx.fillText(_langLabels[_curLang] || _curLang, rowX + rowW - 16, y);
+      } else {
+        _ctx.fillStyle = isOn ? GLOW_COLOR : '#c44';
+        _ctx.font = 'bold 24px "Courier New", monospace';
+        _ctx.fillText(isOn ? 'ON' : 'OFF', rowX + rowW - 16, y);
+      }
 
       // Hit zone
       (function (idx) {

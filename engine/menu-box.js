@@ -378,8 +378,9 @@ var MenuBox = (function () {
       if (!proj) continue;
 
       // Apply fold progress (scale height from 0 at bottom)
+      // Shift up 3% of viewport height (centered ~5% lower than the 8% default)
       var foldH = proj.h * _foldProgress;
-      var foldY = vpH - foldH; // Hinges at bottom of viewport
+      var foldY = vpH - foldH - vpH * 0.03;
 
       _renderFace(ctx, f, proj.x, foldY, proj.w, foldH, proj.alpha * _foldProgress);
     }
@@ -498,7 +499,7 @@ var MenuBox = (function () {
     var dotGap = 16;
     var totalW = FACE_COUNT * dotGap;
     var startX = (vpW - totalW) / 2 + dotGap / 2;
-    var dotY = vpH - 20;
+    var dotY = vpH - 20 - vpH * 0.03;
 
     var activeFace = (((Math.round(_rotAngle / 90)) % FACE_COUNT) + FACE_COUNT) % FACE_COUNT;
 

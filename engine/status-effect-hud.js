@@ -261,7 +261,7 @@ var StatusEffectHUD = (function () {
 
     // Show in status bar tooltip if available
     if (typeof StatusBar !== 'undefined' && StatusBar.showTooltip) {
-      StatusBar.showTooltip(def.emoji + ' ' + def.label + ' — ' + def.description);
+      StatusBar.showTooltip(def.emoji + ' ' + def.label + ' - ' + def.description);
     }
   }
 

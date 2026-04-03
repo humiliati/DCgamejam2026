@@ -148,8 +148,10 @@ var CardFan = (function () {
   }
 
   /**
-   * Create the DOM minimize toggle button (hidden by default).
-   * Floats above the fan at z-index 20.
+   * Create the DOM close button (hidden by default).
+   * Anchors at the NchWidget joker stack position when the fan is
+   * maximized — the stack hides and this button replaces it visually.
+   * Styled as a loud red close indicator so it's unmistakable.
    */
   function _createMinimizeBtn() {
     if (_minimizeBtnEl) return;
@@ -158,22 +160,23 @@ var CardFan = (function () {
 
     _minimizeBtnEl = document.createElement('button');
     _minimizeBtnEl.id = 'fan-minimize-btn';
-    _minimizeBtnEl.textContent = '▼';
-    _minimizeBtnEl.title = 'Minimize hand';
+    _minimizeBtnEl.textContent = '✕';
+    _minimizeBtnEl.title = 'Close hand';
     _minimizeBtnEl.style.cssText =
-      'position:absolute; bottom:28%; right:12px; z-index:20;' +
-      'width:36px; height:36px; border-radius:50%;' +
-      'background:rgba(20,18,28,0.85); border:2px solid rgba(160,140,100,0.5);' +
-      'color:#f0d070; font-size:16px; cursor:pointer;' +
+      'position:absolute; z-index:20;' +
+      'width:40px; height:40px; border-radius:50%;' +
+      'background:rgba(180,40,40,0.85); border:2px solid rgba(255,100,80,0.7);' +
+      'color:#fff; font-size:18px; font-weight:bold; cursor:pointer;' +
       'display:none; align-items:center; justify-content:center;' +
       'font-family:monospace; pointer-events:auto;' +
+      'box-shadow:0 2px 8px rgba(180,40,40,0.5);' +
       'transition:background 0.15s, transform 0.15s;';
     _minimizeBtnEl.addEventListener('mouseenter', function () {
-      _minimizeBtnEl.style.background = 'rgba(40,36,56,0.95)';
-      _minimizeBtnEl.style.transform = 'scale(1.1)';
+      _minimizeBtnEl.style.background = 'rgba(220,50,50,0.95)';
+      _minimizeBtnEl.style.transform = 'scale(1.15)';
     });
     _minimizeBtnEl.addEventListener('mouseleave', function () {
-      _minimizeBtnEl.style.background = 'rgba(20,18,28,0.85)';
+      _minimizeBtnEl.style.background = 'rgba(180,40,40,0.85)';
       _minimizeBtnEl.style.transform = 'scale(1)';
     });
     _minimizeBtnEl.addEventListener('click', function (e) {
@@ -181,6 +184,30 @@ var CardFan = (function () {
       minimize();
     });
     vp.appendChild(_minimizeBtnEl);
+  }
+
+  /**
+   * Position the close button at the NchWidget's last location.
+   * Hides the joker stack and replaces it with the close button.
+   */
+  function _anchorMinimizeToWidget() {
+    if (!_minimizeBtnEl) return;
+    var widgetEl = document.getElementById('nch-widget');
+    if (widgetEl && typeof NchWidget !== 'undefined') {
+      var pos = NchWidget.getCenterPosition();
+      _minimizeBtnEl.style.left = (pos.x - 20) + 'px';
+      _minimizeBtnEl.style.top  = (pos.y - 20) + 'px';
+      _minimizeBtnEl.style.right = 'auto';
+      _minimizeBtnEl.style.bottom = 'auto';
+      // Hide the joker stack while fan is open
+      widgetEl.style.visibility = 'hidden';
+    } else {
+      // Fallback if widget not found
+      _minimizeBtnEl.style.right = '20px';
+      _minimizeBtnEl.style.bottom = '140px';
+      _minimizeBtnEl.style.left = 'auto';
+      _minimizeBtnEl.style.top = 'auto';
+    }
   }
 
   // ── Maximize / Minimize ─────────────────────────────────────────
@@ -193,13 +220,12 @@ var CardFan = (function () {
     _maximized = true;
     _onMinimize = (opts && opts.onMinimize) || null;
 
-    // Show minimize button
+    // Anchor close button at the joker stack location, hide the stack
+    _anchorMinimizeToWidget();
     if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'flex';
 
-    // Slightly blur only the game canvas to focus attention on cards
-    // HUD stays fully opaque and readable
-    var cv = document.getElementById('view-canvas');
-    if (cv) cv.style.filter = 'blur(1.5px) brightness(0.85)';
+    // No CSS filter — peripheral dim with ring cutout is drawn on-canvas
+    // in render(), keeping cards above the dim layer and ring center clear.
   }
 
   /**
@@ -210,9 +236,9 @@ var CardFan = (function () {
     _maximized = false;
     if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
 
-    // Remove canvas blur
-    var cv = document.getElementById('view-canvas');
-    if (cv) cv.style.filter = '';
+    // Restore joker stack visibility
+    var widgetEl = document.getElementById('nch-widget');
+    if (widgetEl) widgetEl.style.visibility = '';
 
     // Close the fan and notify
     if (_open) {
@@ -265,8 +291,8 @@ var CardFan = (function () {
     if (_maximized) {
       _maximized = false;
       if (_minimizeBtnEl) _minimizeBtnEl.style.display = 'none';
-      var cv = document.getElementById('view-canvas');
-      if (cv) cv.style.filter = '';
+      var widgetEl = document.getElementById('nch-widget');
+      if (widgetEl) widgetEl.style.visibility = '';
     }
   }
 
@@ -824,7 +850,7 @@ var CardFan = (function () {
         emojis + ' ' +
         (typeof i18n !== 'undefined' ? i18n.t('combat.stack_preview', 'Combo') : 'Combo') +
         (tags.length > 0 ? ' [' + tags.join('+') + ']' : '') +
-        ' — ' +
+        ' - ' +
         (typeof i18n !== 'undefined' ? i18n.t('combat.swipe_to_fire', 'swipe up to fire!') : 'swipe up to fire!')
       );
     }
@@ -1094,24 +1120,40 @@ var CardFan = (function () {
 
     ctx.save();
 
-    // ── Maximized backdrop: dark gradient across bottom ~30% ──
+    // ── Maximized backdrop: peripheral dim with ring cutout ──
+    // Everything outside the freelook ring dims; inside stays clear.
+    // Cards render AFTER this layer so they are always crisp.
     if (_maximized) {
-      var backdropH = h * 0.35;
-      var backdropY = h - backdropH;
-      var grad = ctx.createLinearGradient(0, backdropY, 0, h);
-      grad.addColorStop(0, 'rgba(10,8,16,0)');
-      grad.addColorStop(0.15, 'rgba(10,8,16,0.7)');
-      grad.addColorStop(1, 'rgba(10,8,16,0.92)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, backdropY, w, backdropH);
+      var ringFrac = (typeof ViewportRing !== 'undefined')
+        ? ViewportRing.RING_RADIUS_FRAC : 0.315;
+      var ringR = Math.min(w, h) * ringFrac;
+      var rcx = w / 2;
+      var rcy = h / 2;
 
-      // Thin divider line at top of backdrop
-      ctx.strokeStyle = 'rgba(160,140,100,0.25)';
+      ctx.save();
+      // Draw full-screen dim with circular cutout (even-odd fill)
+      ctx.beginPath();
+      ctx.rect(0, 0, w, h);
+      ctx.arc(rcx, rcy, ringR, 0, Math.PI * 2, true); // CCW = cutout
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(10,8,16,0.55)';
+      ctx.fill();
+
+      // Soft gradient at bottom for card readability
+      var bottomGrad = ctx.createLinearGradient(0, h * 0.68, 0, h);
+      bottomGrad.addColorStop(0, 'rgba(10,8,16,0)');
+      bottomGrad.addColorStop(1, 'rgba(10,8,16,0.4)');
+      ctx.fillStyle = bottomGrad;
+      ctx.fillRect(0, h * 0.68, w, h * 0.32);
+
+      // Thin divider arc along the bottom of the ring
+      ctx.strokeStyle = 'rgba(160,140,100,0.15)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(0, backdropY + backdropH * 0.15);
-      ctx.lineTo(w, backdropY + backdropH * 0.15);
+      ctx.arc(rcx, rcy, ringR, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
+
+      ctx.restore();
     }
 
     // ── First pass: render stack glow behind stacked cards ──

@@ -52,19 +52,19 @@ i18n.register('en', {
   'combat.beat_ambush':     'You caught them off guard',
   'combat.beat_alert':      'They saw you coming',
   'combat.beat_engaged':    'Face to face',
-  'combat.beat_critical':   'Critical HP — fight carefully',
+  'combat.beat_critical':   'Critical HP - fight carefully',
   'combat.beat_low_energy': 'Low energy',
   'combat.beat_ready':      'Ready',
-  'combat.advantage_ambush':  'Ambush — bonus damage!',
-  'combat.advantage_alert':   'Alert — enemy has advantage',
-  'combat.advantage_neutral': 'Engaged — even ground',
+  'combat.advantage_ambush':  'Ambush - bonus damage!',
+  'combat.advantage_alert':   'Alert - enemy has advantage',
+  'combat.advantage_neutral': 'Engaged - even ground',
 
   // ── Hazards & Bonfire ───────────────────────────────────────────
   'hazard.trap':              'TRAP',
   'hazard.fire':              'FIRE',
   'hazard.spikes':            'SPIKES',
   'hazard.poison':            'POISON',
-  'hazard.bonfire_rest':      '🐉 Rested at dragonfire — HP & energy restored',
+  'hazard.bonfire_rest':      '🐉 Rested at dragonfire; HP & energy restored',
   'hazard.death_trap':        'Caught in a trap',
   'hazard.death_fire':        'Burned alive',
   'hazard.death_spikes':      'Impaled on spikes',
@@ -89,7 +89,7 @@ i18n.register('en', {
 
   // ── Victory ─────────────────────────────────────────────────────
   'victory.header':     'VICTORY',
-  'victory.narrative':  '[Narrative payoff — jam content]',
+  'victory.narrative':  '[Narrative payoff - jam content]',
   'victory.floors':     'Floors explored',
   'victory.enemies':    'Enemies defeated',
   'victory.cards':      'Cards played',
@@ -145,11 +145,11 @@ i18n.register('en', {
 
   // ── Faction Shops ─────────────────────────────────────────────
   'shop.tide_name':        'TIDE COUNCIL',
-  'shop.tide_desc':        'Old fishing families — dragon relics wanted',
+  'shop.tide_desc':        'Old fishing families; dragon relics wanted',
   'shop.foundry_name':     'THE FOUNDRY',
-  'shop.foundry_desc':     'Industrial consortium — monster parts wanted',
+  'shop.foundry_desc':     'Industrial consortium; monster parts wanted',
   'shop.admiralty_name':    'THE ADMIRALTY',
-  'shop.admiralty_desc':    'Naval research — specimens & data wanted',
+  'shop.admiralty_desc':    'Naval research; specimens & data wanted',
 
   // Faction short labels (used by menu-faces.js rep panel)
   'faction.tide':          'Tide',
@@ -231,17 +231,17 @@ i18n.register('en', {
   // ── Interact hints (second line, shown on hover) ───────────────
   'hint.clean':           'Remove blood to raise readiness.',
   'hint.restock':         'Fill slots with matching items to seal.',
-  'hint.restock_sealed':  'Sealed — contributes to readiness.',
+  'hint.restock_sealed':  'Sealed; contributes to readiness.',
   'hint.rearm':           'Restore trap for heroes to trigger.',
-  'hint.cobweb':          'Stretched across the corridor — slows enemies.',
+  'hint.cobweb':          'Stretched across the corridor; slows enemies.',
   'hint.harvest':         'Drag items from corpse stock.',
-  'hint.harvest_sealed':  'Sealed — ready to reanimate.',
+  'hint.harvest_sealed':  'Sealed; ready to reanimate.',
   'hint.smash':           'Break it open for loot.',
   'hint.refuel':          'Add fuel to keep the torch lit.',
   'hint.extinguish':      'Douse the flame (reduces readiness).',
   'hint.read':            'Browse the shelves.',
   'hint.rest':            'Heal, save, and advance time.',
-  'hint.camp':            'Brief rest — restores HP and energy.',
+  'hint.camp':            'Brief rest; restores HP and energy.',
   'hint.drink':           'Temporary stat boost.',
   'hint.inspect':         'Look closer.',
   'hint.enter':           'Go inside.',
@@ -265,16 +265,16 @@ i18n.register('en', {
   'dragonfire.warp_confirm_home':    'Warp home? You can return here later.',
   'bonfire.waypoint_set':            'Respawn point set',
   'ui.confirm':                      'Yes',
-  'shop.stash_empty_hint':           'Drag items here — they survive death.',
-  'hazard.dragonfire_brief':     '🐉 Brief rest — HP & energy restored. Stay alert.',
-  'hazard.dragonfire_rest_dawn': '🐉 Rested until dawn — HP & energy restored. You feel well rested.',
-  'hazard.dragonfire_rest_late': '🐉 Rested until dawn — HP & energy restored. Late night, though...',
+  'shop.stash_empty_hint':           'Drag items here; they survive death.',
+  'hazard.dragonfire_brief':     '🐉 Brief rest; HP & energy restored. Stay alert.',
+  'hazard.dragonfire_rest_dawn': '🐉 Rested until dawn; HP & energy restored. You feel well rested.',
+  'hazard.dragonfire_rest_late': '🐉 Rested until dawn; HP & energy restored. Late night, though...',
   'inv.nothing_burn':        'Nothing to burn',
   'inv.bag':                 'Bag',
 
   // ── Table quips ────────────────────────────────────────────────
   'table.quip1':  'A mug of cold tea. Still half full.',
-  'table.quip2':  'Scattered notes — dungeon cleaning checklists.',
+  'table.quip2':  'Scattered notes... dungeon cleaning checklists.',
   'table.quip3':  'A pressed flower between two invoice sheets.',
   'table.quip4':  "Crumbs from this morning's flatbread.",
   'table.quip5':  'A dull knife and a half-whittled figurine.',
@@ -287,7 +287,10 @@ i18n.register('en', {
 
   // ── Trap re-arm ───────────────────────────────────────────────
   'interact.rearm':     'Re-arm trap',
+  'interact.check_mail': 'Check Mailbox',
+  'hint.check_mail':     'Read hero run reports.',
   'toast.trap_rearmed': 'Trap re-armed!',
+  'readiness.exit_enabled': 'Dragonfire exit enabled!',
   'toast.tile_clean':   'Tile cleaned!',
   'toast.reanimate':    'The fallen rises...',
   'toast.scrub_prog':   'Scrubbing...',
@@ -299,6 +302,10 @@ i18n.register('en', {
 
   // ── Settings ────────────────────────────────────────────────────
   'settings.language':  'Language',
+  'settings.lang_en':   'English',
+  'settings.lang_es':   'Español',
+  'settings.lang_hi':   'हिन्दी',
+  'settings.lang_ps':   'پښتو',
   'settings.sfx':       'SFX Volume',
   'settings.bgm':       'BGM Volume',
   'settings.master':    'Master Volume'

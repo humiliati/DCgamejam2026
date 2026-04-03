@@ -534,7 +534,7 @@ var HeroSystem = (function () {
     console.log('[HeroSystem] Hero Day! Cycle ' + _heroCount + ' — ' + _getCurrentHeroDef().name);
 
     if (typeof Toast !== 'undefined') {
-      Toast.show('⚔️ Hero Day — ' + _getCurrentHeroDef().name + ' is dispatched.', 'danger');
+      Toast.show('⚔️ Hero Day - ' + _getCurrentHeroDef().name + ' is dispatched.', 'danger');
     }
 
     // Fire system bark

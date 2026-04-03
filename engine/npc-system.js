@@ -598,10 +598,11 @@ var NpcSystem = (function () {
       }
     }
 
-    // Animate NPC sprite — use pacified state for a calm "waiting" look
-    // (gentle bob, peace overlay, no aggression). Falls back gracefully.
+    // Keep NPC in IDLE state while talking. PACIFIED is a combat status
+    // (dove particles, "PEACE" overlay, glow) — wrong for friendly chat.
+    // The NPC already faces the player and stops moving via _talking flag.
     if (typeof EnemySprites !== 'undefined' && EnemySprites.STATE) {
-      npc.spriteState = EnemySprites.STATE.PACIFIED;
+      npc.spriteState = EnemySprites.STATE.IDLE;
     }
 
     // Voice chirp
@@ -761,24 +762,79 @@ var NpcSystem = (function () {
     }
   }
 
+  /**
+   * Compute the yaw offset needed to center the camera on an NPC.
+   * Returns a value in Player.FREE_LOOK_RANGE for MouseLook.lockOn().
+   */
+  function _computeNpcYaw(npc) {
+    if (typeof MovementController === 'undefined' || typeof Player === 'undefined') return 0;
+    var pp = MovementController.getGridPos();
+    var dx = npc.x - pp.x;
+    var dy = npc.y - pp.y;
+    var angleToNpc = Math.atan2(dy, dx); // world angle to NPC
+    var playerAngle = MovementController.dirToAngle
+      ? MovementController.dirToAngle(Player.getDir())
+      : Player.getDir() * Math.PI / 2;
+    // Signed angular difference, clamped to freelook range
+    var diff = angleToNpc - playerAngle;
+    // Normalize to [-π, π]
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    var range = Player.FREE_LOOK_RANGE || 0.56;
+    return Math.max(-range, Math.min(range, diff));
+  }
+
   function _interactInteractive(npc) {
-    // Show speech capsule above NPC during interaction
+    // Show rolling ellipsis above NPC while they "speak".
+    // Uses 'speaking' key (rolling "...") — NOT 'greeting' (kaomoji face).
     if (typeof KaomojiCapsule !== 'undefined') {
-      KaomojiCapsule.startSpeech(npc.id, 'greeting');
+      KaomojiCapsule.startSpeech(npc.id, 'speaking');
     }
 
-    // Prefer a registered DialogBox tree over a bark pool
+    // ── Dialogue tree path ─────────────────────────────────────────
+    // OoT-style lock-on: smooth freelook pan to NPC + letterbox bars.
+    // DialogBox.moveLocked() blocks movement input. The speech capsule
+    // persists continuously until the tree closes.
     var tree = _trees[npc.id];
     if (tree && typeof DialogBox !== 'undefined') {
+      // Lock camera on NPC via smooth freelook pan
+      var lockYaw = _computeNpcYaw(npc);
+      if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
+        MouseLook.lockOn(lockYaw, 0);
+      }
+      // Slide in cinematic letterbox bars
+      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.start) {
+        CinematicCamera.start('npc_dialogue');
+      }
+
       DialogBox.startConversation(
         { id: npc.id, name: npc.name, emoji: npc.emoji },
         tree
       );
-      // Release when dialog closes (TALK_HOLD_MS auto-release covers this)
+
+      // Watch for dialog close to dismiss everything
+      var _pollClose = setInterval(function () {
+        if (!DialogBox.isOpen()) {
+          clearInterval(_pollClose);
+          if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+          // Release camera lock (smooth decay back to mouse position)
+          if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) {
+            MouseLook.releaseLock();
+          }
+          // Slide out letterbox bars
+          if (typeof CinematicCamera !== 'undefined' && CinematicCamera.close) {
+            CinematicCamera.close();
+          }
+          _releaseTalk(npc);
+        }
+      }, 200);
       return;
     }
 
-    // Fall back: fire the interaction bark pool
+    // ── Bark path (no dialogue tree) ───────────────────────────────
+    // Fire bark text into the tooltip footer. The rolling ellipsis
+    // plays briefly above the NPC then fades. No camera lock or bars
+    // for simple barks — just the tooltip + speech capsule.
     var barkFired = false;
     if (npc.dialoguePool && typeof BarkLibrary !== 'undefined') {
       var b = BarkLibrary.fire(npc.dialoguePool, { style: 'dialog' });
@@ -790,7 +846,6 @@ var NpcSystem = (function () {
     }
 
     // Fallback: all bark pools exhausted — push a generic acknowledgement
-    // so the player still gets visible feedback from the interaction.
     if (!barkFired) {
       var fallbackText = (npc.name || 'NPC') + ' nods silently.';
       if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {

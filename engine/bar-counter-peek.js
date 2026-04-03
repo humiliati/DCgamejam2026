@@ -140,13 +140,13 @@ var BarCounterPeek = (function () {
 
     if (taps > 0) {
       Toast.show(
-        drink.emoji + ' ' + drink.name + ' — ' + drink.desc +
+        drink.emoji + ' ' + drink.name + ' - ' + drink.desc +
         ' (' + taps + '/' + MAX_TAPS + ' left)  [OK] Drink',
         'info'
       );
     } else {
       Toast.show(
-        drink.emoji + ' ' + drink.name + ' — Empty! Come back next visit.',
+        drink.emoji + ' ' + drink.name + ' - Empty! Come back next visit.',
         'warning'
       );
     }

@@ -93,6 +93,14 @@ var StatusBar = (function () {
       });
     }
 
+    // Click-away collapse: clicking anywhere outside the tooltip area
+    // auto-minimizes it (unless in a dialogue tree).
+    document.addEventListener('click', function (e) {
+      if (!_tooltipExpanded || _dialogueActive) return;
+      if (_tooltipArea && _tooltipArea.contains(e.target)) return;
+      _setExpanded(false);
+    });
+
     // Button click handlers
     if (_btnDebrief) {
       _btnDebrief.addEventListener('click', function (e) {
@@ -312,8 +320,26 @@ var StatusBar = (function () {
     _tooltipExpanded = expanded;
     if (_el) _el.classList.toggle('sb-expanded', expanded);
 
-    // Cancel any pending auto-collapse when manually toggling
+    // Cancel any pending auto-collapse when toggling
     if (_autoCollapseId) { clearTimeout(_autoCollapseId); _autoCollapseId = null; }
+
+    // When expanding (from any source), start a gracious auto-collapse
+    // timer so the tooltip doesn't stay expanded forever.
+    if (expanded && !_dialogueActive) {
+      _autoCollapseId = setTimeout(function () {
+        if (!_dialogueActive) _setExpanded(false);
+      }, AUTO_COLLAPSE_MS);
+    }
+  }
+
+  /**
+   * Collapse the tooltip if it's currently expanded (and not in a dialogue tree).
+   * Called externally on movement or click-away.
+   */
+  function collapseIfIdle() {
+    if (_tooltipExpanded && !_dialogueActive) {
+      _setExpanded(false);
+    }
   }
 
   function pushTooltip(text, category) {
@@ -344,12 +370,8 @@ var StatusBar = (function () {
     _burstResetId = setTimeout(function () { _burstCount = 0; }, BURST_WINDOW_MS);
 
     if (!_tooltipExpanded && _burstCount >= BURST_THRESHOLD) {
+      // _setExpanded(true) schedules its own auto-collapse timer
       _setExpanded(true);
-      // Schedule auto-collapse after activity settles
-      if (_autoCollapseId) clearTimeout(_autoCollapseId);
-      _autoCollapseId = setTimeout(function () {
-        if (!_dialogueActive) _setExpanded(false);
-      }, AUTO_COLLAPSE_MS);
     }
 
     // Flash the expand hint when new entry arrives (if collapsed)
@@ -616,10 +638,14 @@ var StatusBar = (function () {
     }
   }
 
-  /** Helper: current timestamp string. */
+  /** Helper: current timestamp string — uses in-game DayCycle time. */
   function _timestamp() {
+    if (typeof DayCycle !== 'undefined' && DayCycle.getTimeString) {
+      return DayCycle.getTimeString();
+    }
+    // Fallback to wall clock if DayCycle not available yet
     var now = new Date();
-    return ('0' + now.getMinutes()).slice(-2) + ':' + ('0' + now.getSeconds()).slice(-2);
+    return ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
   }
 
   /** Rebuild history HTML (shared by pushTooltip and dialogue).
@@ -744,6 +770,7 @@ var StatusBar = (function () {
     clearDialogue:     clearDialogue,
     isDialogueActive:  isDialogueActive,
     checkWalkAway:     checkWalkAway,
+    collapseIfIdle:    collapseIfIdle,
     setOnFlee: function (fn) { _onFleeCallback = fn; }
   };
 })();

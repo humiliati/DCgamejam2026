@@ -31,7 +31,11 @@ var BoxAnim = (function () {
   var TEMPLATE =
     '<div class="box3d-scene">' +
       '<div class="box3d-spin spinning">' +
-        '<div class="box3d-glow"></div>' +
+        '<div class="box3d-glow">' +
+          '<div class="glow-plane gp0"></div>' +
+          '<div class="glow-plane gp1"></div>' +
+          '<div class="glow-plane gp2"></div>' +
+        '</div>' +
         '<div class="box3d-face bf-back"></div>' +
         '<div class="box3d-face bf-left"></div>' +
         '<div class="box3d-face bf-right"></div>' +

@@ -1,4 +1,12 @@
 /**
+ * IntroWalk — SHELVED for jam (script tag commented out in index.html).
+ *
+ * To restore: uncomment the script tag in index.html (Layer 3, after
+ * minimap-nav.js) and wire _startIntroWalk() back into game.js
+ * _initGameplay() after the MonologuePeek.play('deploy_dropoff') call.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * IntroWalk — cursor-hijack tutorial that teaches minimap click-to-move.
  *
  * Adapted from EyesOnly/public/js/onboarding-tutorial.js (gone-rogue

@@ -1,10 +1,12 @@
 # Tutorial World Roadmap
 ## Dungeon Gleaner — DC Jam 2026
-### Version 2.1 — March 29, 2026
+### Version 2.2 — April 2, 2026
 
 World Graph Design · Initial Player Experience · Hero Reveal · Scavenger Economy · Floor ID Architecture
 
 > **v2.1 changes:** Corrected playflow from v2.0. Dispatcher force-turn moved to Floor 1→2 gate (was at dungeon entrance). Floor 2.1 is now the Dispatcher's Office (employer's interior), not the Watchman's Post. Floor 2 expanded to a full commercial district ("more shops, more barks"). Dungeon building entrance split to Floor 2.2 (was 2.1). Soft dungeon given proper intermediate building floor (1.3 → 1.3.1, was direct 1.1.1). Hero's Wake renumbered to 2.2.1/2.2.2 (was 2.1.1/2.1.2).
+>
+> **v2.2 changes:** Updated floor dimensions and grid diagrams to match actual implementation in floor-manager.js. Floor 1 is 40×30 (was 24×20 in spec). Floor 1.1 is 16×12 with bookshelves, bonfire, and STAIRS_DN to Coral Cellars (was 12×10 shop-only). Floor 1.6 is 24×20 multi-room dwelling (was 10×8 single room). Mailbox on Floor 1 exterior uses TILES.MAILBOX (37), not PILLAR. Implementation status updated: hand-authored floors are 0, 1, 1.1, 1.6; all other floors proc-gen via GridGen + SpatialContract. Gleaner loop systems (cleaning, restocking, torch, cobweb, readiness, work orders, day cycle, dungeon schedule, hero runs, morning report) all implemented. Peek modules live: bookshelf-peek, bar-counter-peek, bed-peek, mailbox-peek, crate-peek, corpse-peek, torch-peek, chest-peek, locked-door-peek, merchant-peek, monologue-peek, puzzle-peek, door-peek.
 
 ---
 
@@ -119,41 +121,44 @@ Future:
 
 ### 3.1 Floor Table
 
-| Floor ID | Depth | Type | Biome | Grid | Authored | Label | Purpose |
-|----------|-------|------|-------|------|----------|-------|---------|
-| `"0"` | 1 | exterior | approach | 20×16 | hand | The Approach | Tutorial auto-walk, first NPC barks |
-| `"1"` | 1 | exterior | boardwalk | 24×20 | hand | The Promenade | Hub town — shops, home, dungeon access |
-| `"1.1"` | 2 | interior | shop | 12×10 | hand | Coral Bazaar | Card shop (buy/sell), faction: Coral Traders |
-| `"1.2"` | 2 | interior | inn | 14×12 | hand | Driftwood Inn | Bonfire: overheal + replenish |
-| `"1.3"` | 2 | interior | cellar-entry | 10×8 | hand | Cellar Entrance | Soft dungeon building, leads to 1.3.1 |
-| `"1.6"` | 2 | interior | home | 10×8 | hand | Gleaner's Home | Player bunk, keyring, mailbox, bed/bonfire |
-| `"1.3.1"` | 3 | dungeon | cellar | 20×20 | proc-gen | Soft Cellar | Tutorial trap — sidequests, easy enemies |
-| `"2"` | 1 | exterior | street | 28×16 | hand | Lantern Row | Commercial district — more shops, more barks, dungeon building |
-| `"2.1"` | 2 | interior | office | 12×10 | hand | Dispatcher's Office | Employer's interior, briefing, mission assignment |
-| `"2.2"` | 2 | interior | post | 12×10 | hand | Watchman's Post | Dungeon staging — shaken NPC, stairs down |
-| `"2.2.1"` | 3 | dungeon | ruin | 28×28 | proc-gen | Hero's Wake (B1) | Hero reveal, high-level corpses, unbeatable enemy |
-| `"2.2.2"` | 3 | dungeon | ruin | 30×30 | proc-gen | Hero's Wake (B2) | Deeper scavenge floor |
-| `"3"` | 1 | exterior | frontier | 20×16 | hand | Frontier Gate | Future: third exterior zone |
-| `"3.1"` | 2 | interior | armory | 12×10 | hand | Armory | Future: third building + dungeon access |
-| `"3.1.1"` | 3 | dungeon | deep | 30×30 | proc-gen | Deep Vaults (B1) | Future: third dungeon chain |
+| Floor ID | Depth | Type | Biome | Grid | Authored | Label | Purpose | Status |
+|----------|-------|------|-------|------|----------|-------|---------|--------|
+| `"0"` | 1 | exterior | approach | 20×16 | hand | The Approach | Tutorial auto-walk, first NPC barks | ✅ |
+| `"1"` | 1 | exterior | promenade | 40×30 | hand | The Promenade | Hub town — shops, home, dungeon access | ✅ |
+| `"1.1"` | 2 | interior | bazaar | 16×12 | hand | Coral Bazaar | Card shop, bookshelves, bonfire, stairs to cellars | ✅ |
+| `"1.2"` | 2 | interior | inn | SpatialContract | proc-gen | Driftwood Inn | Bonfire: overheal + replenish | proc-gen ✅ |
+| `"1.3"` | 2 | interior | cellar-entry | SpatialContract | proc-gen | Cellar Entrance | Soft dungeon building, leads to 1.3.1 | proc-gen ✅ |
+| `"1.6"` | 2 | interior | home | 24×20 | hand | Gleaner's Home | Multi-room dwelling: bedroom, living room, storage, entry hall | ✅ |
+| `"1.3.1"` | 3 | dungeon | cellar | SpatialContract | proc-gen | Soft Cellar | Tutorial trap — sidequests, easy enemies | proc-gen ✅ |
+| `"2"` | 1 | exterior | lantern | SpatialContract | proc-gen | Lantern Row | Commercial district — more shops, more barks, dungeon building | proc-gen ✅ |
+| `"2.1"` | 2 | interior | guild | SpatialContract | proc-gen | Dispatcher's Office | Employer's interior, briefing, mission assignment | proc-gen ✅ |
+| `"2.2"` | 2 | interior | watchpost | SpatialContract | proc-gen | Watchman's Post | Dungeon staging — shaken NPC, stairs down | proc-gen ✅ |
+| `"2.2.1"` | 3 | dungeon | ruin | SpatialContract | proc-gen | Hero's Wake (B1) | Hero reveal, high-level corpses, unbeatable enemy | proc-gen ✅ |
+| `"2.2.2"` | 3 | dungeon | ruin | SpatialContract | proc-gen | Hero's Wake (B2) | Deeper scavenge floor | proc-gen ✅ |
+| `"3"` | 1 | exterior | frontier | SpatialContract | proc-gen | Frontier Gate | Future: third exterior zone | proc-gen ✅ |
+| `"3.1"` | 2 | interior | armory | SpatialContract | proc-gen | Armory | Future: third building + dungeon access | proc-gen ✅ |
+| `"3.1.1"` | 3 | dungeon | deep | SpatialContract | proc-gen | Deep Vaults (B1) | Future: third dungeon chain | proc-gen ✅ |
+
+> **Implementation note:** Only floors "0", "1", "1.1", and "1.6" have hand-authored grids in floor-manager.js. All other floors are generated by GridGen using SpatialContract dimensions per biome. Proc-gen floors get bookshelves auto-placed via `_placeBookshelvesInInterior()` with biome-appropriate book presets.
 
 ### 3.2 Connection Table
 
 | From | Exit Tile | Direction | To | Gate? | Notes |
 |------|-----------|-----------|-----|-------|-------|
 | `"0"` | DOOR | advance | `"1"` | — | Auto-walk target |
-| `"1"` | DOOR_BACK | retreat | `"0"` | — | Return to courtyard |
-| `"1"` | DOOR | advance | `"1.1"` | — | Coral Bazaar entrance |
-| `"1"` | DOOR | advance | `"1.2"` | — | Driftwood Inn |
-| `"1"` | DOOR | advance | `"1.3"` | — | Soft dungeon building |
-| `"1"` | DOOR | advance | `"1.6"` | — | Player's Home (east side, partially hidden) |
-| `"1"` | GATE (south) | advance | `"2"` | Dispatcher force-turn | Dispatcher blocks gate until keyring fetch |
-| `"1.1"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade |
-| `"1.2"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade |
-| `"1.3"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade |
+| `"1"` | DOOR_EXIT (18,26) | retreat | `"0"` | — | Return to courtyard |
+| `"1"` | DOOR (12,3) | advance | `"1.1"` | — | Coral Bazaar entrance (NW) |
+| `"1"` | DOOR (27,3) | advance | `"1.2"` | — | Driftwood Inn (NE) |
+| `"1"` | DOOR (5,9) | advance | `"1.3"` | — | Soft dungeon building (W, east-facing) |
+| `"1"` | DOOR (34,9) | advance | `"1.6"` | — | Player's Home (E, west-facing) |
+| `"1"` | GATE (20,26) | advance | `"2"` | Dispatcher force-turn | Dispatcher blocks gate until keyring fetch |
+| `"1.1"` | DOOR_EXIT (7,10) | retreat | `"1"` | — | Back to Promenade |
+| `"1.1"` | STAIRS_DN (7,4) | advance | — | — | Down to Coral Cellars (depth 3) |
+| `"1.2"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade (proc-gen) |
+| `"1.3"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade (proc-gen) |
 | `"1.3"` | STAIRS_DN | advance | `"1.3.1"` | — | Down to soft dungeon |
 | `"1.3.1"` | STAIRS_UP | retreat | `"1.3"` | — | Back to building |
-| `"1.6"` | DOOR_EXIT (5,7) | retreat | `"1"` | — | Back to Promenade |
+| `"1.6"` | DOOR_EXIT (11,19) | retreat | `"1"` | — | Back to Promenade |
 | `"2"` | DOOR_BACK | retreat | `"1"` | — | Back through gate |
 | `"2"` | DOOR | advance | `"2.1"` | — | Dispatcher's Office |
 | `"2"` | DOOR | advance | `"2.2"` | NOT locked (subversion) | Dungeon building — Dispatcher SAID it was locked, but it isn't |
@@ -297,60 +302,82 @@ Keep the existing 20×16 hand-authored grid. The auto-walk path goes north to a 
 
 Changes from v1.0: No hidden door needed. The auto-walk delivers the player directly to Floor 1.
 
-### 5.2 Floor 1 — The Promenade
+### 5.2 Floor 1 — The Promenade ✅ Implemented
 
-24×20 exterior boardwalk. The hub town. Multiple building facades with interactive DOORs.
+40×30 exterior boardwalk (expanded from spec's 24×20 for building footprint + plaza breathing room). The hub town. Multiple building facades with interactive DOORs.
 
-Layout zones:
-- **North row**: Building facades — Coral Bazaar (1.1), Driftwood Inn (1.2)
-- **East wall**: Player's Home (1.6) — DOOR at east side, partially obscured by pillar
-- **West**: Soft dungeon building (DOOR to 1.3) — prominent but not signposted. Players who ignore NPC barks will find this first.
-- **South**: Wall funnel narrowing to 2-3 tile passage with Dispatcher NPC blocking gate → Floor 2
-- **Center**: Open plaza with bonfire, fountain, ambient NPCs on patrol
+Layout zones (actual grid coords from floor-manager.js):
+- **North row (y=3)**: Building facades — Coral Bazaar DOOR(12,3)→1.1, Driftwood Inn DOOR(27,3)→1.2
+- **West (y=9)**: Cellar Entrance DOOR(5,9)→1.3 — east-facing, prominent but not signposted
+- **East (y=9)**: Gleaner's Home DOOR(34,9)→1.6 — west-facing, approach from col 33
+- **South wall (y=26)**: Gate funnel with shrub/tree narrowing. EXIT(18,26)→"0" + GATE(20,26)→"2" (Dispatcher blocks until keyring)
+- **Center (y=13)**: Open plaza with BONFIRE(19,13), pillar arcades, tree accents
+- **Exterior mailbox**: TILES.MAILBOX(33,8) — 1 tile north of home approach. MailboxPeek scans for MAILBOX tile dynamically.
 
 NPC barks on Floor 1 serve dual purpose:
 1. **Directional:** Point the player toward Floor 2 and the dungeon
 2. **Warning:** Discourage entering the soft dungeon prematurely ("That cellar? Just rats and cobwebs. The real work's on Lantern Row.")
 
-### 5.3 Floor 1.1 — Coral Bazaar (shop)
+### 5.3 Floor 1.1 — Coral Bazaar ✅ Implemented
 
-12×10 interior. Card shop. Buy/sell cards and supplies. Faction: Coral Traders (flame-aligned cards). First shop encounter triggers a brief bark teaching buy/sell.
+16×12 hand-authored interior (biome: `bazaar`). Card shop with bookshelves, bonfire, and STAIRS_DN to Coral Cellars dungeon. Faction: Coral Traders (flame-aligned cards). First shop encounter triggers a brief bark teaching buy/sell.
 
-### 5.4 Floor 1.2 — Driftwood Inn
+Actual layout (floor-manager.js `_buildFloor2`):
+- **North hall (y=1-2)**: Bookshelves at (2,2) and (13,2) with bazaar-themed books
+- **Inner stair chamber (y=3-5)**: STAIRS_DN(7,4) to Coral Cellars depth-3 dungeon
+- **Main hall (y=7-9)**: Bookshelf(2,7), pillars(2,8)+(13,8), BONFIRE(7,8)
+- **DOOR_EXIT(7,10)**: Back to The Promenade
 
-14×12 interior. Main hall with bonfire (**overheal**: 150% max HP, decays over 3 floors) and sleeping quarters bonfire (**replenish**: restore all energy). NPC innkeeper provides lore.
+### 5.4 Floor 1.2 — Driftwood Inn (proc-gen)
 
-### 5.5 Floor 1.3 — Cellar Entrance (soft dungeon building)
+Proc-gen interior via SpatialContract (biome: `inn`). Main hall with bonfire (**overheal**: 150% max HP, decays over 3 floors) and sleeping quarters bonfire (**replenish**: restore all energy). NPC innkeeper provides lore. Auto-placed bookshelves with inn-themed books (`tip_inn_bonfire`, `fiction_tides_of_passion`, `lore_dragon_history_1`). BedPeek module provides bed interaction (rest/advance day).
 
-10×8 hand-authored interior. The intermediate building that leads down to the soft mini-dungeon. Biome: `cellar-entry` (stone walls, dim amber torchlight).
+### 5.5 Floor 1.3 — Cellar Entrance (proc-gen)
 
-A small vestibule with a few crates, a lantern, and STAIRS_DN leading to Floor 1.3.1. Optional NPC: an old caretaker who provides a bark about the cellar's history.
+Proc-gen interior via SpatialContract (biome: `cellar_entry`). The intermediate building that leads down to the soft mini-dungeon. Stone walls, dim amber torchlight.
+
+A small vestibule with a few crates, a lantern, and STAIRS_DN leading to Floor 1.3.1. Optional NPC: an old caretaker who provides a bark about the cellar's history. Auto-placed bookshelves with cellar-themed books (`tip_combat`, `lore_dragon_history_2`).
 
 This floor exists so the soft dungeon follows proper depth hierarchy: exterior (1) → interior (1.3) → dungeon (1.3.1).
 
-### 5.6 Floor 1.6 — Gleaner's Home
+### 5.6 Floor 1.6 — Gleaner's Home ✅ Implemented
 
-10×8 hand-authored interior. Biome: `home` (warm amber plank walls, dark wood floor).
+24×20 hand-authored multi-room interior (expanded from spec's 10×8 single room). Biome: `home` (warm amber plank walls, dark wood floor). Takes advantage of the "bigger on the inside" rule for depth-2 floors.
+
+Four distinct zones:
+1. **Bedroom (west, cols 1-5, rows 1-8)**: BED pair at (2,3)+(3,3) — bonfire/rest point. Nightstand TABLE(4,7). Bookshelf(1,1).
+2. **Living room (center, cols 7-15, rows 1-8)**: TABLE pair(11,5)+(12,5), HEARTH(11,7), bookshelves at (9,2)+(14,2). Cozy hub.
+3. **Storage (east, cols 17-22, rows 1-8)**: CHEST(19,3) — work keys stash. PILLAR/mailbox history(19,6). Bookshelves at (21,1)+(20,8).
+4. **Entry hall (center, cols 7-15, rows 10-18)**: Long corridor, hall pillars(10,10)+(13,10), bookshelves at (9,15)+(14,15).
 
 ```
- 0  1  2  3  4  5  6  7  8  9
-┌──────────────────────────────┐
-│ W  W  W  W  W  W  W  W  W  W│  0  north wall
-│ W  .  .  .  .  .  .  .  .  W│  1  back of room
-│ W  .  🔥 .  .  .  .  .  .  W│  2  BED (bonfire) at (2,2)
-│ W  .  .  .  .  🗝️ .  .  .  W│  3  KEYS chest (DOOR tile) at (5,3)
-│ W  .  .  .  .  .  .  .  .  W│  4  open floor
-│ W  .  📬 .  .  .  .  .  .  W│  5  MAILBOX (pillar) at (2,5)
-│ W  .  .  .  .  .  .  .  .  W│  6  approach
-│ W  W  W  W  W  🚪 W  W  W  W│  7  DOOR_EXIT (5,7) → The Promenade
-└──────────────────────────────┘
+ Simplified layout (24×20 — see floor-manager.js for exact grid):
+┌────────────────────────────────────┐
+│ BEDROOM    │  LIVING ROOM  │ STORAGE│  rows 0-9
+│ BED(2,3)   │  TABLE(11,5)  │ CHEST  │
+│ BED(3,3)   │  HEARTH(11,7) │(19,3)  │
+│ nightstand │  bookshelves  │ 📬(19,6)│
+├─doorway────┤              ├doorway──┤  row 5 (open)
+│            │              │         │
+├────────────┤──────────────├─────────┤  row 9 (dividing wall)
+│            │  ENTRY HALL   │         │
+│   walled   │ pillars(10,10)│  walled │  rows 10-18
+│   off      │        (13,10)│  off    │
+│            │ 📚(9,15)(14,15)│        │
+│            │  DOOR_EXIT    │         │
+│            │  (11,19)→"1"  │         │
+└────────────────────────────────────┘
 ```
 
 Objects:
-- **Bed** (BONFIRE, 2,2): Sleep / advance day (future feature, currently stub)
-- **Work Keys** (DOOR, 5,3): Interact to pick up keyring. Triggers gate unlock + Hero sighting scripted moment. Tile becomes EMPTY after pickup.
-- **Mailbox** (PILLAR, 2,5): Hero-run reports (future feature)
-- **DOOR_EXIT** (5,7): Back to Floor 1. `doorTargets['5,7'] = '1'`
+- **Bed pair** (BED tiles 27, (2,3)+(3,3)): Sleep / advance day via BedPeek interaction ✅
+- **Work Keys** (CHEST tile 7, 19,3): Interact to pick up keyring. Triggers gate unlock + Hero sighting scripted moment. Tile becomes EMPTY after pickup.
+- **Mailbox history** (PILLAR, 19,6): Hero-run report history via MailboxPeek ✅ (configured in `mailboxHistory: { x: 19, y: 6 }`)
+- **Hearth** (HEARTH tile 29, 11,7): Decorative fireplace, cozy atmosphere
+- **7 bookshelves**: Biome-appropriate books (personal fiction, work schedule, guild lore, dragon history, adventure novel, shopping guide, ghost story)
+- **DOOR_EXIT** (11,19): Back to Floor 1. `doorTargets['11,19'] = '1'`
+
+> **Note:** The exterior mailbox for Floor 1 is a separate TILES.MAILBOX (37) at (33,8) on the Promenade grid, not inside the home. MailboxPeek scans for MAILBOX tiles dynamically via `_findMailboxTile()`.
 
 ### 5.7 Floor 1.3.1 — Soft Mini-Dungeon
 
@@ -365,9 +392,9 @@ Design intent: gentle but educational.
 
 The player who clears this dungeon learns combat, looting, and restocking basics. They emerge slightly richer and more confident, ready to follow the NPC barks toward Floor 2.
 
-### 5.8 Floor 2 — Lantern Row
+### 5.8 Floor 2 — Lantern Row (proc-gen)
 
-28×16 exterior. A proper commercial district — wider than v2.0's narrow street. Lantern-lit evening atmosphere. Building facades on both sides, several with interactive DOORs (shops, Dispatcher's Office, dungeon building).
+Proc-gen exterior via SpatialContract (biome: `lantern`). A proper commercial district — wider than v2.0's narrow street. Lantern-lit evening atmosphere. Building facades on both sides, several with interactive DOORs (shops, Dispatcher's Office, dungeon building).
 
 Key elements:
 - **DOOR_BACK** (west): Return to Floor 1 through gate
@@ -382,18 +409,18 @@ NPC barks on Floor 2:
 - *"Watch yourself near the dungeon building. Heroes been going in and out all night."*
 - *"Hey, new restock ingredients just came in. Better prices than the Promenade."*
 
-### 5.9 Floor 2.1 — Dispatcher's Office
+### 5.9 Floor 2.1 — Dispatcher's Office (proc-gen)
 
-12×10 interior. The employer's office. Biome: `office` (dark wood paneling, map-covered walls, desk, filing cabinets).
+Proc-gen interior via SpatialContract (biome: `guild`). The employer's office. Dark wood paneling, map-covered walls, desk, filing cabinets. Auto-placed bookshelves with office-themed books (`tip_dispatch_protocol`, `notice_work_order_template`, `lore_gleaner_guild_charter`).
 
 - **DOOR_EXIT** (south): Back to Floor 2
 - **Dispatcher NPC**: Stationed at desk. Bark cascade provides mission briefing and reinforces the (false) expectation that Floor 2.2 is locked.
 - **Wall maps**: Decorative PILLAR tiles showing dungeon floor plans (atmospheric detail)
 - **Desk items**: Non-interactive props establishing the bureaucratic world
 
-### 5.10 Floor 2.2 — Watchman's Post (dungeon building)
+### 5.10 Floor 2.2 — Watchman's Post (proc-gen)
 
-12×10 interior. The dungeon staging area. A shaken NPC sits inside.
+Proc-gen interior via SpatialContract (biome: `watchpost`). The dungeon staging area. A shaken NPC sits inside. Auto-placed bookshelves with watchpost-themed books (`manual_admiralty_handbook`, `lore_hero_arrival`, `notice_hero_registration`).
 
 - **DOOR_EXIT** (south): Back to Floor 2
 - **STAIRS_DN** (north): Down to Floor 2.2.1 (Hero's Wake dungeon)
@@ -577,69 +604,87 @@ Per-floor state persistence:
 
 ---
 
-## 9. Gleaner Pivot — Dungeon Maintenance Systems
+## 9. Gleaner Pivot — Dungeon Maintenance Systems ✅ All Implemented
 
 (Preserved from v1.0 §13-§15 — the three interlocking loops)
 
 The scavenge loop described in §7 is the game's first act. As the player gains power, the maintenance loops layer on top:
 
-### 9.1 The Cleaning Loop
-Scrub dirty/damaged tiles grid-by-grid. Each scrub pops 1 coin. 80% cleanliness triggers bonus coin burst.
+### 9.1 The Cleaning Loop ✅
+`cleaning-system.js` — Scrub dirty/damaged tiles grid-by-grid. Each scrub costs battery, pops 1 coin, credits readiness. 80% cleanliness triggers bonus coin burst.
 
-### 9.2 The Restocking Loop
-Fill crate slots with items. Matched frame = 2-3x yield. Seal reward table rolls for card drops (1% legendary).
+### 9.2 The Restocking Loop ✅
+`crate-system.js` + `crate-peek.js` + `crate-ui.js` — Fill crate slots with items. Matched frame = 2-3x yield. Seal reward table rolls for card drops (1% legendary).
 
-### 9.3 The Dungeon Reset Loop
-Work orders from the Gleaner's Guild. Readiness score = cleaning (25%) + restocking (25%) + traps (15%) + puzzles (15%) + monsters (10%) + secrets (10%).
+### 9.3 The Dungeon Reset Loop ✅
+`work-order-system.js` + `readiness-calc.js` — Work orders from the Gleaner's Guild. Readiness score uses CORE/EXTRA split scoring (0.0–2.0): cleaning (25%) + restocking (25%) + traps (15%) + puzzles (15%) + monsters (10%) + secrets (10%). ReadinessBar in HUD tracks progress with tier crossing FX, celebration at 100%, and extra-credit coin drip above 1.0.
 
-(Full detail in §13-§15 of v1.0 — all systems still apply, just reframed by the new initial playflow.)
+### 9.4 Supporting Systems ✅
+- `trap-rearm.js` — Trap restoration with readiness credit
+- `torch-state.js` + `torch-peek.js` — 3-slot torch model with fuel + hero damage
+- `cobweb-system.js` + `cobweb-node.js` + `cobweb-renderer.js` — Trap webs
+- `day-cycle.js` — 8-phase day/night clock
+- `dungeon-schedule.js` — Per-group hero day state machine, combo multiplier, death-shift
+- `hero-run.js` — Hero run simulation per-group
+- `morning-report.js` — Dawn Toast sequence with per-group status
+- `mailbox-sprites.js` + `mailbox-peek.js` — Report delivery + history
 
 ---
 
 ## 10. Implementation Phases (Jam-Ready)
 
-### Phase 0: Playflow Critical Path (4-5 hours)
+### Phase 0: Playflow Critical Path — ✅ Partially Complete
 
 **Goal:** Floor 0 → 1 → gate force-turn → 1.6 → back to gate → 2 → 2.1 → 2.2 → 2.2.1 is walkable end-to-end with NPC barks, the Dispatcher misdirection, and the Hero reveal.
 
-Tasks:
-1. Hand-author Floor 1 grid (24×20) with all building DOORs + gate passage with Dispatcher spawn
-2. Hand-author Floor 1.3 grid (10×8) — cellar entrance building
-3. Hand-author Floor 2 grid (28×16) with Dispatcher's Office + dungeon building DOORs + shop facades
-4. Hand-author Floor 2.1 grid (12×10) — Dispatcher's Office with briefing NPC
-5. Hand-author Floor 2.2 grid (12×10) — Watchman's Post with shaken NPC + STAIRS_DN
-6. Wire Floor 1.6 (Home) — already designed in v1.0 §18.5
-7. Wire Dispatcher force-turn at Floor 1 gate → bark cascade → key fetch redirect
-8. Wire keys pickup → Dispatcher steps aside → gate passable
-9. Wire Floor 2.2.1 generation post-pass: Hero trail + high-level corpses + unbeatable enemy + Hero sprite
-10. Wire Hero walk controller (tick-driven, flee-on-approach, despawn on LOS break)
-11. All NPC barks in `data/barks/en.js`
+Completed:
+- ✅ Hand-authored Floor 0, Floor 1 (40×30), Floor 1.1 (16×12), Floor 1.6 (24×20) grids in floor-manager.js
+- ✅ Floors 1.2, 1.3, 2, 2.1, 2.2 all generate via SpatialContract proc-gen — walkable, correct biomes
+- ✅ Floor 1.6 has full multi-room interior with bed, chest, mailbox history, hearth, bookshelves
+- ✅ Floor transition system, door contracts, door animator, interact prompt all operational
+- ✅ NPC system + NPC composer + bark library all operational
+- ✅ Intro-walk (Floor 0 auto-walk) implemented
+- ✅ All peek modules live (bookshelf, bar-counter, bed, mailbox, crate, corpse, torch, chest, locked-door, merchant, monologue, puzzle, door)
 
-### Phase 1: Shops + Economy (2-3 hours)
+Remaining:
+- Dispatcher force-turn bark cascade (NPC blocking gate with collision mask + key redirect)
+- Keys pickup scripted moment (Hero sighting through window)
+- Hero walk controller on Floor 2.2.1 (tick-driven, flee-on-approach, despawn)
+- Hero trail post-pass (pre-placed high-level corpses on first visit)
+- Populated bark pools in `data/barks/en.js`
 
-1. Wire Coral Bazaar (1.1) to Shop module with tuned prices
-2. Wire Driftwood Inn (1.2) bonfire effects (overheal + replenish)
-3. Wire Floor 2 shops (Lantern Row commercial district)
-4. Tune starter deck to 5 cards
-5. Tune enemy stats for soft dungeon (1.3.1) and Hero's Wake (2.2.1)
+### Phase 1: Shops + Economy — ✅ Systems Complete, Content Pending
 
-### Phase 2: Soft Dungeon + Scavenge Loop (2-3 hours)
+Completed:
+- ✅ Shop module operational (buy/sell/sellPart with faction rep tiers)
+- ✅ Coral Bazaar (1.1) hand-authored with bonfire + stairs to cellars
+- ✅ Card system, card authority, card transfer all operational
+- ✅ Loot tables, world items, breakable spawner, salvage, combat engine all operational
 
-1. Wire Floor 1.3 → 1.3.1 transition (building → dungeon depth hierarchy)
-2. Wire Floor 1.3.1 proc-gen with easy enemies
-3. Wire corpse loot tables for both dungeon tiers
-4. Wire crate restocking (basic slot system)
-5. Test the 3-dungeon scavenge loop end-to-end
+Remaining:
+- Tuned shop prices per floor
+- Starter deck balance (5 cards)
+- Enemy stat tuning per dungeon tier
 
-### Phase 3: Polish + NPC Dialog (1-2 hours)
+### Phase 2: Soft Dungeon + Scavenge Loop — ✅ Systems Complete, Content Pending
+
+Completed:
+- ✅ Floor transitions (building → dungeon depth hierarchy) operational
+- ✅ Proc-gen dungeon floors with enemies, breakables, crates
+- ✅ Crate restocking system (crate-system + crate-peek + crate-ui)
+- ✅ Corpse looting (corpse-registry + corpse-peek + salvage)
+
+Remaining:
+- Loot table tuning per dungeon tier
+- 3-dungeon scavenge loop end-to-end playtest
+
+### Phase 3: Polish + NPC Dialog — Pending
 
 1. All ambient bark pools populated
 2. Dispatcher bark cascades polished (gate encounter + office briefing)
 3. Shaken NPC dialog
 4. Minimap labels for all floors
 5. Test full 20-minute initial experience
-
-**Total estimated: 10-14 hours** (fits in 3-4 jam days alongside engine work)
 
 ---
 
@@ -702,4 +747,4 @@ The NPC types map cleanly to the playflow:
 
 ---
 
-*End of Document — v2.1*
+*End of Document — v2.2*

@@ -182,9 +182,21 @@ var NchWidget = (function () {
       _renderStack();
     } else if (!CardFan.isOpen()) {
       var hand = _getHand();
+      var deckCount = _getDeckCount();
       if (hand.length === 0) {
-        if (typeof Toast !== 'undefined') {
-          Toast.show(i18n.t('nch.empty_hand', 'No cards in hand'), 'info');
+        if (deckCount === 0) {
+          // No cards anywhere — nothing to show
+          if (typeof Toast !== 'undefined') {
+            Toast.show(i18n.t('nch.totally_empty', 'Totally out of cards'), 'info');
+          }
+          return;
+        }
+        // Hand empty but deck has cards — open pause menu at inventory face
+        // so the player can manage their deck
+        if (typeof Game !== 'undefined' && Game.requestPause) {
+          Game.requestPause('pause', 2);
+        } else if (typeof ScreenManager !== 'undefined') {
+          ScreenManager.toPause();
         }
         return;
       }

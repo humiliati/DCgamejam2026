@@ -131,37 +131,56 @@
 
 ---
 
-## Pass 8 — Polish + Jam Submission 🔧 IN PROGRESS
+## Pass 8 — Polish + Jam Submission ✅ DONE (core), 🔧 Final polish
 
 **Goal:** Complete game with win/lose conditions, theme integration, and polish.
 
-**Done:**
-- `engine/title-screen.js` ✅ — CRT terminal-style title screen
-- `engine/splash-screen.js` ✅ — Splash/intro screen
-- `engine/screen-manager.js` ✅ — State machine (title → playing → paused → game over → victory)
-- `engine/game-over-screen.js` ✅ — Death screen with stats
-- `engine/victory-screen.js` ✅ — Win screen
-- `engine/session-stats.js` ✅ — Per-run stat tracking
-- `engine/debrief-feed.js` ✅ — CRT sidebar with event log + resource display
-- `engine/status-bar.js` ✅ — Bottom status bar
-- `engine/dialog-box.js` ✅ — Canvas-rendered dialog with typewriter, portraits, Morrowind-style branching choices
-- `engine/toast.js` ✅ — Transient toast notifications
-- `engine/i18n.js` ✅ — Internationalization for LG store
-- `engine/ui-sprites.js` ✅ — Procedural UI sprite rendering
-- `engine/box-anim.js` ✅ — Box rotation animation for MenuBox
-- Vendor NPC greeting dialogs ✅ — Per-faction NPCs (Kai/Renko/Vasca) with first-visit + return-visit lines
-- Battery pip row in HUD ✅ — Always-visible discrete pips with spent animation
-- Inventory pipeline complete ✅ — See GAP_COVERAGE_TO_DEPLOYABILITY.md (Tier 0: 8/8 ✅)
-- Floor texture casting ✅ — ImageData-based floor rendering (cobble/wood/stone/dirt)
-- Wall stretch fix ✅ — Proper texture UV clipping, no lineHeight cap, free-look compatible
-- Biome-specific textures ✅ — cellar=stone, foundry=metal, sealab=concrete wall + floor
-- `engine/door-peek.js` ✅ — BoxAnim door reveal when facing transition tiles
+**Core systems (all ✅):**
+- Screen flow: `splash-screen.js`, `title-screen.js`, `screen-manager.js`, `game-over-screen.js`, `victory-screen.js` ✅
+- Session: `session-stats.js` ✅ — per-run tracking with arc summary + ending variant injection
+- HUD: `debrief-feed.js`, `status-bar.js`, `hud.js` (battery pips, readiness bar w/ celebration FX) ✅
+- Dialog: `dialog-box.js` ✅ — Canvas typewriter + Morrowind branching + vendor greetings
+- Notifications: `toast.js` ✅, `i18n.js` ✅, `ui-sprites.js` ✅, `box-anim.js` ✅
+- Floor polish: floor texture casting ✅, wall stretch fix ✅, biome-specific textures ✅
+- Peek overlays: `door-peek.js`, `bookshelf-peek.js`, `bar-counter-peek.js`, `bed-peek.js`, `crate-peek.js`, `corpse-peek.js`, `mailbox-peek.js`, `torch-peek.js`, `chest-peek.js`, `locked-door-peek.js`, `merchant-peek.js`, `monologue-peek.js`, `puzzle-peek.js` ✅
+- Combat polish: `enemy-intent.js` (telegraph) ✅, `corpse-registry.js` + `corpse-peek.js` ✅, `combat-fx.js` + `particle-fx.js` ✅
 
-**Remaining (see GAP_COVERAGE_TO_DEPLOYABILITY.md):**
-- Tier 1: Combat polish — telegraph ✅ (EnemyIntent), corpse render ✅ (CorpseRegistry + CorpsePeek), card play anim ✅ (CardFan fly-forward). **Still needed:** particle FX, synergy toast
-- Tier 2: Economy loop — stash transfer ✅ (bonfire stash grid), deck reshuffle ✅ (CardSystem auto-reshuffle), victory stats ✅ (SessionStats on VictoryScreen). **Still needed:** rep feedback (faction rank-up toast/dialog)
+**Inventory overhaul (Sprint 0, see UNIFIED_EXECUTION_ORDER.md):**
+- `card-authority.js` ✅ — Single read/write gateway for all card/inventory state
+- `card-transfer.js` ✅ — Validated zone-to-zone moves with rollback
+- 16 files migrated, all proxy stubs stripped ✅
+- `card-draw.js` ✅ — Unified card renderer (replaced card-renderer.js)
+
+**Gleaner loop systems (all ✅):**
+- `cleaning-system.js` ✅ — Tile scrub w/ battery cost + readiness integration
+- `crate-system.js` + `crate-peek.js` + `crate-ui.js` ✅ — Restocking loop
+- `trap-rearm.js` ✅ — Trap restoration w/ readiness credit
+- `torch-state.js` + `torch-peek.js` ✅ — 3-slot torch model w/ fuel + hero damage
+- `cobweb-system.js` + `cobweb-node.js` + `cobweb-renderer.js` ✅ — Trap webs
+- `readiness-calc.js` ✅ — CORE/EXTRA split scoring (0.0–2.0)
+- `work-order-system.js` ✅ — Per-floor work order tracking
+
+**Schedule + win-state (all ✅):**
+- `day-cycle.js` ✅ — 8-phase day/night clock
+- `dungeon-schedule.js` ✅ — Per-group hero day state machine, combo multiplier, death-shift
+- `hero-run.js` ✅ — Hero run simulation per-group
+- `morning-report.js` ✅ — Dawn Toast sequence with per-group status
+- `mailbox-sprites.js` + `mailbox-peek.js` ✅ — Report delivery + history
+- Victory/GameOver extended with arc summary, combo streak, ending variants ✅
+- Readiness bar: full animation state machine + tier-4 celebration FX + extra credit coin drip ✅
+
+**NPC + narrative (all ✅):**
+- `npc-system.js` + `npc-composer.js` ✅ — NPC placement + dialogue
+- `bark-library.js` ✅ — Context-sensitive bark pools
+- `cinematic-camera.js` ✅ — 7 presets (3 wired for jam)
+- `intro-walk.js` ✅ — Floor 0 auto-walk
+- `deploy-cutscene.js` ✅ — Deploy animation
+
+**Remaining for jam:**
 - Playtesting + balance tuning
 - itch.io build
+- Synergy toast (nice-to-have)
+- Rep feedback toast (nice-to-have)
 
 ---
 
@@ -187,87 +206,40 @@
 
 ---
 
-## File Map (Current — 58 engine files)
+## File Map (Current — 131 engine files)
 
-```
-dcjam2026/
-├── index.html                  ✅ Full CRT terminal theme
-├── docs/
-│   ├── ROADMAP.md              ✅ This file
-│   ├── GAP_COVERAGE_TO_DEPLOYABILITY.md  ✅ Sprint tracker
-│   ├── DOOR_EFFECTS_ROADMAP.md ✅ Door visual/lock specs
-│   ├── GAME_FLOW_ROADMAP.md    Screen flow documentation
-│   ├── HUD_ROADMAP.md          HUD layout specs
-│   ├── UI_ROADMAP.md           UI component specs
-│   └── UNIFIED_INVENTORY_METADATA_CONTRACT.md  Item/card/enemy schemas
-├── engine/
-│   ├── rng.js                  Layer 0 — SeededRNG
-│   ├── tiles.js                Layer 0 — Tile type constants
-│   ├── game-loop.js            Layer 0 — Fixed-timestep game loop
-│   ├── i18n.js                 Layer 0 — i18n for LG webOS store
-│   ├── input.js                Layer 1 — InputManager (keyboard + pointer events)
-│   ├── input-poll.js           Layer 1 — InputPoll (per-frame state queries)
-│   ├── movement.js             Layer 1 — MovementController (grid-locked)
-│   ├── mouse-look.js           Layer 1 — Free-look for pointer/Magic Remote
-│   ├── player.js               Layer 1 — Player state authority (HP/energy/battery/inventory)
-│   ├── texture-atlas.js        Layer 1 — 15+ procedural wall/door/stair textures
-│   ├── spatial-contract.js     Layer 1 — Depth-aware raycaster rendering rules
-│   ├── raycaster.js            Layer 1 — Wolfenstein-style raycaster + DoorAnimator integration
-│   ├── skybox.js               Layer 1 — Parallax sky for exterior floors
-│   ├── lighting.js             Layer 1 — Tile-based light map
-│   ├── grid-gen.js             Layer 2 — BSP + A* floor generation
-│   ├── floor-manager.js        Layer 2 — Floor stack + biome management
-│   ├── floor-transition.js     Layer 2 — SFX-sequenced transitions + locked door system
-│   ├── transition-fx.js        Layer 2 — Canvas-overlay vignette/fade
-│   ├── door-contracts.js       Layer 2 — Spawn protection contracts
-│   ├── door-contract-audio.js  Layer 2 — Depth-pair SFX sequences
-│   ├── door-animator.js        Layer 2 — Door-open animation with reveal textures
-│   ├── pathfind.js             Layer 2 — A* for enemy pathfinding
-│   ├── enemy-ai.js             Layer 2 — Patrol, awareness, LOS
-│   ├── enemy-sprites.js        Layer 2 — Procedural enemy billboard sprites
-│   ├── combat-engine.js        Layer 2 — STR combat state machine
-│   ├── card-system.js          Layer 2 — Card registry, deck, hand management
-│   ├── synergy-engine.js       Layer 2 — Tag-based cascade combos
-│   ├── loot-tables.js          Layer 2 — Drop tables + combat rewards
-│   ├── world-items.js          Layer 2 — Walk-over pickups
-│   ├── breakable-spawner.js    Layer 2 — Destructible props
-│   ├── salvage.js              Layer 2 — Corpse harvesting + faction economy
-│   ├── hazard-system.js        Layer 2 — Environmental hazards + bonfire
-│   ├── hud.js                  Layer 3 — HP/energy/battery pip display
-│   ├── minimap.js              Layer 3 — Canvas minimap with fog-of-war
-│   ├── dialog-box.js           Layer 3 — Canvas dialog + branching conversations
-│   ├── toast.js                Layer 3 — Transient notifications
-│   ├── interact-prompt.js      Layer 3 — Context-sensitive interaction hints
-│   ├── card-fan.js             Layer 3 — Combat card selection tray
-│   ├── combat-bridge.js        Layer 3 — Combat orchestrator
-│   ├── combat-report.js        Layer 3 — Post-combat summary
-│   ├── death-anim.js           Layer 3 — Enemy death FX
-│   ├── shop.js                 Layer 3 — Faction card shop
-│   ├── menu-box.js             Layer 3 — OoT rotating 4-face menu
-│   ├── menu-faces.js           Layer 3 — Face content renderers
-│   ├── box-anim.js             Layer 3 — Menu box rotation animation
-│   ├── debrief-feed.js         Layer 3 — CRT sidebar event log
-│   ├── status-bar.js           Layer 3 — Bottom status bar
-│   ├── nch-widget.js           Layer 3 — NCH capsule sidebar
-│   ├── quick-bar.js            Layer 3 — Equipped item quick-bar
-│   ├── ui-sprites.js           Layer 3 — Procedural UI sprites
-│   ├── door-peek.js            Layer 3 — BoxAnim door proximity reveal
-│   ├── screen-manager.js       Layer 4 — State machine
-│   ├── title-screen.js         Layer 4 — CRT title screen
-│   ├── splash-screen.js        Layer 4 — Intro splash
-│   ├── game-over-screen.js     Layer 4 — Death screen
-│   ├── victory-screen.js       Layer 4 — Win screen
-│   ├── session-stats.js        Layer 4 — Per-run stat tracking
-│   ├── audio-system.js         Layer 4 — Web Audio API
-│   └── game.js                 Layer 5 — Main orchestrator
-├── data/
-│   ├── cards.json              Card definitions
-│   ├── strings.json            i18n string table
-│   └── audio-manifest.json     Audio asset registry
-└── audio/
-    ├── sfx/                    Sound effects
-    └── music/                  Ambient + biome tracks
-```
+131 engine files across 5 layers. Full listing via `ls engine/`. Key additions since Pass 7:
+
+**Layer 0 (constants/utils):** rng.js, tiles.js (37 tile types), game-loop.js, i18n.js
+
+**Layer 1 (pure state, no DOM):**
+- Core: input.js, input-poll.js, movement.js, mouse-look.js, player.js
+- Renderer: raycaster.js (N-layer DDA), texture-atlas.js (20+ procedural), spatial-contract.js, skybox.js, lighting.js (point lights, flicker)
+- Inventory: card-authority.js, card-transfer.js, card-system.js (registry only), card-draw.js
+- Gleaner: cleaning-system.js, crate-system.js, torch-state.js, cobweb-system.js, cobweb-node.js, trap-rearm.js
+- Schedule: day-cycle.js, dungeon-schedule.js, hero-run.js, readiness-calc.js, work-order-system.js
+- Combat: combat-engine.js, synergy-engine.js, enemy-intent.js, status-effect.js
+
+**Layer 2 (floor/entity management):**
+- Floors: floor-manager.js, grid-gen.js, floor-transition.js, floor-blockout-*.js (5 hand-authored floors)
+- Doors: door-contracts.js, door-contract-audio.js, door-animator.js, transition-fx.js
+- Enemies: enemy-ai.js, enemy-sprites.js, pathfind.js, awareness-config.js
+- NPCs: npc-system.js, npc-composer.js, bark-library.js
+- Economy: loot-tables.js, world-items.js, breakable-spawner.js, salvage.js, shop.js
+
+**Layer 3 (UI/peeks/overlays):**
+- HUD: hud.js (readiness bar + celebration FX), minimap.js, minimap-nav.js, status-bar.js, debrief-feed.js
+- Peeks: bookshelf-peek.js, bar-counter-peek.js, bed-peek.js, crate-peek.js, corpse-peek.js, mailbox-peek.js, torch-peek.js, chest-peek.js, locked-door-peek.js, merchant-peek.js, monologue-peek.js, puzzle-peek.js, door-peek.js, peek-slots.js
+- Menu: menu-box.js, menu-faces.js, box-anim.js, slot-wheel.js, inventory-overlay.js
+- Combat UI: card-fan.js, combat-bridge.js, combat-report.js, combat-fx.js, death-anim.js, particle-fx.js
+- Other: dialog-box.js, toast.js, interact-prompt.js, nch-widget.js, quick-bar.js, ui-sprites.js, vendor-dialog.js, suit-toast.js, world-popup.js, dpad.js, drag-drop.js
+
+**Layer 4 (screens/orchestration):**
+- Screens: screen-manager.js, title-screen.js, splash-screen.js, game-over-screen.js, victory-screen.js
+- Systems: session-stats.js, audio-system.js, cinematic-camera.js, post-process.js, intro-walk.js, deploy-cutscene.js, morning-report.js, hazard-system.js, hero-system.js, stealth.js, status-effect-hud.js
+- Sprites: bonfire-sprites.js, mailbox-sprites.js, cobweb-renderer.js, sprite-sheet.js, corpse-registry.js
+
+**Layer 5:** game.js (main orchestrator, ~3800 lines)
 
 ## EyesOnly Source Reference
 

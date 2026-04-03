@@ -215,16 +215,20 @@ var DragDrop = (function () {
    */
   function registerZone(id, opts) {
     _zones[id] = {
-      id:      id,
-      x:       opts.x || 0,
-      y:       opts.y || 0,
-      w:       opts.w || 0,
-      h:       opts.h || 0,
-      accepts: opts.accepts || function () { return true; },
-      onDrop:  opts.onDrop  || function () { return false; },
-      onHover: opts.onHover || null,
-      onLeave: opts.onLeave || null,
-      active:  opts.active !== undefined ? opts.active : true
+      id:          id,
+      x:           opts.x || 0,
+      y:           opts.y || 0,
+      w:           opts.w || 0,
+      h:           opts.h || 0,
+      accepts:     opts.accepts     || function () { return true; },
+      onDrop:      opts.onDrop      || function () { return false; },
+      onHover:     opts.onHover     || null,
+      onLeave:     opts.onLeave     || null,
+      active:      opts.active !== undefined ? opts.active : true,
+      // ── Source + interaction callbacks (from MenuFaces / QuickBar) ──
+      dragPayload: opts.dragPayload || null,   // fn() → payload, or null if drop-only
+      onTap:       opts.onTap       || null,   // fn(payload) on click without drag
+      onDragCancel: opts.onDragCancel || null   // fn() when drag is cancelled/rejected
     };
   }
 
@@ -570,7 +574,8 @@ var DragDrop = (function () {
     if (!c) return;
 
     // ── Ghost ──
-    if (_drag && _drag.started) {
+    // Skip canvas ghost when DOM ghost is active (avoids duplicate visuals)
+    if (_drag && _drag.started && !_ghostEl) {
       c.save();
       c.globalAlpha = GHOST_ALPHA;
       c.textAlign = 'center';

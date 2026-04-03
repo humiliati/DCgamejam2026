@@ -162,6 +162,22 @@ var CinematicCamera = (function () {
       lockInput: true,
       duration: 0,         // Controlled by dialogue system
       sfx: null            // Fire crackle is already ambient
+    },
+
+    /**
+     * NPC dialogue: thin bars, subtle zoom, no input lock (DialogBox
+     * handles that via moveLocked). Bars slide in to frame the
+     * conversation. Camera freelook smoothly pans to the NPC via
+     * MouseLook.lockOn() — this preset provides the visual framing.
+     */
+    npc_dialogue: {
+      barPct: 0.10,
+      barSpeed: 400,       // Gentle slide — conversational
+      fovMult: 0.94,       // Slight zoom toward NPC
+      focusSpeed: 0,       // Focus handled by MouseLook.lockOn()
+      lockInput: false,    // DialogBox.moveLocked() handles this
+      duration: 0,         // Controlled by dialogue system
+      sfx: null
     }
   };
 

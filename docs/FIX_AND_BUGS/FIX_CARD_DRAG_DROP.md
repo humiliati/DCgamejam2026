@@ -6,6 +6,31 @@ Card drag-and-drop is the primary combat mechanic but isn't working from the use
 
 ## Root Cause Analysis
 
+### PRIMARY BUG (Fixed 2026-04-02): DragDrop.registerZone drops critical properties
+
+**The single root cause of "nothing responds to drag and drop":**
+
+`DragDrop.registerZone(id, opts)` in `engine/drag-drop.js` only copied a fixed
+whitelist of properties (`x, y, w, h, accepts, onDrop, onHover, onLeave, active`)
+and silently dropped all other opts. Three critical properties were lost:
+
+- **`dragPayload`** — function returning the drag source data. Without this,
+  `_onPointerDown` checks `z.dragPayload` and finds `undefined`, so no drag
+  session EVER starts from any inventory zone.
+- **`onTap`** — tap callback for click-without-drag. Without this, tapping a
+  slot to select/inspect does nothing.
+- **`onDragCancel`** — cleanup callback when drag is rejected/cancelled.
+
+MenuFaces (Face 2 inventory), QuickBar, and SlotWheel all pass these properties
+in their `registerZone()` calls. DragDrop silently ate them. Every zone appeared
+registered (visible in `DragDrop.getZoneIds()`) with correct bounds, but was
+completely inert — no drags could originate, no taps could fire.
+
+**Fix**: Added `dragPayload`, `onTap`, and `onDragCancel` to the property copy
+in `registerZone()`.
+
+### Secondary issues (pre-existing, lower priority)
+
 1. **Pointer event coordinate transform** — CardFan binds pointer events to `_canvas` (the game canvas element passed in `init(canvas)`). The canvas receives raw pointer events but the coordinate transform from client→canvas space may be off depending on CSS scaling or canvas positioning. This causes hitTest to fail against the wrong coordinates.
 
 2. **Drag dead zone too tight** — The drag system has a 4px dead zone (`DRAG_DEAD_ZONE = 4` in card-fan.js). At 2.5x explore scale, 4 canvas-pixels = ~1.6 CSS-pixels, which may be too tight and require excessive movement before drag activates.

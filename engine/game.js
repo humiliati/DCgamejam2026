@@ -86,6 +86,7 @@ var Game = (function () {
 
   // ── Fire crackle ambient timer ──────────────────────────────────
   var _fireCrackleTimer = 0;
+  var _bonfireGlowTimer = 0;
 
   // ── Passive time drip timer (exterior floors) ──────────────────
   var _passiveTimeTimer = 0;
@@ -452,6 +453,11 @@ var Game = (function () {
             if (typeof MenuFaces !== 'undefined') {
               MenuFaces.handleSettingsToggle(hit.toggleKey);
             }
+          } else if (hit.action === 'cycle_language') {
+            // Face 3 language cycle
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.handleLanguageCycle) {
+              MenuFaces.handleLanguageCycle();
+            }
           } else if (hit.action === 'slider_click') {
             // Face 3 slider click-to-set — select that slider row
             var sliderIdx = hit.slot - 800;
@@ -558,9 +564,14 @@ var Game = (function () {
         }
       }
 
-      // Show HUD, enable mouse look
-      _showHUD(true);
+      // Delay HUD reveal — let the player absorb the 3D viewport first.
+      // HUD elements slide in after a brief beat.
+      _showHUD(false);
       MouseLook.init(_canvas);
+      setTimeout(function () {
+        _showHUD(true);
+        _animateHUDSlideIn();
+      }, 1800);
     }
 
     if (newState === S.GAME_OVER) {
@@ -579,6 +590,10 @@ var Game = (function () {
         _dayCyclePausedBeforeMenu = DayCycle.isPaused();
         DayCycle.setPaused(true);
       }
+
+      // Suppress non-essential HUD overlays so canvas-rendered menu faces
+      // are the topmost interactive layer during pause.
+      _suppressHUDForPause(true);
 
       // Open MenuBox with context based on what triggered pause
       var menuContext = _pendingMenuContext || 'pause';
@@ -609,6 +624,9 @@ var Game = (function () {
     }
 
     if (oldState === S.PAUSE && newState === S.GAMEPLAY) {
+      // Restore DOM HUD overlays hidden during pause
+      _suppressHUDForPause(false);
+
       // Restore DayCycle to its pre-pause state (respects interior time-freeze)
       if (typeof DayCycle !== 'undefined') {
         DayCycle.setPaused(_dayCyclePausedBeforeMenu);
@@ -654,6 +672,7 @@ var Game = (function () {
     // Refresh status bar now that CardSystem has the starting hand/deck
     if (typeof StatusBar !== 'undefined') { StatusBar.updateDeck(); StatusBar.updateBag(); }
     MouseLook.init(_canvas);
+    if (typeof ViewportRing !== 'undefined') ViewportRing.init();
 
     // Combat bridge
     CombatBridge.init({
@@ -694,6 +713,15 @@ var Game = (function () {
             Toast.show('\uD83D\uDECF The heroes carried you home. You owe them one.', 'warning');
           } else {
             Toast.show('\uD83D\uDECF You stumbled home battered. Rest up, Gleaner.', 'warning');
+          }
+        }
+
+        // §10: Death-shift — shift this group's hero day to tomorrow
+        if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onPlayerDeath) {
+          var shifted = DungeonSchedule.onPlayerDeath(info.floorId);
+          if (shifted && typeof Toast !== 'undefined') {
+            Toast.show('\u26A0 ' + shifted.label + ' hero day shifted to Day ' +
+                       shifted.actualDay + '!', 'warning');
           }
         }
 
@@ -776,6 +804,49 @@ var Game = (function () {
         // Legacy Player.tickDebuffs fallback (for SHAKEN etc. not yet migrated)
         if (typeof Player !== 'undefined' && Player.tickDebuffs) {
           Player.tickDebuffs();
+        }
+
+        // §9: DungeonSchedule — check if any group's hero day arrived
+        if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onDayChange) {
+          DungeonSchedule.onDayChange(newDay);
+
+          // R-5: Morning report — dawn Toast sequence with per-group status
+          if (typeof MorningReport !== 'undefined') {
+            MorningReport.onDayChange(newDay);
+          }
+
+          // R-4: Arc completion → win-state check
+          if (DungeonSchedule.isArcComplete && DungeonSchedule.isArcComplete()) {
+            var arcSummary = DungeonSchedule.getArcSummary();
+            var combo = arcSummary.combo;
+
+            // §12.3: Ending variant based on combo streak
+            // Good:    combo ≥ 2 (both eligible groups on schedule + target met)
+            // Neutral: combo 1 or mixed results
+            // Bad:     combo 0 (all groups failed or death-shifted)
+            var endingVariant = 'neutral';
+            if (combo.streak >= 2 || combo.maxStreak >= 2) {
+              endingVariant = 'good';
+            } else if (combo.streak === 0 && combo.maxStreak === 0) {
+              endingVariant = 'bad';
+            }
+
+            // Inject arc data into SessionStats so end screens can read it
+            if (typeof SessionStats !== 'undefined') {
+              var ss = SessionStats.get();
+              ss.arcSummary = arcSummary;
+              ss.endingVariant = endingVariant;
+            }
+
+            // Delay end-state to let the final hero run mailbox report land
+            setTimeout(function () {
+              if (endingVariant === 'bad') {
+                _changeState(S.GAME_OVER);
+              } else {
+                _changeState(S.VICTORY);
+              }
+            }, 2000);
+          }
         }
       });
 
@@ -910,11 +981,20 @@ var Game = (function () {
       }
     }
 
+    // DungeonSchedule — staggered per-group hero days (§9–§13)
+    if (typeof DungeonSchedule !== 'undefined') {
+      DungeonSchedule.init();
+    }
+
     // ── BedPeek → overnight hero run → mailbox report pipeline ──
     if (typeof BedPeek !== 'undefined') {
       BedPeek.setOnHeroDayRun(function (dayNum) {
-        // Execute overnight hero run and generate mailbox report
-        _executeOvernightHeroRun(dayNum);
+        // §9: DungeonSchedule handles per-group hero runs via onDayChange().
+        // Legacy monolithic path is only used when DungeonSchedule is absent.
+        if (typeof DungeonSchedule === 'undefined') {
+          _executeOvernightHeroRun(dayNum);
+        }
+        // DungeonSchedule already fired from DayCycle.setOnDayChange.
       });
       BedPeek.setOnWake(function (dayNum) {
         // Update HUD day counter on wake
@@ -986,7 +1066,7 @@ var Game = (function () {
             ]
           },
           backstory: {
-            text: 'Twelve years cleaning dungeons. Started same as you — green, underpaid, and convinced the Hero was on our side. Experience teaches you to look closer.',
+            text: 'Twelve years cleaning dungeons. Started same as you - green, underpaid, and convinced the Hero was on our side. Experience teaches you to look closer.',
             choices: [
               { label: 'Tips for the dungeon', next: 'tips' },
               { label: 'Take care', next: null }
@@ -1016,7 +1096,7 @@ var Game = (function () {
             ]
           },
           best_contract: {
-            text: 'Hero\'s Wake cleanup. But nobody wants it — the deep floors are rough and the Hero leaves behind... well. You\'ll see for yourself.',
+            text: 'Hero\'s Wake cleanup. But nobody wants it. The deep floors are rough and the Hero leaves behind... well. You\'ll see for yourself.',
             choices: [
               { label: 'I\'ll take it', next: 'brave' },
               { label: 'Maybe later', next: null }
@@ -1029,13 +1109,13 @@ var Game = (function () {
             ]
           },
           supplies: {
-            text: 'Northwest corner. Rags are free, trap kits cost 5g each. Mops and brushes are on the shelf — take what you need. Just sign the ledger.',
+            text: 'Northwest corner. Rags are free, trap kits cost 5g each. Mops and brushes are on the shelf; take what you need. Just sign the ledger.',
             choices: [
               { label: 'Back', next: 'greeting' }
             ]
           },
           dispatcher_info: {
-            text: 'The Dispatcher handles all Gleaner assignments for this district. Former field operative — did twenty years in the deep floors before moving to admin. Don\'t let the desk fool you.',
+            text: 'The Dispatcher handles all Gleaner assignments for this district. Former field operative who did twenty years in the deep floors before moving to admin. Don\'t let the desk fool you.',
             choices: [
               { label: 'Back', next: 'greeting' }
             ]
@@ -1069,7 +1149,7 @@ var Game = (function () {
             ]
           },
           advice: {
-            text: 'I\'ve only been here a week, so take this with a grain of salt — but the old-timers say: don\'t skip the cobweb spots. Even if they seem pointless. The readiness bonus adds up.',
+            text: 'I\'ve only been here a week, so take this with a grain of salt... but the old-timers say: don\'t skip the cobweb spots. Even if they seem pointless. The readiness bonus adds up.',
             choices: [
               { label: 'Thanks Pip', next: null }
             ]
@@ -1117,7 +1197,7 @@ var Game = (function () {
             ]
           },
           numbers: {
-            text: 'More go in than come out. That\'s normal — some use the back exits, some get extracted by the Guild. But lately... the margin is wider. And nobody wants to talk about it.',
+            text: 'More go in than come out. That\'s normal; some use the back exits, some get extracted by the Guild. But lately... the margin is wider. And nobody wants to talk about it.',
             choices: [
               { label: '...', next: null }
             ]
@@ -1157,7 +1237,7 @@ var Game = (function () {
             ]
           },
           stew_bought: {
-            text: 'Good choice. Take a seat anywhere — except table three. That\'s reserved for the Hero. Don\'t ask.',
+            text: 'Good choice. Take a seat anywhere... except table three. That\'s reserved for the Hero. Don\'t ask.',
             choices: [
               { label: 'Thanks', next: null }
             ]
@@ -1190,7 +1270,7 @@ var Game = (function () {
             ]
           },
           rumor_detail: {
-            text: 'The Watchman at 2.2 hasn\'t slept in three days. The Hero this cycle isn\'t normal — goes straight to the deep floors, skips everything above. And someone from the Tide Council was asking about old maps.',
+            text: 'The Watchman at 2.2 hasn\'t slept in three days. The Hero this cycle isn\'t normal; goes straight to the deep floors, skips everything above. And someone from the Tide Council was asking about old maps.',
             choices: [
               { label: 'Old maps?', next: 'maps' },
               { label: 'Interesting. Thanks.', next: null }
@@ -1225,7 +1305,7 @@ var Game = (function () {
             ]
           },
           sarcasm: {
-            text: 'Oh, a comedian. Great. Just what this town needs — another wise-guy with a mop. Get lost before I call the Admiralty.',
+            text: 'Oh, a comedian. Great. Just what this town needs... another wise-guy with a mop. Get lost before I call the Admiralty.',
             choices: [
               { label: 'Easy. I\'m going.', next: null },
               { label: 'What\'s your problem?', next: 'problem' }
@@ -1300,7 +1380,7 @@ var Game = (function () {
             ]
           },
           passing: {
-            text: 'Just — please don\'t touch anything. And close the cellar door behind you if you go down. I don\'t want whatever\'s down there coming up here.',
+            text: 'Just... please don\'t touch anything. And close the cellar door behind you if you go down. I don\'t want whatever\'s down there coming up here.',
             choices: [
               { label: 'Understood', next: null }
             ]
@@ -1395,6 +1475,12 @@ var Game = (function () {
     // Generate Floor 0 and wire movement callbacks
     _generateAndWire();
 
+    // Trigger per-floor arrival hooks for the starting floor (NPC spawns,
+    // ambient barks, gate logic). _onFloorArrive is normally fired by the
+    // FloorTransition callback, but the very first floor is loaded directly
+    // — not via transition — so it must be called explicitly here.
+    _onFloorArrive(startFloorId);
+
     // Draw initial card hand
     CardAuthority.drawHand();
     HUD.updateCards(CardAuthority.getHand());
@@ -1403,16 +1489,12 @@ var Game = (function () {
       Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
     }
 
-    // Play deploy dropoff monologue (player was just dropped off by the truck)
-    // then start intro auto-walk sequence on Floor 0
+    // Play deploy dropoff monologue (player was just dropped off by the truck).
+    // IntroWalk (cursor-hijack tutorial) disabled for jam — module preserved
+    // in engine/intro-walk.js for post-jam re-enable. To restore, uncomment
+    // the script tag in index.html and call _startIntroWalk() in onComplete.
     if (typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
-      MonologuePeek.play('deploy_dropoff', {
-        onComplete: function () {
-          _startIntroWalk();
-        }
-      });
-    } else {
-      _startIntroWalk();
+      MonologuePeek.play('deploy_dropoff');
     }
 
     // Wire input polling
@@ -1424,7 +1506,6 @@ var Game = (function () {
                FloorTransition.isTransitioning() ||
                DialogBox.moveLocked() ||
                (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive && StatusBar.isDialogueActive()) ||
-               (typeof IntroWalk !== 'undefined' && IntroWalk.isBlocking()) ||
                (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen());
       },
       onInteract: _interact,
@@ -1453,6 +1534,9 @@ var Game = (function () {
 
     // Reset stats for new run
     SessionStats.reset();
+
+    // Reset morning report dedup for new run
+    if (typeof MorningReport !== 'undefined') MorningReport.reset();
 
     _gameplayReady = true;
     console.log('[Game] Gameplay initialized — WASD to move, Q/E turn, 1-5 for cards');
@@ -1484,6 +1568,79 @@ var Game = (function () {
     }
     if (typeof DPad !== 'undefined') {
       if (visible) DPad.show(); else DPad.hide();
+    }
+  }
+
+  /**
+   * Animate HUD elements sliding into position after first deploy.
+   * Uses CSS transitions — each element starts off-screen, then slides in
+   * with a staggered delay so the viewport breathes before UI appears.
+   */
+  function _animateHUDSlideIn() {
+    var HUD_SLIDE_MS = '0.6s';
+    var elements = [
+      { el: document.getElementById('minimap-frame'),  delay: 0,   from: 'translateX(120%)' },
+      { el: document.getElementById('status-bar'),     delay: 200, from: 'translateY(100%)' },
+      { el: document.getElementById('debrief-feed'),   delay: 100, from: 'translateX(-120%)' }
+    ];
+    // NchWidget + QuickBar are smaller — stagger later
+    var nchEl = document.getElementById('nch-widget');
+    if (nchEl) elements.push({ el: nchEl, delay: 300, from: 'translateY(80px) scale(0.8)' });
+    var qbEl = document.getElementById('quick-bar');
+    if (qbEl) elements.push({ el: qbEl, delay: 250, from: 'translateY(80px)' });
+    var dpadEl = document.getElementById('dpad-frame');
+    if (dpadEl) elements.push({ el: dpadEl, delay: 350, from: 'translateX(-120%)' });
+
+    for (var i = 0; i < elements.length; i++) {
+      (function (cfg) {
+        if (!cfg.el) return;
+        // Start from off-screen position
+        cfg.el.style.transition = 'none';
+        cfg.el.style.transform = cfg.from;
+        cfg.el.style.opacity = '0';
+        // Force reflow then animate in
+        void cfg.el.offsetHeight;
+        setTimeout(function () {
+          cfg.el.style.transition = 'transform ' + HUD_SLIDE_MS + ' cubic-bezier(0.22,1,0.36,1), opacity 0.4s ease';
+          cfg.el.style.transform = '';
+          cfg.el.style.opacity = '';
+        }, cfg.delay);
+      })(elements[i]);
+    }
+
+    // Clean up inline transitions after animation completes
+    setTimeout(function () {
+      for (var j = 0; j < elements.length; j++) {
+        if (elements[j].el) {
+          elements[j].el.style.transition = '';
+          elements[j].el.style.transform = '';
+        }
+      }
+    }, 1200);
+  }
+
+  /**
+   * Suppress / restore DOM HUD overlays during pause so the canvas-rendered
+   * menu faces aren't occluded by higher-z DOM elements.
+   * StatusBar stays visible (BAG/DECK buttons navigate menu faces).
+   */
+  function _suppressHUDForPause(suppress) {
+    var minimapFrame = document.getElementById('minimap-frame');
+    if (minimapFrame) minimapFrame.style.display = suppress ? 'none' : '';
+    if (typeof DebriefFeed !== 'undefined') {
+      if (suppress) DebriefFeed.hide(); else DebriefFeed.show();
+    }
+    if (typeof NchWidget !== 'undefined') {
+      if (suppress) NchWidget.hide(); else NchWidget.show();
+    }
+    if (typeof DPad !== 'undefined') {
+      if (suppress) DPad.hide(); else DPad.show();
+    }
+    if (typeof StatusBar !== 'undefined') {
+      if (suppress) StatusBar.hide(); else StatusBar.show();
+    }
+    if (typeof QuickBar !== 'undefined') {
+      if (suppress) QuickBar.hide(); else QuickBar.show();
     }
   }
 
@@ -1615,7 +1772,7 @@ var Game = (function () {
           var newOrder = WorkOrderSystem.getOrder(floorId);
           if (newOrder) {
             Toast.show('📋 ' + i18n.t('work.order_posted', 'Work order posted') +
-                        ' — ' + Math.round(newOrder.target * 100) + '%', 'info');
+                        ' - ' + Math.round(newOrder.target * 100) + '%', 'info');
           }
         }
       } else if (depth <= 2) {
@@ -2440,7 +2597,10 @@ var Game = (function () {
           }
 
           // Trigger overnight hero run if it's a Hero Day
-          if (typeof DayCycle !== 'undefined' && DayCycle.isHeroDay()) {
+          // §9: DungeonSchedule handles per-group runs via DayCycle.onDayChange.
+          // Legacy path only when DungeonSchedule is absent.
+          if (typeof DayCycle !== 'undefined' && DayCycle.isHeroDay() &&
+              typeof DungeonSchedule === 'undefined') {
             _executeOvernightHeroRun(DayCycle.getDay());
           }
 
@@ -2467,11 +2627,20 @@ var Game = (function () {
   // Day abbreviations — Monday-first to match DayCycle (Day 0 = Monday)
   var _WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   // Suit symbols for hero-day indicators (each dungeon gets a color+suit)
+  // Legacy: used when DungeonSchedule is absent
   var _DUNGEON_SUITS = [
     { sym: '\u2660', color: '#8888ff' },  // ♠ spades — blue dungeon
     { sym: '\u2666', color: '#ff6666' },  // ♦ diamonds — red dungeon
     { sym: '\u2663', color: '#66cc66' }   // ♣ clubs — green dungeon
   ];
+
+  // §9: Group-to-suit mapping for DungeonSchedule-driven display.
+  // Each group gets a unique suit symbol + color for the week strip.
+  var _GROUP_SUITS = {
+    soft_cellar: { sym: '\u2660', color: '#8888ff', name: 'Soft Cellar'  },  // ♠ spades
+    heros_wake:  { sym: '\u2666', color: '#ff6666', name: "Hero's Wake"  },  // ♦ diamonds
+    heart:       { sym: '\u2665', color: '#ff5588', name: 'Heart'        }   // ♥ hearts
+  };
 
   /**
    * Create the day counter DOM element — week-strip with day nodes.
@@ -2492,84 +2661,235 @@ var Game = (function () {
       var viewport = document.getElementById('viewport');
       if (viewport) viewport.appendChild(_dayCounterEl);
     }
+
+    // Inject keyframes + suit-stack hover styles (once)
+    if (!document.getElementById('day-strip-style')) {
+      var style = document.createElement('style');
+      style.id = 'day-strip-style';
+      style.textContent =
+        '@keyframes day-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }\n' +
+        // Suit stack: overlapping cascade (NCH joker pattern)
+        '.ds-node { position:relative; display:inline-flex; align-items:center;' +
+        '  justify-content:center; width:20px; height:22px; border-radius:3px;' +
+        '  text-align:center; line-height:22px; vertical-align:top; }\n' +
+        // Individual suit chip inside a stacked node
+        '.ds-suit { position:absolute; transition: left 0.2s ease, top 0.15s ease;' +
+        '  font-size:inherit; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }\n' +
+        // Stack positions: diagonal cascade (like NCH joker offset)
+        '.ds-suit.s-0 { left:0; top:0; }\n' +
+        '.ds-suit.s-1 { left:5px; top:-1px; }\n' +
+        '.ds-suit.s-2 { left:10px; top:0; }\n' +
+        // Hover: fan out (more horizontal spread)
+        '.ds-node:hover .ds-suit.s-0 { left:-2px; }\n' +
+        '.ds-node:hover .ds-suit.s-1 { left:6px; }\n' +
+        '.ds-node:hover .ds-suit.s-2 { left:14px; }\n' +
+        // Stacked node gets wider to accommodate fanned suits
+        '.ds-node.ds-stacked { width:22px; }\n' +
+        '.ds-node.ds-stacked:hover { width:30px; }\n' +
+        // Death-shifted suits: pulsing red border glow
+        '.ds-suit.ds-shifted { animation:ds-shift-pulse 1.5s ease-in-out infinite; }\n' +
+        '@keyframes ds-shift-pulse { 0%,100%{filter:drop-shadow(0 1px 1px rgba(0,0,0,0.6))}' +
+        '  50%{filter:drop-shadow(0 0 4px rgba(255,80,60,0.7))} }\n' +
+        // Resolved (past hero day): checkmark or X
+        '.ds-suit.ds-resolved-pass::after { content:"\\2713"; position:absolute;' +
+        '  bottom:-6px; right:-4px; font-size:7px; color:#66cc66; }\n' +
+        '.ds-suit.ds-resolved-fail::after { content:"\\2717"; position:absolute;' +
+        '  bottom:-6px; right:-4px; font-size:7px; color:#ff5555; }\n';
+      document.head.appendChild(style);
+    }
+
     _updateDayCounter();
   }
 
   /**
-   * Update the week-strip widget — [M T ♠ T F S S] style display.
+   * Build a map: dayNum → [{ sym, color, groupId, resolved, onSchedule, result }]
+   * from DungeonSchedule contracts. Returns {} if DungeonSchedule absent.
+   */
+  function _buildHeroDayMap() {
+    if (typeof DungeonSchedule === 'undefined' || !DungeonSchedule.getSchedule) return null;
+    var schedule = DungeonSchedule.getSchedule();
+    var map = {};
+    for (var i = 0; i < schedule.length; i++) {
+      var c = schedule[i];
+      var suit = _GROUP_SUITS[c.groupId] || { sym: '\u2694', color: '#aaa', name: c.label };
+      var dayKey = c.actualDay;
+      if (!map[dayKey]) map[dayKey] = [];
+      map[dayKey].push({
+        sym:        suit.sym,
+        color:      suit.color,
+        groupId:    c.groupId,
+        label:      suit.name || c.label,
+        resolved:   c.resolved,
+        onSchedule: c.onSchedule,
+        result:     c.result,
+        shifted:    c.actualDay !== c.scheduledDay,
+        scheduledDay: c.scheduledDay
+      });
+    }
+    return map;
+  }
+
+  /**
+   * Update the week-strip widget — [M T ♠ T ♦ S S] style display.
    * Monday-first (Day 0 = Monday, matching DayCycle).
+   *
+   * §9 DungeonSchedule-aware: consults actual group schedule (including
+   * death-shifted days) instead of legacy HERO_DAY_INTERVAL cycling.
+   * When multiple groups converge on the same day (due to death-shift),
+   * their suits stack with NCH joker-style cascade + hover fan-out.
    *
    * Visual states per node:
    *   Past:    dim text, no background — already lived through
    *   Today:   bold, bright, bobbing, lit background — "you are here"
    *   Future:  medium text, no background — days ahead
-   *   Hero:    suit symbol in suit color (past=dimmed, today=gold, future=vivid)
+   *   Hero:    suit symbol(s) in suit color (stacked if convergent)
+   *   Shifted: pulsing red glow on death-shifted suits
+   *   Resolved: tiny ✓/✗ below resolved suits
    */
   function _updateDayCounter() {
     if (!_dayCounterEl) return;
     if (typeof DayCycle === 'undefined') return;
 
     var day = DayCycle.getDay();
-    var heroInterval = DayCycle.HERO_DAY_INTERVAL || 3;
     var weekDayIndex = day % 7;
-    var isHero = DayCycle.isHeroDay();
     var timeStr = DayCycle.getTimeString ? DayCycle.getTimeString() : '06:00';
     var phase = DayCycle.getPhase ? DayCycle.getPhase() : 'morning';
 
+    // Build hero day map from DungeonSchedule (or null if absent)
+    var heroDayMap = _buildHeroDayMap();
+
+    // Legacy fallback: use DayCycle HERO_DAY_INTERVAL when no DungeonSchedule
+    var heroInterval = DayCycle.HERO_DAY_INTERVAL || 3;
+
     var html = '';
 
-    // Build 7-day strip (Monday-first)
-    for (var i = 0; i < 7; i++) {
-      var dayNum = day - weekDayIndex + i; // absolute day number for this slot
-      var isToday = (i === weekDayIndex);
-      var isPast = (i < weekDayIndex);
-      var isHeroSlot = (dayNum >= 0 && dayNum % heroInterval === 0);
-      var dungeonIdx = Math.floor(Math.max(0, dayNum) / heroInterval) % _DUNGEON_SUITS.length;
+    // Build 8+ day strip — show days 0 through max(7, highest hero day)
+    // For the 8-day jam arc we need at least days 0–8 visible.
+    var stripLen = 7;
+    if (heroDayMap) {
+      // Extend strip to cover all scheduled hero days
+      for (var key in heroDayMap) {
+        if (heroDayMap.hasOwnProperty(key)) {
+          var d = parseInt(key, 10);
+          if (d >= stripLen) stripLen = d + 1;
+        }
+      }
+    }
+    // Cap at 9 to keep strip compact (days 0–8 for jam)
+    if (stripLen > 9) stripLen = 9;
 
-      var label = _WEEK_DAYS[i];
-      var nodeColor, nodeStyle, bg, fontSize, fontWeight, opacity;
+    for (var i = 0; i < stripLen; i++) {
+      var dayNum = i; // absolute day number (0-indexed jam arc)
+      var isToday = (dayNum === day);
+      var isPast = (dayNum < day);
 
-      if (isHeroSlot) {
-        // Show suit symbol instead of day letter
-        label = _DUNGEON_SUITS[dungeonIdx].sym;
+      // Check for hero groups on this day
+      var suitEntries = heroDayMap ? (heroDayMap[dayNum] || []) : [];
+
+      // Legacy fallback: single suit from DayCycle cycling
+      if (!heroDayMap && dayNum >= 0 && dayNum % heroInterval === 0) {
+        var legacyIdx = Math.floor(dayNum / heroInterval) % _DUNGEON_SUITS.length;
+        suitEntries = [{
+          sym: _DUNGEON_SUITS[legacyIdx].sym,
+          color: _DUNGEON_SUITS[legacyIdx].color,
+          label: 'Hero Day',
+          resolved: false, onSchedule: true, shifted: false, result: null
+        }];
       }
 
+      var isHeroSlot = suitEntries.length > 0;
+      var isStacked = suitEntries.length > 1;
+
+      // Day label — abbreviated day-of-week name
+      var dayOfWeekIdx = dayNum % 7;
+      var label = _WEEK_DAYS[dayOfWeekIdx];
+
+      // ── Style by temporal state ──
+      var nodeColor, bg, fontSize, fontWeight, opacity, nodeAnim;
+
       if (isToday) {
-        // ── TODAY: bright, bold, bobbing, lit background ──
-        nodeColor = isHero ? '#f0c040' : '#ffe8a0';
+        nodeColor = isHeroSlot ? '#f0c040' : '#ffe8a0';
         fontWeight = '900';
-        fontSize = '14px';
+        fontSize = isHeroSlot ? '14px' : '13px';
         bg = 'rgba(255,255,255,0.15)';
         opacity = '1';
-        nodeStyle = 'animation:day-bob 1.2s ease-in-out infinite;';
+        nodeAnim = 'animation:day-bob 1.2s ease-in-out infinite;';
       } else if (isPast) {
-        // ── PAST: dim, struck-through feel ──
-        nodeColor = isHeroSlot ? _DUNGEON_SUITS[dungeonIdx].color : '#5a5040';
+        nodeColor = '#5a5040';
         fontWeight = '400';
         fontSize = '10px';
         bg = 'transparent';
-        opacity = isHeroSlot ? '0.45' : '0.5';
-        nodeStyle = '';
+        opacity = '0.5';
+        nodeAnim = '';
       } else {
-        // ── FUTURE: medium brightness ──
-        nodeColor = isHeroSlot ? _DUNGEON_SUITS[dungeonIdx].color : '#8a8068';
-        fontWeight = isHeroSlot ? '700' : '500';
+        nodeColor = '#8a8068';
+        fontWeight = '500';
         fontSize = '11px';
         bg = 'transparent';
-        opacity = isHeroSlot ? '0.85' : '0.75';
-        nodeStyle = '';
+        opacity = '0.75';
+        nodeAnim = '';
       }
 
-      html += '<span style="display:inline-block;width:20px;height:22px;' +
-              'text-align:center;line-height:22px;border-radius:3px;' +
-              'color:' + nodeColor + ';background:' + bg + ';' +
-              'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
-              'opacity:' + opacity + ';' +
-              nodeStyle + '" title="' +
-              _WEEK_DAYS[i] + ' — Day ' + (dayNum + 1) +
-              (isHeroSlot ? ' (HERO DAY)' : '') +
-              (isToday ? ' [TODAY]' : '') + '">' +
-              label + '</span>';
+      // ── Build node HTML ──
+      if (isHeroSlot) {
+        // Hero day node — suit symbols (possibly stacked)
+        var stackClass = isStacked ? ' ds-stacked' : '';
+        var titleParts = [];
+        for (var si = 0; si < suitEntries.length; si++) {
+          var se = suitEntries[si];
+          titleParts.push(se.sym + ' ' + se.label +
+            (se.shifted ? ' (SHIFTED from Day ' + (se.scheduledDay + 1) + ')' : '') +
+            (se.resolved ? (se.result && se.result.coreScore >= 0.6 ? ' \u2713' : ' \u2717') : ''));
+        }
+        var titleStr = _WEEK_DAYS[dayOfWeekIdx] + ' \u2014 Day ' + (dayNum + 1) +
+                       ' (HERO DAY)\n' + titleParts.join('\n') +
+                       (isToday ? '\n[TODAY]' : '');
+
+        html += '<span class="ds-node' + stackClass + '" style="' +
+                'background:' + bg + ';' +
+                'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
+                'opacity:' + opacity + ';' +
+                nodeAnim + '" title="' + titleStr + '">';
+
+        // Render each suit as an overlapping chip
+        for (var sj = 0; sj < suitEntries.length; sj++) {
+          var entry = suitEntries[sj];
+          var suitColor;
+
+          if (isToday) {
+            suitColor = '#f0c040';  // gold for today's active suits
+          } else if (isPast) {
+            suitColor = entry.color;
+          } else {
+            suitColor = entry.color;
+          }
+
+          var suitOpacity = isPast ? '0.45' : (isToday ? '1' : '0.85');
+          var extraClass = '';
+          if (entry.shifted && !entry.resolved) extraClass += ' ds-shifted';
+          if (entry.resolved && entry.result) {
+            extraClass += entry.result.coreScore >= 0.6
+              ? ' ds-resolved-pass' : ' ds-resolved-fail';
+          }
+
+          html += '<span class="ds-suit s-' + sj + extraClass + '" style="' +
+                  'color:' + suitColor + ';opacity:' + suitOpacity + ';">' +
+                  entry.sym + '</span>';
+        }
+
+        html += '</span>';
+
+      } else {
+        // Regular day node (no hero groups)
+        html += '<span class="ds-node" style="' +
+                'color:' + nodeColor + ';background:' + bg + ';' +
+                'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
+                'opacity:' + opacity + ';' +
+                nodeAnim + '" title="' +
+                _WEEK_DAYS[dayOfWeekIdx] + ' \u2014 Day ' + (dayNum + 1) +
+                (isToday ? ' [TODAY]' : '') + '">' +
+                label + '</span>';
+      }
     }
 
     // Phase-tinted separator dot
@@ -2581,15 +2901,20 @@ var Game = (function () {
             'letter-spacing:0.05em;font-weight:600">' +
             timeStr + '</span>';
 
-    _dayCounterEl.innerHTML = html;
-
-    // Inject bobbing keyframe if not already present
-    if (!document.getElementById('day-bob-style')) {
-      var style = document.createElement('style');
-      style.id = 'day-bob-style';
-      style.textContent = '@keyframes day-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }';
-      document.head.appendChild(style);
+    // Combo indicator (when streak > 0)
+    if (heroDayMap && typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getCombo) {
+      var combo = DungeonSchedule.getCombo();
+      if (combo.streak > 0) {
+        var stars = '';
+        for (var ci = 0; ci < combo.streak && ci < 3; ci++) stars += '\u2605';
+        html += '<span style="margin-left:4px;font-size:10px;color:#f0c040;' +
+                'filter:drop-shadow(0 0 2px rgba(240,192,64,0.5))" title="' +
+                'Combo streak: ' + combo.streak + ' (' + combo.multiplier.toFixed(1) + '\u00D7)">' +
+                stars + '</span>';
+      }
     }
+
+    _dayCounterEl.innerHTML = html;
   }
 
   /**
@@ -2685,6 +3010,10 @@ var Game = (function () {
     // Walk-away interrupt for inline tooltip dialogue
     if (typeof StatusBar !== 'undefined' && StatusBar.checkWalkAway) {
       StatusBar.checkWalkAway(x, y);
+    }
+    // Auto-minimize expanded tooltip footer on movement
+    if (typeof StatusBar !== 'undefined' && StatusBar.collapseIfIdle) {
+      StatusBar.collapseIfIdle();
     }
 
     // Cobweb destruction — player (or enemy) walks through standalone cobweb.
@@ -2966,6 +3295,10 @@ var Game = (function () {
             Toast.show('🧹 ' + i18n.t('toast.tile_clean', 'Tile cleaned!'), 'loot');
             if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 Clean!', fx, fy, 'loot');
             SessionStats.inc('tilesCleaned');
+            // R-2: Trigger readiness bar sweep preview
+            if (typeof ReadinessCalc !== 'undefined' && HUD.triggerReadinessSweep) {
+              HUD.triggerReadinessSweep(ReadinessCalc.getScore(cleanFloorId));
+            }
           } else {
             if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 ' + remaining + '/' + CleaningSystem.MAX_BLOOD, fx, fy, 'info');
           }
@@ -2983,6 +3316,10 @@ var Game = (function () {
           Toast.show('⚙️ ' + i18n.t('toast.trap_rearmed', 'Trap re-armed!'), 'loot');
           if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('⚙️ Armed!', fx, fy, 'loot');
           if (typeof SessionStats !== 'undefined') SessionStats.inc('trapsRearmed');
+          // R-2: Trigger readiness bar sweep preview
+          if (typeof ReadinessCalc !== 'undefined' && HUD.triggerReadinessSweep) {
+            HUD.triggerReadinessSweep(ReadinessCalc.getScore(rearmFloorId));
+          }
           return;
         }
       }
@@ -3007,7 +3344,7 @@ var Game = (function () {
       // Cozy table inspection — show a toast with a lived-in detail
       var tableQuips = [
         i18n.t('table.quip1', 'A mug of cold tea. Still half full.'),
-        i18n.t('table.quip2', 'Scattered notes — dungeon cleaning checklists.'),
+        i18n.t('table.quip2', 'Scattered notes... dungeon cleaning checklists.'),
         i18n.t('table.quip3', 'A pressed flower between two invoice sheets.'),
         i18n.t('table.quip4', 'Crumbs from this morning\'s flatbread.'),
         i18n.t('table.quip5', 'A dull knife and a half-whittled figurine.')
@@ -3120,7 +3457,7 @@ var Game = (function () {
       lines: [
         'Need something reforged?',
         'The anvil never sleeps.',
-        'Foundry steel — accept no substitute.',
+        'Foundry steel. Accept no substitute.',
         'Business is business.'
       ]
     },
@@ -3459,6 +3796,13 @@ var Game = (function () {
     var item = bag[bagIndex];
     if (!item) return;
 
+    // Reject cards — cards have suit, _bagStored, _cardRef, or cardId
+    if (item._bagStored || item.suit !== undefined ||
+        item._cardRef || item.cardId !== undefined) {
+      if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDCCF Cards can\u2019t be equipped', 'warning');
+      return;
+    }
+
     // Auto-detect target slot from item type
     var slot = 0;  // default: weapon
     if (item.type === 'consumable' || item.subtype === 'food' || item.subtype === 'vice') slot = 1;
@@ -3609,26 +3953,39 @@ var Game = (function () {
   }
 
   function _backupToHand(deckIndex) {
-    var hand = CardAuthority.getHand();
-    if (hand.length >= CardAuthority.MAX_HAND) {
-      Toast.show(i18n.t('inv.hand_full', 'Hand is full! (5/5)'), 'warning');
-      return;
-    }
-
     var backup = CardAuthority.getBackup();
     var card = backup[deckIndex];
     if (!card) return;
 
-    // Remove from backup by id
-    CardAuthority.removeFromBackupById(card.id);
+    var hand = CardAuthority.getHand();
+    if (hand.length < CardAuthority.MAX_HAND) {
+      // Hand has room — move card there
+      CardAuthority.removeFromBackupById(card.id);
+      CardAuthority.addToHand(card);
+      var emoji = card.emoji || '\uD83C\uDCA0';
+      Toast.show(emoji + ' \u2192 Hand', 'info');
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
+      _refreshPanels();
+      return;
+    }
 
-    // Add to hand
-    CardAuthority.addToHand(card);
+    // Hand full — cascade to bag (EyesOnly pattern: hand → bag)
+    var bagSize = (typeof CardAuthority.getBagSize === 'function')
+      ? CardAuthority.getBagSize()
+      : CardAuthority.getBag().length;
+    if (bagSize < CardAuthority.MAX_BAG) {
+      CardAuthority.removeFromBackupById(card.id);
+      card._bagStored = true;
+      CardAuthority.addToBag(card);
+      var emoji2 = card.emoji || '\uD83C\uDCA0';
+      Toast.show(emoji2 + ' \u2192 Bag', 'info');
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
+      _refreshPanels();
+      return;
+    }
 
-    var emoji = card.emoji || '\uD83C\uDCA0';
-    Toast.show(emoji + ' \u2192 Hand', 'info');
-    if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
-    _refreshPanels();
+    // Both full
+    Toast.show(i18n.t('inv.no_space', 'No space! Hand & bag full.'), 'warning');
   }
 
   // ── Tick (game logic at 10fps — enemies, aggro) ────────────────────
@@ -3793,7 +4150,11 @@ var Game = (function () {
       var ctx = _canvas.getContext('2d');
       MenuBox.render(ctx, _canvas.width, _canvas.height);
       // Drag-drop ghost overlay (renders above pause menu)
-      if (typeof DragDrop !== 'undefined') DragDrop.render(ctx);
+      if (typeof DragDrop !== 'undefined') {
+        DragDrop.render(ctx);
+        // Debug: show zone outlines (toggle via console: window.__DD_DEBUG = true)
+        if (window.__DD_DEBUG && DragDrop.renderDebug) DragDrop.renderDebug(ctx);
+      }
       // Toast overlay (feedback during inventory drags)
       Toast.update(frameDt);
       Toast.render(ctx, _canvas.width, _canvas.height);
@@ -3812,12 +4173,17 @@ var Game = (function () {
       if (typeof TextureAtlas !== 'undefined' && TextureAtlas.tick) {
         TextureAtlas.tick(frameDt);
       }
-      _renderGameplay(frameDt);
+      _renderGameplay(frameDt, now);
 
       // Post-processing pixel shaders (after world, before overlays)
       var ctx = _canvas.getContext('2d');
       if (typeof PostProcess !== 'undefined') {
         PostProcess.apply(ctx, _canvas.width, _canvas.height, frameDt);
+      }
+
+      // Viewport ring (freelook zone + directional indicators)
+      if (typeof ViewportRing !== 'undefined') {
+        ViewportRing.render(ctx, _canvas.width, _canvas.height);
       }
 
       // UI overlays (after post-process, before HUD z-layer)
@@ -3899,7 +4265,7 @@ var Game = (function () {
   }
 
   /** Render the 3D world + minimap (extracted for reuse by overlays). */
-  function _renderGameplay(frameDt) {
+  function _renderGameplay(frameDt, now) {
     // Tick combat bridge (facing timer + CombatEngine phase auto-advance)
     CombatBridge.update(frameDt);
 
@@ -4087,6 +4453,27 @@ var Game = (function () {
       }
     }
 
+    // ── Mailbox billboard sprites (emoji on stone base) ──────────
+    if (typeof MailboxSprites !== 'undefined') {
+      var _mbFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
+      var mailboxSprites = MailboxSprites.buildSprites(
+        _mbFloorId, floorData.grid, floorData.gridW, floorData.gridH
+      );
+      MailboxSprites.animate(now);
+      for (var mbi = 0; mbi < mailboxSprites.length; mbi++) {
+        var mbs = mailboxSprites[mbi];
+        _sprites.push({
+          x: mbs.x,
+          y: mbs.y,
+          emoji: mbs.emoji,
+          scale: mbs.scale,
+          bobY: MailboxSprites.getAnimatedY(mbs),
+          glow: null,
+          glowRadius: 0
+        });
+      }
+    }
+
     // Tick door-open animation (before raycaster reads its state)
     if (typeof DoorAnimator !== 'undefined') DoorAnimator.update(frameDt);
 
@@ -4124,7 +4511,7 @@ var Game = (function () {
 
     Raycaster.render(
       { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset,
-        bobY: MC.getBobY() },
+        pitch: p.lookPitch || 0, bobY: MC.getBobY() },
       floorData.grid, floorData.gridW, floorData.gridH,
       _sprites, lightMap
     );

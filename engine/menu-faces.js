@@ -211,9 +211,9 @@ var MenuFaces = (function () {
 
     // ── Scale-aware font sizes ──
     var F_BODY   = Math.max(10, Math.round(14 * S));
-    var F_SMALL  = Math.max(9, Math.round(13 * S));
-    var F_HINT   = Math.max(9, Math.round(13 * S));
-    var F_COMPASS = Math.max(9, Math.round(13 * S));
+    var F_SMALL  = Math.max(10, Math.round(13 * S));
+    var F_HINT   = Math.max(10, Math.round(13 * S));
+    var F_COMPASS = Math.max(10, Math.round(13 * S));
 
     // ── Floor label + depth info ──
     var floorId = FloorManager.getFloor();
@@ -445,9 +445,9 @@ var MenuFaces = (function () {
     var ty = divY + Math.round(10 * S);
 
     var F_BODY  = Math.max(10, Math.round(14 * S));
-    var F_SMALL = Math.max(9, Math.round(13 * S));
-    var F_HINT  = Math.max(9, Math.round(13 * S));
-    var F_MICRO = Math.max(8, Math.round(11 * S));
+    var F_SMALL = Math.max(10, Math.round(13 * S));
+    var F_HINT  = Math.max(10, Math.round(13 * S));
+    var F_MICRO = Math.max(10, Math.round(11 * S));
 
     var ps = Player.state();
 
@@ -530,7 +530,7 @@ var MenuFaces = (function () {
     ty += Math.round(16 * S);
     ctx.fillStyle = COL.dim;
     ctx.font = F_SMALL + 'px monospace';
-    ctx.fillText(FloorManager.getFloorLabel() + ' — ' + FloorManager.getCurrentFloorId(),
+    ctx.fillText(FloorManager.getFloorLabel() + ' - ' + FloorManager.getCurrentFloorId(),
                  x + w / 2, ty + Math.round(10 * S));
 
     // ── Warp button (exterior → home, dungeon → entrance) ──
@@ -540,17 +540,24 @@ var MenuFaces = (function () {
     var warpTarget = null;
     var warpLabel  = '';
     var warpLocked = false;
-    var WARP_READINESS_THRESHOLD = 0.6; // 60% floor readiness to extract from dungeon
+    var WARP_READINESS_THRESHOLD = 1.0; // 100% — matches dragonfire exit Toast
 
-    if (depth === 1 && floorId !== '0') {
-      // Exterior campfire: always warp home
-      warpTarget = '1.6';
-      warpLabel  = '\uD83C\uDFE0 ' + i18n.t('bonfire.warp_home', 'Warp Home');
-    } else if (depth >= 3) {
+    // REVIEW: Exterior→home warp is cross-floor fast travel via bonfire.
+    // Per design intent bonfires are rest points, not teleporters.
+    // Only valid bonfire warp: dungeon (n.n.n) → parent interior (n.n)
+    // when readiness complete. Exterior→home should use doors/walking.
+    // Keeping disabled until warp rules matrix is finalized.
+    //
+    // if (depth === 1 && floorId !== '0') {
+    //   warpTarget = '1.6';
+    //   warpLabel  = '\uD83C\uDFE0 ' + i18n.t('bonfire.warp_home', 'Warp Home');
+    // } else
+    if (depth >= 3) {
       // Dungeon hearth: warp to entrance gated on readiness
       warpTarget = (typeof FloorManager !== 'undefined') ? FloorManager.parentId(floorId) : null;
-      var readiness = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getScore)
-        ? ReadinessCalc.getScore(floorId) : 1.0;
+      // Use core score for warp gating — extra credit doesn't count
+      var readiness = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
+        ? ReadinessCalc.getCoreScore(floorId) : 1.0;
       if (readiness >= WARP_READINESS_THRESHOLD) {
         warpLabel = '\uD83D\uDD3C ' + i18n.t('bonfire.warp_entrance', 'Warp to Entrance');
       } else {
@@ -601,8 +608,8 @@ var MenuFaces = (function () {
   function _renderShopInfo(ctx, x, y, w, h) {
     var S = Math.min(w, h) / 400;
     var F_BODY  = Math.max(10, Math.round(14 * S));
-    var F_SMALL = Math.max(9, Math.round(13 * S));
-    var F_HINT  = Math.max(9, Math.round(13 * S));
+    var F_SMALL = Math.max(10, Math.round(13 * S));
+    var F_HINT  = Math.max(10, Math.round(13 * S));
 
     // ── Faction identity ─────────────────────────────────────────
     var factionId    = (typeof Shop !== 'undefined') ? Shop.getCurrentFaction() : null;
@@ -717,7 +724,7 @@ var MenuFaces = (function () {
                  tx + ts / 2, ty + ts / 2 - 2);
 
     // "EMPTY" label
-    ctx.font = '7px monospace';
+    ctx.font = '10px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     ctx.fillText(opts.label || 'EMPTY', tx + ts / 2, ty + ts / 2 + 10);
 
@@ -788,7 +795,7 @@ var MenuFaces = (function () {
 
     // Slot key hint (top-left, dim)
     if (slotIdx < 5) {
-      ctx.font = '7px monospace';
+      ctx.font = '10px monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'left';
       ctx.fillText('' + (slotIdx + 1), tx + 3, ty + 9);
@@ -866,7 +873,7 @@ var MenuFaces = (function () {
     var ty = _drawTitle(ctx, x, y, w, 'REMAINS', '💀', S);
 
     var F_BODY = Math.max(10, Math.round(14 * S));
-    var F_HINT = Math.max(9, Math.round(13 * S));
+    var F_HINT = Math.max(10, Math.round(13 * S));
 
     // Get staged loot from Salvage
     var loot = (typeof Salvage !== 'undefined') ? Salvage.getStagedLoot() : [];
@@ -926,7 +933,7 @@ var MenuFaces = (function () {
     var ty = _drawTitle(ctx, x, y, w, 'BAG', '🎒', S);
 
     var F_BODY  = Math.max(10, Math.round(14 * S));
-    var F_SMALL = Math.max(9, Math.round(13 * S));
+    var F_SMALL = Math.max(10, Math.round(13 * S));
 
     var bag = CardAuthority.getBag();
     var maxBag = CardAuthority.MAX_BAG;
@@ -1016,9 +1023,9 @@ var MenuFaces = (function () {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'JOURNAL'), '\uD83D\uDCD6', S);
 
     var F_BODY    = Math.max(10, Math.round(14 * S));
-    var F_SMALL   = Math.max(9, Math.round(13 * S));
+    var F_SMALL   = Math.max(10, Math.round(13 * S));
     var F_SECTION = Math.max(9, Math.round(12 * S));
-    var F_HINT    = Math.max(9, Math.round(13 * S));
+    var F_HINT    = Math.max(10, Math.round(13 * S));
     var PAD       = Math.round(10 * S);
 
     // ── Section 1: Operative dossier (class, callsign, status) ──
@@ -1250,6 +1257,94 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText('Discover lore by exploring the world', x + w / 2, ty + 2);
 
+    // ── Section 6: Weekly timer / Hero Day cycle ──
+    ty += Math.round(16 * S);
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + PAD, ty); ctx.lineTo(x + w - PAD, ty);
+    ctx.stroke();
+    ty += Math.round(8 * S);
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('WEEKLY CYCLE', x + PAD, ty + Math.round(6 * S));
+    ty += Math.round(14 * S);
+
+    if (typeof DayCycle !== 'undefined') {
+      var _dayNum = DayCycle.getDay();
+      var _daysLeft = DayCycle.daysUntilHeroDay();
+      var _heroActive = (_daysLeft === 0);
+      var _weekPips = [];
+      // Build 7-day pip row: current day, hero days highlighted
+      for (var _wp = 0; _wp < 7; _wp++) {
+        var futureDay = _dayNum + _wp - (_dayNum % 7) + _wp;
+        _weekPips.push(_wp);
+      }
+
+      var pipW = Math.max(12, Math.round(18 * S));
+      var pipH = Math.max(8, Math.round(10 * S));
+      var pipGap = Math.round(4 * S);
+      var totalPipW = 7 * pipW + 6 * pipGap;
+      var pipStartX = x + (w - totalPipW) / 2;
+      var pipY = ty;
+      var dayOfWeek = _dayNum % 7;
+      var _weekDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      for (var _pi = 0; _pi < 7; _pi++) {
+        var _px = pipStartX + _pi * (pipW + pipGap);
+        var isCurrent = (_pi === dayOfWeek);
+        var _futDay = _dayNum - dayOfWeek + _pi;
+        var isHeroDay = (_futDay >= 0 && _futDay % 3 === 0);
+
+        ctx.fillStyle = isCurrent ? 'rgba(240,208,112,0.6)'
+                      : isHeroDay ? 'rgba(255,80,60,0.3)'
+                      : 'rgba(255,255,255,0.08)';
+        _roundRectFill(ctx, _px, pipY, pipW, pipH, Math.round(2 * S));
+        ctx.strokeStyle = isCurrent ? COL.accent : 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = isCurrent ? 1.5 : 0.5;
+        _roundRectStroke(ctx, _px, pipY, pipW, pipH, Math.round(2 * S));
+
+        // Day abbreviation below pip
+        ctx.font = Math.max(8, Math.round(9 * S)) + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isCurrent ? COL.accent : 'rgba(255,255,255,0.3)';
+        ctx.fillText(_weekDayNames[_pi], _px + pipW / 2, pipY + pipH + Math.round(8 * S));
+
+        // Hit zone for hover
+        _hitZones.push({ x: _px, y: pipY, w: pipW, h: pipH + Math.round(10 * S),
+          slot: 950 + _pi, action: 'inspect' });
+      }
+
+      ty = pipY + pipH + Math.round(16 * S);
+
+      // Hero Day countdown text
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'center';
+      if (_heroActive) {
+        ctx.fillStyle = 'rgba(255,80,60,0.9)';
+        ctx.fillText('\u2694 HERO DAY \u2014 The Hero is active. Stay alert.', x + w / 2, ty + 2);
+      } else {
+        ctx.fillStyle = 'rgba(255,200,100,0.6)';
+        ctx.fillText('\u2694 Next Hero Day in ' + _daysLeft + ' day' + (_daysLeft !== 1 ? 's' : ''), x + w / 2, ty + 2);
+      }
+
+      // Hover detail for weekly pips
+      for (var _phi = 0; _phi < 7; _phi++) {
+        if (_hoverSlot === 950 + _phi) {
+          var hovFut = _dayNum - dayOfWeek + _phi;
+          var hovIsHero = (hovFut >= 0 && hovFut % 3 === 0);
+          var hovDesc = _weekDayNames[_phi] + (hovIsHero ? ' \u2014 Hero Day! Dungeon enemies refreshed.' : ' \u2014 Safe day for cleaning.');
+          if (_phi === dayOfWeek) hovDesc = 'Today: ' + hovDesc;
+          _hoverDetail = { item: { name: _weekDayNames[_phi], description: hovDesc, emoji: hovIsHero ? '\u2694' : '\uD83D\uDCC5' },
+            x: pipStartX + _phi * (pipW + pipGap) + pipW, y: pipY };
+        }
+      }
+
+      ty += Math.round(14 * S);
+    }
+
     // ── Day/time info + hint ──
     if (typeof DayCycle !== 'undefined') {
       var dayNum = DayCycle.getDay() + 1;
@@ -1366,7 +1461,7 @@ var MenuFaces = (function () {
     if (backupDeck.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.font = '12px monospace';
-      ctx.fillText('Empty — pick up cards to build your deck', x + w / 2, ty + 20);
+      ctx.fillText('Empty - pick up cards to build your deck', x + w / 2, ty + 20);
     } else {
       var bCols = 4;
       var bSlotW = 36;
@@ -1424,7 +1519,7 @@ var MenuFaces = (function () {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('dragonfire.no_stash_title', 'TOO DEEP'), '🚫', S);
 
     var F_BODY  = Math.max(10, Math.round(14 * S));
-    var F_SMALL = Math.max(9, Math.round(13 * S));
+    var F_SMALL = Math.max(10, Math.round(13 * S));
 
     // Flavour
     ctx.fillStyle = COL.text;
@@ -1451,7 +1546,7 @@ var MenuFaces = (function () {
     var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.stash_title', 'STASH'), '📦', S);
 
     var F_BODY  = Math.max(10, Math.round(14 * S));
-    var F_SMALL = Math.max(9, Math.round(13 * S));
+    var F_SMALL = Math.max(10, Math.round(13 * S));
 
     // Stash description
     ctx.fillStyle = COL.text;
@@ -1481,7 +1576,7 @@ var MenuFaces = (function () {
       emptyY += Math.round(22 * S);
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.font = F_BODY + 'px monospace';
-      ctx.fillText(i18n.t('shop.stash_empty_hint', 'Drag items here — they survive death.'),
+      ctx.fillText(i18n.t('shop.stash_empty_hint', 'Drag items here; they survive death.'),
                    x + w / 2, emptyY);
       emptyY += Math.round(16 * S);
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -1712,25 +1807,50 @@ var MenuFaces = (function () {
     var F_EXPANDER = 'bold ' + Math.round(15 * S) + 'px monospace';
 
     // ── Vertical budget — proportional fill ─────────────────────
-    // Title:   fixed
-    // Equip:   15% of body
-    // Bag:     20%
-    // Hand:    30%
-    // Deck:    20%
-    // Footer:  15%
+    // Title:   fixed (includes incinerator + currency)
+    // Equip:   16% of body
+    // Bag:     22%
+    // Hand:    32%
+    // Deck:    22%
+    // Hint:    8% (slim footer — just a hint line)
     var TITLE_H = Math.round(38 * S);
     var bodyH = h - TITLE_H;
-    var eqH    = Math.floor(bodyH * 0.14);
-    var bagH   = Math.floor(bodyH * 0.20);
-    var handH  = Math.floor(bodyH * 0.30);
-    var deckH  = Math.floor(bodyH * 0.20);
+    var eqH    = Math.floor(bodyH * 0.16);
+    var bagH   = Math.floor(bodyH * 0.22);
+    var handH  = Math.floor(bodyH * 0.32);
+    var deckH  = Math.floor(bodyH * 0.22);
     var footH  = bodyH - eqH - bagH - handH - deckH;
 
-    // ── Title ──────────────────────────────────────────────────
+    // ── Title (with incinerator + currency anchored in header) ──
+    var titleY = y + Math.round(24 * S);
+    // Incinerator icon (left of title)
+    var incinIconS = Math.round(22 * S);
+    var incinIconX = x + Math.round(10 * S);
+    var incinIconY = titleY - incinIconS / 2 - Math.round(2 * S);
+    var incinHov = (_hoverSlot === 800);
+    ctx.fillStyle = incinHov ? 'rgba(255,60,30,0.3)' : 'rgba(60,20,10,0.5)';
+    _roundRectFill(ctx, incinIconX, incinIconY, incinIconS, incinIconS, Math.round(3 * S));
+    ctx.strokeStyle = incinHov ? '#ff4422' : 'rgba(255,80,40,0.35)';
+    ctx.lineWidth = incinHov ? 2 : 1;
+    _roundRectStroke(ctx, incinIconX, incinIconY, incinIconS, incinIconS, Math.round(3 * S));
+    ctx.font = Math.round(16 * S) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = incinHov ? '#ff6644' : 'rgba(255,100,60,0.7)';
+    ctx.fillText('\uD83D\uDD25', incinIconX + incinIconS / 2, incinIconY + incinIconS * 0.7);
+    _hitZones.push({ x: incinIconX, y: incinIconY, w: incinIconS, h: incinIconS, slot: 800, action: 'incinerator' });
+
+    // Title text (center)
     ctx.fillStyle = COL.title;
     ctx.font = 'bold ' + F_TITLE;
     ctx.textAlign = 'center';
-    ctx.fillText('\uD83C\uDF92 ' + i18n.t('menu.face2', 'Inventory'), x + w / 2, y + Math.round(24 * S));
+    ctx.fillText('\uD83C\uDF92 ' + i18n.t('menu.face2', 'Inventory'), x + w / 2, titleY);
+
+    // Currency badge (right of title)
+    ctx.fillStyle = COL.currency;
+    ctx.font = F_CURRENCY;
+    ctx.textAlign = 'right';
+    ctx.fillText('\uD83D\uDCB0 ' + ps.currency + 'g', x + w - Math.round(10 * S), titleY);
+
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1944,7 +2064,9 @@ var MenuFaces = (function () {
         if (bName.length > bMaxC) bName = bName.substring(0, bMaxC - 1) + '\u2026';
         ctx.fillText(bName, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG * 0.82);
 
-        _hitZones.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG, slot: 200 + bdi, action: 'equip' });
+        // Cards get 'inspect' action (no equip); items get 'equip'
+        var bagAction = _isBagCard(bagItem) ? 'inspect' : 'equip';
+        _hitZones.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG, slot: 200 + bdi, action: bagAction });
         bagSlotBounds.push({ x: bsx, y: ty, w: SLOT_S_BAG, h: SLOT_S_BAG });
       }
     }
@@ -2119,29 +2241,12 @@ var MenuFaces = (function () {
     ty += deckH;
 
     // ════════════════════════════════════════════════════════════
-    // Footer: Incinerator + Currency + Hint
+    // Footer: Hint only (incinerator + currency moved to header)
     // ════════════════════════════════════════════════════════════
-    var incinS = Math.min(Math.round(48 * S), footH - Math.round(20 * S));
-    var incinX = x + Math.round(8 * S);
-    var incinY = ty + (footH - incinS - Math.round(16 * S)) / 2;
-    var incinHov = (_hoverSlot === 800);
-
-    ctx.fillStyle = incinHov ? 'rgba(255,60,30,0.3)' : 'rgba(60,20,10,0.5)';
-    _roundRectFill(ctx, incinX, incinY, incinS, incinS, RAD);
-    ctx.strokeStyle = incinHov ? '#ff4422' : 'rgba(255,80,40,0.35)';
-    ctx.lineWidth = incinHov ? 2.5 : 1.5;
-    _roundRectStroke(ctx, incinX, incinY, incinS, incinS, RAD);
-    ctx.font = Math.round(28 * S) + 'px serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = incinHov ? '#ff6644' : 'rgba(255,100,60,0.7)';
-    ctx.fillText('\uD83D\uDD25', incinX + incinS / 2, incinY + incinS * 0.64);
-    _hitZones.push({ x: incinX, y: incinY, w: incinS, h: incinS, slot: 800, action: 'incinerator' });
-
-    // Currency (centered)
-    ctx.fillStyle = COL.currency;
-    ctx.font = F_CURRENCY;
-    ctx.textAlign = 'center';
-    ctx.fillText('\uD83D\uDCB0 ' + ps.currency + 'g', x + w / 2, incinY + incinS / 2 + Math.round(5 * S));
+    // Incinerator bounds for DragDrop (header position)
+    var incinS = incinIconS;
+    var incinX = incinIconX;
+    var incinY = incinIconY;
 
     // Hint (bottom)
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
@@ -2566,6 +2671,7 @@ var MenuFaces = (function () {
   function handleSettingsToggle(key) {
     var toggleDefs = [
       { key: 'screenShake', default: true },
+      { key: 'invertYFreeLook', default: false },
       { key: 'showFps', default: false },
       { key: 'minimapVisible', default: true }
     ];
@@ -2577,9 +2683,25 @@ var MenuFaces = (function () {
         if (key === 'minimapVisible' && typeof Minimap !== 'undefined') {
           if (_settingsState[key]) Minimap.show(); else Minimap.hide();
         }
+        if (key === 'invertYFreeLook' && typeof MouseLook !== 'undefined') {
+          MouseLook.setInvertY(_settingsState[key]);
+        }
         return;
       }
     }
+  }
+
+  /**
+   * Cycle through available languages.
+   * Called when the language row in Face 3 is clicked.
+   */
+  function handleLanguageCycle() {
+    var codes = ['en', 'es', 'hi', 'ps'];
+    var cur = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
+    var idx = codes.indexOf(cur);
+    var next = codes[(idx + 1) % codes.length];
+    if (typeof i18n !== 'undefined') i18n.setLocale(next);
+    try { localStorage.setItem('dg_lang', next); } catch (e) {}
   }
 
   /**
@@ -2599,12 +2721,17 @@ var MenuFaces = (function () {
    */
   function renderFace3(ctx, x, y, w, h, context) {
     var S = Math.min(w, h) / 400;
+    // Clip to face bounds so nothing bleeds out
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️', S);
 
     var F_BODY    = Math.max(10, Math.round(14 * S));
-    var F_SMALL   = Math.max(9, Math.round(13 * S));
+    var F_SMALL   = Math.max(10, Math.round(13 * S));
     var F_SECTION = Math.max(9, Math.round(12 * S));
-    var F_HINT    = Math.max(9, Math.round(13 * S));
+    var F_HINT    = Math.max(10, Math.round(13 * S));
     var PAD       = Math.round(16 * S);
 
     var listX  = x + PAD;
@@ -2612,16 +2739,85 @@ var MenuFaces = (function () {
     var rowH   = Math.max(30, Math.round(44 * S));
     var ty2    = ty + Math.round(6 * S);
 
+    // ── Toggle settings (top section) ────────────────────────────────
+    var toggleRowH = Math.max(22, Math.round(26 * S));
+    var toggleY = ty2;
+    var toggleDefs = [
+      { label: 'Screen Shake', key: 'screenShake', default: true,
+        desc: 'Camera shakes on impacts and explosions', bind: 'Click' },
+      { label: 'Invert Y Free Look', key: 'invertYFreeLook', default: false,
+        desc: 'Swap vertical free-look direction', bind: 'Click' },
+      { label: 'Show FPS', key: 'showFps', default: false,
+        desc: 'Display framerate counter in corner', bind: 'Click' },
+      { label: 'Minimap Visible', key: 'minimapVisible', default: true,
+        desc: 'Show the radar minimap during gameplay', bind: 'M' }
+    ];
+
+    var _hoveredToggleDesc = null;
+    var _hoveredToggleBind = null;
+
+    for (var ti = 0; ti < toggleDefs.length; ti++) {
+      var td = toggleDefs[ti];
+      var togY = toggleY + ti * toggleRowH;
+      var togVal = _settingsState[td.key] !== undefined ? _settingsState[td.key] : td.default;
+      var togSelected = (_settingsState.row === _SLIDER_DEFS.length + ti);
+      var togHover = (_hoverSlot === (810 + ti));
+
+      if (togSelected || togHover) {
+        ctx.fillStyle = togSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
+        ctx.fillRect(x + 6, togY - 2, w - 12, toggleRowH - 2);
+        _hoveredToggleDesc = td.desc;
+        _hoveredToggleBind = td.bind;
+      }
+
+      ctx.fillStyle = (togSelected || togHover) ? COL.accent : COL.dim;
+      ctx.font = F_BODY + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + Math.round(14 * S), togY + Math.round(10 * S));
+      ctx.textAlign = 'right';
+      ctx.fillStyle = togVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
+      ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + Math.round(6 * S), togY + Math.round(10 * S));
+
+      // Hit zone for toggle click
+      _hitZones.push({
+        x: x + 6, y: togY - 2,
+        w: w - 12, h: toggleRowH - 2,
+        slot: 810 + ti, action: 'toggle', toggleKey: td.key
+      });
+    }
+
+    // Toggle hover description line (includes keybind hint)
+    var descY = toggleY + toggleDefs.length * toggleRowH + Math.round(2 * S);
+    if (_hoveredToggleDesc) {
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = 'italic ' + F_SMALL + 'px monospace';
+      ctx.textAlign = 'left';
+      var descText = _hoveredToggleDesc;
+      if (_hoveredToggleBind) descText += '  [' + _hoveredToggleBind + ']';
+      ctx.fillText(descText, listX + Math.round(14 * S), descY + Math.round(8 * S));
+    }
+
+    // ── Divider ──
+    var divY1 = descY + Math.round(16 * S);
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, divY1);
+    ctx.lineTo(x + w - 10, divY1);
+    ctx.stroke();
+
+    // ── Volume sliders (below toggles) ──────────────────────────────
+    var sliderStartY = divY1 + Math.round(8 * S);
+
     // Live volumes from AudioSystem (0–100 integers)
     var vols = (typeof AudioSystem !== 'undefined')
              ? AudioSystem.getVolumes()
              : { master: 80, sfx: 100, bgm: 60 };
 
-    // ── Volume sliders ─────────────────────────────────────────────
     for (var s = 0; s < _SLIDER_DEFS.length; s++) {
       var def     = _SLIDER_DEFS[s];
       var val     = vols[def.key];
-      var sy      = ty2 + s * rowH;
+      var sy      = sliderStartY + s * rowH;
       var selected = (s === _settingsState.row);
 
       // Selection highlight row
@@ -2632,7 +2828,7 @@ var MenuFaces = (function () {
         ctx.fillStyle = COL.accent;
         ctx.font = 'bold ' + F_BODY + 'px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('▶', x + Math.round(6 * S), sy + Math.round(14 * S));
+        ctx.fillText('\u25B6', x + Math.round(6 * S), sy + Math.round(14 * S));
       }
 
       // Label
@@ -2694,8 +2890,8 @@ var MenuFaces = (function () {
       }
     }
 
-    // ── Language ──────────────────────────────────────────────────
-    var langY = ty2 + _SLIDER_DEFS.length * rowH + Math.round(6 * S);
+    // ── Language (clickable cycle) ────────────────────────────────
+    var langY = sliderStartY + _SLIDER_DEFS.length * rowH + Math.round(6 * S);
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -2703,54 +2899,37 @@ var MenuFaces = (function () {
     ctx.lineTo(x + w - 10, langY - Math.round(4 * S));
     ctx.stroke();
 
-    ctx.fillStyle = COL.dim;
+    var _LANG_CODES = ['en', 'es', 'hi', 'ps'];
+    var _LANG_LABELS = { en: 'English', es: 'Español', hi: 'हिन्दी', ps: 'پښتو' };
+    var curLang = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
+    var langLabel = _LANG_LABELS[curLang] || curLang;
+    var langRowH = Math.max(22, Math.round(26 * S));
+    var langHov = (_hoverSlot === 830);
+
+    if (langHov) {
+      ctx.fillStyle = 'rgba(240,208,112,0.06)';
+      ctx.fillRect(x + 6, langY - 2, w - 12, langRowH - 2);
+    }
+
+    ctx.fillStyle = langHov ? COL.accent : COL.dim;
     ctx.font = F_BODY + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(
-      i18n.t('settings.language', 'Language') + ':  ' +
-      i18n.t('settings.lang_en', 'English'),
+      i18n.t('settings.language', 'Language') + ':  ' + langLabel,
       listX + Math.round(14 * S), langY + Math.round(10 * S)
     );
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.fillText('[Click] cycle', listX + trackW + Math.round(6 * S), langY + Math.round(10 * S));
 
-    // ── Toggle settings ───────────────────────────────────────────
-    var toggleRowH = Math.max(18, Math.round(22 * S));
-    var toggleY = langY + Math.round(26 * S);
-    var toggleDefs = [
-      { label: 'Screen Shake', key: 'screenShake', default: true },
-      { label: 'Show FPS', key: 'showFps', default: false },
-      { label: 'Minimap Visible', key: 'minimapVisible', default: true }
-    ];
-
-    for (var ti = 0; ti < toggleDefs.length; ti++) {
-      var td = toggleDefs[ti];
-      var togY = toggleY + ti * toggleRowH;
-      var togVal = _settingsState[td.key] !== undefined ? _settingsState[td.key] : td.default;
-      var togSelected = (_settingsState.row === _SLIDER_DEFS.length + ti);
-      var togHover = (_hoverSlot === (810 + ti));
-
-      if (togSelected || togHover) {
-        ctx.fillStyle = togSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
-        ctx.fillRect(x + 6, togY - 2, w - 12, toggleRowH - 2);
-      }
-
-      ctx.fillStyle = (togSelected || togHover) ? COL.accent : COL.dim;
-      ctx.font = F_BODY + 'px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText((togSelected ? '\u25B6 ' : '  ') + td.label, listX + Math.round(14 * S), togY + Math.round(10 * S));
-      ctx.textAlign = 'right';
-      ctx.fillStyle = togVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
-      ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + Math.round(6 * S), togY + Math.round(10 * S));
-
-      // Hit zone for toggle click
-      _hitZones.push({
-        x: x + 6, y: togY - 2,
-        w: w - 12, h: toggleRowH - 2,
-        slot: 810 + ti, action: 'toggle', toggleKey: td.key
-      });
-    }
+    _hitZones.push({
+      x: x + 6, y: langY - 2, w: w - 12, h: langRowH - 2,
+      slot: 830, action: 'cycle_language'
+    });
 
     // ── Controls reference ────────────────────────────────────────
-    var ctrlY = toggleY + toggleDefs.length * toggleRowH + Math.round(8 * S);
+    var ctrlY = langY + Math.round(24 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
     ctx.moveTo(x + 10, ctrlY - Math.round(4 * S));
@@ -2837,6 +3016,7 @@ var MenuFaces = (function () {
     }
 
     ctx.textAlign = 'left';
+    ctx.restore(); // Undo face clip
   }
 
   // ── Hit zone management ────────────────────────────────────────
@@ -2885,7 +3065,11 @@ var MenuFaces = (function () {
       var z = _hitZones[i];
       if (ptr.x >= z.x && ptr.x <= z.x + z.w &&
           ptr.y >= z.y && ptr.y <= z.y + z.h) {
-        return { slot: z.slot, action: z.action };
+        var hit = { slot: z.slot, action: z.action };
+        // Pass through extra properties (toggleKey, warpTarget, etc.)
+        if (z.toggleKey !== undefined) hit.toggleKey = z.toggleKey;
+        if (z.warpTarget !== undefined) hit.warpTarget = z.warpTarget;
+        return hit;
       }
     }
     return null;
@@ -2902,9 +3086,13 @@ var MenuFaces = (function () {
   // Zone ID tracking for cleanup
   var _registeredZoneIds = [];
 
-  /** Helper: detect card stored in bag */
+  /** Helper: detect card stored in bag (or any card-like object).
+   *  Cards always have `suit`; items never do.
+   *  The old check also required `value`, but cards.json cards
+   *  have no top-level `value` — it's nested in cost/effects. */
   function _isBagCard(item) {
-    return item && (item._bagStored || (item.suit !== undefined && item.value !== undefined));
+    return item && (item._bagStored || item.suit !== undefined ||
+           item.cardId !== undefined || item._cardRef !== undefined);
   }
 
   /** Helper: suit emoji lookup */
@@ -2998,12 +3186,21 @@ var MenuFaces = (function () {
           accepts: function (p) {
             if (!p || p.zone === 'equip') return false;
             if (p.type !== 'item') return false;
-            // Cards stored as items can't be equipped
+            // Cards stored as items can't be equipped — belt + suspenders:
+            // check _isBagCard AND reject anything with card DNA
             if (_isBagCard(p.data)) return false;
+            if (p.data && (p.data._cardRef || p.data.suit !== undefined ||
+                p.data.cardId !== undefined || p.data.type === 'card')) return false;
             return true;
           },
           onDrop: function (p) {
             if (!p || !p.data) return false;
+            // Hard reject cards — no card should ever become equippable
+            if (_isBagCard(p.data) || p.type === 'card' || p.data._cardRef ||
+                p.data.suit !== undefined || p.data.cardId !== undefined) {
+              if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDCCF Cards can\u2019t be equipped', 'warning');
+              return false;
+            }
             var item2 = p.data;
             // Safety: if slot has an item and bag is full, reject the drop
             var prev = CardAuthority.getEquipped()[slotIdx];
@@ -3527,7 +3724,7 @@ var MenuFaces = (function () {
             var bagCard = { id: card.id, name: card.name, emoji: card.emoji || '🃏',
                            type: 'card', suit: card.suit, _bagStored: true, _cardRef: card };
             if (!CardAuthority.addToBag(bagCard)) {
-              if (typeof Toast !== 'undefined') Toast.show('Bag full — make room first', 'warning');
+              if (typeof Toast !== 'undefined') Toast.show('Bag full - make room first', 'warning');
               return false;
             }
             // Remove from hand
@@ -3585,6 +3782,7 @@ var MenuFaces = (function () {
     handleSettingsNav:       handleSettingsNav,
     handleSettingsAdjust:    handleSettingsAdjust,
     handleSettingsToggle:    handleSettingsToggle,
+    handleLanguageCycle:     handleLanguageCycle,
     handleSettingsSelectRow: handleSettingsSelectRow,
     resetSettings:           resetSettings,
     clearHitZones:        clearHitZones,

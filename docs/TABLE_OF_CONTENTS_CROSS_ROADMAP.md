@@ -21,6 +21,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-33 | [GAP_ANALYSIS.md](#doc-33-gap_analysismd) | 🟡 Living audit | docs/ |
 | DOC-35 | [DEBUG_NOTES_SCREENER.md](#doc-35-debug_notes_screenermd) | 🟡 Living checklist | docs/ |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | 🟡 Living debug log | docs/ |
+| DOC-53 | [PLAYTEST_AND_BLOCKOUT_PROCEDURE.md](#doc-53-playtest_and_blockout_proceduremd) | 🟢 Blockout order + playtest cycle + tester guide | docs/ |
 
 ### 📐 Design Bibles & Core Loop
 
@@ -94,6 +95,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | DOC-31b | [COBWEB_TRAP_STRATEGY_ROADMAP.md](#doc-31-cobweb_trap_strategy_roadmapmd) | docs/ |
 | DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ |
 | DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ |
+| DOC-52 | [READINESS_BAR_ROADMAP.md](#doc-52-readiness_bar_roadmapmd) | docs/ |
 
 ### 👤 NPCs, Barks & Audio
 
@@ -488,6 +490,9 @@ All documents with scope summaries and section inventories. Each document now in
 ### DOC-35: DEBUG_NOTES_SCREENER.md
 > **Scope**: Active UI polish and debugging checklist — title screen, class selection, settings menu styling, in-game HUD issues, and interaction bugs. Living document updated per debug pass.
 
+### DOC-53: PLAYTEST_AND_BLOCKOUT_PROCEDURE.md
+> **Scope**: Pre-submission sprint procedure. Jam-scope audit results (130 files, no competing systems, index.html truncation fix), blockout execution order (Pass 1: exteriors → Pass 2: interiors → Pass 3: dungeons, pressure wash parallel), regimented playtest→debug→fix cycle with 9 scenarios (A–I), contracted playtester guide (setup, reporting template, known limitations vs real bugs), bug triage template (repurposed from DEBUG_NOTES_SCREENER format), stale feedback filter for April 2 pulls.
+
 ### DOC-36: FACE2_INVENTORY_POLISH.md
 > **Scope**: Known issues and interaction improvements for the inventory UI (MenuBox Face 2) — slot sizing, drag-drop conflicts, affordance clarity, and visual feedback.
 
@@ -594,6 +599,31 @@ All documents with scope summaries and section inventories. Each document now in
 
 ---
 
+### DOC-52: READINESS_BAR_ROADMAP.md
+> **Scope**: Full readiness system design — bar visual FX (constellation tracer port), two-tier scoring model (core 0–100% + extra credit 0–100% = 0–200% overhealing), staggered dungeon schedule, death-shift mechanics, combo multiplier, heart dungeon confrontation, and DungeonSchedule module architecture. Covers the jam's conflict-resolution/win-state requirement.
+
+| Section | Content | Status |
+|---|---|---|
+| §1 Readiness Bar Visual Design | Canvas bar constants, constellation tracer FX, interaction sweep / fill pump / rescind slide animations, overhealing glow | 📐 Spec done |
+| §2 Readiness Score Model | Core weights (crate 35%, clean 25%, torch 20%, trap 20%), extra credit weights (corpse 30%, cobweb 15%, overclean 10%, vermin/puzzle/doors/suit stubs) | ✅ ReadinessCalc refactored |
+| §3 Bonfire Warp Threshold | Core score gating for dragonfire warp, advance-to-next-dungeon flow | ✅ menu-faces.js updated |
+| §4 Morning Report & Mailbox | Hero-day reporting engine, dependency chain, mailbox-peek integration | 📐 Spec done |
+| §5 Revolving Mini Win-State | Cycle Report Card (0–5 stars), escalating targets, victory/failure conditions | 📐 Spec done |
+| §6 Dependency Graph | Full system dependency DAG | 📐 Spec done |
+| §7 Implementation Priority | R-1 through R-6 phased plan, R-3 = DungeonSchedule module | 📐 Spec done |
+| §8 Cross-References | Links to DOC-7, DOC-2, DOC-30, DOC-22, DOC-11 | Reference |
+| §9 Staggered Dungeon Schedule | Groups A/B/C, 8-day jam arc timeline, DungeonContract data model | 📐 Spec done |
+| §10 Death-Shift Mechanics | Per-group rules, narrative justification, 5 edge cases | 📐 Spec done |
+| §11 Combo Multiplier | Porta-john clipboard streak, 1.0x→1.3x rules, payout examples, dispatcher board juice | 📐 Spec done |
+| §12 Heart Dungeon | Floor 0.N.N, employer faction (♥), Day 8 confrontation, 4 ending variants | 📐 Spec done |
+| §13 DungeonSchedule Module | Layer 1 module shape, integration points, JAM_CONTRACTS config | ✅ Built + tested |
+| §14 Mailbox System | Physical exterior tile (bonfire pattern), interior history peek (bookshelf pattern), MailboxPeek refactor, R-5a phase plan | 📐 Spec done |
+
+**Implementation**: `engine/readiness-calc.js` (✅ refactored), `engine/hud.js` (✅ bar rendering), `engine/dungeon-schedule.js` (✅ built + 26 tests pass), `engine/mailbox-peek.js` (🔨 refactor pending §14)
+**Design refs**: DOC-7 §5 (economy/day loop), DOC-2 §16 (dungeon reset), DOC-30 (bonfire), DOC-22 (HUD layout), DOC-11 (factions)
+
+---
+
 ## Cross-Roadmap Execution Order
 
 Phases are dependency-ordered. Each phase lists its source document, section reference, estimated hours, and what it unblocks. **All phases must complete for a playable prototype.**
@@ -684,7 +714,7 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 | C2 | Blood rendering in raycaster + readiness HUD bar | DOC-4 BIOME | §17.1 | 1.5h | C1 | ✅ DONE |
 | C3 | Progressive cleaning tools (scrub speed scales with equipped tool) | DOC-2 TUTORIAL | §15 | 1h | C1 | ✅ DONE |
 | C4 | Dungeon reset tasks: work-order-system.js | DOC-2 TUTORIAL | §16 Phase 3 | 2h | B1 | ✅ DONE |
-| C5 | Readiness score (weighted: crates 40%, clean 30%, traps 20%, misc 10%) | DOC-4 BIOME | §17.3 | 1h | C1, C4 | ✅ DONE |
+| C5 | Readiness score — **REFACTORED Apr 2**: two-tier core/extra model, 0–200% overhealing, `getCoreScore()` for warp/contracts, `getExtraScore()` for bonus. See READINESS_BAR_ROADMAP.md | DOC-4 BIOME | §17.3 | 1h | C1, C4 | ✅ DONE (refactored) |
 | C6 | Floor deck reshuffle on transition | DOC-1 GAP | T2.4 | 30m | — | ✅ DONE |
 | C7 | Trap re-arm mechanic + cobweb module wiring | DOC-2 TUTORIAL | §16 | 30m | C1 | ✅ DONE |
 | C8 | Wire work orders into game flow (post on arrive, evaluate on return) | DOC-2 TUTORIAL | §16 Phase 3 | 45m | C4 | ✅ DONE |

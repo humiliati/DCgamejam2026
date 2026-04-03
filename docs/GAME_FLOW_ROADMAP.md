@@ -8,7 +8,7 @@
 
 ## Current State
 
-_(Updated 2026-03-27 — reflects implemented engine state)_
+_(Updated 2026-04-02 — reflects implemented engine state, 131 engine files)_
 
 **MenuBox (pause overlay) — ✅ fully functional**
 The 4-face rotating box is live. ESC opens/closes it via `ScreenManager`
@@ -90,13 +90,28 @@ after. `CombatReport` — post-combat XP/actions click-through overlay.
 HUD streamlined: HP/EN bars removed (live in DebriefFeed), combat log
 upgraded to CRT theme.
 
-**Still outstanding (pre-jam):**
-- `ScreenManager` formal state machine (currently ad-hoc in `game.js`)
-- `DialogBox` (vendor greetings, P6 UI_ROADMAP)
-- HUD battery pip row + typed collectible toasts (HUD_ROADMAP)
-- Phase 4–5 click/drag interaction polish (HUD_ROADMAP)
+**Completed since last update (as of 2026-04-02):**
+- `ScreenManager` state machine ✅ — screen-manager.js
+- `DialogBox` ✅ — Canvas-rendered dialog with typewriter, Morrowind branching, vendor greetings
+- HUD battery pip row ✅ — Discrete pips with spent animation
+- Toast system ✅ — Typed toasts (info/success/warning) via toast.js
+- `CardAuthority` + `CardTransfer` ✅ — Sprint 0 inventory overhaul (see UNIFIED_EXECUTION_ORDER)
+- ReadinessBar HUD ✅ — Full animation state machine, celebration FX, coin drip
+- DungeonSchedule ✅ — Per-group hero day state machine, win/loss conditions
+- Victory/GameOver screens extended ✅ — Arc summary, combo streak, ending variants
+- MorningReport ✅ — Dawn Toast per-group status
+- 13 peek overlays ✅ — Bookshelf, bar counter, bed, mailbox, crate, corpse, torch, chest, locked door, merchant, monologue, puzzle, door
+- CinematicCamera ✅ — 7 presets, 3 wired for jam (combat_lock, dispatcher_grab, morning_recap)
+- NPC system ✅ — npc-system.js, npc-composer.js, bark-library.js
+- IntroWalk ✅ — Floor 0 auto-walk sequence
+- Legibility pass ✅ — All font minimums raised to 10px across menu faces and end screens
+
+**Still outstanding (nice-to-have):**
 - Enemy sprite particle effects CSS rendering
-- NCH widget drag-to-reorder cards (Phase 4)
+- NCH widget drag-to-reorder cards
+- Click/drag interaction polish
+- Synergy toast on card combos
+- Faction rank-up toast/dialog
 
 ---
 
