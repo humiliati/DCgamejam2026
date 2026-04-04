@@ -1,7 +1,7 @@
 # Bonfire & Hearth — Interaction Audit & Polish Roadmap
 
 **Created**: 2026-03-28 | **Updated**: 2026-04-03
-**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. §10, §12 are expansion passes.
+**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. **§15 bonfire interaction decoupling complete (Apr 3).** §10, §12 are expansion passes.
 *** REBRANDED PLAYER FACING BONFIRE TO DRAGONFIRE ***
 ---
 
@@ -19,15 +19,23 @@ The bonfire/hearth is the game's **waypoint + stash + rest station** — the Dar
 | HEARTH (29) | `TILES.HEARTH` | Home + Interior interiors | 1.6× riverrock column + step-fill cavity (offset -0.18) + `decor_hearth_fire` in lip band + cavity glow. See LIGHT_AND_TORCH_ROADMAP §2.5a-b. |
 | BED (28) | `TILES.BED` | Home only (Floor 1.6, pos 2,2) | BedPeek overlay — sleep/day-advance, NOT bonfire context |
 
-### Interaction flow (game.js → HazardSystem → MenuBox)
+### Interaction flow (game.js → MenuBox → HazardSystem) — Updated Apr 3
+
+**Previous (pre-§15):** Interact → rest executes immediately → menu opens showing results.
+**Current (post-§15):** Interact → menu opens (no rest yet) → player clicks "🔥 Rest" button → rest executes → menu shows results.
 
 1. Player faces BONFIRE or HEARTH tile and presses interact
 2. InteractPrompt shows `interact.rest` with 🔥 icon for both tile types
-3. `game.js _interact()` calls `HazardSystem.restAtBonfire(fx, fy)` which:
-   - Registers tile as respawn point for this floor (`_bonfirePositions[floorId]`)
-   - Calls `Player.fullRestore()` (HP + energy)
-   - Updates HUD, plays `ui-confirm`, increments `SessionStats.bonfiresUsed`
-4. Sets `_pendingMenuContext = 'bonfire'` and opens pause screen via `ScreenManager.toPause()`
+3. `game.js _interact()` records pending bonfire position (`_bonfirePendingX/Y`) and clears last rest result via `HazardSystem.clearLastRestResult()`
+4. Opens pause screen via `ScreenManager.toPause()` with `bonfire` context
+5. Face 0 renders in **pre-rest state**: shows clickable "🔥 Rest" button (hit-zone slot 901)
+6. Player clicks Rest → `game.js` pointer_click handler fires `HazardSystem.restAtBonfire()` which:
+   - Registers tile as respawn point (`_bonfirePositions[floorId]`)
+   - Calls `Player.fullRestore()` (HP + energy), clears TIRED, grants WELL_RESTED (depth-gated)
+   - Advances time (dawn for exterior, 2h for dungeon)
+   - Returns result object with cleared/gained effects
+7. Face 0 re-renders in **post-rest state**: shows status effect results ("✓ TIRED cleared", "★ WELL_RESTED gained")
+8. Closing menu does nothing additional — rest already executed from button
 
 ### MenuBox bonfire context — 4 faces
 
@@ -366,3 +374,31 @@ Lighting tints already vary by depth (§8a-8d). No additional work needed — th
 | Glow tint | Warm orange | Amber/golden | Cold blue-grey |
 | Billboard sprite | ⛺ tent | — | — |
 | Gameplay contract | §11 exterior | §11 interior | §11 dungeon |
+
+---
+
+## §15 Bonfire Interaction Decoupling — ✅ COMPLETE (Apr 3)
+
+Decoupled rest execution from bonfire interaction. Previously, approaching a bonfire and pressing OK immediately fired `HazardSystem.restAtBonfire()`, advancing the day and restoring HP before the menu even opened. This caused the tooltip to fight the cinematic fade, and gave the player no agency over when rest actually fires.
+
+### What changed
+
+| # | Task | Status |
+|---|------|--------|
+| 15a | Decouple rest from interact: menu opens first, rest fires from Face 0 "🔥 Rest" button only | ✅ |
+| 15b | Track pending bonfire position (`_bonfirePendingX/Y`) in game.js for deferred rest | ✅ |
+| 15c | `HazardSystem.clearLastRestResult()` on menu open — null = pre-rest, non-null = post-rest | ✅ |
+| 15d | Face 0 two-state renderer: pre-rest shows rest button (slot 901), post-rest shows effect results | ✅ |
+| 15e | InteractPrompt emoji changed from 🐉 to 🔥 (BONFIRE, HEARTH, depth-override — 3 locations) | ✅ |
+| 15f | HEARTH tileWallHeight in home biome changed from 0.5 to 2.5 (floor-to-ceiling chimney) | ✅ |
+| 15g | InteractPrompt repositioned from `BOX_Y_OFF = 200` to `BOX_Y_FRAC = 0.60` (above tooltip bar) | ✅ |
+| 15h | Post-key quest target updated to dungeon 2.N entrance (3-phase quest system) | ✅ |
+
+### Files changed
+| File | Changes |
+|------|---------|
+| `engine/game.js` | `_bonfirePendingX/Y` tracking, rest fires from pointer_click `action === 'rest'`, clearLastRestResult on menu open |
+| `engine/menu-faces.js` | Face 0 pre/post rest states, 🔥 title emoji replacing 🐉 |
+| `engine/hazard-system.js` | `clearLastRestResult()` public API exposed |
+| `engine/interact-prompt.js` | 🐉→🔥 in 3 locations, `BOX_Y_FRAC = 0.60` positioning |
+| `engine/floor-manager.js` | HEARTH wallHeight 2.5 in home biome |

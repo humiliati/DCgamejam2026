@@ -415,7 +415,7 @@ var DeployCutscene = (function () {
       '}' +
       '@keyframes dcMovingCar {' +
         '0% { bottom: 0; transform: translate(-50%) scale(1); }' +
-        '19% { bottom: 190px; transform: translate(-50%) scale(0); }' +
+        '19% { bottom: 160px; transform: translate(-50%) scale(0); }' +
         '20% { bottom: -1200px; transform: translate(-50%) scale(2); }' +
         '30% { bottom: 0; transform: translate(-50%) scale(1); }' +
       '}' +
@@ -429,11 +429,11 @@ var DeployCutscene = (function () {
       '#cutout::before {' +
         'content: "";' +
         'position: absolute;' +
-        'top: 48%;' +
+        'top: 54%;' +
         'left: 50%;' +
         'transform: translate(-50%, -50%);' +
-        'width: 540px;' +
-        'height: 490px;' +
+        'width: 520px;' +
+        'height: 460px;' +
         'background-color: transparent;' +
         'border-radius: 40px;' +
         'box-shadow: 0 0 0 2000px rgb(19, 19, 19);' +

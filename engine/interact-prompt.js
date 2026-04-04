@@ -19,7 +19,9 @@ var InteractPrompt = (function () {
   var BOX_H     = 60;    // Prompt box height (Magic Remote tactile target)
   var BOX_PAD   = 24;    // Horizontal padding
   var BOX_RAD   = 10;    // Corner radius
-  var BOX_Y_OFF = 200;   // Pixels from bottom — must clear status bar (120px) + card tray
+  var BOX_Y_FRAC = 0.60;  // Vertical position as fraction of viewport height (0.5=center)
+                          // 0.60 sits just below the ViewportRing bottom edge,
+                          // well above the tooltip footer bar.
 
   // ── Colors ──────────────────────────────────────────────────────
   var COL_BG      = 'rgba(10,8,18,0.88)';
@@ -41,10 +43,11 @@ var InteractPrompt = (function () {
   var _hitBox     = null;    // { x, y, w, h } — screen-space click zone
   var _hovered    = false;   // Pointer is over the prompt
   var _clickFlash = 0;       // Click feedback flash timer (ms remaining)
+  var _inactive   = false;   // True when tile is non-interactive (empty bookshelf)
 
   function init() {
     ACTION_MAP[TILES.CHEST]     = { action: 'interact.open',   icon: '' };
-    ACTION_MAP[TILES.BONFIRE]   = { action: 'interact.rest',   icon: '🐉' };
+    ACTION_MAP[TILES.BONFIRE]   = { action: 'interact.rest',   icon: '🔥' };
     ACTION_MAP[TILES.SHOP]      = { action: 'interact.browse', icon: '' };
     ACTION_MAP[TILES.STAIRS_DN] = { action: 'interact.descend',icon: '' };
     ACTION_MAP[TILES.STAIRS_UP] = { action: 'interact.ascend', icon: '' };
@@ -59,7 +62,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
     ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
-    ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🐉' };
+    ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
     ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
     ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
     ACTION_MAP[TILES.MAILBOX]     = { action: 'interact.check_mail', icon: '📫' };
@@ -117,9 +120,20 @@ var InteractPrompt = (function () {
 
     if (entry) {
       _visible = true;
+      _inactive = false;
       _actionText = i18n.t(entry.action, entry.action.split('.')[1]);
       _iconText = entry.icon;
       _hintText = entry.hint ? i18n.t(entry.hint, '') : '';
+
+      // Empty bookshelf → non-interactive state (dimmed, no [OK])
+      if (tile === TILES.BOOKSHELF && typeof BookshelfPeek !== 'undefined' && BookshelfPeek.hasBook) {
+        if (!BookshelfPeek.hasBook(fx, fy)) {
+          _inactive = true;
+          _actionText = i18n.t('interact.empty_shelf', 'Empty');
+          _iconText = '📖';
+          _hintText = '';
+        }
+      }
 
       // §11d: Depth-based verb for bonfire/hearth tiles ("Camp" vs "Rest")
       if (tile === TILES.BONFIRE || tile === TILES.HEARTH) {
@@ -132,7 +146,7 @@ var InteractPrompt = (function () {
           _actionText = i18n.t('interact.dragonfire_camp', 'Camp');
           _hintText = i18n.t('hint.rest', '');
         }
-        _iconText = '🐉';
+        _iconText = '🔥';
       }
 
       // Gleaner mode: show restock prompt for containers that exist
@@ -255,7 +269,7 @@ var InteractPrompt = (function () {
     var actW = ctx.measureText('  ' + fullText).width;
     var boxW = BOX_PAD * 2 + keyW + actW;
     var boxX = (vpW - boxW) / 2;
-    var boxY = vpH - BOX_Y_OFF;
+    var boxY = vpH * BOX_Y_FRAC;
 
     // Store hit zone for pointer click
     _hitBox = { x: boxX, y: boxY, w: boxW, h: BOX_H };
@@ -269,6 +283,27 @@ var InteractPrompt = (function () {
           ptr.y >= boxY && ptr.y <= boxY + BOX_H) {
         _hovered = true;
       }
+    }
+
+    // ── Inactive state: dimmed, no glow, no [OK] key ──
+    if (_inactive) {
+      // Dim background
+      _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
+      ctx.fillStyle = 'rgba(10,8,18,0.55)';
+      ctx.fill();
+      // Dim border (no glow)
+      ctx.strokeStyle = 'rgba(120,110,100,0.25)';
+      ctx.lineWidth = 1;
+      _roundRect(ctx, boxX, boxY, boxW, BOX_H, BOX_RAD);
+      ctx.stroke();
+      // Dim text — icon + label only, no [OK] key
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '18px monospace';
+      ctx.fillStyle = 'rgba(160,150,130,0.45)';
+      ctx.fillText(fullText, boxX + boxW / 2, boxY + BOX_H / 2);
+      ctx.restore();
+      return;
     }
 
     // Ambient glow halo behind the box
@@ -332,6 +367,7 @@ var InteractPrompt = (function () {
    * then calls _interact() to execute the action.
    */
   function handlePointerClick() {
+    if (_inactive) return false;  // Non-interactive tiles don't respond to clicks
     if (!_hitBox || _alpha < 0.5) return false;
     if (typeof InputManager === 'undefined') return false;
     var ptr = InputManager.getPointer();
@@ -367,6 +403,7 @@ var InteractPrompt = (function () {
     update: update,
     render: render,
     isVisible: isVisible,
+    isInactive: function () { return _inactive; },
     handlePointerClick: handlePointerClick
   };
 })();

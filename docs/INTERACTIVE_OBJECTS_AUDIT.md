@@ -65,7 +65,7 @@ Player can still turn and walk away during cooldown — only the interact is gat
 | BAR_COUNTER | 26 | ✗ | ✓ | — | 0.8 (inn) | — | wood_dark | Counter height, tap interaction | ✅ |
 | BED | 27 | ✗ | ✓ | — | 0.6 | — | bed_quilt | Low bed, BedPeek overlay for home | ✅ |
 | TABLE | 28 | ✗ | ✓ | — | 0.7 | — | table_wood | Half-height, cozy inspection toast | ✅ |
-| HEARTH | 29 | ✗ | ✓ | — | **1.6** | 1.0 | **hearth_riverrock** ⚠️ | **Sprite-inside-wall porthole** + decor_hearth_fire + cavity glow + wobble | ⚠️ Fixed |
+| HEARTH | 29 | ✗ | ✓ | — | **2.5** | 1.0 | **hearth_riverrock** ⚠️ | Step-fill cavity (offset -0.18) + decor_hearth_fire + glow. Home: floor-to-ceiling chimney (2.5×) | ✅ Fixed |
 | TORCH_LIT | 30 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_lit | Wall segment w/ torch decor + warm glow | ❌ See below |
 | TORCH_UNLIT | 31 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_unlit | Wall segment w/ charred bracket | ❌ See below |
 | FENCE | 35 | ✗ | ✓ | **0.4** ⚠️ | — | — | **fence_wood** ⚠️ | Half-height railing, player sees over | ⚠️ Fixed |
@@ -96,26 +96,52 @@ height should match the surrounding WALL tiles in each context:
 Fixed in dungeon biomes (0.6×). Not yet in interior biomes (defaults to 2.0× = full wall).
 Breakables don't currently appear in interior floors, but if added, they'll need height entries.
 
-### CHEST (7) — Walk-on interaction in dungeon contexts
+### CHEST (7) — Unified Container System ✅ COMPLETE (Apr 3)
 
-CHEST is walkable (`isWalkable` returns true) and auto-opens on step via `_onMoveFinish`.
-At 0.65× in dungeons, the raycaster renders it as a short wall — but the player can walk
-through it (walkable) which feels wrong for a visible object. Consider either:
-- Making CHEST non-walkable (player interacts via F from adjacent tile)
-- OR keeping walkable but removing it from the grid after opening (like COLLECTIBLE)
+**Design decision**: Chests and crates use the **same peek interaction wrapper** with
+**opposite resource flow**:
 
-Current behavior: step onto chest → auto-open → chest stays on grid. This is functional
-but visually inconsistent with the short-wall rendering.
+| | CRATE (BREAKABLE) | CHEST (small) | CHEST (stash) |
+|---|---|---|---|
+| **Resource flow** | Player deposits INTO slots | Player withdraws FROM slots | Player withdraws FROM slots |
+| **Initial state** | Barely hydrated (30-70% pre-filled with junk) | Fully loaded (all slots filled with loot) | 256 empty slots + pre-loaded items |
+| **Player action** | Fill empty slots from bag to earn restock credit | Take items from filled slots into inventory | Click to withdraw, arrow keys to scroll |
+| **Seal/Complete** | All slots filled → seal → coin reward + d100 bonus | All slots emptied → chest depleted (tile persists) | Never depletes — permanent furniture |
+| **Break risk** | Crate can break, destroying contents + restock chance | N/A — chests don't break | N/A |
+| **Readiness** | Contributes to floor readiness score | No readiness contribution | No readiness contribution |
+| **Interaction feel** | "This expects something from me" | "This yields something for me" | "My storage" |
+
+**Depth-based chest behavior contract** (Apr 3):
+
+| Depth | Floor pattern | Slot count | demandRefill | DragDrop zones | Seal | Behavior |
+|-------|-------------|-----------|-------------|---------------|------|----------|
+| 1 | floorN (surface) | 1-5 | false | None (withdraw-only) | No | Passive loot, walk away after taking |
+| 2 | floorN.N (interior) | 8-12 | false | None (withdraw-only) | No | Persistent furniture, bigger capacity |
+| 3+ | floorN.N.N (dungeon) | 1-5 | true | Registered (deposit+withdraw) | No | Restocking target, part of cleaning circuit |
+| stash | Floor 1.6 home (19,3) | 256 | false | None (withdraw-only) | No | Scrollable grid UI, never depletes |
+
+**Implementation** (all complete):
+1. CHEST non-walkable, F-interact only — `PeekSlots.tryOpen()` → `CrateUI` ✅
+2. CrateSystem TYPE.CHEST with `stash` and `demandRefill` flags ✅
+3. CrateUI withdraw mode (number keys for small, click for all, grid for stash) ✅
+4. CrateUI pointer/click handling via `_slotRects` hit-test array ✅
+5. CrateUI scrollable 8-column grid renderer for stash containers ✅
+6. PeekSlots chest-aware: skips DragDrop zones + seal for non-demandRefill chests ✅
+7. Legacy `CombatBridge.openChest()` fallback removed ✅
+8. Chests never disappear from grid — `depleted` flag for visual, tile persists ✅
+9. Stash chests never marked depleted (permanent furniture) ✅
+10. Work-keys chest at (19,3) uses `{ stash: true }` with key in slot 0 ✅
 
 ### Interaction Modes Summary
 
 | Mode | Tiles | Trigger | Notes |
 |------|-------|---------|-------|
 | Step-on auto | DOOR, DOOR_BACK, DOOR_EXIT, STAIRS_DN, STAIRS_UP | Walk onto tile | Floor transition |
-| Step-on auto | CHEST | Walk onto tile | CombatBridge.openChest |
+| ~~Step-on auto~~ | ~~CHEST~~ | ~~Walk onto tile~~ | ~~CombatBridge.openChest~~ **REMOVED — Apr 3** |
+| F-interact (facing) | CHEST | Press OK while adjacent | PeekSlots → CrateUI withdraw mode |
 | Step-on auto | COLLECTIBLE | Walk onto tile | WorldItems pickup, tile cleared |
 | Step-on auto | Hazards (FIRE, TRAP, SPIKES, POISON) | Walk onto tile | Damage/death |
-| F-interact (facing) | BONFIRE, HEARTH, BED | Press OK while adjacent | restAtBonfire + bonfire menu (800ms cooldown) |
+| F-interact (facing) | BONFIRE, HEARTH, BED | Press OK while adjacent | Opens bonfire menu (rest executes from menu button, NOT on interact). 🔥 icon. 800ms cooldown. |
 | F-interact (facing) | TABLE | Press OK while adjacent | Cozy quip toast |
 | F-interact (facing) | SHOP | Press OK while adjacent | Shop menu |
 | F-interact (facing) | BOOKSHELF | Press OK while adjacent | TorchPeek overlay |
@@ -191,4 +217,57 @@ Applied intentionally to HEARTH and BONFIRE:
 | `engine/raycaster.js` | Removed cavity pre-fill, back-face injection. Added step-fill cavity rendering |
 | `engine/texture-atlas.js` | Reverted hearth_riverrock + bonfire_ring to fully opaque (no portholes) |
 | `engine/floor-manager.js` | PILLAR offset→0, HEARTH offset→-0.35, BONFIRE offset→-0.25, cavityBand flag |
+
+---
+
+## Session 4 Fixes (Apr 3 — chest persistence, bonfire decouple, toast, stash grid)
+
+### Chest system overhaul
+- Chests never disappear from grid — `depleted` flag marks empty, CHEST tile persists as furniture
+- Depth-based behavior contract: surface/interior chests (depth 1-2) are withdraw-only, dungeon chests (depth 3+) demand refilling
+- Home chest at (19,3) uses `{ stash: true }` — 256 empty slots with work keys pre-loaded in slot 0
+- Stash chests never marked depleted (permanent furniture)
+- CrateUI gains scrollable 8-column grid renderer for stash containers (arrow keys/PageUp/Down scroll)
+- CrateUI pointer/click handling via `_slotRects` hit-test for Magic Remote support
+- Interior chests (floorN.N, depth 2) now get 8-12 slots instead of 1-5
+
+### PeekSlots chest-awareness
+- DragDrop deposit zones only register for crates, corpses, and dungeon chests with `demandRefill === true`
+- Surface/interior chests: no deposit zones, no seal flow, no "Fill all slots first!" toast
+- S key ignored for all chest containers (seal is a crate/corpse mechanic)
+
+### Bonfire interaction decoupling
+- Bonfire interact opens menu only — rest executes from menu button, not on interact
+- InteractPrompt icon changed from 🐉 to 🔥 (3 locations: BONFIRE, HEARTH, depth-override)
+- HazardSystem.clearLastRestResult() called on menu open (pre/post rest state tracking)
+- HEARTH tileWallHeight in home biome changed to 2.5 (floor-to-ceiling chimney effect)
+
+### InteractPrompt repositioning
+- Changed from fixed `BOX_Y_OFF = 200` (px from bottom) to `BOX_Y_FRAC = 0.60` (fraction of viewport height)
+- Popup now sits at 60% viewport height — above tooltip footer bar, below freelook ring
+
+### Toast repositioning
+- Regular toasts moved from top-right (under minimap) to center-anchor below freelook ring
+- Position: `vpH/2 + ringRadius + 10px`, centered horizontally
+- Slide-in replaced with fade-in animation
+- Fixed bug where centered toasts wouldn't render without regular toasts active
+
+### Quest objective 3-phase system
+- Phase 0 (dispatcher not done): Floor 0→door, Floor 1→dispatcher position
+- Phase 1 (dispatcher done, no keys): Floor 1→home door, Floor 1.6→chest
+- Phase 2 (keys obtained): Floor 1→east gate, Floor 2→STAIRS_DN
+
+### Files changed
+| File | Changes |
+|------|---------|
+| `engine/crate-system.js` | Depth-based slot counts (depth 2: 8-12), stash depletion guard, `demandRefill` flag |
+| `engine/crate-ui.js` | Stash grid renderer, scroll state, pointer click handling, _slotRects for all layouts |
+| `engine/peek-slots.js` | Chest-aware: skip DragDrop for non-demandRefill, skip seal for chest type |
+| `engine/toast.js` | Center-anchor positioning below freelook ring, fade-in, centered toast render fix |
+| `engine/game.js` | Bonfire decouple, quest 3-phase, legacy openChest removal, CrateUI click wiring |
+| `engine/interact-prompt.js` | 🐉→🔥 icon, BOX_Y_FRAC repositioning |
+| `engine/menu-faces.js` | Face 0 pre/post rest states, 🔥 title emoji |
+| `engine/hazard-system.js` | clearLastRestResult() public API |
+| `engine/floor-manager.js` | HEARTH 2.5× in home biome |
+| `engine/chest-peek.js` | Sublabel "→ take loot", depleted "— empty" |
 | `docs/LIGHT_AND_TORCH_ROADMAP.md` | Replaced §2.5a-d with step-fill cavity documentation |

@@ -148,7 +148,7 @@ Expand button, 320px max, category dots, scrollbar.
 
 ## Phase 1: Inline Tooltip Dialogue (IN PROGRESS)
 
-**Priority**: Critical for jam | **Status**: Building now
+**Priority**: Critical for jam | **Status**: Core shipped, polish pass remaining
 
 Implement `StatusBar.pushDialogue()` — renders NPC dialogue with clickable
 `[choice]` spans directly in the tooltip footer. Player clicks a choice,
@@ -157,14 +157,18 @@ stays visible throughout the conversation.
 
 ### Implementation
 
-1. `StatusBar.pushDialogue(speaker, text, choices, onChoice)` — new API
-2. Priority gating: dialogue entries block lower-priority pushTooltip writes
-3. Choice `<span>` elements with click delegation
-4. Visited choice dimming (dotted underline, muted green)
-5. Auto-scroll to active dialogue entry
-6. `StatusBar.clearDialogue()` — restores normal tooltip flow
-7. DialogBox delegates to StatusBar for non-modal conversations
-   (bark-initiated, proximity-triggered); full-screen overlay for modal ones
+1. ~~`StatusBar.pushDialogue(speaker, text, choices, onChoice)` — new API~~ ✅
+2. ~~Priority gating: dialogue entries block lower-priority pushTooltip writes~~ ✅
+3. ~~Choice `<span>` elements with click delegation~~ ✅
+4. ~~Visited choice dimming (dotted underline, muted green)~~ ✅
+5. ~~Auto-scroll to active dialogue entry~~ ✅
+6. ~~`StatusBar.clearDialogue()` — restores normal tooltip flow~~ ✅
+7. ~~DialogBox delegates to StatusBar for non-modal conversations~~ ✅
+   Dispatcher gate dialogue, vendor dialogue, all interactive NPCs now route
+   through StatusBar.pushDialogue(). Full Canon §Choice Effects table wired:
+   currency, heal, setFlag, giveItem, openShop, callback(ctx, npc).
+8. ~~Walk-away detection (checkWalkAway) clears dialogue on player movement~~ ✅
+9. ~~Force-facing via MouseLook.lockOn/releaseLock on interactive NPCs~~ ✅
 
 ### Layout (Canon-aligned)
 

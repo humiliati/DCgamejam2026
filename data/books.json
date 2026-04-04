@@ -672,6 +672,44 @@
         "FIRMWARE NOTES (v3.7.2):\n- Fixed false positive on grime sensors\n- Increased hero detection range to 12 tiles\n- Patched dispatch queue overflow (was assigning work orders to decommissioned gleaners)\n- Known issue: terminal flickers near high-EMF sources. This is a FEATURE of the phosphor display, not a bug."
       ],
       "biome": "guild"
+    },
+    {
+      "id": "notice_landlord_welcome",
+      "title": "LANDLORD'S NOTICE — Welcome, Operative",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "BOARDWALK VILLAGE — UNIT 6\nTENANT: Operative Gleaner (Guild Secondment)\n\nWelcome to your quarters. Rent is deducted from your Guild contract — you will not receive a separate invoice. The unit comes furnished: bed, stash chest, table, mailbox. Do not rearrange the furniture. The walls are load-bearing and I mean all of them.",
+        "HOUSE RULES:\n\n1. Curfew is enforced. If you're not home by the bell, you collapse where you stand. That's not my problem; it's yours.\n2. The stash chest is Guild-issued. Don't try to pick the lock on the one in the storage room — it's empty, and the locksmith charges by the hour.\n3. Your mail arrives through the slot. Read it.",
+        "4. The bonfire is in the bedroom. Yes, indoors. No, it won't burn the place down. The hearthstones are warded. Don't ask by whom.\n5. Your neighbours are other operatives. They keep odd hours. So do you. Mind your business.\n6. Complaints go to the Guild, not to me. I'm the landlord, not your therapist.\n\nWelcome to Coralshore. Try not to die on my property.\n— Mgmt."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "notice_dispatcher_orientation",
+      "title": "DISPATCHER'S PACKET — New Operative Orientation",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "GLEANER'S GUILD — ORIENTATION PACKET\nPrepared by: The Dispatcher\nFor: New Operative (Classification 4-C)\n\nCongratulations on your assignment. You are now a licensed Gleaner operating under the Dragon Compact's maintenance provisions. Your job is simple: clean up after the heroes.",
+        "YOUR DAILY ROUTINE:\n\n1. Check your mailbox for work orders.\n2. Visit the Dispatcher's Office on Lantern Row for briefing.\n3. Descend to the assigned floor.\n4. Clean, restock, re-arm. Hit the readiness target.\n5. Return to the surface before curfew.\n6. Sleep. Repeat.",
+        "EQUIPMENT PRIMER:\n\nCards: Your combat deck. Buy from shops, earn from seal rewards. Suit triangle: Clubs beats Diamonds, Diamonds beats Spades, Spades beats Clubs. Hearts heal.\n\nBag: Carries restocking materials. Buy ingredients at shops or salvage from the field.\n\nStash: Long-term storage. Accessed from your chest at home or any bonfire.",
+        "CLEANING OPTIONS:\n\n1. Scrub tiles by hand — face a dirty tile, press OK. Slow but free.\n2. Pressure hose — grab it from the Guild cleanup rig outside. Clears a full wall section per charge. Charges are limited.\n3. Restock crates — interact with a smashed crate, fill it with matching materials. Earns coin and readiness.\n4. Read field manuals — bookshelves in buildings contain cleaning techniques and advanced protocols. The more you read, the more efficient you become."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "journal_personal_day0",
+      "title": "Personal Journal — Day 0",
+      "icon": "📓",
+      "category": "journal",
+      "pages": [
+        "Arrived in Coralshore this morning. The truck dropped me at the approach — no fanfare, no welcome committee, just a bonfire and two people who looked like they'd been sitting there for years.",
+        "This place is stranger than the brochure suggested. The buildings are old — really old — but the infrastructure is modern. Clean running water, warded fire pits, crystal-powered lampposts. Someone is spending money to keep this town functional. The dungeons underneath apparently generate all the revenue.",
+        "Met my Dispatcher. Clipboard, black jacket, no patience. Seems competent. Told me to get my keys from my bunk and report for work. Didn't mention what the work actually involves beyond 'cleaning up after heroes.' I've been cleaning up after people my whole life. How bad can a dungeon be?",
+        "Found the bunk. It's small but dry. There's a stash chest with my work keys, a mailbox, and a bed with a fire pit in it. The landlord left a note. Charming individual.\n\nTomorrow I descend for the first time. I should read everything I can find before then."
+      ],
+      "biome": "home"
     }
   ]
 }

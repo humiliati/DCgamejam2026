@@ -1,17 +1,17 @@
 /**
- * CrateSystem — unified slot-based container logic for crates AND corpse stocks.
+ * CrateSystem — unified slot-based container logic for crates, corpse stocks, AND chests.
  *
- * Both container types share identical slot anatomy:
- *   • 2–5 framed slots (crates avg 3, corpses avg 2)
- *   • Each slot has a frame tag hinting the ideal item category
- *   • ANY item fills ANY slot; frame-match gives bonus coins
- *   • Sealing all slots awards flat bonus + d100 reward roll
+ * All container types share identical slot anatomy:
+ *   • 2–5 framed slots (crates avg 3, corpses avg 2, chests avg 3)
+ *   • Each slot has a frame tag hinting the resource category
  *
- * Differences:
- *   • Crates yield more loot (higher coin/slot, bigger seal bonus)
- *   • Corpse stocks yield less loot but include a SUIT CARD slot
- *   • Filling the suit card slot with a matching suit card enables
- *     reanimation → friendly NPC + readiness contribution
+ * Three resource flow directions:
+ *   • CRATE:  Slots barely hydrated. Player DEPOSITS items to earn restock credit.
+ *   • CORPSE: Same as crate but with SUIT_CARD slot for reanimation.
+ *   • CHEST:  Slots pre-filled with loot. Player WITHDRAWS items into inventory.
+ *
+ * Chests yield something FOR the player. Crates expect something FROM the player.
+ * Both use the same peek interaction pattern for consistent feel.
  *
  * Layer 1 — depends on: SeededRNG, TILES
  */
@@ -66,6 +66,15 @@ var CrateSystem = (function () {
     sealab:  [FRAME.ENERGY, FRAME.ENERGY, FRAME.BATTERY, FRAME.SCROLL, FRAME.GEM, FRAME.WILDCARD]
   };
 
+  // Chest loot pools — what the player withdraws (richer than crate hydration)
+  var CHEST_FRAME_WEIGHTS = {
+    cellar:    [FRAME.HP_FOOD, FRAME.BATTERY, FRAME.SCROLL, FRAME.GEM, FRAME.WILDCARD],
+    foundry:   [FRAME.BATTERY, FRAME.ENERGY, FRAME.GEM, FRAME.SCROLL, FRAME.WILDCARD],
+    sealab:    [FRAME.ENERGY, FRAME.HP_FOOD, FRAME.GEM, FRAME.SCROLL, FRAME.WILDCARD],
+    home:      [FRAME.HP_FOOD, FRAME.BATTERY, FRAME.WILDCARD],
+    exterior:  [FRAME.HP_FOOD, FRAME.BATTERY, FRAME.GEM, FRAME.WILDCARD]
+  };
+
   // Corpse stocks use a smaller frame pool + guaranteed suit card slot
   var CORPSE_FRAME_WEIGHTS = {
     cellar:  [FRAME.HP_FOOD, FRAME.BATTERY, FRAME.WILDCARD],
@@ -77,7 +86,8 @@ var CrateSystem = (function () {
 
   var TYPE = {
     CRATE:  'crate',
-    CORPSE: 'corpse'
+    CORPSE: 'corpse',
+    CHEST:  'chest'
   };
 
   // ── Container registry ─────────────────────────────────────────────
@@ -183,6 +193,97 @@ var CrateSystem = (function () {
     return container;
   }
 
+  /**
+   * Create slot data for a treasure chest (player WITHDRAWS loot).
+   * All slots start filled with good loot — the opposite of crate hydration.
+   *
+   * @param {number} x - Grid X
+   * @param {number} y - Grid Y
+   * @param {string} floorId
+   * @param {string} biome
+   * @param {Object} [opts] - Optional overrides
+   * @param {Array}  [opts.fixedSlots] - Exact slot contents (for work-keys chest etc.)
+   * @returns {Object} Container entity
+   */
+  /**
+   * Create a CHEST container.
+   *
+   * Depth-based behaviour contract:
+   *   floorN / floorN.N (depth 1-2): Passive storage. Lightly hydrated
+   *     with 1-5 slots. No demand to refill empty slots. Player withdraws
+   *     loot and walks away.
+   *   floorN.N.N (depth 3+): Dungeon restocking. Slots must be filled as
+   *     part of the cleaning circuit. demandRefill = true.
+   *
+   * opts.stash = true creates a large-capacity stash chest (home storage).
+   * opts.fixedSlots overrides automatic slot generation.
+   * opts.slotCount overrides the default random 1-5 range.
+   */
+  function createChest(x, y, floorId, biome, opts) {
+    biome = biome || 'cellar';
+    opts = opts || {};
+
+    var depth = floorId ? floorId.split('.').length : 1;
+
+    var slots;
+    if (opts.fixedSlots) {
+      // Special chests (work-keys, quest items) specify exact contents
+      slots = opts.fixedSlots;
+    } else if (opts.stash) {
+      // Large stash chest — many empty slots for player storage
+      var stashCount = opts.slotCount || 256;
+      slots = [];
+      for (var si = 0; si < stashCount; si++) {
+        slots.push({
+          frameTag: 'stash',
+          suit: null,
+          filled: false,
+          item: null,
+          matched: false
+        });
+      }
+    } else {
+      // Depth-based default slot count:
+      //   depth 1 (floorN surface): 1-5 slots
+      //   depth 2 (floorN.N interior): 8-12 slots (bigger persistent chests)
+      //   depth 3+ (floorN.N.N dungeon): 1-5 slots (restocking targets)
+      var defaultCount;
+      if (depth === 2) {
+        defaultCount = SeededRNG.randInt(8, 12);
+      } else {
+        defaultCount = SeededRNG.randInt(1, 5);
+      }
+      var slotCount = opts.slotCount || defaultCount;
+      var frames = CHEST_FRAME_WEIGHTS[biome] || CHEST_FRAME_WEIGHTS.cellar;
+      slots = _generateSlots(slotCount, frames);
+
+      // All slots start filled with loot (player withdraws)
+      for (var i = 0; i < slots.length; i++) {
+        slots[i].filled = true;
+        slots[i].item = _hydrateChestLoot(slots[i].frameTag, biome, floorId);
+        slots[i].matched = true;
+      }
+    }
+
+    var container = {
+      type: TYPE.CHEST,
+      x: x,
+      y: y,
+      floorId: floorId,
+      biome: biome,
+      slots: slots,
+      sealed: false,          // Not used for chests (depleted instead)
+      depleted: false,        // True when all slots emptied
+      sealReward: null,
+      coinTotal: 0,
+      stash: !!opts.stash,    // True for home stash chests
+      demandRefill: depth >= 3  // Dungeon chests demand slot refilling
+    };
+
+    _containers[_key(x, y, floorId)] = container;
+    return container;
+  }
+
   // ── Slot generation ────────────────────────────────────────────────
 
   function _generateSlots(count, framePalette) {
@@ -235,6 +336,95 @@ var CrateSystem = (function () {
     }
 
     return item;
+  }
+
+  // ── Chest loot hydration (richer than crate filler) ────────────────
+
+  function _hydrateChestLoot(frameTag, biome, floorId) {
+    var item = { id: 'chest_' + frameTag, name: '', emoji: '', category: frameTag };
+
+    switch (frameTag) {
+      case FRAME.HP_FOOD:
+        item.name = 'Hearty Ration';
+        item.emoji = '🥩';
+        item.value = 3;
+        break;
+      case FRAME.ENERGY:
+        item.name = 'Strong Tonic';
+        item.emoji = '⚗️';
+        item.value = 3;
+        break;
+      case FRAME.BATTERY:
+        item.name = 'Charged Cell';
+        item.emoji = '🔋';
+        item.value = 2;
+        break;
+      case FRAME.SCROLL:
+        item.name = 'Sealed Letter';
+        item.emoji = '📜';
+        item.value = 4;
+        break;
+      case FRAME.GEM:
+        item.name = 'Rough Gem';
+        item.emoji = '💎';
+        item.value = 5;
+        break;
+      default:
+        item.name = 'Trinket';
+        item.emoji = '🪙';
+        item.value = 2;
+        break;
+    }
+
+    return item;
+  }
+
+  // ── Withdraw slot (CHEST only) ─────────────────────────────────────
+
+  /**
+   * Withdraw a filled slot's item into the player's inventory.
+   * Opposite of fillSlot — removes item from container slot.
+   *
+   * @param {number} x - Container grid X
+   * @param {number} y - Container grid Y
+   * @param {string} floorId
+   * @param {number} slotIndex - Which slot to withdraw from
+   * @returns {Object|null} The withdrawn item, or null if unavailable
+   */
+  function withdrawSlot(x, y, floorId, slotIndex) {
+    var c = _containers[_key(x, y, floorId)];
+    if (!c || c.type !== TYPE.CHEST) return null;
+    if (c.depleted) return null;
+
+    var slot = c.slots[slotIndex];
+    if (!slot || !slot.filled) return null;
+
+    var item = slot.item;
+    slot.filled = false;
+    slot.item = null;
+    slot.matched = false;
+
+    // Check if chest is now depleted (all slots empty).
+    // Stash chests are permanent furniture — never mark depleted.
+    if (!c.stash) {
+      var allEmpty = true;
+      for (var i = 0; i < c.slots.length; i++) {
+        if (c.slots[i].filled) { allEmpty = false; break; }
+      }
+      if (allEmpty) {
+        c.depleted = true;
+      }
+    }
+
+    return item;
+  }
+
+  /**
+   * Check if a chest container is fully depleted.
+   */
+  function isDepleted(x, y, floorId) {
+    var c = _containers[_key(x, y, floorId)];
+    return c && c.type === TYPE.CHEST && c.depleted;
   }
 
   // ── Fill slot ──────────────────────────────────────────────────────
@@ -500,7 +690,10 @@ var CrateSystem = (function () {
     TYPE:           TYPE,
     createCrate:    createCrate,
     createCorpse:   createCorpse,
+    createChest:    createChest,
     fillSlot:       fillSlot,
+    withdrawSlot:   withdrawSlot,
+    isDepleted:     isDepleted,
     canSeal:        canSeal,
     seal:           seal,
     getContainer:   getContainer,

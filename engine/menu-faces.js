@@ -54,7 +54,9 @@ var MenuFaces = (function () {
   // Rebuilt every render frame; each entry: { x, y, w, h, slot }
   var _hitZones = [];
   var _hoverSlot = -1;   // slot index under pointer, or -1
+  // (bonfire rest state is tracked by HazardSystem.getLastRestResult — null = pre-rest)
   var _hoverDetail = null; // { item, x, y } — item/card under pointer for tooltip
+  var _bookScrollOffset = 0; // Journal books list scroll offset
   var _selectedSlot = -1;  // tap-selected slot for highlight mode
   var _selectedPayload = null; // payload from selected slot (for drop matching)
   var _selectedZoneId = null;  // zone id of selected slot
@@ -127,6 +129,22 @@ var MenuFaces = (function () {
       if (desc.length > 24) desc = desc.substring(0, 23) + '\u2026';
       ctx.fillText(desc, tx + 6, cy);
     }
+  }
+
+  /**
+   * Auto-shrink text to fit within maxW.
+   * Reduces font size by 1px until it fits or hits minPx.
+   * Returns the font size actually used.
+   */
+  function _fitText(ctx, text, basePx, maxW, minPx) {
+    minPx = minPx || 8;
+    var px = basePx;
+    while (px > minPx) {
+      ctx.font = ctx.font.replace(/\d+px/, px + 'px');
+      if (ctx.measureText(text).width <= maxW * 0.93) break;
+      px--;
+    }
+    return px;
   }
 
   function _drawTitle(ctx, x, y, w, text, emoji, S) {
@@ -411,7 +429,7 @@ var MenuFaces = (function () {
   function _renderBonfireRest(ctx, x, y, w, h) {
     var S = Math.min(w, h) / 400;
 
-    // §9a: Animated fire emoji — 🐉 pulses with time-varying alpha + scale
+    // §9a: Animated fire emoji — 🔥 pulses with time-varying alpha + scale
     var t = Date.now() * 0.001;
     var fireAlpha = 0.82 + 0.18 * Math.sin(t * 4.2);
     var fireScale = 1.0 + 0.06 * Math.sin(t * 3.1 + 0.5);
@@ -424,7 +442,7 @@ var MenuFaces = (function () {
     ctx.font = 'bold ' + titleFontSize + 'px monospace';
     ctx.textAlign = 'center';
     var titleStr = i18n.t('shop.bonfire_title', 'DRAGONFIRE');
-    var emojiW = ctx.measureText('🐉 ').width;
+    var emojiW = ctx.measureText('🔥 ').width;
     ctx.fillText(titleStr, x + w / 2 + emojiW * 0.5, titleY);
 
     // Draw emoji with flicker
@@ -432,7 +450,7 @@ var MenuFaces = (function () {
     ctx.globalAlpha = fireAlpha;
     ctx.translate(x + w / 2 - ctx.measureText(titleStr).width / 2 - emojiW * 0.5, titleY);
     ctx.scale(fireScale, fireScale);
-    ctx.fillText('🐉', 0, 0);
+    ctx.fillText('🔥', 0, 0);
     ctx.restore();
 
     // Divider
@@ -451,7 +469,7 @@ var MenuFaces = (function () {
 
     var ps = Player.state();
 
-    // HP/Energy bars
+    // HP/Energy bars (always shown — current state)
     var barW = Math.min(w - Math.round(40 * S), Math.round(220 * S));
     var barH = Math.max(10, Math.round(14 * S));
     var barX = x + (w - barW) / 2;
@@ -486,26 +504,27 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText(ps.energy + '/' + ps.maxEnergy, barX + barW / 2, ty + barH);
 
-    // §9b: Status effects cleared/gained feedback
+    // §9b: Check if rest has been executed this menu session
     ty += Math.round(26 * S);
     var restResult = (typeof HazardSystem !== 'undefined' && HazardSystem.getLastRestResult)
       ? HazardSystem.getLastRestResult() : null;
-    if (restResult) {
+    // restResult is null until player clicks Rest button (cleared on menu open).
+    var hasRested = !!restResult;
+
+    if (hasRested) {
+      // POST-REST: show results
       ctx.font = F_MICRO + 'px monospace';
       ctx.textAlign = 'center';
-      // Cleared effects (green checkmark)
       for (var ci = 0; ci < restResult.cleared.length; ci++) {
         ctx.fillStyle = 'rgba(80,220,120,0.85)';
         ctx.fillText('✓ ' + restResult.cleared[ci] + ' cleared', x + w / 2, ty + Math.round(10 * S));
         ty += Math.round(14 * S);
       }
-      // Gained effects (gold star)
       for (var gi = 0; gi < restResult.gained.length; gi++) {
         ctx.fillStyle = 'rgba(240,208,112,0.9)';
         ctx.fillText('★ ' + restResult.gained[gi] + ' gained', x + w / 2, ty + Math.round(10 * S));
         ty += Math.round(14 * S);
       }
-      // Restore confirmation
       if (restResult.cleared.length === 0 && restResult.gained.length === 0) {
         ctx.fillStyle = COL.accent;
         ctx.font = F_SMALL + 'px monospace';
@@ -513,11 +532,23 @@ var MenuFaces = (function () {
         ty += Math.round(14 * S);
       }
     } else {
-      ctx.fillStyle = COL.accent;
-      ctx.font = F_SMALL + 'px monospace';
+      // PRE-REST: show Rest button
+      var restBtnW = Math.min(w - Math.round(20 * S), Math.round(200 * S));
+      var restBtnH = Math.max(24, Math.round(30 * S));
+      var restBtnX = x + (w - restBtnW) / 2;
+      var restHov = (_hoverSlot === 901);
+
+      ctx.fillStyle = restHov ? 'rgba(255,160,60,0.25)' : 'rgba(255,120,40,0.12)';
+      _roundRectFill(ctx, restBtnX, ty, restBtnW, restBtnH, Math.round(4 * S));
+      ctx.strokeStyle = restHov ? '#ffa040' : 'rgba(255,160,80,0.5)';
+      ctx.lineWidth = restHov ? 2 : 1;
+      _roundRectStroke(ctx, restBtnX, ty, restBtnW, restBtnH, Math.round(4 * S));
+      ctx.fillStyle = restHov ? '#ffd0a0' : 'rgba(255,200,140,0.9)';
+      ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(i18n.t('shop.bonfire_restored', 'HP & Energy restored'), x + w / 2, ty + Math.round(10 * S));
-      ty += Math.round(14 * S);
+      ctx.fillText('🔥 ' + i18n.t('bonfire.rest_action', 'Rest'), x + w / 2, ty + restBtnH * 0.65);
+      _hitZones.push({ x: restBtnX, y: ty, w: restBtnW, h: restBtnH, slot: 901, action: 'rest' });
+      ty += restBtnH;
     }
 
     // §9c: Waypoint registration + floor info
@@ -796,7 +827,7 @@ var MenuFaces = (function () {
     // Slot key hint (top-left, dim)
     if (slotIdx < 5) {
       ctx.font = '10px monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillStyle = 'rgba(230,220,200,0.60)';
       ctx.textAlign = 'left';
       ctx.fillText('' + (slotIdx + 1), tx + 3, ty + 9);
       ctx.textAlign = 'center';
@@ -1123,7 +1154,7 @@ var MenuFaces = (function () {
       ty += Math.round(16 * S);
     }
 
-    // ── Section 3: Books read (thumbnail grid) ──
+    // ── Section 3: Books read (selectable scrollable rows) ──
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1149,8 +1180,10 @@ var MenuFaces = (function () {
     ctx.fillText(readBooks.length + '/' + catalog.length, x + w - PAD, ty + Math.round(6 * S));
     ty += Math.round(14 * S);
 
-    var thumbS = Math.max(28, Math.min(Math.round(44 * S), Math.floor((w - PAD * 2) / 5 - Math.round(5 * S))));
-    var thumbGap = Math.round(5 * S);
+    var ROW_H = Math.round(28 * S);  // Height per book row
+    var ROW_GAP = Math.round(3 * S);
+    var MAX_VISIBLE = 6;  // Max rows visible before scrolling
+    var ICON_W = Math.round(22 * S);
 
     if (readBooks.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -1159,44 +1192,82 @@ var MenuFaces = (function () {
       ctx.fillText('No books read yet. Find a bookshelf!', x + w / 2, ty + Math.round(10 * S));
       ty += Math.round(24 * S);
     } else {
-      var thumbPerRow = Math.max(1, Math.floor((w - PAD * 2) / (thumbS + thumbGap)));
-      var maxVisible = Math.min(readBooks.length, thumbPerRow * 3);
+      // Clamp scroll offset
+      _bookScrollOffset = Math.max(0, Math.min(_bookScrollOffset, readBooks.length - MAX_VISIBLE));
+      var startIdx = Math.max(0, _bookScrollOffset);
+      var endIdx = Math.min(readBooks.length, startIdx + MAX_VISIBLE);
 
-      for (var rb = 0; rb < maxVisible; rb++) {
-        var bk = readBooks[rb];
-        var col2 = rb % thumbPerRow;
-        var row2 = Math.floor(rb / thumbPerRow);
-        var bx = x + PAD + col2 * (thumbS + thumbGap);
-        var by = ty + row2 * (thumbS + thumbGap);
-        var bHov = (_hoverSlot === (900 + rb));
-
-        ctx.fillStyle = bHov ? 'rgba(180,160,100,0.2)' : 'rgba(60,50,35,0.5)';
-        _roundRectFill(ctx, bx, by, thumbS, thumbS, Math.round(3 * S));
-        ctx.strokeStyle = bHov ? COL.accent : 'rgba(180,160,120,0.3)';
-        ctx.lineWidth = 1;
-        _roundRectStroke(ctx, bx, by, thumbS, thumbS, Math.round(3 * S));
-
-        var bookEmojiFont = Math.max(12, Math.round(22 * S));
-        ctx.font = bookEmojiFont + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(bk.emoji || '\uD83D\uDCD6', bx + thumbS / 2, by + thumbS / 2 + Math.round(4 * S));
-
-        _hitZones.push({ x: bx, y: by, w: thumbS, h: thumbS, slot: 900 + rb, action: 'read_book' });
-
-        if (bHov) {
-          _hoverDetail = { item: { name: bk.title || bk.id, emoji: bk.emoji || '\uD83D\uDCD6',
-            description: bk.category || '' }, x: bx + thumbS, y: by };
-        }
-      }
-
-      ty += Math.ceil(maxVisible / thumbPerRow) * (thumbS + thumbGap);
-
-      if (readBooks.length > maxVisible) {
+      // Scroll-up chevron (if scrolled down)
+      if (startIdx > 0) {
         ctx.fillStyle = COL.dim;
         ctx.font = F_SECTION + 'px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('+' + (readBooks.length - maxVisible) + ' more', x + w / 2, ty + Math.round(4 * S));
+        ctx.fillText('\u25B2 ' + startIdx + ' more', x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2, h: Math.round(14 * S),
+          slot: 920, action: 'book_scroll_up' });
+        ty += Math.round(14 * S);
+      }
+
+      for (var rb = startIdx; rb < endIdx; rb++) {
+        var bk = readBooks[rb];
+        var rowY = ty;
+        var bHov = (_hoverSlot === (900 + rb));
+
+        // Row background
+        ctx.fillStyle = bHov ? 'rgba(180,160,100,0.15)' : 'rgba(60,50,35,0.35)';
+        _roundRectFill(ctx, x + PAD, rowY, w - PAD * 2, ROW_H, Math.round(3 * S));
+        ctx.strokeStyle = bHov ? COL.accent : 'rgba(180,160,120,0.2)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, x + PAD, rowY, w - PAD * 2, ROW_H, Math.round(3 * S));
+
+        // Icon
+        var iconFont = Math.max(10, Math.round(16 * S));
+        ctx.font = iconFont + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(bk.icon || bk.emoji || '\uD83D\uDCD6', x + PAD + ICON_W / 2 + 4, rowY + ROW_H / 2 + Math.round(3 * S));
+
+        // Title (truncated to fit)
+        var titleX = x + PAD + ICON_W + Math.round(6 * S);
+        var maxTitleW = w - PAD * 2 - ICON_W - Math.round(12 * S);
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = bHov ? '#fff' : COL.text;
+        var titleStr = bk.title || bk.id;
+        // Measure and truncate if needed
+        while (titleStr.length > 3 && ctx.measureText(titleStr).width > maxTitleW) {
+          titleStr = titleStr.substring(0, titleStr.length - 4) + '...';
+        }
+        ctx.fillText(titleStr, titleX, rowY + ROW_H / 2 + Math.round(2 * S));
+
+        // Category tag (small, right-aligned, dimmed)
+        if (bk.category) {
+          ctx.font = Math.max(8, Math.round(10 * S)) + 'px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillStyle = 'rgba(180,170,150,0.45)';
+          ctx.fillText(bk.category.toUpperCase(), x + w - PAD - 4, rowY + ROW_H / 2 + Math.round(2 * S));
+        }
+
+        // Hit zone for click-to-read
+        _hitZones.push({ x: x + PAD, y: rowY, w: w - PAD * 2, h: ROW_H,
+          slot: 900 + rb, action: 'read_book' });
+
+        if (bHov) {
+          _hoverDetail = { item: { name: bk.title || bk.id, emoji: bk.icon || bk.emoji || '\uD83D\uDCD6',
+            description: bk.category || '' }, x: x + w - PAD, y: rowY };
+        }
+
+        ty += ROW_H + ROW_GAP;
+      }
+
+      // Scroll-down chevron (if more below)
+      if (endIdx < readBooks.length) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25BC ' + (readBooks.length - endIdx) + ' more', x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2, h: Math.round(14 * S),
+          slot: 921, action: 'book_scroll_down' });
         ty += Math.round(14 * S);
       }
     }
@@ -1877,7 +1948,7 @@ var MenuFaces = (function () {
       if (item) {
         ctx.fillStyle = eHov ? 'rgba(51,255,136,0.12)' : COL.slot_bg;
         _roundRectFill(ctx, sx, ty, eqSlotW, eqSlotH, RAD);
-        ctx.strokeStyle = eHov ? COL.accent : 'rgba(255,255,255,0.25)';
+        ctx.strokeStyle = eHov ? COL.accent : 'rgba(255,255,255,0.35)';
         ctx.lineWidth = eHov ? 2.5 : 1.5;
         _roundRectStroke(ctx, sx, ty, eqSlotW, eqSlotH, RAD);
         ctx.font = F_EMOJI;
@@ -1899,7 +1970,7 @@ var MenuFaces = (function () {
         ctx.setLineDash([]);
         ctx.font = F_LABEL;
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillStyle = 'rgba(230,220,200,0.55)';
         ctx.fillText(EQUIP_LABELS[e], sx + eqSlotW / 2, ty + eqSlotH / 2 + Math.round(4 * S));
         // Still register hit zone for empty equip slots (drop target)
         _hitZones.push({ x: sx, y: ty, w: eqSlotW, h: eqSlotH, slot: 100 + e, action: 'unequip' });
@@ -2043,7 +2114,7 @@ var MenuFaces = (function () {
           ctx.fillStyle = 'rgba(128,0,255,0.14)';
           _roundRectFill(ctx, bsx + 2, ty + 2, SLOT_S_BAG - 4, SLOT_S_BAG - 4, RAD - 1);
         }
-        ctx.strokeStyle = bHov ? COL.accent : (bagFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.25)');
+        ctx.strokeStyle = bHov ? COL.accent : (bagFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.35)');
         ctx.lineWidth = bHov ? 2.5 : 1.5;
         _roundRectStroke(ctx, bsx, ty, SLOT_S_BAG, SLOT_S_BAG, RAD);
 
@@ -2055,13 +2126,12 @@ var MenuFaces = (function () {
         ctx.fillStyle = '#fff';
         ctx.fillText(bagEmoji, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG * 0.4);
 
-        // Name
+        // Name (auto-shrink to fit slot width)
         ctx.font = F_LABEL;
         ctx.textBaseline = 'alphabetic';
         ctx.fillStyle = COL.text;
         var bName = bagItem.name || '';
-        var bMaxC = Math.max(4, Math.floor(SLOT_S_BAG / (9 * S)));
-        if (bName.length > bMaxC) bName = bName.substring(0, bMaxC - 1) + '\u2026';
+        _fitText(ctx, bName, parseInt(F_LABEL, 10) || 10, SLOT_S_BAG, 7);
         ctx.fillText(bName, bsx + SLOT_S_BAG / 2, ty + SLOT_S_BAG * 0.82);
 
         // Cards get 'inspect' action (no equip); items get 'equip'
@@ -2205,9 +2275,9 @@ var MenuFaces = (function () {
       var dHov = (_hoverSlot === (600 + ddi));
 
       if (dCard) {
-        ctx.fillStyle = dHov ? 'rgba(100,255,100,0.12)' : 'rgba(40,35,50,0.6)';
+        ctx.fillStyle = dHov ? 'rgba(100,255,100,0.12)' : 'rgba(52,46,68,0.80)';
         _roundRectFill(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
-        ctx.strokeStyle = dHov ? COL.accent : (deckFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.25)');
+        ctx.strokeStyle = dHov ? COL.accent : (deckFocused ? 'rgba(255,215,0,0.3)' : 'rgba(255,255,255,0.35)');
         ctx.lineWidth = dHov ? 2.5 : 1.5;
         _roundRectStroke(ctx, dsx, ty, SLOT_S_DECK, SLOT_S_DECK, RAD);
         if (typeof CardDraw !== 'undefined') {
@@ -2252,7 +2322,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.font = F_HINT;
     ctx.textAlign = 'center';
-    ctx.fillText('[Drag] Transfer  [Q/E] Scroll  [TAB] Focus', x + w / 2, y + h - Math.round(6 * S));
+    // Footer hint removed — controls are implied by interaction
     ctx.textAlign = 'left';
 
     // ── Hover detail tooltip ────────────────────────────────────
@@ -2626,32 +2696,43 @@ var MenuFaces = (function () {
 
   // ── Settings face state (persists within a pause session) ───────
 
-  var _settingsState = { row: 0 };   // 0 = Master, 1 = SFX, 2 = BGM
+  var _settingsState = { row: 0 };   // 0–2 = sliders, 3–6 = toggles, 7 = language
+  var _settingsLocked = false;       // When true, ←/→ adjusts slider, W/S blocked
 
   var _SLIDER_DEFS = [
-    { key: 'master', labelKey: 'settings.master', label: 'Master Volume' },
-    { key: 'sfx',    labelKey: 'settings.sfx',    label: 'SFX Volume'    },
-    { key: 'bgm',    labelKey: 'settings.bgm',    label: 'BGM Volume'    }
+    { key: 'master', labelKey: 'settings.master', label: 'Master Volume',
+      desc: 'Overall volume for all game audio', bind: 'Scroll' },
+    { key: 'sfx',    labelKey: 'settings.sfx',    label: 'SFX Volume',
+      desc: 'Sound effects, footsteps, interactions', bind: 'Scroll' },
+    { key: 'bgm',    labelKey: 'settings.bgm',    label: 'BGM Volume',
+      desc: 'Background music and ambient tracks', bind: 'Scroll' }
   ];
 
+  // Total navigable rows: 3 sliders + 4 toggles + 1 language = 8
+  var _TOGGLE_COUNT = 4;
+  var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + 1;
+
   /**
-   * Move selected slider row up (-1) or down (+1). Wraps.
+   * Move selected settings row up (-1) or down (+1). Wraps.
    * Called by game.js W/S handlers when Face 3 is the active face.
+   * Blocked when a slider is focus-locked (Enter to unlock first).
    */
   function handleSettingsNav(dir) {
-    var n = _SLIDER_DEFS.length;
+    if (_settingsLocked) return; // Locked on a slider — block navigation
+    var n = _SETTINGS_ROW_COUNT;
     _settingsState.row = ((_settingsState.row + dir) % n + n) % n;
   }
 
   /**
    * Adjust the currently selected slider by `delta` percentage points.
    * Clamped to 0–100. Writes immediately to AudioSystem.
-   * Called by game.js ← → handlers on Face 3 and scroll_up/down.
+   * When focus-locked, ←/→ routes here; otherwise ←/→ rotates the face.
    * @param {number} delta - positive = louder, negative = quieter
    */
   function handleSettingsAdjust(delta) {
     if (typeof AudioSystem === 'undefined') return;
-    var vols = AudioSystem.getVolumes();       // { master, sfx, bgm } as 0–100
+    if (_settingsState.row >= _SLIDER_DEFS.length) return; // Not on a slider row
+    var vols = AudioSystem.getVolumes();
     var def = _SLIDER_DEFS[_settingsState.row];
     var newVal = Math.max(0, Math.min(100, vols[def.key] + delta));
     if (def.key === 'master') AudioSystem.setMasterVolume(newVal / 100);
@@ -2659,9 +2740,38 @@ var MenuFaces = (function () {
     if (def.key === 'bgm')    AudioSystem.setMusicVolume(newVal / 100);
   }
 
+  /**
+   * Toggle focus-lock on the current row.
+   * - Slider rows: Enter locks (←/→ adjusts), Enter again unlocks.
+   * - Toggle rows: Enter toggles the boolean immediately.
+   * - Language row: Enter cycles language.
+   * Called by game.js on interact (Enter/Space) when Face 3 is active.
+   */
+  function handleSettingsInteract() {
+    var row = _settingsState.row;
+    if (row < _SLIDER_DEFS.length) {
+      // Slider row — toggle lock
+      _settingsLocked = !_settingsLocked;
+    } else if (row < _SLIDER_DEFS.length + _TOGGLE_COUNT) {
+      // Toggle row — fire the toggle
+      var toggleKeys = ['screenShake', 'invertYFreeLook', 'showFps', 'minimapVisible'];
+      var tIdx = row - _SLIDER_DEFS.length;
+      if (tIdx >= 0 && tIdx < toggleKeys.length) {
+        handleSettingsToggle(toggleKeys[tIdx]);
+      }
+    } else {
+      // Language row
+      handleLanguageCycle();
+    }
+  }
+
+  /** @returns {boolean} True if a slider is focus-locked. */
+  function isSettingsLocked() { return _settingsLocked; }
+
   /** Reset per-session state. Called by game.js on every MenuBox.open(). */
   function resetSettings() {
     _settingsState.row = 0;
+    _settingsLocked = false;
   }
 
   /**
@@ -2721,11 +2831,9 @@ var MenuFaces = (function () {
    */
   function renderFace3(ctx, x, y, w, h, context) {
     var S = Math.min(w, h) / 400;
-    // Clip to face bounds so nothing bleeds out
+    // No inner clip — the outer _renderFace already clips to face bounds.
+    // Double-clipping caused exit buttons to get cut off.
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️', S);
 
     var F_BODY    = Math.max(10, Math.round(14 * S));
@@ -2736,11 +2844,11 @@ var MenuFaces = (function () {
 
     var listX  = x + PAD;
     var trackW = w - PAD * 3;
-    var rowH   = Math.max(30, Math.round(44 * S));
+    var rowH   = Math.max(26, Math.round(36 * S));
     var ty2    = ty + Math.round(6 * S);
 
     // ── Toggle settings (top section) ────────────────────────────────
-    var toggleRowH = Math.max(22, Math.round(26 * S));
+    var toggleRowH = Math.max(18, Math.round(22 * S));
     var toggleY = ty2;
     var toggleDefs = [
       { label: 'Screen Shake', key: 'screenShake', default: true,
@@ -2820,15 +2928,16 @@ var MenuFaces = (function () {
       var sy      = sliderStartY + s * rowH;
       var selected = (s === _settingsState.row);
 
-      // Selection highlight row
+      // Selection highlight row (bright gold when focus-locked)
       if (selected) {
-        ctx.fillStyle = 'rgba(240,208,112,0.12)';
+        var locked = _settingsLocked && s < _SLIDER_DEFS.length;
+        ctx.fillStyle = locked ? 'rgba(240,208,112,0.22)' : 'rgba(240,208,112,0.12)';
         ctx.fillRect(x + 6, sy - 2, w - 12, rowH - Math.round(4 * S));
 
-        ctx.fillStyle = COL.accent;
+        ctx.fillStyle = locked ? '#ffee44' : COL.accent;
         ctx.font = 'bold ' + F_BODY + 'px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('\u25B6', x + Math.round(6 * S), sy + Math.round(14 * S));
+        ctx.fillText(locked ? '\u25B6\u25B6' : '\u25B6', x + Math.round(6 * S), sy + Math.round(14 * S));
       }
 
       // Label
@@ -2883,15 +2992,32 @@ var MenuFaces = (function () {
 
       // Nudge hint on selected row
       if (selected) {
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillStyle = 'rgba(230,220,200,0.45)';
         ctx.font = F_SECTION + 'px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('\u2190 / \u2192 adjust    scroll fine-tune', x + w / 2, trackY + trackH + Math.round(12 * S));
+        var hint = _settingsLocked
+          ? '\u2190 / \u2192 adjust   [Enter] unlock'
+          : '[Enter] lock   scroll fine-tune';
+        ctx.fillText(hint, x + w / 2, trackY + trackH + Math.round(12 * S));
+      }
+    }
+
+    // Slider hover/selection description (mirrors toggle desc pattern)
+    var sliderDescY = sliderStartY + _SLIDER_DEFS.length * rowH - Math.round(6 * S);
+    if (_settingsState.row < _SLIDER_DEFS.length) {
+      var sDef = _SLIDER_DEFS[_settingsState.row];
+      if (sDef.desc) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = 'italic ' + F_SMALL + 'px monospace';
+        ctx.textAlign = 'left';
+        var sDescText = sDef.desc;
+        if (sDef.bind) sDescText += '  [' + sDef.bind + ']';
+        ctx.fillText(sDescText, listX + Math.round(14 * S), sliderDescY + Math.round(8 * S));
       }
     }
 
     // ── Language (clickable cycle) ────────────────────────────────
-    var langY = sliderStartY + _SLIDER_DEFS.length * rowH + Math.round(6 * S);
+    var langY = sliderStartY + _SLIDER_DEFS.length * rowH + Math.round(4 * S);
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -2903,16 +3029,25 @@ var MenuFaces = (function () {
     var _LANG_LABELS = { en: 'English', es: 'Español', hi: 'हिन्दी', ps: 'پښتو' };
     var curLang = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
     var langLabel = _LANG_LABELS[curLang] || curLang;
-    var langRowH = Math.max(22, Math.round(26 * S));
+    var langRowH = Math.max(18, Math.round(22 * S));
     var langHov = (_hoverSlot === 830);
+    var langSelected = (_settingsState.row === _SLIDER_DEFS.length + _TOGGLE_COUNT);
+    var langActive = langHov || langSelected;
 
-    if (langHov) {
-      ctx.fillStyle = 'rgba(240,208,112,0.06)';
+    if (langActive) {
+      ctx.fillStyle = langSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
       ctx.fillRect(x + 6, langY - 2, w - 12, langRowH - 2);
     }
 
-    ctx.fillStyle = langHov ? COL.accent : COL.dim;
-    ctx.font = F_BODY + 'px monospace';
+    if (langSelected) {
+      ctx.fillStyle = COL.accent;
+      ctx.font = 'bold ' + F_BODY + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('\u25B6', x + Math.round(6 * S), langY + Math.round(10 * S));
+    }
+
+    ctx.fillStyle = langActive ? COL.accent : COL.dim;
+    ctx.font = (langSelected ? 'bold ' : '') + F_BODY + 'px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(
       i18n.t('settings.language', 'Language') + ':  ' + langLabel,
@@ -2921,7 +3056,7 @@ var MenuFaces = (function () {
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_SMALL + 'px monospace';
-    ctx.fillText('[Click] cycle', listX + trackW + Math.round(6 * S), langY + Math.round(10 * S));
+    ctx.fillText(langSelected ? '[Enter] cycle' : '[Click] cycle', listX + trackW + Math.round(6 * S), langY + Math.round(10 * S));
 
     _hitZones.push({
       x: x + 6, y: langY - 2, w: w - 12, h: langRowH - 2,
@@ -2929,7 +3064,7 @@ var MenuFaces = (function () {
     });
 
     // ── Controls reference ────────────────────────────────────────
-    var ctrlY = langY + Math.round(24 * S);
+    var ctrlY = langY + Math.round(18 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
     ctx.moveTo(x + 10, ctrlY - Math.round(4 * S));
@@ -2950,7 +3085,7 @@ var MenuFaces = (function () {
       ['1-5', 'Quick-select']
     ];
 
-    var ctrlRowH = Math.max(10, Math.round(13 * S));
+    var ctrlRowH = Math.max(10, Math.round(10 * S));
     ctx.font = F_SECTION + 'px monospace';
     for (var ci = 0; ci < controls.length; ci++) {
       var cY = ctrlY + ci * ctrlRowH;
@@ -2962,8 +3097,8 @@ var MenuFaces = (function () {
       ctx.fillText(controls[ci][1], listX + trackW + Math.round(6 * S), cY + Math.round(4 * S));
     }
 
-    // ── Exit options (clickable buttons) ──────────────────────────
-    var exitY = y + h - Math.round(50 * S);
+    // ── Exit options (flow-positioned below controls) ─────────────
+    var exitY = ctrlY + controls.length * ctrlRowH + Math.round(8 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
     ctx.moveTo(x + 10, exitY - Math.round(6 * S));
@@ -3670,6 +3805,10 @@ var MenuFaces = (function () {
     _deckOffset = Math.max(0, _deckOffset + delta);
   }
 
+  function scrollBooks(delta) {
+    _bookScrollOffset = Math.max(0, _bookScrollOffset + delta);
+  }
+
   function scrollFocused(delta) {
     if (_invFocus === 'bag') scrollBag(delta);
     else scrollDeck(delta);
@@ -3782,6 +3921,8 @@ var MenuFaces = (function () {
     handleSettingsNav:       handleSettingsNav,
     handleSettingsAdjust:    handleSettingsAdjust,
     handleSettingsToggle:    handleSettingsToggle,
+    handleSettingsInteract:  handleSettingsInteract,
+    isSettingsLocked:        isSettingsLocked,
     handleLanguageCycle:     handleLanguageCycle,
     handleSettingsSelectRow: handleSettingsSelectRow,
     resetSettings:           resetSettings,
@@ -3810,6 +3951,9 @@ var MenuFaces = (function () {
     getBagOffset:         function () { return _bagOffset; },
     getDeckOffset:        function () { return _deckOffset; },
     isBagExpanded:        function () { return _bagExpanded; },
-    isDeckExpanded:       function () { return _deckExpanded; }
+    isDeckExpanded:       function () { return _deckExpanded; },
+
+    // Journal book scroll
+    scrollBooks:          scrollBooks
   };
 })();

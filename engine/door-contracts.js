@@ -75,50 +75,75 @@ var DoorContracts = (function () {
    * When the player exits through a DOOR tile, look for the complementary
    * door tile on the new floor (DOOR_BACK/DOOR_EXIT for advance, DOOR for retreat).
    *
-   * Priority:
-   *   1. doorTargets reverse lookup — find the door on this floor whose
-   *      target matches the source floor ID. This handles multi-door floors
-   *      (e.g. Promenade has 4 building doors, each leading somewhere different).
-   *   2. doors.doorEntry / doors.doorExit — single-door shorthand
-   *   3. Grid scan for matching tile type — last resort
+   * Priority depends on direction:
+   *
+   * ADVANCE (exited DOOR/BOSS_DOOR → arriving at new floor):
+   *   1. doors.doorExit/doorBack shorthand — authoritative, identifies the
+   *      PRIMARY exit point (e.g. center tile of a 3-wide gate).
+   *   2. doorTargets reverse lookup
+   *   3. Grid scan
+   *
+   * RETREAT (exited DOOR_EXIT/DOOR_BACK → returning to previous floor):
+   *   1. doorTargets reverse lookup — required for multi-door parent floors
+   *      where doorEntry might point to a different child's door.
+   *   2. doors.doorEntry shorthand — fallback for single-entrance floors
+   *   3. Grid scan
    *
    * @returns {{ x: number, y: number } | null}
    */
   function _resolveDoorTarget(grid, W, H, doors, doorTargets) {
     if (!_exitTile) return null;
 
-    // ── Strategy 1: doorTargets reverse lookup ──
-    // If we know which floor we came from, find the door on THIS floor
-    // that leads there. This is the only correct method for multi-door floors.
-    if (_sourceFloorId && doorTargets) {
-      for (var key in doorTargets) {
-        if (String(doorTargets[key]) === String(_sourceFloorId)) {
-          var parts = key.split(',');
-          var dx = parseInt(parts[0], 10);
-          var dy = parseInt(parts[1], 10);
-          if (!isNaN(dx) && !isNaN(dy)) {
-            return { x: dx, y: dy };
+    var isAdvance = (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR);
+    var isRetreat = (_exitTile === TILES.DOOR_BACK || _exitTile === TILES.DOOR_EXIT);
+
+    if (!isAdvance && !isRetreat) return null;
+
+    if (isAdvance) {
+      // ── ADVANCE: prefer doors shorthand, then reverse lookup ──
+      // The floor builder explicitly sets doorExit/doorBack to mark the
+      // canonical arrival tile. This is more authoritative than reverse
+      // lookup, which can return any of several tiles mapping to the same
+      // source floor (e.g. a 3-wide gate with 3 doorTargets entries).
+      if (doors.doorExit) return doors.doorExit;
+      if (doors.doorBack) return doors.doorBack;
+
+      // Reverse lookup fallback
+      if (_sourceFloorId && doorTargets) {
+        for (var key in doorTargets) {
+          if (String(doorTargets[key]) === String(_sourceFloorId)) {
+            var parts = key.split(',');
+            var dx = parseInt(parts[0], 10);
+            var dy = parseInt(parts[1], 10);
+            if (!isNaN(dx) && !isNaN(dy)) return { x: dx, y: dy };
           }
         }
       }
-    }
-
-    // ── Strategy 2: doors shorthand (single-door floors) ──
-    var searchTiles;
-    if (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR) {
-      // Entered through door: look for exit / back door to spawn near
-      if (doors.doorExit) return doors.doorExit;
-      if (doors.doorBack) return doors.doorBack;
-      searchTiles = [TILES.DOOR_BACK, TILES.DOOR_EXIT];
-    } else if (_exitTile === TILES.DOOR_BACK || _exitTile === TILES.DOOR_EXIT) {
-      // Exited through back/exit door: look for entry door to spawn near
-      if (doors.doorEntry) return doors.doorEntry;
-      searchTiles = [TILES.DOOR, TILES.BOSS_DOOR];
     } else {
-      return null; // Not a door tile
+      // ── RETREAT: prefer reverse lookup, then doors shorthand ──
+      // Multi-door parent floors (e.g. Promenade with 4 building doors)
+      // need the reverse lookup to find which specific door leads back
+      // to the source floor. The doorEntry shorthand only marks ONE door.
+      if (_sourceFloorId && doorTargets) {
+        for (var key2 in doorTargets) {
+          if (String(doorTargets[key2]) === String(_sourceFloorId)) {
+            var parts2 = key2.split(',');
+            var dx2 = parseInt(parts2[0], 10);
+            var dy2 = parseInt(parts2[1], 10);
+            if (!isNaN(dx2) && !isNaN(dy2)) return { x: dx2, y: dy2 };
+          }
+        }
+      }
+
+      // Shorthand fallback
+      if (doors.doorEntry) return doors.doorEntry;
     }
 
-    // ── Strategy 3: Grid scan for matching door tile ──
+    // ── Grid scan for matching door tile (last resort) ──
+    var searchTiles = isAdvance
+      ? [TILES.DOOR_BACK, TILES.DOOR_EXIT]
+      : [TILES.DOOR, TILES.BOSS_DOOR];
+
     for (var y = 1; y < H - 1; y++) {
       for (var x = 1; x < W - 1; x++) {
         var t = grid[y][x];
@@ -291,8 +316,27 @@ var DoorContracts = (function () {
   }
 
   /**
-   * Find an empty tile near targetDoor, preferring tiles far from avoidDoor.
+   * Check if a tile is safe to spawn on: walkable, non-hazardous, not a
+   * door/stair (to avoid re-triggering transitions). Accepts EMPTY, ROAD,
+   * PATH, GRASS, and other safe walkables.
+   */
+  function _isSpawnSafe(tile) {
+    // Reject non-walkable
+    if (!TILES.isWalkable(tile)) return false;
+    // Reject door/stair tiles (player would immediately re-trigger a transition)
+    if (TILES.isDoor(tile)) return false;
+    // Reject hazards
+    if (TILES.isHazard && TILES.isHazard(tile)) return false;
+    return true;
+  }
+
+  /**
+   * Find a walkable tile near targetDoor, preferring tiles far from avoidDoor.
    * Expanding ring search (from EyesOnly DoorContractSystem.findSpawnNearDoor).
+   *
+   * Accepts any safe walkable tile (EMPTY, ROAD, PATH, GRASS, etc.) — not
+   * just TILES.EMPTY. This is critical for exterior floors where the road
+   * corridor uses ROAD/PATH tiles and no EMPTY tiles exist near gates.
    */
   function findSpawnNearDoor(grid, W, H, targetDoor, avoidDoor, radius) {
     radius = radius || GUARDRAIL_STEPS;
@@ -308,7 +352,7 @@ var DoorContracts = (function () {
           var ty = targetDoor.y + dy;
 
           if (tx <= 0 || tx >= W - 1 || ty <= 0 || ty >= H - 1) continue;
-          if (!grid[ty] || grid[ty][tx] !== TILES.EMPTY) continue;
+          if (!grid[ty] || !_isSpawnSafe(grid[ty][tx])) continue;
 
           // Score = distance from avoidDoor + open neighbor count
           // Prefer tiles in room interiors (more open neighbors) over
@@ -322,12 +366,19 @@ var DoorContracts = (function () {
           var DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
           for (var d = 0; d < 4; d++) {
             var nx = tx + DIRS[d][0], ny = ty + DIRS[d][1];
-            if (nx >= 0 && nx < W && ny >= 0 && ny < H && grid[ny][nx] === TILES.EMPTY) {
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && TILES.isWalkable(grid[ny][nx])) {
               openNeighbors++;
             }
           }
 
-          var score = avoidDist * 4 + openNeighbors; // avoidDist dominant, open tiebreaker
+          // Alignment bonus: prefer tiles on the same row or column as
+          // the target door. This produces a clean cardinal facing direction
+          // (away from the door) instead of a diagonal that picks an
+          // arbitrary axis. E.g. for a west-wall gate, spawning directly
+          // east (same row) gives a clean EAST facing.
+          var alignBonus = (tx === targetDoor.x || ty === targetDoor.y) ? 0.25 : 0;
+
+          var score = avoidDist * 4 + openNeighbors + alignBonus; // avoidDist dominant, open + align tiebreaker
           if (!best || score > bestScore) {
             best = { x: tx, y: ty };
             bestScore = score;

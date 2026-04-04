@@ -797,6 +797,16 @@ var NpcSystem = (function () {
       KaomojiCapsule.startSpeech(npc.id, 'speaking');
     }
 
+    // ── Gentle face-lock: lock MouseLook toward the NPC ──
+    // The player is already grid-facing the NPC (they pressed OK on
+    // the facing tile), but MouseLook offset might have them looking
+    // off-center. lockOn(0, 0) centers the view on the grid direction.
+    // releaseLock fires on dialogue end or bark timeout.
+    // NPC_SYSTEM_ROADMAP §7.3 — force-facing for interactive NPCs.
+    if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
+      MouseLook.lockOn(0, 0);
+    }
+
     // ── Dialogue tree path ─────────────────────────────────────────
     // Renders inline in the StatusBar tooltip footer per
     // EYESONLYS_TOOLTIP_SPACE_CANON. No canvas overlay, no camera lock,
@@ -810,6 +820,7 @@ var NpcSystem = (function () {
         function () {
           // onEnd callback — conversation finished or interrupted
           if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+          if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) MouseLook.releaseLock();
           _releaseTalk(npc);
         }
       );
@@ -843,6 +854,7 @@ var NpcSystem = (function () {
     // Auto-dismiss speech capsule and release NPC after bark
     setTimeout(function () {
       if (typeof KaomojiCapsule !== 'undefined') KaomojiCapsule.stopSpeech(npc.id);
+      if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) MouseLook.releaseLock();
       _releaseTalk(npc);
     }, SPEECH_CAPSULE_MS);
   }
@@ -1057,23 +1069,10 @@ var NpcSystem = (function () {
         barkRadius:   3,
         barkInterval: 32000
       },
-      // ── 6. Dispatcher — near east gate, intercepts player ────
-      //    Positioned on the road near the east gate. When the
-      //    player approaches, the existing choreography system in
-      //    game.js triggers: rushes, grabs, dialogue tree opens.
-      //    Redirects player to 1.6 (Gleaner's Home) for keys.
-      {
-        id:           'floor1_dispatcher',
-        type:         TYPES.DISPATCHER,
-        x: 42, y: 17,
-        facing:       'west',
-        emoji:        '\uD83E\uDDD1\u200D\uD83D\uDCBC',
-        name:         'Dispatcher',
-        blocksMovement: true,
-        barkPool:     'npc.dispatcher.gate',
-        barkRadius:   5,
-        barkInterval: 15000
-      }
+      // ── 6. Dispatcher — REMOVED from NpcSystem ─────────────────
+      //    game.js owns the Dispatcher gate NPC entirely via
+      //    _spawnDispatcherGate(). Having it here too caused a
+      //    duplicate (two dispatchers visible at the gate).
     ]);
 
     // ── Floor 1.1: Coral Bazaar ────────────────────────────────────

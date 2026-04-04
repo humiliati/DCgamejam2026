@@ -893,13 +893,10 @@ var Minimap = (function () {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Rotate so north needle points to world-north
-    // World-north is -π/2 in our coord system; player.dir is the camera angle.
-    // Needle should point toward -π/2 minus player's current angle.
-    var northAngle = -Math.PI / 2 - playerAngle;
-    ctx.rotate(northAngle);
+    // Minimap is north-up, so the compass needle always points straight up.
+    // No rotation — north is screen-up on this minimap.
 
-    // North needle (bright green triangle)
+    // North needle (bright green triangle pointing up)
     var needleLen = r * 0.75;
     var needleW   = r * 0.25;
     ctx.beginPath();
@@ -910,7 +907,7 @@ var Minimap = (function () {
     ctx.fillStyle = 'rgba(51,255,136,0.85)';
     ctx.fill();
 
-    // South needle (dim)
+    // South needle (dim, pointing down)
     ctx.beginPath();
     ctx.moveTo(0, needleLen);
     ctx.lineTo(-needleW, -needleLen * 0.3);
@@ -919,18 +916,13 @@ var Minimap = (function () {
     ctx.fillStyle = 'rgba(51,255,136,0.25)';
     ctx.fill();
 
-    // "N" label at needle tip
-    ctx.rotate(-northAngle); // Un-rotate for text
-    // Place "N" at the north tip position (rotated)
-    var nx = Math.cos(northAngle - Math.PI / 2) * (needleLen + 3);
-    var ny = Math.sin(northAngle - Math.PI / 2) * (needleLen + 3);
-    // Only draw "N" label in expanded/compass modes where there's room
+    // "N" label above needle tip
     if (_size >= 160) {
       ctx.fillStyle = 'rgba(51,255,136,0.7)';
       ctx.font = Math.max(7, r * 0.55) + 'px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('N', nx, ny);
+      ctx.fillText('N', 0, -(needleLen + 3));
     }
 
     ctx.restore();

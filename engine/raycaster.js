@@ -260,12 +260,23 @@ var Raycaster = (function () {
         // them and keep searching for something taller.
         var _maxH = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
 
-        // ── Mailbox back-face injection flag ──────────────────────
-        // MAILBOX platforms are very short (0.25×) and need their inner
-        // face visible so the player can see the platform from behind.
-        // Only MAILBOX gets this — furniture (TABLE, BED) must NOT get
-        // inner faces as it breaks the floor-pre-pass "tabletop" illusion.
-        var _needBackFace = (hitTile === TILES.MAILBOX);
+        // ── Short-wall back-face injection flag ────────────────────
+        // Short walls (height < 1.0×) need their inner face visible so
+        // the player sees a solid box, not a paper cutout. The back-face
+        // is drawn as a back layer (painter's algorithm); the foreground
+        // cap rendering (for furniture tiles) overdraws the top portion,
+        // completing the 3D box illusion.
+        //
+        // Applies to: MAILBOX (0.25×), BONFIRE (0.3×), DUMP_TRUCK (0.5×),
+        //   TABLE (0.7×), BED (0.6×), CHEST (0.65–0.7×), BAR_COUNTER (0.8×).
+        // Does NOT apply to: SHRUB, FENCE (exterior see-over tiles —
+        //   back face would reveal "inside the hedge" which reads wrong).
+        var _needBackFace = (
+          hitTile === TILES.MAILBOX || hitTile === TILES.BONFIRE ||
+          hitTile === TILES.DUMP_TRUCK ||
+          hitTile === TILES.TABLE  || hitTile === TILES.BED ||
+          hitTile === TILES.CHEST  || hitTile === TILES.BAR_COUNTER
+        );
 
         // Continue DDA to collect up to MAX_LAYERS total hits
         var _cSdX = sideDistX, _cSdY = sideDistY;
@@ -279,7 +290,7 @@ var Raycaster = (function () {
           }
           _cDep++;
 
-          // Inject back-face for MAILBOX on first step past the tile
+          // Inject back-face for short walls on first step past the tile
           if (_needBackFace && _lc < _MAX_LAYERS) {
             _layerBuf[_lc].mx = _cMX;
             _layerBuf[_lc].my = _cMY;
@@ -352,11 +363,14 @@ var Raycaster = (function () {
       }
 
       // Z-buffer: very short walls (platforms, rings) don't occlude sprites.
-      // Billboard sprites behind these tiles (mailbox emoji, bonfire tent)
-      // float above them and must remain visible. The wall still renders
-      // normally — we write renderDist so sprite culling sees "no wall"
-      // for these columns.
-      _zBuffer[col] = (wallHeightMult > 0.35) ? perpDist : renderDist;
+      // Billboard sprites behind these tiles (mailbox emoji, bonfire tent,
+      // dump truck hose) float above them and must remain visible. The wall
+      // still renders normally — we write renderDist so sprite culling sees
+      // "no wall" for these columns.
+      // Tile-type override: DUMP_TRUCK (0.5×) is taller than the 0.35
+      // height threshold but still needs its billboard sprite visible.
+      var _zBypass = (hitTile === TILES.DUMP_TRUCK);
+      _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
       // No cap on lineHeight — proper texture UV clipping handles
       // close-range walls. Removing the cap fixes the stretch bug where
       // nearby walls widen (more columns) without getting proportionally
@@ -552,7 +566,58 @@ var Raycaster = (function () {
             // The step-fill lip reads as a cavity opening above the
             // sunken stone column. Dark fill + warm glow + fire sprite
             // composited into the band — the "Doom rule" depth illusion.
+            //
+            // HEARTH sandwich rendering (mantle → fire → base):
+            // The lip region becomes the fire cavity (center of sandwich).
+            // A mantle band is drawn ABOVE the cavity using the same wall
+            // texture, creating the stone-fire-stone fireplace look.
+            // The base stone is the normal wall face below (already drawn).
             if ((hitTile === TILES.HEARTH || hitTile === TILES.BONFIRE) && lipH >= 2) {
+
+              // ── HEARTH mantle band (stone cap above fire cavity) ───
+              // Draws a textured stone band above the fire opening.
+              // Proportional to the base wall height so the sandwich
+              // scales correctly at all distances.
+              if (hitTile === TILES.HEARTH && tex && tex.canvas) {
+                var mantleFrac = 0.70;  // Mantle height as fraction of base wall
+                var mantleH = Math.max(2, Math.floor(lineHeight * mantleFrac));
+                var mantleBot = lipTop;
+                var mantleTop = Math.max(0, mantleBot - mantleH);
+                var mantleStripH = mantleBot - mantleTop;
+                if (mantleStripH > 1) {
+                  // Sample from upper portion of wall texture for mantle
+                  var mTexX = Math.floor(wallX * tex.width);
+                  if (mTexX >= tex.width) mTexX = tex.width - 1;
+                  ctx.drawImage(tex.canvas,
+                    mTexX, 0, 1, Math.floor(tex.height * 0.5),
+                    col, mantleTop, 1, mantleStripH
+                  );
+                  // Side shading to match wall face convention
+                  if (side === 1) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                    ctx.fillRect(col, mantleTop, 1, mantleStripH);
+                  }
+                  // Fog + brightness overlay on mantle (matches wall rendering)
+                  var _mDark = (brightness < 0.95) ? (1 - brightness) : 0;
+                  if (fogFactor > 0.05 || _mDark > 0.05) {
+                    if (fogFactor >= _mDark) {
+                      ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+                    } else {
+                      ctx.fillStyle = 'rgba(0,0,0,' + _mDark.toFixed(3) + ')';
+                    }
+                    ctx.fillRect(col, mantleTop, 1, mantleStripH);
+                  }
+                  // Mantle bottom edge (dark line separating mantle from fire)
+                  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                  ctx.fillRect(col, mantleBot - 1, 1, 1);
+                  // Mantle top edge
+                  if (mantleStripH > 4) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.fillRect(col, mantleTop, 1, 1);
+                  }
+                }
+              }
+
               // 1. Dark cavity base
               var cavDark = _applyFogAndBrightness(
                 '#0a0502', fogFactor, brightness * 0.4, fogColor
@@ -581,9 +646,90 @@ var Raycaster = (function () {
                 ctx.fillStyle = 'rgba(255,120,30,' + glowA.toFixed(3) + ')';
                 ctx.fillRect(col, lipTop, 1, lipH);
               }
+
+              // 4. Base top edge (dark line separating fire from base stone)
+              ctx.fillStyle = 'rgba(0,0,0,0.35)';
+              ctx.fillRect(col, drawStart, 1, 1);
             } else {
               // Normal sunken step fill (doors, stairs, etc.)
               ctx.fillRect(col, lipTop, 1, lipH);
+            }
+          }
+        }
+      }
+
+      // ── Short-wall cap (table top, bed surface, chest lid) ─────
+      // When a short interior furnishing is visible, the area between
+      // the horizon (eye level) and the top of the wall face should
+      // show a horizontal "lid" surface. Without this, the player sees
+      // through to the floor behind, which reads as dissolve.
+      //
+      // Cap tiles: TABLE (28), BED (27), CHEST (7), BAR_COUNTER (26).
+      // Exterior see-over tiles (SHRUB, FENCE) intentionally skip cap.
+      // HEARTH/BOOKSHELF are full-height and skip via the < 0.95 check.
+      //
+      // The cap fills from horizon down to wall-top (drawStart). This
+      // region is the foreshortened horizontal surface — geometrically
+      // correct at all distances. The cap color is sampled from the
+      // wall texture's top-edge pixels at reduced brightness (reads as
+      // a lit horizontal surface vs the vertical wall face).
+      if (wallHeightMult < 0.95 && wallHeightMult > 0.35 && drawStart > halfH) {
+        var _isCapTile = (hitTile === TILES.TABLE || hitTile === TILES.BED ||
+                          hitTile === TILES.CHEST || hitTile === TILES.BAR_COUNTER);
+        if (_isCapTile) {
+          var capTop = Math.max(0, halfH);
+          var capBot = Math.min(drawStart, h);
+          var capH = capBot - capTop;
+          if (capH > 0) {
+            // Sample cap color from texture top-edge pixel (brightened for
+            // foreshortened horizontal surface catching overhead light).
+            // Raw RGB computation — avoids hex format mismatch with
+            // _applyFogAndBrightness which expects '#rrggbb'.
+            var capR = 58, capG = 42, capB = 26;  // Default dark wood
+            if (tex && tex.data) {
+              var capTexX = Math.floor(wallX * tex.width);
+              if (capTexX >= tex.width) capTexX = tex.width - 1;
+              var capIdx = capTexX * 4;  // row 0 (top edge)
+              capR = tex.data[capIdx];
+              capG = tex.data[capIdx + 1];
+              capB = tex.data[capIdx + 2];
+            }
+
+            // Foreshortened surface is brighter than wall face (catching
+            // more overhead light) but still dimmed by distance/fog.
+            var capBright = brightness * 0.80;
+            capR = Math.floor(capR * capBright);
+            capG = Math.floor(capG * capBright);
+            capB = Math.floor(capB * capBright);
+
+            // Apply fog
+            if (fogFactor > 0.01) {
+              var capInvFog = 1 - fogFactor;
+              capR = Math.floor(capR * capInvFog + fogColor.r * fogFactor);
+              capG = Math.floor(capG * capInvFog + fogColor.g * fogFactor);
+              capB = Math.floor(capB * capInvFog + fogColor.b * fogFactor);
+            }
+
+            ctx.fillStyle = 'rgb(' + capR + ',' + capG + ',' + capB + ')';
+            ctx.fillRect(col, capTop, 1, capH);
+
+            // Side shading: cap faces on side=1 walls are darker (matches
+            // wall face convention for directional lighting).
+            if (side === 1) {
+              ctx.fillStyle = 'rgba(0,0,0,0.15)';
+              ctx.fillRect(col, capTop, 1, capH);
+            }
+
+            // Edge line where cap meets wall face — depth separation cue.
+            // Renders at all sizes (even 1px cap gets a dark line).
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(col, capBot - 1, 1, 1);
+
+            // Top edge of cap (where it meets the space behind).
+            // Softer than bottom edge — reads as the far edge of the lid.
+            if (capH > 2) {
+              ctx.fillStyle = 'rgba(0,0,0,0.15)';
+              ctx.fillRect(col, capTop, 1, 1);
             }
           }
         }
@@ -969,6 +1115,50 @@ var Raycaster = (function () {
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
+    // ── Back-layer cap for furniture ────────────────────────────
+    // When a back layer is a furniture tile (injected via _needBackFace),
+    // draw a cap surface above the wall face — same logic as the
+    // foreground cap but using back-layer geometry. Prevents a bare
+    // wall sliver from peeking above the foreground cap at steep angles.
+    if (wh < 0.95 && wh > 0.35 && drStart > halfH) {
+      var _blCap = (L.tile === TILES.TABLE || L.tile === TILES.BED ||
+                    L.tile === TILES.CHEST || L.tile === TILES.BAR_COUNTER);
+      if (_blCap) {
+        var blCapTop = Math.max(0, halfH);
+        var blCapBot = Math.min(drStart, h);
+        var blCapH = blCapBot - blCapTop;
+        if (blCapH > 0) {
+          var blCapR = 58, blCapG = 42, blCapB = 26;
+          if (tex && tex.data) {
+            var blCapTexX = Math.floor(wx * tex.width);
+            if (blCapTexX >= tex.width) blCapTexX = tex.width - 1;
+            var blCapIdx = blCapTexX * 4;
+            blCapR = tex.data[blCapIdx];
+            blCapG = tex.data[blCapIdx + 1];
+            blCapB = tex.data[blCapIdx + 2];
+          }
+          var blCapBri = bri * 0.80;
+          blCapR = Math.floor(blCapR * blCapBri);
+          blCapG = Math.floor(blCapG * blCapBri);
+          blCapB = Math.floor(blCapB * blCapBri);
+          if (fog > 0.01) {
+            var blCapInv = 1 - fog;
+            blCapR = Math.floor(blCapR * blCapInv + fogColor.r * fog);
+            blCapG = Math.floor(blCapG * blCapInv + fogColor.g * fog);
+            blCapB = Math.floor(blCapB * blCapInv + fogColor.b * fog);
+          }
+          ctx.fillStyle = 'rgb(' + blCapR + ',' + blCapG + ',' + blCapB + ')';
+          ctx.fillRect(col, blCapTop, 1, blCapH);
+          if (L.sd === 1) {
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.fillRect(col, blCapTop, 1, blCapH);
+          }
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.fillRect(col, blCapBot - 1, 1, 1);
+        }
+      }
+    }
+
     // Edge line (top border only — bottom is at floor level)
     if (lineH > 20) {
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -1009,6 +1199,11 @@ var Raycaster = (function () {
     var fr = fogColor ? fogColor.r : 0;
     var fg = fogColor ? fogColor.g : 0;
     var fb = fogColor ? fogColor.b : 0;
+    // Water colour — pulled from contract, falls back to deep ocean blue
+    var _wc = _contract && _contract.waterColor;
+    var _waterR = _wc ? _wc.r : 15;
+    var _waterG = _wc ? _wc.g : 35;
+    var _waterB = _wc ? _wc.b : 65;
     var fogStart = fogDist * 0.5;
     var fogRange = (fogDist * 1.5) - fogStart;
 
@@ -1054,10 +1249,33 @@ var Raycaster = (function () {
         var curTexH = texH;
         var curTexData = texData;
 
-        if (tileFloorTexArr &&
-            tileGX >= 0 && tileGX < gridW &&
-            tileGY >= 0 && tileGY < gridH) {
-          var altTex = tileFloorTexArr[grid[tileGY][tileGX]];
+        // ── WATER tile skip: render dedicated water color instead of texture ──
+        // WATER tiles (9) have no floor surface — they render as deep ocean.
+        // Uses contract.waterColor (default deep blue) so water reads correctly
+        // regardless of the fog color (which may be warm brown for amber atmosphere).
+        var tileVal = (tileGX >= 0 && tileGX < gridW &&
+                       tileGY >= 0 && tileGY < gridH)
+                      ? grid[tileGY][tileGX] : -1;
+        if (tileVal === 9) { // TILES.WATER
+          // Write water colour directly — skip texture sampling.
+          // Distance-darkened + fog-blended so water fades naturally at range.
+          var pIdx = rowOffset + col * 4;
+          var wr = _waterR, wg = _waterG, wb = _waterB;
+          // Blend toward fog at distance (same fog curve as textured floor)
+          var wR = (wr * invFog + fr * rowFog) * bright;
+          var wG = (wg * invFog + fg * rowFog) * bright;
+          var wB = (wb * invFog + fb * rowFog) * bright;
+          buf[pIdx]     = (wR) | 0;
+          buf[pIdx + 1] = (wG) | 0;
+          buf[pIdx + 2] = (wB) | 0;
+          buf[pIdx + 3] = 255;
+          floorX += floorStepX;
+          floorY += floorStepY;
+          continue;
+        }
+
+        if (tileFloorTexArr && tileVal >= 0) {
+          var altTex = tileFloorTexArr[tileVal];
           if (altTex) {
             curTexW = altTex.width;
             curTexH = altTex.height;

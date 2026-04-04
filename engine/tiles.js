@@ -43,14 +43,15 @@ var TILES = (function () {
     GRASS:       34,  // Walkable exterior — grass floor texture (clearings, meadows)
     FENCE:       35,  // Half-wall railing (0.4×) — blocks movement, player sees over
     TERMINAL:    36,  // Data terminal — half-wall desk + CRT screen, sickly green glow, peek overlay
-    MAILBOX:     37   // Exterior mailbox — solid, interactable, emoji-on-platform (📫/📬/📪)
+    MAILBOX:     37,  // Exterior mailbox — solid, interactable, emoji-on-platform (📫/📬/📪)
+    DUMP_TRUCK:  38   // Pressure wash dump truck — tall body, wall-decor wheels, cleaning equipment
   };
 
   /** Check if a tile blocks movement */
   T.isWalkable = function (tile) {
     return tile === T.EMPTY || tile === T.DOOR || tile === T.DOOR_BACK ||
            tile === T.DOOR_EXIT || tile === T.STAIRS_DN || tile === T.STAIRS_UP ||
-           tile === T.CHEST || tile === T.TRAP || tile === T.WATER ||
+           tile === T.TRAP || tile === T.WATER ||
            tile === T.SHOP || tile === T.SPAWN || tile === T.BOSS_DOOR ||
            tile === T.FIRE || tile === T.SPIKES || tile === T.POISON ||
            tile === T.BONFIRE || tile === T.CORPSE || tile === T.COLLECTIBLE ||
@@ -66,7 +67,7 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL || tile === T.MAILBOX;
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.CHEST || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.BONFIRE || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL || tile === T.MAILBOX || tile === T.DUMP_TRUCK;
   };
 
   /** Check if tile is a torch (lit or unlit) */

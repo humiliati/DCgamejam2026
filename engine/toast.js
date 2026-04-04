@@ -164,7 +164,7 @@ var Toast = (function () {
    * @param {number} vpH - Viewport height
    */
   function render(ctx, vpW, vpH) {
-    if (_toasts.length === 0) return;
+    if (_toasts.length === 0 && !_centered) return;
 
     ctx.save();
 
@@ -190,13 +190,17 @@ var Toast = (function () {
       var minW = 120;
       if (toastW < minW) toastW = minW;
 
-      // Position: top-right, stacked downward — offset below minimap frame
-      // Minimap frame: 288px tall + 8px top margin = 296px bottom edge + 8px padding
-      var MINIMAP_CLEAR = 304;
-      var tx = vpW - TOAST_MARGIN - toastW * slide;
-      var ty = MINIMAP_CLEAR + i * (TOAST_H + TOAST_GAP);
+      // Position: centered below the freelook ring, stacked downward.
+      // ViewportRing center = viewport center, radius ≈ 0.315 * min(vpW,vpH).
+      // Place toasts just below the ring with a small gap.
+      var RING_FRAC = 0.315;
+      var ringR = RING_FRAC * Math.min(vpW, vpH);
+      var ringBottom = vpH / 2 + ringR + 10;  // 10px gap below ring
+      var tx = (vpW - toastW) / 2;
+      var ty = ringBottom + i * (TOAST_H + TOAST_GAP);
 
-      ctx.globalAlpha = alpha;
+      // Combine slide-in (fade) with expiry alpha
+      ctx.globalAlpha = alpha * slide;
 
       // Background
       _roundRect(ctx, tx, ty, toastW, TOAST_H, TOAST_RADIUS);

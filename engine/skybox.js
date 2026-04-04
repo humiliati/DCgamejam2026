@@ -203,6 +203,46 @@ var Skybox = (function () {
       water: false,
       stars: false
     },
+    // Floor 1 — The Promenade. Warm sunset tones, ocean visible below
+    // the boardwalk fence. Floor gradient is deep ocean blue so WATER
+    // tiles behind FENCE read as water depth.
+    sunset: {
+      zenith:  { r: 45, g: 30, b: 55 },
+      horizon: { r: 180, g: 100, b: 60 },
+      phases: {
+        dawn:      { zenith: { r: 55, g: 40, b: 65 },  horizon: { r: 190, g: 120, b: 75 } },
+        morning:   { zenith: { r: 60, g: 50, b: 80 },  horizon: { r: 160, g: 110, b: 70 } },
+        afternoon: { zenith: { r: 50, g: 38, b: 65 },  horizon: { r: 175, g: 105, b: 65 } },
+        dusk:      { zenith: { r: 35, g: 20, b: 45 },  horizon: { r: 160, g: 70, b: 35 } },
+        night:     { zenith: { r: 6, g: 8, b: 18 },    horizon: { r: 14, g: 18, b: 30 } }
+      },
+      clouds: [
+        { y: 0.10, h: 0.14, depth: 0.25, speed: 0.0002, scale: 70, threshold: 0.42, opacity: 0.4, r: 220, g: 170, b: 130, seed: 200 }
+      ],
+      mountains: null,
+      water: false,
+      stars: false
+    },
+    // Floor 2 — Lantern Row. Warm amber commercial district with ocean
+    // horizon south of the boardwalk appendages. Slightly darker than
+    // sunset to sell the "deep into civilization" density.
+    lantern: {
+      zenith:  { r: 35, g: 22, b: 40 },
+      horizon: { r: 160, g: 85, b: 45 },
+      phases: {
+        dawn:      { zenith: { r: 50, g: 35, b: 55 },  horizon: { r: 170, g: 100, b: 60 } },
+        morning:   { zenith: { r: 45, g: 35, b: 60 },  horizon: { r: 140, g: 90, b: 55 } },
+        afternoon: { zenith: { r: 40, g: 30, b: 50 },  horizon: { r: 155, g: 88, b: 48 } },
+        dusk:      { zenith: { r: 28, g: 16, b: 35 },  horizon: { r: 140, g: 60, b: 28 } },
+        night:     { zenith: { r: 5, g: 6, b: 14 },    horizon: { r: 12, g: 15, b: 24 } }
+      },
+      clouds: [
+        { y: 0.15, h: 0.12, depth: 0.3, speed: 0.00015, scale: 80, threshold: 0.45, opacity: 0.35, r: 200, g: 150, b: 100, seed: 210 }
+      ],
+      mountains: null,
+      water: false,
+      stars: false
+    },
     title: {
       zenith:  { r: 10, g: 21, b: 48 },
       horizon: { r: 90, g: 64, b: 48 },

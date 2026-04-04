@@ -1431,8 +1431,12 @@
       padding: 0 16px;
       cursor: pointer;
       position: relative;
-      /* Sticky-note accent — slight yellow tint */
-      background: linear-gradient(135deg, rgba(240,200,48,0.08) 0%, transparent 60%);
+      /* Opaque paper base + sticky-note accent.
+         The opaque base masks the parent status-bar's ruled-line gradient
+         so tooltip content doesn't get doubled horizontal lines. */
+      background:
+        linear-gradient(135deg, rgba(240,200,48,0.08) 0%, transparent 60%),
+        var(--paper);
       display: flex;
       flex-direction: column;
       justify-content: flex-end; /* pack rows to bottom */
@@ -1494,11 +1498,32 @@
       padding: 0 16px;
       flex-shrink: 1;
       min-height: 0;
+      /* Opaque paper background masks the parent's ruled-line gradient.
+         Without this, the status-bar's fixed 24px ruled lines bleed through
+         the transparent history panel, misaligning with scrolling entries
+         and creating doubled/tripled line artifacts during dialogue. */
+      background: var(--paper);
     }
     #status-bar.sb-expanded .sb-tooltip-history {
       max-height: 320px;
       padding: 4px 16px;
       flex: 1;
+      /* Scrolling ruled lines — background-attachment:local makes the lines
+         move with content instead of staying fixed on the viewport. The line
+         spacing matches entry line-height (24px = 16px font * 1.5). */
+      background-color: var(--paper);
+      background-image: repeating-linear-gradient(
+        180deg,
+        transparent 0px, transparent 23px,
+        rgba(180,190,210,0.18) 23px, rgba(180,190,210,0.18) 24px
+      );
+      background-attachment: local;
+    }
+    /* During dialogue: suppress ruled lines — dialogue entries have their
+       own opaque background + yellow accent border. Ruled lines on the
+       history panel would create doubled/tripled horizontal artifacts. */
+    .sb-tooltip-history.sb-dialogue-mode {
+      background-image: none !important;
     }
     /* Hide preview rows when expanded (full history replaces them) */
     #status-bar.sb-expanded .sb-tooltip-preview {
@@ -1573,7 +1598,10 @@
       flex-wrap: wrap;
       align-items: baseline;
       gap: 4px 8px;
-      background: rgba(240,200,48,0.06);
+      /* Opaque dialogue bg: paper tinted warm-yellow.
+         Must be opaque so the history panel's ruled lines don't
+         bleed through and create doubled horizontal lines. */
+      background: #f6f0df;
       border-left: 3px solid var(--hazmat-yellow);
       padding-left: 8px;
       margin: 2px 0;
@@ -1610,7 +1638,7 @@
     }
     .sb-dialogue-choice {
       color: var(--clipboard-blue);
-      text-decoration: underline;
+      text-decoration: none;
       cursor: pointer;
       font-size: 14px;
       padding: 4px 10px;
@@ -1619,8 +1647,25 @@
       min-height: 26px;
       display: inline-flex;
       align-items: center;
+      gap: 6px;
       border: 1px solid rgba(72,136,192,0.2);
       font-family: var(--font-body);
+    }
+    /* Number key cue — small off-color badge showing which key to press */
+    .sb-choice-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px; height: 18px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-data);
+      color: var(--ink-dim);
+      background: rgba(107,91,74,0.12);
+      border: 1px solid rgba(107,91,74,0.2);
+      flex-shrink: 0;
+      line-height: 1;
     }
     .sb-dialogue-choice:hover {
       color: #2a68a0;
@@ -2178,6 +2223,7 @@
   <script src="engine/card-draw.js"></script>
   <script src="engine/bonfire-sprites.js"></script>
   <script src="engine/mailbox-sprites.js"></script>
+  <script src="engine/dump-truck-sprites.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
   <script src="engine/ui-sprites.js"></script>

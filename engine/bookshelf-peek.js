@@ -277,6 +277,20 @@ var BookshelfPeek = (function () {
     getBook: function () { return _currentBook; },
     getPage: function () { return _currentPage; },
     getCatalog: function () { return _catalog; },
-    getBookById: function (id) { return _catalogById[id] || null; }
+    getBookById: function (id) { return _catalogById[id] || null; },
+
+    /**
+     * Check if a bookshelf at grid position (x, y) has any resolvable book.
+     * Used by InteractPrompt to show a non-interactive state for empty shelves.
+     * @param {number} fx - Grid x
+     * @param {number} fy - Grid y
+     * @returns {boolean}
+     */
+    hasBook: function (fx, fy) {
+      if (!_loaded) return false;
+      var floorData = (typeof FloorManager !== 'undefined') ? FloorManager.getFloorData() : null;
+      if (!floorData) return false;
+      return !!_resolveBook(fx, fy, floorData);
+    }
   };
 })();

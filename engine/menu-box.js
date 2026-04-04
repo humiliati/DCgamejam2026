@@ -437,7 +437,7 @@ var MenuBox = (function () {
     // ── Blur border (outer frame) ──
     // Semi-transparent tinted border
     var borderPct = 0.06;
-    ctx.fillStyle = 'rgba(20,18,25,0.6)';
+    ctx.fillStyle = 'rgba(40,35,55,0.90)';
     ctx.fillRect(x, y, w, h);
 
     // ── Content area (inner region) ──
@@ -446,8 +446,8 @@ var MenuBox = (function () {
     var cw = w * (1 - borderPct * 2);
     var ch = h * (1 - borderPct * 2);
 
-    // Dark semi-opaque content background
-    ctx.fillStyle = 'rgba(8,6,12,0.82)';
+    // Semi-opaque content background
+    ctx.fillStyle = 'rgba(35,30,50,0.92)';
     _roundRect(ctx, cx, cy, cw, ch, 6);
     ctx.fill();
 

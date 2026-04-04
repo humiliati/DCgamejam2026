@@ -1,11 +1,12 @@
 /**
  * PeekSlots — bridge between peek modules and the inventory/slot system.
  *
- * When the player interacts with a BREAKABLE or CORPSE tile that has a
- * CrateSystem container, PeekSlots opens CrateUI overlaid on gameplay
- * and registers the container's slot boxes as DragDrop target zones.
- * This allows drag-from-bag and drag-from-hand to fill crate/corpse
- * resource and suit card slots.
+ * When the player interacts with a tile that has a CrateSystem container,
+ * PeekSlots opens CrateUI overlaid on gameplay. For deposit containers
+ * (crates, corpses, and dungeon chests with demandRefill), it also
+ * registers DragDrop target zones for filling slots from bag/hand.
+ * For withdraw-only chests (surface/interior, demandRefill === false),
+ * only CrateUI opens — no DragDrop zones, no seal flow.
  *
  * States:
  *   IDLE     → player is walking around, peeks are autonomous
@@ -88,8 +89,14 @@ var PeekSlots = (function () {
       CrateUI.open(x, y, floorId);
     }
 
-    // Register DragDrop zones for each slot
-    _registerSlotZones();
+    // Register DragDrop zones only for deposit containers (crate/corpse)
+    // and dungeon chests that demand refilling. Surface/interior chests
+    // (demandRefill === false) are withdraw-only — no deposit zones.
+    var isDepositMode = (container.type !== CrateSystem.TYPE.CHEST) ||
+                        container.demandRefill;
+    if (isDepositMode) {
+      _registerSlotZones();
+    }
 
     // Play open sound
     if (typeof AudioSystem !== 'undefined') {
@@ -132,6 +139,10 @@ var PeekSlots = (function () {
   function trySeal() {
     if (_state !== STATE.FILLING) return false;
     if (typeof CrateSystem === 'undefined') return false;
+
+    // Chests don't seal — they're withdraw-only containers (or refill-only
+    // for dungeon depth, but sealing is still a crate/corpse mechanic).
+    if (_container && _container.type === CrateSystem.TYPE.CHEST) return false;
 
     if (!CrateSystem.canSeal(_targetX, _targetY, _floorId)) {
       if (typeof Toast !== 'undefined') {
@@ -356,12 +367,13 @@ var PeekSlots = (function () {
       return true;
     }
 
-    // S → seal
+    // S → seal (crate/corpse only — chests never seal)
     if (key === 'KeyS' || key === 's') {
+      if (_container && _container.type === CrateSystem.TYPE.CHEST) return false;
       return trySeal();
     }
 
-    // Delegate to CrateUI for number keys (1-5 fill slots)
+    // Delegate to CrateUI for number keys (1-5: withdraw for chests, fill for crates)
     if (typeof CrateUI !== 'undefined') {
       return CrateUI.handleKey(key);
     }

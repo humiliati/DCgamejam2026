@@ -411,4 +411,77 @@ These are explicitly deferred to post-jam:
 
 ---
 
-*End of Document — v1.0*
+## 9. PeekSlots Chest-Awareness (Implemented Apr 3)
+
+The PeekSlots bridge module (which wraps CrateUI for crate/corpse/chest interactions) has been updated with container-type awareness. This work is **prerequisite context** for the PeekSystem unification — the chest-specific behaviors documented here must be preserved when migrating to peek descriptors.
+
+### 9.1 Problem
+
+PeekSlots originally treated all CrateSystem containers identically: register DragDrop deposit zones, allow seal flow, allow S-key seal shortcut. This leaked dungeon cleaning-circuit mechanics (fill notifications, seal prompts) into withdraw-only chest containers on surface/interior floors.
+
+### 9.2 Changes
+
+**DragDrop zone gating** — `tryOpen()` only registers deposit zones when the container is deposit-mode:
+
+```javascript
+var isDepositMode = (container.type !== CrateSystem.TYPE.CHEST) ||
+                    container.demandRefill;
+```
+
+- CRATE / CORPSE → always deposit-mode (cleaning circuit)
+- CHEST with `demandRefill === true` (depth 3+ dungeon chests) → deposit-mode (cleaning circuit applies)
+- CHEST with `demandRefill === false` (surface/interior) → withdraw-only, no DragDrop zones
+
+**Seal flow blocked** — `trySeal()` returns false for all CHEST types:
+
+```javascript
+if (_container && _container.type === CrateSystem.TYPE.CHEST) return false;
+```
+
+**S-key ignored** — `handleKey()` suppresses the seal shortcut for chests:
+
+```javascript
+if (key === 'KeyS' || key === 's') {
+  if (_container && _container.type === CrateSystem.TYPE.CHEST) return false;
+  return trySeal();
+}
+```
+
+### 9.3 Depth-Based Chest Behavior Contract
+
+| Depth | Floor Example | Slots | Mode | DragDrop Zones | Seal | Deplete |
+|-------|---------------|-------|------|----------------|------|---------|
+| 1 (surface) | Floor 0, 1 | 1-5 | withdraw | ✗ | ✗ | ✓ (on empty) |
+| 2 (interior) | Floor 1.6 Home | 8-12 / 256 (stash) | withdraw | ✗ | ✗ | ✗ (stash) / ✓ |
+| 3+ (dungeon) | Floor 3+ | 1-5 | withdraw + refill | ✓ | ✗ | ✓ (on empty) |
+
+### 9.4 Implications for PeekSystem Migration
+
+When migrating ChestPeek to a PeekSystem descriptor (§7 Phase 2, step 4), the descriptor's `onInteract` hook must:
+
+1. Check `CrateSystem.getContainer()` for the faced tile
+2. Route to `PeekSlots.tryOpen()` which already handles all chest-awareness logic
+3. The descriptor should NOT independently register DragDrop zones — PeekSlots owns that decision
+4. Seal-related juice (the "sealed" close animation) should be skipped for CHEST variant peeks
+
+The PeekSystem's variant catalog (§6.4 Chest Peek) should be updated to note:
+
+- **Sub-label**: Should reflect depth context — "treasure chest → press [OK] to open" (surface) vs "supply chest → press [OK] to open / drag to restock" (dungeon)
+- **Juice**: Sparkle particles only for first-open (non-depleted). Depleted chests get dust particles.
+- **Special**: Stash chests (home, 256 slots) route to CrateUI grid renderer, not the standard peek box. The peek box should still appear for the facing/debounce cycle but the `onInteract` hands off to the full CrateUI overlay.
+
+### 9.5 CrateUI Stash Grid (New Renderer)
+
+CrateUI gained a scrollable 8-column grid renderer for stash containers (256 slots). This is relevant to PeekSystem because the stash interaction bypasses the standard peek→interact flow:
+
+- 8-column grid, 4 visible rows, 48px slots
+- Arrow keys + PageUp/Down for scrolling, smooth interpolation
+- Click-to-withdraw only (no number keys — too many slots)
+- Filled/empty count in title bar, scrollbar thumb on right edge
+- `_slotRects[]` array stores screen-space hit-test rectangles for pointer interaction
+
+When PeekSystem unification happens, the stash flow should be: PeekSystem facing check → ChestPeek descriptor fires → `onInteract` opens CrateUI in stash-grid mode → PeekSystem transitions to a "delegated" state (similar to PuzzlePeek in §6.9).
+
+---
+
+*End of Document — v1.1 (updated Apr 3: §9 PeekSlots chest-awareness)*

@@ -76,6 +76,7 @@ var SpatialContract = (function () {
       fogModel:         FOG.FADE,                  // Walls vanish into fog at distance
       fogDistance:       opts.fogDistance || 14,     // Distance where fog starts biting
       fogColor:         opts.fogColor || { r: 40, g: 50, b: 60 },  // Blueish haze
+      waterColor:       opts.waterColor || { r: 15, g: 35, b: 65 }, // Deep ocean blue for WATER tile floor
       ceilingType:      CEILING.SKY,
       skyPreset:        opts.skyPreset || 'cedar',   // Skybox preset name
       ceilColor:        opts.ceilColor || '#2a3a4a',
@@ -96,14 +97,14 @@ var SpatialContract = (function () {
       // ── Tile height offsets (Doom rule) ──
       // Positive = raised platform, negative = sunken recess.
       // Keyed by TILES constant value.
-      tileHeightOffsets: opts.tileHeightOffsets || _buildOffsets({
-        // DOOR/DOOR_BACK/DOOR_EXIT: no offset — flush with floor.
-        // The old 0.15 raise created a visible gap/band under doors
-        // that reads as transparency, especially on same-depth transitions.
+      // ── Tile height offsets (Doom rule) ──
+      // Biome overrides merge INTO these defaults (not replace).
+      tileHeightOffsets: _mergeTileTable(_buildOffsets({
         5: -0.12,     // STAIRS_DN — sunken into ground, "descending"
         6:  0.06,     // STAIRS_UP — slight rise, "ascending"
-        14: 0.15      // BOSS_DOOR — prominently elevated (intentional)
-      }),
+        14: 0.15,     // BOSS_DOOR — prominently elevated (intentional)
+        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+      }), opts.tileHeightOffsets),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
       // Raised tiles show this below the wall; sunken tiles show it above.
@@ -111,8 +112,9 @@ var SpatialContract = (function () {
 
       // ── Wall textures ──
       // Keyed by TILES constant value → TextureAtlas texture ID.
-      // null = fall back to flat color.
-      textures: opts.textures || _buildTextures({
+      // Biome overrides merge INTO these defaults — a biome only needs to
+      // list tiles it wants to remap, not every tile in the contract.
+      textures: _mergeTileTable(_buildTextures({
         1:  'concrete',        // WALL — modern commercial concrete
         2:  'door_wood',       // DOOR — wooden entrance
         3:  'door_wood',       // DOOR_BACK
@@ -124,17 +126,16 @@ var SpatialContract = (function () {
         18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
         30: 'torch_bracket_lit',   // TORCH_LIT — stone wall + burning torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — stone wall + charred bracket
-        35: 'fence_wood'       // FENCE — wooden rail (0.4× half-wall)
-      }),
+        35: 'fence_wood',      // FENCE — wooden rail (0.4× half-wall)
+        38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck (0.5× short wall, hose billboard above)
+      }), opts.textures),
 
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_cobble',
 
       // ── Per-tile-type floor texture overrides ──
-      // Keyed by TILES constant value → TextureAtlas texture ID.
-      // Walkable surface tiles (ROAD/PATH/GRASS) map to distinct floor textures.
-      // TREE/SHRUB tiles render grass underneath for natural ground.
-      tileFloorTextures: opts.tileFloorTextures || {
+      // Biome overrides merge INTO these defaults.
+      tileFloorTextures: _mergeTileTable({
         21: 'floor_grass',       // TREE — grass under trees
         22: 'floor_grass',       // SHRUB — grass under hedges
         32: 'floor_cobble',      // ROAD — cobblestone avenues
@@ -142,17 +143,17 @@ var SpatialContract = (function () {
         34: 'floor_grass',       // GRASS — meadow clearings
         35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
         37: 'bonfire_ring'       // MAILBOX — reuse stone ring base texture
-      },
+      }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
-      // Keyed by TILES constant value → height multiplier.
-      // Used for tiles that should render taller/shorter than the contract default.
-      tileWallHeights:  opts.tileWallHeights || {
+      // Biome overrides merge INTO these defaults.
+      tileWallHeights: _mergeTileTable({
         18: 0.3,    // BONFIRE — low stone ring, player sees over into fire cavity
         22: 0.5,    // SHRUB — half-height hedge
         35: 0.4,    // FENCE — railing, player sees over to skybox
-        37: 0.5     // MAILBOX — half-height post, emoji billboard sits above
-      },
+        37: 0.5,    // MAILBOX — half-height post, emoji billboard sits above
+        38: 0.5     // DUMP_TRUCK — short truck body, hose billboard floats above
+      }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time passes on the surface
@@ -195,16 +196,16 @@ var SpatialContract = (function () {
       useTemplate:      true,   // Generator should load template, not proc-gen
 
       // ── Tile height offsets (Doom rule) ──
-      tileHeightOffsets: opts.tileHeightOffsets || _buildOffsets({
-        // DOOR: no offset — flush with floor (gap artifact removed)
+      tileHeightOffsets: _mergeTileTable(_buildOffsets({
         5: -0.08,     // STAIRS_DN — trap door feel
         6:  0.06,     // STAIRS_UP — slight rise toward exit
-        14: 0.12      // BOSS_DOOR — elevated archway
-      }),
+        14: 0.12,     // BOSS_DOOR — elevated archway
+        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+      }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#151518',
 
       // ── Wall textures ──
-      textures: opts.textures || _buildTextures({
+      textures: _mergeTileTable(_buildTextures({
         1:  'wood_plank',      // WALL — warm wood interior
         2:  'door_wood',       // DOOR — room-to-room door
         3:  'door_wood',       // DOOR_BACK
@@ -217,20 +218,20 @@ var SpatialContract = (function () {
         30: 'torch_bracket_lit',   // TORCH_LIT — interior wall torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — extinguished
         36: 'terminal_screen'  // TERMINAL — CRT desk (retro-futuristic)
-      }),
+      }), opts.textures),
 
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_wood',
 
       // ── Per-tile-type floor texture overrides ──
-      tileFloorTextures: opts.tileFloorTextures || null,
+      tileFloorTextures: _mergeTileTable(null, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
-      tileWallHeights:  opts.tileWallHeights || {
+      tileWallHeights: _mergeTileTable({
         1:  2.5,    // WALL — extends above ceiling plane for close-up immersion
         18: 0.3,    // BONFIRE — low stone ring
         36: 0.6     // TERMINAL — desk height, CRT screen above
-      },
+      }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
       timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
@@ -285,15 +286,16 @@ var SpatialContract = (function () {
       chamberOverrides: chamberOverrides,
 
       // ── Tile height offsets (Doom rule) ──
-      tileHeightOffsets: opts.tileHeightOffsets || _buildOffsets({
+      tileHeightOffsets: _mergeTileTable(_buildOffsets({
         5: -0.10,     // STAIRS_DN — hole in the floor
         6:  0.05,     // STAIRS_UP — rough hewn steps upward
-        14: 0.15      // BOSS_DOOR — chamber entrance
-      }),
+        14: 0.15,     // BOSS_DOOR — chamber entrance
+        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+      }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#111',
 
       // ── Wall textures ──
-      textures: opts.textures || _buildTextures({
+      textures: _mergeTileTable(_buildTextures({
         1:  'stone_rough',     // WALL — rough dungeon stone
         2:  'door_wood',       // DOOR
         3:  'door_wood',       // DOOR_BACK
@@ -306,19 +308,19 @@ var SpatialContract = (function () {
         30: 'torch_bracket_lit',   // TORCH_LIT — dungeon wall torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — hero's mess
         36: 'terminal_screen'  // TERMINAL — dungeon data terminal
-      }),
+      }), opts.textures),
 
       // ── Floor texture ──
       floorTexture:     opts.floorTexture || 'floor_stone',
 
       // ── Per-tile-type floor texture overrides ──
-      tileFloorTextures: opts.tileFloorTextures || null,
+      tileFloorTextures: _mergeTileTable(null, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
-      tileWallHeights:  opts.tileWallHeights || {
+      tileWallHeights: _mergeTileTable({
         18: 0.3,    // BONFIRE — low stone ring
         36: 0.6     // TERMINAL — desk height
-      },
+      }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time ticks in the dungeons — pressure!
@@ -697,6 +699,32 @@ var SpatialContract = (function () {
    */
   function _buildTextures(obj) {
     return Object.freeze(obj);
+  }
+
+  /**
+   * Merge a tile-keyed table: defaults + overrides → frozen result.
+   * Biome overrides replace specific tile entries but defaults remain
+   * for any tile the biome doesn't mention. Prevents the Object.assign
+   * erasure bug where a biome's partial texture map silently drops
+   * tiles that exist in the base contract's defaults.
+   *
+   * @param {Object} defaults - Base tile table from contract constructor
+   * @param {Object|null} overrides - Biome-specific tile table (may be null/undefined)
+   * @returns {Object} Frozen merged table
+   */
+  function _mergeTileTable(defaults, overrides) {
+    if (!overrides) return defaults;
+    if (!defaults) return overrides;
+    var merged = {};
+    var keys = Object.keys(defaults);
+    for (var i = 0; i < keys.length; i++) {
+      merged[keys[i]] = defaults[keys[i]];
+    }
+    keys = Object.keys(overrides);
+    for (var i = 0; i < keys.length; i++) {
+      merged[keys[i]] = overrides[keys[i]];
+    }
+    return Object.freeze(merged);
   }
 
   /**

@@ -286,6 +286,18 @@ BarkLibrary.register('interior.bazaar', [
   { text: '🗣️ "Someone bought every scale fragment in stock yesterday. Every single one."', weight: 0.5 }
 ], { cooldownMs: 40000 });
 
+// ── Promenade Vendor — interact bark (dialoguePool for floor1_bazaar_vendor)
+// Fires when the player talks to the Market Vendor outside Coral Bazaar.
+// Friendly, commercial — she's there to sell, not to philosophise.
+BarkLibrary.register('npc.promenade.vendor', [
+  { text: '🛒 "Morning, Gleaner! Need supplies before heading down?"',            weight: 3 },
+  { text: '🛒 "Fresh stock today. Cards, tonics, the usual."',                    weight: 3 },
+  { text: '🛒 "Word is the Cellars are worse than last week. Stock up."',          weight: 2 },
+  { text: '🛒 "The heroes never buy anything. You lot are my real customers."',    weight: 2 },
+  { text: '🛒 "Got a crate of scale fragments in. Don\'t ask where from."',       weight: 1, oneShot: true },
+  { text: '🛒 "I hear the Tide faction is buying up half my inventory. Weird."',  weight: 0.5 }
+], { cooldownMs: 20000 });
+
 BarkLibrary.register('interior.guild', [
   { text: '🗣️ "Work order board\'s updated — Coral Cellars is priority."',           weight: 3 },
   { text: '🗣️ "Forty percent readiness? Heroes won\'t even bother."',                weight: 3 },

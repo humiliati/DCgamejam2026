@@ -55,6 +55,152 @@ var ViewportRing = (function () {
     quest:  { radius: 5, color: 'rgba(80,220,100,0.8)',  life: 0 }
   };
 
+  // ── Ring bark (north-anchored text) ─────────────────────────────────
+  // Renders interaction text centered at the top of the ring, inside the
+  // brass band. Queued entries cycle through with fade-in/linger/fade-out.
+  // SPATIAL_AUDIO_BARK_ROADMAP Phase 2 — jam-scope subset.
+
+  var BARK_FONT       = '12px monospace';
+  var BARK_LINE_H     = 16;          // px per line
+  var BARK_MAX_W_FRAC = 0.5;         // Max text width as fraction of canvas width
+  var BARK_PAD_X      = 14;          // Horizontal padding inside bubble
+  var BARK_PAD_Y      = 8;           // Vertical padding inside bubble
+  var BARK_OFFSET_Y   = 24;          // Pixels below ring's north edge (inside ring)
+  var BARK_BG         = 'rgba(20,18,14,0.72)';
+  var BARK_TEXT_COLOR  = 'rgba(230,220,190,0.95)';
+  var BARK_FADE_IN    = 200;         // ms
+  var BARK_LINGER     = 3500;        // ms
+  var BARK_FADE_OUT   = 600;         // ms
+  var BARK_QUEUE_MAX  = 4;
+
+  var _barkQueue = [];   // [{ text, lines, spawnT }]
+  var _barkActive = null;
+
+  /**
+   * Push interaction text to the ring-bark display.
+   * Renders centered at the north (top) of the free-look ring.
+   * @param {string} text
+   */
+  function showRingBark(text) {
+    if (!text) return;
+    // Wrap text to lines (deferred — needs canvas ctx, done at render time)
+    var entry = { text: text, lines: null, spawnT: 0 };
+    if (!_barkActive) {
+      _barkActive = entry;
+      _barkActive.spawnT = performance.now();
+    } else {
+      if (_barkQueue.length >= BARK_QUEUE_MAX) _barkQueue.shift();
+      _barkQueue.push(entry);
+    }
+  }
+
+  /** Advance bark queue — call each frame. */
+  function _tickBarkQueue(now) {
+    if (!_barkActive) return;
+    var totalLife = BARK_FADE_IN + BARK_LINGER + BARK_FADE_OUT;
+    if (now - _barkActive.spawnT > totalLife) {
+      // Current entry expired — advance queue
+      _barkActive = _barkQueue.shift() || null;
+      if (_barkActive) _barkActive.spawnT = now;
+    }
+  }
+
+  /** Word-wrap text into lines that fit within maxW pixels. */
+  function _wrapText(ctx, text, maxW) {
+    var words = text.split(' ');
+    var lines = [];
+    var line = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxW && line) {
+        lines.push(line);
+        line = words[i];
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  /** Render the active ring bark entry. */
+  function _renderBark(ctx, cx, cy, r, w, now) {
+    if (!_barkActive) return;
+
+    var age = now - _barkActive.spawnT;
+    var totalLife = BARK_FADE_IN + BARK_LINGER + BARK_FADE_OUT;
+
+    // Compute opacity
+    var alpha;
+    if (age < BARK_FADE_IN) {
+      alpha = age / BARK_FADE_IN;
+    } else if (age < BARK_FADE_IN + BARK_LINGER) {
+      alpha = 1;
+    } else if (age < totalLife) {
+      alpha = 1 - (age - BARK_FADE_IN - BARK_LINGER) / BARK_FADE_OUT;
+    } else {
+      alpha = 0;
+    }
+    if (alpha <= 0) return;
+
+    // Lazy word-wrap (first render frame)
+    ctx.font = BARK_FONT;
+    if (!_barkActive.lines) {
+      var maxW = w * BARK_MAX_W_FRAC;
+      _barkActive.lines = _wrapText(ctx, _barkActive.text, maxW);
+    }
+    var lines = _barkActive.lines;
+    if (!lines.length) return;
+
+    // Measure bubble
+    var textW = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var lw = ctx.measureText(lines[i]).width;
+      if (lw > textW) textW = lw;
+    }
+    var bubbleW = textW + BARK_PAD_X * 2;
+    var bubbleH = lines.length * BARK_LINE_H + BARK_PAD_Y * 2;
+    var bubbleX = cx - bubbleW / 2;
+    var bubbleY = cy - r + BARK_OFFSET_Y;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Background bubble (rounded rect)
+    var cr = 6;
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + cr, bubbleY);
+    ctx.lineTo(bubbleX + bubbleW - cr, bubbleY);
+    ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + cr);
+    ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - cr);
+    ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - cr, bubbleY + bubbleH);
+    ctx.lineTo(bubbleX + cr, bubbleY + bubbleH);
+    ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - cr);
+    ctx.lineTo(bubbleX, bubbleY + cr);
+    ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + cr, bubbleY);
+    ctx.closePath();
+    ctx.fillStyle = BARK_BG;
+    ctx.fill();
+
+    // Subtle brass border to match ring
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(180,160,120,0.35)';
+    ctx.stroke();
+
+    // Text lines
+    ctx.font = BARK_FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = BARK_TEXT_COLOR;
+    var textX = cx;
+    var textY = bubbleY + BARK_PAD_Y;
+    for (var j = 0; j < lines.length; j++) {
+      ctx.fillText(lines[j], textX, textY + j * BARK_LINE_H);
+    }
+
+    ctx.restore();
+  }
+
   // ── State ──────────────────────────────────────────────────────────
   var _enabled = true;
   var _lookOffset = 0;   // Updated each frame from Player.lookOffset
@@ -63,6 +209,8 @@ var ViewportRing = (function () {
 
   function init() {
     _indicators = [];
+    _barkQueue = [];
+    _barkActive = null;
   }
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -161,6 +309,10 @@ var ViewportRing = (function () {
 
     // ── 4. Directional indicator pips ──
     _renderIndicators(ctx, cx, cy, r, now);
+
+    // ── 5. Ring bark text (north-anchored interaction text) ──
+    _tickBarkQueue(now);
+    _renderBark(ctx, cx, cy, r, w, now);
 
     ctx.restore();
   }
@@ -271,6 +423,7 @@ var ViewportRing = (function () {
     addIndicator:     addIndicator,
     removeIndicator:  removeIndicator,
     clearIndicators:  clearIndicators,
+    showRingBark:     showRingBark,
     setEnabled:       setEnabled,
     RING_RADIUS_FRAC: RING_RADIUS_FRAC
   });

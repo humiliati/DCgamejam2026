@@ -450,6 +450,7 @@ var HazardSystem = (function () {
 
     // §9b: REST face reads last rest outcome for status feedback
     getLastRestResult: function () { return _lastRestResult; },
+    clearLastRestResult: function () { _lastRestResult = null; },
 
     // Expose for testing / debug
     HAZARD_DAMAGE: HAZARD_DAMAGE

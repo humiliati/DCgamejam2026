@@ -48,6 +48,7 @@ var StatusBar = (function () {
   var _dialogueNodeId = null;     // current node id
   var _dialogueOnEnd  = null;     // callback when conversation ends
   var _dialogueNpcPos = null;     // { x, y } for walk-away detection
+  var _dialoguePinned = false;    // pinned dialogues ignore walk-away (forced encounters)
 
   // ── Burst bark auto-expand tracking ──────────────────────────
   var _burstCount   = 0;          // Rapid entries in succession
@@ -99,6 +100,25 @@ var StatusBar = (function () {
       if (!_tooltipExpanded || _dialogueActive) return;
       if (_tooltipArea && _tooltipArea.contains(e.target)) return;
       _setExpanded(false);
+    });
+
+    // Keyboard shortcut: 1-5 selects dialogue choices during active dialogue.
+    // Keys map directly to choice index (1 → idx 0, 2 → idx 1, etc.).
+    document.addEventListener('keydown', function (e) {
+      if (!_dialogueActive) return;
+      var key = e.key;
+      if (key >= '1' && key <= '5') {
+        var idx = parseInt(key, 10) - 1;
+        // Verify a choice exists at this index on the current node
+        if (_dialogueTree && _dialogueNodeId) {
+          var node = _dialogueTree.nodes[_dialogueNodeId];
+          if (node && node.choices && node.choices[idx]) {
+            e.preventDefault();
+            e.stopPropagation();
+            _onDialogueChoice(idx);
+          }
+        }
+      }
     });
 
     // Button click handlers
@@ -398,6 +418,15 @@ var StatusBar = (function () {
     _history.unshift({ text: text, time: time, category: category });
     if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
 
+    // Forward to ViewportRing bark display (north-anchored on ring).
+    // All categories except 'system' and 'dim' get ring treatment —
+    // inspect results, NPC barks, pickup notices all show on the ring.
+    if (typeof ViewportRing !== 'undefined' && ViewportRing.showRingBark) {
+      if (category !== 'system' && category !== 'dim') {
+        ViewportRing.showRingBark(text);
+      }
+    }
+
     // If dialogue is active, log to history and rebuild — the bark appears
     // inline above the active dialogue node in the history panel.
     if (_dialogueActive) {
@@ -489,8 +518,10 @@ var StatusBar = (function () {
    * @param {Object}   npc       - { id, name, emoji }
    * @param {Object}   tree      - { root, nodes: { [id]: { text, choices } } }
    * @param {Function} [onEnd]   - Callback when conversation ends
+   * @param {Object}   [opts]    - Options: { pinned: bool } — pinned dialogues
+   *                                ignore walk-away detection (forced encounters).
    */
-  function pushDialogue(npc, tree, onEnd) {
+  function pushDialogue(npc, tree, onEnd, opts) {
     if (!tree || !tree.nodes || !tree.root) return;
     if (!_tooltipHistory) return;
 
@@ -503,13 +534,19 @@ var StatusBar = (function () {
     _dialogueNpc    = npc;
     _dialogueNodeId = tree.root;
     _dialogueOnEnd  = onEnd || null;
+    _dialoguePinned = !!(opts && opts.pinned);
     _activePriority = PRIORITY.DIALOGUE;
 
-    // Store NPC position for walk-away detection
-    _dialogueNpcPos = (npc.x != null && npc.y != null) ? { x: npc.x, y: npc.y } : null;
+    // Store NPC position for walk-away detection (null if pinned — never walks away)
+    _dialogueNpcPos = (!_dialoguePinned && npc.x != null && npc.y != null)
+      ? { x: npc.x, y: npc.y } : null;
 
     // Auto-expand so the history panel is visible
     _setExpanded(true);
+
+    // Toggle dialogue-mode CSS class — suppresses ruled-line background
+    // on the history panel so dialogue entries don't get doubled lines.
+    if (_tooltipHistory) _tooltipHistory.classList.add('sb-dialogue-mode');
 
     // Hide the latest row — dialogue lives entirely in history panel
     if (_tooltipLatest) _tooltipLatest.style.display = 'none';
@@ -576,8 +613,10 @@ var StatusBar = (function () {
       for (var i = 0; i < node.choices.length; i++) {
         var c = node.choices[i];
         var visitedCls = c.visited ? ' sb-dialogue-choice-visited' : '';
+        var keyNum = i + 1;  // 1-indexed for display
         html += '<span class="sb-dialogue-choice' + visitedCls + '" data-choice-idx="' + i + '">' +
-                '[' + _escHtml(c.label || c.text || 'Continue') + ']</span>';
+                '<span class="sb-choice-key">' + keyNum + '</span>' +
+                _escHtml(c.label || c.text || 'Continue') + '</span>';
       }
       html += '</span>';
     }
@@ -598,22 +637,42 @@ var StatusBar = (function () {
     // Mark visited
     choice.visited = true;
 
-    // Apply effects (same as DialogBox)
+    // Apply effects — full Canon §Choice Effects table
     if (choice.effect) {
+      // currency: add/subtract gold (negative = cost)
       if (choice.effect.currency && typeof CardAuthority !== 'undefined') {
         CardAuthority.addGold(choice.effect.currency);
         if (typeof HUD !== 'undefined') HUD.updatePlayer(Player.state());
       }
+      // heal: restore HP (capped at maxHp)
       if (choice.effect.heal && typeof Player !== 'undefined') {
         var ps = Player.state();
         ps.hp = Math.min(ps.maxHp, ps.hp + choice.effect.heal);
         if (typeof HUD !== 'undefined') HUD.updatePlayer(ps);
       }
+      // setFlag: set player.flags[key] = true
       if (choice.effect.setFlag && typeof Player !== 'undefined') {
         Player.state().flags[choice.effect.setFlag] = true;
       }
+      // giveItem: add item to player bag
       if (choice.effect.giveItem && typeof CardAuthority !== 'undefined') {
         CardAuthority.addToBag(choice.effect.giveItem);
+      }
+      // openShop: open the Shop system (vendor dialogue end-action)
+      if (choice.effect.openShop && typeof Shop !== 'undefined' && Shop.open) {
+        var shopFaction = choice.effect.factionId || (_dialogueNpc && _dialogueNpc.factionId) || 'tide';
+        Shop.open(shopFaction);
+      }
+      // callback: custom fn(ctx, npc) — Canon §Choice Effects
+      // ctx provides the choice, current node, and tree for external callbacks.
+      // Inline closures that take zero args still work (extra args ignored).
+      if (typeof choice.effect.callback === 'function') {
+        try {
+          var ctx = { choice: choice, nodeId: _dialogueNodeId, tree: _dialogueTree };
+          choice.effect.callback(ctx, _dialogueNpc);
+        } catch (cbErr) {
+          console.error('[StatusBar] Choice callback error:', cbErr);
+        }
       }
     }
 
@@ -635,13 +694,18 @@ var StatusBar = (function () {
    * Clear active inline dialogue, restore normal tooltip.
    */
   function clearDialogue() {
+    console.log('[StatusBar] clearDialogue — closing conversation');
     _dialogueActive = false;
     _dialogueActiveHtml = '';
     _dialogueTree   = null;
     _dialogueNpc    = null;
     _dialogueNodeId = null;
     _dialogueNpcPos = null;
+    _dialoguePinned = false;
     _activePriority = PRIORITY.NORMAL;
+
+    // Remove dialogue-mode class — restore ruled lines in history
+    if (_tooltipHistory) _tooltipHistory.classList.remove('sb-dialogue-mode');
 
     // Restore the latest row
     if (_tooltipLatest) {
@@ -675,6 +739,13 @@ var StatusBar = (function () {
 
   /** Check if dialogue is currently active (blocks movement). */
   function isDialogueActive() { return _dialogueActive; }
+
+  /** Get number of choices on the current dialogue node (0 if no dialogue). */
+  function getChoiceCount() {
+    if (!_dialogueActive || !_dialogueTree || !_dialogueNodeId) return 0;
+    var node = _dialogueTree.nodes[_dialogueNodeId];
+    return (node && node.choices) ? node.choices.length : 0;
+  }
 
   /**
    * Check if player has walked away from the NPC they're talking to.
@@ -838,6 +909,8 @@ var StatusBar = (function () {
     pushDialogue:      pushDialogue,
     clearDialogue:     clearDialogue,
     isDialogueActive:  isDialogueActive,
+    getChoiceCount:    getChoiceCount,
+    selectChoice:      _onDialogueChoice,
     checkWalkAway:     checkWalkAway,
     collapseIfIdle:    collapseIfIdle,
     setOnFlee: function (fn) { _onFleeCallback = fn; }

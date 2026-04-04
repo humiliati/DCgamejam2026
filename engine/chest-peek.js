@@ -11,7 +11,7 @@
  *
  * Text below box (two rows, left-aligned):
  *   treasure chest
- *   → open for loot
+ *   → take loot
  *
  * Layer 3 (after InteractPrompt, BoxAnim)
  * Depends on: BoxAnim, TILES, Player, MovementController, FloorManager
@@ -137,9 +137,16 @@ var ChestPeek = (function () {
 
     if (_subLabel) {
       _subLabel.textContent = '';
+      // Show depleted state if chest container has been emptied
+      var _isDepleted = false;
+      if (typeof CrateSystem !== 'undefined') {
+        var chestFloorId = FloorManager.getCurrentFloorId();
+        _isDepleted = CrateSystem.isDepleted(fx, fy, chestFloorId);
+      }
       _subLabel.appendChild(document.createTextNode('treasure chest'));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode('\u2192 open for loot'));
+      _subLabel.appendChild(document.createTextNode(
+        _isDepleted ? '\u2014 empty' : '\u2192 take loot'));
       _subLabel.style.color = 'rgba(255,210,100,0)';
     }
 

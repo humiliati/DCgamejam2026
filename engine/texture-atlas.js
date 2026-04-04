@@ -7,6 +7,28 @@
  * For the jam: all textures are generated procedurally at init() time.
  * Post-jam: load hand-pixeled PNGs through the same API.
  *
+ * ── ART DIRECTION (Apr 3 2026) ─────────────────────────────────────
+ *
+ *   Target look: HD-Minecraft pixel art — chunky readable blocks, not
+ *   photorealistic. Two style tiers:
+ *
+ *   NON-INTERACTIVE surfaces (walls, floors, pillars, fences):
+ *     Reference: _genShrub — large cluster blocks (5×4 px), 3-tier
+ *     shadow/mid/highlight, minimal per-pixel noise. Shapes should be
+ *     readable at a glance from TV distance (10 ft / LG webOS).
+ *
+ *   INTERACTIVE surfaces (chests, crates, doors, torches, terminals):
+ *     Reference: _genStashChest — higher detail with bands, rivets,
+ *     latches. Still pixel-art but finer structure so the player can
+ *     parse "this thing is interactable" vs background wall.
+ *
+ *   All generators are expected to get a post-jam HD freshen pass
+ *   toward this style. Current jam versions lean chunky over detailed.
+ *   When in doubt: bigger blocks, less per-pixel noise, stronger
+ *   per-block color contrast.
+ *
+ * ────────────────────────────────────────────────────────────────────
+ *
  * Usage by raycaster:
  *   var tex = TextureAtlas.get('brick_light');
  *   // tex = { width, height, canvas, data (Uint8ClampedArray) }
@@ -91,6 +113,12 @@ var TextureAtlas = (function () {
 
     _genWood('wood_dark', { baseR: 60, baseG: 40, baseB: 25, grainDark: 0.6 });
 
+    // Bookshelf — dark frame with colourful book spines (interactive)
+    _genBookshelf('bookshelf', {
+      frameR: 55, frameG: 38, frameB: 22,     // Dark wood frame
+      shelfR: 45, shelfG: 30, shelfB: 18      // Shelf edge (slightly darker)
+    });
+
     // Default door — flat twinkly porthole (used when direction unknown)
     _genDoorWood('door_wood', { baseR: 120, baseG: 80, baseB: 45,
       bandR: 80, bandG: 55, bandB: 30, porthole: 'flat' });
@@ -131,6 +159,9 @@ var TextureAtlas = (function () {
     _genConcrete('concrete_dark', { baseR: 70, baseG: 68, baseB: 72, variance: 6 });
 
     _genMetal('metal_plate', { baseR: 60, baseG: 65, baseB: 75, variance: 10 });
+
+    // Pressure wash dump truck body — blue-painted steel panel
+    _genMetal('truck_body', { baseR: 40, baseG: 60, baseB: 140, variance: 8 });
 
     _genPillar('pillar_stone', { baseR: 110, baseG: 105, baseB: 100 });
 
@@ -296,6 +327,20 @@ var TextureAtlas = (function () {
       trimR: 160, trimG: 160, trimB: 170
     });
 
+    // Dump truck wheel — black tire ring with grey hub
+    _genTruckWheel('decor_truck_wheel', {
+      tireR: 20, tireG: 20, tireB: 22,     // Black rubber tire
+      hubR: 90, hubG: 88, hubB: 85,        // Grey metal hub
+      axleR: 50, axleG: 48, axleB: 45      // Dark axle center
+    });
+
+    // Dump truck hose reel — blue spool with orange caps (matches diagram)
+    _genTruckHoseReel('decor_truck_hose', {
+      spoolR: 50, spoolG: 120, spoolB: 200, // Blue hose on spool
+      capR: 200, capG: 140, capB: 60,       // Orange/tan wooden caps
+      needleR: 180, needleG: 175, needleB: 190 // Light grey nozzle
+    });
+
     // Terminal desk wall texture (half-wall with CRT screen above)
     _genTerminalWall('terminal_screen', {
       deskR: 55, deskG: 52, deskB: 50,       // Grey metal desk
@@ -329,6 +374,14 @@ var TextureAtlas = (function () {
       flameR: 30,  flameG: 25,  flameB: 20,       // Charred stub (no flame)
       tipR: 40,    tipG: 35,    tipB: 28,          // Dark ash
       embers: false
+    });
+
+    // ── Pier / waterfront wall (Floor 1 south-side buildings) ────
+    _genWallPier('wall_pier', {
+      plankR: 62, plankG: 48, plankB: 32,       // Salt-weathered dark wood
+      gapR:   28, gapG:   22, gapB:   15,       // Dark gaps between boards
+      stainR: 50, stainG: 55, stainB: 58,       // Blue-grey salt stain tint
+      nailR: 100, nailG:  95, nailB:  88        // Nail head highlights
     });
 
     // ── A4.5 textures ────────────────────────────────────────────
@@ -396,9 +449,11 @@ var TextureAtlas = (function () {
   // ── Brick ──
 
   function _genBrick(id, p) {
-    var brickH = 8;  // brick height in pixels
-    var brickW = 16; // brick width in pixels
-    var mortarW = 1; // mortar line width
+    // Chunky pixel-art brick — fat bricks, thick mortar, strong per-brick
+    // colour, 3-tier edge shading, minimal per-pixel noise.
+    var brickH  = 10;  // taller bricks (was 8)
+    var brickW  = 16;  // same width
+    var mortarW = 2;   // thick mortar (was 1)
 
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
       var row = Math.floor(y / brickH);
@@ -406,9 +461,9 @@ var TextureAtlas = (function () {
       var offsetX = (row % 2 === 1) ? Math.floor(brickW / 2) : 0;
       var localX = (x + offsetX) % brickW;
 
-      // Mortar lines
+      // Thick mortar lines
       if (localY < mortarW || localX < mortarW) {
-        var mn = _hash(x + 100, y + 200) * 10 - 5;
+        var mn = (_hash(x + 100, y + 200) - 0.5) * 4;
         return {
           r: _clamp(p.mortarR + mn),
           g: _clamp(p.mortarG + mn),
@@ -416,15 +471,20 @@ var TextureAtlas = (function () {
         };
       }
 
-      // Brick face with per-brick color variation
-      var brickId = row * 10 + Math.floor((x + offsetX) / brickW);
-      var brickNoise = (_hash(brickId, row) - 0.5) * p.variance * 2;
-      var pixNoise = (_hash(x, y) - 0.5) * 8;
+      // Per-brick colour (strong variation like shrub clusters)
+      var brickId = row * 6 + Math.floor((x + offsetX) / brickW);
+      var brickTone = (_hash(brickId, row) - 0.5) * p.variance * 2.5;
+      // 3-tier shading: dark edges → mid → light center
+      var edgeDist = Math.min(localX - mortarW, brickW - mortarW - 1 - localX,
+                              localY - mortarW, brickH - mortarW - 1 - localY);
+      var tier = edgeDist < 2 ? 0.82 : (edgeDist > 4 ? 1.1 : 1.0);
+      // Minimal per-pixel noise (was 8)
+      var pn = (_hash(x, y) - 0.5) * 3;
 
       return {
-        r: _clamp(p.faceR + brickNoise + pixNoise),
-        g: _clamp(p.faceG + brickNoise + pixNoise * 0.8),
-        b: _clamp(p.faceB + brickNoise + pixNoise * 0.6)
+        r: _clamp((p.faceR + brickTone) * tier + pn),
+        g: _clamp((p.faceG + brickTone) * tier + pn * 0.8),
+        b: _clamp((p.faceB + brickTone) * tier + pn * 0.6)
       };
     });
   }
@@ -432,34 +492,43 @@ var TextureAtlas = (function () {
   // ── Stone ──
 
   function _genStone(id, p) {
+    // Chunky pixel-art stone — large irregular blocks, thick mortar,
+    // strong per-block colour, minimal per-pixel noise (shrub style).
+    var blockW = 16;  // wider blocks (was 12)
+    var blockH = 12;  // taller blocks (was 10)
+    var mortarW = 2;  // thick mortar (was 1)
+
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      // Irregular blocks: use hash to create "seams"
-      var blockX = Math.floor(x / 12);
-      var blockY = Math.floor(y / 10);
-      var seamX = x % 12;
-      var seamY = y % 10;
+      var row = Math.floor(y / blockH);
+      var localY = y % blockH;
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var adjX = (x + ox) % blockW;
+      var localX = adjX;
 
-      // Offset every other row
-      var ox = (blockY % 2 === 1) ? 6 : 0;
-      var adjX = (x + ox) % 12;
-
-      // Mortar seams
-      if (adjX < 1 || seamY < 1) {
+      // Thick mortar seams
+      if (localX < mortarW || localY < mortarW) {
+        var mn = (_hash(x + 300, y + 400) - 0.5) * 4;
         return {
-          r: _clamp(p.baseR * 0.5),
-          g: _clamp(p.baseG * 0.5),
-          b: _clamp(p.baseB * 0.5)
+          r: _clamp(p.baseR * 0.45 + mn),
+          g: _clamp(p.baseG * 0.45 + mn),
+          b: _clamp(p.baseB * 0.45 + mn)
         };
       }
 
-      var blockId = blockY * 8 + Math.floor((x + ox) / 12);
-      var blockNoise = (_hash(blockId, blockY + 50) - 0.5) * p.variance * 2;
-      var pixNoise = (_hash(x + 300, y + 400) - 0.5) * 10;
+      // Per-block colour (strong variation, shrub cluster style)
+      var blockId = row * 6 + Math.floor((x + ox) / blockW);
+      var blockTone = (_hash(blockId, row + 50) - 0.5) * p.variance * 2.5;
+      // 3-tier shading: shadow edge, mid, highlight center
+      var edgeDist = Math.min(localX - mortarW, blockW - mortarW - 1 - localX,
+                              localY - mortarW, blockH - mortarW - 1 - localY);
+      var tier = edgeDist < 2 ? 0.8 : (edgeDist > 4 ? 1.1 : 1.0);
+      // Minimal per-pixel noise (toned down from 10 → 3)
+      var pn = (_hash(x + 300, y + 400) - 0.5) * 3;
 
       return {
-        r: _clamp(p.baseR + blockNoise + pixNoise),
-        g: _clamp(p.baseG + blockNoise + pixNoise * 0.9),
-        b: _clamp(p.baseB + blockNoise + pixNoise * 0.8)
+        r: _clamp((p.baseR + blockTone) * tier + pn),
+        g: _clamp((p.baseG + blockTone) * tier + pn * 0.9),
+        b: _clamp((p.baseB + blockTone) * tier + pn * 0.8)
       };
     });
   }
@@ -467,22 +536,158 @@ var TextureAtlas = (function () {
   // ── Wood ──
 
   function _genWood(id, p) {
+    // Chunky pixel-art wood — wide plank bands, per-plank colour shift,
+    // dark grain as full-width stripes, minimal per-pixel noise.
+    var plankW = 10;  // wide vertical planks (was sine wave)
+    var grainH = 4;   // horizontal grain band height
+
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      // Vertical grain lines
-      var grainFreq = 0.4;
-      var grain = Math.sin(x * grainFreq + _hash(x, 0) * 3) * 0.5 + 0.5;
-      var darkGrain = grain < 0.3 ? p.grainDark : 1.0;
+      // Plank boundaries (vertical dark lines between planks)
+      var plankIdx = Math.floor(x / plankW);
+      var localX   = x % plankW;
+      if (localX < 1) {
+        return {
+          r: _clamp(p.baseR * p.grainDark * 0.7),
+          g: _clamp(p.baseG * p.grainDark * 0.7),
+          b: _clamp(p.baseB * p.grainDark * 0.7)
+        };
+      }
 
-      // Horizontal knot variation
-      var knot = _hash(Math.floor(x / 8), Math.floor(y / 16));
-      var knotEffect = knot > 0.92 ? -20 : 0;
-
-      var pixNoise = (_hash(x + 500, y + 600) - 0.5) * 10;
+      // Per-plank base colour (strong shift like shrub clusters)
+      var plankTone = (_hash(plankIdx, 600) - 0.5) * 18;
+      // Horizontal grain bands — alternating dark/light stripes
+      var grainBand = Math.floor(y / grainH);
+      var grainDark = (_hash(plankIdx + 50, grainBand + 70) > 0.6) ? p.grainDark : 1.0;
+      // Knot — rare chunky dark spot (per-plank, one per 16px height zone)
+      var knotZone = _hash(plankIdx + 700, Math.floor(y / 16) + 710);
+      var knotDarken = (knotZone > 0.92 && localX > 2 && localX < plankW - 2) ? -15 : 0;
+      // Minimal per-pixel noise (was 10)
+      var pn = (_hash(x + 500, y + 600) - 0.5) * 3;
 
       return {
-        r: _clamp(p.baseR * darkGrain + pixNoise + knotEffect),
-        g: _clamp(p.baseG * darkGrain + pixNoise * 0.7 + knotEffect),
-        b: _clamp(p.baseB * darkGrain + pixNoise * 0.4 + knotEffect)
+        r: _clamp((p.baseR + plankTone) * grainDark + pn + knotDarken),
+        g: _clamp((p.baseG + plankTone) * grainDark + pn * 0.7 + knotDarken),
+        b: _clamp((p.baseB + plankTone) * grainDark + pn * 0.4 + knotDarken)
+      };
+    });
+  }
+
+  // ── Bookshelf (dark wood frame + coloured book spines) ──
+
+  function _genBookshelf(id, p) {
+    // HD-Minecraft pixel art bookshelf: 3 horizontal shelf rows,
+    // each row filled with chunky coloured book spines. Frame is
+    // dark wood. Shelves are horizontal lines. Books are vertical
+    // stripes with per-spine colour variation.
+    //
+    // Layout (64px tall):
+    //   rows 0–2:   top frame
+    //   rows 3–19:  shelf A (books)
+    //   rows 20–21: shelf bar
+    //   rows 22–39: shelf B (books)
+    //   rows 40–41: shelf bar
+    //   rows 42–59: shelf C (books)
+    //   rows 60–63: bottom frame
+
+    var SHELF_ROWS = [
+      { top: 3,  bot: 19 },
+      { top: 22, bot: 39 },
+      { top: 42, bot: 59 }
+    ];
+    var SHELF_BARS = [[20, 21], [40, 41]];
+    var FRAME_TOP = 2;
+    var FRAME_BOT = 60;
+
+    // Book spine colour palette (earthy + jewel tones)
+    var SPINE_COLORS = [
+      { r: 140, g: 45,  b: 40  },  // deep red
+      { r: 45,  g: 80,  b: 130 },  // navy blue
+      { r: 55,  g: 110, b: 55  },  // forest green
+      { r: 130, g: 100, b: 45  },  // tan/gold
+      { r: 100, g: 55,  b: 110 },  // plum
+      { r: 90,  g: 70,  b: 50  },  // brown leather
+      { r: 120, g: 80,  b: 45  },  // amber
+      { r: 60,  g: 60,  b: 80  }   // slate
+    ];
+
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // ── Frame (top / bottom) ──
+      if (y <= FRAME_TOP || y >= FRAME_BOT) {
+        var fn = (_hash(x + 200, y + 300) - 0.5) * 4;
+        return {
+          r: _clamp(p.frameR + fn),
+          g: _clamp(p.frameG + fn),
+          b: _clamp(p.frameB + fn)
+        };
+      }
+
+      // ── Shelf bars (horizontal dividers) ──
+      for (var sb = 0; sb < SHELF_BARS.length; sb++) {
+        if (y >= SHELF_BARS[sb][0] && y <= SHELF_BARS[sb][1]) {
+          var sn = (_hash(x + 800, y + 900) - 0.5) * 3;
+          return {
+            r: _clamp(p.shelfR + sn + 8),
+            g: _clamp(p.shelfG + sn + 5),
+            b: _clamp(p.shelfB + sn + 3)
+          };
+        }
+      }
+
+      // ── Left/right frame edges ──
+      if (x <= 1 || x >= TEX_SIZE - 2) {
+        var en = (_hash(x + 400, y + 500) - 0.5) * 3;
+        return {
+          r: _clamp(p.frameR + en),
+          g: _clamp(p.frameG + en),
+          b: _clamp(p.frameB + en)
+        };
+      }
+
+      // ── Book spines ──
+      // Each spine is 3–5 px wide; colour seeded by shelf row + x position
+      var shelfIdx = -1;
+      for (var sr = 0; sr < SHELF_ROWS.length; sr++) {
+        if (y >= SHELF_ROWS[sr].top && y <= SHELF_ROWS[sr].bot) {
+          shelfIdx = sr;
+          break;
+        }
+      }
+      if (shelfIdx < 0) {
+        // Between-shelf gap (shouldn't happen but safety)
+        return { r: p.frameR, g: p.frameG, b: p.frameB };
+      }
+
+      // Spine width varies 3–5px, seeded per column position
+      var spineW = 3 + Math.floor(_hash(x + 100, shelfIdx + 200) * 3);
+      var spineIdx = Math.floor((x - 2) / spineW);
+
+      // Gaps between spines (dark shadow line)
+      var localX = (x - 2) % spineW;
+      if (localX === 0) {
+        return {
+          r: _clamp(p.shelfR - 5),
+          g: _clamp(p.shelfG - 5),
+          b: _clamp(p.shelfB - 3)
+        };
+      }
+
+      // Pick spine colour from palette
+      var cIdx = Math.floor(_hash(spineIdx + 50, shelfIdx * 7 + 300) * SPINE_COLORS.length);
+      var sc = SPINE_COLORS[cIdx];
+
+      // Per-pixel noise for texture
+      var pn = (_hash(x + 700, y + 800) - 0.5) * 6;
+
+      // Spine top highlight (first 2 rows of each spine section)
+      var shelfY = y - SHELF_ROWS[shelfIdx].top;
+      var highlight = (shelfY <= 1) ? 15 : 0;
+      // Spine bottom shadow (last row)
+      var shadow = (shelfY >= SHELF_ROWS[shelfIdx].bot - SHELF_ROWS[shelfIdx].top - 1) ? -12 : 0;
+
+      return {
+        r: _clamp(sc.r + pn + highlight + shadow),
+        g: _clamp(sc.g + pn + highlight + shadow),
+        b: _clamp(sc.b + pn * 0.7 + highlight + shadow)
       };
     });
   }
@@ -668,16 +873,42 @@ var TextureAtlas = (function () {
   // ── Concrete ──
 
   function _genConcrete(id, p) {
+    // Chunky pixel-art concrete — large panel blocks with thick seams,
+    // per-panel colour shift, 3-tier edge shading (matches shrub style).
+    var panelW = 32;  // big square panels (was seamless)
+    var panelH = 16;  // half-height panels (horizontal slabs)
+    var seamW  = 2;   // thick seam (was 1px)
+
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      // Smooth surface with very subtle noise + occasional seam lines
-      var pn = (_hash(x + 1200, y + 1300) - 0.5) * p.variance * 2;
-      var seamH = (y % 32) < 1 ? -10 : 0;
-      var seamV = (x % 32) < 1 ? -8 : 0;
+      var row   = Math.floor(y / panelH);
+      var localY = y % panelH;
+      var ox    = (row % 2 === 1) ? Math.floor(panelW / 2) : 0;
+      var localX = (x + ox) % panelW;
+
+      // Thick seam lines
+      if (localX < seamW || localY < seamW) {
+        var sn = (_hash(x + 1200, y + 1300) - 0.5) * 3;
+        return {
+          r: _clamp(p.baseR * 0.55 + sn),
+          g: _clamp(p.baseG * 0.55 + sn),
+          b: _clamp(p.baseB * 0.55 + sn)
+        };
+      }
+
+      // Per-panel tint (strong variation like shrub clusters)
+      var panelId = row * 4 + Math.floor((x + ox) / panelW);
+      var panelTone = (_hash(panelId, row + 90) - 0.5) * p.variance * 3;
+      // 3-tier: dark edges, light center
+      var edgeDist = Math.min(localX - seamW, panelW - seamW - 1 - localX,
+                              localY - seamW, panelH - seamW - 1 - localY);
+      var tier = edgeDist < 3 ? 0.85 : (edgeDist > 6 ? 1.08 : 1.0);
+      // Minimal per-pixel noise
+      var pn = (_hash(x + 1200, y + 1300) - 0.5) * 2;
 
       return {
-        r: _clamp(p.baseR + pn + seamH + seamV),
-        g: _clamp(p.baseG + pn + seamH + seamV),
-        b: _clamp(p.baseB + pn * 0.8 + seamH + seamV)
+        r: _clamp((p.baseR + panelTone) * tier + pn),
+        g: _clamp((p.baseG + panelTone) * tier + pn),
+        b: _clamp((p.baseB + panelTone) * tier + pn * 0.8)
       };
     });
   }
@@ -1424,6 +1655,97 @@ var TextureAtlas = (function () {
         r: _clamp(lr * topFade),
         g: _clamp(lg * topFade),
         b: _clamp(lb * topFade)
+      };
+    });
+  }
+
+  // ── Pier wall (horizontal ship-lap, salt-stained, chunky pixel-art) ──
+  //
+  // Waterfront building exterior: dark weathered horizontal planks with
+  // blue-grey salt staining. Reads as "dock warehouse / fish market" —
+  // distinct from interior wood_plank (lighter, vertical grain) and
+  // concrete (grey slabs, land-side). Matches shrub chunk style.
+
+  function _genWallPier(id, p) {
+    var plankH = 8;   // horizontal plank height (chunky)
+    var gapH   = 2;   // dark gap between planks
+    var postW  = 6;   // vertical support posts every 32px
+    var postInterval = 32;
+    var nailInterval = 16; // nail every 16px along each plank
+
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // ── Vertical support post ──
+      var postLocal = x % postInterval;
+      var isPost = postLocal < postW;
+      if (isPost) {
+        var postTone = (_hash(x + 900, Math.floor(y / 6) + 910) - 0.5) * 8;
+        // Darker than planks, minimal detail
+        var edgeD = Math.min(postLocal, postW - 1 - postLocal);
+        var postTier = edgeD < 1 ? 0.75 : 1.0;
+        return {
+          r: _clamp((p.plankR * 0.7 + postTone) * postTier),
+          g: _clamp((p.plankG * 0.7 + postTone * 0.8) * postTier),
+          b: _clamp((p.plankB * 0.7 + postTone * 0.5) * postTier)
+        };
+      }
+
+      // ── Plank/gap band ──
+      var bandY    = y % (plankH + gapH);
+      var plankIdx = Math.floor(y / (plankH + gapH));
+      var isGap    = bandY >= plankH;
+
+      if (isGap) {
+        var gn = (_hash(x + 920, y + 930) - 0.5) * 3;
+        return {
+          r: _clamp(p.gapR + gn),
+          g: _clamp(p.gapG + gn),
+          b: _clamp(p.gapB + gn)
+        };
+      }
+
+      // ── Nail heads ──
+      var localPlankY = bandY;
+      var nailX = x % nailInterval;
+      var isNail = (nailX >= 7 && nailX <= 9 && localPlankY >= 3 && localPlankY <= 5);
+      if (isNail) {
+        var nn = (_hash(x + 940, y + 950) - 0.5) * 6;
+        return {
+          r: _clamp(p.nailR + nn),
+          g: _clamp(p.nailG + nn),
+          b: _clamp(p.nailB + nn)
+        };
+      }
+
+      // ── Plank body ──
+      // Per-plank colour shift (strong, shrub-cluster style)
+      var plankTone = (_hash(plankIdx, 960) - 0.5) * 14;
+      // Salt stain patches — random blotches per plank section
+      var stainZone = _hash(Math.floor(x / 12) + 970, plankIdx + 980);
+      var hasStain  = stainZone > 0.65;
+      // 3-tier edge shading
+      var edgeDist = Math.min(localPlankY, plankH - 1 - localPlankY);
+      var tier = edgeDist < 1 ? 0.78 : (edgeDist > 3 ? 1.08 : 1.0);
+      // Minimal per-pixel noise
+      var pn = (_hash(x + 990, y + 991) - 0.5) * 3;
+
+      var pr, pg, pb;
+      if (hasStain) {
+        // Blend toward blue-grey salt stain
+        pr = p.plankR * 0.6 + p.stainR * 0.4 + plankTone * 0.5;
+        pg = p.plankG * 0.6 + p.stainG * 0.4 + plankTone * 0.5;
+        pb = p.plankB * 0.6 + p.stainB * 0.4 + plankTone * 0.5;
+      } else {
+        pr = p.plankR + plankTone;
+        pg = p.plankG + plankTone * 0.7;
+        pb = p.plankB + plankTone * 0.4;
+      }
+
+      return {
+        r: _clamp(pr * tier + pn),
+        g: _clamp(pg * tier + pn * 0.8),
+        b: _clamp(pb * tier + pn * 0.5)
       };
     });
   }
@@ -2426,6 +2748,110 @@ var TextureAtlas = (function () {
         r: _clamp(p.stoneR + stoneVar + pn - sootSq * (p.stoneR - p.sootR)),
         g: _clamp(p.stoneG + stoneVar * 0.8 + pn * 0.8 - sootSq * (p.stoneG - p.sootG)),
         b: _clamp(p.stoneB + stoneVar * 0.6 + pn * 0.6 - sootSq * (p.stoneB - p.sootB))
+      };
+    });
+  }
+
+  // ── Dump truck wheel decor ──────────────────────────────────────
+  // Black tire ring with grey hub, alpha-transparent background.
+  // Placed on DUMP_TRUCK wall faces via wallDecor system.
+
+  function _genTruckWheel(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      var cy = S / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var outerR = S * 0.48;   // Tire outer radius
+      var innerR = S * 0.28;   // Hub outer radius
+      var axleR  = S * 0.10;   // Axle center radius
+      var pn = (_hash(x + 9000, y + 9100) - 0.5) * 6;
+
+      if (dist > outerR) {
+        return { r: 0, g: 0, b: 0, a: 0 };  // Outside tire — transparent
+      }
+      if (dist > innerR) {
+        // Tire rubber — black with subtle tread noise
+        var tread = Math.sin(Math.atan2(dy, dx) * 12) * 4;
+        return {
+          r: _clamp(p.tireR + pn + tread),
+          g: _clamp(p.tireG + pn + tread),
+          b: _clamp(p.tireB + pn + tread),
+          a: 255
+        };
+      }
+      if (dist > axleR) {
+        // Hub — grey metal with spoke hints
+        var spoke = Math.cos(Math.atan2(dy, dx) * 5) > 0.6 ? 12 : 0;
+        return {
+          r: _clamp(p.hubR + pn + spoke),
+          g: _clamp(p.hubG + pn + spoke),
+          b: _clamp(p.hubB + pn + spoke),
+          a: 255
+        };
+      }
+      // Axle center — dark
+      return {
+        r: _clamp(p.axleR + pn),
+        g: _clamp(p.axleG + pn),
+        b: _clamp(p.axleB + pn),
+        a: 255
+      };
+    });
+  }
+
+  // ── Dump truck hose reel decor ────────────────────────────────
+  // Blue spool with orange end caps and nozzle (matches diagram).
+
+  function _genTruckHoseReel(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      var cy = S / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var pn = (_hash(x + 9200, y + 9300) - 0.5) * 6;
+
+      // Spool body — vertical cylinder with horizontal stripes (hose wraps)
+      var spoolW = S * 0.40;  // Half-width of spool body
+      var spoolH = S * 0.44;  // Half-height of spool body
+      var capH   = S * 0.10;  // Cap thickness (top + bottom)
+
+      // Outside bounding box — transparent
+      if (Math.abs(dx) > spoolW + capH * 0.3 || Math.abs(dy) > spoolH) {
+        // Nozzle — extends to the right from center
+        if (dy < 0 && dy > -S * 0.06 && x > cx + spoolW * 0.5 && x < S - 2) {
+          return {
+            r: _clamp(p.needleR + pn),
+            g: _clamp(p.needleG + pn),
+            b: _clamp(p.needleB + pn),
+            a: 255
+          };
+        }
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      // End caps (top and bottom of spool — wider, orange)
+      if (Math.abs(dy) > spoolH - capH) {
+        return {
+          r: _clamp(p.capR + pn),
+          g: _clamp(p.capG + pn),
+          b: _clamp(p.capB + pn),
+          a: 255
+        };
+      }
+
+      // Hose wraps — horizontal blue stripes with slight shade variation
+      var wrap = Math.floor((y - (cy - spoolH + capH)) / 3);
+      var wrapShade = (wrap % 2 === 0) ? 8 : -8;
+      return {
+        r: _clamp(p.spoolR + pn + wrapShade),
+        g: _clamp(p.spoolG + pn + wrapShade),
+        b: _clamp(p.spoolB + pn + wrapShade),
+        a: 255
       };
     });
   }

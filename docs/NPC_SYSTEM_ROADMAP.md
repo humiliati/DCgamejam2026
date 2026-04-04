@@ -466,10 +466,10 @@ These items must work for a playable DC Jam submission (April 5):
 - [x] Floor 1.6 (Gleaner's Home) — hand-authored, biome, spawn, door connection
 - [x] Work-keys pickup on Floor 1.6 → gate unlock → Dispatcher despawn
 - [x] `interior.bazaar` bark pool for Coral Bazaar patrons
-- [ ] Vendor ambient barks (proximity bark when near shop) — **Phase B**
+- [x] Vendor ambient barks (proximity bark when near shop) — **Phase B** *(npc.promenade.vendor pool + openShop effect)*
 - [ ] Guild interactive NPC with dialogue tree — **Phase B**
-- [ ] `[OK] Talk` on interactive NPCs routes to `NpcSystem.interact()` — **Phase B** *(NpcSystem dispatch wired; needs talkable NPC defs populated)*
-- [ ] Dispatcher force-facing mechanic (camera snap) — **Phase C**
+- [x] `[OK] Talk` on interactive NPCs routes to `NpcSystem.interact()` — **Phase B** *(NpcSystem dispatch wired; talkable NPC defs populated)*
+- [x] Dispatcher force-facing mechanic (camera snap) — **Phase C** *(MouseLook.lockOn/releaseLock in grab + interactive)*
 - [ ] Hero NPC AI — **Phase D**
 
 ---

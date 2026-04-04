@@ -1,7 +1,7 @@
 # Dungeon Gleaner — Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-02
-**Jam Deadline**: April 5, 2026 (3 days remaining)
+**Created**: 2026-03-28 | **Updated**: 2026-04-03
+**Jam Deadline**: April 5, 2026 (2 days remaining)
 **Goal**: Somewhat playable prototype → debug, smooth, and raise with designer portals through final week
 
 ---
@@ -22,6 +22,8 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-35 | [DEBUG_NOTES_SCREENER.md](#doc-35-debug_notes_screenermd) | 🟡 Living checklist | docs/ |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | 🟡 Living debug log | docs/ |
 | DOC-53 | [PLAYTEST_AND_BLOCKOUT_PROCEDURE.md](#doc-53-playtest_and_blockout_proceduremd) | 🟢 Blockout order + playtest cycle + tester guide | docs/ |
+| DOC-54 | [INTERACTIVE_OBJECTS_AUDIT.md](#doc-54-interactive_objects_auditmd) | 🟢 Tile-by-tile render/interact audit, biome override bug, bonfire menu trap | docs/ |
+| DOC-55 | [MENU_INTERACTIONS_CATALOG.md](#doc-55-menu_interactions_catalogmd) | 🟡 Complete interaction catalog for 4-face menu, StatusBar, system settings | docs/ |
 
 ### 📐 Design Bibles & Core Loop
 
@@ -44,6 +46,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-31a | [LIGHT_AND_TORCH_ROADMAP.md](#doc-31-light_and_torch_roadmapmd) | docs/ |
 | DOC-38 | [PLAYER_CONTROLLER_ROADMAP.md](#doc-38-player_controller_roadmapmd) | docs/ |
 | DOC-37 | [INPUT_CONTROLLER_ROADMAP.md](#doc-37-input_controller_roadmapmd) | docs/ |
+| DOC-54 | [INTERACTIVE_OBJECTS_AUDIT.md](#doc-54-interactive_objects_auditmd) | docs/ |
 | DOC-19 | [DOOR_EFFECTS_ROADMAP.md](#doc-19-door_effects_roadmapmd) | docs/ |
 
 ### 🎴 Card, Inventory & Combat
@@ -69,6 +72,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-32b | [TOOLTIP_BARK_ROADMAP.md](#doc-32-tooltip_bark_roadmapmd) | docs/ | Active |
 | DOC-12 | [PEEK_SYSTEM_ROADMAP.md](#doc-12-peek_system_roadmapmd) | docs/ | Active |
 | DOC-51 | [CINEMATIC_CAMERA_ROADMAP](#doc-51-cinematic-camera) | engine/cinematic-camera.js | Engine built, 3/7 presets wired |
+| DOC-55 | [MENU_INTERACTIONS_CATALOG.md](#doc-55-menu_interactions_catalogmd) | docs/ | Active |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | docs/ | Reference |
 
 **§ Cinematic Camera — cross-cutting wiring status (updated Apr 2, 2026)**
@@ -96,6 +100,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ |
 | DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ |
 | DOC-52 | [READINESS_BAR_ROADMAP.md](#doc-52-readiness_bar_roadmapmd) | docs/ |
+| — | [BONFIRE_BRAINSTORMING.md](#bonfire_brainstormingmd) | docs/ |
 
 ### 👤 NPCs, Barks & Audio
 
@@ -154,7 +159,6 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 |----------|--------|
 | PRESSURE_WASHING_BRAINSTORM.md | docs/Archive/ |
 | CSS_TO_USE.md | docs/ |
-| MENU_INTERACTIONS_CATALOG.md | docs/ |
 
 ---
 
@@ -622,6 +626,39 @@ All documents with scope summaries and section inventories. Each document now in
 **Implementation**: `engine/readiness-calc.js` (✅ refactored), `engine/hud.js` (✅ bar rendering), `engine/dungeon-schedule.js` (✅ built + 26 tests pass), `engine/mailbox-peek.js` (🔨 refactor pending §14)
 **Design refs**: DOC-7 §5 (economy/day loop), DOC-2 §16 (dungeon reset), DOC-30 (bonfire), DOC-22 (HUD layout), DOC-11 (factions)
 
+### DOC-54: INTERACTIVE_OBJECTS_AUDIT.md
+> **Scope**: Tile-by-tile rendering and interaction audit for every non-WALL opaque tile. Created during the sprite-inside-wall → step-fill cavity pivot. Documents two critical bugs fixed (biome override erasure, bonfire menu trap), full height/texture/interaction-mode matrix across exterior/interior/dungeon biomes, and remaining issues (CHEST walk-on inconsistency, TORCH exterior height mismatch, BREAKABLE interior height).
+
+| Section | Content | Status |
+|---|---|---|
+| Critical Bug: Biome Override Erasure | `tileWallHeights` replacing base defaults entirely — all biomes now explicit | ⚠️ Fixed |
+| Critical Bug: Bonfire Menu Trap | No interaction cooldown after menu close → inescapable re-open loop on LG | ⚠️ Fixed |
+| Tile-by-Tile Audit | 20-tile matrix: ID, walkability, opacity, height per biome, texture, visual composition | ✅ Reference |
+| Remaining Issues | CHEST walk-on vs short-wall, TORCH exterior height, BREAKABLE interior height | ❌ Open |
+| Interaction Modes Summary | Step-on auto, F-interact, Peek auto-show, NPC interact — full trigger matrix | ✅ Reference |
+| Session 2 Fixes | Billboard sprite centering (double +0.5 offset in mailbox/bonfire sprites) | ⚠️ Fixed |
+| Session 3 Fixes | Alpha-porthole abandoned → step-fill cavity technique adopted for HEARTH/BONFIRE | ⚠️ Fixed |
+| Files Changed | 10 engine files + 3 docs across 3 sessions | Reference |
+
+**Cross-refs**: DOC-31a (step-fill cavity §2.5), DOC-30 (bonfire polish), DOC-49 (blockout alignment), DOC-55 (interaction catalog)
+
+### DOC-55: MENU_INTERACTIONS_CATALOG.md
+> **Scope**: Complete interaction catalog for the 4-face rotating box menu (minimap/context, inventory, gear/journal, system settings), HUD footer bar (StatusBar), and all peek overlays. Every clickable element, display-only element, and stub-needed element with status (complete/stub/wired). Generated during Sprint 0 visual overhaul.
+
+| Section | Content |
+|---|---|
+| Face 0 — Minimap/Context | Pause, Bonfire, Shop, Harvest contexts — map display, warp button, faction rows |
+| Face 1 — Inventory | Card slots, bag grid, equipped quick-slots, drag-drop zones, sell parts |
+| Face 2 — Journal/Gear | Work orders, stat page, settings stubs |
+| Face 3 — System Settings | Volume, controls, quit stubs |
+| StatusBar Footer | Tooltip feed, HP/energy pips, battery, currency |
+| Peek Overlays | Per-tile peek trigger catalog cross-referenced with DOC-54 interaction modes |
+
+**Cross-refs**: DOC-21 (game flow), DOC-36 (Face 2 polish), DOC-54 (interaction audit), DOC-12 (peek system)
+
+### BONFIRE_BRAINSTORMING.md (companion to DOC-30)
+> **Scope**: Design brainstorming session for bonfire contextual contracts — baseline bonfire primitive + paired context providers (NPC/object/tile). Establishes the "bonfire = anchor, context = permissions" model that DOC-30 §11 implements. Covers waypoint/stash/time-advance gating by context type (campground, inn, home, dungeon deep).
+
 ---
 
 ## Cross-Roadmap Execution Order
@@ -796,6 +833,28 @@ Total estimate: **~42–52 hours across 8 days** (5–6.5h/day average).
 
 ---
 
+### 🟢 PHASE E.5 — Interactive Objects Audit Fixes + Playtest Gate (Apr 3)
+> Audit-driven fixes from DOC-54. Playtest gate: walk the full dispatcher→home→chest→key flow with no competing systems, no redundant triggers, correct 3D rendering, and clean peek menu lifecycle.
+
+| # | Task | Source Doc | Section | Est. | Status |
+|---|------|-----------|---------|------|--------|
+| E5.1 | Biome override erasure fix — all biomes explicitly declare all tile heights/textures | DOC-54 | Critical Bug 1 | — | ✅ DONE |
+| E5.2 | Bonfire menu trap — 800ms interaction cooldown after bonfire menu close | DOC-54 | Critical Bug 2 | — | ✅ DONE |
+| E5.3 | Sprite centering — remove double +0.5 offset in mailbox/bonfire sprites | DOC-54 | Session 2 | — | ✅ DONE |
+| E5.4 | Step-fill cavity pivot — HEARTH/BONFIRE use step-fill instead of alpha porthole | DOC-54 | Session 3 | — | ✅ DONE |
+| E5.5 | Hearth sandwich rendering — mantle stone + fire cavity + base stone three-zone column | DOC-54 + DOC-31a | §2.5 | — | ✅ DONE |
+| E5.6 | Short-wall cap rendering — TABLE, BED, CHEST, BAR_COUNTER lid surface | DOC-54 | Tile audit | — | ✅ DONE |
+| E5.7 | noFogFade flag — interactive sprites (mailbox, bonfire) stay opaque through fog | DOC-54 | Tile audit | — | ✅ DONE |
+| E5.8 | CHEST interaction mode — resolve walk-on vs F-interact dual trigger; ensure ChestPeek shows before CombatBridge.openChest fires; no redundant open paths | DOC-54 | Remaining Issues | 1h | ❌ OPEN |
+| E5.9 | Work keys chest (Floor 1.6) — 3D viewport renders chest at correct height, ChestPeek shows label, F-interact triggers _onPickupWorkKeys, gate unlocks | DOC-54 + DOC-55 | — | 30m | ❌ OPEN |
+| E5.10 | **PLAYTEST GATE**: Dispatcher dialogue on Floor 1 → walk to home → enter Floor 1.6 → face chest → ChestPeek overlay visible → F-interact → key acquired → gate unlocked → re-enter Floor 1 freely | DOC-53 | Scenario A | 30m | ❌ OPEN |
+
+**Phase E.5 status**: 7/10 done (audit fixes shipped), 3 remaining (chest interaction cleanup + playtest gate)
+**Unblocks**: Phase G playtesting — cannot run Scenario A-I without clean chest interaction flow
+**Design refs**: DOC-54 (audit), DOC-55 (menu catalog), DOC-53 (playtest procedure), DOC-12 (peek system)
+
+---
+
 ### 🟣 PHASE F — Economy Tuning & Tool Progression (Days 6–7: Apr 2–3)
 > Balance pass. Make the three loops feel rewarding. Gate tool upgrades to guild rank.
 
@@ -852,6 +911,11 @@ PHASE A ─┤                  ├──► PHASE B (Crate System) ─── B1
               ▼
          PHASE E (Encounters + Factions)
               │
+              ▼
+         PHASE E.5 (Interactive Objects Audit + Playtest Gate) ←── DOC-54 audit
+              │         E5.8 chest interaction cleanup
+              │         E5.9 work keys chest validation
+              │         E5.10 PLAYTEST GATE: dispatcher→home→chest→key
               ▼
          PHASE F (Economy Tuning)
               │

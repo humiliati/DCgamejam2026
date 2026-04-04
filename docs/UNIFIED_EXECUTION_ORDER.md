@@ -1,7 +1,7 @@
 # Unified Execution Order — All Visual Roadmaps
 
-> **Created:** 2026-03-31 | **Updated:** 2026-04-01 (S0.5 complete)
-> **Covers:** INVENTORY_CARD_MENU_REWORK, EYESONLY_3D_ROADMAP, NLAYER_RAYCASTER_ROADMAP, TEXTURE_ROADMAP, LIGHT_AND_TORCH_ROADMAP, SKYBOX_ROADMAP, PRESSURE_WASHING_ROADMAP
+> **Created:** 2026-03-31 | **Updated:** 2026-04-03 (Track IO added — interactive objects audit)
+> **Covers:** INVENTORY_CARD_MENU_REWORK, EYESONLY_3D_ROADMAP, NLAYER_RAYCASTER_ROADMAP, TEXTURE_ROADMAP, LIGHT_AND_TORCH_ROADMAP, SKYBOX_ROADMAP, PRESSURE_WASHING_ROADMAP, INTERACTIVE_OBJECTS_AUDIT
 > **Purpose:** Single source of truth for implementation sequencing across overlapping roadmap phases
 
 ---
@@ -465,3 +465,66 @@ These sprints extract proven game systems from EyesOnly and wire them into DG's 
 **S3 depends on:** S1 (LightingSystem for torch/glow integration)
 **S4 depends on:** S1, S3 (tool quality + loot scatter)
 **S5 depends on:** S4 (cleaning loop complete for Act 1 stakes)
+
+---
+
+## Interactive Objects Audit — Track IO (Apr 3)
+
+> **Source:** INTERACTIVE_OBJECTS_AUDIT.md (DOC-54), MENU_INTERACTIONS_CATALOG.md (DOC-55)
+> **Context:** Tile-by-tile rendering and interaction audit revealed biome override erasure,
+> bonfire menu trap, sprite centering bugs, and the HEARTH porthole→step-fill pivot.
+> Completed work runs parallel with Track A (raycaster changes).
+
+```
+Step IO-1: Biome override erasure — explicit heights/textures in all biomes      ✅ DONE
+  │  Root cause: tileWallHeights/textures objects fully replaced base defaults.
+  │  Fix: Each biome's object now includes ALL tiles with non-default values.
+  │
+Step IO-2: Bonfire menu trap — 800ms interaction cooldown                        ✅ DONE
+  │  Root cause: Magic Remote OK button = menu close + world interact.
+  │  Fix: _bonfireCooldownMs in game.js, drained in _tick().
+  │
+Step IO-3: Billboard sprite centering — mailbox + bonfire                        ✅ DONE
+  │  Root cause: +0.5 in sprite builder + +0.5 in _renderSprites = corner offset.
+  │  Fix: Removed redundant +0.5 from mailbox-sprites.js, bonfire-sprites.js.
+  │
+Step IO-4: Step-fill cavity pivot — HEARTH/BONFIRE fire rendering                ✅ DONE
+  │  Alpha porthole abandoned → step-fill (Doom rule) with tileHeightOffset.
+  │  HEARTH: 0.5 height, -0.40 offset → generous fire cavity.
+  │  BONFIRE: 0.3 height, -0.25 offset → stone ring with cavity glow.
+  │
+Step IO-5: Hearth sandwich — three-zone column rendering                         ✅ DONE
+  │  Mantle stone (70% lineHeight) → fire cavity (step-fill lip) → base stone.
+  │  Air intake grate (decor_grate) on base stone face.
+  │
+Step IO-6: Short-wall cap rendering — furniture lid surfaces                     ✅ DONE
+  │  TABLE, BED, CHEST, BAR_COUNTER draw horizontal cap when drawStart > halfH.
+  │  Texture top-edge sample at 65% brightness, fog-adjusted.
+  │
+Step IO-7: noFogFade flag — interactive sprites stay opaque                      ✅ DONE
+  │  Mailbox and bonfire sprites bypass fog alpha fade.
+  │
+Step IO-8: CHEST interaction mode cleanup                                        (1h)
+  │  Issue: CHEST is walkable (step-on auto-open via _onMoveFinish) BUT renders
+  │  as short wall (0.65–0.7×) AND has F-interact path (ChestPeek + CombatBridge).
+  │  This is two competing interaction triggers for the same tile.
+  │  Options: (a) Make CHEST non-walkable, F-interact only → clean peek lifecycle
+  │           (b) Keep walkable, remove from grid after open → one-shot pickup
+  │  Decision needed. Both options fix the dual-trigger redundancy.
+  │
+Step IO-9: Work keys chest validation (Floor 1.6)                                (30m)
+  │  Depends: IO-8 (chest interaction mode settled)
+  │  Verify: chest at (19,3) renders at correct height, ChestPeek shows label,
+  │  F-interact triggers _onPickupWorkKeys(), gate unlocks, Dispatcher despawns.
+  │
+Step IO-10: PLAYTEST GATE — Dispatcher→Home→Chest→Key                            (30m)
+     Full flow: Dispatcher dialogue tree on Floor 1 → walk to home door →
+     enter Floor 1.6 → face chest → ChestPeek overlay visible (3D box + label) →
+     F-interact → key acquired → exit home → re-enter Floor 1 → gate open.
+     NO competing systems. NO redundant open paths. Peek menu interactive and
+     dismissible without side effects.
+     Depends: IO-8, IO-9
+```
+
+**Track IO total**: IO-1 through IO-7 complete (audit fixes shipped), IO-8 through IO-10 open (~2h)
+**Unblocks**: Phase G playtesting (Scenario A requires clean chest interaction flow)

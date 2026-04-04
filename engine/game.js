@@ -48,6 +48,8 @@ var Game = (function () {
   // when player is still facing bonfire after closing the menu. Without
   // this, every OK press immediately re-opens the bonfire menu (trap).
   var _bonfireCooldownMs = 0;
+  var _bonfirePendingX = -1;   // Bonfire tile position for deferred rest
+  var _bonfirePendingY = -1;   // (rest executes from menu, not from interact)
 
   // ── Bark / Gate NPC state ─────────────────────────────────────────
   // Tracks whether the Day-1 Dispatcher gate encounter has been resolved.
@@ -205,6 +207,15 @@ var Game = (function () {
       DPad.setOnInteract(function () { _interact(); });
     }
 
+    // ── IO-8: Chest withdraw callback — detects work-keys pickup ──
+    if (typeof CrateUI !== 'undefined' && CrateUI.onWithdraw) {
+      CrateUI.onWithdraw(function (item, x, y, floorId) {
+        if (item && item.subtype === 'work_keys' && !_gateUnlocked) {
+          _onPickupWorkKeys();
+        }
+      });
+    }
+
     // ── Phase 3: ScreenManager transition wiring ──
     ScreenManager.onChange(_onScreenChange);
 
@@ -293,15 +304,22 @@ var Game = (function () {
       MenuBox.snapRight();
     });
 
-    // Turn (A/← and D/→) — ALWAYS snap to adjacent face, even on Face 3.
-    // Slider adjustment uses W/S to navigate rows and scroll wheel to fine-tune.
-    // Previously ←/→ was consumed by Face 3 sliders, trapping the player.
+    // Turn (A/← and D/→) — snap to adjacent face, UNLESS settings slider
+    // is focus-locked (Enter to lock), in which case ←/→ adjusts the slider.
     InputManager.on('turn_left', function (type) {
       if (type !== 'press' || !ScreenManager.isPaused()) return;
+      if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined' && MenuFaces.isSettingsLocked()) {
+        MenuFaces.handleSettingsAdjust(-1);
+        return;
+      }
       MenuBox.snapLeft();
     });
     InputManager.on('turn_right', function (type) {
       if (type !== 'press' || !ScreenManager.isPaused()) return;
+      if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined' && MenuFaces.isSettingsLocked()) {
+        MenuFaces.handleSettingsAdjust(+1);
+        return;
+      }
       MenuBox.snapRight();
     });
 
@@ -422,12 +440,46 @@ var Game = (function () {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(-1);
           } else if (hit.action === 'deck_scroll_right') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.scrollDeck(+1);
+          } else if (hit.action === 'book_scroll_up') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollBooks(-1);
+          } else if (hit.action === 'book_scroll_down') {
+            if (typeof MenuFaces !== 'undefined') MenuFaces.scrollBooks(+1);
+          } else if (hit.action === 'read_book') {
+            // Open the book from the journal's read-book list
+            var bookIdx = hit.slot - 900;
+            if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.getCatalog) {
+              var allCat = BookshelfPeek.getCatalog();
+              var readList = [];
+              for (var rbi = 0; rbi < allCat.length; rbi++) {
+                if (typeof Player !== 'undefined' && Player.hasFlag('book_read_' + allCat[rbi].id)) {
+                  readList.push(allCat[rbi]);
+                }
+              }
+              if (readList[bookIdx]) {
+                var bkOpen = readList[bookIdx];
+                // Close menu, then show the book in DialogBox
+                if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
+                if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+                  var pg = bkOpen.pages || [];
+                  var pageText = (bkOpen.icon || '') + ' ' + (bkOpen.title || bkOpen.id) + '\n\n' + (pg[0] || '');
+                  DialogBox.show(pageText, { priority: 2 });
+                }
+              }
+            }
           } else if (hit.action === 'expand_bag') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.toggleBagExpand();
           } else if (hit.action === 'expand_deck') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.toggleDeckExpand();
           } else if (hit.action === 'incinerator') {
             _incinerateFromFocus();
+          } else if (hit.action === 'rest') {
+            // Bonfire rest — deferred execution from menu button
+            if (_bonfirePendingX >= 0 && _bonfirePendingY >= 0) {
+              HazardSystem.restAtBonfire(_bonfirePendingX, _bonfirePendingY);
+              // Bonfire position consumed — prevent double-rest
+              _bonfirePendingX = -1;
+              _bonfirePendingY = -1;
+            }
           } else if (hit.action === 'warp' && hit.warpTarget) {
             // §9f: Confirm dialog before warping
             var _wt = hit.warpTarget;
@@ -473,6 +525,13 @@ var Game = (function () {
         }
         return;
       }
+      // CrateUI click during PeekSlots FILLING — route to slot hit-test
+      if (typeof CrateUI !== 'undefined' && CrateUI.isOpen() && CrateUI.handleClick) {
+        var ptr = InputManager.getPointer ? InputManager.getPointer() : null;
+        if (ptr && CrateUI.handleClick(ptr.x, ptr.y)) {
+          return;
+        }
+      }
       // InteractPrompt click during gameplay — fires _interact()
       if (typeof InteractPrompt !== 'undefined' && InteractPrompt.isVisible()) {
         if (InteractPrompt.handlePointerClick()) {
@@ -500,9 +559,23 @@ var Game = (function () {
         CombatReport.dismiss();
         return;
       }
+      // Settings face interact (Enter/Space toggles slider lock or toggle/language)
+      if (ScreenManager.isPaused() && MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
+        MenuFaces.handleSettingsInteract();
+        return;
+      }
       if (!ScreenManager.isPlaying()) return;
       if (DialogBox.isOpen()) {
         DialogBox.advance();
+        return;
+      }
+      // If StatusBar has an active dialogue with exactly one choice, auto-select it.
+      // Multi-choice nodes require clicking or number keys (1-5) to pick.
+      if (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive && StatusBar.isDialogueActive()) {
+        var choiceCount = StatusBar.getChoiceCount ? StatusBar.getChoiceCount() : 0;
+        if (choiceCount === 1 && StatusBar.selectChoice) {
+          StatusBar.selectChoice(0);
+        }
       }
     });
 
@@ -1647,104 +1720,10 @@ var Game = (function () {
       // Floor 1 — The Promenade (Dispatcher + key NPCs)
       // ════════════════════════════════════════════════════════════════
 
-      // ── Dispatcher ────────────────────────────────────────────────
-      // Intercepts the player near the east gate. Blocks passage to
-      // Floor 2 until the player has visited 1.6 (Gleaner's Home)
-      // and collected their work keys. Redirects player south to
-      // the SC pod where their bunk is.
-      NpcSystem.registerTree('floor1_dispatcher', {
-        root: 'greeting',
-        nodes: {
-          greeting: {
-            text: 'HEY. Hold it. You can\'t go through yet. You the new hire?',
-            choices: [
-              { label: 'I think so?', next: 'confirm' },
-              { label: 'Who are you?', next: 'who' },
-              { label: 'Let me through', next: 'letme' }
-            ]
-          },
-          confirm: {
-            text: 'Thought so. Got a notice about you. Listen — you can\'t access Lantern Row until you\'re on the books. Need your keys, your assignment card, all of it.',
-            choices: [
-              { label: 'Where do I get those?', next: 'where' },
-              { label: 'This seems like a lot of paperwork', next: 'paperwork' }
-            ]
-          },
-          who: {
-            text: 'I\'m the Dispatcher for this district. I manage Gleaner assignments, handle logistics, make sure nobody goes into the dungeons without proper clearance. And right now, you don\'t have clearance.',
-            choices: [
-              { label: 'How do I get clearance?', next: 'where' },
-              { label: 'I just got here', next: 'just_arrived' }
-            ]
-          },
-          letme: {
-            text: '*blocks the arch* No. Policy. I don\'t care if you walked all the way from the overpass — nobody enters Lantern Row without being processed. Go get your keys.',
-            choices: [
-              { label: 'Where do I get keys?', next: 'where' },
-              { label: 'Fine', next: 'fine' }
-            ]
-          },
-          just_arrived: {
-            text: 'I know. The truck drops off a new one every week. Look, here\'s what you need to do — head to your assigned bunk, pick up your keys and your assignment card. Then come back. Simple.',
-            choices: [
-              { label: 'Where\'s my bunk?', next: 'where' },
-              { label: 'Okay', next: 'fine' }
-            ]
-          },
-          where: {
-            text: 'Your bunk is at the Gleaner\'s Home. South side of the road — go back west a bit, take the path south at the second junction. Look for the mailbox. Door\'s unlocked. Your keys should be on the table.',
-            choices: [
-              { label: 'South, second junction, mailbox. Got it.', next: 'gotit' },
-              { label: 'Can you be more specific?', next: 'specific' }
-            ]
-          },
-          specific: {
-            text: 'From here, head WEST along the road. You\'ll pass the bonfire in the middle. At the second path branch going south — around where you see a bonfire to the south — turn. The house with the mailbox out front is yours. Can\'t miss it.',
-            choices: [
-              { label: 'Thanks', next: 'gotit' },
-              { label: 'What if I can\'t find it?', next: 'cantfind' }
-            ]
-          },
-          cantfind: {
-            text: '...It\'s the only building on the south side with a mailbox. If you can\'t find a building with a mailbox, Gleaner work might not be for you.',
-            choices: [
-              { label: 'Fair point', next: 'gotit' }
-            ]
-          },
-          paperwork: {
-            text: 'Paperwork keeps people alive. A Gleaner goes into a dungeon without proper clearance, gets hurt, and nobody knows they\'re down there. No rescue, no recovery. You want to be that person?',
-            choices: [
-              { label: 'No', next: 'where' },
-              { label: 'People get hurt doing this?', next: 'danger' }
-            ]
-          },
-          danger: {
-            text: 'Dungeons aren\'t safe. That\'s the whole point — the Hero goes through and makes a mess, and the Gleaner goes in after. Most floors are just dirty. But the deep ones... the deep ones still have teeth.',
-            choices: [
-              { label: 'Teeth?', next: 'teeth' },
-              { label: 'I\'ll get my keys', next: 'fine' }
-            ]
-          },
-          teeth: {
-            text: 'Monsters don\'t always die when the Hero hits them. Some play dead. Some regenerate. And some are built into the walls. Your keys include a whistle — two short blasts means "send help." Don\'t lose it.',
-            choices: [
-              { label: 'Noted. I\'ll get my keys.', next: 'gotit' }
-            ]
-          },
-          gotit: {
-            text: 'Good. Once you\'ve got your keys, come back here. I\'ll process your card and you can head through to Lantern Row. Welcome aboard, Gleaner.',
-            choices: [
-              { label: 'Thanks, Dispatcher', next: null }
-            ]
-          },
-          fine: {
-            text: 'Your bunk\'s in the south pod. Look for the mailbox. Get your keys. Come back. I\'ll be here.',
-            choices: [
-              { label: 'Got it', next: null }
-            ]
-          }
-        }
-      });
+      // ── Dispatcher — REMOVED from NpcSystem tree registry ─────────
+      // The Dispatcher gate NPC is fully owned by game.js via
+      // _spawnDispatcherGate() and inline dialogue in _openDispatcherDialogue().
+      // The NpcSystem definition was also removed from npc-system.js.
 
       // ── Market Vendor — Coral Bazaar approach ─────────────────────
       NpcSystem.registerTree('floor1_bazaar_vendor', {
@@ -1761,6 +1740,7 @@ var Game = (function () {
           sell: {
             text: 'Trap kits, cleaning solution, light sticks, ration packs. Everything a Gleaner needs to survive a shift. Prices are fair — the Guild subsidizes the basics.',
             choices: [
+              { label: 'Browse stock', next: null, effect: { openShop: true, factionId: 'tide' } },
               { label: 'Where\'s the entrance?', next: 'entrance' },
               { label: 'Thanks', next: null }
             ]
@@ -1930,49 +1910,146 @@ var Game = (function () {
         }
       });
 
-      // The Watchman — Floor 2.2 (shaken NPC guarding dungeon entrance)
+      // The Watchman — Floor 2.2 (competent tutorial NPC at dungeon staging)
+      // Explains adventurers smashed the door, directs player to clean up,
+      // offers branches for cleaning tutorial (book, hose, crate restock).
+      // Lore threads (Resonance, missing numbers) preserved as secondary branch.
       NpcSystem.registerTree('watchpost_watchman', {
         root: 'greeting',
         nodes: {
           greeting: {
-            text: '...you here for the Wake? Go ahead. Door\'s open. Just... watch yourself.',
+            text: 'Ah — you must be the new Gleaner. Welcome to the Post. Come in, come in. Mind the dust; the adventurers kicked up a storm on their way through.',
             choices: [
-              { label: 'What happened down there?', next: 'whathappened' },
-              { label: 'Are you okay?', next: 'okay' },
-              { label: 'Thanks', next: null }
+              { label: 'What happened here?', next: 'whathappened' },
+              { label: 'Dispatcher sent me to clean up', next: 'dispatched' },
+              { label: 'Just passing through', next: 'passing' }
             ]
           },
           whathappened: {
-            text: 'The Hero came through. Same as always. But this time... the sounds were different. Not fighting sounds. Something else. Something that stopped. All at once.',
+            text: 'What always happens. A party of adventurers kicked the door in last night — didn\'t even try the handle, of course — charged downstairs, and left a trail of carnage behind them. Standard Tuesday.',
             choices: [
-              { label: 'Stopped?', next: 'stopped' },
-              { label: 'I\'ll be careful', next: null }
+              { label: 'They broke the door?', next: 'door' },
+              { label: 'Carnage?', next: 'carnage' },
+              { label: 'What do I do now?', next: 'assignment' }
             ]
           },
-          stopped: {
-            text: 'The deep floors used to have a... hum. Faint. You get used to it. After the Hero went through, it stopped. First time in the eighteen years I\'ve been posted here.',
+          dispatched: {
+            text: 'Good. Ren from Dispatch already came through and handled the... sensitive material. Bodies, contraband, anything the Guild doesn\'t want a rookie tripping over. What\'s left is the grunt work — and that\'s you.',
             choices: [
-              { label: 'A hum?', next: 'hum' },
-              { label: '...', next: null }
+              { label: 'What kind of grunt work?', next: 'assignment' },
+              { label: 'Sensitive material?', next: 'sensitive' },
+              { label: 'Got it. Heading down.', next: 'sendoff' }
             ]
           },
-          hum: {
-            text: 'Like something breathing. Or singing very quietly. The old records call it the Resonance. I thought it was just the plumbing. Now I\'m not sure.',
+          passing: {
+            text: 'Nobody passes through here. This is a dead end — literally. Stairs go down, adventurers go down, and Gleaners go down after them to clean up the mess. If Dispatch sent you, you\'re in the right place.',
             choices: [
-              { label: 'The Resonance', next: null }
+              { label: 'Fine. What\'s the job?', next: 'assignment' },
+              { label: '...fair enough', next: 'assignment' }
             ]
           },
-          okay: {
-            text: 'I\'m fine. Just tired. Eighteen years watching a door. Counting people in, counting them out. The numbers don\'t always match. You learn to stop asking why.',
+          door: {
+            text: 'Smashed clean off the hinges. The Dispatcher told you it was locked, right? It wasn\'t. Hasn\'t been locked since the last party came through and decided a door was an insult to their heroic destiny. I stopped replacing it.',
             choices: [
-              { label: 'The numbers don\'t match?', next: 'numbers' },
-              { label: 'Take care of yourself', next: null }
+              { label: 'So the fetch quest was pointless', next: 'fetchquest' },
+              { label: 'What do I do now?', next: 'assignment' }
             ]
           },
-          numbers: {
-            text: 'More go in than come out. That\'s normal; some use the back exits, some get extracted by the Guild. But lately... the margin is wider. And nobody wants to talk about it.',
+          fetchquest: {
+            text: 'Welcome to bureaucracy. Dispatch sends you for keys to a door that isn\'t locked, then sends you here to clean a dungeon that\'s already been triaged. The system works. Mostly. Anyway — you\'re here now, and the floors below need attention.',
             choices: [
-              { label: '...', next: null }
+              { label: 'What needs doing?', next: 'assignment' },
+              { label: 'Who triaged it?', next: 'sensitive' }
+            ]
+          },
+          carnage: {
+            text: 'Adventurers don\'t tidy up after themselves. Smashed crates, scattered inventory, scorch marks on the walls, half-eaten rations everywhere. Some floors look like a tavern brawl hit a warehouse. That\'s what you\'re here for.',
+            choices: [
+              { label: 'How do I clean all that?', next: 'assignment' },
+              { label: 'Were there casualties?', next: 'casualties' }
+            ]
+          },
+          casualties: {
+            text: 'On the adventurer side? Not this time — they were high-level. On the other side... let\'s just say Ren from Dispatch already handled that part. What\'s left for you is property damage, not body recovery.',
+            choices: [
+              { label: 'Ren handled it?', next: 'sensitive' },
+              { label: 'Right. What\'s the job?', next: 'assignment' }
+            ]
+          },
+          sensitive: {
+            text: 'Ren\'s a veteran Gleaner — been with the Guild twenty years. Anything the Guild classifies as above your clearance, she bags and tags before you arrive. Corpses, artifacts, anything that hums. Don\'t worry about what she took. Worry about what she left.',
+            choices: [
+              { label: 'Anything that hums?', next: 'hum_hint' },
+              { label: 'What did she leave?', next: 'assignment' }
+            ]
+          },
+          hum_hint: {
+            text: 'Mmm. Probably nothing. The deep floors have a background vibration — something in the stone. Old-timers call it the Resonance. Used to be steady. Lately it... isn\'t. But that\'s above both our pay grades.',
+            choices: [
+              { label: 'The Resonance?', next: 'resonance' },
+              { label: 'Back to the job', next: 'assignment' }
+            ]
+          },
+          resonance: {
+            text: 'Like something breathing far below. Or singing very quietly. I\'ve been posted here eighteen years, and it\'s always been there. But after the last party went through... it stuttered. First time ever. I put it in my report. Nobody replied.',
+            choices: [
+              { label: '...', next: 'assignment' },
+              { label: 'I\'ll keep my ears open', next: 'assignment' }
+            ]
+          },
+          assignment: {
+            text: 'Three things you can do down there: restock the supply crates before the next wave of adventurers ransacks them, scrub walls and floors — the basics — or study up on advanced techniques. Your choice where to start.',
+            choices: [
+              { label: 'How do I restock crates?', next: 'crates' },
+              { label: 'How do I scrub?', next: 'scrub' },
+              { label: 'Study up?', next: 'books' },
+              { label: 'All three. Got it.', next: 'sendoff' }
+            ]
+          },
+          crates: {
+            text: 'Find a smashed crate, interact with it. If you\'ve got the right restocking materials in your bag, the crate refills automatically. Materials come from shops on the Promenade or from salvage you pick up along the way. Each restocked crate earns you pay and bumps the floor\'s readiness score.',
+            choices: [
+              { label: 'What about scrubbing?', next: 'scrub' },
+              { label: 'And the books?', next: 'books' },
+              { label: 'Good enough. Heading down.', next: 'sendoff' }
+            ]
+          },
+          scrub: {
+            text: 'Cobwebs, grime, scorch marks — interact with a dirty tile to clean it. For the heavier stuff, there\'s a pressure hose on the department cleanup rig parked outside on the street level. Grab it before you go down. The hose clears a whole wall section in one pass.',
+            choices: [
+              { label: 'Where\'s the cleanup rig?', next: 'hose' },
+              { label: 'What about restocking?', next: 'crates' },
+              { label: 'And the books?', next: 'books' },
+              { label: 'Got it. Heading down.', next: 'sendoff' }
+            ]
+          },
+          hose: {
+            text: 'Should be parked on Lantern Row — big flatbed truck, Guild markings, can\'t miss it. The hose is mounted on the side. Grab it and it goes in your bag. Uses charges, so use it on the stubborn spots and save elbow grease for the light stuff.',
+            choices: [
+              { label: 'What about restocking?', next: 'crates' },
+              { label: 'And the books?', next: 'books' },
+              { label: 'Heading down now.', next: 'sendoff' }
+            ]
+          },
+          books: {
+            text: 'There\'s a shelf down the hall with field manuals. Dungeon Hygiene Standards, Crate Inventory Protocol, that kind of thing. Dry reading, but the techniques in there will make your job faster. Some of the advanced methods — fire suppression, trap re-arming — you can only learn from the books.',
+            choices: [
+              { label: 'How do I restock crates?', next: 'crates' },
+              { label: 'What about scrubbing?', next: 'scrub' },
+              { label: 'I\'ll read up. Thanks.', next: 'sendoff' }
+            ]
+          },
+          sendoff: {
+            text: 'Stairs are at the back of the post. Watch your step going down — the adventurers cracked a few of those too. And Gleaner? Don\'t be a hero. Clean the floors, collect your pay, come back alive. That\'s the job.',
+            choices: [
+              { label: 'Copy that', next: null },
+              { label: 'Any last advice?', next: 'advice' }
+            ]
+          },
+          advice: {
+            text: 'Don\'t skip the corners — readiness inspectors check everything. Restock before you scrub; it\'s easier to clean around full crates than empty ones. And if you hear something moving in the dark? Walk the other way. The things the Hero left alive are the things the Hero couldn\'t be bothered to kill. Think about what that means.',
+            choices: [
+              { label: 'Understood', next: null }
             ]
           }
         }
@@ -2825,6 +2902,40 @@ var Game = (function () {
       if (cobFd) CobwebSystem.onFloorLoad(cobFd, floorId);
     }
 
+    // IO-8: Auto-create CrateSystem containers for CHEST tiles on floor load.
+    // Crates are created by BreakableSpawner; chests are hand-authored in grids
+    // so we scan after the grid is loaded. Skip if containers already exist
+    // (floor revisit with cached data).
+    if (typeof CrateSystem !== 'undefined') {
+      var chestFd = FloorManager.getFloorData();
+      if (chestFd && chestFd.grid) {
+        var cGrid = chestFd.grid;
+        var cW = chestFd.gridW || (cGrid[0] ? cGrid[0].length : 0);
+        var cH = chestFd.gridH || cGrid.length;
+        var cBiome = (chestFd.biome && chestFd.biome.name) ? chestFd.biome.name
+                   : (chestFd.biome || 'cellar');
+        for (var cy = 0; cy < cH; cy++) {
+          for (var cx = 0; cx < cW; cx++) {
+            if (cGrid[cy][cx] === TILES.CHEST && !CrateSystem.hasContainer(cx, cy, floorId)) {
+              // Home chest on Floor 1.6 at (19,3): large stash + work keys in slot 0
+              if (floorId === '1.6' && cx === 19 && cy === 3) {
+                var homeChest = CrateSystem.createChest(cx, cy, floorId, cBiome, { stash: true });
+                // Pre-fill slot 0 with work keys if gate is still locked
+                if (!_gateUnlocked && homeChest.slots.length > 0) {
+                  homeChest.slots[0].filled = true;
+                  homeChest.slots[0].frameTag = 'key_item';
+                  homeChest.slots[0].item = { name: 'Work Keys', emoji: '🗝️', type: 'key', subtype: 'work_keys' };
+                  homeChest.slots[0].matched = true;
+                }
+              } else {
+                CrateSystem.createChest(cx, cy, floorId, cBiome);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // C8: Work order posting and evaluation on floor transitions
     if (typeof WorkOrderSystem !== 'undefined') {
       if (depth >= 3) {
@@ -2950,6 +3061,12 @@ var Game = (function () {
    *   6. → _dispatcherPhase = 'grabbing' → dialogue tree opens
    */
   function _spawnDispatcherGate() {
+    // Restore session flag from persisted player state (save/load)
+    if (!_dispatcherDialogShown && typeof Player !== 'undefined' && Player.state) {
+      var pf = Player.state().flags;
+      if (pf && pf.dispatcher_met) _dispatcherDialogShown = true;
+    }
+
     var enemies = FloorManager.getEnemies();
     // Guard: don't double-spawn
     for (var i = 0; i < enemies.length; i++) {
@@ -2960,14 +3077,16 @@ var Game = (function () {
       ? NpcComposer.getVendorPreset('dispatcher')
       : null;
 
-    // Holding position: far corner, invisible until proximity trigger activates
-    var holdX = 1;
-    var holdY = 1;
+    // Find the actual gate position (DOOR leading to Floor 2)
+    var gatePos = _findGateDoorPos();
+    // Stand 1 tile west of the gate (toward the player's approach direction)
+    var spawnX = gatePos ? gatePos.x - 1 : 47;
+    var spawnY = gatePos ? gatePos.y : 17;
 
     var entity = {
       id:          _dispatcherSpawnId,
-      x:           holdX,
-      y:           holdY,
+      x:           spawnX,
+      y:           spawnY,
       name:        'Dispatcher',
       emoji:       stack ? stack.head : '🐉',
       stack:       stack,
@@ -2975,46 +3094,59 @@ var Game = (function () {
       hp:          999,
       maxHp:       999,
       str:         0,
-      facing:      'south',
+      facing:      'west',    // Faces the player's approach (from the road)
       awareness:   0,
       friendly:    true,
       nonLethal:   true,
-      blocksMovement: false,  // Does NOT block passage — grab sequence handles gating
-      _hidden:     true,      // Raycaster skips hidden entities
+      blocksMovement: true,   // Blocks the gate from the start
+      _hidden:     false,     // Visible on minimap and in raycaster
       tags:        ['gate_npc', 'dispatcher']
     };
 
     enemies.push(entity);
     _dispatcherEntity = entity;
-    _dispatcherPhase = 'idle';
 
-    console.log('[Game] Dispatcher gate NPC spawned in holding position — awaiting proximity trigger');
+    // If the encounter already played (player left Floor 1 and returned
+    // before getting keys), skip the choreography — go straight to 'done'.
+    // The dispatcher stays visible as a gatekeeper bump-NPC but doesn't
+    // re-run the barking → dialogue cinematic a second time.
+    if (_dispatcherDialogShown) {
+      _dispatcherPhase = 'done';
+      console.log('[Game] Dispatcher re-spawned as gatekeeper (encounter already completed)');
+    } else {
+      _dispatcherPhase = 'idle';
+      console.log('[Game] Dispatcher gate NPC spawned at gate (' + spawnX + ',' + spawnY + ') — awaiting proximity');
+    }
   }
 
   /**
-   * Find the gate door position on Floor 1 dynamically.
-   * Scans for STAIRS_DN or DOOR tiles. Blockout-agnostic — works on any layout.
-   * Falls back to configurable default if no suitable tile found.
+   * Find the gate door position on Floor 1 that leads to Floor 2.
+   * Uses doorTargets to find the DOOR keyed to target '2', which is the
+   * correct gate regardless of grid layout. Falls back to scanning for
+   * STAIRS_DN / BOSS_DOOR / DOOR if doorTargets is missing.
    * @returns {{x:number, y:number}|null}
    */
   function _findGateDoorPos() {
     var floorData = FloorManager.getFloorData();
     if (!floorData || !floorData.grid) return null;
 
-    // Scan grid for the gate tile (STAIRS_DN leads to Floor 2)
+    // Primary: check doorTargets for the door leading to Floor "2"
+    if (floorData.doorTargets) {
+      var keys = Object.keys(floorData.doorTargets);
+      for (var i = 0; i < keys.length; i++) {
+        if (floorData.doorTargets[keys[i]] === '2') {
+          var parts = keys[i].split(',');
+          return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
+        }
+      }
+    }
+
+    // Fallback: scan for STAIRS_DN or BOSS_DOOR
     for (var gy = 0; gy < floorData.gridH; gy++) {
       for (var gx = 0; gx < floorData.gridW; gx++) {
         var tile = floorData.grid[gy][gx];
         if (tile === TILES.STAIRS_DN || tile === TILES.BOSS_DOOR) {
           return { x: gx, y: gy };
-        }
-      }
-    }
-    // Fallback: check DOOR tiles (gate might use generic door)
-    for (var dy = 0; dy < floorData.gridH; dy++) {
-      for (var dx = 0; dx < floorData.gridW; dx++) {
-        if (floorData.grid[dy][dx] === TILES.DOOR) {
-          return { x: dx, y: dy };
         }
       }
     }
@@ -3091,32 +3223,17 @@ var Game = (function () {
     switch (_dispatcherPhase) {
 
       case 'idle': {
-        // Check proximity to gate door
-        var gatePos = _findGateDoorPos();
-        if (!gatePos) return;
+        // Dispatcher is visible at the gate. Check proximity to the dispatcher.
+        var ddx = pp.x - _dispatcherEntity.x;
+        var ddy = pp.y - _dispatcherEntity.y;
+        var dispDist = Math.sqrt(ddx * ddx + ddy * ddy);
 
-        var gdx = pp.x - gatePos.x;
-        var gdy = pp.y - gatePos.y;
-        var gateDist = Math.sqrt(gdx * gdx + gdy * gdy);
+        if (dispDist <= DISPATCHER_TRIGGER_RANGE) {
+          // ── Player approached the dispatcher — trigger encounter ──
+          _dispatcherPhase = 'grabbing';
 
-        if (gateDist <= DISPATCHER_TRIGGER_RANGE) {
-          // ── Activate: spawn behind player ──
-          var spawnPos = _findSpawnBehind(DISPATCHER_SPAWN_BEHIND);
-          _dispatcherEntity.x = spawnPos.x;
-          _dispatcherEntity.y = spawnPos.y;
-          _dispatcherEntity._hidden = false;
-
-          // Face toward player
-          var sdx = pp.x - spawnPos.x;
-          var sdy = pp.y - spawnPos.y;
-          if (Math.abs(sdx) >= Math.abs(sdy)) {
-            _dispatcherEntity.facing = sdx > 0 ? 'east' : 'west';
-          } else {
-            _dispatcherEntity.facing = sdy > 0 ? 'south' : 'north';
-          }
-
-          _dispatcherPhase = 'barking';
-          _dispatcherBarkTimer = DISPATCHER_BARK_DELAY_MS;
+          // Freeze player movement so buffered inputs can't walk away
+          MC.cancelAll();
 
           // ── Opening bark: "HEY [player class]!" ──
           var className = '';
@@ -3129,56 +3246,13 @@ var Game = (function () {
           if (typeof BarkLibrary !== 'undefined' && BarkLibrary.fire) {
             BarkLibrary.fire('npc.dispatcher.hail', { fallback: barkText });
           } else if (typeof Toast !== 'undefined') {
-            Toast.show('🐉 ' + barkText, 'warning');
+            Toast.show(barkText, 'warning');
           }
 
           // Voice chirp (loud, authoritative)
           if (typeof AudioSystem !== 'undefined') {
             AudioSystem.play('ui-blop', { volume: 0.6, playbackRate: 0.75 });
           }
-
-          console.log('[Game] Dispatcher activated — spawned at (' + spawnPos.x + ',' + spawnPos.y +
-                      ') behind player. Gate dist=' + gateDist.toFixed(1));
-        }
-        break;
-      }
-
-      case 'barking': {
-        // Wait for bark to land, then start rushing
-        _dispatcherBarkTimer -= dt;
-        if (_dispatcherBarkTimer <= 0) {
-          _dispatcherPhase = 'rushing';
-          _dispatcherRushTimer = 0;
-
-          // Second bark while approaching
-          var className2 = '';
-          if (typeof Player !== 'undefined' && Player.state) {
-            className2 = Player.state().avatarName || Player.state().className || 'Gleaner';
-          }
-          if (!className2) className2 = 'Gleaner';
-          if (typeof BarkLibrary !== 'undefined' && BarkLibrary.fire) {
-            BarkLibrary.fire('npc.dispatcher.hail2', { fallback: className2.toUpperCase() + '!' });
-          }
-
-          console.log('[Game] Dispatcher rushing toward player');
-        }
-        break;
-      }
-
-      case 'rushing': {
-        // Rush toward player at high speed
-        _dispatcherRushTimer -= dt;
-        if (_dispatcherRushTimer > 0) break;
-        _dispatcherRushTimer = DISPATCHER_RUSH_STEP_MS;
-
-        var dx = pp.x - _dispatcherEntity.x;
-        var dy = pp.y - _dispatcherEntity.y;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist <= DISPATCHER_GRAB_RANGE) {
-          // ── Within grab range — trigger cinematic ──
-          _dispatcherPhase = 'grabbing';
-          _dispatcherEntity.blocksMovement = true; // Now blocks passage
 
           // Calculate angle from player to dispatcher (for forced turn)
           var angleToDisp = Math.atan2(
@@ -3189,9 +3263,17 @@ var Game = (function () {
           // Force player to face the dispatcher
           var targetDir = (typeof Player !== 'undefined' && Player.radianToDir)
             ? Player.radianToDir(angleToDisp)
-            : MC.DIR_SOUTH;
+            : MC.DIR_EAST;
           MC.startTurn(targetDir);
           Player.setDir(targetDir);
+
+          // Lock MouseLook to dead-center during cinematic
+          if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
+            MouseLook.lockOn(0, 0);
+          }
+          if (typeof Player !== 'undefined' && Player.resetLookOffset) {
+            Player.resetLookOffset();
+          }
 
           // NPC faces player
           if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
@@ -3203,7 +3285,6 @@ var Game = (function () {
             CinematicCamera.start('dispatcher_grab', {
               focusAngle: angleToDisp,
               onMidpoint: function () {
-                // Bars at full height → open dialogue
                 _showDispatcherGateDialog();
               }
             });
@@ -3212,54 +3293,8 @@ var Game = (function () {
             _showDispatcherGateDialog();
           }
 
-          console.log('[Game] Dispatcher grab! Player forced to face dir=' + targetDir +
-                      ' | CinematicCamera=' + (typeof CinematicCamera !== 'undefined'));
-          break;
-        }
-
-        // ── Move one step toward player (with wall checks) ──
-        var stepDx = 0, stepDy = 0;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          stepDx = dx > 0 ? 1 : -1;
-        } else {
-          stepDy = dy > 0 ? 1 : -1;
-        }
-
-        var nx = _dispatcherEntity.x + stepDx;
-        var ny = _dispatcherEntity.y + stepDy;
-
-        // Wall check
-        var blocked = false;
-        if (floorData && floorData.grid && floorData.grid[ny] && floorData.grid[ny][nx] !== undefined) {
-          if (!TILES.isWalkable(floorData.grid[ny][nx])) blocked = true;
-        }
-
-        if (!blocked) {
-          _dispatcherEntity.x = nx;
-          _dispatcherEntity.y = ny;
-
-          // Update facing
-          if      (stepDx > 0) _dispatcherEntity.facing = 'east';
-          else if (stepDx < 0) _dispatcherEntity.facing = 'west';
-          else if (stepDy > 0) _dispatcherEntity.facing = 'south';
-          else if (stepDy < 0) _dispatcherEntity.facing = 'north';
-        } else {
-          // Try perpendicular step to navigate around walls
-          var altDx = 0, altDy = 0;
-          if (stepDx !== 0) { altDy = dy > 0 ? 1 : (dy < 0 ? -1 : 0); }
-          else              { altDx = dx > 0 ? 1 : (dx < 0 ? -1 : 0); }
-
-          var ax = _dispatcherEntity.x + altDx;
-          var ay = _dispatcherEntity.y + altDy;
-          if (floorData && floorData.grid && floorData.grid[ay] &&
-              TILES.isWalkable(floorData.grid[ay][ax])) {
-            _dispatcherEntity.x = ax;
-            _dispatcherEntity.y = ay;
-            if      (altDx > 0) _dispatcherEntity.facing = 'east';
-            else if (altDx < 0) _dispatcherEntity.facing = 'west';
-            else if (altDy > 0) _dispatcherEntity.facing = 'south';
-            else if (altDy < 0) _dispatcherEntity.facing = 'north';
-          }
+          console.log('[Game] Dispatcher encounter triggered — dist=' + dispDist.toFixed(1) +
+                      ' | forced face dir=' + targetDir);
         }
         break;
       }
@@ -3290,13 +3325,36 @@ var Game = (function () {
    * At 13px monospace in a ~428px box, lines wrap at ~33 chars. Long
    * dialogue is fine — it just flows to multiple lines.
    */
+  // Restored from Player.state().flags.dispatcher_met on floor arrival
   var _dispatcherDialogShown = false;
 
+  /**
+   * Dispatcher gate dialogue — Morrowind-style branching tree rendered
+   * inline in the StatusBar tooltip footer (not the DialogBox canvas overlay).
+   *
+   * First encounter (grab sequence):
+   *   "Oh you don't like when I patronize..." → 3 choices
+   *   [Who are you?] → reveals Department/clock → 2 more choices
+   *   [What keys?] → explains key location
+   *   [Where did FACTION hit?] → reveals dungeon target
+   *   [Who am I supposed to be?] → callsign + class ribbing
+   *   All branches → "Your keys are at the BnB..." → end
+   *
+   * Subsequent bumps: shorter redirect with leave / unlock options.
+   *
+   * Uses StatusBar.pushDialogue() per TOOLTIP_BARK_ROADMAP Phase 1.
+   * The first-person viewport stays visible throughout the conversation.
+   */
   function _showDispatcherGateDialog() {
-    if (typeof DialogBox === 'undefined') return;
+    if (typeof StatusBar === 'undefined' || !StatusBar.pushDialogue) return;
 
     var firstTime = !_dispatcherDialogShown;
     _dispatcherDialogShown = true;
+
+    // Persist flag so the encounter doesn't re-trigger on re-entry
+    if (typeof Player !== 'undefined' && Player.state) {
+      Player.state().flags.dispatcher_met = true;
+    }
 
     // Player identity tokens for dialogue
     var ps = (typeof Player !== 'undefined' && Player.state) ? Player.state() : {};
@@ -3307,121 +3365,126 @@ var Game = (function () {
 
     // Callback to close cinematic after dialogue ends
     var _closeCinematic = function () {
-      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
-        CinematicCamera.close();
+      console.log('[Game] _closeCinematic — releasing controls');
+      try {
+        if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
+          CinematicCamera.close();
+        }
+      } catch (e) {
+        console.error('[Game] CinematicCamera.close() error:', e);
       }
+      // Release MouseLook lock so free-look resumes
+      if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) {
+        MouseLook.releaseLock();
+      }
+      // Ensure movement queue is clean and player can move again
+      MC.cancelAll();
       _dispatcherPhase = 'done';
+      _updateQuestTarget();  // Phase 0 → Phase 1: now points to home/keys
     };
 
-    // ── Shared final redirect (all branches end here) ──
-    var _showKeyRedirect = function () {
-      DialogBox.show({
-        speaker:  'Dispatcher',
-        portrait: '\uD83D\uDC09',
-        text:     'Your keys are at the BnB. Head home, grab them, unlock the floor, and let the hazmat crew in. Go.',
-        priority: 3,
-        onClose: function () {
-          _closeCinematic();
-          if (typeof Toast !== 'undefined') {
-            Toast.show('\uD83D\uDDDD Go home and get your work keys', 'info');
-          }
-        }
-      });
+    // NPC descriptor for StatusBar speaker rendering
+    var dispatcherNpc = {
+      id:    _dispatcherSpawnId,
+      name:  'Dispatcher',
+      emoji: '\uD83D\uDC09',
+      x:     _dispatcherEntity ? _dispatcherEntity.x : 0,
+      y:     _dispatcherEntity ? _dispatcherEntity.y : 0
     };
+
+    // ── Build dialogue tree ──
+    var tree;
 
     if (firstTime) {
       // ── GRAB DIALOGUE — first encounter ──
-      DialogBox.show({
-        speaker:  'Dispatcher',
-        portrait: '\uD83D\uDC09',
-        text:     'Oh, you don\'t like when I patronize your delusions of grandeur, ' + callsign + '? Go get your keys from the BnB and unlock the floor so the hazmat crew can get in.',
-        priority: 3,
-        choices:  [
-          { label: 'Who are you?' },
-          { label: 'What keys?' },
-          { label: 'Where did ' + factionName + ' hit this time?' }
-        ],
-        onChoice: function (idx) {
-          if (idx === 0) {
-            // ── [Who are you?] ──
-            DialogBox.show({
-              speaker:  'Dispatcher',
-              portrait: '\uD83D\uDC09',
-              text:     'I\'m who the Department assigned to manage this region. See that clock in the top right of your screen?',
-              priority: 3,
-              choices:  [
-                { label: 'Who am I supposed to be?' },
-                { label: 'What keys?' },
-                { label: 'Where did ' + factionName + ' hit this time?' }
-              ],
-              onChoice: function (idx2) {
-                if (idx2 === 0) {
-                  // ── [Who am I supposed to be?] ──
-                  DialogBox.show({
-                    speaker:  'Dispatcher',
-                    portrait: '\uD83D\uDC09',
-                    text:     'You\'re supposed to go home and get your keys, unlock the door. Your file says you\'ve been assigned ' + callsign + ' and like to pretend you\'re a ' + playerClass + ' instead of working.',
-                    priority: 3,
-                    onClose: _showKeyRedirect
-                  });
-                } else if (idx2 === 1) {
-                  _showKeyRedirect();
-                } else {
-                  // ── [Where did FACTION hit?] from who-are-you branch ──
-                  DialogBox.show({
-                    speaker:  'Dispatcher',
-                    portrait: '\uD83D\uDC09',
-                    text:     'Lower floors. The usual mess. You\'ll see when you get down there \u2014 after you get your keys.',
-                    priority: 3,
-                    onClose: _showKeyRedirect
-                  });
+      tree = {
+        root: 'intro',
+        nodes: {
+          intro: {
+            text: 'You ' + callsign + '? New transfer? Great. I\'m your dispatcher. We had another incident on the lower floors and I need you onsite yesterday.',
+            choices: [
+              { label: 'What happened?',            next: 'what_happened' },
+              { label: 'Nice to meet you too.',     next: 'snide' },
+              { label: 'Just tell me what to do.',  next: 'key_redirect' }
+            ]
+          },
+          what_happened: {
+            text: '' + factionName + ' tore through here last night. Standard cleanup job. Walls need scrubbing, traps need resetting, the usual.',
+            choices: [
+              { label: 'Sounds rough.',             next: 'rough' },
+              { label: 'Where do I start?',         next: 'key_redirect' }
+            ]
+          },
+          snide: {
+            text: 'Save the charm for your landlord. I\'ve had four transfers this quarter and none of them lasted a week. Prove me wrong.',
+            choices: [
+              { label: 'Plan to.',                  next: 'key_redirect' },
+              { label: 'What happened to them?',    next: 'transfers' }
+            ]
+          },
+          transfers: {
+            text: 'Quit. Reassigned. One got too curious. Point is, the Department shuffles people and I\'m tired of the paperwork. Do the job, keep your head down.',
+            choices: [
+              { label: 'Noted. What\'s the job?',   next: 'key_redirect' }
+            ]
+          },
+          rough: {
+            text: 'It\'s the job. You signed up for this. Or the Department signed you up. Same thing.',
+            choices: [
+              { label: 'Where do I start?',         next: 'key_redirect' }
+            ]
+          },
+          key_redirect: {
+            text: 'First thing. Your work keys are back at the BnB. Go home, grab them, then come unlock this floor so the hazmat crew can get through.',
+            choices: [
+              { label: 'On my way.',
+                next: null,
+                effect: {
+                  callback: function () {
+                    if (typeof Toast !== 'undefined') {
+                      Toast.show('\uD83D\uDDDD\uFE0F Go home and get your work keys', 'info');
+                    }
+                  }
                 }
               }
-            });
-          } else if (idx === 1) {
-            // ── [What keys?] ──
-            _showKeyRedirect();
-          } else {
-            // ── [Where did FACTION hit this time?] ──
-            DialogBox.show({
-              speaker:  'Dispatcher',
-              portrait: '\uD83D\uDC09',
-              text:     'Lower floors. The usual mess. You\'ll see when you get down there \u2014 after you get your keys.',
-              priority: 3,
-              onClose: _showKeyRedirect
-            });
+            ]
           }
         }
-      });
+      };
     } else {
       // ── RETURN BUMPS — shorter redirect ──
-      DialogBox.show({
-        speaker:  'Dispatcher',
-        portrait: '\uD83D\uDC09',
-        text:     'Still here, ' + callsign + '? Your keys are at home. Get moving.',
-        priority: 3,
-        choices:  [
-          { label: 'On my way' },
-          { label: 'Actually, I have them now' }
-        ],
-        onChoice: function (idx) {
-          if (idx === 1) {
-            DialogBox.show({
-              speaker:  'Dispatcher',
-              portrait: '\uD83D\uDC09',
-              text:     'About time. Gate\'s open. Watch yourself down there.',
-              priority: 3,
-              onClose: function () {
-                _closeCinematic();
-                _onPickupWorkKeys();
+      tree = {
+        root: 'return_greeting',
+        nodes: {
+          return_greeting: {
+            text: 'Still here, ' + callsign + '? Your keys are at home. Get moving.',
+            choices: [
+              { label: 'On my way', next: null },
+              { label: 'Actually, I have them now', next: 'have_keys' }
+            ]
+          },
+          have_keys: {
+            text: 'About time. Gate\'s open. Watch yourself down there.',
+            choices: [
+              { label: 'Thanks.',
+                next: null,
+                effect: {
+                  callback: function () {
+                    _onPickupWorkKeys();
+                  }
+                }
               }
-            });
-          } else {
-            _closeCinematic();
+            ]
           }
         }
-      });
+      };
     }
+
+    // Push tree to StatusBar tooltip footer (pinned: forced encounter, no walk-away)
+    StatusBar.pushDialogue(dispatcherNpc, tree, function () {
+      // onEnd: fires when any null-next choice is picked (conversation over)
+      _closeCinematic();
+    }, { pinned: true });
   }
 
   /**
@@ -4021,29 +4084,46 @@ var Game = (function () {
   function _updateQuestTarget() {
     if (typeof Minimap === 'undefined' || !Minimap.setQuestTarget) return;
     var floorId = FloorManager.getFloor();
-    var floorData = FloorManager.getFloorData();
 
     if (!_gateUnlocked) {
-      // Phase 1: get work keys
-      if (floorId === '0') {
-        // Point at the door to Promenade (40×30 grid: door at 19,5)
-        Minimap.setQuestTarget({ x: 19, y: 5 });
-      } else if (floorId === '1') {
-        // Point at Gleaner's Home door (40×30 grid: east side at 34,9)
-        Minimap.setQuestTarget({ x: 34, y: 9 });
-      } else if (floorId === '1.6') {
-        // Point at the key chest (unchanged: 19,3)
-        Minimap.setQuestTarget({ x: 19, y: 3 });
+      if (_dispatcherPhase !== 'done') {
+        // Phase 0: meet the dispatcher at the gate
+        if (floorId === '0') {
+          // Point at the door to Promenade
+          Minimap.setQuestTarget({ x: 19, y: 5 });
+        } else if (floorId === '1') {
+          // Point at the dispatcher's actual position (at the gate)
+          if (_dispatcherEntity && !_dispatcherEntity._hidden) {
+            Minimap.setQuestTarget({ x: _dispatcherEntity.x, y: _dispatcherEntity.y });
+          } else {
+            var gateQ = _findGateDoorPos();
+            Minimap.setQuestTarget(gateQ ? { x: gateQ.x - 1, y: gateQ.y } : null);
+          }
+        } else {
+          Minimap.setQuestTarget(null);
+        }
       } else {
-        Minimap.setQuestTarget(null);
+        // Phase 1: get work keys — dispatcher sent us home
+        if (floorId === '1') {
+          // Point at Gleaner's Home door (SC pod at 22,27)
+          Minimap.setQuestTarget({ x: 22, y: 27 });
+        } else if (floorId === '1.6') {
+          // Point at the key chest (19,3)
+          Minimap.setQuestTarget({ x: 19, y: 3 });
+        } else {
+          Minimap.setQuestTarget(null);
+        }
       }
     } else {
-      // Phase 2: head to dungeon
+      // Phase 2: head to dungeon via east gate → Floor 2 → STAIRS_DN
       if (floorId === '1') {
-        // Point at Coral Bazaar entrance (40×30 grid: NW building at 12,3)
-        Minimap.setQuestTarget({ x: 12, y: 3 });
-      } else if (floorId === '1.1') {
-        // Point at stairs down to dungeon (unchanged: 7,4)
+        // Point at east gate to Lantern Row / dungeon entrance (48,17)
+        Minimap.setQuestTarget({ x: 48, y: 17 });
+      } else if (floorId === '1.6') {
+        // Still in home after getting keys — no marker (player will leave)
+        Minimap.setQuestTarget(null);
+      } else if (floorId === '2') {
+        // Point at stairs down to dungeon (7,4 on Floor 2)
         Minimap.setQuestTarget({ x: 7, y: 4 });
       } else {
         // In dungeon or elsewhere — no specific waypoint
@@ -4107,10 +4187,8 @@ var Game = (function () {
       return; // Transition handles everything from here
     }
 
-    if (tile === TILES.CHEST) {
-      CombatBridge.openChest(x, y);
-      SessionStats.inc('chestsOpened');
-    }
+    // CHEST is non-walkable (IO-8 Apr 3) — interaction via F-interact only.
+    // Walk-on auto-open removed; chest uses PeekSlots/CrateUI withdraw mode.
 
     // Hazard check — fire, traps, spikes, poison
     // If hazard kills the player, HazardSystem handles death
@@ -4200,7 +4278,7 @@ var Game = (function () {
         if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
           NpcSystem.engageTalk(_dispatcherEntity);
         }
-        // Turn player to face dispatcher
+        // Turn player to face dispatcher + lock MouseLook
         var ddx = _dispatcherEntity.x - pos.x;
         var ddy = _dispatcherEntity.y - pos.y;
         var bumpDir = (Math.abs(ddx) >= Math.abs(ddy))
@@ -4208,6 +4286,12 @@ var Game = (function () {
           : (ddy > 0 ? MC.DIR_SOUTH : MC.DIR_NORTH);
         MC.startTurn(bumpDir);
         Player.setDir(bumpDir);
+        if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
+          MouseLook.lockOn(0, 0);
+        }
+        if (typeof Player !== 'undefined' && Player.resetLookOffset) {
+          Player.resetLookOffset();
+        }
 
         _showDispatcherGateDialog();
       }
@@ -4312,11 +4396,10 @@ var Game = (function () {
     if (FloorTransition.tryInteractStairs(fx, fy)) return;
     if (FloorTransition.tryInteractDoor(fx, fy)) return;
 
-    // Work-keys pickup on Floor 1.6 (triggers gate unlock)
-    if (_checkWorkKeysChest(fx, fy)) {
-      _onPickupWorkKeys();
-      return;
-    }
+    // Work-keys chest on Floor 1.6 now goes through the CrateUI withdraw
+    // path like all other chests. The onWithdraw callback detects the
+    // work_keys subtype and fires _onPickupWorkKeys() automatically.
+    // (Old bypass removed — IO-8 standardization.)
 
     // NPC interaction — delegate to NpcSystem. All NPC types respond:
     // INTERACTIVE/DISPATCHER use dialogue trees, AMBIENT cycles barks.
@@ -4391,7 +4474,21 @@ var Game = (function () {
 
     var tile = floorData.grid[fy][fx];
     if (tile === TILES.CHEST) {
-      CombatBridge.openChest(fx, fy);
+      // IO-8: Chest uses PeekSlots/CrateUI withdraw mode (same as crate pattern).
+      // No legacy fallback — CombatBridge.openChest is never called for CHEST tiles.
+      var chestFloorId = FloorManager.getCurrentFloorId();
+      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
+          CrateSystem.hasContainer(fx, fy, chestFloorId)) {
+        if (PeekSlots.tryOpen(fx, fy, chestFloorId)) return;
+        // tryOpen returned false — container is sealed/depleted/busy
+        if (typeof Toast !== 'undefined') {
+          var cc = CrateSystem.getContainer(fx, fy, chestFloorId);
+          if (cc && cc.depleted) {
+            Toast.show('Chest is empty', 'dim');
+          }
+        }
+      }
+      return;  // Always return — no fallback to legacy openChest
     } else if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
       // Home bed → BedPeek handles sleep/day-advance (Floor 1.6, position 2,2)
       if (typeof BedPeek !== 'undefined' && FloorManager.getFloor() === '1.6' && fx === 2 && fy === 2) {
@@ -4403,8 +4500,13 @@ var Game = (function () {
       // 800ms. Prevents the OK-button trap where every press re-triggers
       // rest+menu while the player is still facing the bonfire tile.
       if (_bonfireCooldownMs > 0) return;
-      // Non-home bonfire/bed/hearth: heal + open stash MenuBox
-      HazardSystem.restAtBonfire(fx, fy);
+      // Open bonfire menu WITHOUT auto-resting. Rest executes from menu.
+      _bonfirePendingX = fx;
+      _bonfirePendingY = fy;
+      // Clear stale rest result so Face 0 shows pre-rest state
+      if (typeof HazardSystem !== 'undefined' && HazardSystem.clearLastRestResult) {
+        HazardSystem.clearLastRestResult();
+      }
       _pendingMenuContext = 'bonfire';
       _pendingMenuFace = 0;
       ScreenManager.toPause();
@@ -5366,7 +5468,17 @@ var Game = (function () {
     MC.tick(frameDt);
 
     // Smooth mouse free-look (acceleration + exponential lerp)
-    if (typeof MouseLook !== 'undefined' && MouseLook.tick) MouseLook.tick();
+    // Skip MouseLook tick when cinematic camera has locked input — prevents
+    // mouse cursor position from pulling the view away from the forced facing
+    // direction during dispatcher grab or other cinematic sequences.
+    if (typeof MouseLook !== 'undefined' && MouseLook.tick) {
+      var _cinInputLock = typeof CinematicCamera !== 'undefined' && CinematicCamera.isInputLocked();
+      if (!_cinInputLock || (MouseLook.isLocked && MouseLook.isLocked())) {
+        // Allow tick when: no cinematic lock, OR MouseLook has its own lockOn
+        // target (e.g. forced face-dispatcher → lockOn(0,0) still needs to lerp)
+        MouseLook.tick();
+      }
+    }
 
     // Get interpolated render position
     var renderPos = MC.getRenderPos();
@@ -5552,6 +5664,28 @@ var Game = (function () {
           bobY: MailboxSprites.getAnimatedY(mbs),
           glow: null,
           glowRadius: 0
+        });
+      }
+    }
+
+    // ── Dump truck billboard sprites (hose reel on truck body) ─────
+    if (typeof DumpTruckSprites !== 'undefined') {
+      var _dtFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
+      var dumpTruckSprites = DumpTruckSprites.buildSprites(
+        _dtFloorId, floorData.grid, floorData.gridW, floorData.gridH
+      );
+      DumpTruckSprites.animate(now);
+      for (var dti = 0; dti < dumpTruckSprites.length; dti++) {
+        var dts = dumpTruckSprites[dti];
+        _sprites.push({
+          x: dts.x,
+          y: dts.y,
+          emoji: dts.emoji,
+          emojiOverlay: dts.emojiOverlay || null,
+          scale: dts.scale,
+          bobY: dts.bobY || 0,
+          glow: dts.glow || null,
+          glowRadius: dts.glowRadius || 0
         });
       }
     }

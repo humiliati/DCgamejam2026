@@ -227,7 +227,8 @@ var FloorManager = (function () {
             21: 'tree_trunk',      // TREE — perimeter trees (brown trunk + green canopy)
             22: 'shrub',           // SHRUB — wayfinding hedgerows (half-height, see-over)
             35: 'fence_wood',      // FENCE — wooden rail
-            37: 'shrub'            // MAILBOX — shrub base matching grass floor (emoji billboard above via MailboxSprites)
+            37: 'shrub',           // MAILBOX — shrub base matching grass floor (emoji billboard above via MailboxSprites)
+            38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck body
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — 3.5× tall multi-story facade (dominates skyline)
@@ -240,13 +241,15 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — 2.5× tall perimeter trees (solid treeline)
             22: 0.5,               // SHRUB — half-height hedge (player sees over to buildings)
             35: 0.4,               // FENCE — railing, player sees over
-            37: 0.25               // MAILBOX — short stone platform, emoji framed inside
+            37: 0.25,              // MAILBOX — short stone platform, emoji framed inside
+            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
             6:   0.06,   // STAIRS_UP — slight rise (base default)
             14:  0.15    // BOSS_DOOR — elevated (base default)
             // BONFIRE: no offset on exterior — ring sits at ground level (visible like mailbox)
+            // DUMP_TRUCK: no offset — truck sits at ground level (same as bonfire)
           }),
           floorTexture: 'floor_brick_red',
           tileFloorTextures: Object.freeze({
@@ -277,7 +280,8 @@ var FloorManager = (function () {
             21: 'tree_trunk',      // TREE — perimeter trees
             22: 'shrub',           // SHRUB — wayfinding hedgerows
             35: 'fence_wood',      // FENCE — wooden rail
-            37: 'shrub'            // MAILBOX — shrub base matching grass floor
+            37: 'shrub',           // MAILBOX — shrub base matching grass floor
+            38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck body
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — multi-story facade (towers over treeline)
@@ -290,13 +294,14 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — 2.5× tall perimeter trees
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
-            37: 0.25               // MAILBOX — short stone platform
+            37: 0.25,              // MAILBOX — short stone platform
+            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
             6:   0.06,   // STAIRS_UP — slight rise (base default)
             14:  0.15    // BOSS_DOOR — elevated (base default)
-            // BONFIRE: no offset on exterior — ring sits at ground level (visible like mailbox)
+            // DUMP_TRUCK: no offset — truck sits at ground level (same as bonfire)
           }),
           floorTexture: 'floor_cobble',  // Polished stone walkway
           tileFloorTextures: Object.freeze({
@@ -343,7 +348,7 @@ var FloorManager = (function () {
             4:  'door_wood_asc',    // DOOR_EXIT — out to The Promenade
             7:  'stash_chest',      // CHEST — stash container
             10: 'stone_rough',      // PILLAR — mailbox post
-            25: 'wood_dark',        // BOOKSHELF — dark wood shelves
+            25: 'bookshelf',        // BOOKSHELF — dark wood shelves
             27: 'bed_quilt',        // BED — quilted blanket
             28: 'table_wood',       // TABLE — work surface
             29: 'hearth_riverrock'  // HEARTH — riverrock fireplace
@@ -354,7 +359,7 @@ var FloorManager = (function () {
             10: 2.0,               // PILLAR — full wall height decorative column
             27: 0.6,               // BED — low, player sees over it
             28: 0.7,               // TABLE — half-height surface
-            29: 1.6                 // HEARTH — taller than player, shorter than walls
+            29: 2.5                 // HEARTH — full chimney stack (floor-to-ceiling riverrock, fire cavity via tileHeightOffset)
           }),
           floorTexture: 'floor_wood'
         };
@@ -370,7 +375,7 @@ var FloorManager = (function () {
             5:  'stairs_down',      // STAIRS_DN (if applicable)
             6:  'stairs_up',        // STAIRS_UP
             10: 'wood_dark',        // PILLAR — dark wood accent columns
-            25: 'wood_dark',        // BOOKSHELF — dark wood shelves
+            25: 'bookshelf',        // BOOKSHELF — dark wood shelves
             26: 'wood_dark',        // BAR_COUNTER — bar surface
             27: 'bed_quilt',        // BED — inn guest bed
             28: 'table_wood',       // TABLE — dining table
@@ -383,7 +388,7 @@ var FloorManager = (function () {
             26: 0.8,               // BAR_COUNTER — counter height
             27: 0.6,               // BED — low inn bed
             28: 0.7,               // TABLE — dining height
-            29: 1.6                // HEARTH — tall fireplace
+            29: 0.5                // HEARTH — short base stone (sandwich: mantle above fire cavity)
           }),
           floorTexture: 'floor_wood'
         };
@@ -399,13 +404,13 @@ var FloorManager = (function () {
             5:  'stairs_down',      // STAIRS_DN — to dungeon
             6:  'stairs_up',        // STAIRS_UP
             10: 'stone_rough',      // PILLAR — stone columns
-            25: 'wood_dark',        // BOOKSHELF — dusty shelves
+            25: 'bookshelf',        // BOOKSHELF — dusty shelves
             29: 'hearth_riverrock'  // HEARTH — warming fire
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling for close-up immersion
             10: 1.8,               // PILLAR — cellar columns
-            29: 1.2                // HEARTH — modest fireplace
+            29: 0.5                // HEARTH — short base stone (sandwich: mantle above fire cavity)
           }),
           floorTexture: 'floor_dirt'
         };
@@ -426,7 +431,8 @@ var FloorManager = (function () {
             21: 'tree_trunk',       // TREE — perimeter trees
             22: 'shrub',            // SHRUB — wayfinding hedgerows
             35: 'fence_wood',       // FENCE — wooden rail
-            37: 'shrub'             // MAILBOX — shrub base matching grass floor
+            37: 'shrub',            // MAILBOX — shrub base matching grass floor
+            38: 'truck_body'        // DUMP_TRUCK — blue pressure wash truck body
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — multi-story commercial facades
@@ -439,20 +445,21 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — perimeter trees
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
-            37: 0.25               // MAILBOX — short stone platform
+            37: 0.25,              // MAILBOX — short stone platform
+            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
             6:   0.06,   // STAIRS_UP — slight rise (base default)
             14:  0.15    // BOSS_DOOR — elevated (base default)
-            // BONFIRE: no offset on exterior — ring sits at ground level (visible like mailbox)
+            // DUMP_TRUCK: no offset — truck sits at ground level (same as bonfire)
           }),
           floorTexture: 'floor_cobble',
           tileFloorTextures: Object.freeze({
             21: 'floor_grass',       // TREE — grass under trees
             22: 'floor_grass',       // SHRUB — grass under hedges
             32: 'floor_cobble',      // ROAD — cobblestone avenues
-            33: 'floor_dirt',        // PATH — dirt trails
+            33: 'floor_boardwalk',   // PATH — boardwalk planks (walkable boardwalk surface)
             34: 'floor_grass',       // GRASS — meadow clearings
             35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
             37: 'floor_grass'        // MAILBOX — grass under mailbox
@@ -468,7 +475,7 @@ var FloorManager = (function () {
             3:  'door_wood',        // DOOR_BACK
             4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
             10: 'stone_rough',      // PILLAR — stone columns
-            25: 'wood_dark',        // BOOKSHELF — filing shelves
+            25: 'bookshelf',        // BOOKSHELF — filing shelves
             28: 'table_wood'        // TABLE — dispatch desk
           }),
           tileWallHeights: Object.freeze({
@@ -489,7 +496,7 @@ var FloorManager = (function () {
             5:  'stairs_down',      // STAIRS_DN — to Hero's Wake
             6:  'stairs_up',        // STAIRS_UP
             10: 'stone_cathedral',  // PILLAR — stone columns
-            25: 'wood_dark',        // BOOKSHELF — records shelves
+            25: 'bookshelf',        // BOOKSHELF — records shelves
             28: 'table_wood'        // TABLE — planning table
           }),
           tileWallHeights: Object.freeze({
@@ -506,7 +513,7 @@ var FloorManager = (function () {
             5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
             29: 'hearth_riverrock'
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 1.0 }),
+          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
           floorTexture: 'floor_stone',
           fogColor: { r: 6, g: 4, b: 8 },
           stepColor: '#140e18'
@@ -519,7 +526,7 @@ var FloorManager = (function () {
             5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
             29: 'hearth_riverrock'   // HEARTH — dungeon rest point
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 1.0 }),
+          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
           floorTexture: 'floor_dirt'
         };
       case 'foundry':
@@ -530,7 +537,7 @@ var FloorManager = (function () {
             5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
             29: 'hearth_riverrock'   // HEARTH — dungeon rest point
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 1.0 }),
+          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
           floorTexture: 'floor_dirt',
           fogColor: { r: 12, g: 6, b: 3 },    // Warm furnace tint
           stepColor: '#1a1210'
@@ -549,7 +556,7 @@ var FloorManager = (function () {
             14: 'door_iron',       // BOSS_DOOR
             29: 'hearth_riverrock' // HEARTH — dungeon rest point
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 1.0 }),
+          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
           floorTexture: 'floor_tile',
           fogColor: { r: 2, g: 5, b: 12 },    // Cold fluorescent tint
           stepColor: '#0a1018'
@@ -629,14 +636,15 @@ var FloorManager = (function () {
         return SpatialContract.exterior(Object.assign({
           label: 'Lantern Row',
           wallHeight: 1.0,
-          renderDistance: 22,
-          fogDistance: 18,
+          renderDistance: 30,
+          fogDistance: 24,
           fogColor: { r: 35, g: 22, b: 15 },
+          waterColor: { r: 12, g: 30, b: 55 },  // Deep dusk-ocean blue
           ceilColor: '#d09060',
           floorColor: '#b8a080',
-          gridSize: { w: 32, h: 24 },
-          roomCount: { min: 3, max: 4 },
-          skyPreset: 'sunset',
+          gridSize: { w: 50, h: 36 },
+          roomCount: { min: 7, max: 7 },
+          skyPreset: 'lantern',
           parallax: [
             { depth: 0.95, color: '#b06040', height: 0.10 },
             { depth: 0.85, color: '#4a2030', height: 0.12 }
@@ -684,7 +692,7 @@ var FloorManager = (function () {
             10: 0,       // PILLAR — flush with floor (no floating)
             27: -0.15,   // BED — low to the ground, player looks down at it
             28: -0.10,   // TABLE — half-height work surface
-            29: -0.18    // HEARTH — sunken: step-fill lip above = fire cavity opening
+            29: -0.40    // HEARTH — deep sunken: generous fire cavity for sandwich rendering
           })
         }, biomeTextures));
       }
@@ -704,7 +712,7 @@ var FloorManager = (function () {
             26: -0.05,   // BAR_COUNTER — bar height offset
             27: -0.15,   // BED — low guest bed
             28: -0.10,   // TABLE — dining table
-            29: -0.18    // HEARTH — sunken: step-fill lip above = fire cavity opening
+            29: -0.40    // HEARTH — deep sunken: generous fire cavity for sandwich rendering
           })
         }, biomeTextures));
       }
@@ -722,7 +730,7 @@ var FloorManager = (function () {
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
             5: -0.12,    // STAIRS_DN — sunken entry to dungeon
-            29: 0.0      // HEARTH — flush fireplace
+            29: -0.40    // HEARTH — deep sunken: fire cavity for sandwich rendering
           })
         }, biomeTextures));
       }
@@ -954,7 +962,7 @@ var FloorManager = (function () {
   // South gate: EXIT(18,26)→"0" + GATE(20,26)→"2" (Lantern Row critical path)
   //
   // Landmarks:
-  //   BONFIRE(19,13) — central plaza rest point
+  //   BONFIRE(24,17) — central road plaza rest point (single exterior bonfire)
   //   MAILBOX(33,8)  — north of home door approach (33,9).
   //                     Blockout-agnostic: MailboxPeek._findMailboxTile() scans
   //                     for TILES.MAILBOX rather than hardcoding position.
@@ -962,6 +970,7 @@ var FloorManager = (function () {
   //                     tile to remain 1 tile N of the new approach tile.
   //                     Candidate alt positions: (33,10) S of approach,
   //                     or any EMPTY adjacent to the door approach path.
+  //   DUMP_TRUCK(30,26) — pressure wash truck parked in SE pod near well
 
   var _FLOOR1_W = 50;
   var _FLOOR1_H = 36;
@@ -979,7 +988,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,1,1,1,2,1,1,0,0,0,22,22,0,1,1,1,2,1,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) + Inn DOOR(22,8)
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 9
     [21,21,21,22,0,22,0,21,0,0,33,33,21,0,0,0,22,22,0,0,0,0,33,33,0,21,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //10  path stubs N
-    [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,18,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //11  NC bonfire(22,11)
+    [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //11  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //12
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //13  pod bottoms (C-gaps)
     [21,21,21,22,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,35,35,35], //14  pillar arcades
@@ -992,9 +1001,9 @@ var FloorManager = (function () {
     [21,21,21,22,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,35,35,35], //21  pillar arcades
     [21,21,21,22,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,35,35,35], //22
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //23  pod tops S (open N)
-    [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0,18,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  SC bonfire(19,24)
+    [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,37,33,0,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(22,25) outside home
-    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26
+    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  DUMP_TRUCK(30,26) — parked in SE pod
     [21,21,21,22,0,22,0,0,1,1,2,1,0,0,0,0,22,22,0,0,1,1,2,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + Home DOOR(22,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
@@ -1192,13 +1201,13 @@ var FloorManager = (function () {
       shops: [],
       mailboxHistory: { x: 19, y: 6 },  // PILLAR in storage room — mailbox history peek (§14)
       books: [
-        { x: 1,  y: 1,  bookId: 'fiction_love_among_crates' },  // Bedroom shelf — personal fiction
-        { x: 9,  y: 2,  bookId: 'tip_home_schedule' },          // Living room — work schedule
-        { x: 14, y: 2,  bookId: 'lore_gleaner_guild_charter' }, // Living room — guild lore
-        { x: 21, y: 1,  bookId: 'lore_dragon_history_1' },      // Storage shelf — dragon lore
-        { x: 20, y: 8,  bookId: 'fiction_dashing_rogue' },      // Storage shelf — adventure novel
-        { x: 9,  y: 15, bookId: 'tip_bazaar_shopping' },        // Entry hall — shopping guide
-        { x: 14, y: 15, bookId: 'fiction_ghost_of_pier_nine' }   // Entry hall — ghost story
+        { x: 1,  y: 1,  bookId: 'journal_personal_day0' },         // Bedroom shelf — personal journal
+        { x: 9,  y: 2,  bookId: 'notice_dispatcher_orientation' }, // Living room — dispatcher's orientation packet
+        { x: 14, y: 2,  bookId: 'journal_contract_terms' },        // Living room — filed employment contract
+        { x: 21, y: 1,  bookId: 'notice_landlord_welcome' },       // Storage shelf — landlord's welcome notice
+        { x: 20, y: 8,  bookId: 'journal_operative_brief' },       // Storage shelf — personnel file
+        { x: 9,  y: 15, bookId: 'journal_field_notes_day1' },      // Entry hall — dispatcher's log (day 1)
+        { x: 14, y: 15, bookId: 'letter_anonymous_tip' }            // Entry hall — unsigned letter (conspiracy hook)
       ]
     };
   }
@@ -1354,6 +1363,17 @@ var FloorManager = (function () {
             glowR: cgR, glowG: cgG, glowB: cgB, glowA: cgA,
             wobble: isHearth ? 0.02 : 0.015
           });
+          // HEARTH air intake grate — painted ON the base stone face
+          // (porthole method repurposed: surface-mounted hardware, not
+          // interior cavity effect). Low on the wall, small vent.
+          if (isHearth) {
+            decor[by][bx][bFaces[bf]].push({
+              spriteId: 'decor_grate',
+              anchorU: 0.5,
+              anchorV: 0.35,  // Low on base stone wall
+              scale: 0.20
+            });
+          }
         }
       }
     }
@@ -1420,6 +1440,42 @@ var FloorManager = (function () {
               scale: 0.2
             });
           }
+        }
+      }
+    }
+
+    // ── Dump truck wheel decor on DUMP_TRUCK faces ─────────────────
+    // Wheels at bottom-left and bottom-right of each visible face.
+    // Hose reel is now a billboard sprite (DumpTruckSprites) floating
+    // above the short truck body wall, matching the bonfire pattern.
+    for (var dty = 0; dty < H; dty++) {
+      for (var dtx = 0; dtx < W; dtx++) {
+        if (grid[dty][dtx] !== T.DUMP_TRUCK) continue;
+
+        var dtFaces = [];
+        if (dty > 0 && T.isWalkable(grid[dty - 1][dtx])) dtFaces.push('n');
+        if (dty < H - 1 && T.isWalkable(grid[dty + 1][dtx])) dtFaces.push('s');
+        if (dtx > 0 && T.isWalkable(grid[dty][dtx - 1])) dtFaces.push('w');
+        if (dtx < W - 1 && T.isWalkable(grid[dty][dtx + 1])) dtFaces.push('e');
+        if (dtFaces.length === 0) continue;
+
+        if (!decor[dty][dtx]) decor[dty][dtx] = { n: [], s: [], e: [], w: [] };
+        for (var dtf = 0; dtf < dtFaces.length; dtf++) {
+          var f = dtFaces[dtf];
+          // Left wheel — bottom-left of wall face
+          decor[dty][dtx][f].push({
+            spriteId: 'decor_truck_wheel',
+            anchorU: 0.22,
+            anchorV: 0.22,  // Low on the wall (near ground)
+            scale: 0.30
+          });
+          // Right wheel — bottom-right of wall face
+          decor[dty][dtx][f].push({
+            spriteId: 'decor_truck_wheel',
+            anchorU: 0.78,
+            anchorV: 0.22,
+            scale: 0.30
+          });
         }
       }
     }
