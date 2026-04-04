@@ -105,12 +105,12 @@ var MerchantPeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'merchant-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:38px monospace; color:rgba(200,180,100,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(200,180,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none; line-height:1.3;';
+        'pointer-events:none; line-height:1.4;';
       _labelLayer.appendChild(_subLabel);
     }
 
@@ -121,12 +121,12 @@ var MerchantPeek = (function () {
       _actionBtn.id = 'merchant-peek-action';
       _actionBtn.style.cssText =
         'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:130px; padding:8px 22px;' +
-        'font:bold 20px monospace; color:#d0c080; background:rgba(30,30,20,0.85);' +
+        'margin-top:130px; padding:12px 28px; min-height:48px;' +
+        'font:bold 18px monospace; color:#d0c080; background:rgba(30,30,20,0.85);' +
         'border:1px solid #c8b060; border-radius:6px;' +
-        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'cursor:pointer; pointer-events:auto; opacity:0; white-space:nowrap;' +
         'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s, box-shadow 0.15s;';
-      _actionBtn.textContent = '[OK] Browse Wares';
+      _actionBtn.textContent = 'Browse Wares';
       _actionBtn.addEventListener('click', _onActionClick);
       _actionBtn.addEventListener('mouseenter', function () {
         _actionBtn.style.borderColor = '#ffe080';
@@ -148,12 +148,12 @@ var MerchantPeek = (function () {
       _closeBtn.id = 'merchant-peek-close';
       _closeBtn.style.cssText =
         'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:170px; padding:6px 18px;' +
+        'margin-top:200px; padding:10px 20px; min-height:44px;' +
         'font:16px monospace; color:rgba(200,180,100,0.6); background:rgba(30,30,20,0.5);' +
         'border:1px solid rgba(200,180,100,0.25); border-radius:4px;' +
-        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'cursor:pointer; pointer-events:auto; opacity:0; white-space:nowrap;' +
         'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s;';
-      _closeBtn.textContent = '[ESC] Close';
+      _closeBtn.textContent = '\u2715 Close';
       _closeBtn.addEventListener('click', function () { _hide(); });
       _closeBtn.addEventListener('mouseenter', function () {
         _closeBtn.style.borderColor = 'rgba(200,180,100,0.6)';
@@ -262,10 +262,7 @@ var MerchantPeek = (function () {
     }
 
     if (_subLabel) {
-      _subLabel.textContent = '';
-      _subLabel.appendChild(document.createTextNode(fEmoji + ' ' + vendorName));
-      _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode('\u2192 browse wares'));
+      _subLabel.textContent = fEmoji + ' ' + vendorName;
       _subLabel.style.color = 'rgba(200,180,100,0)';
     }
 

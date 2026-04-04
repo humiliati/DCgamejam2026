@@ -275,6 +275,31 @@ var Skybox = (function () {
       water: false,
       oceanFloor: true,   // Bottom half: ocean floor view (looking down through glass)
       stars: true
+    },
+    // frontier_title — title-screen variant of the frontier (Garrison) preset.
+    //
+    // Canon view: "facing east from Floor 3 looking at the city arch, with
+    // parallax layers worked out." Locked to dusk for golden-hour drama (no
+    // phase table — stable cinematic composition). Top half reuses every
+    // frontier layer (indigo zenith, amber horizon haze, two parallax cloud
+    // bands at depth 0.2/0.35, shaped Vivec-canton city silhouette at depth
+    // 0.9, full-alpha star field). Bottom half: water reflection — the south
+    // boardwalk water at Floor 3 mirroring the dusk sky + city skyline in
+    // rippled amber. Matches SKYBOX_ROADMAP.md Phase 5d.
+    //
+    // Kept as a separate preset (rather than adding water:true to frontier)
+    // so the in-game Floor 3 exterior raycaster path — which calls render()
+    // directly — stays untouched. Only renderFull() reads .water/.oceanFloor.
+    frontier_title: {
+      zenith:  { r: 10, g: 12, b: 28 },
+      horizon: { r: 50, g: 32, b: 22 },
+      clouds: [
+        { y: 0.12, h: 0.10, depth: 0.2, speed: 0.0001, scale: 90, threshold: 0.48, opacity: 0.25, r: 80, g: 60, b: 70, seed: 300 },
+        { y: 0.30, h: 0.12, depth: 0.35, speed: 0.00014, scale: 60, threshold: 0.46, opacity: 0.2, r: 60, g: 45, b: 55, seed: 310 }
+      ],
+      mountains: { depth: 0.9, scale: 120, maxHeight: 0.25, color: 'rgba(18,14,24,0.95)', seed: 900, shaped: true },
+      water: true,        // Bottom half: rippled reflection of dusk sky + skyline
+      stars: true
     }
   };
 

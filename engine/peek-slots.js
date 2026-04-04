@@ -72,9 +72,15 @@ var PeekSlots = (function () {
 
     var container = CrateSystem.getContainer(x, y, floorId);
     if (!container) return false;
+    // Sealed state only applies to crates and corpse stocks — chests are
+    // withdraw-only and never enter the sealed state, so showing "Already sealed"
+    // for a chest would be confusing. Only surface the toast for deposit containers.
     if (container.sealed) {
-      if (typeof Toast !== 'undefined') {
-        Toast.show('\u2714 Already sealed', 'info');
+      var isDepositType = container.type !== CrateSystem.TYPE.CHEST;
+      if (typeof Toast !== 'undefined' && isDepositType) {
+        Toast.show('\u2714 ' + (typeof i18n !== 'undefined' && i18n.t
+          ? i18n.t('toast.already_sealed', 'Already sealed')
+          : 'Already sealed'), 'info');
       }
       return false;
     }

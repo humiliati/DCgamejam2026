@@ -72,12 +72,12 @@ var DoorPeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'door-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:38px monospace; color:rgba(180,170,150,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(180,170,150,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.7);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none; line-height:1.3;';
+        'pointer-events:none; line-height:1.4;';
       _labelLayer.appendChild(_subLabel);
     }
 
@@ -87,17 +87,18 @@ var DoorPeek = (function () {
       _actionBtn = document.createElement('button');
       _actionBtn.id = 'door-peek-action';
       _actionBtn.style.cssText =
-        'position:absolute; bottom:-80px; left:50%;' +
+        'position:absolute; top:100%; left:50%;' +
         'transform:translateX(-50%);' +
+        'margin-top:130px; min-height:48px;' +
         'font:bold 18px monospace; color:#c0d8f0;' +
         'background:rgba(60,80,120,0.5);' +
         'border:2px solid rgba(140,180,220,0.4);' +
-        'border-radius:8px; padding:8px 20px;' +
+        'border-radius:8px; padding:12px 28px;' +
         'text-shadow:0 0 8px rgba(140,180,220,0.4);' +
         'cursor:pointer; pointer-events:auto;' +
         'opacity:0; transition:opacity 0.3s ease;' +
-        'outline:none;';
-      _actionBtn.textContent = '[OK] Enter';
+        'white-space:nowrap; outline:none;';
+      _actionBtn.textContent = 'Enter';
       _actionBtn.addEventListener('click', _onActionClick);
       _actionBtn.addEventListener('mouseenter', function () {
         _actionBtn.style.borderColor = '#c0d8f0';
@@ -303,7 +304,7 @@ var DoorPeek = (function () {
       } else {
         _actionBtn.style.display = '';
         _actionBtn.textContent = direction === 'advance'
-          ? '[OK] Enter' : '[OK] Exit';
+          ? 'Enter' : 'Exit';
         // Color scheme matches direction
         if (direction === 'advance') {
           _actionBtn.style.color = '#dcc8a0';

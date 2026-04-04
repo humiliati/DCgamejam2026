@@ -426,9 +426,13 @@ var TitleScreen = (function () {
     var w = _canvas.width;
     var h = _canvas.height;
 
-    // Background: Skybox lake scene or plain fallback
+    // Background: Floor 3 east-facing arch view (frontier_title preset).
+    // Parallax cloud bands + shaped Vivec-canton city silhouette + star
+    // field up top, rippled dusk water reflection below — "standing on
+    // the south boardwalk at golden hour looking at the Grand Arch".
+    // See SKYBOX_ROADMAP.md Phase 5d.
     if (typeof Skybox !== 'undefined') {
-      Skybox.renderFull(_ctx, w, h, performance.now(), 'title');
+      Skybox.renderFull(_ctx, w, h, performance.now(), 'frontier_title');
     } else {
       _ctx.fillStyle = '#0a0a0a';
       _ctx.fillRect(0, 0, w, h);
@@ -1553,12 +1557,23 @@ var TitleScreen = (function () {
     if (typeof AudioMusicManager !== 'undefined') {
       AudioMusicManager.startTitle();
     }
+
+    // Water cursor FX — reinforce cleaning theme right from the title.
+    // Hover-trail droplets spray off the pointer; click bursts splash on
+    // any menu selection. Tick/render is driven by game.js TITLE branch.
+    if (typeof WaterCursorFX !== 'undefined') {
+      WaterCursorFX.clear();
+      WaterCursorFX.setActive(true);
+    }
   }
 
   function stop() {
     _active = false;
     _unbindInput();
     if (_canvas) _canvas.style.cursor = 'default';
+    if (typeof WaterCursorFX !== 'undefined') {
+      WaterCursorFX.setActive(false);
+    }
   }
 
   function isActive() { return _active; }

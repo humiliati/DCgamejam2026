@@ -36,6 +36,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-8 | [VISUAL_OVERHAUL.md](#doc-8-visual_overhaulmd) | docs/ |
 | DOC-34 | [UNIFIED_UI_OVERHAUL.md](#doc-34-unified_ui_overhaulmd) | docs/ |
 | DOC-27 | [JAM_COMPLIANCE.md](#doc-27-jam_compliancemd) | docs/ |
+| DOC-56 | [RESOURCE_DESIGN.md](#doc-56-resource_designmd) | docs/ |
 
 ### 🧱 Engine & Renderer Roadmaps
 
@@ -61,6 +62,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-36 | [FACE2_INVENTORY_POLISH.md](#doc-36-face2_inventory_polishmd) | docs/ |
 | DOC-20 | [COMBAT_DRAG_SYSTEM.md](#doc-20-combat_drag_systemmd) | docs/ |
 | DOC-16 | [SUIT_SYSTEM_ROADMAP.md](#doc-16-suit_system_roadmapmd) | docs/ |
+| DOC-57 | [CRATEUI_INTERACTION_OVERHAUL.md](#doc-57-crateui_interaction_overhaulmd) | docs/ |
 
 ### 🗺️ HUD, UI & Menus
 
@@ -74,6 +76,7 @@ Active and in-progress docs float to the top. Each entry links to its detailed s
 | DOC-51 | [CINEMATIC_CAMERA_ROADMAP](#doc-51-cinematic-camera) | engine/cinematic-camera.js | Engine built, 3/7 presets wired |
 | DOC-55 | [MENU_INTERACTIONS_CATALOG.md](#doc-55-menu_interactions_catalogmd) | docs/ | Active |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | docs/ | Reference |
+| DOC-58 | [PEEK_BOX_VISUAL_AUDIT.md](#doc-58-peek_box_visual_auditmd) | docs/ | — |
 
 **§ Cinematic Camera — cross-cutting wiring status (updated Apr 2, 2026)**
 
@@ -100,6 +103,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ |
 | DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ |
 | DOC-52 | [READINESS_BAR_ROADMAP.md](#doc-52-readiness_bar_roadmapmd) | docs/ |
+| DOC-59 | [DEPTH3_CLEANING_LOOP_BALANCE.md](#doc-59-depth3_cleaning_loop_balancemd) | docs/ |
 | — | [BONFIRE_BRAINSTORMING.md](#bonfire_brainstormingmd) | docs/ |
 
 ### 👤 NPCs, Barks & Audio
@@ -112,6 +116,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | DOC-6 | [AUDIO_ENGINE.md](#doc-6-audio_enginemd) | docs/ |
 | DOC-50 | [SPATIAL_AUDIO_BARK_ROADMAP.md](#doc-50-spatial_audio_bark_roadmapmd) | docs/ |
 | DOC-44 | [EYESONLYS_TOOLTIP_SPACE_CANON.md](#doc-44-eyesonlys_tooltip_space_canonmd) | docs/ |
+| DOC-60 | [AUDIO_SFX_COMMISSIONING_AUDIT.docx](#doc-60-audio_sfx_commissioning_auditdocx) | docs/ |
 
 ### 🎨 Sprites & Visual Assets
 
@@ -131,6 +136,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | — | FLOOR0_BLOCKOUT.md | docs/ |
 | — | FLOOR1_BLOCKOUT.md | docs/ |
 | — | FLOOR2_BLOCKOUT.md | docs/ |
+| DOC-61 | [FLOOR2_BLOCKOUT_PREP.md](#doc-61-floor2_blockout_prepmd) | docs/ |
 | — | FLOOR3_BLOCKOUT.md | docs/ |
 
 ### 🔀 EyesOnly Convergence & Legacy
@@ -152,6 +158,7 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 | FIX_STATUS_BAR_EMOJI_AND_DECK.md | docs/FIX_AND_BUGS/ |
 | FIX_SUIT_SYMBOLS_IN_PORTHOLES.md | docs/FIX_AND_BUGS/ |
 | FIX_VIEWPORT_BLUR_SCOPING.md | docs/FIX_AND_BUGS/ |
+| CHEST_PLAYTEST_DEBUG.md | docs/ |
 
 ### 📦 Archive/ & Misc
 
@@ -159,6 +166,16 @@ CinematicCamera module exists (446 lines, 7 presets). Letterbox bars, FOV zoom, 
 |----------|--------|
 | PRESSURE_WASHING_BRAINSTORM.md | docs/Archive/ |
 | CSS_TO_USE.md | docs/ |
+| DOC-62 | [POST_JAM_ITEM_ROADMAP.md](#doc-62-post_jam_item_roadmapmd) | docs/ |
+
+### 📤 Submission & Release
+
+| # | Document | Status | Folder |
+|---|----------|--------|--------|
+| DOC-63 | [itch-game-page.md](#doc-63-itch-game-pagemd) | 🟡 Live copy | docs/ |
+| DOC-64 | [itch-submission-kit.md](#doc-64-itch-submission-kitmd) | 🟢 Updated (audio fix Apr 4) | docs/ |
+| DOC-65 | [pre-flight-walk.md](#doc-65-pre-flight-walkmd) | 🟡 Living checklist | docs/ |
+| DOC-66 | [quest-marker-audit.md](#doc-66-quest-marker-auditmd) | 🟢 Audit + patch + post-jam spec | docs/ |
 
 ---
 
@@ -175,7 +192,7 @@ All documents with scope summaries and section inventories. Each document now in
 | Bugs Fixed | B1–B5 (currency, hand dup, salvage sell, rep, game handler) |
 | Gap Analysis | 10 EyesOnly alignment checks (identity, hydration, transfer, etc.) |
 | **Tier 0** | Critical path jam blockers — **8/8 ✅ COMPLETE** |
-| **Tier 1** | Combat polish — **4/6 done** (T1.4 toast ✅, T1.5 telegraph ❌, T1.6 corpse ❌) |
+| **Tier 1** | Combat polish — **6/6 ✅ COMPLETE** (T1.4 toast ✅, T1.5 EnemyIntent ✅, T1.6 CorpseRegistry ✅) |
 | **Tier 2** | Economy loop closure — **0/6 done** (T2.1–T2.6 all pending) |
 | **Tier 3** | Post-jam architecture — 0/10, deferred |
 | Sprint Schedule | Daily plan Mar 28 → Apr 5 |
@@ -659,6 +676,61 @@ All documents with scope summaries and section inventories. Each document now in
 ### BONFIRE_BRAINSTORMING.md (companion to DOC-30)
 > **Scope**: Design brainstorming session for bonfire contextual contracts — baseline bonfire primitive + paired context providers (NPC/object/tile). Establishes the "bonfire = anchor, context = permissions" model that DOC-30 §11 implements. Covers waypoint/stash/time-advance gating by context type (campground, inn, home, dungeon deep).
 
+### DOC-56: RESOURCE_DESIGN.md
+> **Scope**: Economy primitives — gold, battery, food, and any secondary resources. Mint rates, drop tables, bonfire exchange values, tool durability costs. Design reference for balancing the Gleaner's daily budget against dungeon readiness thresholds.
+
+**Cross-refs**: DOC-39 (shop economy), DOC-7 (core loop), DOC-1 (T2 economy tier)
+
+### DOC-57: CRATEUI_INTERACTION_OVERHAUL.md
+> **Scope**: CrateUI visual and interaction overhaul. Covers the peek-slot withdraw flow, grid layout changes, drag-to-reorder within crate, and integration with the unified inventory metadata contract (DOC-26). The canonical reference for crate open/close lifecycle and slot hydration.
+
+**Cross-refs**: DOC-45 (inventory audit), DOC-26 (metadata contract), DOC-55 (interaction catalog)
+
+### DOC-58: PEEK_BOX_VISUAL_AUDIT.md
+> **Scope**: Visual audit of all PeekBox variants (chest peek, item inspect, tile peek, entity inspect). Documents render size, border style, typography, icon placement, and close/confirm button layout. Identifies inconsistencies vs the EyesOnly tooltip canon.
+
+**Cross-refs**: DOC-44 (tooltip space canon), DOC-12 (peek system), DOC-55 (interaction catalog)
+
+### DOC-59: DEPTH3_CLEANING_LOOP_BALANCE.md
+> **Scope**: Depth-3 (Ironhold B3) cleaning loop balance spec. Detritus breakable counts, indestructible crate placement, weight override rules, bag-capacity formula (21+N items), and the "tempo quick-fill" heuristic for high-pressure cleaning runs. See memory file design_depth3_loop.
+
+**Cross-refs**: DOC-52 (readiness bar), DOC-48 (pressure wash), DOC-1 (T2 balance)
+
+### DOC-60: AUDIO_SFX_COMMISSIONING_AUDIT.docx
+> **Scope**: SFX commissioning audit — maps every in-engine AudioSystem.play() call key to its source file status (✅ shipped / 🔸 stub / ❌ missing). Includes priority tier (jam-critical vs post-jam), suggested substitute keys for stubs, and notes from the audio CORS fix pass.
+
+**Cross-refs**: DOC-6 (audio engine), DOC-50 (spatial bark), docs/itch-submission-kit.md (audio size budget)
+
+### DOC-61: FLOOR2_BLOCKOUT_PREP.md
+> **Scope**: Pre-blockout planning notes for Floor 2 (Lantern Row). Covers six-pod layout proposal, NPC placement, connection edges to Floor 2.1 (Vaultmaster's Sanctum) and Floor 2.2 (Watchman's Post / Hero's Wake), and prerequisite fixes needed before blockout begins.
+
+**Cross-refs**: DOC-49 (blockout alignment), FLOOR2_BLOCKOUT.md
+
+### DOC-62: POST_JAM_ITEM_ROADMAP.md
+> **Scope**: Post-jam item expansion roadmap. New consumable categories, tool tiers, equipment slots, crafting primitives, and the full item-metadata contract extensions needed for multi-dungeon arc replayability. Deferred from jam build — no jam-deadline dependency.
+
+**Cross-refs**: DOC-26 (metadata contract), DOC-45 (inventory audit)
+
+### DOC-63: itch-game-page.md
+> **Scope**: itch.io game page copy — title blurb, long description, tags, content warnings, screenshots/GIF list. Living doc: should match whatever is live on the itch page at time of submission.
+
+**Cross-refs**: DOC-64 (submission kit), DOC-27 (jam compliance)
+
+### DOC-64: itch-submission-kit.md
+> **Scope**: Build + upload checklist for the itch.io submission. Zip command, exclusion list (with explicit note to NOT exclude `media_assets/audio/` — that's the audio manifest basePath), expected payload size (~50 MB / ~585 files), and troubleshooting entries for CORS, audio-on-itch, and upload-rejected-for-size errors. Updated 2026-04-04 (audio exclusion fix).
+
+**Cross-refs**: DOC-63 (page copy), DOC-65 (pre-flight), DOC-6 (audio engine)
+
+### DOC-65: pre-flight-walk.md
+> **Scope**: Jam-day pre-flight checklist generated by cross-referencing GAP_ANALYSIS, CORE_GAME_LOOP_AND_JUICE, Tutorial_world_roadmap, and itch-submission-kit. Red flags, go/no-go criteria, and ordered verification steps to run in the last 20 hours before submission.
+
+**Cross-refs**: DOC-33 (gap analysis), DOC-7 (core loop), DOC-2 (tutorial world), DOC-64 (submission kit)
+
+### DOC-66: quest-marker-audit.md
+> **Scope**: Quest marker system audit — root-cause of the "lost between floors" regression, phase-by-phase null-drop analysis, jam-day patch description (applied 2026-04-04 to `_updateQuestTarget()` in game.js), and post-jam rework spec for a data-driven `QuestChain` module anchored to `DumpTruckSpawner`. Includes a five-path verification walk.
+
+**Cross-refs**: engine/game.js (`_updateQuestTarget`), engine/dungeon-schedule.js, engine/dump-truck-spawner.js, engine/minimap.js
+
 ---
 
 ## Cross-Roadmap Execution Order
@@ -975,6 +1047,27 @@ Once the playable prototype ships, the next week focuses on:
 4. **DOC-1 Tier 3** items: CardRef abstraction, event bus, save/load, i18n
 5. **DOC-3 Pass 4**: Companion system if time permits
 6. **DOC-4 §19.4–19.5**: Dragon Conspiracy narrative arcs (economy-gated)
+
+---
+
+## ⚡ Easy Targets — Quick Wins Before Submission
+
+Tasks with clear scope, short estimated time, and no deep dependency chain. Good candidates for the last debug budget.
+
+| ID | Task | Est. | Source | Status |
+|----|------|------|--------|--------|
+| E5.8 | **CHEST interaction dedup** — resolve walk-on vs F-interact dual trigger; ChestPeek shows before CombatBridge fires; no redundant open paths | 1h | DOC-54 Remaining Issues | ❌ OPEN |
+| E5.9 | **Work keys chest (Floor 1.6)** — chest renders at correct height in 3D viewport, ChestPeek label shows, F-interact fires `_onPickupWorkKeys`, gate unlocks reliably | 30m | DOC-54 + DOC-55 | ❌ OPEN |
+| E5.10 | **Playtest gate A** — full walk: dispatcher dialogue → home door → enter 1.6 → face chest → peek visible → F-interact → key acquired → gate unlocked → re-enter Floor 1 freely | 30m | DOC-53 Scenario A | ❌ OPEN |
+| T1.5 | **Combat telegraph** — EnemyIntent module + CombatBridge + Raycaster + KaomojiCapsule all wired | ? | DOC-1 T1.5 | ✅ DONE |
+| T1.6 | **Corpse system** — CorpseRegistry + CorpsePeek + CombatBridge death pipeline wired | ? | DOC-1 T1.6 | ✅ DONE |
+| E3 | **Faction rep tier unlock toast** — tierChanged → Toast + ParticleFX.levelUp() in both sell paths | small | DOC-1 T2.3 | ✅ DONE |
+| — | **CinematicCamera: peek preset wiring** — start('peek') on BookshelfPeek/TorchPeek open; close() in ESC intercepts | small | DOC-51 | ✅ DONE (2026-04-04) |
+| — | **CinematicCamera: monologue preset wiring** — wired internally by MonologuePeek.play() default | small | DOC-51 | ✅ DONE (existing) |
+| — | **Tutorial_world_roadmap §5.2 sync** — six-pod 50×36 layout, door coords, beat narrative updated | 20m | DOC-2 §5.2 | ✅ DONE (2026-04-04) |
+| — | **Quest marker live test** — walk E5.8/E5.9/E5.10 with quest diamond visible throughout | 30m | DOC-66 §7 | ⏭ SKIPPED (jam day) |
+
+*Updated: 2026-04-04*
 
 ---
 

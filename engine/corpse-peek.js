@@ -90,12 +90,12 @@ var CorpsePeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'corpse-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:38px monospace; color:rgba(160,140,180,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(160,140,180,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none; line-height:1.3;';
+        'pointer-events:none; line-height:1.4;';
       _labelLayer.appendChild(_subLabel);
     }
 
@@ -106,12 +106,12 @@ var CorpsePeek = (function () {
       _actionBtn.id = 'corpse-peek-action';
       _actionBtn.style.cssText =
         'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:130px; padding:8px 22px;' +
-        'font:bold 20px monospace; color:#d0b8e0; background:rgba(40,20,50,0.85);' +
+        'margin-top:130px; padding:12px 28px; min-height:48px;' +
+        'font:bold 18px monospace; color:#d0b8e0; background:rgba(40,20,50,0.85);' +
         'border:1px solid #a088c0; border-radius:6px;' +
-        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'cursor:pointer; pointer-events:auto; opacity:0; white-space:nowrap;' +
         'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s, box-shadow 0.15s;';
-      _actionBtn.textContent = '[OK] Harvest';
+      _actionBtn.textContent = 'Harvest';
       _actionBtn.addEventListener('click', _onActionClick);
       _actionBtn.addEventListener('mouseenter', function () {
         _actionBtn.style.borderColor = '#d0b8ff';
@@ -133,12 +133,12 @@ var CorpsePeek = (function () {
       _closeBtn.id = 'corpse-peek-close';
       _closeBtn.style.cssText =
         'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:170px; padding:6px 18px;' +
+        'margin-top:200px; padding:10px 20px; min-height:44px;' +
         'font:16px monospace; color:rgba(160,140,180,0.7); background:rgba(30,20,40,0.6);' +
         'border:1px solid rgba(160,140,180,0.3); border-radius:4px;' +
-        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'cursor:pointer; pointer-events:auto; opacity:0; white-space:nowrap;' +
         'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s;';
-      _closeBtn.textContent = '[ESC] Close';
+      _closeBtn.textContent = '\u2715 Close';
       _closeBtn.addEventListener('click', function () { _hide(); });
       _closeBtn.addEventListener('mouseenter', function () {
         _closeBtn.style.borderColor = 'rgba(160,140,180,0.7)';
@@ -266,7 +266,7 @@ var CorpsePeek = (function () {
     // Action button text based on mode
     if (_actionBtn) {
       _actionBtn.textContent = line2.indexOf('restock') >= 0
-        ? '[OK] Restock' : '[OK] Harvest';
+        ? 'Restock' : 'Harvest';
       _actionBtn.style.opacity = '0';
     }
     if (_closeBtn) _closeBtn.style.opacity = '0';

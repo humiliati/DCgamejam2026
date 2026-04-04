@@ -321,13 +321,58 @@ var DoorContracts = (function () {
   }
 
   /**
+   * Count reachable walkable tiles from a seed position using bounded BFS.
+   * The traversal stops after `cap` tiles are found. Door tiles are treated
+   * as walls so pockets on one side of a door don't bleed through to the
+   * other side. Used to distinguish a true exterior (hundreds of tiles) from
+   * a walled interior alcove (a handful of tiles).
+   */
+  function _boundedReachableCount(grid, W, H, sx, sy, cap) {
+    if (sy < 0 || sy >= H || sx < 0 || sx >= W) return 0;
+    if (!grid[sy] || !TILES.isWalkable(grid[sy][sx])) return 0;
+    cap = cap || 32;
+    var seen = {};
+    var key0 = sx + ',' + sy;
+    seen[key0] = true;
+    var queue = [[sx, sy]];
+    var count = 1;
+    var head = 0;
+    var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (head < queue.length && count < cap) {
+      var cur = queue[head++];
+      for (var i = 0; i < 4; i++) {
+        var nx = cur[0] + DIRS[i][0];
+        var ny = cur[1] + DIRS[i][1];
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        var k = nx + ',' + ny;
+        if (seen[k]) continue;
+        if (!grid[ny]) continue;
+        var t = grid[ny][nx];
+        if (!TILES.isWalkable(t)) continue;
+        if (TILES.isDoor(t)) continue;     // don't cross door boundary
+        seen[k] = true;
+        queue.push([nx, ny]);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
    * Infer which side of a door is the building interior (enclosed) vs
    * exterior (open walkway). Used to synthesize an avoidDoor point when
    * the parent floor has no stairs to use as a natural avoid target.
    *
-   * Checks perpendicular open-space depth: the side with LESS depth is
-   * the enclosed interior. Returns a point 3 tiles into the interior,
-   * so findSpawnNearDoor() will score exterior tiles higher.
+   * Strategy: compare bounded BFS reachable-counts on each side of the door.
+   * The side with FEWER reachable tiles (treating doors as walls) is the
+   * enclosed interior. Falls back to linear-depth comparison only if BFS
+   * can't seed (both adjacent tiles are walls).
+   *
+   * Prior versions used linear depth alone, which failed on symmetric
+   * layouts — e.g. Floor 1's home door (22,27) where a 2-tile wall pocket
+   * at (21,28)+(22,28) tied the "depth" check against the genuine exterior
+   * at (22,26), and the algorithm then placed the avoid marker on the
+   * exterior side, pushing the spawn into the pocket.
    *
    * @returns {{ x: number, y: number } | null}
    */
@@ -342,40 +387,33 @@ var DoorContracts = (function () {
                (east === TILES.WALL || east === TILES.PILLAR);
     }
     if (dy > 0 && dy < H - 1) {
-      var north = grid[dy - 1][dx], south = grid[dy + 1][dx];
-      wallNS = (north === TILES.WALL || north === TILES.PILLAR) &&
-               (south === TILES.WALL || south === TILES.PILLAR);
+      var northT = grid[dy - 1][dx], southT = grid[dy + 1][dx];
+      wallNS = (northT === TILES.WALL || northT === TILES.PILLAR) &&
+               (southT === TILES.WALL || southT === TILES.PILLAR);
     }
 
+    var CAP = 40;   // enough to clearly separate pockets (<10) from exteriors
+
     if (wallEW) {
-      // Door in horizontal wall — compare N vs S open depth
-      var nDepth = 0, sDepth = 0;
-      for (var n = 1; n <= 6; n++) {
-        if (dy - n >= 0 && TILES.isWalkable(grid[dy - n][dx])) nDepth++;
-        else break;
-      }
-      for (var s = 1; s <= 6; s++) {
-        if (dy + s < H && TILES.isWalkable(grid[dy + s][dx])) sDepth++;
-        else break;
-      }
-      // Interior = side with less depth; place avoid point 3 tiles in
-      if (nDepth <= sDepth) return { x: dx, y: Math.max(0, dy - 3) };
-      return { x: dx, y: Math.min(H - 1, dy + 3) };
+      // Door in horizontal wall — compare N vs S reachable regions.
+      var nCount = _boundedReachableCount(grid, W, H, dx, dy - 1, CAP);
+      var sCount = _boundedReachableCount(grid, W, H, dx, dy + 1, CAP);
+      // Interior = smaller region; place avoid point 3 tiles into it so
+      // findSpawnNearDoor scores exterior candidates higher.
+      if (nCount < sCount) return { x: dx, y: Math.max(0, dy - 3) };
+      if (sCount < nCount) return { x: dx, y: Math.min(H - 1, dy + 3) };
+      // Truly symmetric — no information. Return null so scoring falls
+      // back to openNeighbors + alignBonus without an avoid bias.
+      return null;
     }
 
     if (wallNS) {
-      // Door in vertical wall — compare W vs E open depth
-      var wDepth = 0, eDepth = 0;
-      for (var w = 1; w <= 6; w++) {
-        if (dx - w >= 0 && TILES.isWalkable(grid[dy][dx - w])) wDepth++;
-        else break;
-      }
-      for (var e = 1; e <= 6; e++) {
-        if (dx + e < W && TILES.isWalkable(grid[dy][dx + e])) eDepth++;
-        else break;
-      }
-      if (wDepth <= eDepth) return { x: Math.max(0, dx - 3), y: dy };
-      return { x: Math.min(W - 1, dx + 3), y: dy };
+      // Door in vertical wall — compare W vs E reachable regions.
+      var wCount = _boundedReachableCount(grid, W, H, dx - 1, dy, CAP);
+      var eCount = _boundedReachableCount(grid, W, H, dx + 1, dy, CAP);
+      if (wCount < eCount) return { x: Math.max(0, dx - 3), y: dy };
+      if (eCount < wCount) return { x: Math.min(W - 1, dx + 3), y: dy };
+      return null;
     }
 
     return null; // Can't determine wall orientation — no synthetic avoid

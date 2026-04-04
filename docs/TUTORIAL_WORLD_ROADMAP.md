@@ -6,7 +6,7 @@ World Graph Design · Initial Player Experience · Hero Reveal · Scavenger Econ
 
 > **v2.1 changes:** Corrected playflow from v2.0. Dispatcher force-turn moved to Floor 1→2 gate (was at dungeon entrance). Floor 2.1 is now the Dispatcher's Office (employer's interior), not the Watchman's Post. Floor 2 expanded to a full commercial district ("more shops, more barks"). Dungeon building entrance split to Floor 2.2 (was 2.1). Soft dungeon given proper intermediate building floor (1.3 → 1.3.1, was direct 1.1.1). Hero's Wake renumbered to 2.2.1/2.2.2 (was 2.1.1/2.1.2).
 >
-> **v2.2 changes:** Updated floor dimensions and grid diagrams to match actual implementation in floor-manager.js. Floor 1 is 40×30 (was 24×20 in spec). Floor 1.1 is 16×12 with bookshelves, bonfire, and STAIRS_DN to Coral Cellars (was 12×10 shop-only). Floor 1.6 is 24×20 multi-room dwelling (was 10×8 single room). Mailbox on Floor 1 exterior uses TILES.MAILBOX (37), not PILLAR. Implementation status updated: hand-authored floors are 0, 1, 1.1, 1.6; all other floors proc-gen via GridGen + SpatialContract. Gleaner loop systems (cleaning, restocking, torch, cobweb, readiness, work orders, day cycle, dungeon schedule, hero runs, morning report) all implemented. Peek modules live: bookshelf-peek, bar-counter-peek, bed-peek, mailbox-peek, crate-peek, corpse-peek, torch-peek, chest-peek, locked-door-peek, merchant-peek, monologue-peek, puzzle-peek, door-peek.
+> **v2.2 changes:** Updated floor dimensions and grid diagrams to match actual implementation in floor-manager.js. Floor 1 was recorded as 40×30 (was 24×20 in spec). **v2.3 (Apr 4 2026):** Floor 1 corrected again to 50×36 six-pod layout — the 40×30 figure was itself stale. All door coordinates, gate positions, and §5.2 layout zones updated to match live floor-manager.js `_FLOOR1_GRID`. Floor 1.1 is 16×12 with bookshelves, bonfire, and STAIRS_DN to Coral Cellars (was 12×10 shop-only). Floor 1.6 is 24×20 multi-room dwelling (was 10×8 single room). Mailbox on Floor 1 exterior uses TILES.MAILBOX (37), not PILLAR. Implementation status updated: hand-authored floors are 0, 1, 1.1, 1.6; all other floors proc-gen via GridGen + SpatialContract. Gleaner loop systems (cleaning, restocking, torch, cobweb, readiness, work orders, day cycle, dungeon schedule, hero runs, morning report) all implemented. Peek modules live: bookshelf-peek, bar-counter-peek, bed-peek, mailbox-peek, crate-peek, corpse-peek, torch-peek, chest-peek, locked-door-peek, merchant-peek, monologue-peek, puzzle-peek, door-peek.
 
 ---
 
@@ -124,7 +124,7 @@ Future:
 | Floor ID | Depth | Type | Biome | Grid | Authored | Label | Purpose | Status |
 |----------|-------|------|-------|------|----------|-------|---------|--------|
 | `"0"` | 1 | exterior | approach | 20×16 | hand | The Approach | Tutorial auto-walk, first NPC barks | ✅ |
-| `"1"` | 1 | exterior | promenade | 40×30 | hand | The Promenade | Hub town — shops, home, dungeon access | ✅ |
+| `"1"` | 1 | exterior | promenade | 50×36 | hand | The Promenade | Hub town — six-pod layout, shops, home, dungeon access | ✅ |
 | `"1.1"` | 2 | interior | bazaar | 16×12 | hand | Coral Bazaar | Card shop, bookshelves, bonfire, stairs to cellars | ✅ |
 | `"1.2"` | 2 | interior | inn | SpatialContract | proc-gen | Driftwood Inn | Bonfire: overheal + replenish | proc-gen ✅ |
 | `"1.3"` | 2 | interior | cellar-entry | SpatialContract | proc-gen | Cellar Entrance | Soft dungeon building, leads to 1.3.1 | proc-gen ✅ |
@@ -146,12 +146,12 @@ Future:
 | From | Exit Tile | Direction | To | Gate? | Notes |
 |------|-----------|-----------|-----|-------|-------|
 | `"0"` | DOOR | advance | `"1"` | — | Auto-walk target |
-| `"1"` | DOOR_EXIT (18,26) | retreat | `"0"` | — | Return to courtyard |
-| `"1"` | DOOR (12,3) | advance | `"1.1"` | — | Coral Bazaar entrance (NW) |
-| `"1"` | DOOR (27,3) | advance | `"1.2"` | — | Driftwood Inn (NE) |
-| `"1"` | DOOR (5,9) | advance | `"1.3"` | — | Soft dungeon building (W, east-facing) |
-| `"1"` | DOOR (34,9) | advance | `"1.6"` | — | Player's Home (E, west-facing) |
-| `"1"` | GATE (20,26) | advance | `"2"` | Dispatcher force-turn | Dispatcher blocks gate until keyring fetch |
+| `"1"` | DOOR_EXIT (2,17)+(2,18) | retreat | `"0"` | — | West gate — back to The Approach |
+| `"1"` | DOOR (10,8) | advance | `"1.1"` | — | Coral Bazaar (NW pod) |
+| `"1"` | DOOR (22,8) | advance | `"1.2"` | — | Driftwood Inn (NC pod) |
+| `"1"` | DOOR (10,27) | advance | `"1.3"` | — | Storm Shelter / Cellar Entrance (SW pod) |
+| `"1"` | DOOR (22,27) | advance | `"1.6"` | — | Gleaner's Home (SC pod) |
+| `"1"` | GATE (48,17)+(48,18) | advance | `"2"` | Dispatcher force-turn | East gate — Dispatcher blocks until keyring fetch |
 | `"1.1"` | DOOR_EXIT (7,10) | retreat | `"1"` | — | Back to Promenade |
 | `"1.1"` | STAIRS_DN (7,4) | advance | — | — | Down to Coral Cellars (depth 3) |
 | `"1.2"` | DOOR_EXIT | retreat | `"1"` | — | Back to Promenade (proc-gen) |
@@ -205,7 +205,7 @@ These barks establish the world: the player is a janitor, heroes are destructive
 
 ### Act 3 — The Dispatcher Force-Turn (Floor 1 gate)
 
-**Beat 6: Gate encounter.** The player approaches the Floor 1→2 gate at the south end of the Promenade. The Dispatcher NPC (🐉 black jacket, clipboard) is blocking the passage.
+**Beat 6: Gate encounter.** The player approaches the Floor 1→2 gate at the east end of the road corridor (GATE 48,17). The Dispatcher NPC (🐉 black jacket, clipboard) is blocking the passage.
 
 When the player bumps the Dispatcher, a **force-turn** fires: the camera snaps the player to face the Dispatcher. Input is locked during the bark cascade:
 
@@ -216,7 +216,7 @@ When the player bumps the Dispatcher, a **force-turn** fires: the camera snaps t
 
 The gate tile behind the Dispatcher is impassable until the keyring is retrieved. The Dispatcher does not move.
 
-**Beat 7: The fetch quest.** The player backtracks through Floor 1, finds their home (DOOR at east wall — partially hidden behind a pillar, as hinted by the Dispatcher). They enter Floor 1.6 (Gleaner's Home).
+**Beat 7: The fetch quest.** The player backtracks through Floor 1, finds their home (DOOR at SC pod south row, (22,27) — the quest marker points there). They enter Floor 1.6 (Gleaner's Home).
 
 **Beat 8: Home + keyring pickup.** The home is a small 10×8 room. A bed (bonfire), a mailbox (pillar), and a stash chest at (5,3). The player interacts with the chest to pick up the work keyring.
 
@@ -304,15 +304,22 @@ Changes from v1.0: No hidden door needed. The auto-walk delivers the player dire
 
 ### 5.2 Floor 1 — The Promenade ✅ Implemented
 
-40×30 exterior boardwalk (expanded from spec's 24×20 for building footprint + plaza breathing room). The hub town. Multiple building facades with interactive DOORs.
+50×36 exterior (refactored from the 40×30 spec in v2.2 to fit the six-pod building layout). The hub town. A central E–W road corridor (rows 14–22) separates three north pods from three south pods, with both ends gated.
 
-Layout zones (actual grid coords from floor-manager.js):
-- **North row (y=3)**: Building facades — Coral Bazaar DOOR(12,3)→1.1, Driftwood Inn DOOR(27,3)→1.2
-- **West (y=9)**: Cellar Entrance DOOR(5,9)→1.3 — east-facing, prominent but not signposted
-- **East (y=9)**: Gleaner's Home DOOR(34,9)→1.6 — west-facing, approach from col 33
-- **South wall (y=26)**: Gate funnel with shrub/tree narrowing. EXIT(18,26)→"0" + GATE(20,26)→"2" (Dispatcher blocks until keyring)
-- **Center (y=13)**: Open plaza with BONFIRE(19,13), pillar arcades, tree accents
-- **Exterior mailbox**: TILES.MAILBOX(33,8) — 1 tile north of home approach. MailboxPeek scans for MAILBOX tile dynamically.
+Six-pod layout (actual grid coords from floor-manager.js — verified Apr 4 2026):
+- **NW pod**: Coral Bazaar — DOOR(10,8)→1.1
+- **NC pod**: Driftwood Inn — DOOR(22,8)→1.2
+- **NE cluster**: Noticeboard Pavilion — board tile at (38,7); no interior door
+- **SW pod**: Storm Shelter / Cellar Entrance — DOOR(10,27)→1.3
+- **SC pod**: Gleaner's Home — DOOR(22,27)→1.6
+- **SE cluster**: Well / Fountain — decorative
+- **Road corridor (rows 14–22)**:
+  - West gate: DOOR_EXIT(2,17)+(2,18)→"0" The Approach
+  - East gate: GATE(48,17)+(48,18)→"2" Lantern Row — Dispatcher blocks until keyring fetch
+  - BONFIRE(24,17) — central road plaza rest point (only exterior bonfire)
+- **Landmarks**:
+  - MAILBOX(22,25) — 2 tiles north of home door, SC pod. MailboxPeek scans dynamically.
+  - DUMP_TRUCK(30,26) — home parking site between SC and SE pods (moves to faction exterior on hero days)
 
 NPC barks on Floor 1 serve dual purpose:
 1. **Directional:** Point the player toward Floor 2 and the dungeon

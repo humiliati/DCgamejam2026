@@ -93,12 +93,12 @@ var LockedDoorPeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'locked-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:36px monospace; color:rgba(220,80,60,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(220,80,60,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.7);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none; line-height:1.3;';
+        'pointer-events:none; line-height:1.4;';
       _labelLayer.appendChild(_subLabel);
     }
 
@@ -109,12 +109,12 @@ var LockedDoorPeek = (function () {
       _actionBtn.id = 'locked-peek-action';
       _actionBtn.style.cssText =
         'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
-        'margin-top:130px; padding:8px 22px;' +
-        'font:bold 20px monospace; color:#e08060; background:rgba(50,20,20,0.85);' +
+        'margin-top:130px; padding:12px 28px; min-height:48px;' +
+        'font:bold 18px monospace; color:#e08060; background:rgba(50,20,20,0.85);' +
         'border:1px solid #c05040; border-radius:6px;' +
-        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'cursor:pointer; pointer-events:auto; opacity:0; white-space:nowrap;' +
         'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s, box-shadow 0.15s;';
-      _actionBtn.textContent = '[OK] Use Key';
+      _actionBtn.textContent = 'Use Key';
       _actionBtn.addEventListener('click', _onActionClick);
       _actionBtn.addEventListener('mouseenter', function () {
         _actionBtn.style.borderColor = '#ff8060';
@@ -224,7 +224,7 @@ var LockedDoorPeek = (function () {
 
     // Action button — show only if player has the key
     if (_actionBtn) {
-      _actionBtn.textContent = hasKey ? '[OK] Unlock' : '[OK] Use Key';
+      _actionBtn.textContent = hasKey ? 'Unlock' : 'Use Key';
       _actionBtn.style.opacity = '0';
       _actionBtn.style.display = hasKey ? '' : 'none';
     }

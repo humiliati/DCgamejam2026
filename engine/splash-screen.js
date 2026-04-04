@@ -38,6 +38,14 @@ var SplashScreen = (function () {
   var _promptEl = null;
   var _secretEl = null;
 
+  // Water cursor FX canvas (droplet spray layer above the overlay bg)
+  var _fxCanvas = null;
+  var _fxCtx = null;
+  var _fxPointerX = -9999;     // last known pointer in fx-canvas pixel coords
+  var _fxPointerY = -9999;
+  var _fxMoveHandler = null;
+  var _fxLeaveHandler = null;
+
   var _keyHandler = null;
   var _boxClickHandler = null;
   var _splashBoxEl = null;
@@ -63,9 +71,23 @@ var SplashScreen = (function () {
     _promptEl = document.getElementById('splash-prompt-text');
     _secretEl = document.getElementById('splash-secret-text');
     _splashBoxEl = document.getElementById('splash-box');
+    _fxCanvas = document.getElementById('splash-fx-canvas');
+    if (_fxCanvas) _fxCtx = _fxCanvas.getContext('2d');
 
     // Register the splash box with BoxAnim
     if (typeof BoxAnim !== 'undefined') BoxAnim.register('splash-box');
+  }
+
+  /**
+   * Match fx canvas internal resolution to its CSS display size so
+   * droplet coordinates line up 1:1 with pointer coordinates.
+   */
+  function _syncFxCanvasSize() {
+    if (!_fxCanvas) return;
+    var cssW = _fxCanvas.clientWidth  || window.innerWidth;
+    var cssH = _fxCanvas.clientHeight || window.innerHeight;
+    if (_fxCanvas.width !== cssW)  _fxCanvas.width  = cssW;
+    if (_fxCanvas.height !== cssH) _fxCanvas.height = cssH;
   }
 
   var _pointerDownHandler = null;
@@ -87,6 +109,14 @@ var SplashScreen = (function () {
     if (_pointerUpHandler) {
       window.removeEventListener('pointerup', _pointerUpHandler);
       _pointerUpHandler = null;
+    }
+    if (_fxMoveHandler && _overlay) {
+      _overlay.removeEventListener('pointermove', _fxMoveHandler);
+      _fxMoveHandler = null;
+    }
+    if (_fxLeaveHandler && _overlay) {
+      _overlay.removeEventListener('pointerleave', _fxLeaveHandler);
+      _fxLeaveHandler = null;
     }
   }
 
@@ -185,6 +215,17 @@ var SplashScreen = (function () {
 
     _boxClickHandler = function (e) {
       e.stopPropagation();
+      // Juice: splash burst wherever you click, regardless of min-display
+      if (typeof WaterCursorFX !== 'undefined' && _fxCanvas) {
+        var rect = _fxCanvas.getBoundingClientRect();
+        var sx = _fxCanvas.width  / (rect.width  || 1);
+        var sy = _fxCanvas.height / (rect.height || 1);
+        WaterCursorFX.spawnBurst(
+          (e.clientX - rect.left) * sx,
+          (e.clientY - rect.top)  * sy,
+          { count: 20, speedMult: 1.1 }
+        );
+      }
       if (_minDisplayTimer < MIN_DISPLAY) return;
       _eeRegisterClick();
       // Only envelop on double-click or after sufficient display
@@ -207,10 +248,54 @@ var SplashScreen = (function () {
       _eePointerDown = false;
     };
 
+    // ── Water cursor FX — pointer tracking for trail droplets ──
+    // Splash overlay covers the game canvas, so InputManager's
+    // canvas-attached mousemove listener can't see the pointer here.
+    // We sample pointermove on the overlay and feed WaterCursorFX
+    // directly via spawnTrail(). Falls back silently on touch-only
+    // devices where no hover is reported.
+    _fxMoveHandler = function (e) {
+      if (!_fxCanvas) return;
+      var rect = _fxCanvas.getBoundingClientRect();
+      var sx = _fxCanvas.width  / (rect.width  || 1);
+      var sy = _fxCanvas.height / (rect.height || 1);
+      var nx = (e.clientX - rect.left) * sx;
+      var ny = (e.clientY - rect.top)  * sy;
+      if (_fxPointerX < -9000) {
+        _fxPointerX = nx; _fxPointerY = ny;
+        return;
+      }
+      var dx = nx - _fxPointerX;
+      var dy = ny - _fxPointerY;
+      var moved = Math.sqrt(dx * dx + dy * dy);
+      if (moved >= 3 && typeof WaterCursorFX !== 'undefined') {
+        WaterCursorFX.spawnTrail(nx, ny, moved);
+      }
+      _fxPointerX = nx; _fxPointerY = ny;
+    };
+    _fxLeaveHandler = function () {
+      _fxPointerX = -9999; _fxPointerY = -9999;
+    };
+
+    // Activate the FX module (physics ticks + any trail spawns).
+    // setActive(true) also enables InputManager polling inside tick()
+    // as a harmless extra source — it'll just no-op here since the
+    // overlay masks the canvas.
+    if (typeof WaterCursorFX !== 'undefined') {
+      WaterCursorFX.clear();
+      WaterCursorFX.setActive(true);
+    }
+    _syncFxCanvasSize();
+    _fxPointerX = -9999; _fxPointerY = -9999;
+
     window.addEventListener('keydown', _keyHandler);
     if (_splashBoxEl) {
       _splashBoxEl.addEventListener('click', _boxClickHandler);
       _splashBoxEl.addEventListener('pointerdown', _pointerDownHandler);
+    }
+    if (_overlay) {
+      _overlay.addEventListener('pointermove', _fxMoveHandler);
+      _overlay.addEventListener('pointerleave', _fxLeaveHandler);
     }
     window.addEventListener('pointerup', _pointerUpHandler);
   }
@@ -243,6 +328,12 @@ var SplashScreen = (function () {
 
     _minDisplayTimer += dt;
 
+    // Water cursor FX — advance physics every frame. Droplets keep
+    // falling through the fade-out so the screen never cuts mid-arc.
+    if (typeof WaterCursorFX !== 'undefined') {
+      WaterCursorFX.tick(dt);
+    }
+
     if (_fadeOut) {
       _fadeTimer += dt;
       // Apply CSS fade-out
@@ -252,6 +343,11 @@ var SplashScreen = (function () {
       if (_fadeTimer >= FADE_TIME) {
         _active = false;
         if (_overlay) _overlay.classList.add('hidden');
+        // Hand the FX module off to TitleScreen's lifecycle: leave it
+        // active so any in-flight droplets visually carry across the
+        // handoff. TitleScreen.start() calls clear() + setActive(true)
+        // immediately afterward, giving it a clean slate on its own
+        // canvas.
         _unbindAll();
         ScreenManager.toTitle();
       }
@@ -280,6 +376,15 @@ var SplashScreen = (function () {
     // Canvas draws matching dark background behind the DOM overlay
     _ctx.fillStyle = '#080812';
     _ctx.fillRect(0, 0, w, h);
+
+    // Water cursor FX — paint droplets onto the DOM fx-canvas layer
+    // above the splash overlay background. Resync size each frame in
+    // case the window was resized while splash was visible.
+    if (_fxCtx && _fxCanvas && typeof WaterCursorFX !== 'undefined') {
+      _syncFxCanvasSize();
+      _fxCtx.clearRect(0, 0, _fxCanvas.width, _fxCanvas.height);
+      WaterCursorFX.render(_fxCtx);
+    }
   }
 
   // ── Public API ───────────────────────────────────────────────────

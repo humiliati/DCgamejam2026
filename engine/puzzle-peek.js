@@ -141,7 +141,7 @@ var PuzzlePeek = (function () {
     // ── close button ──
     _closeBtn = document.createElement('button');
     _closeBtn.id = 'puzzle-peek-close';
-    _closeBtn.textContent = '[ESC] Close';
+    _closeBtn.textContent = '\u2715 Close';
     _closeBtn.style.cssText =
       'display:block; width:100%; margin-top:6px; padding:5px 0;' +
       'background:rgba(20,30,40,0.5); border:1px solid rgba(100,140,180,0.2);' +

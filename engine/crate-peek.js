@@ -114,9 +114,9 @@ var CratePeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'crate-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:38px monospace; color:rgba(200,170,100,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(200,170,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
@@ -131,18 +131,19 @@ var CratePeek = (function () {
       _actionBtn = document.createElement('div');
       _actionBtn.id = 'crate-peek-action';
       _actionBtn.style.cssText =
-        'position:absolute; bottom:-80px; left:50%;' +
+        'position:absolute; top:100%; left:50%;' +
         'transform:translateX(-50%);' +
+        'margin-top:130px; min-height:48px;' +
         'font:bold 18px monospace; color:#f0d070;' +
         'text-shadow:0 0 6px rgba(240,208,112,0.3);' +
         'background:rgba(10,8,18,0.88);' +
         'border:1.5px solid rgba(200,180,120,0.55);' +
-        'border-radius:10px; padding:10px 24px;' +
+        'border-radius:10px; padding:12px 28px;' +
         'cursor:pointer; pointer-events:auto;' +
         'opacity:0; transition:opacity 0.3s ease 0.4s;' +
         'white-space:nowrap;' +
         'box-shadow:0 0 12px rgba(240,208,112,0.12);';
-      _actionBtn.textContent = '[OK] Smash';
+      _actionBtn.textContent = 'Smash';
       _actionBtn.addEventListener('click', _onActionClick);
       // Hover feedback
       _actionBtn.addEventListener('mouseenter', function () {
@@ -164,16 +165,17 @@ var CratePeek = (function () {
       _closeBtn = document.createElement('div');
       _closeBtn.id = 'crate-peek-close';
       _closeBtn.style.cssText =
-        'position:absolute; bottom:-120px; left:50%;' +
+        'position:absolute; top:100%; left:50%;' +
         'transform:translateX(-50%);' +
+        'margin-top:200px; min-height:44px;' +
         'font:16px monospace; color:rgba(200,170,100,0.55);' +
         'background:rgba(10,8,18,0.6);' +
         'border:1px solid rgba(200,180,120,0.25);' +
-        'border-radius:6px; padding:6px 18px;' +
+        'border-radius:6px; padding:10px 20px;' +
         'cursor:pointer; pointer-events:auto;' +
         'opacity:0; transition:opacity 0.3s ease 0.5s;' +
         'white-space:nowrap;';
-      _closeBtn.textContent = '[ESC] Close';
+      _closeBtn.textContent = '\u2715 Close';
       _closeBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         _hide();
@@ -267,6 +269,11 @@ var CratePeek = (function () {
     _opened  = false;
     _timer   = 0;
 
+    // Determine crate type now so labels and button are correct from first frame
+    var isSupply = typeof CrateSystem !== 'undefined' &&
+      typeof FloorManager !== 'undefined' &&
+      CrateSystem.hasContainer(fx, fy, FloorManager.getCurrentFloorId());
+
     // Style the box instance (pointer-events off)
     var inst = document.getElementById(_boxId);
     if (inst) {
@@ -279,21 +286,26 @@ var CratePeek = (function () {
 
     // Inner label — appears with the box, readable immediately
     if (_innerLabel) {
-      _innerLabel.textContent = '? LOOT ?';
+      _innerLabel.textContent = isSupply ? '\u2691 SUPPLY' : '? LOOT ?';
       _innerLabel.style.opacity = '0';
     }
 
     // Sub-label — appears after lid opens
     if (_subLabel) {
       _subLabel.textContent = '';
-      _subLabel.appendChild(document.createTextNode('breakable crate'));
+      _subLabel.appendChild(document.createTextNode(
+        isSupply ? 'supply crate' : 'breakable crate'
+      ));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode('\u2192 smash to loot'));
+      _subLabel.appendChild(document.createTextNode(
+        isSupply ? '\u2192 restock slots' : '\u2192 smash to loot'
+      ));
       _subLabel.style.color = 'rgba(200,170,100,0)';
     }
 
-    // Action button hidden until lid opens
+    // Action button hidden until lid opens; label reflects crate type
     if (_actionBtn) {
+      _actionBtn.textContent = isSupply ? 'Fill Crate' : 'Smash';
       _actionBtn.style.opacity = '0';
       _actionBtn.style.pointerEvents = 'none';
     }

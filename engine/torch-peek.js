@@ -95,12 +95,12 @@ var TorchPeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'torch-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:60px; text-align:left;' +
-        'font:38px monospace; color:rgba(200,170,100,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:60px; text-align:center;' +
+        'font:20px monospace; color:rgba(200,170,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
-        'pointer-events:none; line-height:1.3;';
+        'pointer-events:none; line-height:1.4;';
       _labelLayer.appendChild(_subLabel);
     }
 
@@ -110,17 +110,18 @@ var TorchPeek = (function () {
       _actionBtn = document.createElement('button');
       _actionBtn.id = 'torch-peek-action';
       _actionBtn.style.cssText =
-        'position:absolute; bottom:-80px; left:50%;' +
+        'position:absolute; top:100%; left:50%;' +
         'transform:translateX(-50%);' +
+        'margin-top:130px; min-height:48px;' +
         'font:bold 18px monospace; color:#ffa030;' +
         'background:rgba(80,50,20,0.5);' +
         'border:2px solid rgba(200,140,60,0.4);' +
-        'border-radius:8px; padding:8px 20px;' +
+        'border-radius:8px; padding:12px 28px;' +
         'text-shadow:0 0 8px rgba(255,140,40,0.4);' +
         'cursor:pointer; pointer-events:auto;' +
         'opacity:0; transition:opacity 0.3s ease;' +
-        'outline:none;';
-      _actionBtn.textContent = '[OK] Interact';
+        'white-space:nowrap; outline:none;';
+      _actionBtn.textContent = 'Interact';
       _actionBtn.addEventListener('click', _onActionClick);
       _actionBtn.addEventListener('mouseenter', function () {
         _actionBtn.style.borderColor = '#ffa030';
@@ -147,12 +148,39 @@ var TorchPeek = (function () {
     }
   }
 
+  /**
+   * Hose extinguish: called when player has hose active and clicks a flame slot.
+   * Uses pressure-wash FX instead of consuming a water bottle from inventory.
+   */
+  function _hoseExtinguish(e) {
+    if (e) e.stopPropagation();
+    if (!_active) return;
+
+    var floorId   = typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : '0';
+    var floorData = typeof FloorManager !== 'undefined' ? FloorManager.getFloorData() : null;
+
+    if (typeof TorchState === 'undefined' || !floorData) return;
+
+    if (TorchState.extinguish(floorId, _facingX, _facingY, floorData.grid)) {
+      // Pressure-wash burst at the torch tile's world position
+      if (typeof WaterCursorFX !== 'undefined') {
+        WaterCursorFX.spawnBurst(_facingX, _facingY, { count: 18, speedMult: 1.4, upward: false });
+      }
+      _onTorchExtinguished();
+      _refreshSlotDisplay();
+      if (typeof SessionStats !== 'undefined') SessionStats.inc('torchesExtinguished');
+      if (typeof Toast !== 'undefined') Toast.show('\uD83D\uDCA7 Hose: torch doused', 'info');
+    }
+  }
+
   // ── Per-frame check ──────────────────────────────────────────
 
   function update(dt) {
     if (!_container || typeof BoxAnim === 'undefined') return;
     if (typeof FloorManager === 'undefined') return;
     if (_interacting) return; // Slot UI is open, don't re-check facing
+    // Don't show torch peek while another slot-fill UI is active (e.g. crate)
+    if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) return;
 
     var floorData = FloorManager.getFloorData();
     if (!floorData) { _hide(); return; }
@@ -223,7 +251,7 @@ var TorchPeek = (function () {
     // Reset action button
     if (_actionBtn) {
       _actionBtn.style.opacity = '0';
-      _actionBtn.textContent = isLit ? '[OK] Extinguish' : '[OK] Refuel';
+      _actionBtn.textContent = isLit ? 'Extinguish' : 'Refuel';
     }
 
     if (_subLabel) {
@@ -303,16 +331,33 @@ var TorchPeek = (function () {
         });
       })(el, labelColor);
 
-      // Click handler — simulate pressing number key for this slot
+      // Click handler — hose bypass, or start+fill atomically for Magic Remote
       (function (slotIdx) {
         el.addEventListener('click', function (e) {
           e.stopPropagation();
+
+          // Hose extinguish path: if player has hose active and this slot is
+          // the flame slot, douse with pressure-wash FX instead of inventory item.
+          if (typeof HoseState !== 'undefined' && HoseState.isActive()) {
+            var floorId2 = typeof FloorManager !== 'undefined'
+              ? FloorManager.getCurrentFloorId() : '0';
+            var torch2 = typeof TorchState !== 'undefined'
+              ? TorchState.getTorch(floorId2, _facingX, _facingY) : null;
+            if (torch2 && torch2.slots[slotIdx] &&
+                torch2.slots[slotIdx].state === 'flame') {
+              _hoseExtinguish(e);
+              return;
+            }
+          }
+
           if (_interacting) {
-            // Simulate the Digit key press for this slot
+            // Already in slot-fill mode — process the slot directly
             handleKey('Digit' + (slotIdx + 1));
           } else {
-            // Not yet interacting — start interaction first, then prompt
-            _onActionClick(e);
+            // Start interaction and immediately process the slot (atomic — one tap)
+            if (tryInteract()) {
+              handleKey('Digit' + (slotIdx + 1));
+            }
           }
         });
       })(i);
@@ -572,9 +617,9 @@ var TorchPeek = (function () {
     // Update action button text
     if (_actionBtn) {
       if (_interacting) {
-        _actionBtn.textContent = '[ESC] Close';
+        _actionBtn.textContent = '\u2715 Close';
       } else {
-        _actionBtn.textContent = isLit ? '[OK] Extinguish' : '[OK] Refuel';
+        _actionBtn.textContent = isLit ? 'Extinguish' : 'Refuel';
       }
     }
 
@@ -588,7 +633,7 @@ var TorchPeek = (function () {
 
       if (_interacting) {
         _subLabel.appendChild(document.createTextNode(
-          '[1-3] fill slot  [click slot] fill  [ESC] close'
+          'Tap slot to fill \u00b7 \u2715 to close'
         ));
       } else {
         _subLabel.appendChild(document.createTextNode(

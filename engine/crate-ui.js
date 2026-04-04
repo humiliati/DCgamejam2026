@@ -46,15 +46,15 @@ var CrateUI = (function () {
   var SCROLL_SPEED    = 0.012; // Smooth scroll interpolation per ms
 
   // ── Bag strip constants ──────────────────────────────────────────
-  var BAG_SLOT_SIZE = 44;   // px per bag item box
+  var BAG_SLOT_SIZE = 48;   // px per bag item box (≥48px for Magic Remote pointer accuracy)
   var BAG_SLOT_GAP  = 8;    // px between bag items
   var BAG_MAX       = 12;   // Max visible bag items before scroll
 
   // ── Seal / Close button constants ──────────────────────────────
   var SEAL_BTN_W    = 140;
   var SEAL_BTN_H    = 32;
-  var CLOSE_BTN_W   = 90;
-  var CLOSE_BTN_H   = 26;
+  var CLOSE_BTN_W   = 100;  // slightly wider for "✕ Close" label
+  var CLOSE_BTN_H   = 36;   // was 26 — bumped to ≥36px for Magic Remote tap accuracy
 
   // ── State ───────────────────────────────────────────────────────
   var _open       = false;
@@ -235,19 +235,20 @@ var CrateUI = (function () {
     ctx.font = TITLE_FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+    var _t = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t.bind(i18n) : function(k, d) { return d; };
     var title, titleColor;
     if (c.type === CrateSystem.TYPE.CHEST) {
       titleColor = '#ffd060';
-      title = 'TREASURE CHEST';
-      if (c.depleted) title += ' - EMPTY';
+      title = _t('ui.chest_title', 'TREASURE CHEST');
+      if (c.depleted) title += ' — ' + _t('ui.chest_empty', 'EMPTY');
     } else if (c.type === CrateSystem.TYPE.CORPSE) {
       titleColor = '#d88';
-      title = 'CORPSE STOCK';
-      if (c.sealed) title += ' - SEALED';
+      title = _t('ui.corpse_title', 'CORPSE STOCK');
+      if (c.sealed) title += ' — ' + _t('ui.sealed', 'SEALED');
     } else {
       titleColor = '#d8c8a0';
-      title = 'CRATE';
-      if (c.sealed) title += ' - SEALED';
+      title = _t('ui.crate_title', 'SUPPLY CRATE');
+      if (c.sealed) title += ' — ' + _t('ui.sealed', 'SEALED');
     }
     ctx.fillStyle = titleColor;
     ctx.fillText(title, vpW / 2, panelY + 8);
@@ -383,7 +384,7 @@ var CrateUI = (function () {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = closeHover ? 'rgba(220,210,180,0.9)' : 'rgba(150,140,120,0.6)';
-      ctx.fillText('[ESC] Close', closeX + CLOSE_BTN_W / 2, closeY + CLOSE_BTN_H / 2);
+      ctx.fillText('\u2715 Close', closeX + CLOSE_BTN_W / 2, closeY + CLOSE_BTN_H / 2);
 
     } else if (c.type === CrateSystem.TYPE.CHEST && !c.depleted) {
       // Chest withdraw mode — just a close button
@@ -573,17 +574,18 @@ var CrateUI = (function () {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(180,170,140,0.5)';
     var hintY = panelY + panelH - 8;
+    var _th = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t.bind(i18n) : function(k, d) { return d; };
     if (c.type === CrateSystem.TYPE.CHEST) {
       if (c.depleted) {
         ctx.fillStyle = 'rgba(120,120,100,0.5)';
-        ctx.fillText('chest emptied', vpW / 2, hintY);
+        ctx.fillText(_th('ui.hint_chest_empty', 'All items taken'), vpW / 2, hintY);
       } else {
-        ctx.fillText('click item to take', vpW / 2, hintY);
+        ctx.fillText(_th('ui.hint_chest_take', 'Tap item to take'), vpW / 2, hintY);
       }
     } else if (c.sealed) {
-      ctx.fillText('coins earned: ' + c.coinTotal, vpW / 2, hintY);
+      ctx.fillText(_th('ui.hint_coins_earned', 'Coins earned') + ': ' + c.coinTotal, vpW / 2, hintY);
     } else {
-      ctx.fillText('click bag item \u2192 click slot    drag \u2192 drop', vpW / 2, hintY);
+      ctx.fillText(_th('ui.hint_deposit', 'Tap bag item → tap slot  ·  drag & drop'), vpW / 2, hintY);
     }
 
     // ── Seal VFX Overlays ────────────────────────────────────────
@@ -736,10 +738,11 @@ var CrateUI = (function () {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(180,170,140,0.7)';
     var hintY = panelY + panelH - 10;
+    var _tg = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t.bind(i18n) : function(k, d) { return d; };
     if (totalRows > visRows) {
-      ctx.fillText('[↑↓] scroll    [click] take    [ESC] close', vpW / 2, hintY);
+      ctx.fillText(_tg('ui.hint_stash_scroll', 'Scroll ↑↓  ·  Tap item to take  ·  ESC close'), vpW / 2, hintY);
     } else {
-      ctx.fillText('[click] take item    [ESC] close', vpW / 2, hintY);
+      ctx.fillText(_tg('ui.hint_stash_take', 'Tap item to take  ·  ESC close'), vpW / 2, hintY);
     }
 
     ctx.restore();

@@ -141,7 +141,7 @@ var BarCounterPeek = (function () {
     if (taps > 0) {
       Toast.show(
         drink.emoji + ' ' + drink.name + ' - ' + drink.desc +
-        ' (' + taps + '/' + MAX_TAPS + ' left)  [OK] Drink',
+        ' (' + taps + '/' + MAX_TAPS + ' left) — tap to drink',
         'info'
       );
     } else {

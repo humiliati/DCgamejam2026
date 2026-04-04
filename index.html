@@ -2039,6 +2039,13 @@
 <body>
   <!-- Splash overlay — 3D box reveal, click envelops screen → title -->
   <div id="splash-overlay" class="hidden">
+    <!-- Water-cursor FX layer (droplet spray follows pointer).
+         Positioned absolutely behind the box, pointer-events: none so
+         clicks pass through to the 3D box beneath. Driven by
+         SplashScreen.update() via WaterCursorFX.tick/render. -->
+    <canvas id="splash-fx-canvas"
+            style="position:absolute;inset:0;width:100%;height:100%;
+                   pointer-events:none;z-index:1;"></canvas>
     <div class="splash-title" id="splash-title-text">DUNGEON GLEANER</div>
     <div class="box3d-wrap splash-variant" id="splash-box">
       <div class="box3d-scene">

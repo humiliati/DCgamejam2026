@@ -104,7 +104,7 @@ These two questions are required by the jam form. Copy-paste ready.
 > - Data tables & balancing — Minimax
 >
 > **External sources (credited in-game and on page):**
-> - Player controller, camera, and character system adapted from *Tower of Hats*
+> - Player controller, camera, and character system adapted from *Tower of Hats* by Jimb Esser
 > - Music by Bober @ Itch, Aliya Scott, and Turtlebox
 >
 > **AI-assisted:**

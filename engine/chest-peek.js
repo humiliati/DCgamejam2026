@@ -57,9 +57,9 @@ var ChestPeek = (function () {
       _subLabel = document.createElement('div');
       _subLabel.id = 'chest-peek-sublabel';
       _subLabel.style.cssText =
-        'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:32px; text-align:left;' +
-        'font:38px monospace; color:rgba(255,210,100,0);' +
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:32px; text-align:center;' +
+        'font:20px monospace; color:rgba(255,210,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';

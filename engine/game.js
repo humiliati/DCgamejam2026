@@ -99,6 +99,19 @@ var Game = (function () {
   // ── Passive time drip timer (exterior floors) ──────────────────
   var _passiveTimeTimer = 0;
 
+  // ── Hero Wake cinematic state (Floor 2.2.1 first-entry reveal) ─
+  // The hero stands in the junction at (11,11), shouts at the unseen
+  // Wounded Vault Warden, then walks clockwise around the ring and
+  // despawns in the west passage. When the hero despawns, the wounded
+  // warden is spawned in the North Hall as a mid-corridor blocker.
+  // Guarded by Player.flags.heroWakeArrival — one-shot per save.
+  var _heroWakeState = {
+    phase: 'idle',          // 'idle' | 'playing' | 'done'
+    combatTrigger: null,    // Copy of floorData.heroScript.combatTrigger
+    triggerSpawned: false,  // Has the wounded warden been spawned yet
+    timeoutIds: []          // setTimeout handles for cleanup on interrupt
+  };
+
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
@@ -232,9 +245,17 @@ var Game = (function () {
         _hoseEnergyPrior = 0;
         // Viewport glow hook: ViewportRing polls HoseState.isActive() each frame.
         if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui_confirm', { volume: 0.4 });
+        _evaluateCursorFxGating();
       });
       HoseState.on('detach', function (reason) {
         _hoseEnergyPrior = 0;
+        _evaluateCursorFxGating();
+        // Victory glow is tied to hose-carry: dropping the hose (manually
+        // or via energy exhaustion / subtree exit) ends the ceremony. The
+        // explicit "roll up hose" evac button will be the clean exit.
+        if (typeof ViewportRing !== 'undefined' && ViewportRing.clearVictoryGlow) {
+          ViewportRing.clearVictoryGlow();
+        }
       });
     }
     if (typeof DPad !== 'undefined') {
@@ -271,12 +292,14 @@ var Game = (function () {
 
       // TorchPeek intercept: ESC closes torch slot UI before pause
       if (typeof TorchPeek !== 'undefined' && TorchPeek.isInteracting()) {
+        if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
         TorchPeek.handleKey('Escape');
         return;
       }
 
       // BookshelfPeek intercept: ESC closes book overlay before pause
       if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
         BookshelfPeek.handleKey('Escape');
         return;
       }
@@ -314,6 +337,7 @@ var Game = (function () {
       if (type !== 'press') return;
       var state = ScreenManager.getState();
       if (state === ScreenManager.STATES.GAMEPLAY) {
+        _collapseAllPeeks();
         _pendingMenuContext = 'pause';
         _pendingMenuFace = 2;
         ScreenManager.toPause();
@@ -695,6 +719,16 @@ var Game = (function () {
     }
 
     if (newState === S.GAMEPLAY) {
+      // Hand off WaterCursorFX from splash/title: stop emitting trail
+      // droplets and clear any in-flight pool. Gameplay only re-enables
+      // the FX when the hose-carry + deep-dungeon gate is satisfied
+      // (_evaluateCursorFxGating, wired to FloorTransition + HoseState).
+      if (oldState === S.TITLE || oldState === S.SPLASH) {
+        if (typeof WaterCursorFX !== 'undefined') {
+          WaterCursorFX.setActive(false);
+          WaterCursorFX.clear();
+        }
+      }
       // If coming from TITLE (new game), initialize gameplay systems
       if (oldState === S.TITLE || oldState === S.SPLASH) {
         _initGameplay();
@@ -741,6 +775,11 @@ var Game = (function () {
         _showHUD(true);
         _animateHUDSlideIn();
       }, 1800);
+
+      // Re-assert WaterCursorFX gating on every (re)entry to gameplay —
+      // covers PAUSE→GAMEPLAY (menu-box set it false on close), retry,
+      // and the first floor after initial deploy.
+      _evaluateCursorFxGating();
     }
 
     if (newState === S.GAME_OVER) {
@@ -2756,6 +2795,10 @@ var Game = (function () {
           HoseState.onFloorEnter(FloorManager.getFloor());
         }
 
+        // Re-evaluate WaterCursorFX gating for the new floor depth.
+        // (Hose may have just detached via subtree validation above.)
+        _evaluateCursorFxGating();
+
         // Refresh HUD + panels for the new floor
         HUD.updateFloor(FloorManager.getFloor());
         HUD.updatePlayer(Player.state());
@@ -2780,8 +2823,16 @@ var Game = (function () {
           DumpTruckSpawner.refresh();
         }
 
-        // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic)
+        // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic).
+        // Must run BEFORE quest marker update so the Dispatcher NPC is
+        // spawned and _dispatcherEntity is live when _updateQuestTarget
+        // reads it on Floor 1.
         _onFloorArrive(FloorManager.getFloor());
+
+        // Refresh quest waypoint for the new floor. Without this, the
+        // minimap marker stays stuck at the previous floor's coordinates
+        // and renders at a garbage tile on the new grid.
+        _updateQuestTarget();
       }
     });
 
@@ -3231,7 +3282,190 @@ var Game = (function () {
       _onArrivePromenade();
     } else if (floorId === '1.6') {
       _onArriveHome();
+    } else if (floorId === '2.2.1') {
+      _onArriveHeroWake();
     }
+  }
+
+  /**
+   * First-entry cinematic for Floor 2.2.1 (Deepwatch Cellars B1).
+   *
+   * The player enters the foyer and, through the 8-wide doorway at the
+   * north end of the foyer, sees the Hero (Seeker) standing in the
+   * junction (11,11) shouting at an unseen enemy. The camera locks with
+   * letterbox bars (CinematicCamera boss_entrance preset), the hero
+   * delivers two dialogue lines, then begins a scripted walk clockwise
+   * around the ring corridor — disappearing from view as they turn the
+   * first corner into the east passage.
+   *
+   * When the hero's scripted path completes (handled in _tick), the
+   * combatTrigger from floorData.heroScript spawns a Wounded Vault
+   * Warden in the North Hall — the mid-corridor blocker. The player
+   * catches up to the hero's trail only to find the hero is gone and a
+   * severely weakened elite is all that stands between them and
+   * nothing.
+   *
+   * One-shot: guarded by Player.flags.heroWakeArrival.
+   */
+  function _onArriveHeroWake() {
+    // One-shot guard. If the player has already triggered this scene,
+    // skip everything (including the wounded warden spawn — they already
+    // killed or bypassed it on the previous visit).
+    if (Player.hasFlag && Player.hasFlag('heroWakeArrival')) {
+      _heroWakeState.phase = 'done';
+      return;
+    }
+
+    var fd = FloorManager.getFloorData();
+    if (!fd || !fd.heroScript) {
+      console.warn('[Game] _onArriveHeroWake: no heroScript on floor data');
+      return;
+    }
+
+    var script = fd.heroScript;
+    if (!script.spawn || !script.path || script.path.length === 0) {
+      console.warn('[Game] _onArriveHeroWake: heroScript missing spawn/path');
+      return;
+    }
+
+    // Mark as played BEFORE spawning anything — a mid-scene reload will
+    // not re-trigger the cinematic (the hero will simply be gone and the
+    // warden will need to be re-placed manually on reload; acceptable
+    // for jam scope).
+    if (Player.setFlag) Player.setFlag('heroWakeArrival', true);
+
+    _heroWakeState.phase = 'playing';
+    _heroWakeState.combatTrigger = script.combatTrigger || null;
+    _heroWakeState.triggerSpawned = false;
+    _heroWakeState.timeoutIds = [];
+
+    // Spawn the scripted hero entity at the junction. HeroSystem tracks
+    // _scriptedHero internally; we render it and tick it from _render
+    // and _tick respectively.
+    if (typeof HeroSystem !== 'undefined' && HeroSystem.createScriptedHero) {
+      HeroSystem.createScriptedHero(script.spawn.x, script.spawn.y, script.path);
+    }
+
+    // Fire the CinematicCamera boss-entrance preset. This:
+    //   • Slams letterbox bars in over ~150ms (barSpeed 1200)
+    //   • Zooms FOV to 0.85 (tight)
+    //   • Adds shake (intensity 6, decay 4)
+    //   • Locks input for the duration (lockInput: true)
+    //   • Auto-closes after 2500ms, returning input to the player
+    // The hero continues its scripted walk after the bars retract —
+    // the player is then free to chase. The focusTarget hint lines up
+    // the framing with the hero's spawn tile.
+    if (typeof CinematicCamera !== 'undefined') {
+      CinematicCamera.start('boss_entrance', {
+        focusTarget: { x: script.spawn.x, y: script.spawn.y }
+      });
+    }
+
+    // Dialogue beats — the hero shouts at the unseen wounded warden.
+    // Fired via setTimeout so they layer over the letterbox reveal
+    // rather than all at once. Each line auto-dismisses after its
+    // display window; the scripted hero starts walking after the
+    // second line completes (handled purely by tickScriptedHero's
+    // movement timer — we do not gate movement on dialogue).
+    var t1 = setTimeout(function () {
+      if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+        DialogBox.show("Come out! I know you're back there!", {
+          speaker: '???',
+          transient: true,
+          priority: 2
+        });
+      }
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('enemy-alert', { volume: 0.4 });
+      }
+    }, 900);
+
+    var t2 = setTimeout(function () {
+      if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+        DialogBox.show("Hiding won't save you, worm. The agency paid in full.", {
+          speaker: '???',
+          transient: true,
+          priority: 2
+        });
+      }
+    }, 3100);
+
+    // Atmospheric entry toast — lands immediately, just under the bars.
+    var t0 = setTimeout(function () {
+      if (typeof Toast !== 'undefined') {
+        Toast.show('The foyer reeks of ozone and old blood.', 'dim');
+      }
+    }, 400);
+
+    _heroWakeState.timeoutIds.push(t0, t1, t2);
+  }
+
+  /**
+   * Spawn the Wounded Vault Warden in the North Hall after the hero
+   * despawns. Called from _tick when HeroSystem.tickScriptedHero
+   * returns the hero entity (path complete).
+   *
+   * The warden is authored in floor-blockout-2-2-1.js as:
+   *   { x: 11, y: 2, enemyType: 'vault_warden',
+   *     maxHp: 15, currentHp: 2, str: 5 }
+   * i.e. a tier-elite enemy at 2/15 HP — the hero has already broken
+   * them. Any weapon hit from the player finishes them. The point is
+   * the pacing beat, not the fight.
+   */
+  function _spawnWoundedWarden(trigger) {
+    if (!trigger || _heroWakeState.triggerSpawned) return;
+    if (typeof EnemyAI === 'undefined' || !EnemyAI.createEnemy) return;
+
+    var enemies = FloorManager.getEnemies();
+    if (!enemies) return;
+
+    // Don't spawn on top of another living entity (defensive — the
+    // authored blockout already keeps North Hall empty of rats).
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.hp > 0 && e.x === trigger.x && e.y === trigger.y) return;
+    }
+
+    var warden = EnemyAI.createEnemy({
+      type:  trigger.enemyType || 'vault_warden',
+      name:  trigger.name || 'Wounded Vault Warden',
+      emoji: trigger.emoji || '🛡️',
+      x: trigger.x,
+      y: trigger.y,
+      hp: trigger.currentHp || 2,    // Severely weakened
+      str: trigger.str || 5,
+      dex: trigger.dex || 1,
+      suit: trigger.suit || 'club',
+      isElite: true,
+      facing: 'south',               // Facing the approaching player
+      awarenessRange: 6
+    });
+    // createEnemy sets maxHp = hp. Override so the HP bar reads "2/15"
+    // and the player sees just how close to death this thing is.
+    if (trigger.maxHp) warden.maxHp = trigger.maxHp;
+    // Pre-alert — the warden hears the player coming and turns to face
+    // them. Awareness in the ALERTED band starts the chase behaviour.
+    warden.awareness = 80;
+
+    enemies.push(warden);
+
+    // Assign a bark pool so the warden gets proximity barks.
+    if (EnemyAI.assignBarkPools) {
+      EnemyAI.assignBarkPools([warden], FloorManager.getFloor());
+    }
+
+    // Audible cue — a distant slam / roar telling the player the
+    // corridor ahead is now occupied.
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('door_slam', { volume: 0.55 });
+    }
+
+    if (typeof Toast !== 'undefined') {
+      Toast.show('Something heavy just stood up in the dark.', 'danger');
+    }
+
+    _heroWakeState.triggerSpawned = true;
+    _heroWakeState.phase = 'done';
   }
 
   /**
@@ -4343,6 +4577,15 @@ var Game = (function () {
 
   function _onReadinessTierCross(tier, floorId) {
     if (tier === 4) {
+      // Victory viewport glow — gold wash + rotating rays. Only for the
+      // deep-dungeon clean-sites (depth ≥ 3). Shallower tiers crossing
+      // tier 4 is a data edge case; the glow is tied to the cleaning
+      // completion fantasy which only exists at depth 3.
+      if (typeof ViewportRing !== 'undefined' && ViewportRing.setVictoryGlow &&
+          _floorDepth(floorId) >= 3) {
+        ViewportRing.setVictoryGlow(floorId);
+      }
+
       // ── 100% — Dungeon Reset ──────────────────────────────────────
       // Build context-aware message from DungeonSchedule contract.
       var label = '';
@@ -4405,16 +4648,45 @@ var Game = (function () {
 
   /**
    * Find a door on parentFloorId that leads to targetFloorId.
-   * Returns { x, y } or null. Uses the floor cache.
+   * Returns { x, y } or null. Uses the floor cache for non-current floors,
+   * falls back to the live floorData when parentFloorId IS the current floor
+   * (the cache isn't written until floor transition, so current floor is cold).
    */
   function _findDoorTo(parentFloorId, targetFloorId) {
-    var cached = FloorManager.getFloorCache ? FloorManager.getFloorCache(parentFloorId) : null;
-    if (!cached || !cached.doorTargets) return null;
-    for (var key in cached.doorTargets) {
-      if (cached.doorTargets[key] === targetFloorId) {
+    var src = null;
+    if (FloorManager.getFloor() === parentFloorId) {
+      src = FloorManager.getFloorData();
+    } else if (FloorManager.getFloorCache) {
+      src = FloorManager.getFloorCache(parentFloorId);
+    }
+    if (!src || !src.doorTargets) return null;
+    for (var key in src.doorTargets) {
+      if (src.doorTargets[key] === targetFloorId) {
         var parts = key.split(',');
         return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
       }
+    }
+    return null;
+  }
+
+  /**
+   * Exterior chain-hop: from currentExterior, find the next door in the
+   * linear exterior chain ['1','2','3'] that moves us toward targetExterior.
+   * Floor 1's east gate leads to '2', Floor 2's east gate leads to '3' — so
+   * when the player is on Floor 1 and the next hero group lives on Floor 3,
+   * we still want the marker on the east gate rather than null.
+   */
+  var _EXTERIOR_CHAIN = ['0', '1', '2', '3'];
+  function _findProgressionDoorForward(currentExterior, targetExterior) {
+    var ci = _EXTERIOR_CHAIN.indexOf(String(currentExterior));
+    var ti = _EXTERIOR_CHAIN.indexOf(String(targetExterior));
+    if (ci < 0 || ti < 0 || ci === ti) return null;
+    var step = ci < ti ? 1 : -1;
+    // Try each intermediate exterior in order (direct first, then chain).
+    for (var i = ti; i !== ci; i -= step) {
+      var hopTarget = _EXTERIOR_CHAIN[i];
+      var pos = _findDoorTo(currentExterior, hopTarget);
+      if (pos) return pos;
     }
     return null;
   }
@@ -4426,34 +4698,123 @@ var Game = (function () {
     return String(id).split('.').length;
   }
 
+  /**
+   * Evaluate whether WaterCursorFX should be emitting trail droplets
+   * during gameplay and toggle it accordingly.
+   *
+   * Rule (per design): FX is only active in gameplay when the player is
+   * in a deep-dungeon floor (depth ≥ 3) AND is actively carrying a hose.
+   * Shallower floors and hose-less exploration get no cursor trail —
+   * keeps the effect tied to the cleaning fantasy and avoids the FPS
+   * drag of constant particle emission during normal traversal.
+   *
+   * Menu/peek overlays (MenuBox, HosePeek, TorchPeek) still call
+   * setActive(true) independently when they open; this gate only
+   * governs the gameplay baseline.
+   */
+  function _evaluateCursorFxGating() {
+    if (typeof WaterCursorFX === 'undefined') return;
+    if (typeof ScreenManager === 'undefined') return;
+    if (ScreenManager.getState() !== ScreenManager.STATES.GAMEPLAY) return;
+
+    var floorId = (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId)
+      ? FloorManager.getCurrentFloorId() : '1';
+    var depth = _floorDepth(floorId);
+    var hoseOn = (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive());
+
+    var shouldBeActive = (depth >= 3) && hoseOn;
+    WaterCursorFX.setActive(shouldBeActive);
+  }
+
+  /**
+   * Find the doorExit on the current live floor (interior → parent exterior).
+   * Used as a "push player back outside" fallback when the marker would
+   * otherwise drop to null in a shop/inn/home during the work cycle.
+   */
+  function _findCurrentDoorExit() {
+    var fd = FloorManager.getFloorData();
+    if (!fd) return null;
+    if (fd.doors && fd.doors.doorExit) return { x: fd.doors.doorExit.x, y: fd.doors.doorExit.y };
+    // Fallback: scan doorTargets for the shortest target ID (i.e. the parent).
+    if (fd.doorTargets) {
+      var bestKey = null, bestLen = 999;
+      for (var k in fd.doorTargets) {
+        var t = String(fd.doorTargets[k]);
+        if (t.length < bestLen) { bestLen = t.length; bestKey = k; }
+      }
+      if (bestKey) {
+        var p = bestKey.split(',');
+        return { x: parseInt(p[0], 10), y: parseInt(p[1], 10) };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * DumpTruckSpawner anchor: if the truck is parked on the current floor,
+   * its first tile makes a great fallback marker (it's where work happens).
+   */
+  function _findTruckAnchorOnFloor(floorId) {
+    if (typeof DumpTruckSpawner === 'undefined' || !DumpTruckSpawner.getDeployment) return null;
+    var dep = DumpTruckSpawner.getDeployment();
+    if (!dep || dep.floorId !== floorId || !dep.tiles || dep.tiles.length === 0) return null;
+    return { x: dep.tiles[0][0], y: dep.tiles[0][1] };
+  }
+
+  // Sticky fallback: if every branch below would drop the marker mid-arc,
+  // reuse the most recent target on this floor rather than flicker to null.
+  var _lastQuestTarget = null;  // { floorId, x, y }
+
+  function _commitQuestTarget(floorId, target) {
+    if (target) {
+      _lastQuestTarget = { floorId: floorId, x: target.x, y: target.y };
+      Minimap.setQuestTarget({ x: target.x, y: target.y });
+    } else {
+      Minimap.setQuestTarget(null);
+    }
+  }
+
   function _updateQuestTarget() {
     if (typeof Minimap === 'undefined' || !Minimap.setQuestTarget) return;
     var floorId = FloorManager.getFloor();
 
     // ── Phase 0–1: pre-gate ────────────────────────────────────────
+    // Sticky fallback helper: prefer the last known good target on THIS
+    // floor over a flicker-to-null if nothing below resolves.
+    function stickyOrNull() {
+      if (_lastQuestTarget && _lastQuestTarget.floorId === floorId) {
+        return { x: _lastQuestTarget.x, y: _lastQuestTarget.y };
+      }
+      return null;
+    }
+
     if (!_gateUnlocked) {
       if (_dispatcherPhase !== 'done') {
-        // Phase 0: meet the dispatcher at the gate
+        // Phase 0: meet the dispatcher at the gate (on Floor 1)
         if (floorId === '0') {
-          Minimap.setQuestTarget({ x: 19, y: 5 });
+          // Tutorial courtyard — point at the exit door leading to Floor 1
+          // so the player walks toward the Promenade where the Dispatcher waits.
+          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
         } else if (floorId === '1') {
           if (_dispatcherEntity && !_dispatcherEntity._hidden) {
-            Minimap.setQuestTarget({ x: _dispatcherEntity.x, y: _dispatcherEntity.y });
+            _commitQuestTarget(floorId, { x: _dispatcherEntity.x, y: _dispatcherEntity.y });
           } else {
             var gateQ = _findGateDoorPos();
-            Minimap.setQuestTarget(gateQ ? { x: gateQ.x - 1, y: gateQ.y } : null);
+            _commitQuestTarget(floorId, gateQ ? { x: gateQ.x - 1, y: gateQ.y } : stickyOrNull());
           }
         } else {
-          Minimap.setQuestTarget(null);
+          // Player ducked into a shop/inn/home before the dispatcher fired.
+          // Push them back outside instead of dropping the marker.
+          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
         }
       } else {
         // Phase 1: get work keys — dispatcher sent us home
         if (floorId === '1') {
-          Minimap.setQuestTarget({ x: 22, y: 27 });
+          _commitQuestTarget(floorId, { x: 22, y: 27 });  // Gleaner's Home door (SC pod)
         } else if (floorId === '1.6') {
-          Minimap.setQuestTarget({ x: 19, y: 3 });
+          _commitQuestTarget(floorId, { x: 19, y: 3 });   // Work keys chest
         } else {
-          Minimap.setQuestTarget(null);
+          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
         }
       }
       return;
@@ -4465,7 +4826,8 @@ var Game = (function () {
       ? DungeonSchedule.getNextGroup() : null;
 
     if (!nextGroup || !nextGroup.floorIds || nextGroup.floorIds.length === 0) {
-      // Arc complete or schedule not initialized — no marker
+      // Arc complete or schedule not initialized — legitimately no marker.
+      _lastQuestTarget = null;
       Minimap.setQuestTarget(null);
       return;
     }
@@ -4476,41 +4838,49 @@ var Game = (function () {
     var segs       = dungeonId.split('.');
     var lobbyId    = segs.slice(0, 2).join('.');         // e.g. '1.3'
     var exteriorId = segs[0];                            // e.g. '1'
+    var target     = (nextGroup.target || 0.6);
 
     // Is the player currently inside this dungeon group's floors?
     var inThisDungeon = false;
+    var dungeonIdx = -1;
     for (var gi = 0; gi < nextGroup.floorIds.length; gi++) {
-      if (floorId === nextGroup.floorIds[gi]) { inThisDungeon = true; break; }
+      if (floorId === nextGroup.floorIds[gi]) { inThisDungeon = true; dungeonIdx = gi; break; }
     }
 
     if (inThisDungeon) {
-      // Player is IN the dungeon — check readiness
+      // Player is IN a group dungeon floor. Push them at the deeper door
+      // (stairsDn) until readiness is met, then pivot to stairsUp. If
+      // there is no deeper floor (last group floor below target), point
+      // at stairsUp as a "go back to lobby and come back stronger" nudge.
       var coreScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
         ? ReadinessCalc.getCoreScore(floorId) : 0;
+      var dData = FloorManager.getFloorData();
+      var stairsUpPos = (dData && dData.doors && dData.doors.stairsUp)
+        ? { x: dData.doors.stairsUp.x, y: dData.doors.stairsUp.y } : null;
+      var stairsDnPos = (dData && dData.doors && dData.doors.stairsDn)
+        ? { x: dData.doors.stairsDn.x, y: dData.doors.stairsDn.y } : null;
 
-      if (coreScore >= (nextGroup.target || 0.6)) {
-        // Readiness met! Point at stairs up — time to leave
-        var dData = FloorManager.getFloorData();
-        if (dData && dData.doors && dData.doors.stairsUp) {
-          Minimap.setQuestTarget({ x: dData.doors.stairsUp.x, y: dData.doors.stairsUp.y });
-        } else {
-          Minimap.setQuestTarget(null);
-        }
+      if (coreScore >= target) {
+        // Readiness met — leave via stairs up. Fallback to stairsDn (deeper
+        // floor still pending) or the truck/sticky so the marker survives.
+        _commitQuestTarget(floorId,
+          stairsUpPos || stairsDnPos || _findTruckAnchorOnFloor(floorId) || stickyOrNull());
       } else {
-        // Still working — no marker (player is doing the sweep)
-        Minimap.setQuestTarget(null);
+        // Still sweeping — push player at deeper door if it exists (the
+        // "dungeonN.N.N deeper door" step in the chain), otherwise keep
+        // marker visible on stairs up so they can retreat to lobby.
+        _commitQuestTarget(floorId,
+          stairsDnPos || stairsUpPos || _findTruckAnchorOnFloor(floorId) || stickyOrNull());
       }
       return;
     }
 
     if (floorId === lobbyId) {
       // In the dungeon lobby — check if ALL group floors are readiness-complete.
-      // If all done, point at the exit door (back to exterior / dispatch).
-      // If not all done, point at stairs down (next floor to clean).
       var allFloorsDone = true;
       if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore) {
         for (var fi = 0; fi < nextGroup.floorIds.length; fi++) {
-          if (ReadinessCalc.getCoreScore(nextGroup.floorIds[fi]) < (nextGroup.target || 0.6)) {
+          if (ReadinessCalc.getCoreScore(nextGroup.floorIds[fi]) < target) {
             allFloorsDone = false;
             break;
           }
@@ -4518,42 +4888,41 @@ var Game = (function () {
       }
 
       var lobbyData = FloorManager.getFloorData();
+      var lobbyExit = (lobbyData && lobbyData.doors && lobbyData.doors.doorExit)
+        ? { x: lobbyData.doors.doorExit.x, y: lobbyData.doors.doorExit.y } : null;
+      var lobbyDn = (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn)
+        ? { x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y } : null;
+
       if (allFloorsDone) {
-        // All floors done — point at exit door (back toward dispatch)
-        if (lobbyData && lobbyData.doors && lobbyData.doors.doorExit) {
-          Minimap.setQuestTarget({ x: lobbyData.doors.doorExit.x, y: lobbyData.doors.doorExit.y });
-        } else {
-          Minimap.setQuestTarget(null);
-        }
+        _commitQuestTarget(floorId, lobbyExit || lobbyDn || stickyOrNull());
       } else {
-        // Floors remain — point at stairs down
-        if (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn) {
-          Minimap.setQuestTarget({ x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y });
-        } else {
-          Minimap.setQuestTarget(null);
-        }
+        _commitQuestTarget(floorId, lobbyDn || lobbyExit || stickyOrNull());
       }
       return;
     }
 
     if (floorId === exteriorId) {
-      // On the correct exterior — point at the door to the dungeon lobby
-      var doorPos = _findDoorTo(exteriorId, lobbyId);
-      Minimap.setQuestTarget(doorPos);
+      // On the correct exterior — point at the door to the dungeon lobby.
+      var doorPos = _findDoorTo(exteriorId, lobbyId)
+                 || _findTruckAnchorOnFloor(floorId)
+                 || stickyOrNull();
+      _commitQuestTarget(floorId, doorPos);
       return;
     }
 
-    // Player is on a different exterior or an unrelated interior.
-    // Find the gate/door that leads toward the target exterior.
+    // Player is on a different exterior — chain-hop toward the target.
     if (_floorDepth(floorId) === 1 && floorId !== exteriorId) {
-      // On a different exterior — find the connecting gate
-      var gateDoor = _findDoorTo(floorId, exteriorId);
-      Minimap.setQuestTarget(gateDoor);
+      var gateDoor = _findDoorTo(floorId, exteriorId)
+                  || _findProgressionDoorForward(floorId, exteriorId)
+                  || _findTruckAnchorOnFloor(floorId)
+                  || stickyOrNull();
+      _commitQuestTarget(floorId, gateDoor);
       return;
     }
 
-    // In a shop, home, or other interior not related to the assignment
-    Minimap.setQuestTarget(null);
+    // In a shop, inn, home, or other unrelated interior during the work
+    // cycle — push the player back to the exterior so they can re-route.
+    _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
   }
 
   // ── Movement callbacks ─────────────────────────────────────────────
@@ -5002,14 +5371,19 @@ var Game = (function () {
       var chestFloorId = FloorManager.getCurrentFloorId();
       if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
           CrateSystem.hasContainer(fx, fy, chestFloorId)) {
-        if (PeekSlots.tryOpen(fx, fy, chestFloorId)) return;
-        // tryOpen returned false — container is sealed/depleted/busy
-        if (typeof Toast !== 'undefined') {
-          var cc = CrateSystem.getContainer(fx, fy, chestFloorId);
-          if (cc && cc.depleted) {
-            Toast.show('Chest is empty', 'dim');
+        var chestContainer = CrateSystem.getContainer(fx, fy, chestFloorId);
+        // Show "already empty" feedback before trying to open — tryOpen() returns
+        // true for depleted containers (they're not sealed), so the empty state must
+        // be surfaced here rather than in the tryOpen false-branch.
+        if (chestContainer && chestContainer.depleted) {
+          if (typeof Toast !== 'undefined') {
+            Toast.show('📦 ' + i18n.t('toast.chest_empty', 'Chest is empty'), 'dim');
           }
+          return;
         }
+        if (PeekSlots.tryOpen(fx, fy, chestFloorId)) return;
+        // tryOpen returned false — PeekSlots is busy or state not IDLE.
+        // Don't show a toast here; the player can see CrateUI is already open.
       }
       return;  // Always return — no fallback to legacy openChest
     } else if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
@@ -5079,7 +5453,13 @@ var Game = (function () {
         if (_quickFillCrate(fx, fy, crateFloorId)) return; // Sealed — done
         // Still has empties: open manual slot UI
         if (typeof PeekSlots !== 'undefined' &&
-            PeekSlots.tryOpen(fx, fy, crateFloorId)) return;
+            PeekSlots.tryOpen(fx, fy, crateFloorId)) {
+          // Collapse the crate peek now that the slot-fill UI is taking over
+          if (typeof CratePeek !== 'undefined' && CratePeek.isActive()) {
+            CratePeek.handleKey('Escape');
+          }
+          return;
+        }
       }
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
@@ -5090,6 +5470,7 @@ var Game = (function () {
         if (TorchPeek.isInteracting()) {
           // Already interacting — pass through to handleKey
         } else if (TorchPeek.isActive()) {
+          if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
           TorchPeek.tryInteract();
         }
       }
@@ -5102,6 +5483,7 @@ var Game = (function () {
           BookshelfPeek.handleKey('KeyD');
         } else {
           // Not yet showing — open immediately (bypasses 400ms debounce)
+          if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
           BookshelfPeek.tryShow(fx, fy);
         }
       }
@@ -5115,6 +5497,7 @@ var Game = (function () {
         if (BookshelfPeek.isActive()) {
           BookshelfPeek.handleKey('KeyD');
         } else {
+          if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
           BookshelfPeek.tryShow(fx, fy);
         }
       }
@@ -5377,6 +5760,7 @@ var Game = (function () {
       VendorDialog.open(factionId, floorId, {
         onBrowse: function () {
           // "Browse Wares" → open card shop via pause menu
+          _collapseAllPeeks();
           if (typeof Shop !== 'undefined') {
             Shop.open(factionId, FloorManager.getFloor());
           }
@@ -5409,6 +5793,7 @@ var Game = (function () {
       portrait: npc.emoji,
       priority: DialogBox.PRIORITY.DIALOGUE,
       onClose: function () {
+        _collapseAllPeeks();
         if (typeof Shop !== 'undefined') {
           Shop.open(factionId, FloorManager.getFloor());
         }
@@ -5497,6 +5882,7 @@ var Game = (function () {
     Salvage.prepareLoot(fx, fy, floorId, biome);
 
     // Open the harvest MenuBox (side-by-side corpse loot + player bag)
+    _collapseAllPeeks();
     _pendingMenuContext = 'harvest';
     _pendingMenuFace = 0;
     ScreenManager.toPause();
@@ -6052,6 +6438,12 @@ var Game = (function () {
     if (state === S.TITLE) {
       TitleScreen.update(frameDt);
       TitleScreen.render();
+      // Water cursor FX — hover trail + click splash on the title menu
+      if (typeof WaterCursorFX !== 'undefined') {
+        var tctx = _canvas.getContext('2d');
+        WaterCursorFX.tick(frameDt);
+        WaterCursorFX.render(tctx);
+      }
       return;
     }
 
@@ -6568,8 +6960,36 @@ var Game = (function () {
    * @param {number} [face=0]   - Starting face index (0-3)
    * @param {string} [invFocus] - 'bag' or 'deck' — sets inventory focus on Face 2
    */
+
+  /**
+   * Silently dismiss all currently-active peek overlays before opening any
+   * menu (shop, inventory, harvest, requestPause). Unlike the ESC intercepts,
+   * which dismiss one peek per keypress so the player can back out gracefully,
+   * this helper clears everything at once when a menu is opening programmatically.
+   *
+   * Does NOT touch the ESC intercept chain — that stays one-at-a-time.
+   */
+  function _collapseAllPeeks() {
+    if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
+      PeekSlots.close();
+    }
+    if (typeof TorchPeek !== 'undefined' && TorchPeek.isInteracting()) {
+      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
+      TorchPeek.handleKey('Escape');
+    }
+    if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
+      BookshelfPeek.handleKey('Escape');
+    }
+    if (typeof CratePeek   !== 'undefined' && CratePeek.isActive())   CratePeek.handleKey('Escape');
+    if (typeof CorpsePeek  !== 'undefined' && CorpsePeek.isActive())  CorpsePeek.handleKey('Escape');
+    if (typeof MerchantPeek !== 'undefined' && MerchantPeek.isActive()) MerchantPeek.handleKey('Escape');
+    if (typeof PuzzlePeek  !== 'undefined' && PuzzlePeek.isActive())  PuzzlePeek.handleKey('Escape');
+  }
+
   function requestPause(context, face, invFocus) {
     if (!ScreenManager.isPlaying()) return;
+    _collapseAllPeeks();
     _pendingMenuContext = context || 'pause';
     _pendingMenuFace = face || 0;
     // Set inventory focus before opening menu

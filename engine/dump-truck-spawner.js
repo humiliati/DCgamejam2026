@@ -17,11 +17,19 @@
  * ┌──────────┬───────────┬──────────┬──────────────────────┐
  * │ Faction  │ Ext Floor │ Door pos │ Truck tiles          │
  * ├──────────┼───────────┼──────────┼──────────────────────┤
- * │ ♠ Spade  │ 1         │ 10,27    │ (10,28) + (11,28)    │
- * │ ♣ Club   │ 2         │ 14,5     │ (14,6)  + (15,6)     │
- * │ ♦ Diamond│ 3         │ 25,1     │ (25,2)  + (26,2)     │
- * │ (home)   │ 1         │ 22,27    │ (22,28) + (23,28)    │
+ * │ ♠ Spade  │ 1         │ 10,27    │ (13,28) + (14,28)    │
+ * │ ♣ Club   │ 2         │ 14,5     │ (15,8)  + (16,8)     │
+ * │ ♦ Diamond│ 3         │ 25,1     │ (22,3)  + (23,3)     │
+ * │ (home)   │ 1         │ 22,27    │ (30,26) + (31,26)    │
  * └──────────┴───────────┴──────────┴──────────────────────┘
+ *
+ * Placement contract (enforced at runtime in _placeTruckTiles):
+ *   • Truck tiles must NOT be a door tile themselves.
+ *   • Truck tiles must NOT be cardinally adjacent to any door tile
+ *     (doing so blocks the player's spawn-back step-out and traps them).
+ *   • Truck tiles must be non-walkable or walkable (the spawner overwrites),
+ *     but the ORIGINAL tile is expected to be a safe EMPTY/ROAD/PATH — we
+ *     warn if we're stomping something interesting (wall/door/stairs).
  *
  * Layer 2 — depends on: TILES, DungeonSchedule, FloorManager,
  *           DumpTruckSprites, NpcSystem, BarkLibrary
@@ -33,13 +41,29 @@ var DumpTruckSpawner = (function () {
   // Each entry: the 2-tile-wide truck placed 1 row south of the door.
   // { floorId, tiles: [[x1,y1],[x2,y2]] }
 
+  // NOTE: These positions MUST NOT be cardinally adjacent to any door tile.
+  // When a door's "step-out" tile is blocked by the truck, DoorContracts'
+  // spawn-near-door ring search is forced into whatever neighbor remains —
+  // on Floor 1 the home door (22,27) has a 2-tile wall pocket at (21,28)+
+  // (22,28), so blocking (22,28) left the player stranded in the pocket
+  // after exiting 1.6. The spade site had the identical pattern at (10,27).
+  // Club (floor 2) and diamond (floor 3) had the same design flaw — the
+  // truck sat directly on the door's step-out tile — even though those
+  // exteriors happen to be open enough that the spawn search would find
+  // a fallback. _placeTruckTiles enforces this invariant at runtime and
+  // logs violators, so we move all four sites off-axis proactively.
   var DEPLOY_SITES = {
-    spade:   { floorId: '1', tiles: [[10, 28], [11, 28]] },
-    club:    { floorId: '2', tiles: [[14, 6],  [15, 6]]  },
-    diamond: { floorId: '3', tiles: [[25, 2],  [26, 2]]  }
+    // Spade: Floor 1 grass south of 1.3 door (10,27). Row 28 is walkable road/path.
+    spade:   { floorId: '1', tiles: [[13, 28], [14, 28]] },  // was (10,28)(11,28) — blocked 1.3 door step-out
+    // Club: Floor 2 grass buffer (rows 7-9 all GR). Offset 2 east of door
+    // col to leave step-out column (14) fully clear.
+    club:    { floorId: '2', tiles: [[15, 8],  [16, 8]]  },  // was (14,6)(15,6) — blocked 2.x door step-out
+    // Diamond: Floor 3 cozy forest clearing. Row 3 cols 22-23 are GR (no
+    // trees/shrubs at those coords), 2 tiles west of door corridor (24-25).
+    diamond: { floorId: '3', tiles: [[22, 3],  [23, 3]]  }   // was (25,2)(26,2) — blocked 3.1 door + boardwalk
   };
 
-  var HOME_SITE = { floorId: '1', tiles: [[22, 28], [23, 28]] };
+  var HOME_SITE = { floorId: '1', tiles: [[30, 26], [31, 26]] };  // was (22,28)(23,28) — blocked 1.6 door step-out
 
   // ── Coworker NPC config ────────────────────────────────────────
   var COWORKER_ID   = 'truck_coworker_hazmat';
@@ -136,11 +160,55 @@ var DumpTruckSpawner = (function () {
   }
 
   /**
+   * Check if a tile is cardinally adjacent to (or is) a door tile on the grid.
+   * Placing a truck on such a tile can block the player's spawn-back step-out
+   * when DoorContracts runs its ring search, trapping them in a wall pocket.
+   */
+  function _isDoorOrDoorAdjacent(grid, W, H, x, y) {
+    if (!grid || !grid[y]) return false;
+    if (typeof TILES === 'undefined' || !TILES.isDoor) return false;
+    if (TILES.isDoor(grid[y][x])) return true;
+    var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (var i = 0; i < 4; i++) {
+      var nx = x + DIRS[i][0];
+      var ny = y + DIRS[i][1];
+      if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+      if (!grid[ny]) continue;
+      if (TILES.isDoor(grid[ny][nx])) return true;
+    }
+    return false;
+  }
+
+  /**
    * Place truck tiles on a floor grid.
+   *
+   * Invariant: no tile may be a door or door-adjacent (blocks step-out).
+   * If any tile fails the check the entire placement is refused and a
+   * warning is logged — safer to have no truck than to trap the player.
    */
   function _placeTruckTiles(site) {
     var fd = _getFloorData(site.floorId);
     if (!fd || !fd.grid) return false;
+
+    var W = fd.gridW || (fd.grid[0] ? fd.grid[0].length : 0);
+    var H = fd.gridH || fd.grid.length;
+
+    // ── Safety contract: validate every tile before touching the grid ──
+    for (var v = 0; v < site.tiles.length; v++) {
+      var vx = site.tiles[v][0];
+      var vy = site.tiles[v][1];
+      if (_isDoorOrDoorAdjacent(fd.grid, W, H, vx, vy)) {
+        if (typeof console !== 'undefined') {
+          console.warn(
+            '[DumpTruckSpawner] REFUSING placement on floor ' + site.floorId +
+            ' — tile (' + vx + ',' + vy + ') is a door or door-adjacent. ' +
+            'Placing a truck here would block the player\'s spawn-back step-out. ' +
+            'Fix the DEPLOY_SITES entry to a non-adjacent position.'
+          );
+        }
+        return false;
+      }
+    }
 
     var truck = _truckTile();
     for (var i = 0; i < site.tiles.length; i++) {
