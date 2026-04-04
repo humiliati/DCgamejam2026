@@ -20,6 +20,7 @@ i18n.register('en', {
   'title.subtitle':     'A Gleaning Dungeon Crawler',
   'title.new_game':     'New Game',
   'title.continue':     'Continue',
+  'title.credits':      'Credits',
   'title.settings':     'Settings',
   'title.jam_credit':   'DC Jam 2026',
 
@@ -289,6 +290,13 @@ i18n.register('en', {
   'interact.rearm':     'Re-arm trap',
   'interact.check_mail': 'Check Mailbox',
   'hint.check_mail':     'Read hero run reports.',
+
+  // ── Pressure-washing hose (PW-2) ──────────────────────────────
+  'interact.grab_hose':  'Grab Hose',
+  'hint.grab_hose':      'Drag the pressure-wash hose into the dungeon.',
+  'hose.grabbed':        'Hose attached — head for the dungeon',
+  'hose.already_carrying': 'Already carrying the hose',
+  'hose.no_deployment':  'No deployment today — truck\u2019s resting',
   'toast.trap_rearmed': 'Trap re-armed!',
   'readiness.exit_enabled': 'Dragonfire exit enabled!',
   'toast.tile_clean':   'Tile cleaned!',

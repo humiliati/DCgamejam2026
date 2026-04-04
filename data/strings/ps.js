@@ -13,6 +13,7 @@ i18n.register('ps', {
   'title.subtitle':     'د تهکو پاکوونکی',
   'title.new_game':     'نوی لوبه',
   'title.continue':     'دوام',
+  'title.credits':      'کریډیټونه',
   'title.settings':     'ترتیبات',
 
   // ── Character Creation ──

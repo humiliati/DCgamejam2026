@@ -1193,7 +1193,7 @@
       --font-terminal:   'Courier New', monospace;
       --border-terminal: 1px solid var(--phosphor-dim);
       --status-bar-h:    128px;
-      --debrief-w:       248px;
+      --debrief-w:       273px;
 
       /* ── Paper / Desk surface ────────────────────────────────── */
       --paper:           #f5f0e8;
@@ -1284,7 +1284,7 @@
       border: 1px solid var(--phosphor-dim);
       border-radius: 10px;
       font-family: var(--font-crt);
-      font-size: 14px;
+      font-size: 15px;
       color: var(--phosphor);
       text-shadow: 0 0 4px var(--phosphor-glow);
       overflow: hidden;
@@ -1293,7 +1293,9 @@
       display: flex; flex-direction: column;
       pointer-events: auto;
       box-shadow: 0 2px 12px rgba(0,0,0,0.5), inset 0 0 8px rgba(51,255,136,0.05);
-      line-height: 1.15;
+      line-height: 1.25;
+      letter-spacing: 0.02em;
+      transition: box-shadow 200ms ease-out;
     }
     /* CRT scanline overlay on debrief panel */
     #debrief-feed::after {
@@ -1311,9 +1313,9 @@
       z-index: 5;
     }
     #debrief-feed .df-header {
-      padding: 3px 8px;
+      padding: 4px 10px;
       border-bottom: 1px solid var(--phosphor-dim);
-      font-size: 11px; letter-spacing: 0.14em;
+      font-size: 13px; letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--phosphor-dim);
       flex-shrink: 0;
@@ -1321,7 +1323,7 @@
     }
     #debrief-feed .df-content {
       flex: 1; overflow-y: auto; overflow-x: hidden;
-      padding: 3px 6px;
+      padding: 4px 8px;
       scrollbar-width: thin;
       scrollbar-color: var(--phosphor-dim) transparent;
       position: relative; z-index: 6;
@@ -1331,19 +1333,27 @@
     #debrief-feed .df-content::-webkit-scrollbar-track { background: transparent; }
 
     /* Debrief: MOK avatar mode */
-    .df-avatar { text-align: center; padding: 1px 0; position: relative; z-index: 6; }
-    .df-avatar .df-emoji { font-size: 28px; }
-    .df-avatar .df-callsign { font-size: 12px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
-    .df-avatar .df-class { font-size: 11px; color: var(--phosphor-dim); }
-    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 2px 0; opacity: 0.4; position: relative; z-index: 6; }
-    .df-gauge-row { display: flex; align-items: center; gap: 3px; font-size: 13px; line-height: 1.15; position: relative; z-index: 6; }
-    .df-gauge-row .df-label { width: 28px; color: var(--phosphor-dim); font-family: var(--font-crt); font-size: 10px; text-align: right; }
-    .df-gauge-row .df-bar { flex: 1; letter-spacing: -1px; }
-    .df-stat-row { font-size: 12px; color: var(--phosphor-dim); line-height: 1.2; position: relative; z-index: 6; }
+    .df-avatar { text-align: center; padding: 2px 0; position: relative; z-index: 6; }
+    .df-avatar .df-emoji { font-size: 31px; }
+    .df-avatar .df-callsign { font-size: 14px; color: var(--phosphor-bright); letter-spacing: 0.1em; }
+    .df-avatar .df-class { font-size: 13px; color: var(--phosphor-dim); letter-spacing: 0.04em; }
+    .df-divider { border: none; border-top: 1px solid var(--phosphor-dim); margin: 3px 0; opacity: 0.4; position: relative; z-index: 6; }
+    .df-gauge-row { display: flex; align-items: center; gap: 4px; font-size: 15px; line-height: 1.25; position: relative; z-index: 6; }
+    .df-gauge-row .df-label { width: 32px; color: var(--phosphor-dim); font-family: var(--font-crt); font-size: 12px; text-align: right; letter-spacing: 0.06em; }
+    .df-gauge-row .df-bar { flex: 1; letter-spacing: 0; }
+    .df-stat-row { font-size: 14px; color: var(--phosphor-dim); line-height: 1.3; position: relative; z-index: 6; letter-spacing: 0.03em; }
     .df-stat-row span { color: var(--phosphor); }
+    /* Pulse — reverse coin-pump fanfare for energy drain */
+    .df-drain-pulse { animation: df-drain-flash 420ms ease-out; }
+    @keyframes df-drain-flash {
+      0%   { color: #00D4FF; text-shadow: 0 0 8px #00D4FF, 0 0 14px rgba(0,212,255,0.7); transform: translateX(0); }
+      25%  { transform: translateX(-2px); }
+      50%  { color: #66E6FF; text-shadow: 0 0 10px #66E6FF; transform: translateX(1px); }
+      100% { color: inherit; text-shadow: inherit; transform: translateX(0); }
+    }
 
     /* Debrief: Feed/log mode */
-    .df-feed-line { font-size: 13px; line-height: 1.25; color: var(--phosphor-dim); word-break: break-all; position: relative; z-index: 6; }
+    .df-feed-line { font-size: 15px; line-height: 1.3; color: var(--phosphor-dim); word-break: break-all; position: relative; z-index: 6; }
     .df-feed-line.df-loot { color: var(--phosphor-bright); }
     .df-feed-line.df-dmg { color: #ff6b6b; }
     .df-feed-line.df-heal { color: #66ffaa; }
@@ -1981,7 +1991,7 @@
        ═══════════════════════════════════════════════════════════════ */
     @media (orientation: landscape) and (max-width: 1024px) {
       :root {
-        --debrief-w: 200px;
+        --debrief-w: 220px;
         --status-bar-h: 120px;
       }
       #dpad-frame {
@@ -2228,6 +2238,7 @@
   <script src="engine/bark-library.js"></script>
   <script src="engine/cleaning-system.js"></script>
   <script src="engine/grime-grid.js"></script>
+  <script src="engine/hose-state.js"></script>
   <script src="engine/trap-rearm.js"></script>
   <script src="engine/torch-state.js"></script>
   <script src="engine/readiness-calc.js"></script>
@@ -2263,6 +2274,7 @@
   <script src="engine/suit-toast.js"></script>
   <script src="engine/sprite-sheet.js"></script>
   <script src="engine/particle-fx.js"></script>
+  <script src="engine/water-cursor-fx.js"></script>
   <script src="engine/world-popup.js"></script>
   <script src="engine/post-process.js"></script>
   <script src="engine/viewport-ring.js"></script>
@@ -2322,6 +2334,7 @@
   <script src="engine/bar-counter-peek.js"></script>
   <script src="engine/bed-peek.js"></script>
   <script src="engine/mailbox-peek.js"></script>
+  <script src="engine/hose-peek.js"></script>
   <script src="engine/cobweb-node.js"></script>
   <script src="engine/combat-fx.js"></script>
   <script src="engine/combat-bridge.js"></script>

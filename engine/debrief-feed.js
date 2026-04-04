@@ -49,6 +49,94 @@ var DebriefFeed = (function () {
   var _mokClass     = 'Blade';
   var _mokExpression = 'idle'; // idle, hurt, happy, alert, dead
 
+  // ── Roll-down animation state ──────────────────────────────────
+  // Reverse coin-pump fanfare: when a numeric pool drops, animate the
+  // displayed number down from the previous value with a pulse flash.
+  //
+  // One tween per key ('hp', 'en', 'bat'). While a tween is running the
+  // *displayed* value lags the real value — _renderUnified draws the
+  // lagged number, not p.energy. The rAF loop advances each tween and
+  // re-writes the corresponding DOM nodes in place (so full re-renders
+  // triggered mid-tween do not stomp the animation).
+  var ROLL_MS = 420;                           // matches --df-drain-flash keyframe
+  var _rollState = {};                         // key → { from, to, t0, duration }
+  var _prevPool  = { hp: null, en: null, bat: null };
+  var _rafId     = 0;
+
+  function _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function _laggedValue(key, realVal) {
+    var r = _rollState[key];
+    if (!r) return realVal;
+    var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    var t = Math.min(1, (now - r.t0) / r.duration);
+    return r.from + (r.to - r.from) * _easeOutCubic(t);
+  }
+
+  function _startRoll(key, from, to) {
+    _rollState[key] = { from: from, to: to, t0: (typeof performance !== 'undefined' ? performance.now() : Date.now()), duration: ROLL_MS };
+    // Flash the row
+    var row = document.getElementById('df-row-' + key);
+    if (row) {
+      row.classList.remove('df-drain-pulse');
+      // force reflow so the animation restarts cleanly
+      void row.offsetWidth;
+      row.classList.add('df-drain-pulse');
+    }
+    if (!_rafId) _tick();
+  }
+
+  function _tick() {
+    _rafId = 0;
+    var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    var anyActive = false;
+    var keys = ['hp', 'en', 'bat'];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var r = _rollState[k];
+      if (!r) continue;
+      var t = Math.min(1, (now - r.t0) / r.duration);
+      var v = r.from + (r.to - r.from) * _easeOutCubic(t);
+      _paintPool(k, v, r.to);
+      if (t >= 1) {
+        delete _rollState[k];
+      } else {
+        anyActive = true;
+      }
+    }
+    if (anyActive && typeof requestAnimationFrame !== 'undefined') {
+      _rafId = requestAnimationFrame(_tick);
+    }
+  }
+
+  /**
+   * Paint a single pool's lagged display value into the DOM without re-rendering.
+   * cur = current tweened value, target = final pool value (used for max clamp).
+   */
+  function _paintPool(key, cur, target) {
+    var p = (typeof Player !== 'undefined') ? Player.state() : {};
+    var max;
+    if (key === 'hp')  max = p.maxHp     || 1;
+    else if (key === 'en')  max = p.maxEnergy  || 1;
+    else                    max = p.maxBattery || 1;
+
+    var numEl = document.getElementById('df-num-' + key);
+    var fillEl = document.getElementById('df-fill-' + key);
+    if (numEl) numEl.textContent = Math.round(cur) + '/' + max;
+    if (fillEl) {
+      var pct = Math.max(0, Math.min(100, (cur / max) * 100));
+      fillEl.style.width = pct + '%';
+    }
+    // Pip-row (battery): rewrite glyphs in place
+    var pipsEl = document.getElementById('df-pips-' + key);
+    if (pipsEl) {
+      var n = Math.round(cur);
+      var s = '';
+      for (var i = 0; i < max; i++) s += (i < n) ? '\u25C8' : '\u25C7';
+      pipsEl.textContent = s;
+    }
+  }
+
   // ── Init ────────────────────────────────────────────────────────
 
   function init() {
@@ -222,6 +310,24 @@ var DebriefFeed = (function () {
     var maxBat = p.maxBattery || 5;
     var currency = p.currency || 0;
 
+    // Detect drops vs last render → kick off reverse-fanfare tweens.
+    // Only trigger on DECREASES; increases snap (matches pump pattern:
+    // up-pumps are a separate fanfare reserved for HUD coin/score).
+    if (_prevPool.hp  !== null && hp  < _prevPool.hp)  _startRoll('hp',  _prevPool.hp,  hp);
+    if (_prevPool.en  !== null && en  < _prevPool.en)  _startRoll('en',  _prevPool.en,  en);
+    if (_prevPool.bat !== null && bat < _prevPool.bat) _startRoll('bat', _prevPool.bat, bat);
+
+    // Choose what value to paint: if a tween is active for this key,
+    // compute its current lagged value so a mid-tween re-render doesn't
+    // snap back to the start. Otherwise show the real value.
+    var hpShown  = _laggedValue('hp',  hp);
+    var enShown  = _laggedValue('en',  en);
+    var batShown = _laggedValue('bat', bat);
+
+    _prevPool.hp  = hp;
+    _prevPool.en  = en;
+    _prevPool.bat = bat;
+
     var html = '';
 
     // Compact avatar row (emoji + class)
@@ -231,9 +337,9 @@ var DebriefFeed = (function () {
     html += '</div>';
 
     // Full-width bars
-    html += _fullBar('HP', hp, maxHp, '#FF6B9D');
-    html += _fullBar('EN', en, maxEn, '#00D4FF');
-    html += _pipRow('BAT', bat, maxBat, '#00FFA6');
+    html += _fullBar('HP', hpShown, maxHp, '#FF6B9D', 'hp');
+    html += _fullBar('EN', enShown, maxEn, '#00D4FF', 'en');
+    html += _pipRow('BAT', batShown, maxBat, '#00FFA6', 'bat');
 
     // Currency + stats row (compact)
     html += '<div class="df-stat-row" style="margin-top:2px">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
@@ -282,27 +388,34 @@ var DebriefFeed = (function () {
       '</div>';
   }
 
-  function _fullBar(label, cur, max, color) {
+  function _fullBar(label, cur, max, color, key) {
     max = (max > 0) ? max : 1;
+    var shown = Math.round(cur);
     var pct = Math.max(0, Math.min(100, (cur / max) * 100));
-    return '<div class="df-gauge-row">' +
+    var rowId  = key ? ' id="df-row-'  + key + '"' : '';
+    var numId  = key ? ' id="df-num-'  + key + '"' : '';
+    var fillId = key ? ' id="df-fill-' + key + '"' : '';
+    return '<div class="df-gauge-row"' + rowId + '>' +
       '<span class="df-label">' + label + '</span>' +
-      '<span style="color:' + color + ';font-size:14px">' + cur + '/' + max + '</span>' +
+      '<span style="color:' + color + ';font-size:15px"' + numId + '>' + shown + '/' + max + '</span>' +
       '</div>' +
-      '<div style="background:rgba(255,255,255,0.08);height:6px;border-radius:3px;margin:2px 0 4px">' +
-      '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px;transition:width 0.3s"></div>' +
+      '<div style="background:rgba(255,255,255,0.08);height:6px;border-radius:3px;margin:2px 0 5px">' +
+      '<div' + fillId + ' style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px;transition:width 0.3s"></div>' +
       '</div>';
   }
 
-  function _pipRow(label, cur, max, color) {
+  function _pipRow(label, cur, max, color, key) {
     max = (max > 0) ? max : 1;
+    cur = Math.round(cur);
     var pips = '';
     for (var i = 0; i < max; i++) {
       pips += (i < cur) ? '\u25C8' : '\u25C7'; // ◈ vs ◇
     }
-    return '<div class="df-gauge-row">' +
+    var rowId = key ? ' id="df-row-' + key + '"' : '';
+    var pipsId = key ? ' id="df-pips-' + key + '"' : '';
+    return '<div class="df-gauge-row"' + rowId + '>' +
       '<span class="df-label">' + label + '</span>' +
-      '<span style="color:' + color + ';letter-spacing:1px">' + pips + '</span>' +
+      '<span' + pipsId + ' style="color:' + color + ';letter-spacing:2px;font-size:16px">' + pips + '</span>' +
       '</div>';
   }
 

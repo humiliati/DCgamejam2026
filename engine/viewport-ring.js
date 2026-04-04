@@ -250,6 +250,31 @@ var ViewportRing = (function () {
     ctx.fill();
     ctx.restore();
 
+    // ── 1b. PW-2: Blue hose glow ──────────────────────────────────
+    // When the player is dragging a pressure-wash hose, paint a pulsing
+    // cyan-blue radial wash across the outer mask zone so the viewport
+    // edges "bloom" with cool water light. Driven by HoseState.isActive().
+    if (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive()) {
+      var pulse = 0.55 + 0.45 * Math.sin(now / 420);  // 0.1 .. 1.0
+      var baseA = 0.22 + 0.16 * pulse;                // edge alpha
+      var innerR = r + RING_WIDTH;
+      var outerR = Math.hypot(w, h) * 0.62;
+      var grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+      grad.addColorStop(0.00, 'rgba(60,180,255,0)');
+      grad.addColorStop(0.45, 'rgba(80,200,255,' + (baseA * 0.5).toFixed(3) + ')');
+      grad.addColorStop(1.00, 'rgba(120,220,255,' + baseA.toFixed(3) + ')');
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, w, h);
+      ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);  // CCW cutout
+      ctx.closePath();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+    }
+
     // ── 2. Ring band (brass porthole frame) ──
     // Inner shadow for depth
     ctx.beginPath();

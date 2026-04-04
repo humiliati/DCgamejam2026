@@ -172,21 +172,29 @@ The Day/Night cycle provides:
 
 ### 5.2 The Player's Home
 
-The Gleaner lives in a **dedicated bunk room at Floor 1.6** — a rented room off The Promenade (Floor 1), reached via the DOOR at (17, 7) on the Promenade's east wall. This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
+The Gleaner lives in a **dedicated bunk at Floor 1.6** — a multi-room dwelling off The Promenade (Floor 1), reached via the DOOR at (22, 27) in the Promenade's SC pod (south-center). This is the player's **anchor point** — the place they always return to. It is to Dungeon Gleaner what the farmhouse is to Stardew Valley.
 
-> **Floor ID:** `"1.6"` (depth 2, interior). 10×8 hand-authored grid. Biome: `home` (warm amber plank walls, dark wood floor). See TUTORIAL_WORLD_ROADMAP §18.5 for the full grid layout.
+> **Layout note:** Floor 1 has been refactored from the original 40×30 north-buildings spec to a **50×36 six-pod layout**: NW Coral Bazaar, NC Driftwood Inn, NE Noticeboard Pavilion, SW Storm Shelter, **SC Gleaner's Home**, SE Well/Fountain, connected by a central E–W road corridor (rows 14–22) with the exit to Floor 0 at the west gate (2,17)/(2,18) and the Lantern Row gate at the east (48,17)/(48,18). The exterior MAILBOX tile sits at (22,25), two tiles north of the home door. See `engine/floor-manager.js` `_FLOOR1_GRID` for canonical coordinates; `Tutorial_world_roadmap.md` §5.2 still reflects the pre-refactor spec and needs a sync pass.
+
+> **Floor ID:** `"1.6"` (depth 2, interior). **24×20 hand-authored grid** (expanded from the original 10×8 spec; takes advantage of the "bigger on the inside" rule for depth-2 floors). Biome: `home` (warm amber plank walls, dark wood floor). Blockout data lives in `engine/floor-blockout-1-6.js`. See `Tutorial_world_roadmap.md` §5.6 for the canonical layout.
 >
-> **Day 1 note:** On the very first session the home floor contains the player's **work keys** (DOOR tile at 5,3). The player must retrieve these before the Dispatcher NPC will clear the dungeon gate. This establishes Floor 1.6 as a destination before it's established as a *home* — the player discovers the hearth before they learn it's theirs.
+> **Day 1 note:** On the very first session the CHEST at (19,3) in the storage room contains the player's **work keys**. The player must retrieve these before the Dispatcher NPC will clear the dungeon gate. This establishes Floor 1.6 as a destination before it's established as a *home* — the player discovers the hearth before they learn it's theirs.
+
+**Home layout (four zones):**
+1. **Bedroom** (west, cols 1–5): BED pair at (2,3)/(3,3), nightstand TABLE(4,7), bookshelf(1,1).
+2. **Living room** (center, cols 7–15): TABLE pair, HEARTH(11,7), cozy bookshelves.
+3. **Storage** (east, cols 17–22): CHEST(19,3) for work keys / stash, mailbox-history TERMINAL(19,6), shelves.
+4. **Entry hall** (center-south, cols 7–15, rows 10–18): corridor to DOOR_EXIT(11,19) → Floor 1.
 
 **Home features:**
-- **Bed** (bonfire tile, 2,2) — Interact (peek-style) to sleep and advance to next day. Rest bonuses applied. BarkLibrary pool: `home.morning.wakeup`.
-- **Work Keys** (DOOR tile, 5,3, Day 1 only) — Interact to collect. Triggers `_onPickupWorkKeys()` in Game. Tile reverts to EMPTY after pickup.
-- **Stash chest** — Persistent storage. Items survive death (existing `stash` in Player state).
-- **Mailbox** (pillar tile, 2,5) — Read overnight results: hero run reports, Guild notices, NPC gossip. New mail indicated by a flag icon on the HUD.
-- **Mirror** — Quick stat/loadout check (existing HUD info, presented diegetically).
-- **Wall clock** — Shows the current day number and time of day. Also shows which day in the hero cycle: `"Day 2 of 3 — Heroes arrive tomorrow."`.
+- **Bed pair** (BED tiles, 2,3 / 3,3) — BedPeek: sleep to advance day, grant WELL_RESTED buff, clear until_rest effects. BarkLibrary pool: `home.morning.wakeup`.
+- **Work Keys** (CHEST tile, 19,3, Day 1 only) — Interact to collect. Triggers `_onPickupWorkKeys()` + gate unlock + Hero-sighting foreshadow bark. Tile reverts to EMPTY after pickup.
+- **Stash chest** — Persistent storage hosted at the same CHEST. Items survive death (existing `stash` in Player state).
+- **Mailbox history** (TERMINAL tile, 19,6) — Read prior overnight results via MailboxPeek's history face. *(The daily exterior mailbox that receives new reports is the separate `TILES.MAILBOX(33,8)` tile on the Promenade, adjacent to the home's front door.)*
+- **Hearth** (HEARTH tile, 11,7) — Decorative, establishes cozy atmosphere.
+- **Wall clock** (future) — Will show day number, time of day, and position in the hero cycle.
 
-**Fail-state respawn:** After curfew collapse or death in a depth 1–2 area, the player respawns at Floor 1.6 spawn point (5, 6). The `IntroWalk.SEQUENCES.HOME_DEPARTURE` named sequence scripts a short walk to the exit door before restoring free movement. BarkLibrary pool: `home.morning.curfew_wakeup` (distinct tone from normal wake-up).
+**Fail-state respawn:** After curfew collapse or death in a depth 1–2 area, the player respawns at Floor 1.6 spawn row (y=18, centered in the entry hall). `IntroWalk.SEQUENCES.HOME_DEPARTURE` scripts a short walk to DOOR_EXIT(11,19) before restoring free movement. BarkLibrary pool: `home.morning.curfew_wakeup` (distinct tone from normal wake-up).
 
 The existing `Skybox` module has 7 biome presets with zenith/horizon colour pairs. The day/night system interpolates between **three sky states** per biome, driven by the game clock:
 

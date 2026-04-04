@@ -77,7 +77,44 @@ var TitleScreen = (function () {
 
   // ── Title menu options ────────────────────────────────────────────
 
-  var TITLE_OPTIONS = ['new_game', 'placeholder_continue', 'placeholder_settings'];
+  var TITLE_OPTIONS = ['new_game', 'credits', 'placeholder_settings'];
+
+  // ── Credits state ──────────────────────────────────────────────────
+  var _creditsOpen = false;
+  var _creditsScroll = 0;
+  var _creditsMaxScroll = 0;
+
+  var CREDITS_DATA = [
+    { type: 'header', label: 'DUNGEON GLEANER' },
+    { type: 'sub',    label: 'DC Jam 2026' },
+    { type: 'spacer' },
+    { type: 'header', label: 'GAME DESIGN & DEVELOPMENT' },
+    { type: 'name',   label: 'Stellar Aqua' },
+    { type: 'spacer' },
+    { type: 'header', label: 'PLAYER CONTROLLER, CAMERA & CHARACTER' },
+    { type: 'name',   label: 'Tower of Hats' },
+    { type: 'spacer' },
+    { type: 'header', label: 'MUSIC' },
+    { type: 'name',   label: 'Bober @ Itch' },
+    { type: 'name',   label: 'Aliya Scott' },
+    { type: 'name',   label: 'Turtlebox' },
+    { type: 'spacer' },
+    { type: 'header', label: 'LIGHTING & RENDERING' },
+    { type: 'name',   label: 'Vinsidious' },
+    { type: 'spacer' },
+    { type: 'header', label: 'AI ENGINEERING & DEBUGGING' },
+    { type: 'name',   label: 'Claude \u2014 Anthropic' },
+    { type: 'spacer' },
+    { type: 'header', label: 'DATA TABLES & BALANCING' },
+    { type: 'name',   label: 'Minimax' },
+    { type: 'spacer' },
+    { type: 'header', label: 'BRAINSTORMING & DESIGN' },
+    { type: 'name',   label: 'GPT \u2014 OpenAI' },
+    { type: 'spacer' },
+    { type: 'spacer' },
+    { type: 'sub',    label: 'Someone has to restock the dungeons.' },
+    { type: 'spacer' }
+  ];
 
   // ── Input handling ────────────────────────────────────────────────
 
@@ -92,7 +129,11 @@ var TitleScreen = (function () {
     _clickHandler = function (e) { _onClick(e); };
     _moveHandler = function (e) { _onMouseMove(e); };
     _wheelHandler = function (e) {
-      if (_settingsOpen) {
+      if (_creditsOpen) {
+        e.preventDefault();
+        _creditsScroll += (e.deltaY > 0 ? 40 : -40);
+        _creditsScroll = Math.max(0, Math.min(_creditsMaxScroll, _creditsScroll));
+      } else if (_settingsOpen) {
         e.preventDefault();
         _settingsScroll += (e.deltaY > 0 ? 40 : -40);
         _settingsScroll = Math.max(0, Math.min(_settingsMaxScroll, _settingsScroll));
@@ -183,6 +224,7 @@ var TitleScreen = (function () {
   // ── Navigation ────────────────────────────────────────────────────
 
   function _navigateUp() {
+    if (_phase === 0 && _creditsOpen) return; // Credits has no keyboard nav — scroll only
     if (_phase === 0 && _settingsOpen) {
       _settingsSelected = (_settingsSelected - 1 + _settingsItemCount()) % _settingsItemCount();
       _settingsAutoScroll = true;  // Keyboard nav — snap scroll to selection
@@ -194,6 +236,7 @@ var TitleScreen = (function () {
   }
 
   function _navigateDown() {
+    if (_phase === 0 && _creditsOpen) return; // Credits has no keyboard nav — scroll only
     if (_phase === 0 && _settingsOpen) {
       _settingsSelected = (_settingsSelected + 1) % _settingsItemCount();
       _settingsAutoScroll = true;  // Keyboard nav — snap scroll to selection
@@ -249,6 +292,10 @@ var TitleScreen = (function () {
   // ── Confirm ───────────────────────────────────────────────────
   function _confirm() {
     if (_phase === 0) {
+      if (_creditsOpen) {
+        _creditsOpen = false;
+        return;
+      }
       if (_settingsOpen) {
         var navCount = _settingsItemCount();
         if (_settingsSelected >= navCount - 1) {
@@ -263,6 +310,9 @@ var TitleScreen = (function () {
         _phase = 1;
         _callsignIndex = 0;
         _callsign = CALLSIGNS[0];
+      } else if (_selected === 1) {
+        _creditsOpen = true;
+        _creditsScroll = 0;
       } else if (_selected === 2) {
         _settingsOpen = true;
         _settingsSelected = 0;
@@ -278,6 +328,10 @@ var TitleScreen = (function () {
   }
 
   function _back() {
+    if (_phase === 0 && _creditsOpen) {
+      _creditsOpen = false;
+      return;
+    }
     if (_phase === 0 && _settingsOpen) {
       _settingsOpen = false;
       return;
@@ -389,6 +443,7 @@ var TitleScreen = (function () {
     if (_phase === 0) {
       _renderTitle(w, h);
       if (_settingsOpen) _renderSettings(w, h);
+      if (_creditsOpen)  _renderCredits(w, h);
     } else if (_phase === 1) {
       _renderCallsign(w, h);
     } else if (_phase === 2) {
@@ -580,7 +635,7 @@ var TitleScreen = (function () {
     var gap = 18;
     var labels = [
       i18n.t('title.new_game', 'New Game'),
-      i18n.t('title.continue', 'Continue'),
+      i18n.t('title.credits', 'Credits'),
       i18n.t('title.settings', 'Settings')
     ];
 
@@ -588,14 +643,14 @@ var TitleScreen = (function () {
       var by = startY + i * (btnH + gap);
       var bx = cx - btnW / 2;
       var isSelected = i === _selected;
-      var isPlaceholder = i === 1;
+      var isPlaceholder = false;  // No placeholders — all buttons active
       var zoneIdx = _hitZones.length;
 
       // Draw glow button
       _drawGlowButton(_ctx, bx, by, btnW, btnH, {
         selected: isSelected,
-        hovered: !isPlaceholder && _isZoneHovered(zoneIdx),
-        disabled: isPlaceholder
+        hovered: _isZoneHovered(zoneIdx),
+        disabled: false
       });
 
       // Button label
@@ -611,18 +666,15 @@ var TitleScreen = (function () {
       }
 
       var label = labels[i];
-      if (isPlaceholder) label += '  [\u2014]';
       _ctx.fillText(label, cx, by + btnH / 2);
 
-      // Hit zone
-      if (!isPlaceholder) {
-        (function (idx) {
-          _hitZones.push({
-            x: bx, y: by, w: btnW, h: btnH,
-            action: function () { _selected = idx; _confirm(); }
-          });
-        })(i);
-      }
+      // Hit zone — all buttons active
+      (function (idx) {
+        _hitZones.push({
+          x: bx, y: by, w: btnW, h: btnH,
+          action: function () { _selected = idx; _confirm(); }
+        });
+      })(i);
     }
 
     // Version / jam credit
@@ -1102,6 +1154,149 @@ var TitleScreen = (function () {
     }
   }
 
+  // ── Credits overlay ───────────────────────────────────────────────
+  function _renderCredits(w, h) {
+    // Dim overlay
+    _ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    _ctx.fillRect(0, 0, w, h);
+
+    var cx = w / 2;
+    var panelW = 520;
+    var panelH = Math.min(h - 40, 600);
+    var panelX = cx - panelW / 2;
+    var panelY = h / 2 - panelH / 2;
+
+    // Panel background with glow border
+    _drawGlowButton(_ctx, panelX, panelY, panelW, panelH, {
+      selected: true, radius: 12
+    });
+
+    // ── Measure content height ──
+    var headerH  = 44;
+    var subH     = 30;
+    var nameH    = 36;
+    var spacerH  = 20;
+    var totalH   = 0;
+    for (var ci = 0; ci < CREDITS_DATA.length; ci++) {
+      var t = CREDITS_DATA[ci].type;
+      totalH += t === 'header' ? headerH : t === 'sub' ? subH : t === 'name' ? nameH : spacerH;
+    }
+    totalH += 60; // BACK button space
+
+    var contentTop = panelY + 20;
+    var contentH   = panelH - 40;
+    _creditsMaxScroll = Math.max(0, totalH - contentH);
+    _creditsScroll = Math.max(0, Math.min(_creditsMaxScroll, _creditsScroll));
+
+    // Clip to content area
+    _ctx.save();
+    _ctx.beginPath();
+    _ctx.rect(panelX, contentTop, panelW, contentH);
+    _ctx.clip();
+
+    var drawY = contentTop - _creditsScroll;
+
+    for (var ri = 0; ri < CREDITS_DATA.length; ri++) {
+      var entry = CREDITS_DATA[ri];
+      var ey;
+
+      if (entry.type === 'header') {
+        ey = drawY + headerH / 2;
+        if (ey > contentTop - headerH && ey < contentTop + contentH + headerH) {
+          _ctx.save();
+          _ctx.shadowColor = GLOW_DIM;
+          _ctx.shadowBlur = 8;
+          _ctx.font = 'bold 20px ' + CRT_FONT;
+          _ctx.fillStyle = 'rgba(200,180,120,0.7)';
+          _ctx.textAlign = 'center';
+          _ctx.textBaseline = 'middle';
+          _ctx.fillText(entry.label, cx, ey);
+          _ctx.shadowBlur = 0;
+          _ctx.restore();
+        }
+        drawY += headerH;
+
+      } else if (entry.type === 'sub') {
+        ey = drawY + subH / 2;
+        if (ey > contentTop - subH && ey < contentTop + contentH + subH) {
+          _ctx.font = '16px ' + CRT_FONT;
+          _ctx.fillStyle = TEXT_DIM;
+          _ctx.textAlign = 'center';
+          _ctx.textBaseline = 'middle';
+          _ctx.fillText(entry.label, cx, ey);
+        }
+        drawY += subH;
+
+      } else if (entry.type === 'name') {
+        ey = drawY + nameH / 2;
+        if (ey > contentTop - nameH && ey < contentTop + contentH + nameH) {
+          _ctx.save();
+          _ctx.shadowColor = GLOW_SPREAD;
+          _ctx.shadowBlur = 6;
+          _ctx.font = '24px ' + CRT_FONT;
+          _ctx.fillStyle = '#fff';
+          _ctx.textAlign = 'center';
+          _ctx.textBaseline = 'middle';
+          _ctx.fillText(entry.label, cx, ey);
+          _ctx.shadowBlur = 0;
+          _ctx.restore();
+        }
+        drawY += nameH;
+
+      } else {
+        // spacer
+        drawY += spacerH;
+      }
+    }
+
+    // BACK button
+    var backBtnW = 200;
+    var backBtnH = 42;
+    var backX = cx - backBtnW / 2;
+    var backY = drawY + 10;
+    var backZoneIdx = _hitZones.length;
+    var isBackHovered = _isZoneHovered(backZoneIdx);
+
+    if (backY > contentTop - 50 && backY < contentTop + contentH + 50) {
+      _drawGlowButton(_ctx, backX, backY, backBtnW, backBtnH, {
+        selected: true, hovered: isBackHovered, radius: 8
+      });
+      _ctx.fillStyle = isBackHovered ? '#fff' : TEXT_WARM;
+      _ctx.font = 'bold 20px ' + CRT_FONT;
+      _ctx.textAlign = 'center';
+      _ctx.textBaseline = 'middle';
+      _ctx.fillText('\u2716 BACK', cx, backY + backBtnH / 2);
+
+      _hitZones.push({
+        x: backX, y: backY, w: backBtnW, h: backBtnH,
+        clipY: contentTop, clipH: contentH,
+        action: function () { _creditsOpen = false; }
+      });
+    }
+
+    _ctx.restore(); // End clip
+
+    // Scrollbar
+    if (_creditsMaxScroll > 0) {
+      var sbX = panelX + panelW - 14;
+      var sbW = 10;
+      var sbH = contentH;
+      var thumbH = Math.max(20, sbH * (contentH / (totalH || 1)));
+      var thumbY = contentTop + (sbH - thumbH) * (_creditsScroll / (_creditsMaxScroll || 1));
+
+      _ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      _ctx.fillRect(sbX, contentTop, sbW, sbH);
+      _ctx.fillStyle = 'rgba(200,180,120,0.4)';
+      _ctx.fillRect(sbX, thumbY, sbW, thumbH);
+    }
+
+    // Hint bar
+    _ctx.textAlign = 'center';
+    _ctx.fillStyle = TEXT_MUTED;
+    _ctx.font = '14px ' + CRT_FONT;
+    _ctx.fillText('[Esc] Back   [Scroll] Navigate', cx, panelY + panelH - 14);
+  }
+
   function _renderSettings(w, h) {
     // Dim overlay
     _ctx.fillStyle = 'rgba(0,0,0,0.8)';
@@ -1342,6 +1537,8 @@ var TitleScreen = (function () {
     _selected = 0;
     _settingsOpen = false;
     _settingsSelected = 0;
+    _creditsOpen = false;
+    _creditsScroll = 0;
     _callsignIndex = 0;
     _callsign = CALLSIGNS[0];
     _avatarIndex = 0;

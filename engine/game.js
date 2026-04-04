@@ -59,6 +59,7 @@ var Game = (function () {
   // the gate is unlocked and the Dispatcher despawns.
 
   var _gateUnlocked = false;       // Has the player retrieved their work keys?
+  var _hoseEnergyPrior = 0;        // PW-2: last-seen HoseState.getEnergyDrained()
   var _dispatcherSpawnId = 'npc_dispatcher_gate';  // Stable entity id
 
   // ── Dispatcher choreography state (§11d / DOC-51) ────────────
@@ -203,6 +204,39 @@ var Game = (function () {
     }
     if (typeof QuickBar !== 'undefined') QuickBar.init();
     if (typeof InteractPrompt !== 'undefined') InteractPrompt.init();
+
+    // ── PW-2: Hose drain loop ───────────────────────────────────
+    // HoseState is a pure data module — it doesn't touch Player. We wire
+    // the energy drain here so the coupling point is visible in one place.
+    // Each movement step: recordStep emits 'step' with drainThisStep which
+    // we subtract from Player.energy. If energy reaches 0, detach with
+    // 'energy_exhausted' so HoseReel/Viewport can clean up.
+    if (typeof HoseState !== 'undefined' && HoseState.on) {
+      HoseState.on('step', function (_tile, _pathLen) {
+        if (typeof Player === 'undefined') return;
+        // The drain for the step just recorded = total drained − prior snapshot.
+        // We track the previous total on the function itself to avoid re-reading.
+        var total = HoseState.getEnergyDrained();
+        var prior = _hoseEnergyPrior || 0;
+        var dStep = total - prior;
+        _hoseEnergyPrior = total;
+        if (dStep <= 0) return;
+        var spend = Math.max(1, Math.round(dStep));
+        Player.spendEnergy(spend);
+        if ((Player.state().energy || 0) <= 0) {
+          HoseState.detach('energy_exhausted');
+          if (typeof Toast !== 'undefined') Toast.show('💨 Hose slipped — out of energy', 'warning');
+        }
+      });
+      HoseState.on('attach', function () {
+        _hoseEnergyPrior = 0;
+        // Viewport glow hook: ViewportRing polls HoseState.isActive() each frame.
+        if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui_confirm', { volume: 0.4 });
+      });
+      HoseState.on('detach', function (reason) {
+        _hoseEnergyPrior = 0;
+      });
+    }
     if (typeof DPad !== 'undefined') {
       DPad.init();
       DPad.setOnInteract(function () { _interact(); });
@@ -946,6 +980,7 @@ var Game = (function () {
     if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
     if (typeof BedPeek !== 'undefined') BedPeek.init();
+    if (typeof HosePeek !== 'undefined') HosePeek.init();
     if (typeof MailboxPeek !== 'undefined') {
       MailboxPeek.init();
 
@@ -2713,6 +2748,13 @@ var Game = (function () {
           onBump: _onBump,
           onTurnFinish: _onTurnFinish
         });
+
+        // PW-2: Hose subtree validation. HoseState decides whether the new
+        // floor is still in the allowed building subtree; if not, it detaches
+        // with 'wrong_building' and the step listener sees isActive() === false.
+        if (typeof HoseState !== 'undefined' && HoseState.isActive()) {
+          HoseState.onFloorEnter(FloorManager.getFloor());
+        }
 
         // Refresh HUD + panels for the new floor
         HUD.updateFloor(FloorManager.getFloor());
@@ -4565,6 +4607,15 @@ var Game = (function () {
       }
     }
 
+    // PW-2: Hose breadcrumb recording. Each step while the hose is active
+    // extends the trail, may detect a kink, and accumulates energy drain.
+    // The 'step' listener (wired in init) is what actually spends player
+    // energy — we just record here so the drain number is up-to-date
+    // before the HUD refresh at the bottom of this function.
+    if (typeof HoseState !== 'undefined' && HoseState.isActive()) {
+      HoseState.recordStep(x, y, FloorManager.getCurrentFloorId());
+    }
+
     // Advance minimap click-to-move path
     if (typeof MinimapNav !== 'undefined') MinimapNav.onMoveFinish();
 
@@ -5074,6 +5125,12 @@ var Game = (function () {
         BarCounterPeek.tryDrink(fx, fy, floorData);
       }
     }
+    // ── DUMP_TRUCK: Grab the hose (PW-2) ──
+    else if (tile === TILES.DUMP_TRUCK) {
+      if (typeof HosePeek !== 'undefined') {
+        HosePeek.tryGrab(fx, fy, FloorManager.getCurrentFloorId());
+      }
+    }
   }
 
   // ── Quick-fill crate from bag (DEPTH3 §6.3b) ─────────────────────
@@ -5252,6 +5309,7 @@ var Game = (function () {
 
     SessionStats.inc('detritusCollected');
     HUD.updatePlayer(Player.state());
+    _refreshPanels();
   }
 
   // ── Vendor dialog (NPC greeting → shop open) ──────────────────────
@@ -6031,6 +6089,11 @@ var Game = (function () {
         ParticleFX.update();
         ParticleFX.render(ctx);
       }
+      // Water cursor FX — hover trail + click splash for cleaning-theme juice
+      if (typeof WaterCursorFX !== 'undefined') {
+        WaterCursorFX.tick(frameDt);
+        WaterCursorFX.render(ctx);
+      }
       return;
     }
 
@@ -6126,6 +6189,12 @@ var Game = (function () {
       if (typeof ParticleFX !== 'undefined') {
         ParticleFX.update();
         ParticleFX.render(ctx);
+      }
+
+      // Water cursor FX — trail + splash when a menu/peek is active
+      if (typeof WaterCursorFX !== 'undefined') {
+        WaterCursorFX.tick(frameDt);
+        WaterCursorFX.render(ctx);
       }
 
       // CrateUI slot overlay (renders during PeekSlots FILLING state)

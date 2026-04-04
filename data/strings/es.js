@@ -14,6 +14,7 @@ i18n.register('es', {
   'title.subtitle':     'Un Rastreador de Mazmorras',
   'title.new_game':     'Nueva Partida',
   'title.continue':     'Continuar',
+  'title.credits':      'Créditos',
   'title.settings':     'Ajustes',
   'title.jam_credit':   'DC Jam 2026',
 

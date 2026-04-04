@@ -225,6 +225,11 @@ var BedPeek = (function () {
     Player.heal(state.maxHp);
     Player.restoreEnergy(state.maxEnergy);
 
+    // Refresh HUD + debrief panels so gauges reflect the restored pools
+    // (sleep fires off the move-finish path, so nothing else will cascade).
+    if (typeof HUD !== 'undefined' && HUD.updatePlayer) HUD.updatePlayer(Player.state());
+    if (typeof DebriefFeed !== 'undefined' && DebriefFeed.refresh) DebriefFeed.refresh();
+
     // Clear TIRED debuff via StatusEffect
     if (typeof StatusEffect !== 'undefined') {
       StatusEffect.clearByCondition('until_rest');

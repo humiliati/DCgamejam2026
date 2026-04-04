@@ -1174,24 +1174,26 @@ var FloorManager = (function () {
   // that funnel players from the south gate toward buildings and Floor 2.
   // Trees and shrubs sit on grass-texture floor; paths use cobble texture.
   //
-  // Buildings:
-  //   NW: Coral Bazaar (DOOR 12,3 → 1.1)  — facade at row 3, approach from row 4
-  //   NE: Driftwood Inn (DOOR 27,3 → 1.2)  — facade at row 3, approach from row 4
-  //   W:  Cellar Entrance (DOOR 5,9 → 1.3)  — east-facing, approach from col 6
-  //   E:  Gleaner's Home (DOOR 34,9 → 1.6)  — west-facing, approach from col 33
+  // Six-pod layout (50×36) with central E–W road corridor rows 14–22:
+  //   NW pod: Coral Bazaar        (DOOR 10,8  → 1.1)
+  //   NC pod: Driftwood Inn       (DOOR 22,8  → 1.2)
+  //   NE cluster: Noticeboard Pavilion (board tile at 38,7)
+  //   SW pod: Storm Shelter       (DOOR 10,27 → 1.3, soft dungeon basement)
+  //   SC pod: Gleaner's Home      (DOOR 22,27 → 1.6)
+  //   SE cluster: Well/Fountain
   //
-  // South gate: EXIT(18,26)→"0" + GATE(20,26)→"2" (Lantern Row critical path)
+  // Road corridor gates:
+  //   West — DOOR_EXIT(2,17)+(2,18)  → "0"  The Approach
+  //   East — GATE(48,17)+(48,18)     → "2"  Lantern Row
   //
   // Landmarks:
   //   BONFIRE(24,17) — central road plaza rest point (single exterior bonfire)
-  //   MAILBOX(33,8)  — north of home door approach (33,9).
+  //   MAILBOX(22,25) — 2 tiles north of home door (22,27) in SC pod.
   //                     Blockout-agnostic: MailboxPeek._findMailboxTile() scans
   //                     for TILES.MAILBOX rather than hardcoding position.
   //                     If the blockout moves the house door, move the MAILBOX
-  //                     tile to remain 1 tile N of the new approach tile.
-  //                     Candidate alt positions: (33,10) S of approach,
-  //                     or any EMPTY adjacent to the door approach path.
-  //   DUMP_TRUCK(30,26) — pressure wash truck parked in SE pod near well
+  //                     tile to stay adjacent to the new approach path.
+  //   DUMP_TRUCK(30,26) — pressure wash truck parked between SC and SE pods
 
   var _FLOOR1_W = 50;
   var _FLOOR1_H = 36;

@@ -116,6 +116,9 @@ var MenuBox = (function () {
     _foldTimer = 0;
     _foldProgress = 0;
 
+    // Water cursor FX — cleaning-theme hover trails while menu is open
+    if (typeof WaterCursorFX !== 'undefined') WaterCursorFX.setActive(true);
+
     console.log('[MenuBox] Opening — context: ' + _context + ', face: ' + _startFace);
   }
 
@@ -127,6 +130,9 @@ var MenuBox = (function () {
     _state = 'folding_down';
     _foldTimer = 0;
     _clearNavHits();
+
+    // Water cursor FX — disable trail emission; in-flight droplets finish naturally
+    if (typeof WaterCursorFX !== 'undefined') WaterCursorFX.setActive(false);
 
     console.log('[MenuBox] Closing');
   }
@@ -666,13 +672,24 @@ var MenuBox = (function () {
   function handlePointerClick() {
     if (_state !== 'open') return false;
 
+    // Resolve pointer position once for click-splash FX dispatch
+    var _pt = (typeof InputManager !== 'undefined' && InputManager.getPointer)
+      ? InputManager.getPointer() : null;
+    function _splash() {
+      if (typeof WaterCursorFX !== 'undefined' && _pt) {
+        WaterCursorFX.spawnBurst(_pt.x, _pt.y, { count: 14, speedMult: 1.0 });
+      }
+    }
+
     // Nav arrow buttons take priority — snap to adjacent face
     if (_navHitLeft && _isPointerInRect(_navHitLeft)) {
+      _splash();
       snapLeft();
       return true;
     }
 
     if (_navHitRight && _isPointerInRect(_navHitRight)) {
+      _splash();
       snapRight();
       return true;
     }
@@ -681,6 +698,7 @@ var MenuBox = (function () {
     if (typeof MenuFaces !== 'undefined' && MenuFaces.handlePointerClick) {
       var hit = MenuFaces.handlePointerClick();
       if (hit) {
+        _splash();
         // Return the hit info so game.js can dispatch the action
         return hit;
       }

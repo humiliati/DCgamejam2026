@@ -232,6 +232,11 @@ var BarCounterPeek = (function () {
       default:
         break;
     }
+
+    // Drink effects fire from an interact path, not a move-step, so nothing
+    // else will cascade a refresh. Push the new state to HUD + debrief now.
+    if (typeof HUD !== 'undefined' && HUD.updatePlayer) HUD.updatePlayer(Player.state());
+    if (typeof DebriefFeed !== 'undefined' && DebriefFeed.refresh) DebriefFeed.refresh();
   }
 
   // ── Update (per-frame) ──────────────────────────────────────────

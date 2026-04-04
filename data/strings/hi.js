@@ -10,6 +10,7 @@ i18n.register('hi', {
   'title.subtitle':     'एक कालकोठरी सफ़ाईकर्ता',
   'title.new_game':     'नया खेल',
   'title.continue':     'जारी रखें',
+  'title.credits':      'श्रेय',
   'title.settings':     'सेटिंग्स',
 
   // ── Character Creation ──
