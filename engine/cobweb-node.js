@@ -69,6 +69,9 @@ var CobwebNode = (function () {
   var _facingY       = -1;
   var _promptAlpha   = 0;
   var _pulseT        = 0;     // Running timer for pulse animation (ms)
+  var _promptHitBox  = null;  // { x, y, w, h } for pointer click/hover
+  var _promptHovered = false; // Pointer is over the prompt box
+  var _lastFloorId   = null;  // Cached for handlePointerClick
 
   // ── Floor depth helper ────────────────────────────────────────────
 
@@ -93,6 +96,8 @@ var CobwebNode = (function () {
     _facingElig = false;
     _facingX    = -1;
     _facingY    = -1;
+
+    _lastFloorId = floorId;
 
     // Nodes are only active in nested dungeons (depth ≥ 3)
     if (_depth(floorId) < 3) {
@@ -162,6 +167,9 @@ var CobwebNode = (function () {
     // Draw spider-deployment prompt above the interact-prompt zone
     if (_promptAlpha > 0.01) {
       _renderPrompt(ctx, vpW, vpH);
+    } else {
+      _promptHitBox = null;
+      _promptHovered = false;
     }
   }
 
@@ -251,6 +259,7 @@ var CobwebNode = (function () {
 
   /**
    * Render the "[OK] 🕷️ Deploy Spider" prompt near the bottom of the viewport.
+   * Stores hit box for pointer click/hover detection.
    */
   function _renderPrompt(ctx, vpW, vpH) {
     var keyLbl = (typeof i18n !== 'undefined')
@@ -274,30 +283,75 @@ var CobwebNode = (function () {
     var BOX_X = (vpW - BOX_W) / 2;
     var BOX_Y = vpH - 140;  // Sits above the standard InteractPrompt zone
 
-    // Background panel
+    // Store hit box for pointer interaction
+    _promptHitBox = { x: BOX_X, y: BOX_Y, w: BOX_W, h: BOX_H };
+
+    // Check pointer hover
+    _promptHovered = false;
+    if (typeof InputManager !== 'undefined' && InputManager.getPointer) {
+      var ptr = InputManager.getPointer();
+      if (ptr && ptr.active &&
+          ptr.x >= BOX_X && ptr.x <= BOX_X + BOX_W &&
+          ptr.y >= BOX_Y && ptr.y <= BOX_Y + BOX_H) {
+        _promptHovered = true;
+      }
+    }
+
+    // Background panel (brighter on hover)
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
-    ctx.fillStyle = 'rgba(10,8,18,0.82)';
+    ctx.fillStyle = _promptHovered ? 'rgba(20,30,30,0.9)' : 'rgba(10,8,18,0.82)';
     ctx.fill();
 
-    // Teal border matching node colour
-    ctx.strokeStyle = NODE_COLOR;
-    ctx.lineWidth   = 1;
+    // Border (brighter + thicker on hover)
+    ctx.strokeStyle = _promptHovered ? '#aaffcc' : NODE_COLOR;
+    ctx.lineWidth   = _promptHovered ? 2 : 1;
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
     ctx.stroke();
 
-    // [OK] label (gold, bold)
+    // Hover glow
+    if (_promptHovered) {
+      ctx.shadowColor = NODE_COLOR;
+      ctx.shadowBlur  = 10;
+      _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
+      ctx.stroke();
+      ctx.shadowBlur  = 0;
+    }
+
+    // [OK] label (gold, bold — brighter on hover)
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
     ctx.font         = 'bold 18px monospace';
-    ctx.fillStyle    = '#f0d070';
+    ctx.fillStyle    = _promptHovered ? '#ffe080' : '#f0d070';
     ctx.fillText(keyLbl, BOX_X + PAD, BOX_Y + BOX_H / 2);
 
-    // Action text (pale)
+    // Action text (brighter on hover)
     ctx.font      = '18px monospace';
-    ctx.fillStyle = '#d8d0c0';
+    ctx.fillStyle = _promptHovered ? '#fff' : '#d8d0c0';
     ctx.fillText(' ' + full, BOX_X + PAD + keyW, BOX_Y + BOX_H / 2);
 
     ctx.restore();
+  }
+
+  /**
+   * Handle a pointer click on the deployment prompt.
+   * Returns true if the click was consumed.
+   */
+  function handlePointerClick() {
+    if (_promptAlpha < 0.05 || !_promptHitBox) return false;
+    if (!_facingElig) return false;
+
+    if (typeof InputManager !== 'undefined' && InputManager.getPointer) {
+      var ptr = InputManager.getPointer();
+      if (ptr && ptr.active &&
+          ptr.x >= _promptHitBox.x && ptr.x <= _promptHitBox.x + _promptHitBox.w &&
+          ptr.y >= _promptHitBox.y && ptr.y <= _promptHitBox.y + _promptHitBox.h) {
+        if (_lastFloorId) {
+          tryInteract(_lastFloorId);
+        }
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── Utility ───────────────────────────────────────────────────────
@@ -317,9 +371,10 @@ var CobwebNode = (function () {
   }
 
   return Object.freeze({
-    update:          update,
-    render:          render,
-    tryInteract:     tryInteract,
-    isPromptVisible: isPromptVisible
+    update:             update,
+    render:             render,
+    tryInteract:        tryInteract,
+    handlePointerClick: handlePointerClick,
+    isPromptVisible:    isPromptVisible
   });
 })();

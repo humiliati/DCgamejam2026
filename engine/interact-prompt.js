@@ -66,6 +66,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
     ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
     ACTION_MAP[TILES.MAILBOX]     = { action: 'interact.check_mail', icon: '📫' };
+    ACTION_MAP[TILES.TERMINAL]    = { action: 'interact.access',     icon: '' };
 
     // ── Hint map (hover-only description, keyed by i18n action key) ──
     ACTION_MAP[TILES.CHEST].hint     = 'hint.inspect';
@@ -88,6 +89,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.DOOR_BACK].hint = 'hint.enter';
     ACTION_MAP[TILES.DOOR_EXIT].hint = 'hint.exit';
     ACTION_MAP[TILES.MAILBOX].hint   = 'hint.check_mail';
+    ACTION_MAP[TILES.TERMINAL].hint  = 'hint.access';
   }
 
   /**

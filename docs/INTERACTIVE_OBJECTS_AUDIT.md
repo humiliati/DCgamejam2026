@@ -57,7 +57,7 @@ Player can still turn and walk away during cooldown — only the interact is gat
 | STAIRS_UP | 6 | ✓ | ✗ | 3.5 | 2.0 | 1.0 | stairs_up | Auto-transition on step | ✅ |
 | CHEST | 7 | ✓ | ✗ | 1.0 | **0.7** ⚠️ | **0.65** ⚠️ | Per-biome | Auto-open on step + F-interact | ⚠️ Fixed |
 | PILLAR | 10 | ✗ | ✓ | 1.5 | Per-biome | 1.0 | Per-biome | Decorative column | ✅ |
-| BREAKABLE | 11 | ✗ | ✓ | 1.0 | 2.0 | **0.6** ⚠️ | crate_wood | Destructible crate | ⚠️ Partial |
+| BREAKABLE | 11 | ✗ | ✓ | 1.0 | 2.0 | **0.6** ⚠️ | crate_wood | Destructible crate | ⚠️ Fixed |
 | BONFIRE | 18 | ✓ | ✗ | **0.3** ⚠️ | 0.3 | 0.3 | **bonfire_ring** ⚠️ | Short stone ring + fire sprite + tent billboard | ⚠️ Fixed |
 | TREE | 21 | ✗ | ✓ | 2.5 | — | — | tree_trunk | Solid trunk, perimeter backdrop | ✅ |
 | SHRUB | 22 | ✗ | ✓ | 0.5 | — | — | shrub | Half-height, player sees over | ✅ |
@@ -66,8 +66,8 @@ Player can still turn and walk away during cooldown — only the interact is gat
 | BED | 27 | ✗ | ✓ | — | 0.6 | — | bed_quilt | Low bed, BedPeek overlay for home | ✅ |
 | TABLE | 28 | ✗ | ✓ | — | 0.7 | — | table_wood | Half-height, cozy inspection toast | ✅ |
 | HEARTH | 29 | ✗ | ✓ | — | **2.5** | 1.0 | **hearth_riverrock** ⚠️ | Step-fill cavity (offset -0.18) + decor_hearth_fire + glow. Home: floor-to-ceiling chimney (2.5×) | ✅ Fixed |
-| TORCH_LIT | 30 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_lit | Wall segment w/ torch decor + warm glow | ❌ See below |
-| TORCH_UNLIT | 31 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_unlit | Wall segment w/ charred bracket | ❌ See below |
+| TORCH_LIT | 30 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_lit | Wall segment w/ torch decor + warm glow | ⚠️ Fixed (interaction) |
+| TORCH_UNLIT | 31 | ✗ | ✓ | 1.0 | 2.0 | 1.0 | torch_bracket_unlit | Wall segment w/ charred bracket | ⚠️ Fixed (interaction) |
 | FENCE | 35 | ✗ | ✓ | **0.4** ⚠️ | — | — | **fence_wood** ⚠️ | Half-height railing, player sees over | ⚠️ Fixed |
 | TERMINAL | 36 | ✗ | ✓ | — | 0.6 | 0.6 | terminal_screen | Half-wall desk + CRT decor + sickly glow | ✅ |
 | MAILBOX | 37 | ✗ | ✓ | **0.25** ⚠️ | — | — | **stone_rough** ⚠️ | Short stone base + MailboxSprites emoji billboard | ⚠️ Fixed |
@@ -91,10 +91,33 @@ height should match the surrounding WALL tiles in each context:
 **Action**: No fix needed now. When torch tiles are added to exterior floors, add
 `30: 3.5, 31: 3.5` to exterior biome tileWallHeights.
 
-### BREAKABLE (11) — Partial fix
+### BREAKABLE (11) — Fixed (height + CratePeek z-stacking)
 
-Fixed in dungeon biomes (0.6×). Not yet in interior biomes (defaults to 2.0× = full wall).
+**Height**: Fixed in dungeon biomes (0.6×). Not yet in interior biomes (defaults to 2.0× = full wall).
 Breakables don't currently appear in interior floors, but if added, they'll need height entries.
+
+**CratePeek overlay bug (Apr 3)**: Playtesters reported all text hidden behind the crate
+animation and nothing clickable. Three-layer root cause:
+
+1. **Inner label behind 3D faces**: The "? LOOT ?" label was inside `.box3d-glow` which
+   lives in the 3D transform hierarchy (`rotateX(-42deg) rotateY(18deg)`). Opaque box
+   faces (bf-top, bf-left, bf-right, lid) rendered in front of the glow plane in 3D
+   space, visually occluding the text.
+
+2. **Sub-label behind projected geometry**: The crate variant is 420×260px with steep
+   perspective rotation. The sub-label at `top:100%; margin-top:36px` was within the
+   3D-projected bounding area of the crate, making it invisible behind the box.
+
+3. **InteractPrompt invisible**: The InteractPrompt renders on the **canvas** at
+   `y=0.60×vpH`. The CratePeek DOM overlay at `z-index:18` painted over it. Even
+   though `pointer-events:none` let clicks pass through, the user couldn't **see**
+   the prompt, so didn't know there was anything to click.
+
+**Fix**: Labels moved to a flat overlay div (`_labelLayer`) with `z-index:2` relative
+to the container, sitting above the 3D scene (`z-index:1`). Sub-label margin increased
+to 60px. Added a visible `[OK] Smash` action button with `pointer-events:auto` that
+calls `Game.interact()` — gives playtesters an obvious DOM click target above the 3D
+box. `Game.interact` exposed as public API on the Game module for this purpose.
 
 ### CHEST (7) — Unified Container System ✅ COMPLETE (Apr 3)
 
@@ -171,6 +194,20 @@ Breakables don't currently appear in interior floors, but if added, they'll need
 | `docs/LIGHT_AND_TORCH_ROADMAP.md` | Sprite-inside-wall technique (§2.5a-c) |
 | `docs/BONFIRE_POLISH_STEPS.md` | Updated HEARTH visual description |
 | `docs/PRESSURE_WASHING_ROADMAP.md` | Cross-ref to sprite-inside-wall for truck hose bay |
+| `engine/crate-peek.js` | z-stacking fix: labels to flat overlay, action button, sub-label margin 36→60 |
+| `engine/game.js` | Exposed `Game.interact()` public API; dialog key routing for ←/→ button nav |
+| `engine/dialog-box.js` | Per-button hit-testing, keyboard focus cycling (←/→), focus highlight render |
+| `engine/menu-faces.js` | Slider click-to-set, slider pointer hover highlight + desc tooltip |
+| `engine/crate-ui.js` | Pointer hover highlight on standard + stash grid slots |
+| `engine/door-peek.js` | Label layer + action button with hover, direction-aware colors |
+| `index.html` | Enhanced .sb-btn hover (glow, lift, press), compass btn hover (glow, scale) |
+| `docs/MENU_INTERACTIONS_CATALOG.md` | Face 3 wiring corrections, keyboard/hover pass updates |
+| `engine/torch-peek.js` | Full restructure: label layer, z-stacking fix, action button, slot hover/click |
+| `engine/cobweb-node.js` | Prompt hit box, pointer hover feedback, handlePointerClick() |
+| `engine/game.js` | CobwebNode.handlePointerClick() dispatch before InteractPrompt |
+| `engine/corpse-peek.js` | Label layer + z-stacking fix, action button (Harvest/Restock), forceHide/isActive |
+| `engine/locked-door-peek.js` | Label layer + z-stacking fix, action button (Use Key/Unlock, key-gated), sub-label 30→60px |
+| `engine/merchant-peek.js` | Label layer + z-stacking fix, action button (Browse Wares), faction-dynamic inner label, forceHide |
 
 ---
 

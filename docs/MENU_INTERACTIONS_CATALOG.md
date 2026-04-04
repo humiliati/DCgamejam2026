@@ -4,6 +4,8 @@
 > HUD footer bar (StatusBar), and system settings. Status: stub/wired/complete.
 >
 > Generated 2026-04-01 during Sprint 0 visual overhaul.
+> Updated 2026-04-03: Click-Everything Phase 1 audit — Face 3 interactions, dialog buttons.
+> Updated 2026-04-03: Keyboard/Hover/Tooltip pass — dialog keyboard nav, slider hover, HUD button hover, crate-ui hover, door-peek action button.
 
 ---
 
@@ -151,17 +153,17 @@
 | Master volume slider | Slider (W/S select, ←/→ adjust) | **Complete** | `AudioSystem.setMasterVolume()` |
 | SFX volume slider | Slider | **Complete** | `AudioSystem.setSFXVolume()` |
 | BGM volume slider | Slider | **Complete** | `AudioSystem.setMusicVolume()` |
-| Slider click-to-set | Clickable | **Stub needed** | Click on track → jump to position. Currently keyboard-only |
+| Slider click-to-set | Clickable | **Complete** | Click on track → jump to position. `handleSettingsSetValue()` calculates pct from pointer x vs track bounds |
 | Language selector | Display | **Stub** | Shows "English" only. Needs: locale picker, string pack loading |
-| Screen Shake toggle | Toggle | **Display only** | `_settingsState.screenShake` — no wiring to game |
-| Show FPS toggle | Toggle | **Display only** | `_settingsState.showFps` — no wiring to game |
-| Minimap Visible toggle | Toggle | **Display only** | `_settingsState.minimapVisible` — no wiring to `Minimap.toggle()` |
-| Toggle click handler | Clickable | **Stub needed** | Toggles render but don't respond to clicks or Enter |
+| Screen Shake toggle | Toggle | **Complete** | Hit zone 810+, click dispatches `handleSettingsToggle(key)` via game.js |
+| Show FPS toggle | Toggle | **Complete** | Hit zone 811, same dispatch path |
+| Minimap Visible toggle | Toggle | **Complete** | Hit zone 812, same dispatch path |
+| Toggle click handler | Clickable | **Complete** | All toggles have hit zones (810+ti), hover states, and game.js dispatch to `handleSettingsToggle()` |
 | Controls reference | Display | **Complete** | Static key mapping |
 | **Controls rebinding** | Interaction | **Stub needed** | Post-jam: `InputManager.rebind()` |
 | **Display settings** | Section | **Stub needed** | GAME_FLOW_ROADMAP: render resolution, pixelation toggle |
-| "Return to Game" | Clickable | **Stub needed** | Shows text but no hit zone or click handler. Should call `MenuBox.close()` |
-| "Quit to Title" | Clickable | **Stub needed** | Shows text but no hit zone or click handler. Should call `ScreenManager.toTitle()` |
+| "Return to Game" | Clickable | **Complete** | Hit zone 820, action `resume` → `MenuBox.close()` via game.js dispatch |
+| "Quit to Title" | Clickable | **Complete** | Hit zone 821, action `quit_title` → `ScreenManager.toTitle()` via game.js dispatch |
 | Hint bar | Display | **Complete** | |
 
 ---
@@ -196,9 +198,9 @@
 | Face 0 warp button | **Complete** | hover slot 900 |
 | Face 1 book tiles | **Complete** | hover + tooltip |
 | Face 2 all slots | **Complete** | Via DragDrop |
-| Face 3 slider rows | **Partial** | Selection cursor but no pointer hover |
-| Face 3 toggle rows | **Stub needed** | No pointer hover or click |
-| Face 3 exit buttons | **Stub needed** | No pointer hover or click |
+| Face 3 slider rows | **Complete** | Pointer hover + click-to-set value |
+| Face 3 toggle rows | **Complete** | Pointer hover + click dispatches toggle |
+| Face 3 exit buttons | **Complete** | Pointer hover + click dispatches resume/quit |
 | HUD buttons | **Complete** | CSS hover states |
 
 ### Keyboard Navigation
@@ -210,7 +212,7 @@
 | Face 2 slot selection | **Complete** | Tab-based via `_invFocus` |
 | Face 3 W/S row nav | **Complete** | |
 | Face 3 ←/→ adjust | **Complete** | |
-| Face 3 Enter to toggle | **Stub needed** | W/S navigates to toggle rows but Enter doesn't fire |
+| Face 3 Enter to toggle | **Complete** | Enter/Space fires toggle or language cycle via game.js settings interact handler |
 
 ### Scale-Aware Sizing (S-factor)
 
@@ -228,8 +230,8 @@
 1. **S-factor scaling** — Face 0, 1, 3 (visual consistency with Face 2)
 2. **HUD button routing** — BAG → Face 2 + bag focus, DECK → Face 2 + deck focus, Gold → Face 1 or Face 2
 3. **Stub sections** — Face 1 skill tree, quest log, lore, dialog history
-4. **Face 3 clickable interactions** — Toggle click, slider click, exit buttons
-5. **Hover interactions** — Face 3 row hover, Face 1 section hover
+4. ~~**Face 3 clickable interactions**~~ — ✅ DONE (Apr 3): Toggle click, slider click-to-set, exit buttons all wired with hit zones and game.js dispatch
+5. ~~**Hover interactions (Face 3)**~~ — ✅ DONE: All Face 3 rows have pointer hover states. Face 1 section hover still pending.
 6. **Incinerator confirmation** — FACE2_POLISH backlog item
 7. **Scroll wheel on Face 2** — Additional input method
 

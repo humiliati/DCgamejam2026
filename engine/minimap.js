@@ -27,9 +27,10 @@ var Minimap = (function () {
   var _tsPhaseEl    = null;  // #mts-phase
   var _tsTimeEl     = null;  // #mts-time
   var _tsHeadingEl  = null;  // #mts-heading
-  var _expanded = false;   // false = embedded (160px), true = overlay (320px)
+  var _expanded = false;   // false = embedded, true = overlay
   var _visible = true;     // Always visible during gameplay (embedded mode)
-  var _size = 160;         // Current render size (changes with expand/collapse)
+  var _size = 184;         // Current render size (changes with expand/collapse)
+  var _zoomLevel = 1.1;    // Tile zoom multiplier (adjustable via +/- controls)
 
   // ── Floor cache & stack ──────────────────────────────────────────
   // _floorCache: floorId → { explored, lastPlayerPos }
@@ -91,8 +92,55 @@ var Minimap = (function () {
     npcIcon:    '#6cf',       // Cyan for NPC markers
     shopIcon:   '#fd4',       // Gold for shop markers
     bossIcon:   '#f4a',       // Pink for boss door markers
-    questIcon:  '#af6'        // Green for quest markers
+    questIcon:  '#af6',       // Green for quest markers
+    // Door-target classification colors (wayfinding)
+    doorShop:    '#b088dd',   // Lavender — shop building entrance
+    doorDungeon: '#dd6644'    // Orange-red — dungeon-entry building entrance
   };
+
+  // ── Door-target classification (wayfinding colors) ──────────────
+  // Biomes whose building entrances render as shop doors (lavender)
+  var _SHOP_BIOMES  = { shop: 1, bazaar: 1 };
+  // Biomes whose building entrances render as dungeon doors (orange-red).
+  // These are depth-2 interiors that contain STAIRS_DN to a depth-3 dungeon.
+  var _DUNGEON_BIOMES = { cellar_entry: 1, watchpost: 1, armory: 1 };
+
+  // Cache per-floor: key → 'shop' | 'dungeon' | null
+  var _doorClassCache = {};
+  var _doorClassFloorId = null;
+
+  /**
+   * Classify an exterior DOOR tile as shop, dungeon, or generic.
+   * Reads doorTargets from current floorData and checks target biome.
+   * Result is cached per floor to avoid repeated lookups.
+   *
+   * @param {string} key  'x,y' tile key
+   * @returns {string|null} 'shop', 'dungeon', or null (generic)
+   */
+  function _classifyDoor(key) {
+    // Invalidate cache on floor change
+    var FM = typeof FloorManager !== 'undefined' ? FloorManager : null;
+    if (!FM) return null;
+    var curFloor = FM.getFloor();
+    if (curFloor !== _doorClassFloorId) {
+      _doorClassCache = {};
+      _doorClassFloorId = curFloor;
+    }
+    if (key in _doorClassCache) return _doorClassCache[key];
+
+    var fd = FM.getFloorData();
+    if (!fd || !fd.doorTargets) { _doorClassCache[key] = null; return null; }
+
+    var targetId = fd.doorTargets[key];
+    if (!targetId) { _doorClassCache[key] = null; return null; }
+
+    var biome = FM.getBiome(targetId);
+    if (_SHOP_BIOMES[biome])    { _doorClassCache[key] = 'shop';    return 'shop'; }
+    if (_DUNGEON_BIOMES[biome]) { _doorClassCache[key] = 'dungeon'; return 'dungeon'; }
+
+    _doorClassCache[key] = null;
+    return null;
+  }
 
   function init(canvas) {
     _canvas = canvas;
@@ -110,8 +158,8 @@ var Minimap = (function () {
     _tsTimeEl    = document.getElementById('mts-time');
     _tsHeadingEl = document.getElementById('mts-heading');
 
-    // Set initial embedded size — render at 2× for sharper menu map
-    _size = 400;
+    // Set initial embedded size — render at ~2× for sharper menu map
+    _size = 460;
     _expanded = false;
     _visible = true;
     _canvas.width = _size;
@@ -124,6 +172,43 @@ var Minimap = (function () {
         _toggleExpand();
       });
     }
+
+    // Create zoom +/- buttons (visible in expanded mode only)
+    if (_frame) {
+      _zoomInBtn = _createZoomBtn('+', 'right: 10px; bottom: 52px;', zoomIn);
+      _zoomOutBtn = _createZoomBtn('\u2212', 'right: 10px; bottom: 16px;', zoomOut);
+      _frame.appendChild(_zoomInBtn);
+      _frame.appendChild(_zoomOutBtn);
+    }
+  }
+
+  function _createZoomBtn(label, posStyle, handler) {
+    var btn = document.createElement('div');
+    btn.className = 'minimap-zoom-btn';
+    btn.textContent = label;
+    btn.setAttribute('style',
+      'position:absolute;' + posStyle +
+      'width:28px;height:28px;border-radius:50%;' +
+      'background:rgba(10,18,10,0.85);border:2px solid seagreen;' +
+      'color:#66ffaa;font-family:monospace;font-size:16px;font-weight:bold;' +
+      'cursor:pointer;z-index:6;display:none;' +
+      'align-items:center;justify-content:center;' +
+      'text-shadow:0 0 4px rgba(51,255,136,0.5);' +
+      'transition:background 0.15s,border-color 0.15s;'
+    );
+    btn.addEventListener('mouseenter', function () {
+      btn.style.background = 'rgba(46,139,87,0.3)';
+      btn.style.borderColor = '#66ffaa';
+    });
+    btn.addEventListener('mouseleave', function () {
+      btn.style.background = 'rgba(10,18,10,0.85)';
+      btn.style.borderColor = 'seagreen';
+    });
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      handler();
+    });
+    return btn;
   }
 
   // ── Floor management ─────────────────────────────────────────────
@@ -248,7 +333,7 @@ var Minimap = (function () {
 
   function _toggleExpand() {
     _expanded = !_expanded;
-    _size = _expanded ? 640 : 400;
+    _size = _expanded ? 640 : 460;
     _canvas.width = _size;
     _canvas.height = _size;
     if (_frame) {
@@ -260,6 +345,9 @@ var Minimap = (function () {
         _frame.style.width = '';
         _frame.style.height = '';
       }
+      // Show/hide zoom controls
+      if (_zoomInBtn)  _zoomInBtn.style.display  = _expanded ? 'flex' : 'none';
+      if (_zoomOutBtn) _zoomOutBtn.style.display = _expanded ? 'flex' : 'none';
     }
     if (_expandBtn) {
       // Hide the old expand button — compass is the toggle now
@@ -280,6 +368,20 @@ var Minimap = (function () {
    */
   function compassCollapse() {
     if (_expanded) _toggleExpand();
+  }
+
+  // ── Zoom controls ─────────────────────────────────────────────────
+  var _zoomInBtn  = null;
+  var _zoomOutBtn = null;
+  var ZOOM_MIN = 0.6;
+  var ZOOM_MAX = 2.4;
+  var ZOOM_STEP = 0.2;
+
+  function zoomIn() {
+    _zoomLevel = Math.min(ZOOM_MAX, _zoomLevel + ZOOM_STEP);
+  }
+  function zoomOut() {
+    _zoomLevel = Math.max(ZOOM_MIN, _zoomLevel - ZOOM_STEP);
   }
 
   function isVisible() { return _visible; }
@@ -317,8 +419,8 @@ var Minimap = (function () {
     if (!_ctx) return;
     var ctx = _ctx;
     var baseTileSize = Math.max(2, Math.floor(_size / Math.max(gridW, gridH)));
-    // 1.1× zoom — tighter view centered on player (~30% closer than 0.85×)
-    var tileSize = Math.max(2, Math.floor(baseTileSize * 1.1));
+    // Adjustable zoom — tighter view centered on player
+    var tileSize = Math.max(2, Math.floor(baseTileSize * _zoomLevel));
     // Center on player position instead of centering the whole grid
     var offsetX = Math.floor(_size / 2 - player.x * tileSize - tileSize / 2);
     var offsetY = Math.floor(_size / 2 - player.y * tileSize - tileSize / 2);
@@ -345,7 +447,11 @@ var Minimap = (function () {
         } else if (tile === TILES.STAIRS_DN) {
           ctx.fillStyle = isLit ? COLORS.stairsDn : _dimColor(COLORS.stairsDn);
         } else if (TILES.isDoor && TILES.isDoor(tile)) {
-          ctx.fillStyle = isLit ? COLORS.door : _dimColor(COLORS.door);
+          var _dc = _classifyDoor(key);
+          var _doorCol = _dc === 'shop' ? COLORS.doorShop
+                       : _dc === 'dungeon' ? COLORS.doorDungeon
+                       : COLORS.door;
+          ctx.fillStyle = isLit ? _doorCol : _dimColor(_doorCol);
         } else if (tile === TILES.CHEST) {
           ctx.fillStyle = isLit ? COLORS.chest : _dimColor(COLORS.chest);
         } else if (TILES.isHazard && TILES.isHazard(tile)) {
@@ -990,6 +1096,8 @@ var Minimap = (function () {
     compassCollapse: compassCollapse,
     hitTestCompass: hitTestCompass,
     setQuestTarget: setQuestTarget,
+    zoomIn: zoomIn,
+    zoomOut: zoomOut,
     getExplored: function () { return _explored; },
     getCanvas: function () { return _canvas; },
     getSize: function () { return _size; }

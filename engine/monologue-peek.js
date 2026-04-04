@@ -357,6 +357,9 @@ var MonologuePeek = (function () {
     ctx.restore();
   }
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { cancel(); }
+
   return Object.freeze({
     play:            play,
     thought:         thought,
@@ -366,6 +369,7 @@ var MonologuePeek = (function () {
     render:          render,
     isActive:        isActive,
     defineSequence:  defineSequence,
+    forceHide:       forceHide,
     SEQUENCES:       SEQUENCES  // Expose for content additions
   });
 })();

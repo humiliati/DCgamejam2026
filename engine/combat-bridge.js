@@ -403,8 +403,29 @@ var CombatBridge = (function () {
       // ── Victory: remove enemy, start death anim, drop corpse tile, award loot ──
       var corpseX = enemy.x;
       var corpseY = enemy.y;
+      var corpseFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
       FloorManager.removeEnemy(enemy);
       SessionStats.inc('enemiesDefeated');
+
+      // Helper: place corpse tile on any walkable surface (not just EMPTY)
+      function _placeCorpseTile(cx, cy, flId) {
+        var fd = FloorManager.getFloorData();
+        // Guard: floor changed during death anim — skip placement
+        var currentFlId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
+        if (currentFlId !== flId) return;
+        if (fd && fd.grid[cy] && fd.grid[cy][cx] !== undefined) {
+          var existing = fd.grid[cy][cx];
+          // Allow overwriting any walkable tile (EMPTY, BREAKABLE, COLLECTIBLE, existing CORPSE)
+          if (existing === TILES.EMPTY || existing === TILES.CORPSE ||
+              existing === TILES.BREAKABLE || existing === TILES.COLLECTIBLE ||
+              (typeof TILES.isWalkable === 'function' && TILES.isWalkable(existing))) {
+            fd.grid[cy][cx] = TILES.CORPSE;
+          }
+        }
+        if (typeof CorpseRegistry !== 'undefined') {
+          CorpseRegistry.register(cx, cy, flId, enemy);
+        }
+      }
 
       // Start death animation (origami fold or poof)
       if (typeof DeathAnim !== 'undefined') {
@@ -436,30 +457,13 @@ var CombatBridge = (function () {
         DeathAnim.start(deathEnemy, sx, sy, 0.6, function (e, deathType) {
           // Place corpse tile after fold animation completes
           if (deathType === 'fold') {
-            var fd = FloorManager.getFloorData();
-            if (fd && fd.grid[corpseY] &&
-                fd.grid[corpseY][corpseX] === TILES.EMPTY) {
-              fd.grid[corpseY][corpseX] = TILES.CORPSE;
-            }
-            // Register in CorpseRegistry with full enemy data
-            var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
-            if (typeof CorpseRegistry !== 'undefined') {
-              CorpseRegistry.register(corpseX, corpseY, flId, enemy);
-            }
+            _placeCorpseTile(corpseX, corpseY, corpseFloorId);
           }
           // Poof enemies leave no corpse tile (and no registry entry)
         });
       } else {
         // Fallback: place corpse immediately if no DeathAnim
-        var fd = FloorManager.getFloorData();
-        if (fd && fd.grid[corpseY] &&
-            fd.grid[corpseY][corpseX] === TILES.EMPTY) {
-          fd.grid[corpseY][corpseX] = TILES.CORPSE;
-        }
-        var flId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
-        if (typeof CorpseRegistry !== 'undefined') {
-          CorpseRegistry.register(corpseX, corpseY, flId, enemy);
-        }
+        _placeCorpseTile(corpseX, corpseY, corpseFloorId);
       }
 
       // Set enemy sprite state to dead (for any remaining render frames)

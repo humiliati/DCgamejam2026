@@ -320,6 +320,9 @@ var CardStack = (function () {
     var damage = 0;
     var defense = 0;
     var healing = 0;
+    var energyGain = 0;
+    var batteryGain = 0;
+    var drawCount = 0;
     var statuses = [];
 
     for (var i = 0; i < _stack.length; i++) {
@@ -330,6 +333,9 @@ var CardStack = (function () {
         if (eff.type === 'damage') damage += eff.value;
         else if (eff.type === 'defense') defense += eff.value;
         else if (eff.type === 'hp') healing += eff.value;
+        else if (eff.type === 'energy') energyGain += eff.value;
+        else if (eff.type === 'battery') batteryGain += eff.value;
+        else if (eff.type === 'draw') drawCount += eff.value;
         else if (eff.type === 'status') statuses.push(eff);
       }
     }
@@ -341,6 +347,9 @@ var CardStack = (function () {
       damage: damage,
       defense: defense,
       healing: healing,
+      energyGain: energyGain,
+      batteryGain: batteryGain,
+      drawCount: drawCount,
       statuses: statuses,
       cards: getCards(),
       thrust: _thrust,

@@ -190,8 +190,12 @@ var ChestPeek = (function () {
 
   // ── Public API ─────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return {
     init: init,
-    update: update
+    update: update,
+    forceHide: forceHide
   };
 })();

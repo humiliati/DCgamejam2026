@@ -598,6 +598,9 @@ var MailboxPeek = (function () {
     }
   }
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return Object.freeze({
     init:       init,
     update:     update,
@@ -625,6 +628,9 @@ var MailboxPeek = (function () {
     // Manual triggers (for InputManager bindings)
     handleInteract: function () { if (_isShowing && _mode === 'exterior') _collectAll(); },
     handlePageNext: _pageNext,
-    handlePagePrev: _pagePrev
+    handlePagePrev: _pagePrev,
+
+    // Force-hide
+    forceHide: forceHide
   });
 })();

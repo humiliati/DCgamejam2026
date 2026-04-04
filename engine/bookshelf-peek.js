@@ -62,6 +62,11 @@ var BookshelfPeek = (function () {
         }
         _loaded = true;
         console.log('[BookshelfPeek] Loaded ' + _catalog.length + ' books');
+      } else {
+        // Non-200/non-0 status (e.g. 404, 403) — mark loaded to prevent
+        // infinite retries, but log the failure for debugging.
+        console.warn('[BookshelfPeek] books.json returned status ' + xhr.status + '; shelves will use biome fallback');
+        _loaded = true;
       }
     } catch (e) {
       console.warn('[BookshelfPeek] Failed to load books.json:', e);
@@ -243,6 +248,14 @@ var BookshelfPeek = (function () {
     var tile = floorData.grid[fy][fx];
 
     if (tile === TILES.BOOKSHELF || tile === TILES.TERMINAL) {
+      // Yield to MailboxPeek on shared terminal positions (home mail station).
+      // MailboxPeek takes priority — if it's showing, we stay dormant.
+      if (typeof MailboxPeek !== 'undefined' && MailboxPeek.isShowing && MailboxPeek.isShowing()) {
+        _timer = 0;
+        if (_active) _hide();
+        return;
+      }
+
       _hideTimer = 0;
       if (_active && fx === _facingX && fy === _facingY) {
         // Already showing this bookshelf/terminal — keep it open
@@ -267,6 +280,9 @@ var BookshelfPeek = (function () {
 
   // ── Public API ──────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return {
     init: function () {
       _loadCatalog();
@@ -278,6 +294,24 @@ var BookshelfPeek = (function () {
     getPage: function () { return _currentPage; },
     getCatalog: function () { return _catalog; },
     getBookById: function (id) { return _catalogById[id] || null; },
+    forceHide: forceHide,
+
+    /**
+     * Immediately open the book peek for the bookshelf at (fx, fy).
+     * Called by game.js on OK press — bypasses the autonomous 400ms debounce.
+     * @param {number} fx - Grid x of the BOOKSHELF tile
+     * @param {number} fy - Grid y of the BOOKSHELF tile
+     * @returns {boolean} true if a book was shown
+     */
+    tryShow: function (fx, fy) {
+      if (_active && fx === _facingX && fy === _facingY) return true; // already showing this one
+      if (_active) _hide(); // close a different book first
+      var floorData = (typeof FloorManager !== 'undefined') ? FloorManager.getFloorData() : null;
+      if (!floorData) return false;
+      if (!_loaded) _loadCatalog(); // last-ditch retry if init() missed
+      _show(fx, fy, floorData);
+      return _active;
+    },
 
     /**
      * Check if a bookshelf at grid position (x, y) has any resolvable book.

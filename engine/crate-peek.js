@@ -9,12 +9,35 @@
  * Visual: BoxAnim crate-variant — wood-plank faces, cross-grain lid,
  * warm amber interior glow.
  *
+ * Labels are rendered in a FLAT overlay div that sits ABOVE the 3D
+ * scene in z-order, so text is never occluded by box faces.
+ *
  * Text below box (two rows, left-aligned):
  *   breakable crate
  *   → smash to loot
  *
  * Layer 3 (after InteractPrompt, BoxAnim)
  * Depends on: BoxAnim, TILES, Player, MovementController, FloorManager
+ *
+ * === Bug fix (Apr 3): z-stacking & click-through ===
+ * Problem: Inner label ("? LOOT ?") and sub-label were inside the 3D
+ * transform hierarchy. The opaque box faces rendered in front of the
+ * glow plane in 3D space, hiding all text. The InteractPrompt (canvas-
+ * rendered at z=0.60×vpH) was also visually occluded by the DOM overlay.
+ * Playtesters saw a crate animation with no readable text and nothing
+ * apparently clickable.
+ *
+ * Fix:
+ *   1. Labels moved to a separate flat overlay div (_labelLayer) that
+ *      sits ABOVE the 3D scene via z-index:2 (relative to container).
+ *   2. Sub-label repositioned with extra bottom margin to clear the
+ *      3D-projected crate geometry.
+ *   3. Added a visible "[OK] Smash" action button inside the label
+ *      layer with pointer-events:auto so playtesters have an obvious
+ *      click target. Fires the same interact as the InteractPrompt.
+ *   4. Container gets pointer-events:none but action button gets
+ *      pointer-events:auto — clicks outside the button still fall
+ *      through to the canvas InteractPrompt.
  */
 var CratePeek = (function () {
   'use strict';
@@ -34,7 +57,11 @@ var CratePeek = (function () {
   var _timer      = 0;
   var _opened     = false;
   var _container  = null;
+  var _labelLayer = null;  // Flat overlay above 3D scene for labels
+  var _innerLabel = null;  // "? LOOT ?" text
   var _subLabel   = null;
+  var _actionBtn  = null;  // Visible click target
+  var _closeBtn   = null;  // [ESC] Close
 
   // ── Init ───────────────────────────────────────────────────────
 
@@ -52,18 +79,138 @@ var CratePeek = (function () {
       if (viewport) viewport.appendChild(_container);
     }
 
+    // ── Label layer: flat div that sits ABOVE the 3D box ─────────
+    // z-index:2 relative to _container ensures labels paint over
+    // the 3D scene (box3d-scene has default z-index / stacking).
+    _labelLayer = document.getElementById('crate-peek-labels');
+    if (!_labelLayer) {
+      _labelLayer = document.createElement('div');
+      _labelLayer.id = 'crate-peek-labels';
+      _labelLayer.style.cssText =
+        'position:absolute; top:0; left:0; width:100%; height:100%;' +
+        'z-index:2; pointer-events:none;';
+      _container.appendChild(_labelLayer);
+    }
+
+    // Inner label — centred over the box, reads "? LOOT ?"
+    _innerLabel = document.getElementById('crate-peek-innerlabel');
+    if (!_innerLabel) {
+      _innerLabel = document.createElement('div');
+      _innerLabel.id = 'crate-peek-innerlabel';
+      _innerLabel.style.cssText =
+        'position:absolute; top:50%; left:50%;' +
+        'transform:translate(-50%,-50%);' +
+        'font:bold 26px monospace; color:#c8a040;' +
+        'text-shadow:0 0 10px rgba(200,150,60,0.5),' +
+        '            0 2px 8px rgba(0,0,0,0.9);' +
+        'white-space:nowrap; pointer-events:none;' +
+        'opacity:0; transition:opacity 0.3s ease 0.15s;';
+      _labelLayer.appendChild(_innerLabel);
+    }
+
+    // Sub-label — below the box with enough margin to clear 3D projection
     _subLabel = document.getElementById('crate-peek-sublabel');
     if (!_subLabel) {
       _subLabel = document.createElement('div');
       _subLabel.id = 'crate-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:36px; text-align:left;' +
+        'margin-top:60px; text-align:left;' +
         'font:38px monospace; color:rgba(200,170,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
-      _container.appendChild(_subLabel);
+      _labelLayer.appendChild(_subLabel);
+    }
+
+    // ── Action button — visible click target ──────────────────────
+    // Gives playtesters an obvious thing to click/tap. Styled as a
+    // compact prompt that matches the InteractPrompt aesthetic.
+    _actionBtn = document.getElementById('crate-peek-action');
+    if (!_actionBtn) {
+      _actionBtn = document.createElement('div');
+      _actionBtn.id = 'crate-peek-action';
+      _actionBtn.style.cssText =
+        'position:absolute; bottom:-80px; left:50%;' +
+        'transform:translateX(-50%);' +
+        'font:bold 18px monospace; color:#f0d070;' +
+        'text-shadow:0 0 6px rgba(240,208,112,0.3);' +
+        'background:rgba(10,8,18,0.88);' +
+        'border:1.5px solid rgba(200,180,120,0.55);' +
+        'border-radius:10px; padding:10px 24px;' +
+        'cursor:pointer; pointer-events:auto;' +
+        'opacity:0; transition:opacity 0.3s ease 0.4s;' +
+        'white-space:nowrap;' +
+        'box-shadow:0 0 12px rgba(240,208,112,0.12);';
+      _actionBtn.textContent = '[OK] Smash';
+      _actionBtn.addEventListener('click', _onActionClick);
+      // Hover feedback
+      _actionBtn.addEventListener('mouseenter', function () {
+        _actionBtn.style.borderColor = '#f0d070';
+        _actionBtn.style.color = '#fff';
+        _actionBtn.style.boxShadow = '0 0 18px rgba(240,208,112,0.25)';
+      });
+      _actionBtn.addEventListener('mouseleave', function () {
+        _actionBtn.style.borderColor = 'rgba(200,180,120,0.55)';
+        _actionBtn.style.color = '#f0d070';
+        _actionBtn.style.boxShadow = '0 0 12px rgba(240,208,112,0.12)';
+      });
+      _labelLayer.appendChild(_actionBtn);
+    }
+
+    // ── Close button ─────────────────────────────────────────────
+    _closeBtn = document.getElementById('crate-peek-close');
+    if (!_closeBtn) {
+      _closeBtn = document.createElement('div');
+      _closeBtn.id = 'crate-peek-close';
+      _closeBtn.style.cssText =
+        'position:absolute; bottom:-120px; left:50%;' +
+        'transform:translateX(-50%);' +
+        'font:16px monospace; color:rgba(200,170,100,0.55);' +
+        'background:rgba(10,8,18,0.6);' +
+        'border:1px solid rgba(200,180,120,0.25);' +
+        'border-radius:6px; padding:6px 18px;' +
+        'cursor:pointer; pointer-events:auto;' +
+        'opacity:0; transition:opacity 0.3s ease 0.5s;' +
+        'white-space:nowrap;';
+      _closeBtn.textContent = '[ESC] Close';
+      _closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _hide();
+      });
+      _closeBtn.addEventListener('mouseenter', function () {
+        _closeBtn.style.borderColor = 'rgba(200,180,120,0.55)';
+        _closeBtn.style.color       = 'rgba(240,220,160,0.8)';
+      });
+      _closeBtn.addEventListener('mouseleave', function () {
+        _closeBtn.style.borderColor = 'rgba(200,180,120,0.25)';
+        _closeBtn.style.color       = 'rgba(200,170,100,0.55)';
+      });
+      _labelLayer.appendChild(_closeBtn);
+    }
+  }
+
+  // ── Action button click handler ────────────────────────────────
+  // Fires the same interact that the InteractPrompt + OK key would.
+
+  function _onActionClick(e) {
+    e.stopPropagation();
+    if (!_active) return;
+
+    // Flash feedback
+    if (_actionBtn) {
+      _actionBtn.style.background = 'rgba(240,220,140,0.3)';
+      setTimeout(function () {
+        if (_actionBtn) _actionBtn.style.background = 'rgba(10,8,18,0.88)';
+      }, 150);
+    }
+
+    // Delegate to game.js _interact() via the same path as keyboard OK
+    if (typeof Game !== 'undefined' && typeof Game.interact === 'function') {
+      Game.interact();
+    } else if (typeof InputManager !== 'undefined' &&
+               typeof InputManager.simulateOK === 'function') {
+      InputManager.simulateOK();
     }
   }
 
@@ -119,27 +266,23 @@ var CratePeek = (function () {
     _opened  = false;
     _timer   = 0;
 
-    var glowColor  = 'rgba(200,150,60,0.5)';
-    var labelColor = '#c8a040';
-
+    // Style the box instance (pointer-events off)
     var inst = document.getElementById(_boxId);
     if (inst) {
-      inst.style.setProperty('--box-glow', glowColor);
+      inst.style.setProperty('--box-glow', 'rgba(200,150,60,0.5)');
       inst.style.pointerEvents = 'none';
-
-      var glow = inst.querySelector('.box3d-glow');
-      if (glow) {
-        var span = document.createElement('span');
-        span.style.cssText =
-          'font:bold 26px monospace;color:' + labelColor +
-          ';text-shadow:0 0 10px ' + glowColor +
-          ';position:absolute;top:50%;left:50%;' +
-          'transform:translate(-50%,-50%);white-space:nowrap;';
-        span.textContent = '? LOOT ?';
-        glow.appendChild(span);
-      }
+      // Ensure the 3D scene stacks BELOW the label layer
+      inst.style.position = 'relative';
+      inst.style.zIndex = '1';
     }
 
+    // Inner label — appears with the box, readable immediately
+    if (_innerLabel) {
+      _innerLabel.textContent = '? LOOT ?';
+      _innerLabel.style.opacity = '0';
+    }
+
+    // Sub-label — appears after lid opens
     if (_subLabel) {
       _subLabel.textContent = '';
       _subLabel.appendChild(document.createTextNode('breakable crate'));
@@ -148,13 +291,27 @@ var CratePeek = (function () {
       _subLabel.style.color = 'rgba(200,170,100,0)';
     }
 
+    // Action button hidden until lid opens
+    if (_actionBtn) {
+      _actionBtn.style.opacity = '0';
+      _actionBtn.style.pointerEvents = 'none';
+    }
+    if (_closeBtn) { _closeBtn.style.opacity = '0'; _closeBtn.style.pointerEvents = 'none'; }
+
     _container.style.opacity = '1';
 
     setTimeout(function () {
       if (_active && _boxId) {
         BoxAnim.open(_boxId);
         _opened = true;
+        // Reveal labels after lid slides off
+        if (_innerLabel) _innerLabel.style.opacity = '1';
         if (_subLabel) _subLabel.style.color = 'rgba(200,170,100,0.9)';
+        if (_actionBtn) {
+          _actionBtn.style.opacity = '1';
+          _actionBtn.style.pointerEvents = 'auto';
+        }
+        if (_closeBtn) { _closeBtn.style.opacity = '1'; _closeBtn.style.pointerEvents = 'auto'; }
       }
     }, OPEN_DELAY);
   }
@@ -165,7 +322,13 @@ var CratePeek = (function () {
     if (_opened && _boxId) BoxAnim.close(_boxId);
 
     _container.style.opacity = '0';
+    if (_innerLabel) _innerLabel.style.opacity = '0';
     if (_subLabel) _subLabel.style.color = 'rgba(200,170,100,0)';
+    if (_actionBtn) {
+      _actionBtn.style.opacity = '0';
+      _actionBtn.style.pointerEvents = 'none';
+    }
+    if (_closeBtn) { _closeBtn.style.opacity = '0'; _closeBtn.style.pointerEvents = 'none'; }
 
     setTimeout(function () { _destroyBox(); }, 350);
 
@@ -186,10 +349,22 @@ var CratePeek = (function () {
     _opened = false;
   }
 
+  function handleKey(key) {
+    if (!_active) return false;
+    if (key === 'Escape') { _hide(); return true; }
+    return false;
+  }
+
+  function isActive() { return _active; }
+  function forceHide() { _hide(); }
+
   // ── Public API ─────────────────────────────────────────────────
 
   return {
-    init: init,
-    update: update
+    init:      init,
+    update:    update,
+    handleKey: handleKey,
+    isActive:  isActive,
+    forceHide: forceHide
   };
 })();

@@ -479,6 +479,8 @@ var DungeonSchedule = (function () {
     return {
       groupId:      best.groupId,
       label:        best.label,
+      floorIds:     best.floorIds,
+      target:       best.target,
       actualDay:    best.actualDay,
       daysAway:     Math.max(0, best.actualDay - _currentDay),
       heroType:     best.heroType,

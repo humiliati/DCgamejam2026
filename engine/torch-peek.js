@@ -42,7 +42,10 @@ var TorchPeek = (function () {
   var _timer      = 0;
   var _opened     = false;
   var _container  = null;
+  var _labelLayer = null;   // Flat overlay above 3D scene (z-index:2)
+  var _slotStrip  = null;   // Slot indicator strip in label layer
   var _subLabel   = null;
+  var _actionBtn  = null;   // Clickable action button (Magic Remote)
   var _slotEls    = [];     // DOM elements for the 3 slot indicators
   var _interacting = false; // true when slot-fill UI is active
 
@@ -62,18 +65,85 @@ var TorchPeek = (function () {
       if (viewport) viewport.appendChild(_container);
     }
 
+    // Label layer — flat overlay above 3D scene for text + action button
+    _labelLayer = document.getElementById('torch-peek-labels');
+    if (!_labelLayer) {
+      _labelLayer = document.createElement('div');
+      _labelLayer.id = 'torch-peek-labels';
+      _labelLayer.style.cssText =
+        'position:absolute; top:0; left:0; width:100%; height:100%;' +
+        'z-index:2; pointer-events:none;';
+      _container.appendChild(_labelLayer);
+    }
+
+    // Slot indicator strip — centered over box, in label layer
+    _slotStrip = document.getElementById('torch-peek-slots');
+    if (!_slotStrip) {
+      _slotStrip = document.createElement('div');
+      _slotStrip.id = 'torch-peek-slots';
+      _slotStrip.style.cssText =
+        'display:flex; justify-content:center; gap:10px;' +
+        'position:absolute; top:50%; left:50%;' +
+        'transform:translate(-50%,-50%); white-space:nowrap;' +
+        'pointer-events:none; opacity:0; transition:opacity 0.3s ease 0.15s;';
+      _labelLayer.appendChild(_slotStrip);
+    }
+
+    // Sub-label below box (in label layer, margin 60px to clear 3D projection)
     _subLabel = document.getElementById('torch-peek-sublabel');
     if (!_subLabel) {
       _subLabel = document.createElement('div');
       _subLabel.id = 'torch-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:36px; text-align:left;' +
+        'margin-top:60px; text-align:left;' +
         'font:38px monospace; color:rgba(200,170,100,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
-      _container.appendChild(_subLabel);
+      _labelLayer.appendChild(_subLabel);
+    }
+
+    // Action button — clickable for Magic Remote
+    _actionBtn = document.getElementById('torch-peek-action');
+    if (!_actionBtn) {
+      _actionBtn = document.createElement('button');
+      _actionBtn.id = 'torch-peek-action';
+      _actionBtn.style.cssText =
+        'position:absolute; bottom:-80px; left:50%;' +
+        'transform:translateX(-50%);' +
+        'font:bold 18px monospace; color:#ffa030;' +
+        'background:rgba(80,50,20,0.5);' +
+        'border:2px solid rgba(200,140,60,0.4);' +
+        'border-radius:8px; padding:8px 20px;' +
+        'text-shadow:0 0 8px rgba(255,140,40,0.4);' +
+        'cursor:pointer; pointer-events:auto;' +
+        'opacity:0; transition:opacity 0.3s ease;' +
+        'outline:none;';
+      _actionBtn.textContent = '[OK] Interact';
+      _actionBtn.addEventListener('click', _onActionClick);
+      _actionBtn.addEventListener('mouseenter', function () {
+        _actionBtn.style.borderColor = '#ffa030';
+        _actionBtn.style.color = '#fff';
+        _actionBtn.style.background = 'rgba(120,70,20,0.6)';
+        _actionBtn.style.textShadow = '0 0 12px rgba(255,180,60,0.5)';
+      });
+      _actionBtn.addEventListener('mouseleave', function () {
+        _actionBtn.style.borderColor = 'rgba(200,140,60,0.4)';
+        _actionBtn.style.color = '#ffa030';
+        _actionBtn.style.background = 'rgba(80,50,20,0.5)';
+        _actionBtn.style.textShadow = '0 0 8px rgba(255,140,40,0.4)';
+      });
+      _labelLayer.appendChild(_actionBtn);
+    }
+  }
+
+  function _onActionClick(e) {
+    if (e) e.stopPropagation();
+    if (typeof Game !== 'undefined' && typeof Game.interact === 'function') {
+      Game.interact();
+    } else if (typeof InputManager !== 'undefined' && InputManager.simulateOK) {
+      InputManager.simulateOK();
     }
   }
 
@@ -125,7 +195,7 @@ var TorchPeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) _destroyBox();
 
-    _boxId   = BoxAnim.create('crate', _container, { spin: false });
+    _boxId   = BoxAnim.create('chest', _container, { spin: false });
     _active  = true;
     _opened  = false;
     _timer   = 0;
@@ -136,14 +206,22 @@ var TorchPeek = (function () {
 
     var inst = document.getElementById(_boxId);
     if (inst) {
+      inst.style.zIndex = '1';
       inst.style.setProperty('--box-glow', glowColor);
+      inst.style.setProperty('--box-dark', isLit ? '#3a2008' : '#1a1810');
+      inst.style.setProperty('--box-light', isLit ? '#c88030' : '#4a4038');
+      inst.style.setProperty('--box-floor', isLit ? '#2a1804' : '#0a0808');
+      inst.style.setProperty('--box-ceil', isLit ? '#8a5820' : '#2a2420');
       inst.style.pointerEvents = 'none';
+    }
 
-      var glow = inst.querySelector('.box3d-glow');
-      if (glow) {
-        // Build slot indicator strip inside the box glow area
-        _buildSlotIndicators(glow, fx, fy, isLit, labelColor, glowColor);
-      }
+    // Build slot indicators in the label layer (above 3D scene)
+    _buildSlotIndicators(_slotStrip, fx, fy, isLit, labelColor, glowColor);
+
+    // Reset action button
+    if (_actionBtn) {
+      _actionBtn.style.opacity = '0';
+      _actionBtn.textContent = isLit ? '[OK] Extinguish' : '[OK] Refuel';
     }
 
     if (_subLabel) {
@@ -165,6 +243,8 @@ var TorchPeek = (function () {
         BoxAnim.open(_boxId);
         _opened = true;
         if (_subLabel) _subLabel.style.color = 'rgba(200,170,100,0.9)';
+        if (_slotStrip) _slotStrip.style.opacity = '1';
+        if (_actionBtn) _actionBtn.style.opacity = '1';
       }
     }, OPEN_DELAY);
   }
@@ -177,11 +257,8 @@ var TorchPeek = (function () {
   function _buildSlotIndicators(parent, fx, fy, isLit, labelColor, glowColor) {
     _slotEls = [];
 
-    var strip = document.createElement('div');
-    strip.style.cssText =
-      'display:flex; justify-content:center; gap:10px;' +
-      'position:absolute; top:50%; left:50%;' +
-      'transform:translate(-50%,-50%); white-space:nowrap;';
+    // Clear existing children
+    while (parent.firstChild) parent.removeChild(parent.firstChild);
 
     var floorId = (typeof FloorManager !== 'undefined')
       ? FloorManager.getCurrentFloorId() : '0';
@@ -192,17 +269,55 @@ var TorchPeek = (function () {
       var slot = torch ? torch.slots[i] : { state: 'empty', item: null };
       var el = document.createElement('span');
       el.style.cssText =
-        'display:inline-block; width:44px; height:44px; line-height:44px;' +
-        'text-align:center; font-size:24px; border-radius:6px;' +
+        'display:inline-block; width:48px; height:48px; line-height:48px;' +
+        'text-align:center; font-size:26px; border-radius:8px;' +
         'border:2px solid ' + labelColor + ';' +
-        'background:rgba(0,0,0,0.5);';
+        'background:rgba(0,0,0,0.6);' +
+        'pointer-events:auto; cursor:pointer;' +
+        'transition:border-color 0.15s, background 0.15s, transform 0.1s;';
       el.textContent = _slotEmoji(slot);
       el.title = _slotLabel(slot);
-      strip.appendChild(el);
+
+      // Slot number label
+      var numLabel = document.createElement('span');
+      numLabel.style.cssText =
+        'position:absolute; bottom:2px; right:4px; font:bold 10px monospace;' +
+        'color:rgba(200,170,100,0.5); pointer-events:none;';
+      numLabel.textContent = String(i + 1);
+      el.style.position = 'relative';
+      el.appendChild(numLabel);
+
+      // Hover feedback
+      (function (elem, lc) {
+        elem.addEventListener('mouseenter', function () {
+          elem.style.borderColor = '#fff';
+          elem.style.background = 'rgba(60,40,10,0.8)';
+          elem.style.transform = 'scale(1.1)';
+        });
+        elem.addEventListener('mouseleave', function () {
+          elem.style.borderColor = lc;
+          elem.style.background = 'rgba(0,0,0,0.6)';
+          elem.style.transform = 'scale(1)';
+        });
+      })(el, labelColor);
+
+      // Click handler — simulate pressing number key for this slot
+      (function (slotIdx) {
+        el.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (_interacting) {
+            // Simulate the Digit key press for this slot
+            handleKey('Digit' + (slotIdx + 1));
+          } else {
+            // Not yet interacting — start interaction first, then prompt
+            _onActionClick(e);
+          }
+        });
+      })(i);
+
+      parent.appendChild(el);
       _slotEls.push(el);
     }
-
-    parent.appendChild(strip);
   }
 
   function _slotEmoji(slot) {
@@ -232,6 +347,8 @@ var TorchPeek = (function () {
 
     _container.style.opacity = '0';
     if (_subLabel) _subLabel.style.color = 'rgba(200,170,100,0)';
+    if (_slotStrip) _slotStrip.style.opacity = '0';
+    if (_actionBtn) _actionBtn.style.opacity = '0';
 
     setTimeout(function () { _destroyBox(); }, 350);
 
@@ -435,14 +552,31 @@ var TorchPeek = (function () {
     if (!torch) return;
 
     for (var i = 0; i < _slotEls.length && i < torch.slots.length; i++) {
-      _slotEls[i].textContent = _slotEmoji(torch.slots[i]);
-      _slotEls[i].title = _slotLabel(torch.slots[i]);
+      var el = _slotEls[i];
+      // Preserve the number label child — update only the first text node
+      var emoji = _slotEmoji(torch.slots[i]);
+      if (el.firstChild && el.firstChild.nodeType === 3) {
+        el.firstChild.textContent = emoji;
+      } else {
+        el.insertBefore(document.createTextNode(emoji), el.firstChild);
+      }
+      el.title = _slotLabel(torch.slots[i]);
+    }
+
+    var isLit = torch.tile === TILES.TORCH_LIT;
+
+    // Update action button text
+    if (_actionBtn) {
+      if (_interacting) {
+        _actionBtn.textContent = '[ESC] Close';
+      } else {
+        _actionBtn.textContent = isLit ? '[OK] Extinguish' : '[OK] Refuel';
+      }
     }
 
     // Update subtitle text
     if (_subLabel) {
       _subLabel.textContent = '';
-      var isLit = torch.tile === TILES.TORCH_LIT;
       _subLabel.appendChild(document.createTextNode(
         isLit ? 'wall torch (lit)' : 'wall torch (unlit)'
       ));
@@ -450,7 +584,7 @@ var TorchPeek = (function () {
 
       if (_interacting) {
         _subLabel.appendChild(document.createTextNode(
-          '[1-3] fill slot  [ESC] close'
+          '[1-3] fill slot  [click slot] fill  [ESC] close'
         ));
       } else {
         _subLabel.appendChild(document.createTextNode(
@@ -487,12 +621,16 @@ var TorchPeek = (function () {
 
   // ── Public API ─────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return {
     init:           init,
     update:         update,
     tryInteract:    tryInteract,
     handleKey:      handleKey,
     isActive:       isActive,
-    isInteracting:  isInteracting
+    isInteracting:  isInteracting,
+    forceHide:      forceHide
   };
 })();

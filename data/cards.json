@@ -89,8 +89,8 @@
     "emoji": "🔥",
     "rarity": "common",
     "cost": {
-      "type": "free",
-      "value": 0
+      "type": "energy",
+      "value": 1
     },
     "effects": [
       {
@@ -143,8 +143,8 @@
     "emoji": "⚡",
     "rarity": "common",
     "cost": {
-      "type": "free",
-      "value": 0
+      "type": "energy",
+      "value": 1
     },
     "effects": [
       {
@@ -170,8 +170,8 @@
     "emoji": "✨",
     "rarity": "common",
     "cost": {
-      "type": "free",
-      "value": 0
+      "type": "energy",
+      "value": 1
     },
     "effects": [
       {
@@ -203,8 +203,8 @@
     "emoji": "🧊",
     "rarity": "common",
     "cost": {
-      "type": "free",
-      "value": 0
+      "type": "energy",
+      "value": 1
     },
     "effects": [
       {
@@ -230,8 +230,8 @@
     "emoji": "🌩️",
     "rarity": "common",
     "cost": {
-      "type": "free",
-      "value": 0
+      "type": "energy",
+      "value": 2
     },
     "effects": [
       {
@@ -2247,7 +2247,6 @@
     "_designNote": "Battery-cost epic. High floor-8 prize. True ♠ — no suit RPS modifier.",
     "suit": "diamond"
   },
-
   {
     "_comment": "=== ♥ HEART — DEFENSIVE / SUPPORT (ACT-110 to ACT-117) — HP-sacrifice synergies ==="
   },
@@ -2256,13 +2255,28 @@
     "name": "Life Ward",
     "emoji": "💗",
     "rarity": "common",
-    "cost": { "type": "free", "value": 0 },
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
     "effects": [
-      { "type": "defense", "value": 3, "target": "self" }
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "medical"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "medical"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "3 defense. A gentle ward of living energy.",
@@ -2274,14 +2288,34 @@
     "name": "Blood Barrier",
     "emoji": "🩸",
     "rarity": "uncommon",
-    "cost": { "type": "hp", "value": 2 },
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 6, "target": "self" },
-      { "type": "status", "value": 1, "target": "self", "status": "regen" }
+      {
+        "type": "defense",
+        "value": 6,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "self",
+        "status": "regen"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "sacrifice"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "sacrifice"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "Pay 2 HP → 6 defense + regen 1. Your blood hardens into a shield.",
@@ -2293,14 +2327,35 @@
     "name": "Vital Surge",
     "emoji": "💓",
     "rarity": "uncommon",
-    "cost": { "type": "hp", "value": 1 },
+    "cost": {
+      "type": "hp",
+      "value": 1
+    },
     "effects": [
-      { "type": "hp", "value": 4, "target": "self" },
-      { "type": "draw", "value": 1, "target": "self" }
+      {
+        "type": "hp",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["medical", "heart", "utility"],
-    "shopPool": ["tide", "admiralty"],
-    "biomeDrops": ["cellar", "sealab"],
+    "synergyTags": [
+      "medical",
+      "heart",
+      "utility"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "sealab"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "Pay 1 HP → restore 4 HP and draw 1. Adrenaline focus.",
@@ -2312,14 +2367,35 @@
     "name": "Heartblood Thorns",
     "emoji": "🌹",
     "rarity": "rare",
-    "cost": { "type": "hp", "value": 3 },
+    "cost": {
+      "type": "hp",
+      "value": 3
+    },
     "effects": [
-      { "type": "defense", "value": 5, "target": "self" },
-      { "type": "status", "value": 2, "target": "self", "status": "reflect" }
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "reflect"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "sacrifice", "reflect"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "sacrifice",
+      "reflect"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "Pay 3 HP → 5 defense + reflect 2. Thorns grow from your wounds.",
@@ -2331,14 +2407,35 @@
     "name": "Martyr's Embrace",
     "emoji": "🕊️",
     "rarity": "rare",
-    "cost": { "type": "hp", "value": 4 },
+    "cost": {
+      "type": "hp",
+      "value": 4
+    },
     "effects": [
-      { "type": "defense", "value": 10, "target": "self" },
-      { "type": "status", "value": 2, "target": "self", "status": "regen" }
+      {
+        "type": "defense",
+        "value": 10,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "regen"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "sacrifice", "medical"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "sacrifice",
+      "medical"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "Pay 4 HP → 10 defense + regen 2. Embrace the pain, outlast.",
@@ -2350,14 +2447,36 @@
     "name": "Crimson Counter",
     "emoji": "⚔️",
     "rarity": "rare",
-    "cost": { "type": "hp", "value": 2 },
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 4, "target": "self" },
-      { "type": "damage", "value": 4, "target": "enemy" }
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "sacrifice", "melee"],
-    "shopPool": ["tide", "foundry"],
-    "biomeDrops": ["cellar", "foundry"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "sacrifice",
+      "melee"
+    ],
+    "shopPool": [
+      "tide",
+      "foundry"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "Pay 2 HP → 4 defense + 4 damage. Brace and strike.",
@@ -2369,14 +2488,34 @@
     "name": "Transfusion",
     "emoji": "💉",
     "rarity": "uncommon",
-    "cost": { "type": "free", "value": 0 },
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
     "effects": [
-      { "type": "hp", "value": 2, "target": "self" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "bleed" }
+      {
+        "type": "hp",
+        "value": 2,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "bleed"
+      }
     ],
-    "synergyTags": ["medical", "heart", "status"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "medical",
+      "heart",
+      "status"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "Heal 2 HP. Enemy bleeds 1. Take theirs, keep yours.",
@@ -2388,14 +2527,38 @@
     "name": "Final Stand",
     "emoji": "💗",
     "rarity": "epic",
-    "cost": { "type": "hp", "value": 5 },
+    "cost": {
+      "type": "hp",
+      "value": 5
+    },
     "effects": [
-      { "type": "defense", "value": 15, "target": "self" },
-      { "type": "status", "value": 3, "target": "self", "status": "regen" },
-      { "type": "status", "value": 2, "target": "self", "status": "reflect" }
+      {
+        "type": "defense",
+        "value": 15,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "self",
+        "status": "regen"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "reflect"
+      }
     ],
-    "synergyTags": ["defensive", "heart", "sacrifice", "desperate"],
-    "shopPool": ["tide"],
+    "synergyTags": [
+      "defensive",
+      "heart",
+      "sacrifice",
+      "desperate"
+    ],
+    "shopPool": [
+      "tide"
+    ],
     "biomeDrops": [],
     "dropTier": 3,
     "starterDeck": false,
@@ -2403,7 +2566,6 @@
     "_designNote": "♥ epic brace. Massive wall when you're desperate. The 'oh god' button.",
     "suit": "heart"
   },
-
   {
     "_comment": "=== ♣ CLUB — DEFENSIVE / CONTROL (ACT-120 to ACT-126) — Energy-cost barriers ==="
   },
@@ -2412,14 +2574,34 @@
     "name": "Static Field",
     "emoji": "⚡",
     "rarity": "common",
-    "cost": { "type": "energy", "value": 1 },
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 3, "target": "self" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "shock" }
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "shock"
+      }
     ],
-    "synergyTags": ["defensive", "club", "status"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "1 energy → 3 defense + shock 1. Zap anything that gets close.",
@@ -2431,13 +2613,28 @@
     "name": "Energy Shield",
     "emoji": "🔷",
     "rarity": "uncommon",
-    "cost": { "type": "energy", "value": 2 },
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 7, "target": "self" }
+      {
+        "type": "defense",
+        "value": 7,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["defensive", "club", "construct"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "construct"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "2 energy → 7 defense. Pure energy barrier, no frills.",
@@ -2449,14 +2646,33 @@
     "name": "Pulse Guard",
     "emoji": "📡",
     "rarity": "uncommon",
-    "cost": { "type": "energy", "value": 1 },
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 4, "target": "self" },
-      { "type": "draw", "value": 1, "target": "self" }
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["defensive", "club", "utility"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "utility"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "1 energy → 4 defense + draw 1. Scan, guard, adapt.",
@@ -2468,14 +2684,35 @@
     "name": "Neural Brace",
     "emoji": "🧠",
     "rarity": "rare",
-    "cost": { "type": "energy", "value": 2 },
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 5, "target": "self" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "stun" }
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "stun"
+      }
     ],
-    "synergyTags": ["defensive", "club", "control", "status"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "control",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "2 energy → 5 defense + stun 2. Lock their brain, lock their attack.",
@@ -2487,15 +2724,41 @@
     "name": "Feedback Loop",
     "emoji": "🔄",
     "rarity": "rare",
-    "cost": { "type": "energy", "value": 2 },
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 6, "target": "self" },
-      { "type": "status", "value": 2, "target": "self", "status": "reflect" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "shock" }
+      {
+        "type": "defense",
+        "value": 6,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "reflect"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "shock"
+      }
     ],
-    "synergyTags": ["defensive", "club", "reflect", "status"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "reflect",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "2 energy → 6 defense + reflect 2 + shock 1. Attack me? Feel it twice.",
@@ -2507,14 +2770,38 @@
     "name": "EMP Dome",
     "emoji": "💠",
     "rarity": "epic",
-    "cost": { "type": "energy", "value": 3 },
+    "cost": {
+      "type": "energy",
+      "value": 3
+    },
     "effects": [
-      { "type": "defense", "value": 12, "target": "self" },
-      { "type": "status", "value": 3, "target": "enemy", "status": "shock" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "stun" }
+      {
+        "type": "defense",
+        "value": 12,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "enemy",
+        "status": "shock"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "stun"
+      }
     ],
-    "synergyTags": ["defensive", "club", "control", "status"],
-    "shopPool": ["admiralty"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "control",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
     "biomeDrops": [],
     "dropTier": 3,
     "starterDeck": false,
@@ -2527,21 +2814,41 @@
     "name": "Countershock",
     "emoji": "🫲",
     "rarity": "uncommon",
-    "cost": { "type": "energy", "value": 1 },
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 3, "target": "self" },
-      { "type": "damage", "value": 3, "target": "enemy" }
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
     ],
-    "synergyTags": ["defensive", "club", "melee"],
-    "shopPool": ["admiralty", "foundry"],
-    "biomeDrops": ["sealab", "foundry"],
+    "synergyTags": [
+      "defensive",
+      "club",
+      "melee"
+    ],
+    "shopPool": [
+      "admiralty",
+      "foundry"
+    ],
+    "biomeDrops": [
+      "sealab",
+      "foundry"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "1 energy → 3 defense + 3 damage. Block and counterpunch.",
     "_designNote": "♣ brace card. Simultaneous offense+defense. Mirror of ♥ Crimson Counter.",
     "suit": "club"
   },
-
   {
     "_comment": "=== ♦ DIAMOND — DEFENSIVE (ACT-130 to ACT-133) — Battery-cost forge armor ==="
   },
@@ -2550,13 +2857,28 @@
     "name": "Tempered Plate",
     "emoji": "🪖",
     "rarity": "uncommon",
-    "cost": { "type": "battery", "value": 1 },
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 8, "target": "self" }
+      {
+        "type": "defense",
+        "value": 8,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["defensive", "diamond", "construct"],
-    "shopPool": ["foundry"],
-    "biomeDrops": ["foundry"],
+    "synergyTags": [
+      "defensive",
+      "diamond",
+      "construct"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "1 battery → 8 defense. Forge-hardened plating.",
@@ -2568,14 +2890,35 @@
     "name": "Slag Armor",
     "emoji": "🔶",
     "rarity": "rare",
-    "cost": { "type": "battery", "value": 1 },
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 6, "target": "self" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "burn" }
+      {
+        "type": "defense",
+        "value": 6,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "burn"
+      }
     ],
-    "synergyTags": ["defensive", "diamond", "construct", "status"],
-    "shopPool": ["foundry"],
-    "biomeDrops": ["foundry"],
+    "synergyTags": [
+      "defensive",
+      "diamond",
+      "construct",
+      "status"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "1 battery → 6 defense + burn 2. Molten metal clings to whoever strikes you.",
@@ -2587,14 +2930,33 @@
     "name": "Forge Brace",
     "emoji": "🔨",
     "rarity": "uncommon",
-    "cost": { "type": "battery", "value": 1 },
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
     "effects": [
-      { "type": "defense", "value": 4, "target": "self" },
-      { "type": "damage", "value": 3, "target": "enemy" }
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      }
     ],
-    "synergyTags": ["defensive", "diamond", "melee"],
-    "shopPool": ["foundry"],
-    "biomeDrops": ["foundry"],
+    "synergyTags": [
+      "defensive",
+      "diamond",
+      "melee"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "1 battery → 4 defense + 3 damage. Hammer meets shield.",
@@ -2606,14 +2968,38 @@
     "name": "Crucible Shell",
     "emoji": "🛡️",
     "rarity": "epic",
-    "cost": { "type": "battery", "value": 2 },
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
     "effects": [
-      { "type": "defense", "value": 14, "target": "self" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "burn" },
-      { "type": "status", "value": 1, "target": "self", "status": "regen" }
+      {
+        "type": "defense",
+        "value": 14,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "burn"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "self",
+        "status": "regen"
+      }
     ],
-    "synergyTags": ["defensive", "diamond", "construct", "status"],
-    "shopPool": ["foundry"],
+    "synergyTags": [
+      "defensive",
+      "diamond",
+      "construct",
+      "status"
+    ],
+    "shopPool": [
+      "foundry"
+    ],
     "biomeDrops": [],
     "dropTier": 3,
     "starterDeck": false,
@@ -2621,7 +3007,6 @@
     "_designNote": "♦ epic brace. Battery-premium fortress. Forge-themed answer to Final Stand.",
     "suit": "diamond"
   },
-
   {
     "_comment": "=== STATUS DIVERSITY (ACT-135 to ACT-142) — Fill poison, root, bleed gaps ==="
   },
@@ -2630,14 +3015,34 @@
     "name": "Venom Drip",
     "emoji": "🐍",
     "rarity": "uncommon",
-    "cost": { "type": "energy", "value": 1 },
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
     "effects": [
-      { "type": "damage", "value": 2, "target": "enemy" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "poison" }
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "poison"
+      }
     ],
-    "synergyTags": ["club", "status", "ranged"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "club",
+      "status",
+      "ranged"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "2 damage + poison 2. Slow death, guaranteed.",
@@ -2649,14 +3054,35 @@
     "name": "Tangle Root",
     "emoji": "🌿",
     "rarity": "uncommon",
-    "cost": { "type": "free", "value": 0 },
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
     "effects": [
-      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
-      { "type": "defense", "value": 2, "target": "self" }
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "root"
+      },
+      {
+        "type": "defense",
+        "value": 2,
+        "target": "self"
+      }
     ],
-    "synergyTags": ["spade", "control", "defensive", "status"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "spade",
+      "control",
+      "defensive",
+      "status"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "Root 2 + 2 defense. Vines snare and shield.",
@@ -2668,14 +3094,36 @@
     "name": "Serrated Edge",
     "emoji": "🗡️",
     "rarity": "uncommon",
-    "cost": { "type": "free", "value": 0 },
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
     "effects": [
-      { "type": "damage", "value": 3, "target": "enemy" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "bleed" }
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "bleed"
+      }
     ],
-    "synergyTags": ["spade", "melee", "status"],
-    "shopPool": ["foundry", "tide"],
-    "biomeDrops": ["cellar", "foundry"],
+    "synergyTags": [
+      "spade",
+      "melee",
+      "status"
+    ],
+    "shopPool": [
+      "foundry",
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "3 damage + bleed 2. Jagged wounds don't close.",
@@ -2687,15 +3135,41 @@
     "name": "Corrosive Splash",
     "emoji": "🧪",
     "rarity": "rare",
-    "cost": { "type": "energy", "value": 2 },
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
     "effects": [
-      { "type": "damage", "value": 3, "target": "enemy" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "poison" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "burn" }
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "poison"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "burn"
+      }
     ],
-    "synergyTags": ["club", "status", "ranged", "aoe"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "club",
+      "status",
+      "ranged",
+      "aoe"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "3 damage + poison 2 + burn 1. Acid eats through everything.",
@@ -2707,15 +3181,41 @@
     "name": "Briar Trap",
     "emoji": "🪤",
     "rarity": "rare",
-    "cost": { "type": "free", "value": 0 },
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
     "effects": [
-      { "type": "defense", "value": 4, "target": "self" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "bleed" }
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "root"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "bleed"
+      }
     ],
-    "synergyTags": ["defensive", "spade", "control", "status"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "defensive",
+      "spade",
+      "control",
+      "status"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "4 defense + root 2 + bleed 1. Step on this. I dare you.",
@@ -2727,14 +3227,38 @@
     "name": "Toxic Cloud",
     "emoji": "☁️",
     "rarity": "rare",
-    "cost": { "type": "energy", "value": 2 },
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
     "effects": [
-      { "type": "status", "value": 3, "target": "enemy", "status": "poison" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "root" }
+      {
+        "type": "status",
+        "value": 3,
+        "target": "enemy",
+        "status": "poison"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "root"
+      }
     ],
-    "synergyTags": ["club", "status", "control", "aoe"],
-    "shopPool": ["tide", "admiralty"],
-    "biomeDrops": ["cellar", "sealab"],
+    "synergyTags": [
+      "club",
+      "status",
+      "control",
+      "aoe"
+    ],
+    "shopPool": [
+      "tide",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "sealab"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "Poison 3 + root 1. Choking fumes pin them in place.",
@@ -2746,14 +3270,35 @@
     "name": "Hemorrhage",
     "emoji": "💀",
     "rarity": "rare",
-    "cost": { "type": "hp", "value": 2 },
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
     "effects": [
-      { "type": "damage", "value": 5, "target": "enemy" },
-      { "type": "status", "value": 3, "target": "enemy", "status": "bleed" }
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "enemy",
+        "status": "bleed"
+      }
     ],
-    "synergyTags": ["heart", "sacrifice", "melee", "status"],
-    "shopPool": ["tide"],
-    "biomeDrops": ["cellar"],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "melee",
+      "status"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
     "dropTier": 2,
     "starterDeck": false,
     "description": "Pay 2 HP → 5 damage + bleed 3. Spill your blood to spill theirs.",
@@ -2765,19 +3310,1163 @@
     "name": "Constrict",
     "emoji": "🐙",
     "rarity": "uncommon",
-    "cost": { "type": "energy", "value": 1 },
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
     "effects": [
-      { "type": "damage", "value": 2, "target": "enemy" },
-      { "type": "status", "value": 2, "target": "enemy", "status": "root" },
-      { "type": "status", "value": 1, "target": "enemy", "status": "stun" }
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "root"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "enemy",
+        "status": "stun"
+      }
     ],
-    "synergyTags": ["club", "marine", "control", "status"],
-    "shopPool": ["admiralty"],
-    "biomeDrops": ["sealab"],
+    "synergyTags": [
+      "club",
+      "marine",
+      "control",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
     "dropTier": 1,
     "starterDeck": false,
     "description": "2 damage + root 2 + stun 1. Tentacles hold. You don't.",
     "_designNote": "♣ sealab CC card. Root + stun combo. Fills marine+control tag intersection.",
+    "suit": "club"
+  },
+  {
+    "_comment": "=== RESOURCE EXCHANGE CARDS (ACT-200+) — Gone Rogue imports adapted for DG's 3-resource system ==="
+  },
+  {
+    "id": "ACT-200",
+    "name": "Battery Pack",
+    "emoji": "🔋",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "battery",
+        "value": 2,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "diamond",
+      "supply"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+2 battery. Standard recharge cell.",
+    "_designNote": "♦ battery restore baseline. Fills the 0-battery-restore gap.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-201",
+    "name": "Power Cell",
+    "emoji": "⚡",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "battery",
+        "value": 1,
+        "target": "self"
+      },
+      {
+        "type": "energy",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "diamond",
+      "supply"
+    ],
+    "shopPool": [
+      "forge",
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+1 battery, +1 energy. Dual-charge capacitor.",
+    "_designNote": "♦ hybrid restore. Gentle resource gen for early game.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-202",
+    "name": "Overcharge",
+    "emoji": "🔌",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "battery",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "club",
+      "conversion"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Spend 1 energy → +3 battery. Convert power to charge.",
+    "_designNote": "♣→♦ resource exchange. Energy to battery at 1:3 premium.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-203",
+    "name": "Salvage Core",
+    "emoji": "🧲",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "battery",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "heart",
+      "sacrifice",
+      "conversion"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Spend 2 HP → +3 battery. Rip wiring from your own flesh.",
+    "_designNote": "♥→♦ resource exchange. Blood tech.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-204",
+    "name": "Adrenaline Surge",
+    "emoji": "💪",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "energy",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "conversion"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Spend 2 HP → +3 energy. Pain fuels focus.",
+    "_designNote": "♥→♣ resource exchange. HP to energy at premium rate.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-205",
+    "name": "Quick Reload",
+    "emoji": "📎",
+    "rarity": "common",
+    "cost": {
+      "type": "free",
+      "value": 0
+    },
+    "effects": [
+      {
+        "type": "energy",
+        "value": 1,
+        "target": "self"
+      },
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "supply",
+      "draw"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "+1 energy + draw 1. Check your pockets.",
+    "_designNote": "♠ cycle card. Cantrip that replaces itself + minor energy.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-206",
+    "name": "Coffee Break",
+    "emoji": "☕",
+    "rarity": "common",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "energy",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "conversion",
+      "supply"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Spend 1 battery → +3 energy. Heat up a quick brew.",
+    "_designNote": "♦→♣ resource exchange. Battery to energy at 1:3.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-207",
+    "name": "Medical Kit",
+    "emoji": "🏥",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 6,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "medical",
+      "conversion"
+    ],
+    "shopPool": [
+      "general",
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Spend 2 energy → +6 HP. Field surgery.",
+    "_designNote": "♣→♥ resource exchange. Energy to HP at 1:3.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-208",
+    "name": "Stim Pack",
+    "emoji": "💉",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 4,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "medical",
+      "tech",
+      "conversion"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "Spend 1 battery → +4 HP. Automated med-injector.",
+    "_designNote": "♦→♥ resource exchange. Battery to HP.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-209",
+    "name": "Rations",
+    "emoji": "🍖",
+    "rarity": "common",
+    "cost": {
+      "type": "energy",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "hp",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "energy",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "supply",
+      "medical"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 1,
+    "starterDeck": false,
+    "description": "Spend 1 energy → +3 HP, +1 energy back. A quick meal.",
+    "_designNote": "Net +3 HP for 0 energy (1 in, 1 refunded). Mild sustain.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-210",
+    "name": "EMP Blast",
+    "emoji": "💻",
+    "rarity": "rare",
+    "cost": {
+      "type": "battery",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 8,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "stun"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "diamond",
+      "disruption"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "3 battery → 8 damage + stun 2. Fry everything nearby.",
+    "_designNote": "♦ battery spender nuke. High cost, devastating effect.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-211",
+    "name": "System Crash",
+    "emoji": "🔥",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "burn"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "diamond",
+      "disruption",
+      "status"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 battery → 5 damage + burn 2. Overheat their circuits.",
+    "_designNote": "♦ battery midrange. DoT via burn status.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-212",
+    "name": "Smoke Screen",
+    "emoji": "💨",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 4,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "stealth"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "club",
+      "defensive",
+      "stealth"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "1 battery → 4 defense + stealth 2. Vanish in the haze.",
+    "_designNote": "♦→defense exchange. Battery buys evasion. Stealth synergy.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-213",
+    "name": "Grenade",
+    "emoji": "💣",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "explosive",
+      "ranged"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 6 damage. Pull pin, throw, duck.",
+    "_designNote": "♠ energy spender. Premium damage for energy.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-214",
+    "name": "Explosive Shot",
+    "emoji": "🎯",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 8,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "ranged",
+      "explosive"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "3 energy → 8 damage. One shot, big boom.",
+    "_designNote": "♠ big energy spender. Linear damage for energy.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-215",
+    "name": "Execute",
+    "emoji": "⚔️",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 10,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "melee",
+      "finisher"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "3 energy → 10 damage. Make it count.",
+    "_designNote": "♠ finisher. Highest pure-energy damage card.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-216",
+    "name": "Thermal Scan",
+    "emoji": "🔭",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "exposed"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "diamond",
+      "recon"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "1 battery → 3 damage + expose 2. Nowhere to hide.",
+    "_designNote": "♦ utility. Battery-costed reveal + minor damage.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-217",
+    "name": "Jammer",
+    "emoji": "📡",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "disrupt"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "club",
+      "disruption",
+      "defensive"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 battery → 3 defense + disrupt 2. Scramble their signals.",
+    "_designNote": "♣ tech defense. Battery-costed CC + shield.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-218",
+    "name": "Ghost Protocol",
+    "emoji": "👻",
+    "rarity": "rare",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "self",
+        "status": "stealth"
+      }
+    ],
+    "synergyTags": [
+      "tech",
+      "club",
+      "stealth",
+      "defensive"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "2 battery → 5 defense + stealth 3. You were never here.",
+    "_designNote": "♣ premium stealth. Battery buys near-invulnerability.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-219",
+    "name": "Predator Focus",
+    "emoji": "👁️",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "accuracy"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "ranged",
+      "buff"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 4 damage + accuracy 2. Lock on.",
+    "_designNote": "♠ energy attack + self-buff. Setup card.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-220",
+    "name": "Blood Strike",
+    "emoji": "🩸",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "hp",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 7,
+        "target": "enemy"
+      }
+    ],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "melee"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "3 HP → 7 damage. Your blood, their problem.",
+    "_designNote": "♥ premium sacrifice attack. 3 HP for 7 damage is efficient.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-221",
+    "name": "Last Stand",
+    "emoji": "🛡️",
+    "rarity": "rare",
+    "cost": {
+      "type": "hp",
+      "value": 4
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 8,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 1,
+        "target": "self",
+        "status": "invulnerable"
+      }
+    ],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "defensive"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "4 HP → 8 defense + invulnerable 1. Not today.",
+    "_designNote": "♥ desperation defense. Huge shield for huge HP cost.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-222",
+    "name": "Panic Dodge",
+    "emoji": "😱",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "hp",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 5,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "defensive",
+      "mobile"
+    ],
+    "shopPool": [
+      "general"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 HP → 5 defense. Stumble out of the way, bleeding.",
+    "_designNote": "♥ defensive sacrifice. Cheaper than energy defense equivalents.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-223",
+    "name": "Berserker Rage",
+    "emoji": "😡",
+    "rarity": "rare",
+    "cost": {
+      "type": "hp",
+      "value": 3
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 5,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "self",
+        "status": "frenzy"
+      }
+    ],
+    "synergyTags": [
+      "heart",
+      "sacrifice",
+      "melee",
+      "buff"
+    ],
+    "shopPool": [
+      "tide"
+    ],
+    "biomeDrops": [
+      "cellar"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "3 HP → 5 damage + frenzy 2. Rage is a resource.",
+    "_designNote": "♥ sacrifice + self-buff. Frenzy status = future dmg bonus.",
+    "suit": "heart"
+  },
+  {
+    "id": "ACT-224",
+    "name": "Charged Shot",
+    "emoji": "⚡",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "draw",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "tech",
+      "ranged",
+      "draw"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry",
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "1 battery → 4 damage + draw 1. Efficient ordnance.",
+    "_designNote": "♦ battery cantrip. Damage + cycle for battery cost.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-225",
+    "name": "Chain Lightning",
+    "emoji": "⛓️",
+    "rarity": "rare",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 6,
+        "target": "enemy"
+      },
+      {
+        "type": "battery",
+        "value": 1,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "electric",
+      "conversion"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 3,
+    "starterDeck": false,
+    "description": "2 energy → 6 damage + 1 battery. Lightning feeds the grid.",
+    "_designNote": "♣ attack + battery gen. Energy→damage with battery kickback.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-226",
+    "name": "Virus",
+    "emoji": "🦠",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 2,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "enemy",
+        "status": "poison"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "tech",
+      "status"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 2 damage + poison 3. Slow death.",
+    "_designNote": "♣ DoT enabler. Low upfront, heavy over time via poison.",
+    "suit": "club"
+  },
+  {
+    "id": "ACT-227",
+    "name": "Fragment Shower",
+    "emoji": "💫",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 3,
+        "target": "enemy"
+      },
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      }
+    ],
+    "synergyTags": [
+      "diamond",
+      "tech",
+      "defensive",
+      "ranged"
+    ],
+    "shopPool": [
+      "forge"
+    ],
+    "biomeDrops": [
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 battery → 3 damage + 3 defense. Shrapnel shield.",
+    "_designNote": "♦ balanced battery card. Splits evenly between offense and defense.",
+    "suit": "diamond"
+  },
+  {
+    "id": "ACT-228",
+    "name": "Incendiary",
+    "emoji": "🧨",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "energy",
+      "value": 2
+    },
+    "effects": [
+      {
+        "type": "damage",
+        "value": 4,
+        "target": "enemy"
+      },
+      {
+        "type": "status",
+        "value": 3,
+        "target": "enemy",
+        "status": "burn"
+      }
+    ],
+    "synergyTags": [
+      "spade",
+      "explosive",
+      "status"
+    ],
+    "shopPool": [
+      "general",
+      "forge"
+    ],
+    "biomeDrops": [
+      "cellar",
+      "foundry"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "2 energy → 4 damage + burn 3. Light 'em up.",
+    "_designNote": "♠ energy DoT. Damage + sustained burn.",
+    "suit": "spade"
+  },
+  {
+    "id": "ACT-229",
+    "name": "Cryo Trap",
+    "emoji": "🧊",
+    "rarity": "uncommon",
+    "cost": {
+      "type": "battery",
+      "value": 1
+    },
+    "effects": [
+      {
+        "type": "defense",
+        "value": 3,
+        "target": "self"
+      },
+      {
+        "type": "status",
+        "value": 2,
+        "target": "enemy",
+        "status": "freeze"
+      }
+    ],
+    "synergyTags": [
+      "club",
+      "tech",
+      "control",
+      "defensive"
+    ],
+    "shopPool": [
+      "admiralty"
+    ],
+    "biomeDrops": [
+      "sealab"
+    ],
+    "dropTier": 2,
+    "starterDeck": false,
+    "description": "1 battery → 3 defense + freeze 2. Ice cage.",
+    "_designNote": "♣ battery CC. Cheap control + defense.",
     "suit": "club"
   }
 ]

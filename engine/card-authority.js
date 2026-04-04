@@ -324,6 +324,11 @@ var CardAuthority = (function () {
    * Called at combat start, floor transition, and after death reset.
    */
   function resetDeck() {
+    // Return any cards currently in hand back to backup before clearing,
+    // so they are not permanently lost on floor transitions.
+    for (var h = 0; h < _state.hand.length; h++) {
+      if (_state.hand[h]) _state.backup.push(_state.hand[h]);
+    }
     _state.deck = _state.backup.slice();
     if (typeof SeededRNG !== 'undefined' && SeededRNG.shuffle) {
       SeededRNG.shuffle(_state.deck);

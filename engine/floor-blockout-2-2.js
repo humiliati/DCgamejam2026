@@ -64,10 +64,10 @@
   ];
 
   var BOOKS = [
-    { x: 1,  y: 1, bookId: 'manual_admiralty_handbook' },  // Armory — equipment manual
-    { x: 1,  y: 3, bookId: 'lore_hero_arrival' },          // Armory — hero arrival report
-    { x: 14, y: 3, bookId: 'notice_hero_registration' },   // Planning — hero registration notice
-    { x: 16, y: 3, bookId: 'lore_dragon_history_2' }       // Planning — dragon lore
+    { x: 1,  y: 1, bookId: 'guide_adventurer_general' },   // Armory — Adventurer's Pocket Guide (universal)
+    { x: 1,  y: 3, bookId: 'guide_cleaner_general' },      // Armory — Gleaner's Cleaning Manual (universal)
+    { x: 14, y: 3, bookId: 'lore_heros_wake' },            // Planning — Hero's Wake dungeon lore
+    { x: 16, y: 3, bookId: 'lore_hero_arrival' }           // Planning — hero arrival report
   ];
 
   function build() {

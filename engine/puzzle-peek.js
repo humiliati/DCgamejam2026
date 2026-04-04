@@ -58,6 +58,7 @@ var PuzzlePeek = (function () {
   var _gridEl     = null;
   var _statusEl   = null;
   var _confirmBtn = null;
+  var _closeBtn   = null;
 
   // ── Init ───────────────────────────────────────────────────────
 
@@ -136,6 +137,30 @@ var PuzzlePeek = (function () {
       _confirmReset();
     });
     _container.appendChild(_confirmBtn);
+
+    // ── close button ──
+    _closeBtn = document.createElement('button');
+    _closeBtn.id = 'puzzle-peek-close';
+    _closeBtn.textContent = '[ESC] Close';
+    _closeBtn.style.cssText =
+      'display:block; width:100%; margin-top:6px; padding:5px 0;' +
+      'background:rgba(20,30,40,0.5); border:1px solid rgba(100,140,180,0.2);' +
+      'border-radius:4px; color:rgba(120,150,180,0.55); font:11px monospace;' +
+      'cursor:pointer; letter-spacing:0.06em; outline:none; pointer-events:auto;' +
+      'transition:background 0.15s,border-color 0.15s,color 0.15s;';
+    _closeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      _hide();
+    });
+    _closeBtn.addEventListener('mouseenter', function () {
+      _closeBtn.style.borderColor = 'rgba(100,140,180,0.5)';
+      _closeBtn.style.color       = 'rgba(160,190,220,0.8)';
+    });
+    _closeBtn.addEventListener('mouseleave', function () {
+      _closeBtn.style.borderColor = 'rgba(100,140,180,0.2)';
+      _closeBtn.style.color       = 'rgba(120,150,180,0.55)';
+    });
+    _container.appendChild(_closeBtn);
   }
 
   // ── Per-frame check ──────────────────────────────────────────
@@ -386,10 +411,22 @@ var PuzzlePeek = (function () {
     }, 350);
   }
 
+  function handleKey(key) {
+    if (!_active) return false;
+    if (key === 'Escape') { _hide(); return true; }
+    return false;
+  }
+
+  function isActive() { return _active; }
+  function forceHide() { _hide(); }
+
   // ── Public API ─────────────────────────────────────────────────
 
   return {
-    init:   init,
-    update: update
+    init:      init,
+    update:    update,
+    handleKey: handleKey,
+    isActive:  isActive,
+    forceHide: forceHide
   };
 })();

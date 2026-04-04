@@ -710,6 +710,171 @@
         "Found the bunk. It's small but dry. There's a stash chest with my work keys, a mailbox, and a bed with a fire pit in it. The landlord left a note. Charming individual.\n\nTomorrow I descend for the first time. I should read everything I can find before then."
       ],
       "biome": "home"
+    },
+    {
+      "id": "term_home_dispatch",
+      "title": "GLEANER HOME TERMINAL",
+      "icon": "\uD83D\uDDA5\uFE0F",
+      "category": "terminal",
+      "pages": [
+        "GLEANER DISPATCH SYSTEM v2.1\nNODE: HOME-BUNK-06\nSTATUS: ONLINE\nOPERATOR: [YOU]\n\nWelcome, Gleaner. This terminal receives your work orders, shift schedules, and dungeon telemetry. Reports from completed hero runs will also be delivered here.\n\nPress [D] to cycle through records.\nPress [Esc] to disconnect.",
+        "ACTIVE SHIFT SCHEDULE:\n> Check your mailbox for current assignments.\n> Hero days are posted 2 days in advance.\n> Report to the dungeon lobby BEFORE your shift.\n> Bring supplies. The dungeon doesn't provide.\n\nTIP: The readiness bar in your HUD shows your progress. Hit the target before hero arrival.\n\nTODO: Wire to DungeonSchedule for live shift data."
+      ],
+      "biome": "home"
+    },
+    {
+      "id": "term_home_diagnostic",
+      "title": "BUNK TERMINAL SELF-TEST",
+      "icon": "\uD83D\uDD27",
+      "category": "diagnostic",
+      "pages": [
+        "SELF-TEST INITIATED...\n\nCPU: OK (Tide Systems TC-4400)\nMEMORY: 256K (residential allocation)\nDISPLAY: CRT-G2 phosphor (green)\nNETWORK: HARDLINE to Boardwalk hub (read-only)\nSTORAGE: Tape drive A (nominal)\n\nNOTE: This is a residential-grade terminal. Write access to the dispatch system is restricted. You can READ work orders and reports but cannot modify, delete, or reassign them.",
+        "NETWORK SERVICES:\n> dispatch.read — shift schedules, work orders\n> mailbox.sync — hero run reports (auto-delivered)\n> telemetry.read — live dungeon sensor feed (when available)\n> archive.search — DENIED (clearance insufficient)\n\nFIRMWARE: v2.1.4-residential\nLAST UPDATE: Cycle 440 (47 cycles behind mainline)\nNEXT SCHEDULED UPDATE: UNKNOWN"
+      ],
+      "biome": "home"
+    },
+
+    {
+      "id": "guide_adventurer_general",
+      "title": "Adventurer's Pocket Guide",
+      "icon": "📗",
+      "category": "manual",
+      "pages": [
+        "Welcome to the life, Gleaner.\n\nHeroes come and go. They kill things, break things, and leave. You come after. You are the reason the dungeon is still standing when the next party arrives.",
+        "Know your floors. Every dungeon has a rhythm — rooms that flood, corridors that collapse, chokepoints where heroes always fight. Learn the layout before you learn the mop.",
+        "Watch the schedule. Hero days are posted at every lobby entrance. If you're still inside when the party arrives, find a bonfire and stay out of the way. Heroes don't check corners before swinging.",
+        "Your tools: cleaning supplies, restocking crates, torch oil, trap springs, and whatever cards you've earned. Everything degrades. Budget accordingly.\n\nStay alive. Stay employed. Stay out of the hero's way."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "guide_cleaner_general",
+      "title": "Gleaner's Cleaning Manual",
+      "icon": "📗",
+      "category": "manual",
+      "pages": [
+        "STANDARD OPERATING PROCEDURE: DUNGEON READINESS\n\nYour job is to bring the floor to 100% readiness before the next hero day. Readiness is measured across four categories: crate restocking, blood cleaning, torch maintenance, and trap re-arming.",
+        "CRATE RESTOCKING (35% weight)\nApproach a broken crate. Press OK. Match the suit symbols for bonus pay. Fill all slots and seal. Don't leave empty crates — heroes expect loot.\n\nBLOOD CLEANING (25% weight)\nFace a bloodstained tile. Scrub. Repeat. Some tiles need multiple passes. Work systematically, room by room.",
+        "TORCH MAINTENANCE (20% weight)\nHeroes knock out torches during fights. Re-light every sconce you find. Carry extra oil — torches in deep rooms burn faster.\n\nTRAP RE-ARMING (20% weight)\nTraps that triggered need to be reset. Face the consumed trap tile and re-arm it. Check every corridor.",
+        "EXTRA CREDIT\nCorpse processing, cobweb upkeep, and bonus cleaning can push your readiness above 100%. Higher readiness means better payout, combo multipliers, and a happier employer.\n\nGet the floor to 100% core. Everything beyond that is profit."
+      ],
+      "biome": "dungeon"
+    },
+    {
+      "id": "lore_soft_cellar",
+      "title": "Notes on the Soft Cellar",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The Soft Cellar got its name from the moss. Ankle-deep in places, thick enough to muffle footsteps. First-time heroes love it — they think stealth is easy down here. The moss just means you can't hear what's coming either.",
+        "This is a training dungeon. Low-tier monsters, simple layouts, forgiving sight lines. The Dispatcher sends new Gleaners here first because it's hard to die if you're paying attention. TODO: expand with more cellar-specific environmental hazards, history of the coral foundation, and why the Tide faction maintains it."
+      ],
+      "biome": "cellar_entry"
+    },
+    {
+      "id": "lore_heros_wake",
+      "title": "Field Report: Hero's Wake",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Hero's Wake is where the Admiralty tests its applicants. Two floors of increasingly nasty encounters, designed to wash out anyone who can't handle real dungeon work. The watchman upstairs keeps a tally. Most parties don't make it past the second chamber.",
+        "The name is a bad joke. 'Wake' as in funeral, not as in waking up. Someone in the Admiralty has a sense of humor. TODO: expand with Admiralty's founding purpose, the Scholar hero type's specific patterns, and why this dungeon has two sub-floors instead of one."
+      ],
+      "biome": "watchpost"
+    },
+    {
+      "id": "lore_ironhold_depths",
+      "title": "Survey: Ironhold Depths",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Ironhold was a foundry before it was a dungeon. You can still see the old smelting channels in the walls — the stone is scorched black in places. When the Dragon Compact converted it, they kept the industrial infrastructure. The traps here are mechanical, not magical. Gears, pressure plates, counterweights.",
+        "The Crusader parties that run Ironhold are the most destructive. They smash everything — crates, torches, support beams. Your cleanup shifts here will be longer than average. Budget extra supplies. TODO: expand with foundry-era history, Foundry faction's claim on the dungeon, and specific environmental hazards unique to iron/forge biome."
+      ],
+      "biome": "armory"
+    },
+    {
+      "id": "tip_dungeon_iron",
+      "title": "Ironhold Prep Sheet",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "IRONHOLD DEPTHS — GLEANER PREP\n\nBring extra trap springs. The mechanical traps here jam more often than magical ones. A jammed trap counts as un-armed for readiness.\n\nWatch for slag pits — the old smelting channels still have residue. Don't step in them. TODO: expand with specific trap types, recommended card loadout, and torch oil consumption rates for iron-biome floors."
+      ],
+      "biome": "armory"
+    },
+    {
+      "id": "notice_ironhold_expedition",
+      "title": "Expedition Notice — Ironhold",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "POSTED BY ORDER OF THE GARRISON COMMAND\n\nExpedition roster for Ironhold Depths has been updated. All Gleaners assigned to Ironhold must report to the Armory before their scheduled shift. Equipment inspection is mandatory.\n\nThe Quartermaster will issue replacement springs for any trap kits older than 30 days. TODO: expand with expedition roster details, Garrison Command's relationship to the Foundry faction, and consequences for missing shift."
+      ],
+      "biome": "armory"
+    },
+    {
+      "id": "lore_garrison_founding",
+      "title": "The Garrison — A Short History",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The Garrison was built in the second year of the Dragon Compact, when the Admiralty realized they needed a permanent military presence near the deep dungeons. Before that, hero parties just camped in the street.",
+        "The original architect was a dwarf named Korrath who insisted on triple-thick walls. Everyone thought it was overkill. Then the first Crusader party came back up the stairs at speed, pursued by something with too many legs, and suddenly triple-thick walls seemed reasonable. TODO: expand with founding timeline, key figures, and the Garrison's role in the three-faction balance."
+      ],
+      "biome": "armory"
+    },
+    {
+      "id": "lore_foundry_forging",
+      "title": "Foundry Methods — A Primer",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "The Foundry faction doesn't just repair equipment — they reforge it. When a hero's sword breaks in the dungeon, the Gleaner salvages the shards. The Foundry melts them down and folds the metal back together with whatever dungeon residue clung to the blade. The result is always slightly different from the original. Sometimes better.",
+        "TODO: expand with forging process details, what 'dungeon residue' actually is, how it affects weapon properties, and the Foundry's economic relationship with Gleaners who supply salvage."
+      ],
+      "biome": "shop"
+    },
+    {
+      "id": "notice_restock_schedule",
+      "title": "Restock Delivery Schedule",
+      "icon": "📋",
+      "category": "notice",
+      "pages": [
+        "WEEKLY RESTOCK SCHEDULE\n\nMorning delivery: cleaning supplies, torch oil, basic crate fill.\nAfternoon delivery: specialty items, trap components, card packs.\n\nDeliveries are suspended on hero days. Plan accordingly.\n\nTODO: expand with specific delivery times per faction shop, what affects delivery frequency, and how the player's reputation tier unlocks better stock."
+      ],
+      "biome": "shop"
+    },
+    {
+      "id": "tip_card_synergies",
+      "title": "Card Synergy Cheat Sheet",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "CARD SYNERGIES — QUICK REFERENCE\n\nMatching suit pairs: +1 bonus to seal quality.\nTriple suit: rare, but triples the readiness bonus for that crate.\nMixed suits: no penalty, just no bonus.\n\nTODO: expand with specific suit types, faction-specific synergies, and how card rarity affects synergy multipliers. Wire to actual card-system mechanics once CardAuthority is finalized."
+      ],
+      "biome": "shop"
+    },
+    {
+      "id": "tip_equipment_care",
+      "title": "Equipment Maintenance Tips",
+      "icon": "📘",
+      "category": "tip",
+      "pages": [
+        "Keep your mop dry between uses. A wet mop in the bag grows mold. Mold in the bag spreads to your cards. Moldy cards don't stack.\n\nReplace torch wicks every three relights. After that the flame gutters and you lose lighting efficiency.\n\nTODO: expand with full equipment degradation mechanics, repair costs, and how equipment condition affects cleaning/restocking speed."
+      ],
+      "biome": "shop"
+    },
+    {
+      "id": "lore_garrison_trade_routes",
+      "title": "Garrison Trade Routes",
+      "icon": "📜",
+      "category": "lore",
+      "pages": [
+        "Three trade routes feed the Garrison: the Coastal Road from the Tide faction's ports, the Mountain Pass from the Foundry's smelters, and the Old King's Highway from the Admiralty's inland holdings. Each route carries different goods.",
+        "TODO: expand with specific goods per route, how trade route disruption affects shop stock, and the political tensions between factions over route control."
+      ],
+      "biome": "shop"
     }
   ]
 }

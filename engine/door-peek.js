@@ -35,6 +35,8 @@ var DoorPeek = (function () {
   var _opened     = false;  // Lid has opened
   var _container  = null;   // DOM container for the peek box
   var _subLabel   = null;   // DOM element for transition text below
+  var _actionBtn  = null;   // Clickable action button (Magic Remote)
+  var _labelLayer = null;   // Flat overlay layer above 3D scene
 
   // ── Init ───────────────────────────────────────────────────────
 
@@ -46,11 +48,22 @@ var DoorPeek = (function () {
       _container.id = 'door-peek-container';
       _container.style.cssText =
         'position:absolute; top:50%; left:50%;' +
-        'transform:translate(-50%,-55%);' +
+        'transform:translate(-50%,-50%);' +
         'z-index:18; pointer-events:none; opacity:0;' +
         'transition:opacity 0.3s ease;';
       var viewport = document.getElementById('viewport');
       if (viewport) viewport.appendChild(_container);
+    }
+
+    // Label layer — flat overlay above 3D scene for text + action button
+    _labelLayer = document.getElementById('door-peek-labels');
+    if (!_labelLayer) {
+      _labelLayer = document.createElement('div');
+      _labelLayer.id = 'door-peek-labels';
+      _labelLayer.style.cssText =
+        'position:absolute; top:0; left:0; width:100%; height:100%;' +
+        'z-index:2; pointer-events:none;';
+      _container.appendChild(_labelLayer);
     }
 
     // Sub-label element for transition text (two rows, 36px, left-aligned)
@@ -60,12 +73,55 @@ var DoorPeek = (function () {
       _subLabel.id = 'door-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:36px; text-align:left;' +
-        'font:42px monospace; color:rgba(180,170,150,0);' +
+        'margin-top:60px; text-align:left;' +
+        'font:38px monospace; color:rgba(180,170,150,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.7);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
-      _container.appendChild(_subLabel);
+      _labelLayer.appendChild(_subLabel);
+    }
+
+    // Action button — clickable for Magic Remote
+    _actionBtn = document.getElementById('door-peek-action');
+    if (!_actionBtn) {
+      _actionBtn = document.createElement('button');
+      _actionBtn.id = 'door-peek-action';
+      _actionBtn.style.cssText =
+        'position:absolute; bottom:-80px; left:50%;' +
+        'transform:translateX(-50%);' +
+        'font:bold 18px monospace; color:#c0d8f0;' +
+        'background:rgba(60,80,120,0.5);' +
+        'border:2px solid rgba(140,180,220,0.4);' +
+        'border-radius:8px; padding:8px 20px;' +
+        'text-shadow:0 0 8px rgba(140,180,220,0.4);' +
+        'cursor:pointer; pointer-events:auto;' +
+        'opacity:0; transition:opacity 0.3s ease;' +
+        'outline:none;';
+      _actionBtn.textContent = '[OK] Enter';
+      _actionBtn.addEventListener('click', _onActionClick);
+      _actionBtn.addEventListener('mouseenter', function () {
+        _actionBtn.style.borderColor = '#c0d8f0';
+        _actionBtn.style.color = '#fff';
+        _actionBtn.style.background = 'rgba(80,120,180,0.6)';
+        _actionBtn.style.textShadow = '0 0 12px rgba(160,200,255,0.5)';
+      });
+      _actionBtn.addEventListener('mouseleave', function () {
+        _actionBtn.style.borderColor = 'rgba(140,180,220,0.4)';
+        _actionBtn.style.color = '#c0d8f0';
+        _actionBtn.style.background = 'rgba(60,80,120,0.5)';
+        _actionBtn.style.textShadow = '0 0 8px rgba(140,180,220,0.4)';
+      });
+      _labelLayer.appendChild(_actionBtn);
+    }
+  }
+
+  function _onActionClick(e) {
+    if (e) e.stopPropagation();
+    // Delegate to Game.interact() — same pathway as Enter key
+    if (typeof Game !== 'undefined' && typeof Game.interact === 'function') {
+      Game.interact();
+    } else if (typeof InputManager !== 'undefined' && InputManager.simulateOK) {
+      InputManager.simulateOK();
     }
   }
 
@@ -203,9 +259,10 @@ var DoorPeek = (function () {
       }
     }
 
-    // Style the box instance
+    // Style the box instance (z-index:1, below label layer at z-index:2)
     var inst = document.getElementById(_boxId);
     if (inst) {
+      inst.style.zIndex = '1';
       inst.style.setProperty('--box-glow', glowColor);
       inst.style.pointerEvents = 'none';
 
@@ -230,10 +287,32 @@ var DoorPeek = (function () {
       _subLabel.textContent = '';
       _subLabel.appendChild(document.createTextNode('exiting ' + currentLabel));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode('\u21b3' + targetLabel));
+      _subLabel.appendChild(document.createTextNode('\u21b3' + targetLabel + ' soon'));
       _subLabel.style.color = 'rgba(180,170,150,0)';
     } else if (_subLabel) {
       _subLabel.textContent = '';
+    }
+
+    // Update action button text and hide initially
+    if (_actionBtn) {
+      _actionBtn.style.opacity = '0';
+      if (_nightLocked) {
+        _actionBtn.style.display = 'none'; // Can't enter at night
+      } else {
+        _actionBtn.style.display = '';
+        _actionBtn.textContent = direction === 'advance'
+          ? '[OK] Enter' : '[OK] Exit';
+        // Color scheme matches direction
+        if (direction === 'advance') {
+          _actionBtn.style.color = '#dcc8a0';
+          _actionBtn.style.background = 'rgba(100,80,40,0.5)';
+          _actionBtn.style.borderColor = 'rgba(200,170,100,0.4)';
+        } else {
+          _actionBtn.style.color = '#c0d8f0';
+          _actionBtn.style.background = 'rgba(60,80,120,0.5)';
+          _actionBtn.style.borderColor = 'rgba(140,180,220,0.4)';
+        }
+      }
     }
 
     // Fade in
@@ -244,8 +323,11 @@ var DoorPeek = (function () {
       if (_active && _boxId) {
         BoxAnim.open(_boxId);
         _opened = true;
-        // Fade in sub-label after door opens
+        // Fade in sub-label and action button after door opens
         if (_subLabel) _subLabel.style.color = 'rgba(180,170,150,0.9)';
+        if (_actionBtn && _actionBtn.style.display !== 'none') {
+          _actionBtn.style.opacity = '1';
+        }
       }
     }, OPEN_DELAY);
   }
@@ -259,6 +341,7 @@ var DoorPeek = (function () {
 
     _container.style.opacity = '0';
     if (_subLabel) _subLabel.style.color = 'rgba(180,170,150,0)';
+    if (_actionBtn) _actionBtn.style.opacity = '0';
 
     // Destroy after fade-out
     setTimeout(function () {
@@ -284,8 +367,12 @@ var DoorPeek = (function () {
 
   // ── Public API ─────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return {
     init: init,
-    update: update
+    update: update,
+    forceHide: forceHide
   };
 })();

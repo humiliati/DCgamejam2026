@@ -241,6 +241,24 @@ var Game = (function () {
         return;
       }
 
+      // Self-imposed peek intercepts: ESC dismisses before pause toggle
+      if (typeof CratePeek !== 'undefined' && CratePeek.isActive()) {
+        CratePeek.handleKey('Escape');
+        return;
+      }
+      if (typeof CorpsePeek !== 'undefined' && CorpsePeek.isActive()) {
+        CorpsePeek.handleKey('Escape');
+        return;
+      }
+      if (typeof MerchantPeek !== 'undefined' && MerchantPeek.isActive()) {
+        MerchantPeek.handleKey('Escape');
+        return;
+      }
+      if (typeof PuzzlePeek !== 'undefined' && PuzzlePeek.isActive()) {
+        PuzzlePeek.handleKey('Escape');
+        return;
+      }
+
       var state = ScreenManager.getState();
       if (state === ScreenManager.STATES.GAMEPLAY) {
         _pendingMenuContext = 'pause';
@@ -307,7 +325,10 @@ var Game = (function () {
     // Turn (A/← and D/→) — snap to adjacent face, UNLESS settings slider
     // is focus-locked (Enter to lock), in which case ←/→ adjusts the slider.
     InputManager.on('turn_left', function (type) {
-      if (type !== 'press' || !ScreenManager.isPaused()) return;
+      if (type !== 'press') return;
+      // Dialog button focus: ← moves left
+      if (DialogBox.isOpen() && DialogBox.handleKey('left')) return;
+      if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined' && MenuFaces.isSettingsLocked()) {
         MenuFaces.handleSettingsAdjust(-1);
         return;
@@ -315,7 +336,10 @@ var Game = (function () {
       MenuBox.snapLeft();
     });
     InputManager.on('turn_right', function (type) {
-      if (type !== 'press' || !ScreenManager.isPaused()) return;
+      if (type !== 'press') return;
+      // Dialog button focus: → moves right
+      if (DialogBox.isOpen() && DialogBox.handleKey('right')) return;
+      if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined' && MenuFaces.isSettingsLocked()) {
         MenuFaces.handleSettingsAdjust(+1);
         return;
@@ -516,10 +540,17 @@ var Game = (function () {
               MenuFaces.handleLanguageCycle();
             }
           } else if (hit.action === 'slider_click') {
-            // Face 3 slider click-to-set — select that slider row
+            // Face 3 slider click-to-set — select row AND jump value
             var sliderIdx = hit.slot - 800;
             if (typeof MenuFaces !== 'undefined' && sliderIdx >= 0 && sliderIdx < 3) {
               MenuFaces.handleSettingsSelectRow(sliderIdx);
+              // Calculate volume from click position on the track
+              var slPtr = InputManager.getPointer ? InputManager.getPointer() : null;
+              if (slPtr && slPtr.active && hit.x !== undefined && hit.w > 0) {
+                var pct = Math.max(0, Math.min(100,
+                  Math.round(((slPtr.x - hit.x) / hit.w) * 100)));
+                MenuFaces.handleSettingsSetValue(sliderIdx, pct);
+              }
             }
           }
         }
@@ -531,6 +562,10 @@ var Game = (function () {
         if (ptr && CrateUI.handleClick(ptr.x, ptr.y)) {
           return;
         }
+      }
+      // CobwebNode click during gameplay — deploy spider via pointer
+      if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
+        if (CobwebNode.handlePointerClick()) return;
       }
       // InteractPrompt click during gameplay — fires _interact()
       if (typeof InteractPrompt !== 'undefined' && InteractPrompt.isVisible()) {
@@ -4079,20 +4114,51 @@ var Game = (function () {
 
   // ── Quest waypoint targeting ────────────────────────────────────────
   // Sets the minimap quest diamond based on current floor and game state.
-  // Day 0 route: approach(0) → promenade(1) → home(1.6) for keys → back
-  // to promenade(1) → bazaar(1.1) → soft cellar(1.3.1).
+  //
+  // Phase 0: meet the dispatcher (approach → promenade)
+  // Phase 1: get work keys (promenade → home → chest)
+  // Phase 2: head to first dungeon (original hardcoded route)
+  // Phase 3: dungeon work cycle — pin at assignment until readiness met,
+  //          then advance to next group per DungeonSchedule
+  //
+  // Phase 3 is data-driven: reads DungeonSchedule.getNextGroup() to find
+  // the target dungeon, derives lobby/exterior IDs from the floor hierarchy,
+  // and resolves door positions from cached floorData.doorTargets.
+
+  /**
+   * Find a door on parentFloorId that leads to targetFloorId.
+   * Returns { x, y } or null. Uses the floor cache.
+   */
+  function _findDoorTo(parentFloorId, targetFloorId) {
+    var cached = FloorManager.getFloorCache ? FloorManager.getFloorCache(parentFloorId) : null;
+    if (!cached || !cached.doorTargets) return null;
+    for (var key in cached.doorTargets) {
+      if (cached.doorTargets[key] === targetFloorId) {
+        var parts = key.split(',');
+        return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Floor depth helper: '1' → 1, '1.3' → 2, '1.3.1' → 3.
+   */
+  function _floorDepth(id) {
+    return String(id).split('.').length;
+  }
+
   function _updateQuestTarget() {
     if (typeof Minimap === 'undefined' || !Minimap.setQuestTarget) return;
     var floorId = FloorManager.getFloor();
 
+    // ── Phase 0–1: pre-gate ────────────────────────────────────────
     if (!_gateUnlocked) {
       if (_dispatcherPhase !== 'done') {
         // Phase 0: meet the dispatcher at the gate
         if (floorId === '0') {
-          // Point at the door to Promenade
           Minimap.setQuestTarget({ x: 19, y: 5 });
         } else if (floorId === '1') {
-          // Point at the dispatcher's actual position (at the gate)
           if (_dispatcherEntity && !_dispatcherEntity._hidden) {
             Minimap.setQuestTarget({ x: _dispatcherEntity.x, y: _dispatcherEntity.y });
           } else {
@@ -4105,31 +4171,89 @@ var Game = (function () {
       } else {
         // Phase 1: get work keys — dispatcher sent us home
         if (floorId === '1') {
-          // Point at Gleaner's Home door (SC pod at 22,27)
           Minimap.setQuestTarget({ x: 22, y: 27 });
         } else if (floorId === '1.6') {
-          // Point at the key chest (19,3)
           Minimap.setQuestTarget({ x: 19, y: 3 });
         } else {
           Minimap.setQuestTarget(null);
         }
       }
-    } else {
-      // Phase 2: head to dungeon via east gate → Floor 2 → STAIRS_DN
-      if (floorId === '1') {
-        // Point at east gate to Lantern Row / dungeon entrance (48,17)
-        Minimap.setQuestTarget({ x: 48, y: 17 });
-      } else if (floorId === '1.6') {
-        // Still in home after getting keys — no marker (player will leave)
-        Minimap.setQuestTarget(null);
-      } else if (floorId === '2') {
-        // Point at stairs down to dungeon (7,4 on Floor 2)
-        Minimap.setQuestTarget({ x: 7, y: 4 });
+      return;
+    }
+
+    // ── Phase 2–3: dungeon work cycle ──────────────────────────────
+    // Get the next unresolved dungeon group from the schedule.
+    var nextGroup = (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup)
+      ? DungeonSchedule.getNextGroup() : null;
+
+    if (!nextGroup || !nextGroup.floorIds || nextGroup.floorIds.length === 0) {
+      // Arc complete or schedule not initialized — no marker
+      Minimap.setQuestTarget(null);
+      return;
+    }
+
+    // Derive floor hierarchy from the first dungeon floor in the group.
+    // '1.3.1' → lobby '1.3', exterior '1'
+    var dungeonId  = nextGroup.floorIds[0];              // e.g. '1.3.1'
+    var segs       = dungeonId.split('.');
+    var lobbyId    = segs.slice(0, 2).join('.');         // e.g. '1.3'
+    var exteriorId = segs[0];                            // e.g. '1'
+
+    // Is the player currently inside this dungeon group's floors?
+    var inThisDungeon = false;
+    for (var gi = 0; gi < nextGroup.floorIds.length; gi++) {
+      if (floorId === nextGroup.floorIds[gi]) { inThisDungeon = true; break; }
+    }
+
+    if (inThisDungeon) {
+      // Player is IN the dungeon — check readiness
+      var coreScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
+        ? ReadinessCalc.getCoreScore(floorId) : 0;
+
+      if (coreScore >= (nextGroup.target || 0.6)) {
+        // Readiness met! Point at stairs up — time to leave
+        var dData = FloorManager.getFloorData();
+        if (dData && dData.doors && dData.doors.stairsUp) {
+          Minimap.setQuestTarget({ x: dData.doors.stairsUp.x, y: dData.doors.stairsUp.y });
+        } else {
+          Minimap.setQuestTarget(null);
+        }
       } else {
-        // In dungeon or elsewhere — no specific waypoint
+        // Still working — no marker (player is doing the sweep)
         Minimap.setQuestTarget(null);
       }
+      return;
     }
+
+    if (floorId === lobbyId) {
+      // In the dungeon lobby — point at stairs down
+      var lobbyData = FloorManager.getFloorData();
+      if (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn) {
+        Minimap.setQuestTarget({ x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y });
+      } else {
+        Minimap.setQuestTarget(null);
+      }
+      return;
+    }
+
+    if (floorId === exteriorId) {
+      // On the correct exterior — point at the door to the dungeon lobby
+      var doorPos = _findDoorTo(exteriorId, lobbyId);
+      Minimap.setQuestTarget(doorPos);
+      return;
+    }
+
+    // Player is on a different exterior or an unrelated interior.
+    // Find the gate/door that leads toward the target exterior.
+    if (_floorDepth(floorId) === 1 && floorId !== exteriorId) {
+      // On a different exterior — find the connecting gate
+      var gateDoor = _findDoorTo(floorId, exteriorId);
+      Minimap.setQuestTarget(gateDoor);
+      return;
+    }
+
+    // In a shop, home, or other interior not related to the assignment
+    Minimap.setQuestTarget(null);
   }
 
   // ── Movement callbacks ─────────────────────────────────────────────
@@ -4561,15 +4685,29 @@ var Game = (function () {
         }
       }
     }
-    // ── BOOKSHELF: Open book peek (autonomous peek handles display,
-    //    but OK interact re-shows the current page) ──
+    // ── BOOKSHELF: Open book peek on OK press, advance page if open ──
     else if (tile === TILES.BOOKSHELF) {
       if (typeof BookshelfPeek !== 'undefined') {
-        // If already showing, treat as "next page" action
+        if (BookshelfPeek.isActive()) {
+          // Already showing — advance to next page
+          BookshelfPeek.handleKey('KeyD');
+        } else {
+          // Not yet showing — open immediately (bypasses 400ms debounce)
+          BookshelfPeek.tryShow(fx, fy);
+        }
+      }
+    }
+    // ── TERMINAL: Mail collection (priority) or book peek ──
+    else if (tile === TILES.TERMINAL) {
+      // MailboxPeek takes priority on the home mail terminal
+      if (typeof MailboxPeek !== 'undefined' && MailboxPeek.isShowing && MailboxPeek.isShowing()) {
+        MailboxPeek.handleInteract();
+      } else if (typeof BookshelfPeek !== 'undefined') {
         if (BookshelfPeek.isActive()) {
           BookshelfPeek.handleKey('KeyD');
+        } else {
+          BookshelfPeek.tryShow(fx, fy);
         }
-        // Otherwise the autonomous update() will show it
       }
     }
     // ── BAR_COUNTER: Tap for a drink ──
@@ -5784,7 +5922,11 @@ var Game = (function () {
   return {
     init: init,
     requestPause: requestPause,
-    isGateUnlocked: function () { return _gateUnlocked; }
+    isGateUnlocked: function () { return _gateUnlocked; },
+    /** Public interact — delegates to _interact(). Used by CratePeek
+     *  action button and other DOM click targets that need to fire the
+     *  same interact path as the keyboard OK / InteractPrompt. */
+    interact: function () { _interact(); }
   };
 })();
 

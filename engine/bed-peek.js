@@ -337,11 +337,15 @@ var BedPeek = (function () {
 
   // ── Public API ──────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return Object.freeze({
     init: init,
     update: update,
     setOnHeroDayRun: setOnHeroDayRun,
     setOnWake: setOnWake,
-    isSleeping: isSleeping
+    isSleeping: isSleeping,
+    forceHide: forceHide
   });
 })();

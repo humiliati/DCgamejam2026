@@ -45,6 +45,17 @@ var CrateUI = (function () {
   var GRID_PAD        = 16;
   var SCROLL_SPEED    = 0.012; // Smooth scroll interpolation per ms
 
+  // ── Bag strip constants ──────────────────────────────────────────
+  var BAG_SLOT_SIZE = 44;   // px per bag item box
+  var BAG_SLOT_GAP  = 8;    // px between bag items
+  var BAG_MAX       = 12;   // Max visible bag items before scroll
+
+  // ── Seal / Close button constants ──────────────────────────────
+  var SEAL_BTN_W    = 140;
+  var SEAL_BTN_H    = 32;
+  var CLOSE_BTN_W   = 90;
+  var CLOSE_BTN_H   = 26;
+
   // ── State ───────────────────────────────────────────────────────
   var _open       = false;
   var _containerX = -1;
@@ -53,6 +64,25 @@ var CrateUI = (function () {
   var _alpha      = 0;       // Fade in/out
   var _selectedSlot = -1;    // Highlighted slot index
   var _sealFlash  = 0;       // Seal celebration timer (ms)
+
+  // ── Bag strip state ────────────────────────────────────────────
+  var _selectedBagIdx  = -1;  // Selected bag item index (-1 = none)
+  var _selectedHandIdx = -1;  // Selected hand card index (-1 = none)
+  var _bagRects        = [];  // Hit rects for bag items { x, y, w, h, index }
+  var _handRects       = [];  // Hit rects for hand cards { x, y, w, h, index }
+
+  // ── Button hit rects (updated each render frame) ───────────────
+  var _sealBtnRect  = null;  // { x, y, w, h } or null if hidden
+  var _closeBtnRect = null;  // { x, y, w, h }
+
+  // ── Seal VFX state ─────────────────────────────────────────────
+  var _sealFlashWhite = 0;   // White flash timer (ms)
+  var _sealFlashGold  = 0;   // Gold flash timer (ms)
+  var _sealTextScale  = 0;   // Seal text bounce scale (0→1.2→1.0)
+  var _sealTextTimer  = 0;   // Seal text animation timer (ms)
+
+  // ── Rejection highlight state ──────────────────────────────────
+  var _rejectFlash    = 0;   // Rejection highlight timer (ms) — pulses bag + close
 
   // ── Stash scroll state ─────────────────────────────────────────
   var _scrollRow    = 0;     // Top visible row index (integer target)
@@ -73,15 +103,28 @@ var CrateUI = (function () {
     _containerY = y;
     _floorId    = floorId;
     _open       = true;
-    _selectedSlot = -1;
+    _selectedSlot    = -1;
+    _selectedBagIdx  = -1;
+    _selectedHandIdx = -1;
     _sealFlash  = 0;
+    _sealFlashWhite = 0;
+    _sealFlashGold  = 0;
+    _sealTextScale  = 0;
+    _sealTextTimer  = 0;
+    _rejectFlash = 0;
     _scrollRow    = 0;
     _scrollSmooth = 0;
+    _bagRects     = [];
+    _handRects    = [];
+    _sealBtnRect  = null;
+    _closeBtnRect = null;
   }
 
   function close() {
     _open = false;
-    _selectedSlot = -1;
+    _selectedSlot    = -1;
+    _selectedBagIdx  = -1;
+    _selectedHandIdx = -1;
   }
 
   function isOpen() { return _open; }
@@ -96,6 +139,20 @@ var CrateUI = (function () {
     }
     if (_sealFlash > 0) {
       _sealFlash = Math.max(0, _sealFlash - dt);
+    }
+    // Seal VFX timers
+    if (_sealFlashWhite > 0) _sealFlashWhite = Math.max(0, _sealFlashWhite - dt);
+    if (_sealFlashGold > 0)  _sealFlashGold  = Math.max(0, _sealFlashGold - dt);
+    if (_rejectFlash > 0)    _rejectFlash    = Math.max(0, _rejectFlash - dt);
+    if (_sealTextTimer > 0) {
+      _sealTextTimer = Math.max(0, _sealTextTimer - dt);
+      // Bounce curve: scale up 0→1.2 in first 200ms, settle 1.2→1.0 in next 300ms
+      var t = 1.0 - (_sealTextTimer / 500);
+      if (t < 0.4) {
+        _sealTextScale = (t / 0.4) * 1.2;
+      } else {
+        _sealTextScale = 1.2 - 0.2 * ((t - 0.4) / 0.6);
+      }
     }
     // Smooth scroll interpolation for stash grid
     if (_scrollSmooth !== _scrollRow) {
@@ -128,10 +185,34 @@ var CrateUI = (function () {
     }
 
     // ── Standard single-row layout (crate/corpse/small chest) ────
-    // Panel dimensions
+
+    // Determine if this is a deposit container (crate/corpse)
+    var isDeposit = (c.type !== CrateSystem.TYPE.CHEST);
+    var canSeal   = isDeposit && !c.sealed &&
+                    CrateSystem.canSeal(_containerX, _containerY, _floorId);
+    var allFilled = canSeal; // canSeal already checks all-filled
+
+    // Get bag contents for deposit mode bag strip
+    var bagItems = [];
+    var handCards = [];  // For corpse mode — combat cards from hand
+    var isCorpse = (c.type === CrateSystem.TYPE.CORPSE);
+    if (isDeposit && !c.sealed) {
+      var hasAuth = (typeof CardAuthority !== 'undefined');
+      bagItems = hasAuth ? CardAuthority.getBag() : (typeof Player !== 'undefined' ? Player.state().bag : []);
+      // Corpses also need hand/deck cards for SUIT_CARD slots
+      if (isCorpse) {
+        handCards = hasAuth ? CardAuthority.getHand() : (typeof Player !== 'undefined' ? (Player.state().hand || []) : []);
+      }
+    }
+
+    // Panel dimensions — taller to fit seal button + bag/hand strips in deposit mode
     var rowW = n * SLOT_SIZE + (n - 1) * SLOT_GAP;
-    var panelW = rowW + PANEL_PAD * 2;
-    var panelH = SLOT_SIZE + PANEL_PAD * 2 + 36; // Extra for title + hint
+    var handStripH = (isCorpse && !c.sealed && handCards.length > 0) ? (BAG_SLOT_SIZE + 30) : 0;
+    var bagStripH = (isDeposit && !c.sealed) ? (BAG_SLOT_SIZE + 30) : 0; // bag label + slots
+    bagStripH += handStripH; // Corpses get both strips
+    var sealRowH  = (isDeposit && !c.sealed) ? 42 : 0; // seal + close buttons row
+    var panelW = Math.max(rowW + PANEL_PAD * 2, 320); // Min width for buttons
+    var panelH = SLOT_SIZE + PANEL_PAD * 2 + 36 + sealRowH + bagStripH;
     var panelX = (vpW - panelW) / 2;
     var panelY = vpH * PANEL_Y_FRAC - panelH / 2;
 
@@ -172,44 +253,366 @@ var CrateUI = (function () {
     ctx.fillText(title, vpW / 2, panelY + 8);
 
     // Slot row — store rects for pointer hit-testing
-    var rowStartX = panelX + PANEL_PAD;
+    var rowStartX = (vpW - rowW) / 2;
     var slotY = panelY + 28;
     _slotRects = [];
+
+    // Pointer hover detection
+    var ptr = (typeof InputManager !== 'undefined' && InputManager.getPointer)
+              ? InputManager.getPointer() : null;
+    var hoverIdx = -1;
 
     for (var i = 0; i < n; i++) {
       var sx = rowStartX + i * (SLOT_SIZE + SLOT_GAP);
       _slotRects.push({ x: sx, y: slotY, w: SLOT_SIZE, h: SLOT_SIZE, index: i });
-      _renderSlot(ctx, slots[i], sx, slotY, i, c.sealed);
+      // Check pointer hover
+      if (ptr && ptr.active &&
+          ptr.x >= sx && ptr.x <= sx + SLOT_SIZE &&
+          ptr.y >= slotY && ptr.y <= slotY + SLOT_SIZE) {
+        hoverIdx = i;
+      }
+      // Highlight matching slots when bag item or hand card is selected
+      var slotHighlight = false;
+      if (isDeposit && !c.sealed && !slots[i].filled) {
+        if (_selectedBagIdx >= 0 && slots[i].frameTag !== CrateSystem.FRAME.SUIT_CARD) {
+          slotHighlight = true; // Resource slot for selected bag item
+        }
+        if (_selectedHandIdx >= 0) {
+          // Highlight SUIT_CARD slots that match the selected hand card's suit
+          var selHand = _getHandCards();
+          var selCard = selHand[_selectedHandIdx];
+          if (selCard && slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD &&
+              slots[i].suit === selCard.suit) {
+            slotHighlight = true;
+          }
+        }
+      }
+      _renderSlot(ctx, slots[i], sx, slotY, i, c.sealed, i === hoverIdx, slotHighlight);
     }
 
-    // Hint text
+    // ── Seal Button + Close Button row (deposit mode only) ───────
+    _sealBtnRect  = null;
+    _closeBtnRect = null;
+    var btnRowY = slotY + SLOT_SIZE + 18; // Below frame tag labels
+
+    // Count filled slots for tiered seal button state
+    var filledSlotCount = 0;
+    for (var fc = 0; fc < n; fc++) {
+      if (slots[fc].filled) filledSlotCount++;
+    }
+    var someFilled = filledSlotCount > 0 && !allFilled;
+    var rejectPulse = _rejectFlash > 0 ? (0.3 + 0.7 * Math.sin(_rejectFlash * 0.02)) : 0;
+
+    if (isDeposit && !c.sealed) {
+      // [F] SEAL button
+      var sealX = vpW / 2 - SEAL_BTN_W / 2 - CLOSE_BTN_W / 2 - 8;
+      var sealHover = ptr && ptr.active &&
+        ptr.x >= sealX && ptr.x <= sealX + SEAL_BTN_W &&
+        ptr.y >= btnRowY && ptr.y <= btnRowY + SEAL_BTN_H;
+
+      _sealBtnRect = { x: sealX, y: btnRowY, w: SEAL_BTN_W, h: SEAL_BTN_H };
+
+      if (allFilled) {
+        // FULL — glowing gold, ready to seal
+        var glowAlpha = 0.6 + 0.3 * Math.sin(Date.now() * 0.005);
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.fillStyle = sealHover ? 'rgba(80,60,10,0.95)' : 'rgba(40,30,8,0.9)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,200,60,' + glowAlpha + ')';
+        ctx.lineWidth = sealHover ? 2.5 : 2;
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.stroke();
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = sealHover ? '#ffe080' : '#ffd060';
+        ctx.fillText('[F] \u2605 SEAL \u2605', sealX + SEAL_BTN_W / 2, btnRowY + SEAL_BTN_H / 2);
+      } else if (someFilled) {
+        // PARTIAL — warm amber, can seal with reduced reward
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.fillStyle = sealHover ? 'rgba(60,45,15,0.95)' : 'rgba(30,22,8,0.85)';
+        ctx.fill();
+        ctx.strokeStyle = sealHover ? 'rgba(220,160,60,0.7)' : 'rgba(180,130,40,0.5)';
+        ctx.lineWidth = sealHover ? 2 : 1.5;
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.stroke();
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = sealHover ? '#e0b040' : '#c09030';
+        ctx.fillText('[F] SEAL (' + filledSlotCount + '/' + n + ')',
+                     sealX + SEAL_BTN_W / 2, btnRowY + SEAL_BTN_H / 2);
+      } else {
+        // EMPTY — dim grey, seal will reject
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.fillStyle = 'rgba(20,18,14,0.7)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(80,70,50,0.3)';
+        ctx.lineWidth = 1;
+        _roundRect(ctx, sealX, btnRowY, SEAL_BTN_W, SEAL_BTN_H, 6);
+        ctx.stroke();
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(100,90,70,0.5)';
+        ctx.fillText('[F] SEAL', sealX + SEAL_BTN_W / 2, btnRowY + SEAL_BTN_H / 2);
+      }
+
+      // [ESC] Close button — to the right of seal
+      var closeX = sealX + SEAL_BTN_W + 16;
+      var closeY = btnRowY + (SEAL_BTN_H - CLOSE_BTN_H) / 2;
+      var closeHover = ptr && ptr.active &&
+        ptr.x >= closeX && ptr.x <= closeX + CLOSE_BTN_W &&
+        ptr.y >= closeY && ptr.y <= closeY + CLOSE_BTN_H;
+
+      _closeBtnRect = { x: closeX, y: closeY, w: CLOSE_BTN_W, h: CLOSE_BTN_H };
+
+      // Rejection flash pulses the close button red to draw attention
+      var closeBorderColor = _rejectFlash > 0
+        ? 'rgba(255,100,80,' + (0.3 + rejectPulse * 0.5) + ')'
+        : closeHover ? 'rgba(180,170,140,0.6)' : 'rgba(100,90,70,0.3)';
+
+      _roundRect(ctx, closeX, closeY, CLOSE_BTN_W, CLOSE_BTN_H, 4);
+      ctx.fillStyle = closeHover ? 'rgba(50,45,35,0.9)' : 'rgba(25,22,18,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = closeBorderColor;
+      ctx.lineWidth = _rejectFlash > 0 ? 2 : 1;
+      _roundRect(ctx, closeX, closeY, CLOSE_BTN_W, CLOSE_BTN_H, 4);
+      ctx.stroke();
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = closeHover ? 'rgba(220,210,180,0.9)' : 'rgba(150,140,120,0.6)';
+      ctx.fillText('[ESC] Close', closeX + CLOSE_BTN_W / 2, closeY + CLOSE_BTN_H / 2);
+
+    } else if (c.type === CrateSystem.TYPE.CHEST && !c.depleted) {
+      // Chest withdraw mode — just a close button
+      var chCloseX = vpW / 2 - CLOSE_BTN_W / 2;
+      var chCloseHover = ptr && ptr.active &&
+        ptr.x >= chCloseX && ptr.x <= chCloseX + CLOSE_BTN_W &&
+        ptr.y >= btnRowY && ptr.y <= btnRowY + CLOSE_BTN_H;
+
+      _closeBtnRect = { x: chCloseX, y: btnRowY, w: CLOSE_BTN_W, h: CLOSE_BTN_H };
+
+      _roundRect(ctx, chCloseX, btnRowY, CLOSE_BTN_W, CLOSE_BTN_H, 4);
+      ctx.fillStyle = chCloseHover ? 'rgba(50,45,35,0.9)' : 'rgba(25,22,18,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = chCloseHover ? 'rgba(180,170,140,0.6)' : 'rgba(100,90,70,0.3)';
+      ctx.lineWidth = 1;
+      _roundRect(ctx, chCloseX, btnRowY, CLOSE_BTN_W, CLOSE_BTN_H, 4);
+      ctx.stroke();
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = chCloseHover ? 'rgba(220,210,180,0.9)' : 'rgba(150,140,120,0.6)';
+      ctx.fillText('[ESC] Close', chCloseX + CLOSE_BTN_W / 2, btnRowY + CLOSE_BTN_H / 2);
+    }
+
+    // ── Bag Strip (deposit mode, unsealed only) ──────────────────
+    _bagRects = [];
+    if (isDeposit && !c.sealed && bagItems.length > 0) {
+      var bagY = btnRowY + SEAL_BTN_H + 14;
+
+      // "YOUR BAG" label — pulses on rejection to draw attention
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = _rejectFlash > 0
+        ? 'rgba(255,180,80,' + (0.6 + rejectPulse * 0.4) + ')'
+        : 'rgba(160,150,120,0.6)';
+      ctx.fillText(_rejectFlash > 0 ? '\u25BC YOUR BAG \u25BC' : 'YOUR BAG', vpW / 2, bagY);
+
+      var bagSlotY = bagY + 14;
+      var visCount = Math.min(bagItems.length, BAG_MAX);
+      var bagRowW  = visCount * BAG_SLOT_SIZE + (visCount - 1) * BAG_SLOT_GAP;
+      var bagStartX = (vpW - bagRowW) / 2;
+
+      for (var bi = 0; bi < visCount; bi++) {
+        var bx = bagStartX + bi * (BAG_SLOT_SIZE + BAG_SLOT_GAP);
+        _bagRects.push({ x: bx, y: bagSlotY, w: BAG_SLOT_SIZE, h: BAG_SLOT_SIZE, index: bi });
+
+        var bagItem = bagItems[bi];
+        var isSelected = (bi === _selectedBagIdx);
+        var bagHover = ptr && ptr.active &&
+          ptr.x >= bx && ptr.x <= bx + BAG_SLOT_SIZE &&
+          ptr.y >= bagSlotY && ptr.y <= bagSlotY + BAG_SLOT_SIZE;
+
+        // Bag slot background
+        _roundRect(ctx, bx, bagSlotY, BAG_SLOT_SIZE, BAG_SLOT_SIZE, 4);
+        ctx.fillStyle = isSelected ? 'rgba(60,50,20,0.95)'
+                       : bagHover ? 'rgba(50,45,30,0.9)'
+                       : 'rgba(20,18,14,0.8)';
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isSelected ? '#ffd060'
+                         : bagHover ? 'rgba(200,180,100,0.6)'
+                         : 'rgba(80,70,50,0.4)';
+        ctx.lineWidth = isSelected ? 2.5 : (bagHover ? 1.5 : 1);
+        _roundRect(ctx, bx, bagSlotY, BAG_SLOT_SIZE, BAG_SLOT_SIZE, 4);
+        ctx.stroke();
+
+        // Item emoji
+        if (bagItem) {
+          ctx.font = '18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(bagItem.emoji || '?', bx + BAG_SLOT_SIZE / 2, bagSlotY + BAG_SLOT_SIZE / 2 - 2);
+
+          // Tiny name below
+          if (bagItem.name) {
+            ctx.font = '7px monospace';
+            ctx.fillStyle = 'rgba(180,170,140,0.7)';
+            var bname = bagItem.name.length > 6 ? bagItem.name.substring(0, 5) + '\u2026' : bagItem.name;
+            ctx.fillText(bname, bx + BAG_SLOT_SIZE / 2, bagSlotY + BAG_SLOT_SIZE - 4);
+          }
+        }
+      }
+
+      // Overflow indicator
+      if (bagItems.length > BAG_MAX) {
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(160,150,120,0.5)';
+        ctx.fillText('+' + (bagItems.length - BAG_MAX), bagStartX + bagRowW + 6, bagSlotY + BAG_SLOT_SIZE / 2);
+      }
+    } else if (isDeposit && !c.sealed && bagItems.length === 0) {
+      // Empty bag notice
+      var emptyBagY = btnRowY + SEAL_BTN_H + 14;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(120,110,90,0.5)';
+      ctx.fillText('BAG EMPTY', vpW / 2, emptyBagY);
+    }
+
+    // ── Hand/Deck Strip (corpse mode only — suit cards) ─────────
+    _handRects = [];
+    if (isCorpse && !c.sealed && handCards.length > 0) {
+      // Position below bag strip (or below buttons if bag is empty)
+      var handBaseY = (bagItems.length > 0)
+        ? (btnRowY + SEAL_BTN_H + 14 + BAG_SLOT_SIZE + 28)
+        : (btnRowY + SEAL_BTN_H + 14);
+
+      // "YOUR HAND" label — red tint for combat cards
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = _rejectFlash > 0
+        ? 'rgba(255,140,100,' + (0.6 + rejectPulse * 0.4) + ')'
+        : 'rgba(200,120,120,0.6)';
+      ctx.fillText(_rejectFlash > 0 ? '\u25BC YOUR HAND \u25BC' : 'YOUR HAND', vpW / 2, handBaseY);
+
+      var handSlotY = handBaseY + 14;
+      var handVisCount = Math.min(handCards.length, BAG_MAX);
+      var handRowW = handVisCount * BAG_SLOT_SIZE + (handVisCount - 1) * BAG_SLOT_GAP;
+      var handStartX = (vpW - handRowW) / 2;
+
+      // Determine which suit the corpse needs (for highlighting matching cards)
+      var neededSuit = c.suit || null;
+
+      for (var hi = 0; hi < handVisCount; hi++) {
+        var hx = handStartX + hi * (BAG_SLOT_SIZE + BAG_SLOT_GAP);
+        _handRects.push({ x: hx, y: handSlotY, w: BAG_SLOT_SIZE, h: BAG_SLOT_SIZE, index: hi });
+
+        var card = handCards[hi];
+        var isHandSelected = (hi === _selectedHandIdx);
+        var handHover = ptr && ptr.active &&
+          hx <= ptr.x && ptr.x <= hx + BAG_SLOT_SIZE &&
+          handSlotY <= ptr.y && ptr.y <= handSlotY + BAG_SLOT_SIZE;
+        var suitMatch = card && neededSuit && card.suit === neededSuit;
+
+        // Card slot background — matching suit gets green tint
+        _roundRect(ctx, hx, handSlotY, BAG_SLOT_SIZE, BAG_SLOT_SIZE, 4);
+        ctx.fillStyle = isHandSelected ? 'rgba(50,20,20,0.95)'
+                       : handHover ? 'rgba(45,25,25,0.9)'
+                       : suitMatch ? 'rgba(20,35,20,0.85)'
+                       : 'rgba(20,15,15,0.8)';
+        ctx.fill();
+
+        // Border — suit match gets green, selected gets red-gold
+        ctx.strokeStyle = isHandSelected ? '#ff6644'
+                         : suitMatch ? '#60c060'
+                         : handHover ? 'rgba(200,120,120,0.6)'
+                         : 'rgba(100,60,60,0.4)';
+        ctx.lineWidth = isHandSelected ? 2.5 : (suitMatch ? 2 : 1);
+        _roundRect(ctx, hx, handSlotY, BAG_SLOT_SIZE, BAG_SLOT_SIZE, 4);
+        ctx.stroke();
+
+        // Card emoji + suit symbol
+        if (card) {
+          // Suit emoji in corner
+          var SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = suitMatch ? '#80ff80' : 'rgba(180,140,140,0.7)';
+          ctx.fillText(SUIT_EMOJI[card.suit] || '?', hx + 3, handSlotY + 2);
+
+          // Card emoji center
+          ctx.font = '18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(card.emoji || '?', hx + BAG_SLOT_SIZE / 2, handSlotY + BAG_SLOT_SIZE / 2);
+
+          // Tiny name
+          if (card.name) {
+            ctx.font = '7px monospace';
+            ctx.fillStyle = 'rgba(200,160,160,0.7)';
+            var cname = card.name.length > 6 ? card.name.substring(0, 5) + '\u2026' : card.name;
+            ctx.fillText(cname, hx + BAG_SLOT_SIZE / 2, handSlotY + BAG_SLOT_SIZE - 4);
+          }
+        }
+      }
+    }
+
+    // ── Hint text (simplified — buttons handle seal/close now) ───
     ctx.font = LABEL_FONT;
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(180,170,140,0.7)';
+    ctx.fillStyle = 'rgba(180,170,140,0.5)';
+    var hintY = panelY + panelH - 8;
     if (c.type === CrateSystem.TYPE.CHEST) {
-      // Chest: withdraw mode
       if (c.depleted) {
-        ctx.fillStyle = 'rgba(120,120,100,0.6)';
-        ctx.fillText('chest emptied', vpW / 2, slotY + SLOT_SIZE + 8);
+        ctx.fillStyle = 'rgba(120,120,100,0.5)';
+        ctx.fillText('chest emptied', vpW / 2, hintY);
       } else {
-        ctx.fillText('[1-' + n + '] take item    [ESC] close', vpW / 2, slotY + SLOT_SIZE + 8);
+        ctx.fillText('click item to take', vpW / 2, hintY);
       }
     } else if (c.sealed) {
-      ctx.fillText('coins earned: ' + c.coinTotal, vpW / 2, slotY + SLOT_SIZE + 8);
-    } else if (CrateSystem.canSeal(_containerX, _containerY, _floorId)) {
-      ctx.fillStyle = '#8d8';
-      ctx.fillText('[S] Seal container', vpW / 2, slotY + SLOT_SIZE + 8);
+      ctx.fillText('coins earned: ' + c.coinTotal, vpW / 2, hintY);
     } else {
-      ctx.fillText('[1-' + n + '] fill slot from bag    [ESC] close', vpW / 2, slotY + SLOT_SIZE + 8);
+      ctx.fillText('click bag item \u2192 click slot    drag \u2192 drop', vpW / 2, hintY);
     }
 
-    // Seal celebration flash (crates/corpses only)
-    if (_sealFlash > 0) {
-      ctx.globalAlpha = _alpha * (_sealFlash / 800);
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 20px monospace';
+    // ── Seal VFX Overlays ────────────────────────────────────────
+    // These render OVER everything (full viewport flashes + text)
+    if (_sealFlashWhite > 0) {
+      ctx.globalAlpha = (_sealFlashWhite / 200) * 0.7;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, vpW, vpH);
+    }
+    if (_sealFlashGold > 0) {
+      ctx.globalAlpha = (_sealFlashGold / 400) * 0.25;
+      ctx.fillStyle = '#ffc83c';
+      ctx.fillRect(0, 0, vpW, vpH);
+    }
+    if (_sealTextTimer > 0 && _sealTextScale > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, _sealTextTimer / 200);
+      ctx.translate(vpW / 2, vpH * 0.30);
+      ctx.scale(_sealTextScale, _sealTextScale);
+      ctx.font = 'bold 28px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('✦ SEALED ✦', vpW / 2, panelY - 10);
+      ctx.textBaseline = 'middle';
+      // Gold text with dark outline
+      ctx.strokeStyle = 'rgba(40,30,0,0.8)';
+      ctx.lineWidth = 4;
+      ctx.strokeText('\u2605 SEALED \u2605', 0, 0);
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText('\u2605 SEALED \u2605', 0, 0);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -292,6 +695,11 @@ var CrateUI = (function () {
     var scrollPx = _scrollSmooth * (S + G);
     _slotRects = [];
 
+    // Pointer hover detection for grid
+    var gPtr = (typeof InputManager !== 'undefined' && InputManager.getPointer)
+               ? InputManager.getPointer() : null;
+    var gHoverIdx = -1;
+
     for (var row = 0; row < totalRows; row++) {
       var rowY = gridY + row * (S + G) - scrollPx;
 
@@ -309,9 +717,15 @@ var CrateUI = (function () {
         // Store hit rect (only for visible area)
         if (sy + S > gridY && sy < gridY + gridH) {
           _slotRects.push({ x: sx, y: sy, w: S, h: S, index: idx });
+          // Pointer hover check
+          if (gPtr && gPtr.active &&
+              gPtr.x >= sx && gPtr.x <= sx + S &&
+              gPtr.y >= sy && gPtr.y <= sy + S) {
+            gHoverIdx = idx;
+          }
         }
 
-        _renderGridSlot(ctx, slot, sx, sy, idx);
+        _renderGridSlot(ctx, slot, sx, sy, idx, idx === gHoverIdx);
       }
     }
 
@@ -332,22 +746,22 @@ var CrateUI = (function () {
   }
 
   /** Render a single slot in the stash grid (smaller, no number key hint). */
-  function _renderGridSlot(ctx, slot, x, y, index) {
+  function _renderGridSlot(ctx, slot, x, y, index, hovered) {
     var display = CrateSystem.getSlotDisplay(slot);
     var S = GRID_SLOT_SIZE;
 
     // Background
     _roundRect(ctx, x, y, S, S, 4);
-    ctx.fillStyle = slot.filled
-      ? 'rgba(30,28,22,0.9)'
-      : 'rgba(15,12,8,0.5)';
+    ctx.fillStyle = hovered ? 'rgba(60,55,40,0.95)'
+                   : slot.filled ? 'rgba(30,28,22,0.9)'
+                   : 'rgba(15,12,8,0.5)';
     ctx.fill();
 
     // Border
-    ctx.strokeStyle = slot.filled
-      ? 'rgba(200,170,80,0.5)'
-      : 'rgba(60,55,40,0.3)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = hovered ? '#f0d070'
+                     : slot.filled ? 'rgba(200,170,80,0.5)'
+                     : 'rgba(60,55,40,0.3)';
+    ctx.lineWidth = hovered ? 2 : 1;
     _roundRect(ctx, x, y, S, S, 4);
     ctx.stroke();
 
@@ -379,19 +793,22 @@ var CrateUI = (function () {
 
   // ── Standard single-slot renderer ──────────────────────────────
 
-  function _renderSlot(ctx, slot, x, y, index, sealed) {
+  function _renderSlot(ctx, slot, x, y, index, sealed, hovered, highlighted) {
     var display = CrateSystem.getSlotDisplay(slot);
 
-    // Slot background
+    // Slot background — highlighted = green tint when matching selected bag item
     _roundRect(ctx, x, y, SLOT_SIZE, SLOT_SIZE, SLOT_RAD);
-    ctx.fillStyle = slot.filled
-      ? 'rgba(30,28,22,0.9)'
-      : 'rgba(15,12,8,0.7)';
+    ctx.fillStyle = hovered ? 'rgba(60,55,40,0.95)'
+                   : highlighted ? 'rgba(20,40,15,0.9)'
+                   : slot.filled ? 'rgba(30,28,22,0.9)'
+                   : 'rgba(15,12,8,0.7)';
     ctx.fill();
 
-    // Frame border (resource colour)
-    ctx.strokeStyle = display.color;
-    ctx.lineWidth = slot.filled && display.matched ? 2.5 : 1.5;
+    // Frame border (resource colour, brighter on hover, green pulse when highlighted)
+    ctx.strokeStyle = highlighted ? '#60c060'
+                     : hovered ? '#f0d070' : display.color;
+    ctx.lineWidth = highlighted ? 2.5
+                   : hovered ? 2.5 : (slot.filled && display.matched ? 2.5 : 1.5);
     _roundRect(ctx, x, y, SLOT_SIZE, SLOT_SIZE, SLOT_RAD);
     ctx.stroke();
 
@@ -514,15 +931,9 @@ var CrateUI = (function () {
     }
 
     // ── CRATE / CORPSE (deposit mode) ──────────────────────────
-    // Seal key
-    if (key === 's' || key === 'S') {
-      if (CrateSystem.canSeal(_containerX, _containerY, _floorId)) {
-        var result = CrateSystem.seal(_containerX, _containerY, _floorId);
-        if (result) {
-          _sealFlash = 800;
-          return true;
-        }
-      }
+    // F (interact key) or S seals — F is primary since it's the interact key
+    if (key === 'f' || key === 'F' || key === 's' || key === 'S') {
+      _attemptSeal(c);
       return true;
     }
 
@@ -557,24 +968,378 @@ var CrateUI = (function () {
     var c = CrateSystem.getContainer(_containerX, _containerY, _floorId);
     if (!c) return false;
 
-    // Hit-test against stored slot rects
+    // ── Seal button hit-test ─────────────────────────────────────
+    if (_sealBtnRect) {
+      var sb = _sealBtnRect;
+      if (px >= sb.x && px <= sb.x + sb.w && py >= sb.y && py <= sb.y + sb.h) {
+        _attemptSeal(c);
+        return true;
+      }
+    }
+
+    // ── Close button hit-test ────────────────────────────────────
+    if (_closeBtnRect) {
+      var cb = _closeBtnRect;
+      if (px >= cb.x && px <= cb.x + cb.w && py >= cb.y && py <= cb.y + cb.h) {
+        if (typeof PeekSlots !== 'undefined' && PeekSlots.close) {
+          PeekSlots.close();
+        } else {
+          close();
+        }
+        return true;
+      }
+    }
+
+    // ── Bag item hit-test ────────────────────────────────────────
+    for (var bi = 0; bi < _bagRects.length; bi++) {
+      var br = _bagRects[bi];
+      if (px >= br.x && px <= br.x + br.w && py >= br.y && py <= br.y + br.h) {
+        _handleBagItemClick(br.index, c);
+        return true;
+      }
+    }
+
+    // ── Hand card hit-test (corpse mode) ───────────────────────
+    for (var hi = 0; hi < _handRects.length; hi++) {
+      var hr = _handRects[hi];
+      if (px >= hr.x && px <= hr.x + hr.w && py >= hr.y && py <= hr.y + hr.h) {
+        _handleHandCardClick(hr.index, c);
+        return true;
+      }
+    }
+
+    // ── Crate/corpse slot hit-test (with bag/hand selection support) ──
     for (var i = 0; i < _slotRects.length; i++) {
       var r = _slotRects[i];
       if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) {
-        // Slot hit — route to appropriate mode
         if (c.type === CrateSystem.TYPE.CHEST) {
+          // Chest withdraw: click filled slot to take
           if (r.index < c.slots.length && c.slots[r.index].filled) {
             _withdrawToBag(r.index, c);
           }
         } else {
-          if (r.index < c.slots.length && !c.slots[r.index].filled) {
+          var slot = c.slots[r.index];
+          // Hand card selected → fill SUIT_CARD slot
+          if (_selectedHandIdx >= 0 && r.index < c.slots.length && !slot.filled &&
+              slot.frameTag === CrateSystem.FRAME.SUIT_CARD) {
+            _fillSuitCardFromHand(_selectedHandIdx, r.index, c);
+            _selectedHandIdx = -1;
+          }
+          // Bag item selected → fill resource slot
+          else if (_selectedBagIdx >= 0 && r.index < c.slots.length && !slot.filled) {
+            _fillFromBagAt(_selectedBagIdx, r.index, c);
+            _selectedBagIdx = -1;
+          }
+          // No selection → auto-fill from bag/hand
+          else if (r.index < c.slots.length && !slot.filled) {
             _fillFromBag(r.index, c);
           }
         }
         return true;
       }
     }
+
+    // Click on empty area deselects bag/hand item
+    if (_selectedBagIdx >= 0 || _selectedHandIdx >= 0) {
+      _selectedBagIdx  = -1;
+      _selectedHandIdx = -1;
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Handle clicking a bag item during deposit mode.
+   * If exactly one empty slot matches, auto-fill it.
+   * Otherwise, select the bag item and highlight matching empty slots.
+   */
+  function _handleBagItemClick(bagIdx, container) {
+    if (_selectedBagIdx === bagIdx) {
+      // Clicking the already-selected item deselects
+      _selectedBagIdx = -1;
+      return;
+    }
+
+    // Count empty slots
+    var emptySlots = [];
+    for (var i = 0; i < container.slots.length; i++) {
+      if (!container.slots[i].filled) {
+        emptySlots.push(i);
+      }
+    }
+
+    if (emptySlots.length === 1) {
+      // Exactly one empty slot — auto-fill it
+      _fillFromBagAt(bagIdx, emptySlots[0], container);
+      _selectedBagIdx = -1;
+    } else if (emptySlots.length > 1) {
+      // Multiple empty slots — select bag item, wait for slot click
+      _selectedBagIdx = bagIdx;
+    }
+    // No empty slots — do nothing
+  }
+
+  /**
+   * Handle clicking a hand card during corpse deposit mode.
+   * If exactly one unfilled SUIT_CARD slot with matching suit exists, auto-fill.
+   * Otherwise, select the card and highlight matching SUIT_CARD slots.
+   */
+  function _handleHandCardClick(handIdx, container) {
+    if (_selectedHandIdx === handIdx) {
+      _selectedHandIdx = -1;
+      return;
+    }
+    _selectedBagIdx = -1; // Deselect bag when selecting hand
+
+    var hasAuth = (typeof CardAuthority !== 'undefined');
+    var hand = hasAuth ? CardAuthority.getHand()
+             : (typeof Player !== 'undefined' ? (Player.state().hand || []) : []);
+    var card = hand[handIdx];
+    if (!card) return;
+
+    // Find unfilled SUIT_CARD slots that match this card's suit
+    var matchingSlots = [];
+    for (var i = 0; i < container.slots.length; i++) {
+      var s = container.slots[i];
+      if (!s.filled && s.frameTag === CrateSystem.FRAME.SUIT_CARD && s.suit === card.suit) {
+        matchingSlots.push(i);
+      }
+    }
+
+    if (matchingSlots.length === 1) {
+      _fillSuitCardFromHand(handIdx, matchingSlots[0], container);
+      _selectedHandIdx = -1;
+    } else if (matchingSlots.length > 1) {
+      _selectedHandIdx = handIdx;
+    } else {
+      // No matching suit slots
+      if (typeof Toast !== 'undefined') {
+        var SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+        Toast.show('No ' + (SUIT_EMOJI[card.suit] || '') + ' slot needs this card', 'info');
+      }
+    }
+  }
+
+  /**
+   * Fill a SUIT_CARD slot from a specific hand card index.
+   * Used by click-to-fill (hand card → suit slot) flow for corpses.
+   */
+  function _fillSuitCardFromHand(handIdx, slotIdx, container) {
+    var hasAuthority = (typeof CardAuthority !== 'undefined');
+    var hand = hasAuthority ? CardAuthority.getHand()
+             : (typeof Player !== 'undefined' ? (Player.state().hand || []) : []);
+
+    if (handIdx >= hand.length) return;
+    var slot = container.slots[slotIdx];
+    if (!slot || slot.filled) return;
+
+    var card = hasAuthority
+      ? CardAuthority.removeFromHand(handIdx)
+      : hand.splice(handIdx, 1)[0];
+
+    if (card) {
+      var result = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+      if (result) {
+        var SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+        if (typeof Toast !== 'undefined') {
+          Toast.show(
+            (SUIT_EMOJI[card.suit] || '?') + ' ' + (card.name || 'Card') +
+            ' \u2192 slot ' + (slotIdx + 1) + (result.matched ? ' \u2713' : '') +
+            ' (+' + result.coins + 'g)', 'loot'
+          );
+        }
+        if (result.coins > 0) {
+          if (typeof CardTransfer !== 'undefined') {
+            CardTransfer.lootGold(result.coins);
+          } else if (typeof CardAuthority !== 'undefined') {
+            CardAuthority.addGold(result.coins);
+          }
+        }
+        if (typeof AudioSystem !== 'undefined') {
+          AudioSystem.play('pickup-success');
+        }
+      }
+    }
+  }
+
+  /**
+   * Fill a specific crate slot from a specific bag index.
+   * Used by click-to-fill (bag selection → slot click) flow.
+   */
+  function _fillFromBagAt(bagIdx, slotIdx, container) {
+    var hasAuthority = (typeof CardAuthority !== 'undefined');
+    var bag = hasAuthority ? CardAuthority.getBag()
+            : (typeof Player !== 'undefined' ? Player.state().bag : []);
+
+    if (bagIdx >= bag.length) return;
+    var slot = container.slots[slotIdx];
+    if (!slot || slot.filled) return;
+
+    var item = hasAuthority
+      ? CardAuthority.removeFromBag(bagIdx)
+      : bag.splice(bagIdx, 1)[0];
+
+    if (item) {
+      var result = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+      if (result) {
+        if (typeof Toast !== 'undefined') {
+          var matchTxt = result.matched ? ' \u2713' : '';
+          Toast.show(
+            (item.emoji || '\uD83D\uDCE6') + ' \u2192 slot ' + (slotIdx + 1) + matchTxt +
+            ' (+' + result.coins + 'g)', 'loot'
+          );
+        }
+        if (result.coins > 0) {
+          if (typeof CardTransfer !== 'undefined') {
+            CardTransfer.lootGold(result.coins);
+          } else if (typeof CardAuthority !== 'undefined') {
+            CardAuthority.addGold(result.coins);
+          }
+        }
+        if (typeof AudioSystem !== 'undefined') {
+          AudioSystem.play('pickup-success');
+        }
+      }
+    }
+  }
+
+  /**
+   * Tiered seal attempt — routes to rejection, partial, or full seal path.
+   *
+   * NO slots hydrated   → reject: highlight bag row + escape button, Toast warning
+   * ALL slots filled     → full seal via PeekSlots.trySeal(), max FX/coins
+   * SOME slots filled    → partial seal via PeekSlots.trySeal(), mini FX
+   *
+   * After seal, fires a tooltip reporting the object type + next hero faction day.
+   */
+  function _attemptSeal(container) {
+    if (!container || container.sealed) return;
+
+    var slots = container.slots;
+    var filledCount = 0;
+    var totalCount  = slots.length;
+    for (var i = 0; i < totalCount; i++) {
+      if (slots[i].filled) filledCount++;
+    }
+
+    // ── REJECT: nothing filled at all ────────────────────────────
+    if (filledCount === 0) {
+      _rejectFlash = 600; // Triggers bag row + close button highlight pulse
+      if (typeof Toast !== 'undefined') {
+        Toast.show('Fill slots from your bag first!', 'warning');
+      }
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('error');
+      }
+      return;
+    }
+
+    // ── FULL or PARTIAL seal ─────────────────────────────────────
+    // canSeal checks all-filled; if not all filled we still allow partial seal
+    var isFull = CrateSystem.canSeal(_containerX, _containerY, _floorId);
+
+    if (isFull) {
+      // Full seal — max coins, full VFX, delegate to PeekSlots
+      if (typeof PeekSlots !== 'undefined' && PeekSlots.trySeal) {
+        PeekSlots.trySeal();
+      }
+    } else {
+      // Partial seal — seal with what we have, reduced reward
+      // Force-seal via CrateSystem directly (bypass canSeal check)
+      if (typeof CrateSystem.forceSeal === 'function') {
+        var result = CrateSystem.forceSeal(_containerX, _containerY, _floorId);
+        if (result) {
+          // Mini FX — gold flash only, no white flash
+          _sealFlash     = 500;
+          _sealFlashGold = 250;
+          _sealTextTimer = 400;
+          _sealTextScale = 0;
+
+          // Reduced coin award
+          if (typeof CardTransfer !== 'undefined') {
+            CardTransfer.lootGold(result.totalCoins);
+          } else if (typeof CardAuthority !== 'undefined') {
+            CardAuthority.addGold(result.totalCoins);
+          }
+
+          // Mini coin burst
+          if (typeof ParticleFX !== 'undefined') {
+            var cvs = document.getElementById('view-canvas');
+            if (cvs && result.totalCoins > 0) {
+              ParticleFX.coinBurst(cvs.width / 2, cvs.height * 0.4,
+                                   Math.max(2, result.totalCoins));
+            }
+          }
+
+          if (typeof Toast !== 'undefined') {
+            Toast.show('Partially sealed +' + result.totalCoins + 'g', 'loot');
+          }
+          if (typeof AudioSystem !== 'undefined') {
+            AudioSystem.play('pickup-success');
+          }
+        }
+      } else {
+        // CrateSystem.forceSeal not available — tell player to fill remaining
+        if (typeof Toast !== 'undefined') {
+          var remaining = totalCount - filledCount;
+          Toast.show('Fill ' + remaining + ' more slot' +
+                     (remaining > 1 ? 's' : '') + ' to seal!', 'info');
+        }
+        return;
+      }
+    }
+
+    // ── Seal Tooltip — report object + next hero faction day ─────
+    _showSealTooltip(container);
+  }
+
+  /**
+   * Post-seal tooltip: "[Object] has been sealed and marked ready
+   * in time for next [faction] day (in N days)."
+   */
+  function _showSealTooltip(container) {
+    if (typeof Toast === 'undefined') return;
+
+    var objName = 'Container';
+    if (container.type === CrateSystem.TYPE.CRATE)  objName = 'Crate';
+    if (container.type === CrateSystem.TYPE.CORPSE)  objName = 'Corpse';
+    if (container.type === CrateSystem.TYPE.CHEST)   objName = 'Chest';
+
+    // Look up the hero faction and their next scheduled day
+    var factionInfo = '';
+    if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getGroupForFloor) {
+      var groupId = DungeonSchedule.getGroupForFloor(_floorId);
+      if (groupId) {
+        var daysUntil = DungeonSchedule.getDaysUntilHeroDay(groupId);
+        var FACTION_NAMES = {
+          tide: 'Tide',  ember: 'Ember',  root: 'Root',
+          iron: 'Iron',  shadow: 'Shadow'
+        };
+        var fName = FACTION_NAMES[groupId] || groupId;
+        if (daysUntil > 0) {
+          factionInfo = ' in time for next ' + fName + ' day (in ' + daysUntil + 'd)';
+        } else if (daysUntil === 0) {
+          factionInfo = ' \u2014 ' + fName + ' heroes arrive today!';
+        } else {
+          factionInfo = ' for the ' + fName + ' faction';
+        }
+      }
+    }
+
+    Toast.show(objName + ' sealed & marked ready' + factionInfo, 'loot', 3500);
+  }
+
+  /**
+   * Trigger the seal celebration VFX sequence.
+   * Called after a successful seal from handleClick or handleKey.
+   */
+  function _triggerSealVFX() {
+    _sealFlash      = 800;
+    _sealFlashWhite = 200;
+    _sealFlashGold  = 400;
+    _sealTextTimer  = 500;
+    _sealTextScale  = 0;
   }
 
   /**
@@ -675,6 +1440,13 @@ var CrateUI = (function () {
     return c && c.type === CrateSystem.TYPE.CHEST;
   }
 
+  /** Get current hand cards (for corpse suit-card slot highlighting). */
+  function _getHandCards() {
+    var hasAuth = (typeof CardAuthority !== 'undefined');
+    return hasAuth ? CardAuthority.getHand()
+         : (typeof Player !== 'undefined' ? (Player.state().hand || []) : []);
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────
 
   function _roundRect(ctx, x, y, w, h, r) {
@@ -700,13 +1472,14 @@ var CrateUI = (function () {
   function onWithdraw(fn) { _onWithdrawCb = fn; }
 
   return {
-    open:        open,
-    close:       close,
-    isOpen:      isOpen,
-    update:      update,
-    render:      render,
-    handleKey:   handleKey,
-    handleClick: handleClick,
-    onWithdraw:  onWithdraw
+    open:            open,
+    close:           close,
+    isOpen:          isOpen,
+    update:          update,
+    render:          render,
+    handleKey:       handleKey,
+    handleClick:     handleClick,
+    onWithdraw:      onWithdraw,
+    triggerSealVFX:  _triggerSealVFX
   };
 })();

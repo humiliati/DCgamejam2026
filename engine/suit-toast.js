@@ -35,6 +35,7 @@ var SuitToast = (function () {
   function show(result, stackCards) {
     if (typeof Toast === 'undefined') return;
     if (typeof SynergyEngine === 'undefined') return;
+    if (!stackCards || stackCards.length === 0) return;  // Guard: no cards → no toast
 
     // ── Suit advantage / disadvantage centered toast ──
     if (result.suitMult && result.suitMult !== 1.0) {
@@ -44,8 +45,9 @@ var SuitToast = (function () {
       // Build display text:  "♣ > ♦  +50%!"  or  "♠ < ♣  -25%"
       var text = label;
       if (!text) {
-        // Fallback: build from multiplier
-        var pctStr = isAdv ? '+50%' : '-25%';
+        // Fallback: compute percentage dynamically from actual multiplier
+        var pctVal = Math.round((result.suitMult - 1.0) * 100);
+        var pctStr = (pctVal >= 0 ? '+' : '') + pctVal + '%';
         text = pctStr;
       }
 

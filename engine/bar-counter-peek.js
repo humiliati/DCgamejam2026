@@ -279,6 +279,9 @@ var BarCounterPeek = (function () {
 
   // ── Public API ──────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
   return {
     init: function () {
       console.log('[BarCounterPeek] Initialised');
@@ -288,6 +291,7 @@ var BarCounterPeek = (function () {
     isActive: function () { return _active; },
     getDrink: function () { return _currentDrink; },
     resetTaps: function () { _tapCounts = {}; },
+    forceHide: forceHide,
     DRINK_MENUS: DRINK_MENUS
   };
 })();

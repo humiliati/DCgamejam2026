@@ -177,7 +177,9 @@ var FloorManager = (function () {
       if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
       if (floor === '2.1') return 'office';      // Dispatcher's Office
       if (floor === '2.2') return 'watchpost';   // Watchman's Post
-      if (floor === '3.1') return 'armory';      // Armory (future)
+      if (floor === '2.3') return 'shop';        // Armorer's Workshop (Foundry shop)
+      if (floor === '3.1') return 'armory';      // Armory
+      if (floor === '3.2') return 'shop';        // Quartermaster's Shop (Admiralty shop)
       return 'bazaar';  // fallback for unknown interiors
     }
 
@@ -339,7 +341,7 @@ var FloorManager = (function () {
         // Gleaner's dwelling — warm planked interior, multiple rooms.
         // Wood plank walls with a soft amber lamp glow. Wooden floor.
         // Contains: BED (bonfire), TABLE (cozy), CHEST (stash+keys),
-        // PILLAR (mailbox), BOOKSHELF (reading), DOOR_EXIT (to Promenade).
+        // TERMINAL (mail + dispatch), BOOKSHELF (reading), DOOR_EXIT (to Promenade).
         return {
           textures: Object.freeze({
             1:  'wood_plank',       // WALL — warm plank walls
@@ -347,11 +349,12 @@ var FloorManager = (function () {
             3:  'door_wood',        // DOOR_BACK (unused)
             4:  'door_wood_asc',    // DOOR_EXIT — out to The Promenade
             7:  'stash_chest',      // CHEST — stash container
-            10: 'stone_rough',      // PILLAR — mailbox post
+            10: 'stone_rough',      // PILLAR — decorative column
             25: 'bookshelf',        // BOOKSHELF — dark wood shelves
             27: 'bed_quilt',        // BED — quilted blanket
             28: 'table_wood',       // TABLE — work surface
-            29: 'hearth_riverrock'  // HEARTH — riverrock fireplace
+            29: 'hearth_riverrock', // HEARTH — riverrock fireplace
+            36: 'terminal_screen'   // TERMINAL — CRT dispatch station
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling for close-up immersion
@@ -359,7 +362,8 @@ var FloorManager = (function () {
             10: 2.0,               // PILLAR — full wall height decorative column
             27: 0.6,               // BED — low, player sees over it
             28: 0.7,               // TABLE — half-height surface
-            29: 2.5                 // HEARTH — full chimney stack (floor-to-ceiling riverrock, fire cavity via tileHeightOffset)
+            29: 2.5,               // HEARTH — full chimney stack
+            36: 1.0                // TERMINAL — desk-height CRT station
           }),
           floorTexture: 'floor_wood'
         };
@@ -465,6 +469,56 @@ var FloorManager = (function () {
             37: 'floor_grass'        // MAILBOX — grass under mailbox
           })
         };
+      case 'frontier':
+        // The Garrison — militarized port district, cool dusk tones
+        // Stone/concrete fortress walls, worn dirt paths, waterfront edge.
+        return {
+          textures: Object.freeze({
+            1:  'concrete',          // WALL — fortress/slum concrete
+            2:  'door_iron',         // DOOR — heavy iron gate (military)
+            3:  'door_wood_asc',     // DOOR_BACK — ascending porthole
+            4:  'door_wood_asc',     // DOOR_EXIT — ascending porthole
+            5:  'stairs_down',       // STAIRS_DN
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'stone_rough',       // PILLAR — rough stone columns (tower corners)
+            11: 'crate_wood',        // BREAKABLE — pier crates
+            14: 'door_iron',         // BOSS_DOOR — grand arch gate
+            18: 'bonfire_ring',      // BONFIRE — stone ring
+            21: 'tree_trunk',        // TREE — perimeter/forest trees
+            22: 'shrub',             // SHRUB — border hedges
+            35: 'wall_pier',         // FENCE — salt-worn pier railing
+            37: 'shrub'              // MAILBOX — shrub base
+          }),
+          tileWallHeights: Object.freeze({
+            1:  2.5,               // WALL — fortress walls (shorter than commercial)
+            2:  2.5,               // DOOR — flush with fortress wall
+            3:  2.5,               // DOOR_BACK
+            4:  2.5,               // DOOR_EXIT
+            10: 2.0,               // PILLAR — tower corner pillars
+            11: 0.5,               // BREAKABLE — crate height
+            14: 3.5,               // BOSS_DOOR — grand arch (tallest element)
+            18: 0.3,               // BONFIRE — low stone ring
+            21: 2.5,               // TREE — perimeter trees
+            22: 0.5,               // SHRUB — half-height hedge
+            35: 0.4,               // FENCE — pier railing
+            37: 0.25               // MAILBOX — short platform
+          }),
+          tileHeightOffsets: Object.freeze({
+            5:  -0.12,   // STAIRS_DN
+            6:   0.06,   // STAIRS_UP
+            14:  0.15    // BOSS_DOOR — elevated arch
+          }),
+          floorTexture: 'floor_dirt',
+          tileFloorTextures: Object.freeze({
+            21: 'floor_grass',       // TREE — grass under trees
+            22: 'floor_grass',       // SHRUB — grass under hedges
+            32: 'floor_cobble',      // ROAD — highway cobblestone
+            33: 'floor_dirt',        // PATH — worn dirt (slum + pier)
+            34: 'floor_grass',       // GRASS — forest clearing
+            35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
+            37: 'floor_grass'        // MAILBOX — grass
+          })
+        };
       case 'office':
         // Dispatcher's Office — formal institutional interior
         // Clean stone walls, orderly layout, dispatch desk.
@@ -502,6 +556,52 @@ var FloorManager = (function () {
           tileWallHeights: Object.freeze({
             10: 2.2,               // PILLAR — imposing columns
             28: 0.7                // TABLE — planning table height
+          }),
+          floorTexture: 'floor_stone'
+        };
+      case 'armory':
+        // Armory / Barracks — military interior, iron and stone
+        // Heavy stone walls, weapon racks (bookshelves), iron doors,
+        // staging room for descent to Ironhold Depths dungeon.
+        return {
+          textures: Object.freeze({
+            1:  'stone_cathedral',  // WALL — heavy dressed stone (garrison)
+            2:  'door_iron',        // DOOR — iron gate
+            3:  'door_iron',        // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            5:  'stairs_down',      // STAIRS_DN — to Ironhold Depths
+            6:  'stairs_up',        // STAIRS_UP
+            10: 'stone_cathedral',  // PILLAR — stone columns
+            18: 'bonfire_ring',     // BONFIRE — warming ring
+            25: 'bookshelf',        // BOOKSHELF — weapon racks / tactical shelf
+            28: 'table_wood'        // TABLE — planning table
+          }),
+          tileWallHeights: Object.freeze({
+            10: 2.2,               // PILLAR — imposing garrison columns
+            18: 0.3,               // BONFIRE — low stone ring
+            28: 0.7                // TABLE — planning table height
+          }),
+          floorTexture: 'floor_stone'
+        };
+      case 'shop':
+        // Generic shop interior — warm lamplight, display cases, stone floor
+        // Reusable biome for all dedicated shop buildings (2.3, 3.2, etc.)
+        return {
+          textures: Object.freeze({
+            1:  'stone_rough',      // WALL — rough stone interior
+            2:  'door_wood',        // DOOR
+            3:  'door_wood',        // DOOR_BACK
+            4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
+            10: 'wood_dark',        // PILLAR — dark wood display columns
+            25: 'bookshelf',        // BOOKSHELF — supply shelves / weapon racks
+            26: 'wood_dark',        // BAR_COUNTER — display case surface
+            30: 'wood_plank'        // TORCH_LIT — torch bracket (warm wood)
+          }),
+          tileWallHeights: Object.freeze({
+            1:  2.5,               // WALL — extends above ceiling
+            10: 2.2,               // PILLAR — tall display columns
+            26: 0.8,               // BAR_COUNTER — counter height
+            30: 1.0                // TORCH_LIT — wall sconce height
           }),
           floorTexture: 'floor_stone'
         };
@@ -651,6 +751,25 @@ var FloorManager = (function () {
           ]
         }, biomeTextures));
       }
+      if (floor === '3') {
+        return SpatialContract.exterior(Object.assign({
+          label: 'The Garrison',
+          wallHeight: 1.0,
+          renderDistance: 32,
+          fogDistance: 26,
+          fogColor: { r: 20, g: 25, b: 40 },
+          waterColor: { r: 10, g: 22, b: 45 },   // Deep dusk-ocean
+          ceilColor: '#1a2040',
+          floorColor: '#3a3830',
+          gridSize: { w: 52, h: 52 },
+          roomCount: { min: 5, max: 5 },
+          skyPreset: 'frontier',
+          parallax: [
+            { depth: 0.95, color: '#161220', height: 0.15 },
+            { depth: 0.85, color: '#1a1220', height: 0.12 }
+          ]
+        }, biomeTextures));
+      }
       // Generic exterior fallback
       return SpatialContract.exterior(Object.assign({
         label: 'District ' + floor,
@@ -765,6 +884,60 @@ var FloorManager = (function () {
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
             5: -0.12,    // STAIRS_DN — sunken descent to Hero's Wake
+            28: -0.10    // TABLE — planning table
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.3') {
+        return SpatialContract.interior(Object.assign({
+          label: "Armorer's Workshop",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 22, g: 14, b: 8 },
+          ceilColor: '#2a1a0c',
+          floorColor: '#5a4830',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — display case height
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '3.2') {
+        return SpatialContract.interior(Object.assign({
+          label: "Quartermaster's Shop",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 14, g: 12, b: 18 },
+          ceilColor: '#1a1820',
+          floorColor: '#484650',
+          gridSize: { w: 14, h: 10 },
+          roomCount: { min: 2, max: 2 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — display case height
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '3.1') {
+        return SpatialContract.interior(Object.assign({
+          label: 'Armory',
+          wallHeight: 2.0,
+          renderDistance: 14,
+          fogDistance: 12,
+          fogColor: { r: 12, g: 10, b: 16 },
+          ceilColor: '#1a1820',
+          floorColor: '#3a3840',
+          gridSize: { w: 18, h: 14 },
+          roomCount: { min: 3, max: 4 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            5: -0.12,    // STAIRS_DN — sunken descent to Ironhold Depths
             28: -0.10    // TABLE — planning table
           })
         }, biomeTextures));
@@ -1064,153 +1237,10 @@ var FloorManager = (function () {
     };
   }
 
-  // ── Hand-authored Floor 2: Coral Bazaar (depth 2) ───────────────
-  //
-  // 16×12 interior. Warm coral-gold market hall. Entered from the
-  // Promenade via building DOOR. DOOR_EXIT at south (back to Promenade),
-  // STAIRS_DN at north (to Coral Cellars dungeon). Bonfire for rest.
-  //
-  // Legend: 0=EMPTY, 1=WALL, 4=DOOR_EXIT, 5=STAIRS_DN, 10=PILLAR, 18=BONFIRE
+  // ── Floor 1.1 (Coral Bazaar) → extracted to engine/floor-blockout-1-1.js
+  // ── Floor 1.6 (Gleaner's Home) → extracted to engine/floor-blockout-1-6.js
 
-  var _FLOOR2_W = 16;
-  var _FLOOR2_H = 12;
-  var _FLOOR2_GRID = [
-    // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
-    [  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  perimeter
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 1  north hall
-    [  1, 0,25, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0,25, 0, 1], // 2  inner wall + BOOKSHELVES (2,2) (13,2)
-    [  1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1], // 3  stair chamber
-    [  1, 0, 0, 0, 1, 0, 0, 5, 0, 0, 0, 1, 0, 0, 0, 1], // 4  STAIRS_DN (7,4)
-    [  1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1], // 5  stair chamber
-    [  1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1], // 6  gap at (6-8)
-    [  1, 0,25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 7  main hall + BOOKSHELF (2,7)
-    [  1, 0,10, 0, 0, 0, 0,18, 0, 0, 0, 0, 0,10, 0, 1], // 8  pillars + bonfire (7,8)
-    [  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 9  entry hall
-    [  1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1], // 10 DOOR_EXIT (7,10)
-    [  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  // 11 perimeter
-  ];
-
-  var _FLOOR2_SPAWN = { x: 7, y: 9, dir: 3 }; // facing NORTH
-  var _FLOOR2_ROOMS = [
-    // Main hall (entry area)
-    { x: 1, y: 7, w: 14, h: 3, cx: 7, cy: 8 },
-    // Stair chamber (inner room with stairs down)
-    { x: 5, y: 3, w: 6, h: 3, cx: 7, cy: 4 }
-  ];
-
-  function _buildFloor2() {
-    var grid = [];
-    for (var y = 0; y < _FLOOR2_H; y++) {
-      grid[y] = _FLOOR2_GRID[y].slice();
-    }
-    return {
-      grid: grid,
-      rooms: _FLOOR2_ROOMS.slice(),
-      doors: {
-        stairsUp: null,            // Exit is via DOOR_EXIT, not stairs
-        stairsDn: { x: 7, y: 4 }, // STAIRS_DN — to Coral Cellars (depth 2→3)
-        doorExit: { x: 7, y: 10 } // DOOR_EXIT — back to Promenade (depth 2→1)
-      },
-      doorTargets: {},  // DOOR_EXIT and STAIRS follow convention
-      gridW: _FLOOR2_W,
-      gridH: _FLOOR2_H,
-      biome: 'bazaar',
-      shops: [],
-      books: [
-        { x: 2,  y: 2, bookId: 'tip_bazaar_shopping' },       // How to Buy and Sell
-        { x: 13, y: 2, bookId: 'lore_adventuring_economy' },   // Adventuring Economy survey
-        { x: 2,  y: 7, bookId: 'fiction_dashing_rogue' }       // The Dashing Rogue (fiction)
-      ]
-    };
-  }
-
-  // ── Hand-authored Floor 1.6: Gleaner's Home (depth 2) ─────────────
-  //
-  // 24×20 interior. Multi-room Gleaner's dwelling — generous interior
-  // space that takes advantage of the "bigger on the inside" rule for
-  // depth-2 floors. Existing on a single-tile door from the 20×-wide
-  // Promenade, the home unfolds into four distinct zones:
-  //
-  //   1. Entry hall (south)   — front door (DOOR_EXIT), coat hooks
-  //   2. Living room (center) — table with cozy contents, bookshelves
-  //   3. Bedroom (west)       — two BED tiles (bonfire), nightstand
-  //   4. Storage (east)       — stash CHEST (work keys), mailbox, shelves
-  //
-  // Work keys (🗝️) are on the CHEST (tile 7) at (19, 4).
-  // BED tiles (27) at (3,3) and (4,3) act as the bonfire.
-  // TABLE tiles (28) at (11,5) and (12,5) hold cozy items.
-  //
-  // DOOR_EXIT at (11, 19) leads back to The Promenade (Floor 1).
-  //
-  // Tile legend:
-  //   0=EMPTY  1=WALL  4=DOOR_EXIT  7=CHEST(stash)
-  //  10=PILLAR(mailbox/post)  25=BOOKSHELF  27=BED  28=TABLE
-
-  var _FLOOR16_W = 24;
-  var _FLOOR16_H = 20;
-  // prettier-ignore
-  var _FLOOR16_GRID = [
-    //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  north wall
-    [ 1,25, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,25, 0, 1], // 1  bedroom shelf | living room | storage shelf
-    [ 1, 0, 0, 0, 0, 0, 1, 0, 0,25, 0, 0, 0, 0,25, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 2  bedroom open  | bookshelves | storage open
-    [ 1, 0,27,27, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 7, 0, 0, 0, 1], // 3  BED pair      | living open | CHEST (stash+keys)
-    [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 4  bedroom open  | living open | storage open
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,28,28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 5  ←doorway      | TABLE pair  | doorway→
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 1], // 6  bedroom open  | living open | PILLAR (mailbox)
-    [ 1, 0, 0, 0,28, 0, 1, 0, 0, 0, 0,29, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1], // 7  nightstand    | HEARTH(11,7)| storage open
-    [ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,25, 0, 0, 1], // 8  bedroom floor | living open | storage shelf
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], // 9  bedroom wall  | living mid  | storage wall
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,10, 0, 0,10, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //10               | hall pillars |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //11               | corridor    |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //12               | entry hall  |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //13               | entry hall  |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //14               | entry hall  |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0,25, 0, 0, 0, 0,25, 0, 1, 1, 1, 1, 1, 1, 1, 1], //15               | hall shelves|
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //16               | entry open  |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //17               | entry open  |
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //18               | spawn row   |
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  //19  DOOR_EXIT(11,19)
-  ];
-
-  var _FLOOR16_SPAWN = { x: 11, y: 18, dir: 3 }; // facing NORTH (toward rooms)
-  var _FLOOR16_ROOMS = [
-    { x: 1,  y: 1,  w: 5,  h: 8,  cx: 3,  cy: 4  },  // Bedroom (west)
-    { x: 7,  y: 1,  w: 9,  h: 8,  cx: 11, cy: 5  },  // Living room (center)
-    { x: 17, y: 1,  w: 6,  h: 8,  cx: 20, cy: 4  },  // Storage (east)
-    { x: 7,  y: 10, w: 9,  h: 9,  cx: 11, cy: 14 }   // Entry hall (south)
-  ];
-
-  function _buildFloor16() {
-    var grid = [];
-    for (var y = 0; y < _FLOOR16_H; y++) {
-      grid[y] = _FLOOR16_GRID[y].slice();
-    }
-    return {
-      grid: grid,
-      rooms: _FLOOR16_ROOMS.slice(),
-      doors: {
-        stairsUp: null,
-        stairsDn: null,
-        doorExit: { x: 11, y: 19 }   // DOOR_EXIT — back to The Promenade
-      },
-      doorTargets: { '11,19': '1' },  // DOOR_EXIT → The Promenade
-      gridW: _FLOOR16_W,
-      gridH: _FLOOR16_H,
-      biome: 'home',
-      shops: [],
-      mailboxHistory: { x: 19, y: 6 },  // PILLAR in storage room — mailbox history peek (§14)
-      books: [
-        { x: 1,  y: 1,  bookId: 'journal_personal_day0' },         // Bedroom shelf — personal journal
-        { x: 9,  y: 2,  bookId: 'notice_dispatcher_orientation' }, // Living room — dispatcher's orientation packet
-        { x: 14, y: 2,  bookId: 'journal_contract_terms' },        // Living room — filed employment contract
-        { x: 21, y: 1,  bookId: 'notice_landlord_welcome' },       // Storage shelf — landlord's welcome notice
-        { x: 20, y: 8,  bookId: 'journal_operative_brief' },       // Storage shelf — personnel file
-        { x: 9,  y: 15, bookId: 'journal_field_notes_day1' },      // Entry hall — dispatcher's log (day 1)
-        { x: 14, y: 15, bookId: 'letter_anonymous_tip' }            // Entry hall — unsigned letter (conspiracy hook)
-      ]
-    };
-  }
+  // (Floor 1.6 inline data removed — now in engine/floor-blockout-1-6.js)
 
   // ── Bookshelf placement for procedural interiors ────────────────
   //
@@ -1594,18 +1624,6 @@ var FloorManager = (function () {
       _floorData.contract = contract;
       _enemies = [];  // No enemies in the plaza (safe zone)
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
-    } else if (_floorId === '1.1') {
-      // Hand-authored Floor 2: Coral Bazaar (depth 2)
-      _floorData = _buildFloor2();
-      _floorData.contract = contract;
-      _enemies = [];  // No enemies in the bazaar (safe zone)
-      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
-    } else if (_floorId === '1.6') {
-      // Hand-authored Floor 1.6: Gleaner's Home (depth 2)
-      _floorData = _buildFloor16();
-      _floorData.contract = contract;
-      _enemies = [];  // Home is always safe
-      _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else {
       _floorData = GridGen.generate({
         width: contract.gridSize.w,
@@ -1633,10 +1651,12 @@ var FloorManager = (function () {
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     }
 
-    // ── Post-gen bookshelf injection for interior floors ──────────
-    // Depth 2 (interiors) that weren't hand-authored get 1-2 bookshelves
-    // placed against walls in the first room.
-    if (!fromCache && _depth(_floorId) === 2 && !_floorData.books) {
+    // ── Post-gen bookshelf injection ──────────────────────────────
+    // Depth 2 (interiors) and depth 3+ (dungeons) that weren't
+    // hand-authored get 1-2 bookshelves placed against walls in the
+    // first room. Dungeon shelves serve the universal adventurer's /
+    // cleaner's guides via biome fallback from the catalog.
+    if (!fromCache && _depth(_floorId) >= 2 && !_floorData.books) {
       _placeBookshelvesInInterior(_floorData, _floorId);
     }
 
@@ -1842,6 +1862,16 @@ var FloorManager = (function () {
 
     // Cache
     clearCache: clearCache,
-    invalidateCache: invalidateCache
+    invalidateCache: invalidateCache,
+
+    /**
+     * Get cached floorData for a previously-visited floor (read-only).
+     * Returns the floorData object or null if the floor hasn't been generated.
+     * Used by quest waypoint system to look up doorTargets on other floors.
+     */
+    getFloorCache: function (floorId) {
+      var entry = _floorCache[String(floorId)];
+      return entry ? entry.floorData : null;
+    }
   };
 })();

@@ -66,11 +66,18 @@ var DialogBox = (function () {
     DIALOGUE:   3    // NPC conversation — blocks all lower
   };
 
+  // ── Button layout ──────────────────────────────────────────────
+  var BTN_H       = 26;     // Button height (tap target)
+  var BTN_PAD     = 12;     // Horizontal padding inside button
+  var BTN_GAP     = 8;      // Gap between buttons
+  var BTN_RADIUS  = 4;      // Corner radius
+
   // ── State ─────────────────────────────────────────────────────
   var _active   = null;    // Current DialogParam or null
   var _state    = null;    // DialogState or null
   var _canvas   = null;    // Game canvas reference
   var _queue    = [];      // Queued dialogs (show while one is active)
+  var _buttonHitRects = []; // Per-button hit rects: { x, y, w, h, idx }
 
   // ── Dialog parameter format ───────────────────────────────────
   // {
@@ -99,6 +106,7 @@ var DialogBox = (function () {
       choiceReady:  false,  // True after CHOICE_DEBOUNCE
       choiceTimer:  0,      // ms since choices appeared
       hoverChoice:  -1,     // Pointer-hovered choice index
+      focusBtn:     0,      // Keyboard-focused button index (←/→ to move)
       fastForward:  false   // Player holding advance key
     };
   }
@@ -292,6 +300,15 @@ var DialogBox = (function () {
 
     // If choices are present, don't auto-close (player must click a choice)
     if (_active.choices && _active.choices.length > 0) {
+      return;
+    }
+
+    // If buttons are present, fire the keyboard-focused button
+    if (_active.buttons && _active.buttons.length > 0) {
+      var idx = Math.max(0, Math.min(_state.focusBtn, _active.buttons.length - 1));
+      var btn = _active.buttons[idx];
+      if (btn && typeof btn.cb === 'function') btn.cb();
+      close();
       return;
     }
 
@@ -533,6 +550,67 @@ var DialogBox = (function () {
       }
     }
 
+    // ── Buttons (modal response row) ──
+    _buttonHitRects = [];
+    if (_active.buttons && _state.charCount >= fullText.length) {
+      var btnY = textY + textH + choicesH + 4;
+      var ptr2 = (typeof InputManager !== 'undefined') ? InputManager.getPointer() : null;
+
+      // Measure all button widths first (for centering)
+      ctx.font = 'bold 11px monospace';
+      var btnWidths = [];
+      var totalBtnW = 0;
+      for (var bi = 0; bi < _active.buttons.length; bi++) {
+        var bw = ctx.measureText(_active.buttons[bi].label).width + BTN_PAD * 2;
+        btnWidths.push(bw);
+        totalBtnW += bw;
+      }
+      totalBtnW += (_active.buttons.length - 1) * BTN_GAP;
+      var btnStartX = boxX + (boxW - totalBtnW) / 2;
+
+      for (var bj = 0; bj < _active.buttons.length; bj++) {
+        var bx = btnStartX;
+        for (var bk = 0; bk < bj; bk++) bx += btnWidths[bk] + BTN_GAP;
+        var bw2 = btnWidths[bj];
+
+        // Hover detection (pointer takes priority over keyboard focus)
+        var btnHover = (ptr2 && ptr2.active &&
+          ptr2.x >= bx && ptr2.x <= bx + bw2 &&
+          ptr2.y >= btnY && ptr2.y <= btnY + BTN_H);
+        var btnFocus = (!btnHover && bj === _state.focusBtn);
+        var btnLit = btnHover || btnFocus;
+
+        // Button background
+        _roundRect(ctx, bx, btnY, bw2, BTN_H, BTN_RADIUS);
+        ctx.fillStyle = btnHover ? 'rgba(100,200,120,0.2)' :
+                        btnFocus ? 'rgba(240,208,112,0.15)' : 'rgba(60,55,40,0.4)';
+        ctx.fill();
+        ctx.strokeStyle = btnHover ? 'rgba(100,200,120,0.7)' :
+                          btnFocus ? 'rgba(240,208,112,0.6)' : 'rgba(160,140,100,0.4)';
+        ctx.lineWidth = btnLit ? 1.5 : 1;
+        _roundRect(ctx, bx, btnY, bw2, BTN_H, BTN_RADIUS);
+        ctx.stroke();
+
+        // Focus caret (keyboard indicator)
+        if (btnFocus) {
+          ctx.fillStyle = '#f0d070';
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('\u25B6', bx + 6, btnY + BTN_H / 2 + 1);
+        }
+
+        // Button label
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = btnHover ? '#afa' : btnFocus ? '#f0d070' : '#d8d0c0';
+        ctx.fillText(_active.buttons[bj].label, bx + bw2 / 2, btnY + BTN_H / 2);
+
+        // Store hit rect
+        _buttonHitRects.push({ x: bx, y: btnY, w: bw2, h: BTN_H, idx: bj });
+      }
+    }
+
     // ── Continue hint ──
     if (!_active.choices && !_active.buttons &&
         _state.charCount >= fullText.length && !_active.transient) {
@@ -598,13 +676,26 @@ var DialogBox = (function () {
       return true;
     }
 
-    // Button click (TODO: hit-test individual buttons)
+    // Button click — hit-test individual buttons via stored rects
     if (_active.buttons && _state.charCount >= _getCurrentText().length) {
-      // For now, first button acts as "OK"
-      var btn = _active.buttons[0];
-      if (btn && btn.cb) {
-        if (typeof btn.cb === 'function') btn.cb();
+      var ptr = (typeof InputManager !== 'undefined') ? InputManager.getPointer() : null;
+      if (ptr && ptr.active && _buttonHitRects.length > 0) {
+        for (var bi = 0; bi < _buttonHitRects.length; bi++) {
+          var hr = _buttonHitRects[bi];
+          if (ptr.x >= hr.x && ptr.x <= hr.x + hr.w &&
+              ptr.y >= hr.y && ptr.y <= hr.y + hr.h) {
+            var btn = _active.buttons[hr.idx];
+            if (btn && typeof btn.cb === 'function') btn.cb();
+            close();
+            return true;
+          }
+        }
+        // Click was outside all buttons — ignore (don't auto-dismiss)
+        return true;
       }
+      // Fallback: no pointer data (keyboard Enter) — fire first button
+      var btn0 = _active.buttons[0];
+      if (btn0 && typeof btn0.cb === 'function') btn0.cb();
       close();
       return true;
     }
@@ -612,6 +703,31 @@ var DialogBox = (function () {
     // General click — advance
     advance();
     return true;
+  }
+
+  // ── Keyboard navigation for buttons ────────────────────────────
+
+  /**
+   * Handle directional key input for button focus cycling.
+   * Returns true if the key was consumed.
+   * @param {string} key - 'left', 'right', 'up', 'down'
+   */
+  function handleKey(key) {
+    if (!_active || !_state) return false;
+
+    // Button focus cycling (←/→)
+    if (_active.buttons && _active.buttons.length > 1 &&
+        _state.charCount >= _getCurrentText().length) {
+      if (key === 'left' || key === 'up') {
+        _state.focusBtn = (_state.focusBtn - 1 + _active.buttons.length) % _active.buttons.length;
+        return true;
+      }
+      if (key === 'right' || key === 'down') {
+        _state.focusBtn = (_state.focusBtn + 1) % _active.buttons.length;
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── Text wrapping ─────────────────────────────────────────────
@@ -686,6 +802,7 @@ var DialogBox = (function () {
     update: update,
     render: render,
     handlePointerClick: handlePointerClick,
+    handleKey: handleKey,
     PRIORITY: PRIORITY
   };
 })();

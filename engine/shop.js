@@ -86,7 +86,8 @@ var Shop = (function () {
     _floor     = floor || 1;
     _open      = true;
 
-    var key = _factionId + '_' + _floor;
+    var repTier = getRepTier();
+    var key = _factionId + '_' + _floor + '_' + repTier;
     if (key !== _cacheKey) {
       _buildInventory();
       _cacheKey = key;
@@ -399,6 +400,7 @@ var Shop = (function () {
     getAllRepTiers:     getAllRepTiers,
     getFactionLabel:   getFactionLabel,
     getFactionEmoji:   getFactionEmoji,
-    isOpen:            isOpen
+    isOpen:            isOpen,
+    getCardSellPrice:  _calcSellPrice
   };
 })();

@@ -1,6 +1,6 @@
 # Gap Coverage to Deployability — Dungeon Gleaner
 
-> **Last Updated:** 2026-03-27
+> **Last Updated:** 2026-04-04
 > **Scope:** All inventory, card, combat, and economy systems audited against EyesOnly patterns
 > **Engine:** Dungeon Gleaner · DC Jam 2026 · Vanilla JS IIFE · LG webOS target
 > **Reference:** EyesOnly `CARD_HAND_HARMONIZATION_ROADMAP`, `CROSS_ROADMAP_EXECUTION_ORDER`
@@ -104,9 +104,9 @@ Improves the combat loop to feel complete. Not strictly blocking but affects jam
 | T1.1 | Enemy sprite particle FX (CSS/canvas) | enemy-sprites.js, raycaster.js, game.js | — | ✅ DONE | — |
 | T1.2 | Suit-based synergy system (♣>♦>♠>♣ RPS + ♥ rule-breaker) | synergy-engine.js, combat-engine.js, card-fan.js, data/*.json | — | ✅ DONE | — |
 | T1.3 | Drag-to-reorder + drag-drop-to-stack + swipe-to-fire | card-fan.js, card-stack.js, combat-bridge.js | — | ✅ DONE | — |
-| T1.4 | Suit advantage toast + visual feedback during resolution | suit-toast.js, combat-bridge.js | T1.2 | ✅ DONE | — |
-| T1.5 | Enemy attack telegraph (intent display) | enemy-intent.js, raycaster.js | — | ✅ DONE | — |
-| T1.6 | Death anim corpse tile rendering in raycaster | death-anim.js, combat-bridge.js | — | ✅ DONE | — |
+| T1.4 | Suit advantage toast + visual feedback during resolution | suit-toast.js, combat-bridge.js | T1.2 | ✅ DONE | — | Centered gold/red toast, audio+CombatFX flash |
+| T1.5 | Enemy attack telegraph (intent display) | enemy-intent.js, raycaster.js | — | ✅ DONE | — | Emoji expression cascade + card stack telegraph |
+| T1.6 | Death anim corpse tile rendering in raycaster | death-anim.js, combat-bridge.js, corpse-registry.js | — | ✅ DONE | — | Full pipeline: DeathAnim→CorpseRegistry→buildSprites→raycaster |
 
 ### Tier 2 — Economy Loop Closure (Playable End-to-End)
 
@@ -114,12 +114,12 @@ Completes the harvest → sell → buy → equip → fight loop.
 
 | # | Work Item | Module(s) | Depends On | Status | Est. |
 |---|-----------|-----------|------------|--------|------|
-| T2.1 | Bag inventory viewer (Face 2 sub-pane) | menu-faces.js | T0.5 | ✅ DONE | — |
-| T2.2 | Stash transfer at bonfire tiles | menu-faces.js, player.js | T2.1 | ✅ DONE | — |
-| T2.3 | Faction rep tier unlock feedback in shop | menu-faces.js, shop.js | T0.4 | ✅ DONE | — |
-| T2.4 | Floor transition deck reshuffle + hand redraw | game.js, card-system.js | — | ✅ DONE | — |
-| T2.5 | Victory/Game Over stat summaries from SessionStats | victory-screen.js, game-over-screen.js | — | ✅ DONE | — |
-| T2.6 | NCH widget drag-to-reorder cards | nch-widget.js | — | ⏸️ POST-JAM | 2h | Only meaningful with card-color overlay on joker emojis; aesthetic only, not blocking gameplay loop |
+| T2.1 | Bag inventory viewer (Face 2 sub-pane) | menu-faces.js | T0.5 | ✅ DONE | — | _renderBag() grid with capacity display, 4-col layout |
+| T2.2 | Stash transfer at bonfire tiles | menu-faces.js, player.js | T2.1 | ✅ DONE | — | Two-panel bag/stash with drag zones, interior-only |
+| T2.3 | Faction rep tier unlock feedback in shop | salvage.js, game.js | T0.4 | ✅ DONE | — | Toast + ParticleFX.levelUp() on tier change |
+| T2.4 | Floor transition deck reshuffle + hand redraw | game.js, card-authority.js | — | ✅ DONE | — | _onFloorArrive: resetDeck()+drawHand() at depth≥3 |
+| T2.5 | Victory/Game Over stat summaries from SessionStats | victory-screen.js, game-over-screen.js | — | ✅ DONE | — | Full stat screens: floors, enemies, cards, time, arc |
+| T2.6 | NCH widget drag-to-reorder cards | nch-widget.js | — | ⏸️ POST-JAM | 2h | Aesthetic only; widget repositions but no card reorder |
 
 ### Tier 3 — Post-Jam / LG Content Store
 
@@ -190,28 +190,38 @@ Not needed for jam submission. Aligns with EyesOnly's long-term architecture.
 
 ```
 T0  ████████████████  8/8  100%   Jam blockers ✅
-T1  ████████░░░░░░░░  3/6   50%   Combat polish
-T2  ░░░░░░░░░░░░░░░░  0/6    0%   Economy loop closure
+T1  ████████████████  6/6  100%   Combat polish ✅
+T2  █████████████░░░  5/6   83%   Economy loop closure (T2.6 deferred post-jam)
 T3  ░░░░░░░░░░░░░░░░  0/10   0%   Post-jam / LG Store
 ```
 
-**Totals:** 30 work items. 11 complete (Tier 0 ✅ + T1.1–T1.3), 19 remaining.
-Jam-critical (T1+T2): 9 remaining items, ~12h estimated work.
+**Totals:** 30 work items. 19 complete, 1 deferred (T2.6), 10 post-jam (Tier 3).
+**Jam-critical tiers (T0+T1+T2): 19/20 complete. Only T2.6 (NCH card reorder) deferred.**
+
+### Additional Apr 4 Work (not in original tiers)
+
+| # | Work Item | Status |
+|---|-----------|--------|
+| A1 | CrateUI click+drag overhaul (seal button, bag strip, hand strip, tiered seal) | ✅ DONE |
+| A2 | Phase 2 HUD cleanup (redundant displays, bag toggle, map button) | ✅ DONE |
+| A3 | Click-everything pass (sliders, dialog buttons, all peeks) | ✅ DONE |
+| A4 | Peek z-stacking fix (6 modules: crate/door/torch/corpse/locked-door/merchant) | ✅ DONE |
+| A5 | Peek ESC/close pass (crate/corpse/merchant/puzzle) | ✅ DONE |
+| A6 | forceHide() added to 9 peek modules (bar-counter/bed/bookshelf/chest/door/mailbox/monologue/peek-slots/torch) | ✅ DONE |
+| A7 | Quick-bar hardcoded slot fix (Player.useItem(1)→useItem(idx)) | ✅ DONE |
+| A8 | Phase 3 deep audit: shops wired, peeks uniform, DragDrop API gap documented | ✅ DONE |
 
 ---
 
-## Recommended Sprint Schedule
+## Sprint History
 
-| Day | Primary | Secondary | Milestone |
-|-----|---------|-----------|-----------|
-| ~~Mar 27~~ | ~~T0.5-T0.8, T1.1–T1.3~~ | — | ~~Tier 0 ✅ + Suit system + Drag-stack~~ |
-| Mar 28 | T1.4 suit advantage toast | T1.5 enemy telegraph, T2.1 bag viewer | Combat feedback polished |
-| Mar 29 | T1.6 corpse render | T2.2-T2.3 stash + rep feedback | Combat + economy |
-| Mar 30 | T2.4 floor reshuffle | T2.5 victory stats | Economy loop closed |
-| Mar 31 | T2.6 NCH reorder | Audio asset pass (Pass 7) | All Tier 2 done |
-| Apr 1-3 | — | Playtesting, suit balance tuning, SFX | Submission ready |
-| Apr 4 | — | Final build, webOS packaging | 📦 |
-| Apr 5 | — | **DC Jam 2026 submission** | 🎯 |
+| Day | Completed | Milestone |
+|-----|-----------|-----------|
+| ~~Mar 27~~ | T0.1–T0.8, T1.1–T1.3 | Tier 0 ✅ + Suit system + Drag-stack |
+| ~~Mar 28–31~~ | T1.4–T1.6, T2.1–T2.5 | Combat polish ✅ + Economy loop ✅ |
+| ~~Apr 1–3~~ | Peek z-fix, click-everything, torch/cobweb, ESC/close, box variants | Interactive peeks ✅ |
+| **Apr 4** | CrateUI overhaul, HUD cleanup, Phase 3 audit, forceHide pass, quick-bar fix | Interaction layer ✅ |
+| **Apr 5** | — | **DC Jam 2026 submission** 🎯 |
 
 ---
 
@@ -227,8 +237,8 @@ All paths that mutate player inventory and their refresh wiring:
 | `CardSystem.removeCard()` | Shop.sell | ✅ | game.js _shopSellFromHand → _refreshPanels |
 | `Player.addToBag()` | game.js harvest handler | ✅ | _refreshPanels() |
 | `Player.removeFromBag()` | Shop.sellPart | ✅ | game.js _shopSellPart → _refreshPanels |
-| `Player.equip()` | (not yet wired) | ❌ | Needs T0.5 |
-| `Player.unequip()` | (not yet wired) | ❌ | Needs T0.5 |
+| `Player.equip()` | game.js _equipFromBag | ✅ | _refreshPanels() (T0.5 complete) |
+| `Player.unequip()` | game.js _unequipSlot | ✅ | _refreshPanels() (T0.5 complete) |
 | `Player.useItem()` | QuickBar._onSlotClick | ✅ | Direct NchWidget.refresh() |
 | `Shop.buy()` | game.js _shopBuy | ✅ | _refreshPanels() |
 | `Shop.sell()` | game.js _shopSellFromHand | ✅ | _refreshPanels() |
@@ -237,7 +247,7 @@ All paths that mutate player inventory and their refresh wiring:
 | `Player.addCurrency()` | pickups, shop sell | ✅ | HUD.updatePlayer() |
 | `Player.spendCurrency()` | Shop.buy | ✅ | HUD.updatePlayer() |
 
-**Coverage:** 13/15 mutation paths wired. 2 pending (equip/unequip — blocked on T0.5 UI).
+**Coverage:** 15/15 mutation paths wired. ✅ All complete (equip/unequip landed with T0.5).
 
 ---
 
@@ -264,8 +274,8 @@ All paths that mutate player inventory and their refresh wiring:
 
 ---
 
-**Document Version:** 1.1
-**Author:** Engine audit session 2026-03-27
+**Document Version:** 2.0
+**Author:** Engine audit session 2026-03-27, updated 2026-04-04
 **EyesOnly Refs:** CARD_HAND_HARMONIZATION_ROADMAP v2.0, CROSS_ROADMAP_EXECUTION_ORDER v3.0
 
 ---

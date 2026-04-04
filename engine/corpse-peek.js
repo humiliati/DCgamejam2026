@@ -33,9 +33,17 @@ var CorpsePeek = (function () {
   var _timer      = 0;
   var _opened     = false;
   var _container  = null;
+  var _labelLayer = null;
+  var _innerLabel = null;
   var _subLabel   = null;
+  var _actionBtn  = null;
+  var _closeBtn   = null;
 
   // ── Init ───────────────────────────────────────────────────────
+
+  function _onActionClick() {
+    if (typeof Game !== 'undefined' && Game.interact) Game.interact();
+  }
 
   function init() {
     _container = document.getElementById('corpse-peek-container');
@@ -51,19 +59,103 @@ var CorpsePeek = (function () {
       if (viewport) viewport.appendChild(_container);
     }
 
+    // ── Label layer (z-index:2) — flat overlay above 3D box ──
+    _labelLayer = document.getElementById('corpse-peek-labels');
+    if (!_labelLayer) {
+      _labelLayer = document.createElement('div');
+      _labelLayer.id = 'corpse-peek-labels';
+      _labelLayer.style.cssText =
+        'position:absolute; top:0; left:0; width:100%; height:100%;' +
+        'z-index:2; pointer-events:none;';
+      _container.appendChild(_labelLayer);
+    }
+
+    // Inner label (emoji, replaces the one that was inside .box3d-glow)
+    _innerLabel = document.getElementById('corpse-peek-innerlabel');
+    if (!_innerLabel) {
+      _innerLabel = document.createElement('div');
+      _innerLabel.id = 'corpse-peek-innerlabel';
+      _innerLabel.style.cssText =
+        'position:absolute; top:50%; left:50%;' +
+        'transform:translate(-50%,-50%);' +
+        'font:bold 32px sans-serif; color:#a088c0;' +
+        'text-shadow:0 0 12px rgba(140,100,180,0.5);' +
+        'white-space:nowrap; pointer-events:none;';
+      _labelLayer.appendChild(_innerLabel);
+    }
+
+    // Sub-label (margin bumped to 60px)
     _subLabel = document.getElementById('corpse-peek-sublabel');
     if (!_subLabel) {
       _subLabel = document.createElement('div');
       _subLabel.id = 'corpse-peek-sublabel';
       _subLabel.style.cssText =
         'position:absolute; top:100%; left:0; transform:none;' +
-        'margin-top:36px; text-align:left;' +
+        'margin-top:60px; text-align:left;' +
         'font:38px monospace; color:rgba(160,140,180,0);' +
         'text-shadow:0 1px 4px rgba(0,0,0,0.8);' +
         'transition:color 0.4s ease 0.3s; white-space:nowrap;' +
         'pointer-events:none; line-height:1.3;';
-      _container.appendChild(_subLabel);
+      _labelLayer.appendChild(_subLabel);
     }
+
+    // Action button
+    _actionBtn = document.getElementById('corpse-peek-action');
+    if (!_actionBtn) {
+      _actionBtn = document.createElement('button');
+      _actionBtn.id = 'corpse-peek-action';
+      _actionBtn.style.cssText =
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:130px; padding:8px 22px;' +
+        'font:bold 20px monospace; color:#d0b8e0; background:rgba(40,20,50,0.85);' +
+        'border:1px solid #a088c0; border-radius:6px;' +
+        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s, box-shadow 0.15s;';
+      _actionBtn.textContent = '[OK] Harvest';
+      _actionBtn.addEventListener('click', _onActionClick);
+      _actionBtn.addEventListener('mouseenter', function () {
+        _actionBtn.style.borderColor = '#d0b8ff';
+        _actionBtn.style.color       = '#fff';
+        _actionBtn.style.boxShadow   = '0 0 10px rgba(160,120,200,0.5)';
+      });
+      _actionBtn.addEventListener('mouseleave', function () {
+        _actionBtn.style.borderColor = '#a088c0';
+        _actionBtn.style.color       = '#d0b8e0';
+        _actionBtn.style.boxShadow   = 'none';
+      });
+      _labelLayer.appendChild(_actionBtn);
+    }
+
+    // Close button — [ESC] Close
+    _closeBtn = document.getElementById('corpse-peek-close');
+    if (!_closeBtn) {
+      _closeBtn = document.createElement('button');
+      _closeBtn.id = 'corpse-peek-close';
+      _closeBtn.style.cssText =
+        'position:absolute; top:100%; left:50%; transform:translateX(-50%);' +
+        'margin-top:170px; padding:6px 18px;' +
+        'font:16px monospace; color:rgba(160,140,180,0.7); background:rgba(30,20,40,0.6);' +
+        'border:1px solid rgba(160,140,180,0.3); border-radius:4px;' +
+        'cursor:pointer; pointer-events:auto; opacity:0;' +
+        'transition:opacity 0.3s ease, border-color 0.15s, color 0.15s;';
+      _closeBtn.textContent = '[ESC] Close';
+      _closeBtn.addEventListener('click', function () { _hide(); });
+      _closeBtn.addEventListener('mouseenter', function () {
+        _closeBtn.style.borderColor = 'rgba(160,140,180,0.7)';
+        _closeBtn.style.color       = 'rgba(200,180,220,0.9)';
+      });
+      _closeBtn.addEventListener('mouseleave', function () {
+        _closeBtn.style.borderColor = 'rgba(160,140,180,0.3)';
+        _closeBtn.style.color       = 'rgba(160,140,180,0.7)';
+      });
+      _labelLayer.appendChild(_closeBtn);
+    }
+  }
+
+  function handleKey(key) {
+    if (!_active) return false;
+    if (key === 'Escape') { _hide(); return true; }
+    return false;
   }
 
   // ── Per-frame check ──────────────────────────────────────────
@@ -114,43 +206,33 @@ var CorpsePeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) _destroyBox();
 
-    _boxId   = BoxAnim.create('crate', _container, { spin: false });
+    _boxId   = BoxAnim.create('chest', _container, { spin: false });
     _active  = true;
     _opened  = false;
     _timer   = 0;
 
     // Eerie spectral glow instead of warm amber
     var glowColor  = 'rgba(140,100,180,0.5)';
-    var labelColor = '#a088c0';
 
     var inst = document.getElementById(_boxId);
     if (inst) {
       inst.style.setProperty('--box-glow', glowColor);
+      // Coffin color scheme — dark grey-purple wood
+      inst.style.setProperty('--box-dark', '#1a1020');
+      inst.style.setProperty('--box-dark2', '#140c1a');
+      inst.style.setProperty('--box-light', '#4a3860');
+      inst.style.setProperty('--box-floor', '#0a0810');
+      inst.style.setProperty('--box-ceil', '#2a2038');
       inst.style.pointerEvents = 'none';
-
-      // Darken the box faces for a coffin look
-      var faces = inst.querySelectorAll('.box3d-face');
-      for (var f = 0; f < faces.length; f++) {
-        faces[f].style.filter = 'hue-rotate(240deg) saturate(0.5) brightness(0.7)';
-      }
-
-      var glow = inst.querySelector('.box3d-glow');
-      if (glow) {
-        // Show the corpse emoji inside
-        var corpseEmoji = '💀';
-        if (typeof CorpseRegistry !== 'undefined') {
-          corpseEmoji = CorpseRegistry.getDisplayEmoji(fx, fy, FloorManager.getCurrentFloorId());
-        }
-        var span = document.createElement('span');
-        span.style.cssText =
-          'font:bold 32px sans-serif;color:' + labelColor +
-          ';text-shadow:0 0 12px ' + glowColor +
-          ';position:absolute;top:50%;left:50%;' +
-          'transform:translate(-50%,-50%);white-space:nowrap;';
-        span.textContent = corpseEmoji;
-        glow.appendChild(span);
-      }
+      inst.style.zIndex = '1'; // Below _labelLayer (z-index:2)
     }
+
+    // Inner label — corpse emoji (in label layer, NOT inside .box3d-glow)
+    var corpseEmoji = '\uD83D\uDC80'; // 💀
+    if (typeof CorpseRegistry !== 'undefined') {
+      corpseEmoji = CorpseRegistry.getDisplayEmoji(fx, fy, FloorManager.getCurrentFloorId());
+    }
+    if (_innerLabel) _innerLabel.textContent = corpseEmoji;
 
     // Determine mode text
     var corpse = null;
@@ -180,6 +262,14 @@ var CorpsePeek = (function () {
       _subLabel.style.color = 'rgba(160,140,180,0)';
     }
 
+    // Action button text based on mode
+    if (_actionBtn) {
+      _actionBtn.textContent = line2.indexOf('restock') >= 0
+        ? '[OK] Restock' : '[OK] Harvest';
+      _actionBtn.style.opacity = '0';
+    }
+    if (_closeBtn) _closeBtn.style.opacity = '0';
+
     _container.style.opacity = '1';
 
     setTimeout(function () {
@@ -187,6 +277,8 @@ var CorpsePeek = (function () {
         BoxAnim.open(_boxId);
         _opened = true;
         if (_subLabel) _subLabel.style.color = 'rgba(160,140,180,0.9)';
+        if (_actionBtn) _actionBtn.style.opacity = '1';
+        if (_closeBtn) _closeBtn.style.opacity = '1';
       }
     }, OPEN_DELAY);
   }
@@ -198,6 +290,8 @@ var CorpsePeek = (function () {
 
     _container.style.opacity = '0';
     if (_subLabel) _subLabel.style.color = 'rgba(160,140,180,0)';
+    if (_actionBtn) _actionBtn.style.opacity = '0';
+    if (_closeBtn) _closeBtn.style.opacity = '0';
 
     setTimeout(function () { _destroyBox(); }, 350);
 
@@ -218,10 +312,19 @@ var CorpsePeek = (function () {
     _opened = false;
   }
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { _hide(); }
+
+  /** Whether the corpse-peek box is currently visible. */
+  function isActive() { return _active; }
+
   // ── Public API ─────────────────────────────────────────────────
 
   return {
-    init: init,
-    update: update
+    init:      init,
+    update:    update,
+    handleKey: handleKey,
+    forceHide: forceHide,
+    isActive:  isActive
   };
 })();

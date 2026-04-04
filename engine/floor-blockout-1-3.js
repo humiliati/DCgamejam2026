@@ -54,9 +54,14 @@
   ];
 
   var BOOKS = [
-    { x: 2,  y: 1, bookId: 'tip_combat' },                // Combat preparation tips
-    { x: 13, y: 1, bookId: 'lore_dragon_history_2' }       // Dragon lore teaser
+    { x: 2,  y: 1, bookId: 'guide_adventurer_general' },   // Adventurer's Pocket Guide (universal)
+    { x: 13, y: 1, bookId: 'guide_cleaner_general' }       // Gleaner's Cleaning Manual (universal)
   ];
+
+  // NOTE: tip_combat and lore_dragon_history_2 still resolve via biome fallback.
+  // The explicit assignments prioritize the two universal guides a new player needs
+  // before their first dungeon descent. Cellar-specific lore (lore_soft_cellar)
+  // resolves from the cellar_entry biome pool on any un-assigned shelf.
 
   function build() {
     var grid = [];

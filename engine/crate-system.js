@@ -557,6 +557,54 @@ var CrateSystem = (function () {
     };
   }
 
+  /**
+   * Force-seal a partially filled container. Awards reduced coins
+   * proportional to filled slots. Unfilled slots are left empty.
+   *
+   * @returns {Object|null} { bonusCoins, totalCoins, reward, canReanimate }
+   */
+  function forceSeal(x, y, floorId) {
+    var c = _containers[_key(x, y, floorId)];
+    if (!c || c.sealed) return null;
+
+    // Count filled vs total
+    var filled = 0;
+    for (var i = 0; i < c.slots.length; i++) {
+      if (c.slots[i].filled) filled++;
+    }
+    if (filled === 0) return null; // Can't seal with nothing
+
+    c.sealed = true;
+
+    // Reduced flat seal bonus proportional to fill ratio
+    var fullBonus = (c.type === TYPE.CRATE) ? 5 : 3;
+    var ratio = filled / c.slots.length;
+    var bonus = Math.max(1, Math.round(fullBonus * ratio));
+    c.coinTotal += bonus;
+
+    // No d100 reward roll for partial seals — just the coins
+    c.sealReward = { type: 'nothing' };
+
+    // Check reanimation eligibility (corpse stocks only, still requires suit card)
+    var canReanimate = false;
+    if (c.type === TYPE.CORPSE) {
+      for (var j = 0; j < c.slots.length; j++) {
+        if (c.slots[j].frameTag === FRAME.SUIT_CARD && c.slots[j].matched) {
+          canReanimate = true;
+          break;
+        }
+      }
+    }
+
+    return {
+      bonusCoins: bonus,
+      totalCoins: c.coinTotal,
+      reward: c.sealReward,
+      canReanimate: canReanimate,
+      containerType: c.type
+    };
+  }
+
   // ── Seal reward table (d100) ───────────────────────────────────────
 
   function _resolveSealReward(roll, containerType) {
@@ -626,10 +674,12 @@ var CrateSystem = (function () {
       if (all[i].type === TYPE.CRATE) {
         crateTotal++;
         if (all[i].sealed) crateSealed++;
-      } else {
+      } else if (all[i].type === TYPE.CORPSE) {
         corpseTotal++;
         if (all[i].sealed) corpseSealed++;
       }
+      // TYPE.CHEST excluded — chests don't seal and shouldn't
+      // dilute crate or corpse readiness scores.
     }
     return {
       crate:  crateTotal  > 0 ? crateSealed  / crateTotal  : 1.0,
@@ -696,6 +746,7 @@ var CrateSystem = (function () {
     isDepleted:     isDepleted,
     canSeal:        canSeal,
     seal:           seal,
+    forceSeal:      forceSeal,
     getContainer:   getContainer,
     hasContainer:   hasContainer,
     getAllOnFloor:   getAllOnFloor,

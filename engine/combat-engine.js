@@ -114,6 +114,14 @@ var CombatEngine = (function () {
     _countdownBeat = 0;
     _countdownTimer = 0;
 
+    // ── Per-combat energy refill ──
+    // Energy is a per-combat tempo budget. Fully refill at combat start
+    // so the player always has their full energy pool to spend.
+    // Battery is NOT refilled — it's a session-spanning resource.
+    if (typeof Player !== 'undefined') {
+      Player.restoreEnergy(player.maxEnergy || 5);
+    }
+
     // Begin countdown phase
     _setPhase('countdown');
 
@@ -299,7 +307,9 @@ var CombatEngine = (function () {
   function playCard(card, player) {
     // Wrap single card as a 1-card stack for the new resolution path
     var singleStack = {
-      damage: 0, defense: 0, healing: 0, statuses: [],
+      damage: 0, defense: 0, healing: 0,
+      energyGain: 0, batteryGain: 0, drawCount: 0,
+      statuses: [],
       cards: [card], thrust: 1.0, stackSize: 1, sharedTags: []
     };
     if (card && card.effects) {
@@ -308,6 +318,9 @@ var CombatEngine = (function () {
         if (eff.type === 'damage') singleStack.damage += eff.value;
         else if (eff.type === 'defense') singleStack.defense += eff.value;
         else if (eff.type === 'hp') singleStack.healing += eff.value;
+        else if (eff.type === 'energy') singleStack.energyGain += eff.value;
+        else if (eff.type === 'battery') singleStack.batteryGain += eff.value;
+        else if (eff.type === 'draw') singleStack.drawCount += eff.value;
         else if (eff.type === 'status') singleStack.statuses.push(eff);
       }
     }
@@ -374,9 +387,38 @@ var CombatEngine = (function () {
     enemyDmg = Math.max(0, enemyDmg - playerDef);
     playerDmg = Math.max(0, playerDmg - enemyDef);
 
+    // ── Pay card costs (each card in the stack pays its cost) ──
+    var costCards = stackEffects.cards || [];
+    for (var ci = 0; ci < costCards.length; ci++) {
+      var cc = costCards[ci];
+      if (!cc || !cc.cost || cc.cost.type === 'free') continue;
+      var cType = cc.cost.type;
+      var cVal = cc.cost.value || 0;
+      if (cType === 'energy' && cVal > 0)  Player.spendEnergy(cVal);
+      if (cType === 'battery' && cVal > 0) Player.spendBattery(cVal);
+      if (cType === 'hp' && cVal > 0)      player.hp -= cVal;
+    }
+
     // ── Healing ──
     if (stackEffects.healing > 0) {
       player.hp = Math.min(player.maxHp, player.hp + stackEffects.healing);
+    }
+
+    // ── Energy gain ──
+    if (stackEffects.energyGain > 0) {
+      Player.restoreEnergy(stackEffects.energyGain);
+    }
+
+    // ── Battery gain ──
+    if (stackEffects.batteryGain > 0) {
+      Player.addBattery(stackEffects.batteryGain);
+    }
+
+    // ── Draw cards ──
+    if (stackEffects.drawCount > 0 && typeof CardAuthority !== 'undefined') {
+      for (var di = 0; di < stackEffects.drawCount; di++) {
+        CardAuthority.drawWithOverflow(5, 0);
+      }
     }
 
     // ── Advantage modifiers (first round only) ──
@@ -496,6 +538,26 @@ var CombatEngine = (function () {
     _onPhaseChange = null;
   }
 
+  /**
+   * Check if the player can afford a card's resource cost.
+   * Used by card-fan and combat-bridge to dim unaffordable cards.
+   *
+   * @param {Object} card - Card with cost: { type, value }
+   * @returns {boolean}
+   */
+  function canPayCost(card) {
+    if (!card || !card.cost || card.cost.type === 'free') return true;
+    var cType = card.cost.type;
+    var cVal = card.cost.value || 0;
+    if (cVal <= 0) return true;
+    if (typeof Player === 'undefined') return true;
+    var s = Player.state();
+    if (cType === 'energy')  return s.energy >= cVal;
+    if (cType === 'battery') return s.battery >= cVal;
+    if (cType === 'hp')      return s.hp > cVal;   // must survive the cost
+    return true;
+  }
+
   return {
     isActive: isActive,
     getPhase: getPhase,
@@ -511,6 +573,7 @@ var CombatEngine = (function () {
     useDraw: useDraw,
     resetEnemyBeat: resetEnemyBeat,
     flee: flee,
+    canPayCost: canPayCost,
     reset: reset,
     // Timing exports (for other modules to sync animations)
     FACING_TIME: FACING_TIME,

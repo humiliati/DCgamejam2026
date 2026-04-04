@@ -243,6 +243,26 @@ var Skybox = (function () {
       water: false,
       stars: false
     },
+    // The Garrison — frontier dusk. Cool indigo sky with warm amber horizon.
+    // Vivec city silhouette: shaped mountains blend industrial cantons (flat-top
+    // step pyramids, crane spikes, chimney stacks) with forest (organic peaks,
+    // pine canopy) zones. The player sees the city EAST and forest WEST.
+    frontier: {
+      zenith:  { r: 10, g: 12, b: 28 },    // Deep indigo
+      horizon: { r: 50, g: 32, b: 22 },    // Warm amber haze (city glow)
+      clouds: [
+        // High thin wisps
+        { y: 0.12, h: 0.10, depth: 0.2, speed: 0.0001, scale: 90, threshold: 0.48, opacity: 0.25, r: 80, g: 60, b: 70, seed: 300 },
+        // Mid band
+        { y: 0.30, h: 0.12, depth: 0.35, speed: 0.00014, scale: 60, threshold: 0.46, opacity: 0.2, r: 60, g: 45, b: 55, seed: 310 }
+      ],
+      // City/forest silhouette — shaped alternates industrial (cantons, cranes)
+      // with forest (pines, hills). Scale 120 = wide zones so the city reads as
+      // a coherent mass, not noise. MaxHeight 0.25 = imposing skyline.
+      mountains: { depth: 0.9, scale: 120, maxHeight: 0.25, color: 'rgba(18,14,24,0.95)', seed: 900, shaped: true },
+      water: false,
+      stars: true
+    },
     title: {
       zenith:  { r: 10, g: 21, b: 48 },
       horizon: { r: 90, g: 64, b: 48 },

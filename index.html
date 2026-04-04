@@ -375,12 +375,19 @@
      * --box-d positions faces at ±half-depth from center.
      * --door-w / --door-h track the non-square dimensions.
      */
+    /*
+     * Door box — proper rectangular doorframe geometry.
+     * Faces are positioned at the EDGES of the rectangle, not at ±box-d.
+     * Back face hidden (void shows through glow). Lid = door panel on
+     * left hinge. Jams at ±half-width, lintel/sill at ±half-height.
+     */
     .box3d-wrap.door-variant {
-      --door-w: 260px;
-      --door-h: 380px;
-      --box-size: 260px;    /* width governs base */
-      --box-d: 90px;        /* half-depth: faces at ±90px */
-      --box-half: -90px;
+      --door-w: 390px;     /* 260 × 1.5 */
+      --door-h: 570px;     /* 380 × 1.5 */
+      --box-size: 390px;
+      --box-d: 46px;       /* half-depth: shallow doorframe feel */
+      --box-half: -46px;
+      --jam-w: 110px;      /* jam thickness (visible depth strip) */
       --bevel-w: 2px;
       --box-dark: #0a0a08;
       --box-dark2: #080806;
@@ -394,40 +401,40 @@
     .box3d-wrap.door-variant .box3d-scene {
       width: var(--door-w);
       height: var(--door-h);
-      transform: rotateX(-12deg) rotateY(16deg);
+      transform: rotateX(-8deg) rotateY(10deg);
     }
     .box3d-wrap.door-variant .box3d-spin {
       width: var(--door-w);
       height: var(--door-h);
     }
 
-    /* Side faces: after rotateY(90°), width becomes Z-depth.
-       Size: (2 × box-d) wide × door-h tall → faces meet at corners. */
+    /* Jams (side faces): at ±half-width so they frame the opening.
+       After rotateY(90°), CSS width → Z-depth, visible strip = jam-w. */
     .box3d-wrap.door-variant .bf-left,
     .box3d-wrap.door-variant .bf-right {
-      width: calc(var(--box-d) * 2);   /* 112px = full depth */
+      width: var(--jam-w);
       height: var(--door-h);
       background: linear-gradient(to top, #2a3020, #44503a 40%, #384030 70%, #2a3020);
     }
     .box3d-wrap.door-variant .bf-left {
-      transform: translateX(calc(var(--box-d) * -1)) rotateY(90deg);
+      transform: translateX(calc(var(--door-w) * -0.5)) rotateY(90deg);
     }
     .box3d-wrap.door-variant .bf-right {
-      transform: translateX(var(--box-d)) rotateY(90deg);
+      transform: translateX(calc(var(--door-w) * 0.5)) rotateY(90deg);
     }
 
-    /* Top face: after rotateX(90°), height becomes Z-depth.
-       Size: door-w wide × (2 × box-d) tall → sits flush at top edge. */
+    /* Lintel (top): at +half-height so it caps the doorframe.
+       After rotateX(90°), translateZ → Y-axis (positive = up). */
     .box3d-wrap.door-variant .bf-top {
       width: var(--door-w);
-      height: calc(var(--box-d) * 2);
+      height: var(--jam-w);
       background: linear-gradient(135deg, #3a4030, #4a5540 50%, #384030);
-      transform: rotateX(90deg) translateZ(var(--box-d));
+      transform: rotateX(90deg) translateZ(calc(var(--door-h) * 0.5));
     }
-    /* Bottom face: floor tile texture */
+    /* Sill (bottom): at -half-height, floor tile texture */
     .box3d-wrap.door-variant .bf-bottom {
       width: var(--door-w);
-      height: calc(var(--box-d) * 2);
+      height: var(--jam-w);
       background:
         repeating-linear-gradient(
           0deg, transparent 0px, transparent 11px, rgba(0,0,0,0.35) 11px, rgba(0,0,0,0.35) 12px
@@ -436,15 +443,11 @@
           90deg, transparent 0px, transparent 11px, rgba(0,0,0,0.35) 11px, rgba(0,0,0,0.35) 12px
         ),
         #1c1a14;
-      transform: rotateX(90deg) translateZ(calc(var(--box-d) * -1));
+      transform: rotateX(90deg) translateZ(calc(var(--door-h) * -0.5));
     }
-    /* Back face: dark interior visible through open door */
+    /* Back face: hidden — glow/void shows through */
     .box3d-wrap.door-variant .bf-back {
-      width: var(--door-w);
-      height: var(--door-h);
-      background: radial-gradient(ellipse at center 40%, #1a1208 20%, #080604 100%);
-      filter: none;
-      border-radius: 4px;
+      display: none;
     }
 
     /* ── Door face textures ── */
@@ -482,7 +485,7 @@
     }
     .box3d-wrap.door-variant.opened .box3d-glow {
       opacity: 1;
-      transform: translateZ(60px) scale(2.2);
+      transform: translateZ(60px) scale(2.6);
     }
     .box3d-wrap.door-variant.envelop .box3d-glow {
       transform: translateZ(200px) scale(30);
@@ -625,7 +628,7 @@
     .box3d-wrap.chest-variant .bf-right {
       width: calc(var(--box-d) * 2);
       height: var(--chest-h);
-      background: linear-gradient(to top, #2a1e06, #5a3c18 40%, #4a3010 70%, #2a1e06);
+      background: linear-gradient(to top, var(--box-dark, #2a1e06), var(--box-light, #5a3c18) 40%, var(--box-dark, #4a3010) 70%, var(--box-dark, #2a1e06));
     }
     .box3d-wrap.chest-variant .bf-left {
       transform: translateX(calc(var(--box-d) * -1)) rotateY(90deg);
@@ -637,19 +640,19 @@
     .box3d-wrap.chest-variant .bf-top {
       width: var(--chest-w);
       height: calc(var(--box-d) * 2);
-      background: linear-gradient(135deg, #5a4020, #6a4c28 50%, #4a3818);
+      background: linear-gradient(135deg, var(--box-ceil, #5a4020), var(--box-light, #6a4c28) 50%, var(--box-ceil, #4a3818));
       transform: rotateX(90deg) translateZ(var(--box-d));
     }
     .box3d-wrap.chest-variant .bf-bottom {
       width: var(--chest-w);
       height: calc(var(--box-d) * 2);
-      background: #1a1206;
+      background: var(--box-floor, #1a1206);
       transform: rotateX(90deg) translateZ(calc(var(--box-d) * -1));
     }
     .box3d-wrap.chest-variant .bf-back {
       width: var(--chest-w);
       height: var(--chest-h);
-      background: radial-gradient(ellipse at center, #2a1c08 30%, #0a0804 100%);
+      background: radial-gradient(ellipse at center, var(--box-dark, #2a1c08) 30%, #0a0804 100%);
       filter: none;
       border-radius: 4px;
       transform: translateZ(calc(var(--box-d) * -1));
@@ -661,11 +664,20 @@
     }
     .box3d-wrap.chest-variant .box3d-lid .box3d-face {
       background: linear-gradient(180deg,
-        #5a3c18 0%, #4a3010 25%, #6a4820 50%,
-        #4a3010 75%, #5a3c18 100%);
+        var(--box-light, #5a3c18) 0%, var(--box-dark, #4a3010) 25%,
+        var(--box-light, #6a4820) 50%, var(--box-dark, #4a3010) 75%,
+        var(--box-light, #5a3c18) 100%);
       box-shadow: inset 0 2px 6px rgba(255,200,80,0.2),
                   inset 0 -1px 3px rgba(0,0,0,0.5),
                   inset 2px 0 4px rgba(255,200,80,0.1);
+    }
+    /* Chest glow: 4-stop volumetric orb (splash-quality, color via --box-glow) */
+    .box3d-wrap.chest-variant .box3d-glow {
+      background: radial-gradient(circle,
+        var(--box-glow, rgba(255,200,80,0.7)) 0%,
+        var(--box-glow, rgba(220,160,40,0.4)) 30%,
+        rgba(180,120,30,0.15) 60%,
+        transparent 100%);
     }
     .box3d-wrap.chest-variant.opened .box3d-glow {
       opacity: 1;
@@ -903,7 +915,7 @@
     #minimap-frame {
       position: absolute;
       top: 8px; right: 8px;
-      width: 288px; height: 288px;
+      width: 330px; height: 330px;
       background: #0a120a;
       border: 2px solid seagreen;
       border-radius: 50%;
@@ -944,7 +956,7 @@
       100% { transform: rotate(360deg); }
     }
     #minimap-frame.expanded {
-      width: 360px; height: 360px;
+      width: 414px; height: 414px;
       top: 50%; right: 50%;
       transform: translate(50%, -50%);
       border-radius: 50%;
@@ -970,8 +982,9 @@
     }
     #minimap-expand:hover { opacity: 1; color: #66ffaa; }
     #minimap-frame.expanded #minimap-expand { font-size: 18px; top: 10px; right: 16px; }
-    /* Compass widget on minimap frame */
+    /* Compass widget on minimap frame — HIDDEN (redundant, expand btn handles toggle) */
     .minimap-compass-btn {
+      display: none;
       position: absolute; top: 6px; left: 6px;
       width: 32px; height: 32px;
       border-radius: 50%;
@@ -983,24 +996,21 @@
       cursor: pointer; z-index: 5;
       display: flex; align-items: center; justify-content: center;
       text-shadow: 0 0 4px rgba(51,255,136,0.5);
-      transition: background 0.15s, border-color 0.15s;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
     }
     .minimap-compass-btn:hover {
       background: rgba(46,139,87,0.3);
       border-color: #66ffaa;
+      box-shadow: 0 0 8px rgba(51,255,136,0.3);
+      transform: scale(1.08);
     }
-    /* Floor label inside frame */
+    .minimap-compass-btn:active {
+      transform: scale(0.95);
+    }
+    /* Floor label inside frame — HIDDEN (redundant with sb-floor in status bar) */
     #minimap-floor-label {
-      position: absolute; bottom: 8px; left: 50%;
-      transform: translateX(-50%);
-      font-family: var(--font-crt, 'Courier New', monospace);
-      font-size: 10px; color: rgba(46,139,87,0.6);
-      letter-spacing: 0.08em;
-      pointer-events: none;
-      z-index: 5;
-      text-shadow: 0 0 4px rgba(46,139,87,0.3);
+      display: none;
     }
-    #minimap-frame.expanded #minimap-floor-label { font-size: 13px; bottom: 14px; }
     /* Time/heading strip inside minimap frame — sits above floor label */
     #minimap-time-strip {
       position: absolute; bottom: 22px; left: 50%;
@@ -1713,12 +1723,18 @@
       border-radius: 6px; padding: 5px 14px;
       color: #1a1510; font-family: var(--font-body);
       font-size: 16px; font-weight: 700; cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, transform 0.1s;
     }
     .sb-btn:hover {
       border-color: var(--clipboard-blue);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-      background: rgba(72,136,192,0.1);
+      box-shadow: 0 1px 6px rgba(72,136,192,0.25), 0 0 12px rgba(72,136,192,0.1);
+      background: rgba(72,136,192,0.14);
+      transform: translateY(-1px);
+    }
+    .sb-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 0 2px rgba(72,136,192,0.2);
+      background: rgba(72,136,192,0.2);
     }
     .sb-btn.sb-active { border-color: var(--clipboard-blue); background: rgba(72,136,192,0.12); }
     .sb-btn.sb-bag-warn {
@@ -1984,7 +2000,7 @@
       #dpad-back    { top: 52px; left: 52px; }
       #dpad-str-r   { top: 52px; left: 104px; }
       #minimap-frame {
-        width: 192px; height: 192px;
+        width: 220px; height: 220px;
       }
     }
 
@@ -2045,16 +2061,12 @@
     <div id="viewport">
       <canvas id="view-canvas"></canvas>
 
-      <!-- HUD viewport overlay (hidden — floor/battery/advantage now in CRT panels) -->
-      <!-- Elements kept in DOM for HUD.js API compat, but display:none -->
+      <!-- Vestigial HUD stubs — kept minimal for HUD.js API compat -->
       <div id="hud" style="display:none">
-        <span id="hud-hp" style="display:none"></span>
-        <span id="hud-energy" style="display:none"></span>
-        <div id="hud-hp-fill" style="display:none"></div>
-        <div id="hud-energy-fill" style="display:none"></div>
-        <span id="hud-floor" style="display:none"></span>
-        <span id="hud-advantage" style="display:none"></span>
-        <span id="hud-battery-pips" style="display:none"></span>
+        <span id="hud-hp"></span><span id="hud-energy"></span>
+        <div id="hud-hp-fill"></div><div id="hud-energy-fill"></div>
+        <span id="hud-floor"></span><span id="hud-advantage"></span>
+        <span id="hud-battery-pips"></span>
       </div>
 
       <!-- Combat overlay -->
@@ -2267,11 +2279,18 @@
   <script src="engine/mouse-look.js"></script>
   <script src="engine/floor-manager.js"></script>
   <!-- Floor blockout files (register hand-authored floors via FloorManager.registerFloorBuilder) -->
+  <script src="engine/floor-blockout-1-1.js"></script>
   <script src="engine/floor-blockout-1-2.js"></script>
   <script src="engine/floor-blockout-1-3.js"></script>
+  <script src="engine/floor-blockout-1-6.js"></script>
   <script src="engine/floor-blockout-2.js"></script>
   <script src="engine/floor-blockout-2-1.js"></script>
   <script src="engine/floor-blockout-2-2.js"></script>
+  <script src="engine/floor-blockout-2-2-1.js"></script>
+  <script src="engine/floor-blockout-2-3.js"></script>
+  <script src="engine/floor-blockout-3.js"></script>
+  <script src="engine/floor-blockout-3-1.js"></script>
+  <script src="engine/floor-blockout-3-2.js"></script>
   <script src="engine/minimap-nav.js"></script>
   <!-- IntroWalk disabled — standalone module preserved for post-jam re-enable.
        See engine/intro-walk.js header for API docs. To restore: uncomment

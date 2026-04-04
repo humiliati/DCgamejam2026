@@ -2594,7 +2594,7 @@ var MenuFaces = (function () {
     ctx.fillText('CARDS', x + 8, ty + 8);
     ty += 12;
 
-    var SELL_VALUE = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
+    var _SELL_FALLBACK = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
     var RARITY_COL = {
       common: '#aaa', uncommon: '#4cf', rare: '#c8f',
       epic: '#fa4', legendary: '#ff0'
@@ -2610,7 +2610,7 @@ var MenuFaces = (function () {
       if (card) {
         _hitZones.push({ x: pos.x, y: pos.y, w: TILE_SIZE, h: TILE_SIZE, slot: i, action: 'sell' });
 
-        var sv = SELL_VALUE[card.rarity] || 12;
+        var sv = (typeof Shop !== 'undefined' && Shop.getCardSellPrice) ? Shop.getCardSellPrice(card) : (_SELL_FALLBACK[card.rarity] || 12);
         _drawItemTile(ctx, pos.x, pos.y, card, i, _hoverSlot === i, {
           priceText: '+' + sv + 'g',
           priceColor: COL.currency,
@@ -2822,6 +2822,23 @@ var MenuFaces = (function () {
     _settingsState.row = rowIdx;
   }
 
+  /**
+   * Set a slider's value directly (0–100). Used by click-to-set on the
+   * slider track — the player clicks a position on the track and the
+   * volume jumps to that percentage.
+   * @param {number} sliderIdx - 0=master, 1=sfx, 2=bgm
+   * @param {number} value - 0–100
+   */
+  function handleSettingsSetValue(sliderIdx, value) {
+    if (typeof AudioSystem === 'undefined') return;
+    if (sliderIdx < 0 || sliderIdx >= _SLIDER_DEFS.length) return;
+    var def = _SLIDER_DEFS[sliderIdx];
+    var clamped = Math.max(0, Math.min(100, Math.round(value)));
+    if (def.key === 'master') AudioSystem.setMasterVolume(clamped / 100);
+    if (def.key === 'sfx')    AudioSystem.setSFXVolume(clamped / 100);
+    if (def.key === 'bgm')    AudioSystem.setMusicVolume(clamped / 100);
+  }
+
   // ── Renderer ─────────────────────────────────────────────────────
 
   /**
@@ -2927,6 +2944,13 @@ var MenuFaces = (function () {
       var val     = vols[def.key];
       var sy      = sliderStartY + s * rowH;
       var selected = (s === _settingsState.row);
+      var sliderHov = (!selected && _hoverSlot === (800 + s));
+
+      // Pointer hover highlight (when not keyboard-selected)
+      if (sliderHov) {
+        ctx.fillStyle = 'rgba(240,208,112,0.06)';
+        ctx.fillRect(x + 6, sy - 2, w - 12, rowH - Math.round(4 * S));
+      }
 
       // Selection highlight row (bright gold when focus-locked)
       if (selected) {
@@ -2941,14 +2965,14 @@ var MenuFaces = (function () {
       }
 
       // Label
-      ctx.font = (selected ? 'bold ' : '') + F_BODY + 'px monospace';
-      ctx.fillStyle = selected ? COL.accent : COL.dim;
+      ctx.font = ((selected || sliderHov) ? 'bold ' : '') + F_BODY + 'px monospace';
+      ctx.fillStyle = selected ? COL.accent : sliderHov ? COL.text : COL.dim;
       ctx.textAlign = 'left';
       ctx.fillText(i18n.t(def.labelKey, def.label), listX + Math.round(14 * S), sy + Math.round(14 * S));
 
       // Value badge (right-aligned)
       ctx.font = 'bold ' + F_BODY + 'px monospace';
-      ctx.fillStyle = selected ? COL.accent : COL.text;
+      ctx.fillStyle = selected ? COL.accent : sliderHov ? COL.text : COL.text;
       ctx.textAlign = 'right';
       ctx.fillText(val + '%', listX + trackW + Math.round(6 * S), sy + Math.round(14 * S));
 
@@ -2969,7 +2993,7 @@ var MenuFaces = (function () {
           grad.addColorStop(1, COL.accent);
           ctx.fillStyle = grad;
         } else {
-          ctx.fillStyle = 'rgba(180,140,50,0.55)';
+          ctx.fillStyle = sliderHov ? 'rgba(200,160,60,0.7)' : 'rgba(180,140,50,0.55)';
         }
         _roundRectFill(ctx, listX + Math.round(14 * S), trackY, fillW, trackH, Math.round(3 * S));
       }
@@ -3003,9 +3027,17 @@ var MenuFaces = (function () {
     }
 
     // Slider hover/selection description (mirrors toggle desc pattern)
+    // Show desc for keyboard-selected row OR pointer-hovered row
     var sliderDescY = sliderStartY + _SLIDER_DEFS.length * rowH - Math.round(6 * S);
-    if (_settingsState.row < _SLIDER_DEFS.length) {
-      var sDef = _SLIDER_DEFS[_settingsState.row];
+    var sliderDescRow = -1;
+    for (var sd = 0; sd < _SLIDER_DEFS.length; sd++) {
+      if (_hoverSlot === (800 + sd)) { sliderDescRow = sd; break; }
+    }
+    if (sliderDescRow < 0 && _settingsState.row < _SLIDER_DEFS.length) {
+      sliderDescRow = _settingsState.row;
+    }
+    if (sliderDescRow >= 0) {
+      var sDef = _SLIDER_DEFS[sliderDescRow];
       if (sDef.desc) {
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.font = 'italic ' + F_SMALL + 'px monospace';
@@ -3200,7 +3232,7 @@ var MenuFaces = (function () {
       var z = _hitZones[i];
       if (ptr.x >= z.x && ptr.x <= z.x + z.w &&
           ptr.y >= z.y && ptr.y <= z.y + z.h) {
-        var hit = { slot: z.slot, action: z.action };
+        var hit = { slot: z.slot, action: z.action, x: z.x, y: z.y, w: z.w, h: z.h };
         // Pass through extra properties (toggleKey, warpTarget, etc.)
         if (z.toggleKey !== undefined) hit.toggleKey = z.toggleKey;
         if (z.warpTarget !== undefined) hit.warpTarget = z.warpTarget;
@@ -3560,9 +3592,9 @@ var MenuFaces = (function () {
       },
       onDrop: function (p) {
         if (!p || !p.data || typeof Shop === 'undefined') return false;
-        var SELL_VALUE = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
+        var _SELL_FB = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
         if (p.type === 'card') {
-          var sv = SELL_VALUE[p.data.rarity] || 12;
+          var sv = (typeof Shop !== 'undefined' && Shop.getCardSellPrice) ? Shop.getCardSellPrice(p.data) : (_SELL_FB[p.data.rarity] || 12);
           if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
           else if (p.zone === 'deck') CardAuthority.removeFromBackupById(p.data.id);
           else if (p.zone === 'bag') CardAuthority.removeFromBagById(p.data.id);
@@ -3925,6 +3957,7 @@ var MenuFaces = (function () {
     isSettingsLocked:        isSettingsLocked,
     handleLanguageCycle:     handleLanguageCycle,
     handleSettingsSelectRow: handleSettingsSelectRow,
+    handleSettingsSetValue:  handleSettingsSetValue,
     resetSettings:           resetSettings,
     clearHitZones:        clearHitZones,
     updateHover:          updateHover,

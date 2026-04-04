@@ -40,7 +40,8 @@ var PeekSlots = (function () {
   // ── Constants ────────────────────────────────────────────────────
   var STATE = { IDLE: 0, FILLING: 1, SEALED: 2 };
   var SEALED_DISMISS_MS = 1200;
-  var ZONE_PREFIX = 'crate-slot-';
+  var ZONE_PREFIX     = 'crate-slot-';
+  var BAG_ZONE_PREFIX = 'bag-item-';
 
   // ── State ────────────────────────────────────────────────────────
   var _state      = STATE.IDLE;
@@ -184,6 +185,11 @@ var PeekSlots = (function () {
       }
     }
 
+    // Trigger CrateUI seal VFX (white flash, gold flash, bouncing text)
+    if (typeof CrateUI !== 'undefined' && CrateUI.triggerSealVFX) {
+      CrateUI.triggerSealVFX();
+    }
+
     // Transition to SEALED state
     _state     = STATE.SEALED;
     _sealTimer = 0;
@@ -303,7 +309,57 @@ var PeekSlots = (function () {
       })(i);
     }
 
+    // Register bag items as DragDrop SOURCE zones
+    _registerBagSourceZones();
+
     _zonesRegistered = true;
+  }
+
+  /**
+   * Register each bag item as a DragDrop source zone.
+   * When dragged, the ghost follows the pointer with the item's emoji.
+   * On drop onto a crate slot zone, the slot's onDrop handler fires.
+   */
+  function _registerBagSourceZones() {
+    if (typeof DragDrop === 'undefined') return;
+    if (typeof DragDrop.registerSource !== 'function') return;
+
+    var hasAuth = (typeof CardAuthority !== 'undefined');
+    var bag = hasAuth ? CardAuthority.getBag()
+            : (typeof Player !== 'undefined' ? Player.state().bag : []);
+
+    for (var i = 0; i < bag.length; i++) {
+      (function (bagIdx) {
+        var item = bag[bagIdx];
+        if (!item) return;
+
+        var zoneId = BAG_ZONE_PREFIX + bagIdx;
+        DragDrop.registerSource(zoneId, {
+          x: 0, y: 0, w: 0, h: 0, // Updated dynamically
+          dragPayload: function () {
+            return {
+              type:  'item',
+              zone:  'bag',
+              index: bagIdx,
+              data:  item,
+              emoji: item.emoji || '?',
+              label: item.name || 'Item'
+            };
+          }
+        });
+      })(i);
+    }
+  }
+
+  /** Unregister bag source zones. */
+  function _unregisterBagSourceZones() {
+    if (typeof DragDrop === 'undefined') return;
+    if (typeof DragDrop.removeSource !== 'function') return;
+
+    // Remove up to BAG_MAX zones (safe upper bound)
+    for (var i = 0; i < 24; i++) {
+      DragDrop.removeSource(BAG_ZONE_PREFIX + i);
+    }
   }
 
   function _unregisterSlotZones() {
@@ -316,6 +372,7 @@ var PeekSlots = (function () {
     for (var i = 0; i < _container.slots.length; i++) {
       DragDrop.removeZone(ZONE_PREFIX + i);
     }
+    _unregisterBagSourceZones();
     _zonesRegistered = false;
   }
 
@@ -398,6 +455,9 @@ var PeekSlots = (function () {
 
   // ── Public API ───────────────────────────────────────────────────
 
+  /** Force-hide the peek overlay. */
+  function forceHide() { close(); }
+
   return {
     tryOpen:          tryOpen,
     close:            close,
@@ -409,6 +469,7 @@ var PeekSlots = (function () {
     isSealed:         isSealed,
     getTarget:        getTarget,
     getContainerType: getContainerType,
+    forceHide:        forceHide,
 
     // Constants
     STATE: STATE

@@ -151,13 +151,14 @@ var StatusBar = (function () {
         // Toggle pause menu at Face 2 with bag focus
         if (typeof ScreenManager !== 'undefined') {
           if (ScreenManager.isPaused()) {
-            // If already on Face 2 with bag focus, close. Otherwise navigate.
+            // Already paused — if on Face 2, close. Otherwise navigate to bag.
             var onFace2 = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 2);
-            var bagFocused = (typeof MenuFaces !== 'undefined' && MenuFaces.getInvFocus() === 'bag');
-            if (onFace2 && bagFocused) {
-              MenuBox.close();
+            if (onFace2) {
+              // Toggle off: close menu, resume gameplay
+              if (typeof MenuBox !== 'undefined') MenuBox.close();
+              ScreenManager.resumeGameplay();
             } else {
-              // Navigate to Face 2 and set bag focus
+              // Navigate to bag face
               if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(2);
               if (typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) MenuFaces.setInvFocus('bag');
             }
@@ -179,9 +180,10 @@ var StatusBar = (function () {
         if (typeof ScreenManager !== 'undefined') {
           if (ScreenManager.isPaused()) {
             var onFace2d = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 2);
-            var deckFocused = (typeof MenuFaces !== 'undefined' && MenuFaces.getInvFocus() === 'deck');
-            if (onFace2d && deckFocused) {
-              MenuBox.close();
+            if (onFace2d) {
+              // Toggle off: close menu, resume gameplay
+              if (typeof MenuBox !== 'undefined') MenuBox.close();
+              ScreenManager.resumeGameplay();
             } else {
               if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(2);
               if (typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) MenuFaces.setInvFocus('deck');

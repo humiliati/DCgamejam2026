@@ -104,7 +104,7 @@ var QuickBar = (function () {
     } else if (idx === 1) {
       // Consumable — use immediately
       if (typeof Player !== 'undefined' && Player.useItem) {
-        var result = Player.useItem(1);
+        var result = Player.useItem(idx);
         if (result && typeof Toast !== 'undefined') {
           Toast.show(
             i18n.t('quick.used', 'Used') + ' ' + item.emoji + ' ' + item.name,

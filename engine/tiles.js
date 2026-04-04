@@ -44,7 +44,8 @@ var TILES = (function () {
     FENCE:       35,  // Half-wall railing (0.4×) — blocks movement, player sees over
     TERMINAL:    36,  // Data terminal — half-wall desk + CRT screen, sickly green glow, peek overlay
     MAILBOX:     37,  // Exterior mailbox — solid, interactable, emoji-on-platform (📫/📬/📪)
-    DUMP_TRUCK:  38   // Pressure wash dump truck — tall body, wall-decor wheels, cleaning equipment
+    DUMP_TRUCK:  38,  // Pressure wash dump truck — tall body, wall-decor wheels, cleaning equipment
+    DETRITUS:    39   // Adventurer detritus — walkable floor, bobbing emoji sprite, pick-up or walk-over
   };
 
   /** Check if a tile blocks movement */
@@ -56,7 +57,7 @@ var TILES = (function () {
            tile === T.FIRE || tile === T.SPIKES || tile === T.POISON ||
            tile === T.BONFIRE || tile === T.CORPSE || tile === T.COLLECTIBLE ||
            tile === T.PUZZLE || tile === T.ROAD || tile === T.PATH ||
-           tile === T.GRASS;
+           tile === T.GRASS || tile === T.DETRITUS;
   };
 
   /** Check if a tile is an environmental hazard */
