@@ -64,6 +64,27 @@ var Shop = (function () {
     admiralty: { label: 'The Admiralty', emoji: '🌊' }
   };
 
+  // ── Supply stock (DEPTH3 §5) ───────────────────────────────────────
+  // Unlimited supply items sold at every faction shop. Cheap crate-fill
+  // consumables + cleaning tools + utility items. Always available
+  // regardless of card refresh schedule. Data from items.json ITM-080–092.
+
+  var SUPPLY_STOCK = [
+    { id: 'ITM-080', name: 'Stale Rations',    emoji: '🍞', shopPrice: 2, category: 'food',    subtype: 'supply', crateFillTag: 'HP_FOOD',  desc: 'Barely edible. Fills an HP crate slot.' },
+    { id: 'ITM-081', name: 'Dead Cell',         emoji: '🔋', shopPrice: 3, category: 'battery', subtype: 'supply', crateFillTag: 'BATTERY',  desc: 'Drained but accepted by crate scanners.' },
+    { id: 'ITM-082', name: 'Weak Tonic',        emoji: '🧪', shopPrice: 2, category: 'energy',  subtype: 'supply', crateFillTag: 'ENERGY',   desc: 'Fizzy and flat. Fills an energy crate slot.' },
+    { id: 'ITM-083', name: 'Scrap Parchment',   emoji: '📜', shopPrice: 4, category: 'scroll',  subtype: 'supply', crateFillTag: 'SCROLL',   desc: 'Blank but official. Fills a scroll crate slot.' },
+    { id: 'ITM-084', name: 'Glass Bead',        emoji: '💎', shopPrice: 5, category: 'gem',     subtype: 'supply', crateFillTag: 'GEM',      desc: 'Pretty enough for a crate frame.' },
+    { id: 'ITM-085', name: 'Generic Salvage',   emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
+    { id: 'ITM-086', name: 'Torch Oil',         emoji: '🛢️', shopPrice: 3, category: 'fuel',    subtype: 'supply', desc: 'Refuels a torch. 3 units of fuel.' },
+    { id: 'ITM-087', name: 'Water Bottle',      emoji: '💧', shopPrice: 1, category: 'water',   subtype: 'supply', desc: 'Drink, clean, or douse. Never wrong to buy.' },
+    { id: 'ITM-088', name: 'Cleaning Rag',      emoji: '🧹', shopPrice: 1, category: 'tool',    subtype: 'rag',    desc: 'Basic cleaning tool. 3 uses, slow.' },
+    { id: 'ITM-089', name: 'Mop Head',          emoji: '🧹', shopPrice: 4, category: 'tool',    subtype: 'mop',    desc: 'Mid-tier clean speed. 5 uses.' },
+    { id: 'ITM-090', name: 'Scrub Brush',       emoji: '🧹', shopPrice: 8, category: 'tool',    subtype: 'brush',  desc: 'Fast cleaning. 8 uses. Worth every coin.' },
+    { id: 'ITM-091', name: 'Bone Powder',       emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
+    { id: 'ITM-092', name: 'Trap Spring',       emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' }
+  ];
+
   // ── Internal state ────────────────────────────────────────────────
 
   var _factionId   = null;   // Currently-open faction
@@ -325,6 +346,62 @@ var Shop = (function () {
     return { ok: true, amount: amount, repResult: repResult };
   }
 
+  // ── Supply purchases (DEPTH3 §5) ─────────────────────────────────
+
+  /**
+   * Buy a supply item by index into SUPPLY_STOCK.
+   * Unlimited stock — never sells out. Deducts gold, adds item to bag.
+   *
+   * @param {number} supplyIndex - Index into SUPPLY_STOCK array
+   * @returns {Object} { ok, reason?, item?, cost? }
+   */
+  function buySupply(supplyIndex) {
+    if (!_open) return { ok: false, reason: 'shop_closed' };
+
+    var template = SUPPLY_STOCK[supplyIndex];
+    if (!template) return { ok: false, reason: 'invalid_supply' };
+
+    var price = template.shopPrice || 1;
+    var gold = CardAuthority.getGold();
+    if (gold < price) {
+      return { ok: false, reason: 'no_gold', needed: price - gold };
+    }
+
+    // Check bag capacity
+    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) {
+      return { ok: false, reason: 'bag_full' };
+    }
+
+    // Deduct gold
+    CardAuthority.spendGold(price);
+
+    // Create a fresh item instance from the template
+    var item = {
+      id: template.id,
+      name: template.name,
+      emoji: template.emoji,
+      category: template.category,
+      subtype: template.subtype,
+      type: 'supply',
+      shopPrice: template.shopPrice
+    };
+    if (template.crateFillTag) item.crateFillTag = template.crateFillTag;
+
+    // Add to bag
+    CardAuthority.addToBag(item);
+
+    return { ok: true, item: item, cost: price };
+  }
+
+  /**
+   * Get the supply stock array (read-only reference).
+   * Always the same items — unlimited, never depleted.
+   * @returns {Array}
+   */
+  function getSupplyStock() {
+    return SUPPLY_STOCK;
+  }
+
   // ── Reputation ────────────────────────────────────────────────────
 
   /**
@@ -401,6 +478,9 @@ var Shop = (function () {
     getFactionLabel:   getFactionLabel,
     getFactionEmoji:   getFactionEmoji,
     isOpen:            isOpen,
-    getCardSellPrice:  _calcSellPrice
+    getCardSellPrice:  _calcSellPrice,
+    buySupply:         buySupply,
+    getSupplyStock:    getSupplyStock,
+    SUPPLY_STOCK:      SUPPLY_STOCK
   };
 })();

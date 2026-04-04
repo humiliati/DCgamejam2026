@@ -40,7 +40,8 @@ var CardAuthority = (function () {
 
   var MAX_HAND    = 5;
   var MAX_BACKUP  = 30;   // D1: expandable via equip items post-jam
-  var MAX_BAG     = 12;
+  var BASE_BAG    = 21;   // DEPTH3 §4: was 12, now 21+N (N from equipped bag_slots)
+  var MAX_BAG     = BASE_BAG;  // Legacy compat — use getMaxBag() for live value
   var MAX_STASH   = 20;
   var EQUIP_SLOTS = 3;    // 0=weapon, 1=consumable, 2=key
 
@@ -482,13 +483,33 @@ var CardAuthority = (function () {
   // ═══════════════════════════════════════════════════════════════════
 
   /**
+   * Get the current max bag size: BASE_BAG + sum of bag_slots from equipped items.
+   * DEPTH3 §4: base 21 + N (N from equipped passive item effects).
+   * @returns {number}
+   */
+  function getMaxBag() {
+    var bonus = 0;
+    for (var i = 0; i < EQUIP_SLOTS; i++) {
+      var eq = _state.equipped[i];
+      if (eq && eq.effects) {
+        for (var j = 0; j < eq.effects.length; j++) {
+          if (eq.effects[j].type === 'bag_slots') {
+            bonus += (eq.effects[j].value || 0);
+          }
+        }
+      }
+    }
+    return BASE_BAG + bonus;
+  }
+
+  /**
    * Add an item or card to the bag. Returns false if bag is full.
    * @param {Object} item
    * @returns {boolean}
    */
   function addToBag(item) {
     if (!item) return false;
-    if (_state.bag.length >= MAX_BAG) return false;
+    if (_state.bag.length >= getMaxBag()) return false;
     _state.bag.push(item);
     _emit('bag:changed', { bag: getBag() });
     return true;
@@ -822,7 +843,8 @@ var CardAuthority = (function () {
     // ── Constants ──
     MAX_HAND:       MAX_HAND,
     MAX_BACKUP:     MAX_BACKUP,
-    MAX_BAG:        MAX_BAG,
+    MAX_BAG:        MAX_BAG,       // Legacy constant (21). Use getMaxBag() for live value
+    getMaxBag:      getMaxBag,     // DEPTH3 §4: BASE_BAG + equipped bag_slots
     MAX_STASH:      MAX_STASH,
     EQUIP_SLOTS:    EQUIP_SLOTS,
 

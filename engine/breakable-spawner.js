@@ -115,6 +115,16 @@ var BreakableSpawner = (function () {
     var b = _getAt(x, y);
     if (!b) return null;
 
+    // ── Depth-3+ supply crates are indestructible (DEPTH3 §3) ────
+    // Detritus is handled by DetritusSprites, not here.
+    // Only BREAKABLE tiles with CrateSystem containers are protected.
+    var depth = _floorId ? _floorId.split('.').length : 1;
+    if (depth >= 3 && typeof CrateSystem !== 'undefined' &&
+        CrateSystem.hasContainer && CrateSystem.hasContainer(x, y, _floorId)) {
+      // This crate is bolted down. Fill it, don't smash it.
+      return { blocked: true, reason: 'crate_bolted' };
+    }
+
     b.hp--;
 
     if (b.hp > 0) return null;  // Still standing

@@ -376,13 +376,21 @@ var Game = (function () {
     InputManager.on('scroll_up', function (type) {
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
-        MenuFaces.handleSettingsAdjust(+10);
+        if (MenuFaces.isSettingsLocked()) {
+          MenuFaces.handleSettingsAdjust(+10);
+        } else {
+          MenuFaces.handleSettingsScroll(-30);
+        }
       }
     });
     InputManager.on('scroll_down', function (type) {
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
-        MenuFaces.handleSettingsAdjust(-10);
+        if (MenuFaces.isSettingsLocked()) {
+          MenuFaces.handleSettingsAdjust(-10);
+        } else {
+          MenuFaces.handleSettingsScroll(30);
+        }
       }
     });
 
@@ -795,6 +803,52 @@ var Game = (function () {
     CombatBridge.init({
       onGameOver: function () {
         ScreenManager.toGameOver();
+      },
+      onDeathRescue: function (info) {
+        console.log('[Game] Combat death rescue from ' + info.floorId + ' (depth ' + info.depth + ')');
+
+        // Track cumulative fail stats
+        if (typeof Player !== 'undefined') {
+          Player.setFlag('deathCount', (Player.getFlag('deathCount') || 0) + 1);
+          Player.setFlag('consecutiveFails', (Player.getFlag('consecutiveFails') || 0) + 1);
+        }
+
+        // Mirror debuffs into StatusEffect for HUD display
+        if (typeof StatusEffect !== 'undefined') {
+          StatusEffect.apply('GROGGY', 1);
+          StatusEffect.apply('SORE', 1);
+          StatusEffect.apply('HUMILIATED', 1);
+          if (info.depth >= 3) {
+            StatusEffect.apply('SHAKEN', 2);
+          }
+          StatusEffect.remove('TIRED', 'manual');
+        }
+
+        // Show narrative Toast
+        if (typeof Toast !== 'undefined') {
+          if (info.depth >= 3) {
+            Toast.show('\uD83D\uDECF The heroes carried you home. You owe them one.', 'warning');
+          } else {
+            Toast.show('\uD83D\uDECF You stumbled home battered. Rest up, Gleaner.', 'warning');
+          }
+        }
+
+        // §10: Death-shift — shift this group's hero day to tomorrow
+        if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onPlayerDeath) {
+          var shifted = DungeonSchedule.onPlayerDeath(info.floorId);
+          if (shifted && typeof Toast !== 'undefined') {
+            Toast.show('\u26A0 ' + shifted.label + ' hero day shifted to Day ' +
+                       shifted.actualDay + '!', 'warning');
+          }
+        }
+
+        // Close any open peek/crate UI before rescue transition
+        if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
+
+        // Transition to home floor after a brief delay
+        setTimeout(function () {
+          FloorTransition.go('1.6', 'retreat');
+        }, 800);
       }
     });
     if (typeof CombatFX !== 'undefined') CombatFX.init();
@@ -811,6 +865,12 @@ var Game = (function () {
     if (HazardSystem.setOnDeathRescue) {
       HazardSystem.setOnDeathRescue(function (info) {
         console.log('[Game] Death rescue from ' + info.floorId + ' (depth ' + info.depth + ')');
+
+        // Track cumulative fail stats
+        if (typeof Player !== 'undefined') {
+          Player.setFlag('deathCount', (Player.getFlag('deathCount') || 0) + 1);
+          Player.setFlag('consecutiveFails', (Player.getFlag('consecutiveFails') || 0) + 1);
+        }
 
         // Mirror debuffs into StatusEffect for HUD display
         if (typeof StatusEffect !== 'undefined') {
@@ -1018,6 +1078,12 @@ var Game = (function () {
       // ── Curfew collapse at 02:00 — forced home, penalties ──
       DayCycle.setOnCurfew(function (day) {
         console.log('[Game] Curfew collapse at 02:00 on day ' + day);
+
+        // Track cumulative fail stats
+        if (typeof Player !== 'undefined') {
+          Player.setFlag('curfewCount', (Player.getFlag('curfewCount') || 0) + 1);
+          Player.setFlag('consecutiveFails', (Player.getFlag('consecutiveFails') || 0) + 1);
+        }
 
         var currentFloor = FloorManager.getFloor();
         var depth = currentFloor ? currentFloor.split('.').length : 1;
@@ -2934,7 +3000,18 @@ var Game = (function () {
     // Cobweb system: scan eligible positions on floor load (depth 3+)
     if (typeof CobwebSystem !== 'undefined' && depth >= 3) {
       var cobFd = FloorManager.getFloorData();
-      if (cobFd) CobwebSystem.onFloorLoad(cobFd, floorId);
+      if (cobFd) {
+        CobwebSystem.onFloorLoad(cobFd, floorId);
+        // Install pre-authored cobwebs from floor blockout data.
+        // These represent webs left by a previous gleaner shift — the
+        // dungeon isn't pristine, it has some existing maintenance.
+        if (cobFd.cobwebs && cobFd.cobwebs.length) {
+          for (var _cwi = 0; _cwi < cobFd.cobwebs.length; _cwi++) {
+            var _cw = cobFd.cobwebs[_cwi];
+            CobwebSystem.install(_cw.x, _cw.y, floorId, 'standalone');
+          }
+        }
+      }
     }
 
     // IO-8: Auto-create CrateSystem containers for CHEST tiles on floor load.
@@ -3066,6 +3143,28 @@ var Game = (function () {
     // On first arrival before gate is unlocked, spawn the Dispatcher
     if (!_gateUnlocked) {
       _spawnDispatcherGate();
+    }
+
+    // ── Dispatcher confrontation: escalating barks based on fail streak ──
+    if (_gateUnlocked && typeof Player !== 'undefined') {
+      var fails = Player.getFlag('consecutiveFails') || 0;
+      if (fails >= 4) {
+        // Terminal — game over via dispatcher firing
+        setTimeout(function () {
+          BarkLibrary.fire('npc.dispatcher.warn.fired');
+          setTimeout(function () {
+            _changeState(S.GAME_OVER);
+          }, 3000);
+        }, 1500);
+      } else if (fails >= 3) {
+        setTimeout(function () {
+          BarkLibrary.fire('npc.dispatcher.warn.severe');
+        }, 1500);
+      } else if (fails >= 2) {
+        setTimeout(function () {
+          BarkLibrary.fire('npc.dispatcher.warn.mild');
+        }, 1500);
+      }
     }
   }
 
@@ -3739,7 +3838,11 @@ var Game = (function () {
           }
 
           // Heal + heal particles
-          if (typeof Player !== 'undefined') Player.fullRestore();
+          if (typeof Player !== 'undefined') {
+            Player.fullRestore();
+            // Successful voluntary sleep resets consecutive fail streak
+            Player.setFlag('consecutiveFails', 0);
+          }
           if (typeof ParticleFX !== 'undefined') {
             ParticleFX.healPulse(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.5 : 220);
           }
@@ -4283,17 +4386,27 @@ var Game = (function () {
       StatusBar.collapseIfIdle();
     }
 
-    // Cobweb destruction — player (or enemy) walks through standalone cobweb.
+    // Cobweb destruction — player walks through standalone cobweb.
     // The player tears their own web if they backtrack carelessly.
-    // This is the strategic cost: deploy webs after you've cleared
-    // a corridor, then path around them on the way out.
+    // Strategic cost: deploy webs after clearing a corridor, then
+    // path around them on the way out. Tearing costs 1g penalty
+    // (you're undoing your own work) and hurts readiness.
     if (typeof CobwebSystem !== 'undefined') {
       var cobFloorId = FloorManager.getCurrentFloorId();
       if (CobwebSystem.onEntityMove(x, y, cobFloorId)) {
-        AudioSystem.play('sweep', { volume: 0.3 });
-        Toast.show('🕸️ ' + i18n.t('cobweb.torn', 'You tore your own cobweb!'), 'warning');
-        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕸️ Torn!', x, y, 'warning');
+        // Track player self-tear for readiness penalty
+        CobwebSystem.recordPlayerTear(cobFloorId);
+        // Coin penalty — carelessness costs money (can go to 0, not below)
+        var tearPenalty = 1;
+        CardAuthority.spendGold(tearPenalty);
+        if (typeof AudioSystem !== 'undefined') AudioSystem.play('sweep', { volume: 0.3 });
+        Toast.show('🕸️ ' + i18n.t('cobweb.torn', 'You tore your own cobweb!') + '  -' + tearPenalty + 'g', 'warning');
+        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕸️ -' + tearPenalty + 'g', x, y, 'warning');
         if (typeof SessionStats !== 'undefined') SessionStats.inc('cobwebsTorn');
+        // Silk strand tear particles
+        if (typeof CobwebRenderer !== 'undefined' && CobwebRenderer.spawnTear) {
+          CobwebRenderer.spawnTear(x, y);
+        }
       }
     }
 
@@ -4326,6 +4439,29 @@ var Game = (function () {
     if (tile === TILES.COLLECTIBLE) {
       var pickup = WorldItems.pickupAt(x, y, floorData.grid);
       if (pickup) _applyPickup(pickup);
+    }
+
+    // Walk-over detritus auto-collect (step on debris → battery/HP/energy)
+    if (tile === TILES.DETRITUS) {
+      _collectDetritus(x, y);
+    }
+
+    // ── DEPTH3 §6.3c: Scrub-on-walk passive cleaning ──
+    // Walking over a blood tile with a cleaning tool equipped auto-scrubs
+    // 1 blood layer. No interaction needed — exploration IS cleaning.
+    if (typeof CleaningSystem !== 'undefined') {
+      var scrubFloorId = FloorManager.getCurrentFloorId();
+      if (CleaningSystem.isDirty(x, y, scrubFloorId)) {
+        var tool = CardAuthority.getEquipSlot(1); // consumable slot
+        if (tool && tool.subtype && CleaningSystem.TOOL_SPEED[tool.subtype]) {
+          var scrubbed = CleaningSystem.scrub(x, y, scrubFloorId, tool.subtype);
+          if (scrubbed) {
+            AudioSystem.play('sweep', { volume: 0.2 });
+            // Subtle red flash feedback, no text toast (spec: "subtle red flash on tile")
+            if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🩸', x, y, 'warning');
+          }
+        }
+      }
     }
 
     // HOT tick (heal-over-time from food items)
@@ -4535,12 +4671,35 @@ var Game = (function () {
       }
     }
 
+    // Friendly (resurrected) enemy interaction — bark or re-fight
+    if (typeof CombatBridge !== 'undefined') {
+      var enemies = FloorManager.getEnemies();
+      for (var _fi = 0; _fi < enemies.length; _fi++) {
+        var _fe = enemies[_fi];
+        if (_fe.friendly && _fe.x === fx && _fe.y === fy) {
+          CombatBridge.interactFriendlyEnemy(_fe);
+          return;
+        }
+      }
+    }
+
     // Cobweb installation — spider deployment on eligible corridor tiles
+    // Awards 2g per web (gleaner work = coin income).
     if (typeof CobwebNode !== 'undefined') {
       if (CobwebNode.tryInteract(FloorManager.getCurrentFloorId())) {
         if (typeof SessionStats !== 'undefined') SessionStats.inc('cobwebsInstalled');
-        Toast.show('🕷️ ' + i18n.t('cobweb.installed', 'Cobweb installed'), 'loot');
-        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕷️ Deployed!', fx, fy, 'loot');
+        // Coin reward for gleaner work
+        var cobwebGold = 2;
+        CardAuthority.addGold(cobwebGold);
+        Toast.show('🕷️ ' + i18n.t('cobweb.installed', 'Cobweb installed') + '  +' + cobwebGold + 'g', 'loot');
+        if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🕷️ +' + cobwebGold + 'g', fx, fy, 'loot');
+        if (typeof ParticleFX !== 'undefined') {
+          var _cobCanvas = document.getElementById('view-canvas');
+          var _cobCx = _cobCanvas ? _cobCanvas.width / 2 : 320;
+          var _cobCy = _cobCanvas ? _cobCanvas.height * 0.5 : 200;
+          ParticleFX.coinBurst(_cobCx, _cobCy, 2);
+        }
+        if (typeof AudioSystem !== 'undefined') AudioSystem.playRandom('coin', { volume: 0.4 });
         return;
       }
     }
@@ -4651,7 +4810,7 @@ var Game = (function () {
       var shopList = floorData.shops || [];
       for (var si = 0; si < shopList.length; si++) {
         if (shopList[si].x === fx && shopList[si].y === fy) {
-          shopFaction = shopList[si].factionId;
+          shopFaction = shopList[si].faction || shopList[si].factionId || 'tide';
           break;
         }
       }
@@ -4665,12 +4824,22 @@ var Game = (function () {
       }
       // Fallback: necro-salvage (harvest parts from the Hero's mess)
       _harvestCorpse(fx, fy);
+    } else if (tile === TILES.DETRITUS) {
+      // Face + OK: pick up detritus item directly into bag
+      _collectDetritus(fx, fy);
     } else if (tile === TILES.BREAKABLE) {
-      // If a CrateSystem container exists (crate slots), open slot-filling UI
+      // If a CrateSystem container exists (crate slots):
+      //   1. Quick-fill from bag (DEPTH3 §6.3b) — auto-match & fill slots
+      //   2. If still has empties → open PeekSlots for manual filling
+      //   3. If fully filled → already sealed, skip PeekSlots
       var crateFloorId = FloorManager.getCurrentFloorId();
-      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
+      if (typeof CrateSystem !== 'undefined' &&
           CrateSystem.hasContainer(fx, fy, crateFloorId)) {
-        if (PeekSlots.tryOpen(fx, fy, crateFloorId)) return;
+        // Quick-fill pass: auto-slot matching bag items
+        if (_quickFillCrate(fx, fy, crateFloorId)) return; // Sealed — done
+        // Still has empties: open manual slot UI
+        if (typeof PeekSlots !== 'undefined' &&
+            PeekSlots.tryOpen(fx, fy, crateFloorId)) return;
       }
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
@@ -4718,6 +4887,70 @@ var Game = (function () {
     }
   }
 
+  // ── Quick-fill crate from bag (DEPTH3 §6.3b) ─────────────────────
+
+  /**
+   * Auto-fill empty crate slots with matching bag items before opening
+   * PeekSlots. Scans the bag for items whose crateFillTag or category
+   * matches each empty slot's frameTag, fills in one pass, then:
+   *   - If crate still has empties → returns false (caller opens PeekSlots)
+   *   - If crate is now full → auto-seals, awards coins, returns true
+   *
+   * @param {number} fx - Crate grid X
+   * @param {number} fy - Crate grid Y
+   * @param {string} floorId
+   * @returns {boolean} true if crate was fully filled and sealed
+   */
+  function _quickFillCrate(fx, fy, floorId) {
+    var crate = CrateSystem.getContainer(fx, fy, floorId);
+    if (!crate || crate.sealed) return false;
+
+    var filled = 0;
+
+    for (var s = 0; s < crate.slots.length; s++) {
+      var slot = crate.slots[s];
+      if (slot.filled) continue;
+
+      // Scan bag for a matching item (live bag — shrinks as we remove)
+      var bag = CardAuthority.getBag();
+      var bestIdx = -1;
+      for (var b = 0; b < bag.length; b++) {
+        if (CrateSystem.doesItemMatch(bag[b], slot.frameTag)) {
+          bestIdx = b;
+          break; // First match wins — keeps bag order predictable
+        }
+      }
+
+      if (bestIdx === -1) continue; // No match in bag for this slot
+
+      // Pull the item out of the bag and fill the slot
+      var item = CardAuthority.removeFromBag(bestIdx);
+      if (!item) continue;
+
+      CrateSystem.fillSlot(fx, fy, floorId, s, item);
+      filled++;
+    }
+
+    if (filled === 0) return false;
+
+    // Feedback
+    AudioSystem.play('pickup', { volume: 0.4 });
+    Toast.show('📦 ' + i18n.t('toast.quick_fill', 'Auto-stocked') + ' ' + filled + ' ' + i18n.t('toast.slots', 'slot' + (filled > 1 ? 's' : '')), 'info');
+
+    // If all slots now filled → auto-seal
+    if (CrateSystem.canSeal(fx, fy, floorId)) {
+      var result = CrateSystem.seal(fx, fy, floorId);
+      if (result) {
+        AudioSystem.play('ui-confirm', { volume: 0.6 });
+        Toast.show('✅ ' + i18n.t('toast.crate_sealed', 'Crate sealed!') + ' +' + result.totalCoins + 'g', 'loot');
+        SessionStats.inc('cratesSealed');
+      }
+      return true; // Fully filled — no need to open PeekSlots
+    }
+
+    return false; // Still has empties — caller should open PeekSlots
+  }
+
   // ── Breakable prop smash ──────────────────────────────────────────
 
   function _smashBreakable(fx, fy) {
@@ -4730,12 +4963,106 @@ var Game = (function () {
     AudioSystem.play('smash', { volume: 0.7 });
 
     var destroyed = BreakableSpawner.hitBreakable(fx, fy, floorData.grid);
+
+    // Depth-3+ supply crates are bolted down (DEPTH3 §3)
+    if (destroyed && destroyed.blocked) {
+      AudioSystem.play('ui-blop', { volume: 0.5 });
+      Toast.show('\uD83D\uDD29 ' + i18n.t('toast.crate_bolted', 'This crate is bolted down. Fill it, don\'t smash it.'), 'info');
+      return;
+    }
+
     if (destroyed) {
       Toast.show(destroyed.emoji + ' ' + destroyed.name + ' ' + i18n.t('toast.smashed', 'smashed!'), 'loot');
       AudioSystem.playRandom('coin', { volume: 0.4 });  // Loot spill feedback
       SessionStats.inc('breakablesBroken');
+
+      // ── DEPTH3 §6.3a: Auto-loot spilled drops directly ──
+      // Instead of leaving walk-over items on the floor, immediately collect
+      // everything _spillDrops just placed at the destroy site + adjacents.
+      // Anything that fails pickup stays on the floor (existing fallback).
+      if (typeof WorldItems !== 'undefined') {
+        var dirs = [{ dx:0,dy:0 }, { dx:0,dy:-1 }, { dx:1,dy:0 }, { dx:0,dy:1 }, { dx:-1,dy:0 }];
+        var autoCount = 0;
+        for (var di = 0; di < dirs.length; di++) {
+          var ax = fx + dirs[di].dx;
+          var ay = fy + dirs[di].dy;
+          var loot = WorldItems.pickupAt(ax, ay, floorData.grid);
+          while (loot) {
+            _applyPickup(loot);
+            autoCount++;
+            loot = WorldItems.pickupAt(ax, ay, floorData.grid);
+          }
+        }
+      }
     }
     // If not destroyed, the prompt stays visible until HP reaches 0
+  }
+
+  // ── Detritus pickup (face+OK or walk-over) ───────────────────────
+
+  /**
+   * Collect detritus at (gx, gy).
+   * - Removes the sprite from DetritusSprites cache
+   * - Clears tile to EMPTY
+   * - Face+OK: full item drop (auto-loot into bag via WorldItems)
+   * - Walk-over: simplified pickup (battery/HP/energy based on type)
+   * - Shows a toast either way
+   *
+   * Both paths converge here — the walk-over path just gets a simpler
+   * pickup effect (no bag item, just a stat bump).
+   */
+  function _collectDetritus(gx, gy) {
+    if (typeof DetritusSprites === 'undefined') return;
+
+    var floorData = FloorManager.getFloorData();
+    if (!floorData || !floorData.grid) return;
+
+    var det = DetritusSprites.getAt(gx, gy);
+    if (!det) return;
+
+    // Remove from sprite cache + clear grid tile
+    var removed = DetritusSprites.remove(gx, gy, floorData.grid);
+    if (!removed) return;
+
+    AudioSystem.play('pickup', { volume: 0.5 });
+
+    // ── Determine if face+OK (interact) or walk-over ──
+    var pos = MC.getGridPos();
+    var isFacing = (pos.x !== gx || pos.y !== gy); // If player is NOT on the tile, they're facing it
+
+    if (isFacing) {
+      // Face + OK: full item pickup — drop the item into bag
+      // Uses WorldItems to spawn a walk-over collectible at player feet
+      // that's immediately picked up. This reuses the existing loot pipe.
+      Toast.show(removed.detritusEmoji + ' ' + i18n.t('toast.detritus_pickup', 'Picked up') + ' ' + removed.detritusName, 'loot');
+
+      // Spawn item drop at the tile location, then immediately collect
+      if (typeof WorldItems !== 'undefined' && removed.dropItemId) {
+        WorldItems.spawnAt(gx, gy, {
+          type: removed.walkOverType,
+          amount: removed.walkOverAmount,
+          itemId: removed.dropItemId
+        }, floorData.grid);
+        // Auto-collect: pick it up since player just interacted deliberately
+        var autoPickup = WorldItems.pickupAt(gx, gy, floorData.grid);
+        if (autoPickup) _applyPickup(autoPickup);
+      }
+    } else {
+      // Walk-over: simplified stat pickup (no bag item, just the effect)
+      if (removed.walkOverType === 'food') {
+        Player.heal(removed.walkOverAmount || 1);
+        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u2665', 'hp');
+      } else if (removed.walkOverType === 'battery') {
+        Player.addBattery(removed.walkOverAmount || 1);
+        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u25C8', 'battery');
+      } else if (removed.walkOverType === 'energy') {
+        if (typeof Player.restoreEnergy === 'function') Player.restoreEnergy(removed.walkOverAmount || 1);
+        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u26A1', 'energy');
+      }
+    }
+
+    SessionStats.inc('detritusCollected');
+    HUD.updatePlayer(Player.state());
   }
 
   // ── Vendor dialog (NPC greeting → shop open) ──────────────────────
@@ -4786,27 +5113,48 @@ var Game = (function () {
   var _vendorVisits = { tide: 0, foundry: 0, admiralty: 0 };
 
   /**
-   * Show a vendor greeting dialog, then open the shop on close.
-   * First visit to a faction uses the longer intro; subsequent visits
-   * rotate through shorter lines.
+   * Show vendor interaction flow. Delegates to VendorDialog if available
+   * (full greeting tree: Browse Wares / Buy Supplies / Sell All Junk / Leave).
+   * Falls back to the legacy DialogBox → pause menu path.
    *
    * @param {string} factionId - 'tide' | 'foundry' | 'admiralty'
    */
   function _openVendorDialog(factionId) {
-    var npc = VENDOR_NPC[factionId] || VENDOR_NPC.tide;
-    var visits = _vendorVisits[factionId] || 0;
-
-    // Pick greeting text
-    var greeting;
-    if (visits === 0) {
-      greeting = i18n.t('vendor.' + factionId + '.first', npc.first);
-    } else {
-      var idx = (visits - 1) % npc.lines.length;
-      greeting = i18n.t('vendor.' + factionId + '.' + idx, npc.lines[idx]);
-    }
-    _vendorVisits[factionId] = visits + 1;
+    _vendorVisits[factionId] = (_vendorVisits[factionId] || 0) + 1;
 
     AudioSystem.playRandom('coin', { volume: 0.3 });
+
+    // ── Primary path: VendorDialog (has supply stock + bulk sell) ──
+    if (typeof VendorDialog !== 'undefined') {
+      var floorId = FloorManager.getCurrentFloorId();
+      VendorDialog.open(factionId, floorId, {
+        onBrowse: function () {
+          // "Browse Wares" → open card shop via pause menu
+          if (typeof Shop !== 'undefined') {
+            Shop.open(factionId, FloorManager.getFloor());
+          }
+          _pendingMenuContext = 'shop';
+          _pendingMenuFace = 0;
+          ScreenManager.toPause();
+        },
+        onLeave: function () {
+          // "Leave" — close, return to gameplay
+          if (typeof Shop !== 'undefined') Shop.close();
+        }
+      });
+      return;
+    }
+
+    // ── Fallback: legacy DialogBox greeting → direct shop open ──
+    var npc = VENDOR_NPC[factionId] || VENDOR_NPC.tide;
+    var visits = _vendorVisits[factionId] || 0;
+    var greeting;
+    if (visits <= 1) {
+      greeting = i18n.t('vendor.' + factionId + '.first', npc.first);
+    } else {
+      var idx = (visits - 2) % npc.lines.length;
+      greeting = i18n.t('vendor.' + factionId + '.' + idx, npc.lines[idx]);
+    }
 
     DialogBox.show({
       text:     greeting,
@@ -4814,7 +5162,6 @@ var Game = (function () {
       portrait: npc.emoji,
       priority: DialogBox.PRIORITY.DIALOGUE,
       onClose: function () {
-        // Open shop after dialog dismisses
         if (typeof Shop !== 'undefined') {
           Shop.open(factionId, FloorManager.getFloor());
         }
@@ -4848,29 +5195,41 @@ var Game = (function () {
         var rfd = FloorManager.getFloorData();
         if (rfd && rfd.grid[fy]) rfd.grid[fy][fx] = TILES.EMPTY;
 
+        // Try to find the original enemy object still in _enemies (placed
+        // there by CombatBridge victory handler with hp=0, spriteState='dead').
+        // If found, resurrect it in-place. If not (e.g. pre-placed corpse
+        // that was never a combat enemy), fall back to spawning a new NPC.
+        var existingEnemy = (typeof CombatBridge !== 'undefined')
+          ? CombatBridge.findDeadEnemyAt(fx, fy) : null;
+
         // Fire stand-up animation
         if (typeof DeathAnim !== 'undefined') {
           var canvas = document.getElementById('view-canvas');
           var cw = canvas ? canvas.width : 640;
           var ch = canvas ? canvas.height : 400;
           DeathAnim.startReanimate(reanimData.type, cw / 2, ch * 0.45, 0.6, function () {
-            // Spawn friendly NPC into the enemy list
-            var npc = {
-              x: fx, y: fy,
-              id: 'reanim_' + reanimData.type + '_' + fx + '_' + fy,
-              name: reanimData.name,
-              emoji: reanimData.emoji,
-              type: reanimData.type,
-              hp: reanimData.hp,
-              maxHp: reanimData.hp,
-              str: reanimData.str,
-              facing: 'south',
-              awareness: 0,
-              friendly: true,
-              nonLethal: true,
-              tags: reanimData.tags || []
-            };
-            FloorManager.getEnemies().push(npc);
+            if (existingEnemy) {
+              // Resurrect the original enemy object in-place
+              CombatBridge.resurrectAsFriendly(existingEnemy);
+            } else {
+              // Fallback: spawn new friendly NPC (pre-placed world corpse)
+              var npc = {
+                x: fx, y: fy,
+                id: 'reanim_' + reanimData.type + '_' + fx + '_' + fy,
+                name: reanimData.name,
+                emoji: reanimData.emoji,
+                type: reanimData.type,
+                hp: reanimData.hp,
+                maxHp: reanimData.hp,
+                str: reanimData.str,
+                facing: 'south',
+                awareness: 0,
+                friendly: true,
+                nonLethal: true,
+                tags: reanimData.tags || []
+              };
+              FloorManager.getEnemies().push(npc);
+            }
             Toast.show(i18n.t('toast.reanimate', 'The fallen rises...'), 'loot');
           });
         }
@@ -5143,7 +5502,7 @@ var Game = (function () {
     var item = CardAuthority.getEquipSlot(slot);
     if (!item) return;
 
-    if (CardAuthority.getBagSize() >= CardAuthority.MAX_BAG) {
+    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) {
       Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
       return;
     }
@@ -5186,7 +5545,7 @@ var Game = (function () {
     var item = stash[stashIndex];
     if (!item) return;
 
-    if (CardAuthority.getBagSize() >= CardAuthority.MAX_BAG) {
+    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) {
       Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
       return;
     }
@@ -5281,7 +5640,7 @@ var Game = (function () {
     var bagSize = (typeof CardAuthority.getBagSize === 'function')
       ? CardAuthority.getBagSize()
       : CardAuthority.getBag().length;
-    if (bagSize < CardAuthority.MAX_BAG) {
+    if (bagSize < CardAuthority.getMaxBag()) {
       CardAuthority.removeFromBackupById(card.id);
       card._bagStored = true;
       CardAuthority.addToBag(card);
@@ -5420,6 +5779,10 @@ var Game = (function () {
     var frameDt = now - _lastFrameTime;
     _lastFrameTime = now;
     if (frameDt > 100) frameDt = 100;
+
+    // Poll gamepad every frame regardless of screen state
+    // (title, game-over, etc. all need gamepad input)
+    InputManager.pollGamepad();
 
     // GIF recorder capture (runs regardless of screen)
     if (typeof GifRecorder !== 'undefined' && GifRecorder.tick) {
@@ -5828,6 +6191,35 @@ var Game = (function () {
       }
     }
 
+    // ── Detritus billboard sprites (bobbing debris on floor) ─────
+    if (typeof DetritusSprites !== 'undefined') {
+      var _detFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
+      var detritusPlacements = null;
+      if (typeof FloorManager !== 'undefined' && FloorManager.getFloorData) {
+        var _detFD = FloorManager.getFloorData();
+        if (_detFD && _detFD.detritusPlacements) detritusPlacements = _detFD.detritusPlacements;
+      }
+      var detritusSprites = DetritusSprites.buildSprites(
+        _detFloorId, floorData.grid, floorData.gridW, floorData.gridH, detritusPlacements
+      );
+      DetritusSprites.animate(now);
+      for (var dei = 0; dei < detritusSprites.length; dei++) {
+        var des = detritusSprites[dei];
+        _sprites.push({
+          x: des.x,
+          y: des.y,
+          emoji: des.emoji,
+          scale: des.scale,
+          bobY: des.bobY || 0,
+          groundLevel: des.groundLevel,
+          groundTilt: des.groundTilt,
+          noFogFade: false,
+          glow: null,
+          glowRadius: 0
+        });
+      }
+    }
+
     // Tick door-open animation (before raycaster reads its state)
     if (typeof DoorAnimator !== 'undefined') DoorAnimator.update(frameDt);
 
@@ -5876,7 +6268,12 @@ var Game = (function () {
     var _cobFloorId = FloorManager.getCurrentFloorId();
     var _cobPlayer = { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset };
     if (typeof CobwebRenderer !== 'undefined') {
-      CobwebRenderer.render(ctx, _canvas.width, _canvas.height, _cobPlayer, _cobFloorId);
+      var _cobBiome = (typeof FloorManager !== 'undefined' && FloorManager.getBiome)
+        ? FloorManager.getBiome() : 'cellar';
+      CobwebRenderer.render(ctx, _canvas.width, _canvas.height, _cobPlayer, _cobFloorId, _cobBiome);
+      if (CobwebRenderer.updateTearParticles) {
+        CobwebRenderer.updateTearParticles(ctx, _canvas.width, _canvas.height, _cobPlayer, frameDt);
+      }
     }
     if (typeof CobwebNode !== 'undefined') {
       CobwebNode.update(frameDt, _cobFloorId);

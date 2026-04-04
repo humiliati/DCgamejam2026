@@ -967,7 +967,7 @@ var MenuFaces = (function () {
     var F_SMALL = Math.max(10, Math.round(13 * S));
 
     var bag = CardAuthority.getBag();
-    var maxBag = CardAuthority.MAX_BAG;
+    var maxBag = CardAuthority.getMaxBag();
 
     // Capacity header
     ctx.fillStyle = COL.dim;
@@ -1982,7 +1982,7 @@ var MenuFaces = (function () {
     // Section 2: BAG (adaptive wheel + expander)
     // ════════════════════════════════════════════════════════════
     var bag = CardAuthority.getBag();
-    var bagMax = CardAuthority.MAX_BAG || 12;
+    var bagMax = CardAuthority.getMaxBag() || 12;
     var bagFocused = (_invFocus === 'bag');
     var bagHeaderH = Math.round(22 * S);
 
@@ -2431,12 +2431,12 @@ var MenuFaces = (function () {
       ctx.fillStyle = COL.accent;
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('BAG (' + bag.length + '/' + CardAuthority.MAX_BAG + ')', panelLX + halfW / 2, ty + 10);
+      ctx.fillText('BAG (' + bag.length + '/' + CardAuthority.getMaxBag() + ')', panelLX + halfW / 2, ty + 10);
 
       var bagY = ty + 16;
-      var bagRows = Math.ceil(CardAuthority.MAX_BAG / cols);
+      var bagRows = Math.ceil(CardAuthority.getMaxBag() / cols);
       var bagGridX = panelLX + (halfW - bagGridW) / 2;
-      _renderSlotGrid(ctx, bag, CardAuthority.MAX_BAG, cols, slotSize, bagGridX, bagY, bagRows,
+      _renderSlotGrid(ctx, bag, CardAuthority.getMaxBag(), cols, slotSize, bagGridX, bagY, bagRows,
                        300, 'bag-to-stash');
 
       // ── Right panel: VAULT / STASH ──
@@ -2475,10 +2475,10 @@ var MenuFaces = (function () {
       ctx.fillStyle = COL.dim;
       ctx.font = '12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(bag.length + ' / ' + CardAuthority.MAX_BAG + ' slots', x + w / 2, ty + 10);
+      ctx.fillText(bag.length + ' / ' + CardAuthority.getMaxBag() + ' slots', x + w / 2, ty + 10);
       ty += 16;
 
-      var totalSlots2 = CardAuthority.MAX_BAG;
+      var totalSlots2 = CardAuthority.getMaxBag();
       var rows2 = Math.ceil(totalSlots2 / cols);
       _renderSlotGrid(ctx, bag, totalSlots2, cols, slotSize, gridX2, ty, rows2, 300, null);
 
@@ -2696,8 +2696,9 @@ var MenuFaces = (function () {
 
   // ── Settings face state (persists within a pause session) ───────
 
-  var _settingsState = { row: 0 };   // 0–2 = sliders, 3–6 = toggles, 7 = language
+  var _settingsState = { row: 0 };   // 0–2 = sliders, 3+ = toggles, then language
   var _settingsLocked = false;       // When true, ←/→ adjusts slider, W/S blocked
+  var _f3ScrollY = 0;                // Scroll offset for Face 3 overflow
 
   var _SLIDER_DEFS = [
     { key: 'master', labelKey: 'settings.master', label: 'Master Volume',
@@ -2708,8 +2709,8 @@ var MenuFaces = (function () {
       desc: 'Background music and ambient tracks', bind: 'Scroll' }
   ];
 
-  // Total navigable rows: 3 sliders + 4 toggles + 1 language = 8
-  var _TOGGLE_COUNT = 4;
+  // Total navigable rows: 3 sliders + 10 toggles + 1 language = 14
+  var _TOGGLE_COUNT = 10;
   var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + 1;
 
   /**
@@ -2754,7 +2755,11 @@ var MenuFaces = (function () {
       _settingsLocked = !_settingsLocked;
     } else if (row < _SLIDER_DEFS.length + _TOGGLE_COUNT) {
       // Toggle row — fire the toggle
-      var toggleKeys = ['screenShake', 'invertYFreeLook', 'showFps', 'minimapVisible'];
+      var toggleKeys = [
+        'screenShake', 'invertYFreeLook', 'showFps', 'minimapVisible',
+        'gpEnabled', 'gpVibration',
+        'quadStick', 'autoAim', 'largeText', 'slowMode'
+      ];
       var tIdx = row - _SLIDER_DEFS.length;
       if (tIdx >= 0 && tIdx < toggleKeys.length) {
         handleSettingsToggle(toggleKeys[tIdx]);
@@ -2772,6 +2777,7 @@ var MenuFaces = (function () {
   function resetSettings() {
     _settingsState.row = 0;
     _settingsLocked = false;
+    _f3ScrollY = 0;
   }
 
   /**
@@ -2783,7 +2789,13 @@ var MenuFaces = (function () {
       { key: 'screenShake', default: true },
       { key: 'invertYFreeLook', default: false },
       { key: 'showFps', default: false },
-      { key: 'minimapVisible', default: true }
+      { key: 'minimapVisible', default: true },
+      { key: 'gpEnabled', default: true },
+      { key: 'gpVibration', default: true },
+      { key: 'quadStick', default: false },
+      { key: 'autoAim', default: false },
+      { key: 'largeText', default: false },
+      { key: 'slowMode', default: false }
     ];
     for (var i = 0; i < toggleDefs.length; i++) {
       if (toggleDefs[i].key === key) {
@@ -2795,6 +2807,11 @@ var MenuFaces = (function () {
         }
         if (key === 'invertYFreeLook' && typeof MouseLook !== 'undefined') {
           MouseLook.setInvertY(_settingsState[key]);
+        }
+        // QuadStick preset: enable slow mode + aim assist when toggled on
+        if (key === 'quadStick' && _settingsState[key]) {
+          _settingsState.slowMode = true;
+          _settingsState.autoAim = true;
         }
         return;
       }
@@ -2848,10 +2865,19 @@ var MenuFaces = (function () {
    */
   function renderFace3(ctx, x, y, w, h, context) {
     var S = Math.min(w, h) / 400;
-    // No inner clip — the outer _renderFace already clips to face bounds.
-    // Double-clipping caused exit buttons to get cut off.
     ctx.save();
     var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face3', 'SYSTEM'), '⚙️', S);
+
+    // ── Scrollable clip region ──
+    // Content below the title scrolls; title stays fixed.
+    var clipTop = ty;
+    var clipH = y + h - ty;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, clipTop, w, clipH);
+    ctx.clip();
+    // Apply scroll offset (shift content up)
+    ctx.translate(0, -_f3ScrollY);
 
     var F_BODY    = Math.max(10, Math.round(14 * S));
     var F_SMALL   = Math.max(10, Math.round(13 * S));
@@ -2875,7 +2901,21 @@ var MenuFaces = (function () {
       { label: 'Show FPS', key: 'showFps', default: false,
         desc: 'Display framerate counter in corner', bind: 'Click' },
       { label: 'Minimap Visible', key: 'minimapVisible', default: true,
-        desc: 'Show the radar minimap during gameplay', bind: 'M' }
+        desc: 'Show the radar minimap during gameplay', bind: 'M' },
+      // ── Gamepad ──
+      { label: '\uD83C\uDFAE Gamepad Input', key: 'gpEnabled', default: true,
+        desc: 'Enable gamepad / controller support', bind: 'Auto' },
+      { label: '\uD83C\uDFAE Vibration', key: 'gpVibration', default: true,
+        desc: 'Controller rumble on impacts', bind: 'Click' },
+      // ── Accessibility ──
+      { label: '\u267F QuadStick / Sip-Puff', key: 'quadStick', default: false,
+        desc: 'Optimized for sip-puff & adaptive controllers', bind: 'Click' },
+      { label: '\u267F Aim Assist', key: 'autoAim', default: false,
+        desc: 'Snap card targeting to nearest enemy', bind: 'Click' },
+      { label: '\u267F Large Text', key: 'largeText', default: false,
+        desc: 'Increase UI text size for readability', bind: 'Click' },
+      { label: '\u267F Reduced Speed', key: 'slowMode', default: false,
+        desc: 'Slow game speed for reaction time needs', bind: 'Click' }
     ];
 
     var _hoveredToggleDesc = null;
@@ -3103,13 +3143,24 @@ var MenuFaces = (function () {
     ctx.lineTo(x + w - 10, ctrlY - Math.round(4 * S));
     ctx.stroke();
 
+    var gpConnected = (typeof InputManager !== 'undefined' && InputManager.isGamepadConnected());
+
     ctx.fillStyle = COL.dim;
     ctx.font = F_SECTION + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('CONTROLS', listX + Math.round(14 * S), ctrlY + Math.round(6 * S));
+    ctx.fillText(gpConnected ? 'CONTROLS  \uD83C\uDFAE' : 'CONTROLS', listX + Math.round(14 * S), ctrlY + Math.round(6 * S));
     ctrlY += Math.round(14 * S);
 
-    var controls = [
+    var controls = gpConnected ? [
+      ['D-pad / L-Stick', 'Move & Turn'],
+      ['R-Stick', 'Free Look'],
+      ['A / Cross', 'Interact'],
+      ['B / Circle', 'Flee (combat)'],
+      ['Y / Triangle', 'Inventory'],
+      ['LT LB X RB RT', 'Cards 1-5'],
+      ['Start', 'Pause / Resume'],
+      ['Select', 'Map toggle']
+    ] : [
       ['WASD / Arrows', 'Move & Turn'],
       ['F / Space', 'Interact'],
       ['Q / E', 'Browse panes'],
@@ -3182,8 +3233,49 @@ var MenuFaces = (function () {
       _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
     }
 
+    // Track content bottom for scroll range
+    var contentBottom = exitY + exitBtnH + Math.round(8 * S);
+    if (context === 'pause' && typeof quitY !== 'undefined' && quitY) {
+      contentBottom = quitY + exitBtnH + Math.round(8 * S);
+    }
+
     ctx.textAlign = 'left';
+    ctx.restore(); // End scroll clip + translate
+
+    // ── Auto-scroll to selected row ──
+    var totalContentH = contentBottom - clipTop;
+    var maxScroll = Math.max(0, totalContentH - clipH);
+    // Estimate selected row Y position for auto-scroll
+    var estRowY = 0;
+    var estRowH = Math.max(18, Math.round(22 * S));
+    var estSliderRowH = Math.max(26, Math.round(36 * S));
+    for (var sr = 0; sr < _settingsState.row; sr++) {
+      estRowY += (sr < _SLIDER_DEFS.length) ? estSliderRowH : estRowH;
+    }
+    if (estRowY - _f3ScrollY < 0) _f3ScrollY = estRowY;
+    if (estRowY + estSliderRowH - _f3ScrollY > clipH) _f3ScrollY = estRowY + estSliderRowH - clipH;
+    _f3ScrollY = Math.max(0, Math.min(maxScroll, _f3ScrollY));
+
+    // ── Scrollbar ──
+    if (maxScroll > 0) {
+      var sbX = x + w - Math.round(6 * S);
+      var sbW = Math.round(4 * S);
+      var thumbFrac = clipH / (totalContentH || 1);
+      var thumbH = Math.max(Math.round(12 * S), clipH * thumbFrac);
+      var thumbY = clipTop + (clipH - thumbH) * (_f3ScrollY / (maxScroll || 1));
+
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      _roundRectFill(ctx, sbX, clipTop, sbW, clipH, Math.round(2 * S));
+      ctx.fillStyle = 'rgba(200,180,120,0.35)';
+      _roundRectFill(ctx, sbX, thumbY, sbW, thumbH, Math.round(2 * S));
+    }
+
     ctx.restore(); // Undo face clip
+  }
+
+  /** Scroll Face 3 content by delta pixels. Called on scroll_up/scroll_down. */
+  function handleSettingsScroll(delta) {
+    _f3ScrollY = Math.max(0, _f3ScrollY + delta);
   }
 
   // ── Hit zone management ────────────────────────────────────────
@@ -3371,7 +3463,7 @@ var MenuFaces = (function () {
             var item2 = p.data;
             // Safety: if slot has an item and bag is full, reject the drop
             var prev = CardAuthority.getEquipped()[slotIdx];
-            if (prev && CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) {
+            if (prev && CardAuthority.getBag().length >= (CardAuthority.getMaxBag() || 12)) {
               if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDF92 Bag full \u2014 unequip something first', 'warning');
               return false;
             }
@@ -3412,12 +3504,12 @@ var MenuFaces = (function () {
           accepts: function (p) {
             if (!p) return false;
             if (p.zone === 'bag') return false;  // No bag→bag
-            if (CardAuthority.getBag().length >= CardAuthority.MAX_BAG) return false;
+            if (CardAuthority.getBag().length >= CardAuthority.getMaxBag()) return false;
             return (p.type === 'item' || p.type === 'card');
           },
           onDrop: function (p) {
             if (!p || !p.data) return false;
-            if (CardAuthority.getBag().length >= CardAuthority.MAX_BAG) return false;
+            if (CardAuthority.getBag().length >= CardAuthority.getMaxBag()) return false;
             // Remove from source
             if (p.zone === 'equip') CardAuthority.equip(p.index, null);
             else if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
@@ -3445,12 +3537,12 @@ var MenuFaces = (function () {
       accepts: function (p) {
         if (!p) return false;
         if (p.zone === 'bag') return false;
-        if (CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) return false;
+        if (CardAuthority.getBag().length >= (CardAuthority.getMaxBag() || 12)) return false;
         return (p.type === 'item' || p.type === 'card');
       },
       onDrop: function (p) {
         if (!p || !p.data) return false;
-        if (CardAuthority.getBag().length >= (CardAuthority.MAX_BAG || 12)) return false;
+        if (CardAuthority.getBag().length >= (CardAuthority.getMaxBag() || 12)) return false;
         if (p.zone === 'equip') CardAuthority.equip(p.index, null);
         else if (p.zone === 'hand') CardAuthority.removeFromHand(p.index);
         else if (p.zone === 'deck') CardAuthority.removeFromBackupById(p.data.id);
@@ -3952,6 +4044,7 @@ var MenuFaces = (function () {
     registerAll:          registerAll,
     handleSettingsNav:       handleSettingsNav,
     handleSettingsAdjust:    handleSettingsAdjust,
+    handleSettingsScroll:    handleSettingsScroll,
     handleSettingsToggle:    handleSettingsToggle,
     handleSettingsInteract:  handleSettingsInteract,
     isSettingsLocked:        isSettingsLocked,

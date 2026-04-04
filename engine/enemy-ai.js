@@ -511,7 +511,7 @@ var EnemyAI = (function () {
 
   /** Can this enemy engage the player right now? */
   function canEngage(enemy) {
-    return enemy.hp > 0 && enemy.fleeImmunity <= 0;
+    return enemy.hp > 0 && !enemy.friendly && enemy.fleeImmunity <= 0;
   }
 
   /**

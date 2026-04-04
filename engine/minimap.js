@@ -83,6 +83,7 @@ var Minimap = (function () {
     corpse:     '#8a6',       // Muted green for harvestable corpses
     collectible:'#fa4',       // Amber for walk-over pickups (gold/battery/food)
     breakable:  '#876',       // Tan-brown for destructible props
+    detritus:   '#a86',       // Warm amber-brown for adventurer debris (slightly lighter than breakable)
     unexplored: '#000',
     label:      'rgba(255,255,255,0.6)',
     labelBg:    'rgba(0,0,0,0.5)',
@@ -464,6 +465,8 @@ var Minimap = (function () {
           ctx.fillStyle = isLit ? COLORS.collectible : _dimColor(COLORS.collectible);
         } else if (tile === TILES.BREAKABLE) {
           ctx.fillStyle = isLit ? COLORS.breakable : _dimColor(COLORS.breakable);
+        } else if (tile === TILES.DETRITUS) {
+          ctx.fillStyle = isLit ? COLORS.detritus : _dimColor(COLORS.detritus);
         } else if (tile === TILES.EMPTY || (TILES.isWalkable && TILES.isWalkable(tile))) {
           ctx.fillStyle = isLit ? COLORS.floorLit : COLORS.floor;
         } else {

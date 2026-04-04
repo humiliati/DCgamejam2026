@@ -60,6 +60,7 @@ var CobwebSystem = (function () {
   //                type: 'wall_overlay'|'standalone', installedAt }
   var _eligible = {};
   var _cobwebs  = {};
+  var _tornByPlayer = {};  // { floorId: count } — player self-tears (not enemy/hero)
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -225,6 +226,7 @@ var CobwebSystem = (function () {
       x: x, y: y,
       state: 'intact',
       type: type,
+      corridorDir: getCorridorDir(x, y, floorId) || 'H',
       installedAt: Date.now()
     };
     return true;
@@ -324,6 +326,26 @@ var CobwebSystem = (function () {
   }
 
   /**
+   * Record that the PLAYER tore a cobweb (vs enemy/hero tearing one).
+   * Used by readiness-calc to apply a penalty for careless self-tearing.
+   * Called from game.js _onPlayerMoveCommit when the player walks through.
+   *
+   * @param {string} floorId
+   */
+  function recordPlayerTear(floorId) {
+    _tornByPlayer[floorId] = (_tornByPlayer[floorId] || 0) + 1;
+  }
+
+  /**
+   * Get how many cobwebs the PLAYER has torn on this floor.
+   * @param {string} floorId
+   * @returns {number}
+   */
+  function getPlayerTornCount(floorId) {
+    return _tornByPlayer[floorId] || 0;
+  }
+
+  /**
    * Readiness bonus for a floor: READINESS_BONUS_PER_COBWEB × intact cobwebs.
    *
    * Phase 3 integration (docs/CORE_GAME_LOOP_AND_JUICE.md §8):
@@ -344,6 +366,7 @@ var CobwebSystem = (function () {
    */
   function resetFloor(floorId) {
     _cobwebs[floorId] = {};
+    _tornByPlayer[floorId] = 0;
   }
 
   // ── Exposed constants and API ────────────────────────────────────
@@ -364,6 +387,8 @@ var CobwebSystem = (function () {
     getIntact:           getIntact,
     getEligible:         getEligible,
     onEntityMove:        onEntityMove,
+    recordPlayerTear:    recordPlayerTear,
+    getPlayerTornCount:  getPlayerTornCount,
     getReadinessBonus:   getReadinessBonus,
     resetFloor:          resetFloor
   });

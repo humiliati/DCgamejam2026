@@ -51,8 +51,8 @@ var Player = (function () {
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
   var FREE_LOOK_RANGE = 32 * Math.PI / 180;
   // Vertical pitch range: more down (floor inspection) than up
-  var PITCH_DOWN_MAX = 0.35;   // fraction of halfH to shift horizon down
-  var PITCH_UP_MAX   = 0.10;   // fraction of halfH to shift horizon up
+  var PITCH_DOWN_MAX = 0.55;   // fraction of halfH to shift horizon down (floor inspection)
+  var PITCH_UP_MAX   = 0.35;   // fraction of halfH to shift horizon up (ceiling/architecture)
 
   // ── Accessors ──────────────────────────────────────────────────────
 

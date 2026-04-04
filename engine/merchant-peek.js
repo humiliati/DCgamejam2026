@@ -220,7 +220,7 @@ var MerchantPeek = (function () {
     var shopList = floorData.shops || [];
     for (var i = 0; i < shopList.length; i++) {
       if (shopList[i].x === fx && shopList[i].y === fy) {
-        _factionId = shopList[i].factionId;
+        _factionId = shopList[i].faction || shopList[i].factionId || 'tide';
         break;
       }
     }

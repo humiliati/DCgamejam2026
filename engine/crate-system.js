@@ -483,7 +483,14 @@ var CrateSystem = (function () {
 
   function _doesItemMatch(item, frameTag) {
     if (frameTag === FRAME.WILDCARD) return true;
-    if (!item || !item.category) return false;
+    if (!item) return false;
+
+    // crateFillTag match (supply consumables + detritus drops from items.json)
+    if (item.crateFillTag && item.crateFillTag === frameTag) return true;
+    // WILDCARD crateFillTag fills any slot
+    if (item.crateFillTag === 'WILDCARD') return true;
+
+    if (!item.category) return false;
 
     // Direct category match
     if (item.category === frameTag) return true;
@@ -753,6 +760,7 @@ var CrateSystem = (function () {
     getReadiness:   getReadiness,
     getReadinessByType: getReadinessByType,
     getSlotDisplay: getSlotDisplay,
+    doesItemMatch:  _doesItemMatch,
     clearFloor:     clearFloor,
     clearAll:       clearAll
   };

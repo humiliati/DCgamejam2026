@@ -1,20 +1,24 @@
 /**
- * MouseLook — free-look offset from mouse/pointer position.
+ * MouseLook — free-look offset from mouse/pointer or gamepad right stick.
  *
- * The active zone is the circular area defined by ViewportRing. The
- * center ~60% of the ring is a dead zone — freelook only activates
- * when the cursor approaches the ring edge (outer 40% of radius).
- * This means the player must deliberately push the cursor toward the
- * ring to look around; idle cursor motion near center does nothing.
+ * Mouse backend:
+ *   The active zone is the circular area defined by ViewportRing. The
+ *   center ~60% of the ring is a dead zone — freelook only activates
+ *   when the cursor approaches the ring edge (outer 40% of radius).
+ *
+ * Gamepad backend:
+ *   Right stick analog deflection drives free-look through the same
+ *   acceleration curve. Overrides mouse when stick is deflected.
+ *   InputManager.getGamepadRightStick() provides raw axis values.
  *
  * Horizontal: ±32° yaw via acceleration curve.
- * Vertical:   pitch shift (horizon offset) — more range looking down
- *             (floor inspection / pressure washing) than up.
+ * Vertical:   pitch shift (horizon offset) — asymmetric range,
+ *             more down (floor inspection) than up (ceiling/architecture).
  *
  * Lock-on system: external code can call lockOn(x, y) to smoothly
  * pan the camera toward a world position (OoT Z-target style).
  * The lock persists until releaseLock() is called. During lock,
- * mouse input is ignored and the offset lerps toward the target.
+ * mouse and gamepad input are ignored and the offset lerps toward the target.
  */
 var MouseLook = (function () {
   'use strict';
@@ -154,6 +158,58 @@ var MouseLook = (function () {
     }
   }
 
+  // ── Gamepad right stick speed multipliers ───────────────────────────
+  // These scale the stick deflection before applying the acceleration
+  // curve so stick feel can be tuned independently of mouse sensitivity.
+  var GP_YAW_SPEED   = 0.85;    // Horizontal stick sensitivity
+  var GP_PITCH_SPEED = 0.85;    // Vertical stick sensitivity
+
+  /**
+   * Read gamepad right stick and compute free-look targets.
+   * Uses the same acceleration power curve as the mouse ring.
+   * Called from tick() when a gamepad is connected and stick is deflected.
+   */
+  function _updateFromGamepad() {
+    if (typeof InputManager === 'undefined' || !InputManager.isGamepadConnected()) return false;
+
+    var rs = InputManager.getGamepadRightStick();
+    if (rs.x === 0 && rs.y === 0) return false;
+
+    // Magnitude and unit direction (same model as mouse ring)
+    var mag = Math.sqrt(rs.x * rs.x + rs.y * rs.y);
+    if (mag > 1) mag = 1;
+
+    // Remap through the same acceleration curve
+    var accel = Math.pow(mag, ACCEL_POWER);
+
+    // Horizontal — stick right = look right (positive yaw)
+    var normX = rs.x / (mag || 1);
+    var hWeight = Math.abs(normX);
+    var hSign = rs.x < 0 ? -1 : 1;
+    var hAccel = hSign * accel * hWeight * GP_YAW_SPEED;
+
+    if (typeof Player !== 'undefined') {
+      _targetYaw = hAccel * Player.FREE_LOOK_RANGE;
+    }
+
+    // Vertical — stick down (positive Y) = look down (positive pitch)
+    var normY = rs.y / (mag || 1);
+    var vWeight = Math.abs(normY);
+    var vSign = rs.y > 0 ? 1 : -1;
+    if (_invertY) vSign = -vSign;
+    var vAccel = vSign * accel * vWeight * GP_PITCH_SPEED;
+
+    if (typeof Player !== 'undefined') {
+      if (vAccel > 0) {
+        _targetPitch = vAccel * Player.PITCH_DOWN_MAX;
+      } else {
+        _targetPitch = vAccel * Player.PITCH_UP_MAX;
+      }
+    }
+
+    return true;
+  }
+
   /**
    * Call once per frame to advance smoothing and apply offsets.
    * Must be called BEFORE Raycaster.render().
@@ -166,6 +222,16 @@ var MouseLook = (function () {
       if (Math.abs(_smoothYaw)   < 0.0005) _smoothYaw = 0;
       if (Math.abs(_smoothPitch) < 0.0005) _smoothPitch = 0;
     } else {
+      // Gamepad right stick overrides mouse when active
+      var gpActive = _updateFromGamepad();
+
+      // If gamepad not driving free-look and mouse is outside ring,
+      // targets will be 0 (natural decay to center)
+      if (!gpActive && _mouseX < 0) {
+        _targetYaw = 0;
+        _targetPitch = 0;
+      }
+
       // Normal freelook: two-stage smoothing per axis
       _smoothYaw   = _lerp2(_smoothYaw,   _targetYaw);
       _smoothPitch = _lerp2(_smoothPitch, _targetPitch);

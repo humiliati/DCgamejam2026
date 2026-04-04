@@ -53,6 +53,7 @@
  *   - TORCH_UNLIT    ×5    (on hero's trail)                → torch score
  *   - TRAP           ×3    (triggered by hero)              → trap score
  *   - CORPSE         ×7    (loot / necro-salvage)
+ *   - DETRITUS       ×8    (adventurer debris near corpses) → crate fill items
  *
  * Enemy spawns:
  *   - Rat ×4 (low-level, first combat encounters)
@@ -61,7 +62,7 @@
  * Tile legend:
  *   0=EMPTY  1=WALL  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
  *   11=BREAKABLE  19=CORPSE  27=BED  28=TABLE
- *   30=TORCH_LIT  31=TORCH_UNLIT
+ *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS
  */
 (function () {
   'use strict';
@@ -73,20 +74,20 @@
   var GRID = [
     //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
     [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  north wall
-    [ 1, 0, 0, 0, 0, 0, 0, 0,19, 0, 0, 0, 0, 0,19, 0, 0, 0, 0,19, 0, 0, 0, 1], // 1  North Hall — 3 corpses (hero carnage)
+    [ 1, 0, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0,39,19, 0, 0, 0, 0,19,39, 0, 0, 1], // 1  North Hall — 3 corpses + 3 detritus (9,1)(13,1)(20,1)
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 2  triggered trap (10,2) — COMBAT TRIGGER ZONE
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 3  crate toppled by hero (14,3)
     [ 1, 0, 0, 0, 1, 1,30, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,31, 1,31, 0, 0, 0, 1], // 4  inner block N face — lit(6,4), unlit(17,4),(19,4)
     [ 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 7, 0, 1, 0, 0, 0, 1], // 5  E vault top — CHEST(17,5)
-    [ 1, 0, 0, 0,30,27, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,11, 0, 0, 0, 0,19, 0, 1], // 6  W quarters top — BED(5,6) | E vault mid — BREAKABLE(16,6), doorway(19,6)
-    [ 1, 0,19, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1], // 7  W quarters doorway(4,7) | corpse(2,7) | E vault bottom
+    [ 1, 0, 0, 0,30,27, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,11, 0, 0, 0,39,19, 0, 1], // 6  W quarters top — BED(5,6) | E vault — BREAKABLE(16,6), detritus(20,6)
+    [ 1, 0,19,39, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1], // 7  W quarters — corpse(2,7), detritus(3,7) | E vault bottom
     [ 1, 0, 0, 0,30,28, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,31, 0, 0, 0, 1], // 8  W quarters bottom — TABLE(5,8) | E face unlit(19,8)
     [ 1, 0, 0, 0, 1, 1,31, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,31, 1, 1, 0, 0, 0, 1], // 9  inner block S face — unlit(6,9), unlit(17,9)
-    [ 1, 0, 0, 0, 0, 0, 0, 0,19, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 1], //10  South Hall — corpse(8,10), trap(14,10)
+    [ 1, 0, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 1], //10  South Hall — corpse(8,10), detritus(9,10), trap(14,10)
     [ 1, 0, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 1], //11  South Hall — crates (6,11),(17,11)
     [ 1, 0, 0, 0, 0,10, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0,10, 0, 0, 0, 0, 1], //12  junction — pillars (5,12),(18,12), crate(10,12)
     [ 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1], //13  ring→foyer wall (8-wide opening, cols 8-15)
-    [ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,19, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //14  foyer north — corpse at doorway (11,14)
+    [ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,39,19,39, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //14  foyer north — corpse(11,14) + 2 detritus (10,14)(12,14)
     [ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,10, 0, 0,10, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //15  foyer — pillar pair (10,15),(13,15)
     [ 1, 1, 1, 1,30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,30, 1, 1, 1, 1], //16  foyer — wall torches lit (4,16),(19,16)
     [ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //17  foyer — triggered trap (12,17)
@@ -208,6 +209,26 @@
     { x: 17, y: 7  }   // inside east vault
   ];
 
+  // ── Adventurer Detritus ──────────────────────────────────────────
+  //
+  // Gear fragments left by fallen heroes, placed 1–2 tiles from each
+  // CORPSE site. Walk over or face+OK to collect. Types map to
+  // DetritusSprites.TYPES and items.json ITM-110–114.
+  //
+  // The foyer corpse (11,14) gets 2 detritus — entry area bootstraps
+  // the player's first crate-fill items.
+
+  var DETRITUS_DATA = [
+    { x: 9,  y: 1,  type: 'cracked_flask'  },  // near corpse (8,1)
+    { x: 13, y: 1,  type: 'dented_shield'   },  // near corpse (14,1)
+    { x: 20, y: 1,  type: 'broken_arrows'   },  // near corpse (19,1)
+    { x: 3,  y: 7,  type: 'torn_satchel'    },  // near corpse (2,7)
+    { x: 20, y: 6,  type: 'cracked_flask'   },  // near corpse (21,6)
+    { x: 9,  y: 10, type: 'hero_rations'    },  // near corpse (8,10)
+    { x: 12, y: 14, type: 'torn_satchel'    },  // near corpse (11,14) — right
+    { x: 10, y: 14, type: 'dented_shield'   }   // near corpse (11,14) — left
+  ];
+
   function build() {
     var grid = [];
     for (var y = 0; y < H; y++) {
@@ -230,7 +251,8 @@
       heroScript: HERO_SCRIPT,
       corpseData: CORPSE_DATA,
       enemySpawns: ENEMY_SPAWNS,
-      cobwebs: COBWEBS
+      cobwebs: COBWEBS,
+      detritusPlacements: DETRITUS_DATA
     };
   }
 

@@ -1,5 +1,32 @@
 # Resource Design — Dungeon Gleaner
 
+## Core Philosophy: Flee First
+
+Dungeon Gleaner is a **janitor sim**, not a combat RPG. Heroes are hazards.
+Enemies are obstacles you route around, not XP piñatas you farm.
+
+At game start, **most enemies will kill or nearly kill the player**. The correct
+early-game response to combat is: **flee**. Fleeing costs 1 energy and leaves
+the enemy in place — you have to find another route or come back prepared.
+
+Combat becomes viable only after the player earns better cards through labor
+(cleaning loops, restocking, dungeon reset tasks). The deck you build through
+work is what makes you strong enough to stand and fight — and even then,
+picking your battles matters.
+
+### Difficulty Curve
+- **Floors 1-2 (Cellar):** Standard enemies deal 3 dmg/round, have 10-14 HP.
+  Player (10 HP, starter deck) survives 2-3 rounds at best. Flee or die.
+- **Floors 3-5 (Foundry):** STR 3-5, HP 12-18. Need upgraded deck to compete.
+- **Floors 6-8 (Sealab):** STR 4-6, HP 12-20. Endgame deck required.
+- **Elites/Bosses:** Always threatening regardless of deck quality.
+
+### When Combat Becomes Viable
+- After 3-5 labor cycles earning better cards from shops/drops
+- With resource-exchange cards enabling multi-round sustain
+- With suit advantage (1.5x multiplier) against the right enemy type
+- After investing battery in tech cards for burst turns
+
 ## Three Resources, Three Pressures
 
 | Resource | What It Controls | Spend Rate | Recovery |
@@ -71,44 +98,52 @@ Current: all 10 starter cards are free. This means zero resource pressure.
 
 **Result:** 5 free + 4 cost-1 + 1 cost-2 = 8 energy budget needed for full rotation. Player starts with 5 energy → forces choices about which 4-5 powered cards to play.
 
-## Enemy HP Audit (Tier 1 — Cellar)
+## Enemy Stats (Flee-First Balance)
 
-### Current Problem
-Player STR (2) + best starter card (Thunder Clap: 4 dmg) = 6 base damage. Stack 2 cards = 9+ damage. Every tier-1 enemy dies in round 1.
+### Design: Enemies Outclass the Starter Deck
 
-### Proposed Tier-1 HP Bump
+Player best-case round: Thunder Clap + Arc Bolt = 10 dmg (costs 3 energy).
+That's ONE good round. Most cellar enemies have 10-14 HP and deal 3-4/round.
+The math says: you CAN kill them, but you'll lose 60-80% HP doing it. Not worth it.
 
-| Enemy | Current HP | Proposed HP | Rationale |
-|-------|-----------|------------|-----------|
-| ENM-001 Cobweb Crawler | 3 | **5** | Should survive 1 round of single-card play |
-| ENM-002 Shambling Corpse | 5 | **8** | Tank archetype, should take 2-3 rounds |
-| ENM-003 Dungeon Rat | 2 | **3** | Non-lethal tutorial, still quick |
-| ENM-004 Bone Guard | 4 | **6** | Standard 2-round fight |
-| ENM-005 Mold Wraith | 4 | **6** | Match Bone Guard tier |
-| ENM-006 Cave Toad | 4 | **6** | Match Bone Guard tier |
-| ENM-007 Rot Hound (elite) | 8 | **12** | Elite should feel dangerous, 3-4 rounds |
-| ENM-008 Bone Sovereign (boss) | 16 | **20** | Boss encounter, multi-round slugfest |
+### Cellar (Floors 1-2) — STR 3, HP 10-14
 
-### Target Combat Length
-- **Standard enemy:** 2 rounds (spend resources, take 1-2 hits)
-- **Elite:** 3-4 rounds (must heal, must manage resources)
-- **Boss:** 5+ rounds (full resource management, card cycling)
+| Enemy | HP | STR | Role |
+|-------|-----|-----|------|
+| Cobweb Crawler | 10 | 3 | Fast ambusher. Barely winnable. |
+| Shambling Corpse | 14 | 4 | Slow tank. Hits hard, won't chase. |
+| Dungeon Rat | 4 | 1 | Non-lethal. Learning encounter. |
+| Bone Guard | 12 | 3 | Armored. 2-round fight = -6 HP. |
+| Mold Wraith | 10 | 3 | Poison theme. Flee or regret. |
+| Cave Toad | 10 | 3 | Lunges. Blocks corridors. |
+| Rot Hound (elite) | 18 | 5 | **Instant flee.** 5 dmg/round = dead in 2. |
+| Bone Sovereign (boss) | 30 | 5 | **Impossible without built deck.** |
+
+### Target Outcomes (Starter Deck)
+- **vs Standard:** Pyrrhic victory at best. -6 to -8 HP. One more fight = death.
+- **vs Elite:** Player dies in 2 rounds. Flee immediately.
+- **vs Boss:** Don't even try. 30 HP / 5 STR = need 4+ rounds while taking 20+ damage.
+- **vs Non-lethal:** Safe tutorial fights. Learn mechanics risk-free.
 
 ## Player HP Audit
 
 ### Current: 10 HP, 10 maxHP
 
-With enemies dealing 1-2 damage per round and combat lasting 2 rounds, player loses 2-4 HP per fight. With 10 HP that's 2-5 combats before needing rest. That's actually reasonable IF fights last 2 rounds.
+With enemies dealing 3-4 per round, a single fight costs 6-8 HP. One fight
+and you're nearly dead. Two fights without healing = death.
 
-**Verdict: 10 HP is fine.** The issue isn't max HP — it's that fights end too fast for HP to matter. Fixing enemy HP (above) and adding starter card costs fixes this naturally.
+**Verdict: 10 HP is correct for flee-first.** Low HP makes every encounter
+life-or-death and rewards avoidance. The Mend card (+3 HP) heals 30% — meaningful
+but not enough to chain fights. Bonfire rest (full heal) becomes the critical
+waypoint between excursions.
 
-### HP Math After Rebalance
-- 2-round fight vs Bone Guard (str 2): take 4 damage → 6 HP remaining
-- Use Mend (+3): back to 9 HP, but Mend used a hand slot (opportunity cost)
-- Next fight: 9 HP → take 4 more → 5 HP → getting dangerous
-- Bonfire rest: full heal (reward for exploration, finding rest points)
-
-This creates the tension loop: explore → fight → chip HP → find bonfire → heal → push deeper.
+### HP Pressure Loop
+1. **Explore** — clean floors, restock shelves, earn gold/cards
+2. **Encounter** — enemy blocks path. Flee (1 energy) or fight (6-8 HP)
+3. **Fight (if forced)** — 2-round slug. Survive with 2-4 HP. Burn heal card.
+4. **Retreat** — limp to bonfire. Full heal. Push deeper or continue labor.
+5. **Upgrade** — buy better cards. Now fights cost 3-4 HP instead of 6-8.
+6. **Mastery** — built deck handles standard enemies. Elites still dangerous.
 
 ## Energy Per-Combat Budget
 

@@ -1,6 +1,6 @@
 # Cobweb & Trap Strategy Roadmap
 
-**Created**: 2026-03-30 | **Status**: Phase 1 complete, Phases 2–7 planned
+**Created**: 2026-03-30 | **Updated**: 2026-04-04 | **Status**: Phases 1–2 complete, Phase 4 partial, Phases 3/5–7 planned
 **Depends on**: Phase C (cleaning loop), Phase E (hero cycle), Phase F (economy tuning)
 
 ---
@@ -28,9 +28,9 @@ The strategic loop is: **clean inward → arm outward → exit via safe path**. 
 ### Cobweb System
 - **Modules**: `engine/cobweb-system.js` (Layer 1, ~370 lines), `engine/cobweb-renderer.js` (Layer 2, ~240 lines), `engine/cobweb-node.js` (Layer 3, ~320 lines)
 - **Mechanic**: Face eligible corridor tile (1-wide, 3+ long) → interact → spider deploys cobweb
-- **Self-tear**: Walking through your own cobweb destroys it (warning toast, readiness drop)
-- **Rendering**: Procedural radial web pattern with concentric rings, billboard-projected in 3D viewport
-- **Readiness**: Each intact cobweb adds 0.05 to misc score (capped at 0.15 bonus)
+- **Self-tear**: Walking through your own cobweb destroys it (warning toast, −1g penalty, readiness drop of 0.25 per tear)
+- **Rendering**: Corridor-aware elliptical web with foreshortened projection, per-biome tint, tear particle system
+- **Readiness**: `_cobwebScore() = max(0, min(1.0, intactCount × 0.33) − tornCount × 0.25)` — weighs 15% of extra-credit tier
 - **Node highlights**: Green pulsing dots at eligible positions, visible within 7 tiles
 - **Enemy interaction**: Wired in `_onMoveFinish` — entities moving through cobwebs destroy them
 
@@ -38,29 +38,42 @@ The strategic loop is: **clean inward → arm outward → exit via safe path**. 
 1. Enter dungeon, work order posted (C8)
 2. Clean blood, restock crates, process corpses (forward sweep)
 3. On the way back: arm consumed traps, deploy spiders at corridor chokes
-4. **Mistake penalty**: walk over your own trap = 1 dmg + trap consumed; walk through your own web = web torn + readiness loss
-5. Exit dungeon, work order evaluated, readiness score determines payout
+4. **Mistake penalty**: walk over your own trap = 1 dmg + trap consumed; walk through your own web = web torn + readiness loss + **−1g gold penalty**
+5. **Install reward**: each successful cobweb deploy = **+2g** (coin burst VFX)
+6. Exit dungeon, work order evaluated, readiness score determines payout
+
+### Pre-Placed Cobwebs (Apr 4)
+- Floor blockout data can include a `cobwebs` array: `[{ x, y, type }]`
+- `game.js _onFloorArrived` auto-installs these via `CobwebSystem.install()`
+- Allows level designers to pre-arm corridors for the Gleaner to maintain (or tear accidentally)
 
 ---
 
-## Phase 2 — Economic Cost (Post-Jam Priority)
+## Phase 2 — Economic Cost (Partial — Coin Loop Done)
 
-Spider deployment currently costs nothing. This is fine for the jam but removes the core tension. Players spam cobwebs everywhere once they learn the mechanic.
+### ✅ 2.0 Coin Economy (Apr 4)
+Spider deployment and cobweb tearing now have immediate gold consequences:
+- **Install reward**: +2g on successful cobweb deploy (`CardAuthority.addGold(2)`)
+- **Tear penalty**: −1g when the player walks through their own cobweb (`CardAuthority.spendGold(1)`)
+- **Readiness penalty**: Each player self-tear deducts 0.25 from cobweb readiness sub-score (`readiness-calc.js _cobwebScore()`)
+- **Tracking**: `CobwebSystem.recordPlayerTear(floorId)` / `getPlayerTornCount(floorId)` track per-floor self-tears
+- VFX: coin burst on install, tear particle effect on destruction
+- This creates the core lesson: deploy carefully, exit via a different path
 
-### 2.1 Spider Resource
+### 2.1 Spider Resource (Planned)
 - New consumable item: **Silk Spider** (🕷️)
 - Found in dungeon loot, purchased from Tide Council shop
 - Deploying a cobweb consumes 1 Silk Spider from bag/equipped
 - Cost creates the first-cobweb lesson: deploy → tear accidentally → "that was my only spider"
 - Rarity tiers: Common Spider (1 web), Fat Spider (2 webs from 1 deploy), Queen Spider (reinforced web, 2 hits to destroy)
 
-### 2.2 Trap Parts
+### 2.2 Trap Parts (Planned)
 - New consumable: **Trap Kit** (⚙️)
 - Required to re-arm traps (currently free)
 - Found in breakable crates, crafted from salvage parts
 - Cost makes the player choose: re-arm this trap or save the kit for a deeper floor
 
-### 2.3 Price Curve
+### 2.3 Price Curve (Planned)
 - Early floors: spiders and kits are common drops, nearly free
 - Deep floors: resources become scarce, player must choose which corridors to web/trap
 - Economy tuning ties into DOC-2 §16 Phase 8 and Phase F tasks
@@ -90,43 +103,43 @@ Work orders (C4/C8) currently set a flat readiness target. Phase 3 adds **embell
 
 ---
 
-## Phase 4 — Cobweb Visual Upgrade: Windsails
+## Phase 4 — Cobweb Visual Upgrade: Windsails (Partial — Core Rendering Done)
 
-The current cobweb rendering is a flat radial web pattern projected as a billboard. Phase 4 transforms cobwebs into dramatic **corridor windsails** — large fabric-like webs that billow and sway, filling the 3D space with visual presence.
+### ✅ 4.1 Biome Tint System (Apr 4)
+- Per-biome colour applied dynamically in `cobweb-renderer.js`:
+  - Cellar: `#ddd8cc` (dusty grey)
+  - Foundry: `#e8d8a0` (warm gold)
+  - Sealab: `#b8e8c8` (pale green)
+  - Default: `#ccc8b8` (neutral silk)
+- `render()` accepts optional `biome` parameter; game.js passes current biome each frame
+- All hardcoded `WEB_COLOR` / `WEB_COLOR2` references replaced with `_mainColor` / `_ringColor`
 
-### 4.1 Texture System
-- New procedural texture: `cobweb_sail` generated by TextureAtlas
-- 64×64 canvas with radial thread pattern + transparency gradient
-- Per-biome tint: grey (cellar), pale green (sealab), gold (temple), white (default)
-- Texture applied to a full-height quad spanning the corridor width
+### ✅ 4.2 Corridor-Aware Projection (Apr 4)
+- `_renderOne()` rewritten: computes `planeNormalAngle` from cobweb `corridorDir` (H or V)
+- Width foreshortened by `cos(playerDir − planeNormalAngle)`, clamped to min 0.15
+- Result: webs appear as flat planes spanning the corridor, foreshortened when viewed at an angle
+- Structural anchor threads drawn to 4 corridor corners (elliptical `halfW` / `halfH`)
 
-### 4.2 Third-Space Rendering
-- Cobwebs occupy the **third space** between walls — they're not wall textures and not floor sprites
-- Render as a semi-transparent vertical plane perpendicular to the corridor direction
-- The raycaster's column-based rendering can composite the web texture over the background wall
-- Requires a per-column alpha blend pass after the main wall render
-- Z-buffer integration: web columns occlude sprites behind them but are occluded by closer walls
-
-### 4.3 Billow Animation
+### 4.3 Billow Animation (Planned)
 - Subtle sine-wave horizontal displacement per-column (simulates air current)
 - Amplitude scales with corridor width and distance from player
 - Wind direction follows the corridor orientation (H or V from CobwebSystem)
 - Breathing effect: slow amplitude pulse (2–4s period) so webs feel alive
 - When player moves through adjacent tile: billow spike (web reacts to air displacement)
 
-### 4.4 Hover Interaction (Magic Remote / Pointer)
+### 4.4 Hover Interaction (Magic Remote / Pointer) (Planned)
 - When pointer hovers over a cobweb in the 3D viewport, highlight the web threads
 - Thread color shifts to NODE_COLOR (lime green) to indicate interactability
 - Tooltip appears: "🕸️ Intact cobweb — +5 readiness"
 - Click to inspect: brief info overlay with placement time, corridor direction, readiness contribution
 - This is the post-jam LG Content Store / webOS Magic Remote target interaction
 
-### 4.5 Destruction Animation
-- When a cobweb is torn, don't just remove it — animate the tear:
-  - Threads snap from center outward (0.3s)
-  - Silk strands drift downward (particle emitters, 0.5s)
-  - Tattered remnants persist on adjacent walls for ~3s (ghost texture)
-- Audio: soft fabric tear + silk whisper
+### ✅ 4.5 Destruction Animation (Apr 4)
+- `CobwebRenderer.spawnTear(wx, wy)` spawns 6–10 silk strand particles on cobweb destruction
+- Particle physics: drift, gravity, rotation, alpha fade over ~1s lifetime
+- `updateTearParticles()` called each frame from game.js render loop
+- Game.js wires tear particles on player self-tear (`_onPlayerMoveCommit`)
+- Audio: placeholder 'step' cue (TODO: add dedicated `cobweb_tear` audio asset)
 
 ---
 
@@ -196,15 +209,15 @@ The current cobweb rendering is a flat radial web pattern projected as a billboa
 
 ## Integration Map
 
-| Phase | Depends On | Files Modified | New Files |
-|-------|-----------|----------------|-----------|
-| 1 (done) | Phase C | game.js, hazard-system.js, interact-prompt.js, readiness-calc.js, index.html | trap-rearm.js |
-| 2 | Phase E (hero cycle), Phase F (economy) | game.js, cobweb-node.js, loot-tables.json | — |
-| 3 | Phase 2, C4 (work orders) | work-order-system.js, game.js | — |
-| 4 | — (visual only) | cobweb-renderer.js, texture-atlas.js, raycaster.js | — |
-| 5 | Phase 2 (resource cost) | cobweb-system.js, trap-rearm.js, loot-tables.json | — |
-| 6 | Phase E (enemy AI) | enemy-ai.js, pathfind.js, cobweb-system.js | — |
-| 7 | Phases 5+6 | cobweb-system.js, cobweb-renderer.js | cobweb-ecology.js |
+| Phase | Status | Depends On | Files Modified | New Files |
+|-------|--------|-----------|----------------|-----------|
+| 1 | ✅ Done | Phase C | game.js, hazard-system.js, interact-prompt.js, readiness-calc.js, index.html | trap-rearm.js |
+| 2 | 🔶 Partial (coin loop done, consumable cost planned) | Phase E (hero cycle), Phase F (economy) | game.js, cobweb-system.js, cobweb-node.js, readiness-calc.js | — |
+| 3 | ⬜ Planned | Phase 2, C4 (work orders) | work-order-system.js, game.js | — |
+| 4 | 🔶 Partial (biome tint, corridor projection, tear particles done; billow + hover planned) | — (visual only) | cobweb-renderer.js, game.js | — |
+| 5 | ⬜ Planned | Phase 2 (resource cost) | cobweb-system.js, trap-rearm.js, loot-tables.json | — |
+| 6 | ⬜ Planned | Phase E (enemy AI) | enemy-ai.js, pathfind.js, cobweb-system.js | — |
+| 7 | ⬜ Planned | Phases 5+6 | cobweb-system.js, cobweb-renderer.js | cobweb-ecology.js |
 
 ---
 

@@ -268,7 +268,7 @@ var CobwebNode = (function () {
     var action = (typeof i18n !== 'undefined')
       ? i18n.t('cobweb.deploy', 'Deploy Spider')
       : 'Deploy Spider';
-    var full = '\uD83D\uDD77\uFE0F ' + action;  // 🕷️ Deploy Spider
+    var full = '\uD83D\uDD77\uFE0F ' + action + '  +2g';  // 🕷️ Deploy Spider  +2g
 
     ctx.save();
     ctx.globalAlpha = _promptAlpha;

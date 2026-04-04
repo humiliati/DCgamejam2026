@@ -310,7 +310,7 @@ var StatusBar = (function () {
     var max = 12;
     if (typeof CardAuthority !== 'undefined') {
       count = CardAuthority.getBagSize();
-      max = CardAuthority.MAX_BAG;
+      max = CardAuthority.getMaxBag();
     }
     _btnBag.textContent = '🎒 BAG ' + count + '/' + max;
 

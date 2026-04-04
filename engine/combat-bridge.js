@@ -37,6 +37,7 @@ var CombatBridge = (function () {
 
   // ── Callbacks (wired by Game orchestrator) ─────────────────────────
   var _onGameOver = null;
+  var _onDeathRescue = null;
 
   // ── Turn-to-face state ────────────────────────────────────────────
   var _pendingEnemy = null;    // Enemy waiting for turn animation to finish
@@ -52,6 +53,7 @@ var CombatBridge = (function () {
   function init(cbs) {
     cbs = cbs || {};
     _onGameOver = cbs.onGameOver || null;
+    _onDeathRescue = cbs.onDeathRescue || null;
     _pendingEnemy = null;
     _facingTimer = 0;
     _lastBeatMsg = '';
@@ -378,6 +380,160 @@ var CombatBridge = (function () {
     }
   }
 
+  // ── Corpse placement (after death animation) ───────────────────────
+
+  /**
+   * Place a corpse tile and register with CorpseRegistry + CrateSystem.
+   * Called after the death animation completes (NOT before).
+   *
+   * This creates the corpse slot container that the player interacts
+   * with via CorpsePeek → PeekSlots → seal → reanimate.
+   *
+   * @param {Object} enemy - The defeated enemy (still in _enemies, hp=0)
+   * @param {number} x - Grid X where enemy fell
+   * @param {number} y - Grid Y where enemy fell
+   * @param {string} floorId - Current floor ID
+   */
+  function _placeCorpse(enemy, x, y, floorId) {
+    // Place CORPSE tile on the grid (so CorpsePeek activates on approach)
+    var fd = FloorManager.getFloorData();
+    if (fd && fd.grid[y] && fd.grid[y][x] !== undefined) {
+      fd.grid[y][x] = TILES.CORPSE;
+    }
+
+    // Register with CorpseRegistry (auto-creates CrateSystem corpse slots)
+    if (typeof CorpseRegistry !== 'undefined') {
+      CorpseRegistry.register(x, y, floorId, enemy);
+    }
+  }
+
+  // ── Enemy resurrection (called by reanimate pipeline) ──────────────
+
+  /**
+   * Resurrect a defeated enemy as a friendly NPC.
+   *
+   * NOT called directly after death animation. Instead, called by the
+   * game.js reanimate handler when the player fills corpse slots and
+   * seals the container (CorpseRegistry → CrateSystem → DeathAnim).
+   *
+   * The enemy object stays in FloorManager._enemies the whole time.
+   * While dead: hp=0, spriteState='dead', NOT rendered as living sprite.
+   * After reanimate: hp restored, friendly=true, spriteState='idle'.
+   *
+   * @param {Object} enemy - The defeated enemy object (still in _enemies)
+   */
+  function _resurrectAsFriendly(enemy) {
+    // Preserve original HP for future re-fights
+    if (!enemy._origHp) enemy._origHp = enemy.maxHp || enemy.hp || 10;
+
+    enemy.hp = enemy._origHp;
+    enemy.friendly = true;
+    enemy.spriteState = 'idle';
+    enemy.awareness = 0;
+    enemy.fleeImmunity = 0;
+
+    // Clear player-filled slots (readiness resets)
+    enemy.filledSlots = [];
+    enemy.readiness = 0;
+
+    if (typeof WorldPopup !== 'undefined') {
+      WorldPopup.spawn('\u2764\uFE0F', enemy.x, enemy.y, 'hp');
+    }
+  }
+
+  /**
+   * Find a dead enemy at a tile position (for reanimate callback wiring).
+   * Used by game.js to link CorpseRegistry reanimate back to the original
+   * enemy object instead of spawning a duplicate NPC.
+   *
+   * @param {number} x
+   * @param {number} y
+   * @returns {Object|null} The dead enemy object, or null
+   */
+  function findDeadEnemyAt(x, y) {
+    var enemies = FloorManager.getEnemies();
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.x === x && e.y === y && e.hp <= 0 && e.spriteState === 'dead') {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Interact with a friendly (resurrected) enemy.
+   * Called when the player presses OK while facing a friendly enemy.
+   *
+   * Behaviour by type:
+   *   - nonLethal / vendor → bark only (no re-fight)
+   *   - standard → random: 70% bark, 30% re-initiate combat
+   *   - elite / boss → 50% bark, 50% re-initiate combat
+   *
+   * Re-initiating combat:
+   *   - enemy.friendly flipped to false
+   *   - Player-filled slots cleared
+   *   - No readiness score awarded
+   *   - Second defeat yields no loot
+   *
+   * @param {Object} enemy
+   * @returns {boolean} true if interaction was handled
+   */
+  function interactFriendlyEnemy(enemy) {
+    if (!enemy || !enemy.friendly) return false;
+
+    // ── Bark pool (by enemy type) ──
+    var barks = {
+      organic:   ['*shuffles awkwardly*', '*sniffs the air*', 'What... happened?', '*stares blankly*'],
+      undead:    ['*bones rattle*', '*jaw clicks open*', '...rest...', '*groans softly*'],
+      construct: ['*gears whir*', 'SYSTEM REBOOT...', '*clicks and hums*', 'Recalibrating...'],
+      marine:    ['*bubbles*', '*gurgles pensively*', 'The depths... remember...', '*ink clouds*'],
+      _default:  ['*blinks*', '...', '*nods slowly*', 'You again.']
+    };
+
+    var pool = barks[enemy.lootProfile] || barks._default;
+
+    // Decide: bark or re-fight?
+    var refightChance = 0.3;  // standard
+    if (enemy.nonLethal) refightChance = 0;
+    if (enemy.isElite || enemy.tier === 'boss') refightChance = 0.5;
+
+    var roll = Math.random();
+    if (roll < refightChance) {
+      // ── Re-initiate combat ──
+      enemy.friendly = false;
+      enemy.hp = enemy._origHp || enemy.maxHp || 10;
+      enemy.spriteState = 'idle';
+      enemy.awareness = 120;  // fully aggro
+
+      // Clear player-filled slots — gleaner work is undone
+      enemy.filledSlots = [];
+      enemy.readiness = 0;
+
+      // Clean up corpse registry from previous defeat.
+      // CrateSystem + CorpseRegistry both key by floorId:x:y — when this
+      // enemy is defeated again, register()/createCorpse() will overwrite
+      // the old entries at the same key. Just remove the CorpseRegistry
+      // entry so buildSprites() stops rendering a pile here.
+      var floorId = FloorManager.getCurrentFloorId
+        ? FloorManager.getCurrentFloorId()
+        : FloorManager.getFloor();
+      if (typeof CorpseRegistry !== 'undefined') {
+        CorpseRegistry.remove(enemy.x, enemy.y, floorId);
+      }
+
+      HUD.showCombatLog(enemy.emoji + ' ' + enemy.name + ' snaps back to hostility!');
+      startCombat(enemy);
+    } else {
+      // ── Bark ──
+      var bark = pool[Math.floor(Math.random() * pool.length)];
+      HUD.showCombatLog(enemy.emoji + ' ' + enemy.name + ': ' + bark);
+      Toast.show(enemy.emoji + ' ' + bark, 'info');
+    }
+
+    return true;
+  }
+
   // ── Combat end handler ────────────────────────────────────────────
 
   function _onCombatEnd(result, enemy) {
@@ -400,41 +556,118 @@ var CombatBridge = (function () {
     if (typeof NchWidget !== 'undefined') NchWidget.exitCombat();
 
     if (result === 'victory') {
-      // ── Victory: remove enemy, start death anim, drop corpse tile, award loot ──
+      // ══════════════════════════════════════════════════════════════
+      // VICTORY FLOW
+      //
+      // 1. Roll loot (first defeat only)
+      // 2. Coin splash + collectible drop
+      // 3. Death animation
+      // 4. Resurrect enemy as friendly (restockable, path-friendly)
+      //    — enemy stays in _enemies list, NOT removed
+      // 5. Show combat report
+      //
+      // On REPEAT defeat (enemy.defeatCount >= 2):
+      //   - No loot, no gold, no collectibles
+      //   - Slots emptied, no readiness score
+      // ══════════════════════════════════════════════════════════════
+
       var corpseX = enemy.x;
       var corpseY = enemy.y;
-      var corpseFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
-      FloorManager.removeEnemy(enemy);
       SessionStats.inc('enemiesDefeated');
 
-      // Helper: place corpse tile on any walkable surface (not just EMPTY)
-      function _placeCorpseTile(cx, cy, flId) {
-        var fd = FloorManager.getFloorData();
-        // Guard: floor changed during death anim — skip placement
-        var currentFlId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
-        if (currentFlId !== flId) return;
-        if (fd && fd.grid[cy] && fd.grid[cy][cx] !== undefined) {
-          var existing = fd.grid[cy][cx];
-          // Allow overwriting any walkable tile (EMPTY, BREAKABLE, COLLECTIBLE, existing CORPSE)
-          if (existing === TILES.EMPTY || existing === TILES.CORPSE ||
-              existing === TILES.BREAKABLE || existing === TILES.COLLECTIBLE ||
-              (typeof TILES.isWalkable === 'function' && TILES.isWalkable(existing))) {
-            fd.grid[cy][cx] = TILES.CORPSE;
+      // Track defeat count for reward gating
+      enemy.defeatCount = (enemy.defeatCount || 0) + 1;
+      var firstDefeat = (enemy.defeatCount === 1);
+
+      // ── 1. Roll loot (first defeat only) ──
+      var lootResult = null;
+      if (firstDefeat && typeof LootTables !== 'undefined') {
+        var lootProfile = enemy.lootProfile || 'organic';
+        var lootTier = enemy.tier || 'standard';
+        var lootFloor = FloorManager.getFloorDepth ? FloorManager.getFloorDepth() : 1;
+        lootResult = LootTables.rollEnemyLoot(lootProfile, lootTier, lootFloor);
+      }
+
+      // ── 2. Coin splash + collectible drop ──
+      if (lootResult) {
+        // Gold reward
+        if (lootResult.currency > 0) {
+          CardAuthority.addGold(lootResult.currency);
+          Toast.show('\uD83D\uDCB0 +' + lootResult.currency, 'currency');
+          // Coin VFX
+          if (typeof ParticleFX !== 'undefined') {
+            var canvas = document.getElementById('view-canvas');
+            var gcx = canvas ? canvas.width / 2 : 320;
+            var gcy = canvas ? canvas.height * 0.5 : 200;
+            if (lootResult.currency >= 15) {
+              ParticleFX.coinRain(gcx, gcy, lootResult.currency);
+            } else if (lootResult.currency >= 3) {
+              ParticleFX.coinBurst(gcx, gcy, Math.max(3, Math.floor(lootResult.currency / 2)));
+            }
+          }
+          if (typeof AudioSystem !== 'undefined') AudioSystem.playRandom('coin', { volume: 0.6 });
+        }
+
+        // Battery pickup
+        if (lootResult.battery > 0) {
+          Player.addBattery(lootResult.battery);
+          Toast.show('\u25C8 +' + lootResult.battery, 'battery');
+          HUD.updateBattery(Player.state());
+        }
+
+        // Food collectible → place on ground for walk-over
+        if (lootResult.food && typeof WorldItems !== 'undefined') {
+          WorldItems.placeAt(corpseX, corpseY, {
+            type: 'food', itemId: lootResult.food
+          });
+          var fd = FloorManager.getFloorData();
+          if (fd && fd.grid[corpseY] && fd.grid[corpseY][corpseX] === TILES.EMPTY) {
+            fd.grid[corpseY][corpseX] = TILES.COLLECTIBLE;
           }
         }
-        if (typeof CorpseRegistry !== 'undefined') {
-          CorpseRegistry.register(cx, cy, flId, enemy);
+
+        // Card drop
+        if (lootResult.dropCard && typeof CardSystem !== 'undefined') {
+          var biome = FloorManager.getBiome ? FloorManager.getBiome() : 'cellar';
+          var droppedCard = CardSystem.getBiomeDrops ? CardSystem.getBiomeDrops(biome) : null;
+          if (droppedCard) {
+            var added = CardAuthority.addToBackup(droppedCard);
+            if (added) {
+              Toast.show('\uD83C\uDCCF ' + droppedCard.name, 'loot');
+              HUD.showCombatLog('\uD83C\uDCCF Found: ' + droppedCard.emoji + ' ' + droppedCard.name);
+            }
+          }
         }
       }
 
-      // Start death animation (origami fold or poof)
+      // ── 3. Death animation → corpse tile + registry (NOT instant resurrect) ──
+      //
+      // Pipeline: death anim → place CORPSE tile → CorpseRegistry.register()
+      //   (which auto-calls CrateSystem.createCorpse for slot UI)
+      // Player later: approach corpse → fill slots → seal → reanimate pop-up
+      //
+      // Enemy stays in _enemies with hp=0, spriteState='dead'. The corpse
+      // tile + CorpseRegistry handle the visual. game.js reanimate handler
+      // calls _resurrectAsFriendly() via findDeadEnemyAt() when slots sealed.
+
+      // Mark dead BEFORE animation starts (stops AI/rendering as living)
+      enemy.hp = 0;
+      enemy.spriteState = 'dead';
+      enemy.awareness = 0;
+
+      // Preserve original HP for future re-fights
+      if (!enemy._origHp) enemy._origHp = enemy.maxHp || 10;
+
+      var _corpseEnemy = enemy; // closure ref for callback
+      var _corpseFloorId = FloorManager.getCurrentFloorId
+        ? FloorManager.getCurrentFloorId()
+        : FloorManager.getFloor();
+
       if (typeof DeathAnim !== 'undefined') {
-        // Project enemy grid position → screen coordinates
-        // Uses camera math matching the raycaster's sprite projection.
-        var canvas = document.getElementById('view-canvas');
-        var cw = canvas ? canvas.width : 640;
-        var ch = canvas ? canvas.height : 400;
-        var sx = cw / 2;  // fallback: screen center
+        var canvas2 = document.getElementById('view-canvas');
+        var cw = canvas2 ? canvas2.width : 640;
+        var ch = canvas2 ? canvas2.height : 400;
+        var sx = cw / 2;
         var sy = ch * 0.45;
         var renderPos = MC.getRenderPos ? MC.getRenderPos() : null;
         if (renderPos) {
@@ -449,34 +682,27 @@ var CombatBridge = (function () {
             var fov = Math.PI / 3;
             var halfFov = fov / 2;
             sx = Math.floor(cw / 2 + (eAngle / halfFov) * (cw / 2));
-            sy = ch / 2;  // eye-level center
+            sy = ch / 2;
           }
         }
-        var deathEnemy = { emoji: enemy.emoji, type: enemy.type || '', tags: enemy.tags || [] };
-
-        DeathAnim.start(deathEnemy, sx, sy, 0.6, function (e, deathType) {
-          // Place corpse tile after fold animation completes
-          if (deathType === 'fold') {
-            _placeCorpseTile(corpseX, corpseY, corpseFloorId);
-          }
-          // Poof enemies leave no corpse tile (and no registry entry)
+        var deathEnemy = { emoji: _corpseEnemy.emoji, type: _corpseEnemy.type || '', tags: _corpseEnemy.tags || [] };
+        DeathAnim.start(deathEnemy, sx, sy, 0.6, function () {
+          // After death anim completes → place corpse tile + register
+          _placeCorpse(_corpseEnemy, corpseX, corpseY, _corpseFloorId);
         });
       } else {
-        // Fallback: place corpse immediately if no DeathAnim
-        _placeCorpseTile(corpseX, corpseY, corpseFloorId);
+        // No DeathAnim — place corpse immediately
+        _placeCorpse(_corpseEnemy, corpseX, corpseY, _corpseFloorId);
       }
-
-      // Set enemy sprite state to dead (for any remaining render frames)
-      enemy.spriteState = 'dead';
 
       HUD.showCombatLog(
         enemy.emoji + ' ' + enemy.name + ' ' +
         i18n.t('combat.victory', 'defeated!')
       );
 
-      // Calculate XP reward (simple formula: base 5 + depth * 2 + elite bonus)
+      // Calculate XP reward (first defeat only)
       var depth = (typeof FloorManager !== 'undefined') ? FloorManager.getFloorDepth() : 1;
-      var xpEarned = 5 + depth * 2 + (enemy.isElite ? 10 : 0);
+      var xpEarned = firstDefeat ? (5 + depth * 2 + (enemy.isElite ? 10 : 0)) : 0;
 
       // Show combat report after brief delay
       setTimeout(function () {
@@ -484,10 +710,13 @@ var CombatBridge = (function () {
         if (typeof CombatReport !== 'undefined') {
           CombatReport.show({
             xpEarned: xpEarned,
+            loot: lootResult,
             onDismiss: function () {
-              // Feed log the victory
               if (typeof DebriefFeed !== 'undefined') {
-                DebriefFeed.logEvent(enemy.emoji + ' defeated! +' + xpEarned + 'XP', 'loot');
+                var msg = enemy.emoji + ' defeated!';
+                if (xpEarned > 0) msg += ' +' + xpEarned + 'XP';
+                if (!firstDefeat) msg += ' (no loot — already defeated)';
+                DebriefFeed.logEvent(msg, firstDefeat ? 'loot' : 'info');
               }
             }
           });
@@ -510,19 +739,31 @@ var CombatBridge = (function () {
         );
         setTimeout(function () { HUD.hideCombat(); }, 2000);
       } else {
-        // Lethal defeat — inventory scatter prep, game over
+        // Lethal defeat — inventory wipe, debuffs, rescue home
         var dropped = Player.onDeath();
-        // TODO: Pass dropped to FloorManager for loot scatter tiles
-        // FloorManager.scatterLoot(dropped, Player.getPos());
+        Player.fullRestore();
 
-        // §10: Death-shift — shift this group's hero day before game over
-        // POST-JAM: Convert combat death to rescue (like HazardSystem) so
-        // death-shift is meaningful. For now, game-over ends the run.
+        // Determine depth for debuff severity
+        var currentFloor = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
+        var depth = currentFloor ? currentFloor.split('.').length : 1;
+
+        // §10: Death-shift — shift this group's hero day
         if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onPlayerDeath) {
-          DungeonSchedule.onPlayerDeath(FloorManager.getCurrentFloorId());
+          DungeonSchedule.onPlayerDeath(currentFloor);
         }
 
-        _gameOver();
+        // Route through rescue callback (same path as environmental death)
+        if (_onDeathRescue) {
+          _onDeathRescue({
+            reason: 'combat',
+            floorId: currentFloor,
+            depth: depth,
+            dropped: dropped
+          });
+        } else {
+          // Fallback: game over if rescue not wired
+          _gameOver();
+        }
       }
 
     } else if (result === 'flee') {
@@ -927,6 +1168,9 @@ var CombatBridge = (function () {
     flee: flee,
     openChest: openChest,
     checkEnemyProximity: checkEnemyProximity,
-    checkEnemyAggro: checkEnemyAggro
+    checkEnemyAggro: checkEnemyAggro,
+    interactFriendlyEnemy: interactFriendlyEnemy,
+    findDeadEnemyAt: findDeadEnemyAt,
+    resurrectAsFriendly: _resurrectAsFriendly
   };
 })();

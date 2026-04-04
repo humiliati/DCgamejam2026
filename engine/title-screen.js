@@ -36,6 +36,9 @@ var TitleScreen = (function () {
   var TEXT_DIM          = '#888070';
   var TEXT_MUTED        = '#5a5548';
 
+  // ── CRT font stack (console, NOT Courier) ─────────────────────────
+  var CRT_FONT = "'Classic Console Neue', Consolas, Monaco, 'Lucida Console', monospace";
+
   // ── Hover tracking ────────────────────────────────────────────────
   var _mouseX = -1, _mouseY = -1;
   var _hoveredZoneIdx = -1;
@@ -82,22 +85,34 @@ var TitleScreen = (function () {
   var _clickHandler = null;
   var _moveHandler = null;
 
+  var _wheelHandler = null;
+
   function _bindInput() {
     _keyHandler = function (e) { _onKey(e); };
     _clickHandler = function (e) { _onClick(e); };
     _moveHandler = function (e) { _onMouseMove(e); };
+    _wheelHandler = function (e) {
+      if (_settingsOpen) {
+        e.preventDefault();
+        _settingsScroll += (e.deltaY > 0 ? 40 : -40);
+        _settingsScroll = Math.max(0, Math.min(_settingsMaxScroll, _settingsScroll));
+      }
+    };
     window.addEventListener('keydown', _keyHandler);
     _canvas.addEventListener('click', _clickHandler);
     _canvas.addEventListener('mousemove', _moveHandler);
+    _canvas.addEventListener('wheel', _wheelHandler, { passive: false });
   }
 
   function _unbindInput() {
     if (_keyHandler) window.removeEventListener('keydown', _keyHandler);
     if (_clickHandler) _canvas.removeEventListener('click', _clickHandler);
     if (_moveHandler) _canvas.removeEventListener('mousemove', _moveHandler);
+    if (_wheelHandler) _canvas.removeEventListener('wheel', _wheelHandler);
     _keyHandler = null;
     _clickHandler = null;
     _moveHandler = null;
+    _wheelHandler = null;
   }
 
   function _canvasCoords(e) {
@@ -116,6 +131,8 @@ var TitleScreen = (function () {
     _hoveredZoneIdx = -1;
     for (var i = 0; i < _hitZones.length; i++) {
       var z = _hitZones[i];
+      // Skip zones outside their clip region (scrollable settings items)
+      if (z.clipY != null && (_mouseY < z.clipY || _mouseY > z.clipY + z.clipH)) continue;
       if (_mouseX >= z.x && _mouseX <= z.x + z.w && _mouseY >= z.y && _mouseY <= z.y + z.h) {
         _hoveredZoneIdx = i;
         break;
@@ -207,14 +224,31 @@ var TitleScreen = (function () {
   var _settingsSelected = 0;
 
   function _settingsItemCount() {
-    return SETTINGS_ITEMS.length + 1; // +1 for BACK button
+    // Count navigable items (skip headers) + 1 for BACK button
+    var count = 0;
+    for (var i = 0; i < SETTINGS_ITEMS.length; i++) {
+      if (SETTINGS_ITEMS[i].type !== 'header') count++;
+    }
+    return count + 1; // +1 for BACK button
+  }
+
+  /** Map navigable index to actual SETTINGS_ITEMS index (skipping headers). */
+  function _navToItemIdx(navIdx) {
+    var nav = 0;
+    for (var i = 0; i < SETTINGS_ITEMS.length; i++) {
+      if (SETTINGS_ITEMS[i].type === 'header') continue;
+      if (nav === navIdx) return i;
+      nav++;
+    }
+    return -1; // BACK button
   }
 
   // ── Confirm ───────────────────────────────────────────────────
   function _confirm() {
     if (_phase === 0) {
       if (_settingsOpen) {
-        if (_settingsSelected >= SETTINGS_ITEMS.length) {
+        var navCount = _settingsItemCount();
+        if (_settingsSelected >= navCount - 1) {
           // BACK button selected
           _settingsOpen = false;
           return;
@@ -259,6 +293,8 @@ var TitleScreen = (function () {
   function _hitTest(mx, my) {
     for (var i = 0; i < _hitZones.length; i++) {
       var z = _hitZones[i];
+      // Skip zones outside their clip region (scrollable settings items)
+      if (z.clipY != null && (my < z.clipY || my > z.clipY + z.clipH)) continue;
       if (mx >= z.x && mx <= z.x + z.w && my >= z.y && my <= z.y + z.h) {
         if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-select', { volume: 0.3 });
         z.action();
@@ -360,6 +396,7 @@ var TitleScreen = (function () {
     _hoveredZoneIdx = -1;
     for (var i = 0; i < _hitZones.length; i++) {
       var z = _hitZones[i];
+      if (z.clipY != null && (_mouseY < z.clipY || _mouseY > z.clipY + z.clipH)) continue;
       if (_mouseX >= z.x && _mouseX <= z.x + z.w && _mouseY >= z.y && _mouseY <= z.y + z.h) {
         _hoveredZoneIdx = i;
         break;
@@ -512,7 +549,7 @@ var TitleScreen = (function () {
     _ctx.shadowColor = GLOW_SPREAD;
     _ctx.shadowBlur = 35;
     _ctx.fillStyle = 'rgba(176,255,189,0.04)';
-    _ctx.font = 'bold 72px "Courier New", monospace';
+    _ctx.font = 'bold 72px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('title.game_name', 'DUNGEON GLEANER'), cx, h * 0.20);
@@ -526,7 +563,7 @@ var TitleScreen = (function () {
 
     // Subtitle — slightly brighter
     _ctx.fillStyle = TEXT_WARM;
-    _ctx.font = '26px "Courier New", monospace';
+    _ctx.font = '26px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('title.subtitle', 'A Dungeon Crawler'), cx, h * 0.20 + 56);
@@ -559,7 +596,7 @@ var TitleScreen = (function () {
       // Button label
       _ctx.textAlign = 'center';
       _ctx.textBaseline = 'middle';
-      _ctx.font = (isSelected ? 'bold ' : '') + '28px "Courier New", monospace';
+      _ctx.font = (isSelected ? 'bold ' : '') + '28px ' + CRT_FONT;
       if (isPlaceholder) {
         _ctx.fillStyle = '#444';
       } else if (isSelected || _isZoneHovered(zoneIdx)) {
@@ -585,7 +622,7 @@ var TitleScreen = (function () {
 
     // Version / jam credit
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '16px "Courier New", monospace';
+    _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText(i18n.t('title.jam_credit', 'DC Jam 2026'), cx, h - 36);
   }
@@ -598,7 +635,7 @@ var TitleScreen = (function () {
     _ctx.shadowColor = GLOW_DIM;
     _ctx.shadowBlur = 8;
     _ctx.fillStyle = TEXT_WARM;
-    _ctx.font = 'bold 28px "Courier New", monospace';
+    _ctx.font = 'bold 28px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('create.callsign_header', 'CHOOSE YOUR CALLSIGN'), cx, h * 0.13);
@@ -610,7 +647,7 @@ var TitleScreen = (function () {
     _ctx.shadowColor = GLOW_SPREAD;
     _ctx.shadowBlur = 25;
     _ctx.fillStyle = '#fff';
-    _ctx.font = 'bold 72px "Courier New", monospace';
+    _ctx.font = 'bold 72px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(_callsign, cx, h * 0.32);
@@ -630,7 +667,7 @@ var TitleScreen = (function () {
       selected: false, hovered: _isZoneHovered(leftZoneIdx), radius: 8
     });
     _ctx.fillStyle = _isZoneHovered(leftZoneIdx) ? '#fff' : TEXT_WARM;
-    _ctx.font = 'bold 36px "Courier New", monospace';
+    _ctx.font = 'bold 36px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText('\u25C0', leftArrowX + arrowBtnW / 2, arrowY + arrowBtnH / 2);
@@ -645,7 +682,7 @@ var TitleScreen = (function () {
       selected: false, hovered: _isZoneHovered(rightZoneIdx), radius: 8
     });
     _ctx.fillStyle = _isZoneHovered(rightZoneIdx) ? '#fff' : TEXT_WARM;
-    _ctx.font = 'bold 36px "Courier New", monospace';
+    _ctx.font = 'bold 36px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText('\u25B6', rightArrowX + arrowBtnW / 2, arrowY + arrowBtnH / 2);
     _hitZones.push({
@@ -657,14 +694,14 @@ var TitleScreen = (function () {
     var prevIdx = (_callsignIndex - 1 + CALLSIGNS.length) % CALLSIGNS.length;
     var nextIdx = (_callsignIndex + 1) % CALLSIGNS.length;
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '22px "Courier New", monospace';
+    _ctx.font = '22px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText(CALLSIGNS[prevIdx], cx - 160, h * 0.48);
     _ctx.fillText(CALLSIGNS[nextIdx], cx + 160, h * 0.48);
 
     // Index counter
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '18px "Courier New", monospace';
+    _ctx.font = '18px ' + CRT_FONT;
     _ctx.fillText((_callsignIndex + 1) + ' / ' + CALLSIGNS.length, cx, h * 0.57);
 
     // Confirm button
@@ -678,7 +715,7 @@ var TitleScreen = (function () {
       selected: true, hovered: _isZoneHovered(confirmZoneIdx)
     });
     _ctx.fillStyle = _isZoneHovered(confirmZoneIdx) ? '#fff' : GLOW_COLOR;
-    _ctx.font = 'bold 26px "Courier New", monospace';
+    _ctx.font = 'bold 26px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText('CONFIRM \u25B6', cx, confirmY + confirmBtnH / 2);
@@ -698,7 +735,7 @@ var TitleScreen = (function () {
       selected: false, hovered: _isZoneHovered(backZoneIdx)
     });
     _ctx.fillStyle = _isZoneHovered(backZoneIdx) ? '#fff' : TEXT_DIM;
-    _ctx.font = '20px "Courier New", monospace';
+    _ctx.font = '20px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText('\u25C0 BACK', cx, backY + backBtnH / 2);
@@ -709,7 +746,7 @@ var TitleScreen = (function () {
 
     // Controls hint
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '16px "Courier New", monospace';
+    _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText(i18n.t('create.callsign_hint', '[\u2190 \u2192] Browse   [Enter] Confirm   [Esc] Back'), cx, h * 0.92);
   }
@@ -722,7 +759,7 @@ var TitleScreen = (function () {
     _ctx.shadowColor = GLOW_DIM;
     _ctx.shadowBlur = 8;
     _ctx.fillStyle = TEXT_WARM;
-    _ctx.font = 'bold 28px "Courier New", monospace';
+    _ctx.font = 'bold 28px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('create.avatar_header', 'CHOOSE YOUR CLASS'), cx, h * 0.05);
@@ -731,7 +768,7 @@ var TitleScreen = (function () {
 
     // Callsign reminder — warm tint
     _ctx.fillStyle = GLOW_DIM;
-    _ctx.font = '20px "Courier New", monospace';
+    _ctx.font = '20px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText('Agent ' + _callsign, cx, h * 0.10);
@@ -768,12 +805,12 @@ var TitleScreen = (function () {
       _ctx.fillText(AVATARS[i].emoji, ax + 14, ay + 36);
 
       // Name (bold, readable)
-      _ctx.font = (isSelected ? 'bold ' : '') + '24px "Courier New", monospace';
+      _ctx.font = (isSelected ? 'bold ' : '') + '24px ' + CRT_FONT;
       _ctx.fillStyle = isSelected || isHovered ? '#fff' : TEXT_WARM;
       _ctx.fillText(AVATARS[i].name, ax + 64, ay + 30);
 
       // Description — now fits in the larger card
-      _ctx.font = '16px "Courier New", monospace';
+      _ctx.font = '16px ' + CRT_FONT;
       _ctx.fillStyle = isSelected || isHovered ? '#bbb' : TEXT_DIM;
       // Clip to card bounds for safety
       _ctx.save();
@@ -784,7 +821,7 @@ var TitleScreen = (function () {
       _ctx.restore();
 
       // Stat badge (right side)
-      _ctx.font = '13px "Courier New", monospace';
+      _ctx.font = '13px ' + CRT_FONT;
       _ctx.textAlign = 'right';
       _ctx.fillStyle = isSelected ? GLOW_COLOR : 'rgba(176,255,189,0.4)';
       var statLabel = '+' + AVATARS[i].stat.toUpperCase();
@@ -824,18 +861,18 @@ var TitleScreen = (function () {
     _ctx.shadowBlur = 0;
     _ctx.restore();
 
-    _ctx.font = 'bold 28px "Courier New", monospace';
+    _ctx.font = 'bold 28px ' + CRT_FONT;
     _ctx.fillStyle = isPreviewHovered ? TEXT_DIM : TEXT_WARM;
     _ctx.textAlign = 'left';
     _ctx.fillText(ava.name, cx - 80, detailY);
 
     // Short desc
-    _ctx.font = '17px "Courier New", monospace';
+    _ctx.font = '17px ' + CRT_FONT;
     _ctx.fillStyle = isPreviewHovered ? TEXT_MUTED : TEXT_DIM;
     _ctx.fillText(ava.desc, cx - 80, detailY + 26);
 
     // Lore text — word-wrapped
-    _ctx.font = '14px "Courier New", monospace';
+    _ctx.font = '14px ' + CRT_FONT;
     _ctx.fillStyle = isPreviewHovered ? 'rgba(136,128,112,0.7)' : 'rgba(200,180,120,0.6)';
     var loreLines = _wrapText(_ctx, ava.lore || '', gridW - 40);
     var loreY = detailY + 48;
@@ -856,7 +893,7 @@ var TitleScreen = (function () {
     _drawGlowButton(_ctx, deployBtnX, deployBtnY, deployBtnW, deployBtnH, {
       selected: true, hovered: isDeployHovered, radius: 8
     });
-    _ctx.font = 'bold 22px "Courier New", monospace';
+    _ctx.font = 'bold 22px ' + CRT_FONT;
     _ctx.fillStyle = isDeployHovered ? '#fff' : GLOW_COLOR;
     _ctx.fillText('DEPLOY \u25B6', cx, deployBtnY + deployBtnH / 2);
     _hitZones.push({
@@ -875,7 +912,7 @@ var TitleScreen = (function () {
       selected: false, hovered: _isZoneHovered(backZoneIdx)
     });
     _ctx.fillStyle = _isZoneHovered(backZoneIdx) ? '#fff' : TEXT_DIM;
-    _ctx.font = '20px "Courier New", monospace';
+    _ctx.font = '20px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText('\u25C0 BACK', backX + backBtnW / 2, backY + backBtnH / 2);
@@ -886,7 +923,7 @@ var TitleScreen = (function () {
 
     // Controls hint
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '16px "Courier New", monospace';
+    _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText(i18n.t('create.avatar_hint', '[\u2190 \u2192 \u2191 \u2193] Browse   [Enter] Deploy   [Esc] Back'), cx, h - 12);
   }
@@ -915,7 +952,7 @@ var TitleScreen = (function () {
     _ctx.save();
     _ctx.shadowColor = GLOW_DIM;
     _ctx.shadowBlur = 12;
-    _ctx.font = 'bold 52px "Courier New", monospace';
+    _ctx.font = 'bold 52px ' + CRT_FONT;
     _ctx.fillStyle = TEXT_WARM;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
@@ -924,7 +961,7 @@ var TitleScreen = (function () {
     _ctx.restore();
 
     // Class
-    _ctx.font = '26px "Courier New", monospace';
+    _ctx.font = '26px ' + CRT_FONT;
     _ctx.fillStyle = TEXT_DIM;
     _ctx.textAlign = 'center';
     _ctx.fillText(ava.name + ' class', cx, h * 0.56);
@@ -934,7 +971,7 @@ var TitleScreen = (function () {
       var blink = Math.sin(_deployTimer / 200) * 0.3 + 0.7;
       _ctx.globalAlpha = blink;
       _ctx.fillStyle = GLOW_COLOR;
-      _ctx.font = 'bold 24px "Courier New", monospace';
+      _ctx.font = 'bold 24px ' + CRT_FONT;
       _ctx.fillText(i18n.t('create.deploying', 'DEPLOYING...'), cx, h * 0.68);
     }
 
@@ -944,14 +981,37 @@ var TitleScreen = (function () {
   // ── Settings overlay ───────────────────────────────────────────
 
   var SETTINGS_ITEMS = [
-    { key: 'sfx',    label: 'Sound Effects', type: 'toggle' },
-    { key: 'music',  label: 'Music',         type: 'toggle' },
-    { key: 'screen', label: 'Screen Shake',  type: 'toggle' },
+    // ── Audio & Display ──
+    { key: 'sfx',    label: 'Sound Effects',    type: 'toggle', section: 'AUDIO & DISPLAY' },
+    { key: 'music',  label: 'Music',            type: 'toggle' },
+    { key: 'screen', label: 'Screen Shake',     type: 'toggle' },
     { key: 'invertY', label: 'Invert Free Look', type: 'toggle' },
-    { key: 'lang',   label: 'Language',  type: 'toggle' }
+    { key: 'lang',   label: 'Language',          type: 'toggle' },
+    // ── Gamepad ──
+    { key: '_header_gp', label: 'GAMEPAD', type: 'header' },
+    { key: 'gpEnabled',   label: 'Gamepad Input',        type: 'toggle' },
+    { key: 'gpDeadzone',  label: 'Stick Dead Zone',      type: 'cycle', values: ['Low (25%)', 'Normal (40%)', 'High (55%)'], map: [0.25, 0.40, 0.55] },
+    { key: 'gpVibration', label: 'Vibration Feedback',   type: 'toggle' },
+    // ── Accessibility ──
+    { key: '_header_a11y', label: 'ACCESSIBILITY', type: 'header' },
+    { key: 'quadStick',   label: 'QuadStick / Sip-Puff', type: 'toggle' },
+    { key: 'holdConfirm', label: 'Hold-to-Confirm',      type: 'cycle', values: ['Off', '0.5s', '1.0s', '1.5s'], map: [0, 500, 1000, 1500] },
+    { key: 'autoAim',     label: 'Aim Assist (Combat)',   type: 'toggle' },
+    { key: 'largeText',   label: 'Large Text',            type: 'toggle' },
+    { key: 'highContrast', label: 'High Contrast UI',     type: 'toggle' },
+    { key: 'slowMode',    label: 'Reduced Game Speed',    type: 'toggle' }
   ];
 
-  var _settings = { sfx: true, music: true, screen: true, invertY: false, lang: true };
+  var _settings = {
+    sfx: true, music: true, screen: true, invertY: false, lang: true,
+    gpEnabled: true, gpDeadzone: 1, gpVibration: true,
+    quadStick: false, holdConfirm: 0, autoAim: false,
+    largeText: false, highContrast: false, slowMode: false
+  };
+
+  // Scroll state for settings panel
+  var _settingsScroll = 0;
+  var _settingsMaxScroll = 0;
 
   function _loadSettings() {
     try {
@@ -975,9 +1035,12 @@ var TitleScreen = (function () {
     catch (e) { /* silent */ }
   }
 
-  function _toggleSetting(idx) {
-    var item = SETTINGS_ITEMS[idx];
-    if (!item) return;
+  function _toggleSetting(navIdx) {
+    var itemIdx = _navToItemIdx(navIdx);
+    if (itemIdx < 0) return; // BACK button
+    var item = SETTINGS_ITEMS[itemIdx];
+    if (!item || item.type === 'header') return;
+
     // Language cycles through available locales
     if (item.key === 'lang') {
       var _codes = ['en', 'es', 'hi', 'ps'];
@@ -989,9 +1052,27 @@ var TitleScreen = (function () {
       if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-select', { volume: 0.5 });
       return;
     }
+
+    // Cycle type: advance through values array
+    if (item.type === 'cycle') {
+      var cur = _settings[item.key] || 0;
+      _settings[item.key] = (cur + 1) % item.values.length;
+      _saveSettings();
+      _applySettingSideEffect(item);
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-select', { volume: 0.5 });
+      return;
+    }
+
+    // Toggle type
     _settings[item.key] = !_settings[item.key];
     _saveSettings();
+    _applySettingSideEffect(item);
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-select', { volume: 0.5 });
+  }
 
+  /** Apply runtime side-effects when a setting changes. */
+  function _applySettingSideEffect(item) {
+    if (!item) return;
     if (typeof AudioSystem !== 'undefined') {
       if (item.key === 'music') AudioSystem.setMusicVolume(_settings.music ? 1 : 0);
       if (item.key === 'sfx')   AudioSystem.setMasterVolume(_settings.sfx ? 1 : 0);
@@ -999,8 +1080,19 @@ var TitleScreen = (function () {
     if (item.key === 'invertY' && typeof MouseLook !== 'undefined' && MouseLook.setInvertY) {
       MouseLook.setInvertY(_settings.invertY);
     }
-    if (typeof AudioSystem !== 'undefined') {
-      AudioSystem.play('ui-select', { volume: 0.5 });
+    // Gamepad deadzone
+    if (item.key === 'gpDeadzone' && typeof InputManager !== 'undefined' && InputManager.setGamepadDeadzone) {
+      InputManager.setGamepadDeadzone(item.map[_settings.gpDeadzone] || 0.40);
+    }
+    // QuadStick mode: slow down game speed + increase hold timing
+    if (item.key === 'quadStick') {
+      // QuadStick enables high deadzone + slow mode + hold-to-confirm automatically
+      if (_settings.quadStick) {
+        _settings.gpDeadzone = 2;     // High (55%)
+        _settings.holdConfirm = 2;    // 1.0s
+        _settings.slowMode = true;
+        _saveSettings();
+      }
     }
   }
 
@@ -1010,8 +1102,8 @@ var TitleScreen = (function () {
     _ctx.fillRect(0, 0, w, h);
 
     var cx = w / 2;
-    var panelW = 480;
-    var panelH = 500;
+    var panelW = 500;
+    var panelH = Math.min(h - 40, 580);
     var panelX = cx - panelW / 2;
     var panelY = h / 2 - panelH / 2;
 
@@ -1020,96 +1112,213 @@ var TitleScreen = (function () {
       selected: true, radius: 12
     });
 
-    // Title
+    // Title (fixed, not scrolled)
     _ctx.save();
     _ctx.shadowColor = GLOW_DIM;
     _ctx.shadowBlur = 10;
     _ctx.fillStyle = TEXT_WARM;
-    _ctx.font = 'bold 36px "Courier New", monospace';
+    _ctx.font = 'bold 32px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
-    _ctx.fillText('SETTINGS', cx, panelY + 48);
+    _ctx.fillText('SETTINGS', cx, panelY + 36);
     _ctx.shadowBlur = 0;
     _ctx.restore();
 
-    // Items
-    var startY = panelY + 100;
-    var lineH = 60;
+    // Gamepad connection indicator
+    var gpConnected = (typeof InputManager !== 'undefined' && InputManager.isGamepadConnected());
+    _ctx.font = '14px ' + CRT_FONT;
+    _ctx.textAlign = 'right';
+    _ctx.fillStyle = gpConnected ? 'rgba(80,220,120,0.8)' : 'rgba(180,80,80,0.5)';
+    _ctx.fillText(gpConnected ? '\uD83C\uDFAE Connected' : '\uD83C\uDFAE No Gamepad', panelX + panelW - 24, panelY + 36);
+    _ctx.textAlign = 'left';
 
-    for (var i = 0; i < SETTINGS_ITEMS.length; i++) {
-      var y = startY + i * lineH;
-      var item = SETTINGS_ITEMS[i];
-      var isOn = _settings[item.key];
-      var isSel = i === _settingsSelected;
-      var rowX = panelX + 24;
-      var rowW = panelW - 48;
-      var rowH = 48;
-      var zoneIdx = _hitZones.length;
-      var isHovered = _isZoneHovered(zoneIdx);
+    // ── Scrollable content area ──
+    var contentTop = panelY + 64;
+    var contentH = panelH - 64 - 44; // Reserve bottom 44px for hint bar
+    var rowX = panelX + 24;
+    var rowW = panelW - 48;
+    var lineH = 46;
+    var headerH = 32;
 
-      // Row glow button
-      _drawGlowButton(_ctx, rowX, y - rowH / 2, rowW, rowH, {
-        selected: isSel, hovered: isHovered, radius: 6
-      });
+    // Calculate total content height
+    var totalH = 0;
+    for (var ci = 0; ci < SETTINGS_ITEMS.length; ci++) {
+      totalH += SETTINGS_ITEMS[ci].type === 'header' ? headerH : lineH;
+    }
+    totalH += lineH; // BACK button
+    _settingsMaxScroll = Math.max(0, totalH - contentH);
 
-      // Label
-      _ctx.font = (isSel ? 'bold ' : '') + '24px "Courier New", monospace';
-      _ctx.fillStyle = isSel || isHovered ? '#fff' : TEXT_WARM;
-      _ctx.textAlign = 'left';
-      _ctx.textBaseline = 'middle';
-      _ctx.fillText(item.label, rowX + 16, y);
+    // Auto-scroll to keep selected item visible
+    var selY = 0;
+    var navCount = 0;
+    for (var ai = 0; ai < SETTINGS_ITEMS.length; ai++) {
+      if (SETTINGS_ITEMS[ai].type === 'header') { selY += headerH; continue; }
+      if (navCount === _settingsSelected) break;
+      navCount++;
+      selY += lineH;
+    }
+    if (selY - _settingsScroll < 0) _settingsScroll = selY;
+    if (selY + lineH - _settingsScroll > contentH) _settingsScroll = selY + lineH - contentH;
+    _settingsScroll = Math.max(0, Math.min(_settingsMaxScroll, _settingsScroll));
 
-      // Toggle indicator (language shows locale name, others show ON/OFF)
-      _ctx.textAlign = 'right';
-      if (item.key === 'lang') {
-        var _langLabels = { en: 'English', es: 'Español', hi: 'हिन्दी', ps: 'پښتو' };
-        var _curLang = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
-        _ctx.fillStyle = GLOW_COLOR;
-        _ctx.font = 'bold 24px "Courier New", monospace';
-        _ctx.fillText(_langLabels[_curLang] || _curLang, rowX + rowW - 16, y);
-      } else {
-        _ctx.fillStyle = isOn ? GLOW_COLOR : '#c44';
-        _ctx.font = 'bold 24px "Courier New", monospace';
-        _ctx.fillText(isOn ? 'ON' : 'OFF', rowX + rowW - 16, y);
+    // Clip to content area
+    _ctx.save();
+    _ctx.beginPath();
+    _ctx.rect(panelX, contentTop, panelW, contentH);
+    _ctx.clip();
+
+    // Render items
+    var drawY = contentTop - _settingsScroll;
+    var navIdx = 0;
+
+    for (var ri = 0; ri < SETTINGS_ITEMS.length; ri++) {
+      var item = SETTINGS_ITEMS[ri];
+
+      // Section header
+      if (item.type === 'header') {
+        var hy = drawY + headerH / 2;
+        if (hy > contentTop - headerH && hy < contentTop + contentH + headerH) {
+          // Divider line
+          _ctx.strokeStyle = 'rgba(200,180,120,0.25)';
+          _ctx.lineWidth = 1;
+          _ctx.beginPath();
+          _ctx.moveTo(rowX, drawY + 4);
+          _ctx.lineTo(rowX + rowW, drawY + 4);
+          _ctx.stroke();
+
+          _ctx.font = 'bold 16px ' + CRT_FONT;
+          _ctx.fillStyle = 'rgba(200,180,120,0.6)';
+          _ctx.textAlign = 'left';
+          _ctx.textBaseline = 'middle';
+          _ctx.fillText(item.label, rowX + 8, drawY + headerH / 2 + 4);
+        }
+        drawY += headerH;
+        continue;
       }
 
-      // Hit zone
-      (function (idx) {
-        _hitZones.push({
-          x: rowX, y: y - rowH / 2, w: rowW, h: rowH,
-          action: function () { _settingsSelected = idx; _toggleSetting(idx); }
+      var y = drawY + lineH / 2;
+      var isSel = navIdx === _settingsSelected;
+      var rowTop = drawY;
+      var rowH = lineH - 4;
+
+      // Only render if visible
+      if (y > contentTop - lineH && y < contentTop + contentH + lineH) {
+        var zoneIdx = _hitZones.length;
+        var isHovered = _isZoneHovered(zoneIdx);
+
+        // Row glow button
+        _drawGlowButton(_ctx, rowX, rowTop, rowW, rowH, {
+          selected: isSel, hovered: isHovered, radius: 6
         });
-      })(i);
+
+        // Label
+        _ctx.font = (isSel ? 'bold ' : '') + '20px ' + CRT_FONT;
+        _ctx.fillStyle = isSel || isHovered ? '#fff' : TEXT_WARM;
+        _ctx.textAlign = 'left';
+        _ctx.textBaseline = 'middle';
+        _ctx.fillText(item.label, rowX + 16, y);
+
+        // Value display
+        _ctx.textAlign = 'right';
+        if (item.key === 'lang') {
+          var _langLabels = { en: 'English', es: 'Español', hi: 'हिन्दी', ps: 'پښتو' };
+          var _curLang = (typeof i18n !== 'undefined') ? i18n.getLocale() : 'en';
+          _ctx.fillStyle = GLOW_COLOR;
+          _ctx.font = 'bold 20px ' + CRT_FONT;
+          _ctx.fillText(_langLabels[_curLang] || _curLang, rowX + rowW - 16, y);
+        } else if (item.type === 'cycle') {
+          var cycleVal = _settings[item.key] || 0;
+          _ctx.fillStyle = GLOW_COLOR;
+          _ctx.font = 'bold 20px ' + CRT_FONT;
+          _ctx.fillText(item.values[cycleVal] || '?', rowX + rowW - 16, y);
+        } else {
+          var isOn = !!_settings[item.key];
+          _ctx.fillStyle = isOn ? GLOW_COLOR : '#c44';
+          _ctx.font = 'bold 20px ' + CRT_FONT;
+          _ctx.fillText(isOn ? 'ON' : 'OFF', rowX + rowW - 16, y);
+        }
+
+        // Hit zone (only for visible items, clip-aware)
+        (function (idx) {
+          _hitZones.push({
+            x: rowX, y: rowTop, w: rowW, h: rowH,
+            clipY: contentTop, clipH: contentH,
+            action: function () { _settingsSelected = idx; _toggleSetting(idx); }
+          });
+        })(navIdx);
+      }
+
+      drawY += lineH;
+      navIdx++;
     }
 
-    // BACK button — clickable exit
-    var backY = startY + SETTINGS_ITEMS.length * lineH + 16;
+    // BACK button
+    var backY = drawY;
     var backBtnW = 200;
-    var backBtnH = 48;
+    var backBtnH = 42;
     var backX = cx - backBtnW / 2;
-    var isSel = _settingsSelected >= SETTINGS_ITEMS.length;
+    var isBackSel = _settingsSelected >= navIdx;
     var backZoneIdx = _hitZones.length;
     var isBackHovered = _isZoneHovered(backZoneIdx);
 
-    _drawGlowButton(_ctx, backX, backY, backBtnW, backBtnH, {
-      selected: isSel, hovered: isBackHovered, radius: 8
-    });
-    _ctx.fillStyle = isSel || isBackHovered ? '#fff' : TEXT_DIM;
-    _ctx.font = 'bold 22px "Courier New", monospace';
-    _ctx.textAlign = 'center';
-    _ctx.textBaseline = 'middle';
-    _ctx.fillText('\u2716 BACK', cx, backY + backBtnH / 2);
+    if (backY > contentTop - lineH && backY < contentTop + contentH + lineH) {
+      _drawGlowButton(_ctx, backX, backY, backBtnW, backBtnH, {
+        selected: isBackSel, hovered: isBackHovered, radius: 8
+      });
+      _ctx.fillStyle = isBackSel || isBackHovered ? '#fff' : TEXT_DIM;
+      _ctx.font = 'bold 20px ' + CRT_FONT;
+      _ctx.textAlign = 'center';
+      _ctx.textBaseline = 'middle';
+      _ctx.fillText('\u2716 BACK', cx, backY + backBtnH / 2);
 
-    _hitZones.push({
-      x: backX, y: backY, w: backBtnW, h: backBtnH,
-      action: function () { _settingsOpen = false; }
-    });
+      _hitZones.push({
+        x: backX, y: backY, w: backBtnW, h: backBtnH,
+        clipY: contentTop, clipH: contentH,
+        action: function () { _settingsOpen = false; }
+      });
+    }
 
-    // Hint
+    _ctx.restore(); // End clip
+
+    // ── Scrollbar (right edge) ──
+    if (_settingsMaxScroll > 0) {
+      var sbX = panelX + panelW - 14;
+      var sbW = 10;
+      var sbH = contentH;
+      var thumbH = Math.max(20, sbH * (contentH / (totalH || 1)));
+      var thumbY = contentTop + (sbH - thumbH) * (_settingsScroll / (_settingsMaxScroll || 1));
+
+      // Track
+      _ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      _ctx.fillRect(sbX, contentTop, sbW, sbH);
+      // Thumb
+      _ctx.fillStyle = 'rgba(200,180,120,0.4)';
+      _ctx.fillRect(sbX, thumbY, sbW, thumbH);
+
+      // Clickable scrollbar hit zone — maps click Y to scroll position
+      (function (sTop, sH, sThumbH, sMaxScroll) {
+        _hitZones.push({
+          x: sbX - 4, y: sTop, w: sbW + 8, h: sH,
+          action: function () {
+            // Map click Y to scroll fraction
+            var clickY = _mouseY - sTop - sThumbH / 2;
+            var range = sH - sThumbH;
+            if (range <= 0) return;
+            var frac = Math.max(0, Math.min(1, clickY / range));
+            _settingsScroll = Math.round(frac * sMaxScroll);
+          }
+        });
+      })(contentTop, sbH, thumbH, _settingsMaxScroll);
+    }
+
+    // Hint bar (fixed at bottom)
     _ctx.textAlign = 'center';
     _ctx.fillStyle = TEXT_MUTED;
-    _ctx.font = '16px "Courier New", monospace';
-    _ctx.fillText('[Esc] Back   [Enter] Toggle', cx, panelY + panelH - 20);
+    _ctx.font = '14px ' + CRT_FONT;
+    var hintText = gpConnected
+      ? '[Esc/B] Back   [Enter/A] Toggle   [\u2191\u2193] Navigate'
+      : '[Esc] Back   [Enter] Toggle   [\u2191\u2193] Navigate';
+    _ctx.fillText(hintText, cx, panelY + panelH - 14);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────

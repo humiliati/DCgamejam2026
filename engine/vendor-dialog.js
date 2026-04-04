@@ -99,7 +99,7 @@ var VendorDialog = (function () {
       if (Shop.getFactionEmoji) vendorEmoji = Shop.getFactionEmoji(_factionId) || vendorEmoji;
     }
 
-    // Build dialogue tree — three choices, each leads to its own end node
+    // Build dialogue tree — four choices, each leads to its own end node
     // that sets _actionPending before the dialogue closes.
     var tree = {
       root: 'greet',
@@ -108,6 +108,7 @@ var VendorDialog = (function () {
           text: greeting,
           choices: [
             { label: 'Browse Wares',  next: 'do_browse' },
+            { label: 'Buy Supplies',  next: 'do_supply' },
             { label: 'Sell All Junk', next: 'do_sell' },
             { label: 'Leave',         next: null }
           ]
@@ -117,6 +118,13 @@ var VendorDialog = (function () {
           choices: [
             { label: 'Continue', next: null,
               effect: { setFlag: '__vendor_action_browse' } }
+          ]
+        },
+        do_supply: {
+          text: 'Supplies are always in stock. What do you need?',
+          choices: [
+            { label: 'Continue', next: null,
+              effect: { setFlag: '__vendor_action_supply' } }
           ]
         },
         do_sell: {
@@ -159,17 +167,17 @@ var VendorDialog = (function () {
         return;
       }
 
+      if (flags.__vendor_action_supply) {
+        delete flags.__vendor_action_supply;
+        _openSupplyMenu();
+        return;
+      }
+
       if (flags.__vendor_action_sell) {
         delete flags.__vendor_action_sell;
         _bulkSell();
         // After selling, re-open dialog so they can browse or leave
-        var fid = _factionId;
-        var flid = _floorId;
-        var browse = _onBrowse;
-        var leave = _onLeave;
-        setTimeout(function () {
-          open(fid, flid, { onBrowse: browse, onLeave: leave });
-        }, 1000);
+        setTimeout(function () { _returnToVendor(); }, 800);
         return;
       }
     }
@@ -211,8 +219,8 @@ var VendorDialog = (function () {
 
     for (var j = 0; j < sellable.length; j++) {
       var result = null;
-      if (typeof Shop.sellSalvage === 'function') {
-        result = Shop.sellSalvage(sellable[j].id);
+      if (typeof Shop.sellPart === 'function') {
+        result = Shop.sellPart(sellable[j].id);
       }
 
       if (result && result.ok) {
@@ -253,6 +261,128 @@ var VendorDialog = (function () {
     if (typeof HUD !== 'undefined' && HUD.updatePlayer) {
       HUD.updatePlayer(Player.state());
     }
+  }
+
+  // ── Supply shop (DEPTH3 §5) ─────────────────────────────────────
+
+  /**
+   * Open an interactive supply purchase dialogue.
+   * Each supply item appears as a choice with emoji + name + price.
+   * Buying an item loops back to the supply list for multi-purchase.
+   * "Done" returns to the main vendor greeting.
+   */
+  function _openSupplyMenu() {
+    if (typeof Shop === 'undefined' || !Shop.getSupplyStock) {
+      if (typeof Toast !== 'undefined') Toast.show('No supplies available.', 'dim');
+      _returnToVendor();
+      return;
+    }
+
+    var stock = Shop.getSupplyStock();
+    var gold = (typeof CardAuthority !== 'undefined') ? CardAuthority.getGold() : 0;
+    var bagFree = (typeof CardAuthority !== 'undefined')
+      ? CardAuthority.getMaxBag() - CardAuthority.getBagSize()
+      : 0;
+
+    // Build choices — one per supply item + "Done" at the end
+    var choices = [];
+    for (var i = 0; i < stock.length; i++) {
+      var s = stock[i];
+      var affordable = gold >= s.shopPrice;
+      var label = s.emoji + ' ' + s.name + '  ' + s.shopPrice + 'g';
+      if (!affordable) label += ' (need ' + (s.shopPrice - gold) + 'g)';
+      choices.push({
+        label: label,
+        next: null,
+        effect: { setFlag: '__supply_buy_' + i },
+        disabled: !affordable || bagFree <= 0
+      });
+    }
+    choices.push({ label: '\u2190 Done', next: null });
+
+    var headerText = '\uD83D\uDCB0 ' + gold + 'g  |  \uD83C\uDF92 ' + bagFree + ' slot' + (bagFree !== 1 ? 's' : '') + ' free';
+
+    var tree = {
+      root: 'supply_list',
+      nodes: {
+        supply_list: {
+          text: headerText,
+          choices: choices
+        }
+      }
+    };
+
+    var npc = {
+      id: 'vendor_supply_' + _factionId,
+      name: 'Supply Stock',
+      emoji: '\uD83D\uDCE6'
+    };
+
+    if (typeof StatusBar !== 'undefined' && StatusBar.pushDialogue) {
+      StatusBar.pushDialogue(npc, tree, function () {
+        _onSupplyDialogueEnd(stock);
+      });
+    }
+  }
+
+  /**
+   * After the supply dialogue closes, check which item was purchased.
+   * If an item was bought, execute the purchase and re-open the supply menu.
+   * If "Done" was chosen (no flag set), return to vendor greeting.
+   */
+  function _onSupplyDialogueEnd(stock) {
+    if (typeof Player === 'undefined') { _returnToVendor(); return; }
+
+    var flags = Player.state().flags || {};
+    var bought = false;
+
+    for (var i = 0; i < stock.length; i++) {
+      var flagKey = '__supply_buy_' + i;
+      if (flags[flagKey]) {
+        delete flags[flagKey];
+
+        // Execute purchase through Shop
+        var floorNum = parseInt(_floorId, 10) || 1;
+        if (!Shop.isOpen()) Shop.open(_factionId, floorNum);
+
+        var result = Shop.buySupply(i);
+        if (result.ok) {
+          if (typeof Toast !== 'undefined') {
+            Toast.show(result.item.emoji + ' ' + i18n.t('toast.bought', 'Bought') + ' ' + result.item.name + '  -' + result.cost + 'g', 'currency');
+          }
+          if (typeof AudioSystem !== 'undefined') AudioSystem.play('pickup', { volume: 0.4 });
+          if (typeof HUD !== 'undefined' && HUD.updatePlayer) HUD.updatePlayer(Player.state());
+        } else if (result.reason === 'no_gold') {
+          if (typeof Toast !== 'undefined') Toast.show(i18n.t('toast.no_gold', 'Not enough gold.'), 'warning');
+        } else if (result.reason === 'bag_full') {
+          if (typeof Toast !== 'undefined') Toast.show(i18n.t('toast.bag_full', 'Bag is full!'), 'warning');
+        }
+
+        bought = true;
+        break;
+      }
+    }
+
+    if (bought) {
+      // Re-open supply menu for multi-purchase
+      setTimeout(function () { _openSupplyMenu(); }, 300);
+    } else {
+      // "Done" — return to main vendor dialog
+      _returnToVendor();
+    }
+  }
+
+  /**
+   * Return to the main vendor greeting after supply shopping or selling.
+   */
+  function _returnToVendor() {
+    var fid = _factionId;
+    var flid = _floorId;
+    var browse = _onBrowse;
+    var leave = _onLeave;
+    setTimeout(function () {
+      open(fid, flid, { onBrowse: browse, onLeave: leave });
+    }, 400);
   }
 
   function _getHaulComment(gold) {

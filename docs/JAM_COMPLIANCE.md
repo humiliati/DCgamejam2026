@@ -25,7 +25,7 @@ pre-jam engine work is fair game.
 | 3  | 90° turns in 4 cardinal directions | ✅ DONE | MovementController | Q/E turn, smooth interpolation |
 | 4  | Mouse-look snaps to 90° | ✅ DONE | MouseLook | ±45° free-look offset, cardinal snap on turn |
 | 5  | Keyboard controls (WASD/arrows) | ✅ DONE | InputManager, InputPoll | WASD + Q/E + 1-5 cards |
-| 6  | Gamepad support | ❌ MISSING | InputManager | Need gamepad backend — pre-jam engine work |
+| 6  | Gamepad support | ✅ DONE | InputManager | Standard Gamepad API: D-pad+left stick movement, triggers+bumpers for 5-card hand, right stick strafe, face buttons interact/flee/inventory |
 | 7  | Explorable locations | ⚠️ PARTIAL | GridGen, FloorManager | Proc-gen works; hand-authored street templates NOT yet built |
 
 ### Character & Combat

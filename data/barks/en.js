@@ -751,3 +751,49 @@ BarkLibrary.register('npc.guild.callsign', [
   { text: 'Do you think if I train hard enough I could be a {class} too, {callsign}?',  speaker: 'Pip (Rookie)', style: 'bubble', weight: 2 }
 ], { cooldownMs: 45000 });
 
+// ── Confrontation: Dispatcher fail escalation ────────────────────────
+// Triggered when player has accumulated consecutive fails (deaths + curfews).
+// Threshold 1: mild concern (2 consecutive). Threshold 2: warning (3+).
+
+BarkLibrary.register('npc.dispatcher.warn.mild', [
+  { text: 'Two incidents in a row. I\'m noticing.',                      speaker: 'Dispatcher', style: 'bubble', weight: 3 },
+  { text: 'The Guild doesn\'t track your accidents, Gleaner. I do.',     speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'Getting sloppy. This isn\'t a vacation — it\'s a contract.', speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'I have to file paperwork every time you collapse. Don\'t make it a habit.', speaker: 'Dispatcher', style: 'bubble', weight: 1 }
+], { cooldownMs: 0 });
+
+BarkLibrary.register('npc.dispatcher.warn.severe', [
+  { text: 'Three strikes. You understand what happens next?',             speaker: 'Dispatcher', style: 'bubble', weight: 3 },
+  { text: 'Guild is reviewing your contract. I\'d clean up your act.',   speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'One more collapse and I pull you off the roster. Clear?',     speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'The Heroes are asking why the dungeon isn\'t ready. I have no good answer.', speaker: 'Dispatcher', style: 'bubble', weight: 1 }
+], { cooldownMs: 0 });
+
+BarkLibrary.register('npc.dispatcher.warn.fired', [
+  {
+    text:    'That\'s it. Contract terminated. Pack your things, Gleaner.',
+    speaker: 'Dispatcher',
+    style:   'bubble',
+    weight:  1,
+    oneShot: true
+  }
+], { cooldownMs: 0 });
+
+// ── Confrontation: Mailbox report escalation ─────────────────────────
+// Hero report text that escalates based on cumulative player failures.
+// Used by mailbox-peek to flavor the morning report card.
+
+BarkLibrary.register('mailbox.report.disappointed', [
+  { text: 'The dungeon was barely prepped. We lost a scout to a trap you missed.', weight: 3 },
+  { text: 'Readiness was unacceptable. We had to clear your mess AND the monsters.', weight: 2 },
+  { text: 'Half the crates were empty. Did you even stock floor 3?',               weight: 2 },
+  { text: 'We expected better. The Guild is watching your performance.',            weight: 1 }
+], { cooldownMs: 0 });
+
+BarkLibrary.register('mailbox.report.angry', [
+  { text: 'Two of my team are in the infirmary because of your negligence.',        weight: 3 },
+  { text: 'This is the worst-prepared dungeon I\'ve ever seen. We\'re filing a formal complaint.', weight: 2 },
+  { text: 'I hope you\'re proud. The Gleaner before you lasted three seasons. You won\'t last one.', weight: 2 },
+  { text: 'Next run, we hire our own Gleaner. You\'re done.',                       weight: 1 }
+], { cooldownMs: 0 });
+

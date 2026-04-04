@@ -4,6 +4,7 @@
  *
  * Backends:
  *   - Keyboard (jam)
+ *   - Gamepad (jam — Standard Gamepad API, Xbox/PS/generic HID)
  *   - Magic Remote (post-jam webOS port)
  *
  * Actions: step_forward, step_back, turn_left, turn_right, strafe_left, strafe_right,
@@ -123,6 +124,169 @@ var InputManager = (function () {
     }
   }
 
+  // ── Gamepad backend ─────────────────────────────────────
+  // Standard Gamepad API polling. Reads navigator.getGamepads()
+  // each frame and injects into the action system. Works with
+  // Xbox, PlayStation, and generic HID controllers.
+
+  var _gpPrevButtons = {};   // idx → true (previous frame button state)
+  var _gpPrevAxes = {};      // 'axis_dir' → true (previous frame stick zone)
+  var _gpConnected = false;
+
+  // Deadzone for analog sticks (0–1 range)
+  var GP_DEADZONE = 0.4;
+
+  // Standard Gamepad button → action mapping
+  // https://w3c.github.io/gamepad/#remapping
+  // Card hand layout on triggers+bumpers (left→right):
+  //   LT(card_0) LB(card_1) [interact] RB(card_3) RT(card_4)
+  //   Face X = card_2 (center card)
+  var GP_BUTTON_MAP = {
+    0:  'interact',       // A / Cross
+    1:  'flee',           // B / Circle — flee in combat, back out of menus
+    2:  'card_2',         // X / Square — center card
+    3:  'inventory',      // Y / Triangle — open inventory
+    4:  'card_1',         // LB / L1 — second card from left
+    5:  'card_3',         // RB / R1 — second card from right
+    6:  'card_0',         // LT / L2 — leftmost card
+    7:  'card_4',         // RT / R2 — rightmost card
+    8:  'map_toggle',     // Back / Select
+    9:  'pause',          // Start / Options
+    12: 'step_forward',   // D-pad Up
+    13: 'step_back',      // D-pad Down
+    14: 'turn_left',      // D-pad Left
+    15: 'turn_right'      // D-pad Right
+  };
+
+  // Left stick axes → grid actions (with deadzone)
+  // Right stick (axes 2+3) → free-look, handled in MouseLook
+  var GP_AXIS_MAP = {
+    'axis0_neg': 'turn_left',     // Left stick left
+    'axis0_pos': 'turn_right',    // Left stick right
+    'axis1_neg': 'step_forward',  // Left stick up
+    'axis1_pos': 'step_back'      // Left stick down
+  };
+
+  // Right stick raw values (updated by pollGamepad, consumed by MouseLook)
+  var _gpRightStick = { x: 0, y: 0 };
+
+  /** Get right stick raw analog values for free-look. */
+  function getGamepadRightStick() { return _gpRightStick; }
+
+  // Strafe via right stick since bumpers are now cards
+
+  /**
+   * Poll connected gamepads. Call once per frame BEFORE InputPoll.poll().
+   * Injects edges and held state into the existing action system.
+   */
+  function pollGamepad() {
+    if (!navigator.getGamepads) return;
+
+    var gamepads = navigator.getGamepads();
+    var gp = null;
+
+    // Find first connected gamepad
+    for (var g = 0; g < gamepads.length; g++) {
+      if (gamepads[g] && gamepads[g].connected) {
+        gp = gamepads[g];
+        break;
+      }
+    }
+
+    if (!gp) {
+      if (_gpConnected) {
+        _gpConnected = false;
+        console.log('[Input] Gamepad disconnected');
+      }
+      return;
+    }
+
+    if (!_gpConnected) {
+      _gpConnected = true;
+      console.log('[Input] Gamepad connected: ' + gp.id);
+    }
+
+    // ── Buttons ──
+    for (var btnIdx in GP_BUTTON_MAP) {
+      var bi = parseInt(btnIdx, 10);
+      if (bi >= gp.buttons.length) continue;
+
+      var pressed = gp.buttons[bi].pressed;
+      var action = GP_BUTTON_MAP[btnIdx];
+      var wasPressed = !!_gpPrevButtons[bi];
+
+      if (pressed && !wasPressed) {
+        // Down edge
+        _downEdge[action] = true;
+        _fire(action, 'press');
+        // Inject into keysDown so isDown() works for held buttons
+        _keysDown['gp_btn_' + bi] = true;
+        // Inject into keyMap so isDown(action) lookup works
+        _keyMap['gp_btn_' + bi] = action;
+      } else if (!pressed && wasPressed) {
+        // Up edge
+        _upEdge[action] = true;
+        _fire(action, 'release');
+        delete _keysDown['gp_btn_' + bi];
+      }
+
+      _gpPrevButtons[bi] = pressed;
+    }
+
+    // ── Left stick axes ──
+    for (var axisKey in GP_AXIS_MAP) {
+      var parts = axisKey.split('_');
+      var axisIdx = parseInt(parts[0].replace('axis', ''), 10);
+      var isPos = parts[1] === 'pos';
+
+      if (axisIdx >= gp.axes.length) continue;
+
+      var val = gp.axes[axisIdx];
+      var inZone = isPos ? (val > GP_DEADZONE) : (val < -GP_DEADZONE);
+      var wasInZone = !!_gpPrevAxes[axisKey];
+      var axAction = GP_AXIS_MAP[axisKey];
+
+      if (inZone && !wasInZone) {
+        // Entered active zone — edge
+        _downEdge[axAction] = true;
+        _fire(axAction, 'press');
+        _keysDown['gp_' + axisKey] = true;
+        _keyMap['gp_' + axisKey] = axAction;
+      } else if (!inZone && wasInZone) {
+        // Left active zone — release
+        _upEdge[axAction] = true;
+        _fire(axAction, 'release');
+        delete _keysDown['gp_' + axisKey];
+      }
+
+      _gpPrevAxes[axisKey] = inZone;
+    }
+
+    // ── Right stick → raw analog for free-look (consumed by MouseLook) ──
+    if (gp.axes.length >= 4) {
+      var rsX = gp.axes[2];
+      var rsY = gp.axes[3];
+      // Apply deadzone
+      _gpRightStick.x = Math.abs(rsX) > GP_DEADZONE ? rsX : 0;
+      _gpRightStick.y = Math.abs(rsY) > GP_DEADZONE ? rsY : 0;
+    } else {
+      _gpRightStick.x = 0;
+      _gpRightStick.y = 0;
+    }
+  }
+
+  // Listen for gamepad connect/disconnect for logging
+  window.addEventListener('gamepadconnected', function (e) {
+    console.log('[Input] Gamepad connected: ' + e.gamepad.id + ' (' + e.gamepad.buttons.length + ' buttons, ' + e.gamepad.axes.length + ' axes)');
+    _gpConnected = true;
+  });
+  window.addEventListener('gamepaddisconnected', function (e) {
+    console.log('[Input] Gamepad disconnected: ' + e.gamepad.id);
+    _gpConnected = false;
+    _gpPrevButtons = {};
+    _gpPrevAxes = {};
+  });
+
   // ── Magic Remote stub ──────────────────────────────────
   // Post-jam: add pointer position, scroll wheel, gyro events.
 
@@ -178,6 +342,9 @@ var InputManager = (function () {
     upEdge: upEdge,
     clearEdges: clearEdges,
     getPointer: getPointer,
-    initPointer: _initMousePointer
+    initPointer: _initMousePointer,
+    pollGamepad: pollGamepad,
+    isGamepadConnected: function () { return _gpConnected; },
+    getGamepadRightStick: getGamepadRightStick
   };
 })();

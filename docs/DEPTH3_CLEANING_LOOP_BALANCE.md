@@ -126,7 +126,7 @@ Floor 2.2.1 has 7 supply crates with ~12 empty slots to fill. Detritus placement
 | Warden kill | 1 | 1 | 1–2 |
 | **Total** | 14 | **12–16** | **6–10** |
 
-12–16 crate-fill items vs 12 empty slots = the player can fill most or all crates from in-dungeon sources alone. The utility items (oil, water, food) provide supplemental torch fuel and healing. The economy is **self-contained** — no shop run needed for a first pass, but a shop run from Watchman's Post (add supply vendor to 2.2) lets a returning player top off for extra credit on subsequent visits.
+12–16 crate-fill items vs 21+ bag slots = the player can hold a full sweep of crate-fill items plus supplies from the shop. The utility items (oil, water, food) provide supplemental torch fuel and healing. The economy is **self-contained** — no shop run needed for a first pass, but a shop run from Watchman's Post (add supply vendor to 2.2) lets a returning player top off for extra credit on subsequent visits.
 
 ### 2.4 Detritus Placement on 2.2.1
 
@@ -409,19 +409,20 @@ The player's clockwise sweep alternates: combat → break → fill → walk/clea
 
 ## 7. Summary of Changes
 
-| Change | Scope | Files Affected |
-|--------|-------|----------------|
-| Per-floor readiness weight overrides | System | readiness-calc.js |
-| Depth-3 default: Crate 40%, Clean 30%, Torch 10%, Trap 20% | Data | readiness-calc.js (init call) |
-| Adventurer detritus breakable category | New feature | breakable-spawner.js, loot-tables.json, tiles.js |
-| 8 detritus placements on 2.2.1 | Blockout | floor-blockout-2-2-1.js |
-| Supply crates indestructible at depth ≥ 3 | Rule | breakable-spawner.js |
-| MAX_BAG: 12 → 16 | Constant | card-authority.js |
-| Supply stock UI on existing Floor 2 shops | System | shop.js (supply tab alongside cards) |
-| Auto-loot on break | UX | breakable-spawner.js, card-authority.js |
-| Quick-fill on crate interact | UX | crate-system.js, crate-peek.js |
-| Scrub-on-walk passive cleaning | UX | cleaning-system.js, movement.js |
-| InteractPrompt verb split: "Break" vs "Fill" | UX | interact-prompt.js |
+| Change | Scope | Files Affected | Status |
+|--------|-------|----------------|--------|
+| Per-floor readiness weight overrides | System | readiness-calc.js | ✅ Done |
+| Depth-3 default: Crate 40%, Clean 30%, Torch 10%, Trap 20% | Data | readiness-calc.js (init call) | ✅ Done |
+| Adventurer detritus system (tile, sprites, interaction) | New feature | tiles.js, detritus-sprites.js, game.js, interact-prompt.js, minimap.js | ✅ Done |
+| 8 detritus placements on 2.2.1 | Blockout | floor-blockout-2-2-1.js | ✅ Done |
+| Supply crates indestructible at depth ≥ 3 | Rule | breakable-spawner.js, game.js | ✅ Done |
+| MAX_BAG: 12 → 21+N (N from equipped bag_slots) | Constant | card-authority.js, game.js, card-transfer.js, status-bar.js, menu-faces.js | ✅ Done |
+| crateFillTag matching in CrateSystem | System | crate-system.js | ✅ Done |
+| Supply stock UI on existing Floor 2 shops | System | shop.js (SUPPLY_STOCK + buySupply), vendor-dialog.js (supply menu) | ✅ Done |
+| Auto-loot on breakable destroy | UX | game.js (_smashBreakable) | ✅ Done |
+| Quick-fill on crate interact | UX | game.js (_quickFillCrate), crate-system.js (doesItemMatch) | ✅ Done |
+| Scrub-on-walk passive cleaning | UX | game.js (_onMoveFinish) | ✅ Done |
+| InteractPrompt verb split: "Smash" vs "Fill" | UX | interact-prompt.js | ✅ Done |
 
 ---
 

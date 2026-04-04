@@ -34,11 +34,45 @@
 var ReadinessCalc = (function () {
   'use strict';
 
-  // ── Core Weights (must sum to 1.0) ─────────────────────────────
+  // ── Core Weights — defaults (must sum to 1.0) ──────────────────
   var C_CRATE = 0.35;
   var C_CLEAN = 0.25;
   var C_TORCH = 0.20;
   var C_TRAP  = 0.20;
+
+  // ── Per-floor / per-depth weight overrides ─────────────────────
+  // See DEPTH3_CLEANING_LOOP_BALANCE §1. Each faction's dungeon
+  // emphasizes different pillars via weight overrides.
+  var _overrides = {};  // { floorId: { crate, clean, torch, trap } }
+
+  // Depth-3 default: Watchmen's poor torch discipline
+  _overrides['__depth3'] = Object.freeze({
+    crate: 0.40, clean: 0.30, torch: 0.10, trap: 0.20
+  });
+
+  /**
+   * Set a weight override for a specific floor.
+   * @param {string} floorId
+   * @param {{ crate: number, clean: number, torch: number, trap: number }} weights
+   */
+  function setWeightOverride(floorId, weights) {
+    _overrides[floorId] = Object.freeze(weights);
+  }
+
+  /**
+   * Resolve weights for a floor: exact match → depth default → global default.
+   * @param {string} floorId
+   * @returns {{ crate: number, clean: number, torch: number, trap: number }}
+   */
+  function _getWeights(floorId) {
+    // Exact floor match first
+    if (_overrides[floorId]) return _overrides[floorId];
+    // Depth-based default (N.N.N = depth 3)
+    var depth = floorId ? floorId.split('.').length : 1;
+    if (depth >= 3 && _overrides['__depth3']) return _overrides['__depth3'];
+    // Global defaults
+    return { crate: C_CRATE, clean: C_CLEAN, torch: C_TORCH, trap: C_TRAP };
+  }
 
   // ── Extra Credit Weights (must sum to 1.0) ─────────────────────
   var X_CORPSE    = 0.30;
@@ -84,8 +118,17 @@ var ReadinessCalc = (function () {
 
   function _cobwebScore(floorId) {
     if (typeof CobwebSystem !== 'undefined' && CobwebSystem.getIntact) {
-      var count = CobwebSystem.getIntact(floorId).length;
-      return Math.min(1.0, count * 0.33); // 3 intact cobwebs = full bonus
+      var intactCount = CobwebSystem.getIntact(floorId).length;
+      var bonus = Math.min(1.0, intactCount * 0.33); // 3 intact cobwebs = full bonus
+
+      // Penalty: player self-tearing subtracts from cobweb score.
+      // Each self-tear deducts 0.25 (so tearing 1 of 3 drops from 1.0 to 0.42,
+      // not the 0.66 it would be from just losing the intact count).
+      // This makes tearing actively worse than never installing at all.
+      var tornCount = CobwebSystem.getPlayerTornCount
+        ? CobwebSystem.getPlayerTornCount(floorId) : 0;
+      var penalty = tornCount * 0.25;
+      return Math.max(0, bonus - penalty);
     }
     return 0;
   }
@@ -101,11 +144,12 @@ var ReadinessCalc = (function () {
     var clean  = _cleanScore(floorId);
     var torch  = _torchScore(floorId);
     var trap   = _trapScore(floorId);
+    var w      = _getWeights(floorId);
 
-    return crates.crate * C_CRATE +
-           clean        * C_CLEAN +
-           torch        * C_TORCH +
-           trap         * C_TRAP;
+    return crates.crate * w.crate +
+           clean        * w.clean +
+           torch        * w.torch +
+           trap         * w.trap;
   }
 
   // ── Extra Credit Score (0.0–1.0) ──────────────────────────────
@@ -170,8 +214,9 @@ var ReadinessCalc = (function () {
     var overclean   = (clean > 0.9) ? Math.min(1.0, (clean - 0.9) * 10) : 0;
     var corpse      = crates.corpse;
 
-    var core  = crates.crate * C_CRATE + clean * C_CLEAN +
-                torch * C_TORCH + trap * C_TRAP;
+    var w     = _getWeights(floorId);
+    var core  = crates.crate * w.crate + clean * w.clean +
+                torch * w.torch + trap * w.trap;
     var extra = corpse * X_CORPSE + cobweb * X_COBWEB +
                 overclean * X_OVERCLEAN;
     // Stubs add 0
@@ -255,7 +300,9 @@ var ReadinessCalc = (function () {
     meetsTarget:    meetsTarget,
     snapshotFloor:  snapshotFloor,
     getSnapshot:    getSnapshot,
-    clearSnapshots: clearSnapshots,
+    clearSnapshots:    clearSnapshots,
+    setWeightOverride: setWeightOverride,
+    getWeights:        _getWeights,
     CORE_WEIGHTS: Object.freeze({
       crate: C_CRATE, clean: C_CLEAN, torch: C_TORCH, trap: C_TRAP
     }),

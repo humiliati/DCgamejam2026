@@ -575,6 +575,21 @@ var MailboxPeek = (function () {
    */
   function addReport(report) {
     if (!report) return;
+
+    // Inject escalating hero flavor text based on cumulative player failures
+    if (!report.flavor && !report.systemNotice && typeof Player !== 'undefined') {
+      var deaths = Player.getFlag('deathCount') || 0;
+      var curfews = Player.getFlag('curfewCount') || 0;
+      var totalFails = deaths + curfews;
+      if (totalFails >= 4 && typeof BarkLibrary !== 'undefined') {
+        var angry = BarkLibrary.pick('mailbox.report.angry');
+        if (angry) report.flavor = angry.text || angry;
+      } else if (totalFails >= 2 && typeof BarkLibrary !== 'undefined') {
+        var disappointed = BarkLibrary.pick('mailbox.report.disappointed');
+        if (disappointed) report.flavor = disappointed.text || disappointed;
+      }
+    }
+
     _pending.push(report);
 
     // FIFO cap

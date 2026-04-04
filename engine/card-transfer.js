@@ -279,7 +279,7 @@ var CardTransfer = (function () {
   function equipToBag(slot) {
     var item = CardAuthority.getEquipSlot(slot);
     if (!item) return _fail('slot_empty');
-    if (CardAuthority.getBagSize() >= CardAuthority.MAX_BAG) return _fail('bag_full');
+    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) return _fail('bag_full');
 
     CardAuthority.unequip(slot);
     CardAuthority.addToBag(item);
