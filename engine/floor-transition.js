@@ -78,8 +78,10 @@ var FloorTransition = (function () {
     // Play door open sound immediately (delay=0 entries fire now)
     AudioSystem.playSequence(sounds);
 
-    // Stop current music during transition
-    AudioSystem.stopMusic();
+    // Update music for the target floor (handles continuity, muffle, dungeon switch)
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onFloorChange(targetFloorId);
+    }
 
     // Notify orchestrator (cancel combat, etc.)
     if (_onBeforeTransition) _onBeforeTransition();
@@ -249,14 +251,17 @@ var FloorTransition = (function () {
    * @returns {boolean} true if a transition was triggered
    */
   function tryInteractDoor(fx, fy) {
-    console.log('[FloorTransition] tryInteractDoor(' + fx + ',' + fy + ') transitioning=' + _transitioning);
     if (_transitioning) return false;
 
     var floorData = FloorManager.getFloorData();
     var grid = floorData.grid;
     var tile = grid[fy][fx];
     var currentId = FloorManager.getFloor();
-    console.log('[FloorTransition] tryInteractDoor tile=' + tile + ' floorId=' + currentId);
+
+    // Only log for door-type tiles to reduce console noise
+    if (TILES.isDoor(tile) || tile === TILES.LOCKED_DOOR) {
+      console.log('[FloorTransition] tryInteractDoor(' + fx + ',' + fy + ') tile=' + tile + ' floorId=' + currentId);
+    }
 
     var direction = null;
     var targetId = null;

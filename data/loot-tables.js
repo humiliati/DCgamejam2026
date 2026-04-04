@@ -1,3 +1,4 @@
+var LOOT_TABLES_DATA = 
 {
   "_comment": "Dungeon Gleaner loot-tables.json — read by LootTables engine module",
   "version": "1.0.0",
@@ -281,3 +282,4 @@
     }
   }
 }
+;

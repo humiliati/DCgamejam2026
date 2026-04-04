@@ -185,6 +185,11 @@ var CombatBridge = (function () {
       AudioSystem.preloadCategory('card');
     }
 
+    // Switch to combat music
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onCombatStart();
+    }
+
     // Draw a fresh hand
     CardAuthority.drawHand();
     HUD.updateCards(CardAuthority.getHand());
@@ -537,6 +542,11 @@ var CombatBridge = (function () {
   // ── Combat end handler ────────────────────────────────────────────
 
   function _onCombatEnd(result, enemy) {
+    // ── Restore floor music after combat ──
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onCombatEnd();
+    }
+
     // ── Close cinematic letterbox ──
     if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
       CinematicCamera.close();
@@ -868,6 +878,9 @@ var CombatBridge = (function () {
 
     // Compute aggregated stack effects
     var stackEffects = CardStack.computeStackEffects();
+
+    // Card fire sound (hand released)
+    if (typeof AudioSystem !== 'undefined') AudioSystem.playRandom('card-fire', { volume: 0.5 });
 
     var player = Player.state();
     var result = CombatEngine.fireStack(stackEffects, player);

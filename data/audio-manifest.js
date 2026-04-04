@@ -1,4 +1,5 @@
-{
+/** Auto-generated from data/audio-manifest.json — do not edit directly. */
+var AUDIO_MANIFEST = {
   "_meta": {
     "version": 1,
     "game": "Dungeon Gleaner",
@@ -180,4 +181,4 @@
 
   "_comment_music_bober": "── Mood - Bober (title→floor1 overworld theme) ──",
   "music-mood-bober":        { "src": "music/mood_bober.webm",         "category": "music" }
-}
+};

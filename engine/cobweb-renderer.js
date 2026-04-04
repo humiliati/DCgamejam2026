@@ -351,7 +351,7 @@ var CobwebRenderer = (function () {
     var pDir = player.dir;
 
     ctx.save();
-    ctx.strokeStyle = WEB_COLOR;
+    ctx.strokeStyle = _mainColor;
 
     for (var i = _tearParticles.length - 1; i >= 0; i--) {
       var p = _tearParticles[i];

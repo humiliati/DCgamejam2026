@@ -109,6 +109,8 @@ var ChestPeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) _destroyBox();
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.4 });
+
     _boxId   = BoxAnim.create('chest', _container, { spin: false });
     _active  = true;
     _opened  = false;
@@ -163,6 +165,8 @@ var ChestPeek = (function () {
 
   function _hide() {
     if (!_active) { _timer = 0; return; }
+
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.3 });
 
     if (_opened && _boxId) BoxAnim.close(_boxId);
 

@@ -215,6 +215,8 @@ var MerchantPeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) _destroyBox();
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.4 });
+
     // Resolve faction for this shop tile
     _factionId = 'tide'; // fallback
     var shopList = floorData.shops || [];
@@ -291,6 +293,8 @@ var MerchantPeek = (function () {
 
   function _hide() {
     if (!_active) return;
+
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.3 });
 
     if (_subLabel) {
       _subLabel.style.color = 'rgba(200,180,100,0)';

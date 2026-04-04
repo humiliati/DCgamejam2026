@@ -423,6 +423,13 @@ The player's clockwise sweep alternates: combat → break → fill → walk/clea
 | Quick-fill on crate interact | UX | game.js (_quickFillCrate), crate-system.js (doesItemMatch) | ✅ Done |
 | Scrub-on-walk passive cleaning | UX | game.js (_onMoveFinish) | ✅ Done |
 | InteractPrompt verb split: "Smash" vs "Fill" | UX | interact-prompt.js | ✅ Done |
+| Hand-authored enemy spawns from blockout | System | enemy-ai.js (_resolveEmoji + enemySpawns path), floor-blockout-2-2-1.js | ✅ Done |
+| Pre-placed corpse registration (CorpseRegistry) | System | game.js (floor-load corpseData scan), floor-blockout-2-2-1.js | ✅ Done |
+| BREAKABLE crate containers on blockout floors | Fix | game.js (floor-load BREAKABLE scan → CrateSystem.createCrate) | ✅ Done |
+| HeroScript consumption from blockout | Feature | HeroSystem (not yet built) | 🗓️ Roadmap |
+| 100% readiness notification + quest update | System | hud.js (tier callback), game.js (_onReadinessTierCross) | ✅ Done |
+| Quest waypoint: lobby all-done → exit door | Fix | game.js (_updateQuestTarget lobby branch) | ✅ Done |
+| Warp confirm dialog context-aware for reset | UX | game.js (warp confirm) | ✅ Done |
 
 ---
 

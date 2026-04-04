@@ -30,12 +30,15 @@ var AudioSystem = (function () {
   var _manifest   = null;  // Parsed audio-manifest.json
   var _buffers    = {};    // name → AudioBuffer (decoded SFX cache)
   var _loading    = {};    // name → Promise (in-flight fetches)
+  var _failed     = {};    // name → true (permanently failed — don't retry)
   var _cooldowns  = {};    // name → last play timestamp (rate limiter)
   var _muted      = false;
 
   // Music state
   var _musicEl    = null;  // <audio> element for BGM streaming
   var _musicName  = null;  // Currently playing music key
+  var _bgmFilter  = null;  // BiquadFilterNode for muffle (lowpass)
+  var _muffled    = false; // Current muffle state
 
   var COOLDOWN_MS = 80;    // Minimum ms between identical SFX plays
   var FADE_MS     = 400;   // Music crossfade duration
@@ -55,16 +58,26 @@ var AudioSystem = (function () {
    * creation defers until the first interaction event.
    */
   function init() {
-    // Load manifest synchronously (it's small — <10KB)
+    // Load manifest — try XHR first, fall back to <script> global.
+    // file:// origins block XHR/fetch, so data/audio-manifest.js provides
+    // window.AUDIO_MANIFEST as a synchronous fallback.
+    _manifest = null;
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', 'data/audio-manifest.json', false);
       xhr.send();
-      if (xhr.status === 200 || xhr.status === 0) {
+      if ((xhr.status === 200 || xhr.status === 0) && xhr.responseText && xhr.responseText.length > 2) {
         _manifest = JSON.parse(xhr.responseText);
       }
     } catch (e) {
-      console.warn('[Audio] Failed to load manifest:', e);
+      // XHR failed (file:// CORS or parse error) — fall through to global
+    }
+    // Fallback: pick up the <script>-loaded global
+    if (!_manifest && typeof AUDIO_MANIFEST !== 'undefined') {
+      _manifest = AUDIO_MANIFEST;
+    }
+    if (!_manifest) {
+      console.warn('[Audio] No manifest loaded (XHR failed, no AUDIO_MANIFEST global)');
       _manifest = {};
     }
 
@@ -89,13 +102,20 @@ var AudioSystem = (function () {
 
         _applyVolumes();
 
+        // Create lowpass filter for interior muffle effect
+        _bgmFilter = _ctx.createBiquadFilter();
+        _bgmFilter.type = 'lowpass';
+        _bgmFilter.frequency.value = 22050;  // Wide open by default
+        _bgmFilter.Q.value = 0.7;
+
         // Create <audio> element for music streaming
         _musicEl = document.createElement('audio');
         _musicEl.loop = true;
         _musicEl.preload = 'auto';
-        // Connect through gain bus
+        // Connect through gain bus: audio → filter → bgmGain → master
         var musicSource = _ctx.createMediaElementSource(_musicEl);
-        musicSource.connect(_bgmGain);
+        musicSource.connect(_bgmFilter);
+        _bgmFilter.connect(_bgmGain);
 
         _ready = true;
         console.log('[Audio] Context created (' + _ctx.sampleRate + 'Hz). ' +
@@ -136,20 +156,33 @@ var AudioSystem = (function () {
    */
   function _loadBuffer(name) {
     if (_buffers[name]) return Promise.resolve(_buffers[name]);
+    if (_failed[name])  return Promise.resolve(null);   // Don't retry known failures
     if (_loading[name]) return _loading[name];
 
     var entry = _manifest[name];
     if (!entry || !entry.src) {
-      return Promise.reject(new Error('No manifest entry: ' + name));
+      _failed[name] = true;
+      return Promise.resolve(null);
     }
 
     var url = (_manifest._meta && _manifest._meta.basePath || '') + entry.src;
 
-    _loading[name] = fetch(url)
-      .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
-        return res.arrayBuffer();
-      })
+    // Use XHR instead of fetch() for file:// compatibility.
+    // fetch() fails on file:// origins; XHR with responseType works on http://.
+    _loading[name] = new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = function () {
+        if (xhr.response && xhr.response.byteLength > 0) {
+          resolve(xhr.response);
+        } else {
+          reject(new Error('Empty response for ' + url));
+        }
+      };
+      xhr.onerror = function () { reject(new Error('XHR error for ' + url)); };
+      xhr.send();
+    })
       .then(function (ab) {
         return _ctx.decodeAudioData(ab);
       })
@@ -160,6 +193,7 @@ var AudioSystem = (function () {
       })
       .catch(function (err) {
         delete _loading[name];
+        _failed[name] = true;   // Cache failure — never retry this clip
         console.warn('[Audio] Load failed:', name, err.message || err);
         return null;
       });
@@ -382,6 +416,75 @@ var AudioSystem = (function () {
   /** Check if audio context is active and ready. */
   function isReady() { return _ready && _ctx && _ctx.state === 'running'; }
 
+  // ── Muffle (lowpass filter for interior/building BGM) ────────────
+
+  /**
+   * Apply lowpass muffle to BGM. Ramps filter frequency over 400ms.
+   * @param {boolean} on - true = muffle (800Hz cutoff), false = clear (22kHz)
+   * @param {number} [cutoff=800] - Lowpass frequency when muffled
+   */
+  function setMuffle(on, cutoff) {
+    if (!_bgmFilter || !_ctx) return;
+    _muffled = !!on;
+    var freq = on ? (cutoff || 800) : 22050;
+    _bgmFilter.frequency.setValueAtTime(_bgmFilter.frequency.value, _ctx.currentTime);
+    _bgmFilter.frequency.linearRampToValueAtTime(freq, _ctx.currentTime + 0.4);
+  }
+
+  /** Check if BGM is currently muffled. */
+  function isMuffled() { return _muffled; }
+
+  // ── Music duck (temporary volume reduction) ──────────────────────
+
+  var _duckLevel = null;  // Saved bgm volume before duck
+
+  /**
+   * Duck the BGM to a lower volume (e.g. during cinematics).
+   * @param {number} [level=0.35] - Target bgm volume during duck
+   */
+  function duckMusic(level) {
+    if (!_bgmGain || !_ctx) return;
+    if (_duckLevel !== null) return;  // Already ducked
+    _duckLevel = _volumes.bgm;
+    var target = (typeof level === 'number') ? level : 0.35;
+    _bgmGain.gain.setValueAtTime(_bgmGain.gain.value, _ctx.currentTime);
+    _bgmGain.gain.linearRampToValueAtTime(target, _ctx.currentTime + 0.3);
+  }
+
+  /** Restore BGM volume after a duck. */
+  function unduckMusic() {
+    if (!_bgmGain || !_ctx || _duckLevel === null) return;
+    _bgmGain.gain.setValueAtTime(_bgmGain.gain.value, _ctx.currentTime);
+    _bgmGain.gain.linearRampToValueAtTime(_duckLevel, _ctx.currentTime + 0.5);
+    _duckLevel = null;
+  }
+
+  // ── Spatial SFX (distance-attenuated playback) ───────────────────
+
+  /**
+   * Play a sound with distance-based volume attenuation.
+   * No stereo panning yet — bare-bones volume-only spatial.
+   *
+   * @param {string} name - Manifest key
+   * @param {number} srcX - Source world tile X
+   * @param {number} srcY - Source world tile Y
+   * @param {number} plX  - Player world tile X
+   * @param {number} plY  - Player world tile Y
+   * @param {Object} [opts] - { volume, playbackRate, maxDist }
+   */
+  function playSpatial(name, srcX, srcY, plX, plY, opts) {
+    opts = opts || {};
+    var dx = srcX - plX;
+    var dy = srcY - plY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var maxDist = opts.maxDist || 8;
+    if (dist > maxDist) return;
+
+    var attenuation = 1 - (dist / maxDist);
+    var vol = (opts.volume || 0.5) * attenuation * attenuation;  // Inverse-square
+    play(name, { volume: vol, playbackRate: opts.playbackRate || 1 });
+  }
+
   // ── Public API ───────────────────────────────────────────────────
 
   return {
@@ -399,6 +502,14 @@ var AudioSystem = (function () {
     setMasterMute:   setMasterMute,
     getVolumes:      getVolumes,
     isReady:         isReady,
+    // Muffle (interior lowpass)
+    setMuffle:       setMuffle,
+    isMuffled:       isMuffled,
+    // Duck (cinematic volume reduction)
+    duckMusic:       duckMusic,
+    unduckMusic:     unduckMusic,
+    // Spatial SFX
+    playSpatial:     playSpatial,
     // Legacy aliases matching EyesOnly's AudioSystem API
     setSFXVolumeLegacy: setSFXVolumeLegacy
   };

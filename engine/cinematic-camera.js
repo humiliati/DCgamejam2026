@@ -243,6 +243,11 @@ var CinematicCamera = (function () {
     if (config.sfx && typeof AudioSystem !== 'undefined') {
       AudioSystem.play(config.sfx);
     }
+
+    // Duck music during cinematic focus
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onCinematicOpen();
+    }
   }
 
   /**
@@ -251,6 +256,12 @@ var CinematicCamera = (function () {
    */
   function close(immediate) {
     if (!_active) return;
+
+    // Restore music volume after cinematic
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onCinematicClose();
+    }
+
     if (immediate) {
       _active = false;
       _barHeight = 0;

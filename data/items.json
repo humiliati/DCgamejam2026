@@ -1191,5 +1191,51 @@
     "lootProfile": "detritus",
     "description": "Half-eaten rations a hero couldn't finish. Still nutritious. Mostly.",
     "_designNote": "Drops from Hero's Discarded Rations detritus. Dual-use: eat for 1 HP or HP_FOOD crate fill"
+  },
+
+  {
+    "_comment": "=== EMBELLISHMENT CONSUMABLES ITM-115 to ITM-119 ==="
+  },
+  {
+    "id": "ITM-115",
+    "name": "Silk Spider",
+    "emoji": "\uD83D\uDD77\uFE0F",
+    "type": "consumable",
+    "subtype": "supply",
+    "rarity": "common",
+    "stackable": true,
+    "maxStack": 10,
+    "equipSlot": "none",
+    "element": null,
+    "effects": [
+      { "type": "cobweb_deploy", "value": 1 }
+    ],
+    "synergyTags": ["supply", "cobweb", "embellishment"],
+    "lootProfile": "shop",
+    "shopPrice": 5,
+    "shopUnlimited": true,
+    "description": "A docile dungeon spider. Deploy at a corridor choke to install a cobweb barrier.",
+    "_designNote": "Phase 2.1 cobweb consumable. 5g balances against +2g install reward — net cost 3g per web. Found in breakable loot and shop."
+  },
+  {
+    "id": "ITM-116",
+    "name": "Trap Kit",
+    "emoji": "\uD83E\uDE9C",
+    "type": "consumable",
+    "subtype": "supply",
+    "rarity": "common",
+    "stackable": true,
+    "maxStack": 10,
+    "equipSlot": "none",
+    "element": null,
+    "effects": [
+      { "type": "trap_rearm", "value": 1 }
+    ],
+    "synergyTags": ["supply", "trap", "embellishment"],
+    "lootProfile": "shop",
+    "shopPrice": 3,
+    "shopUnlimited": true,
+    "description": "Replacement mechanism for spent dungeon traps. Face a consumed trap and interact to re-arm.",
+    "_designNote": "Phase 2.2 trap consumable. Replaces ITM-092 Trap Spring as the primary rearm resource. Cheaper than spider (3g) since traps hurt the player too."
   }
 ]

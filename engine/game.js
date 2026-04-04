@@ -114,6 +114,7 @@ var Game = (function () {
     InputManager.init();
     InputManager.initPointer(_canvas);
     AudioSystem.init();
+    if (typeof AudioMusicManager !== 'undefined') AudioMusicManager.init();
 
     // Debug GIF recorder (F8 start/stop, F9 save last N seconds)
     if (typeof GifRecorder !== 'undefined') {
@@ -222,6 +223,11 @@ var Game = (function () {
     // ── ESC toggle: pause ↔ gameplay ──
     InputManager.on('pause', function (type) {
       if (type !== 'press') return;
+
+      // CobwebNode intercept: ESC dismisses spider deploy prompt before pause
+      if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
+        if (CobwebNode.handleKey('Escape')) return;
+      }
 
       // PeekSlots intercept: ESC closes slot-filling UI before pause
       if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
@@ -518,9 +524,17 @@ var Game = (function () {
             if (typeof DialogBox !== 'undefined' && DialogBox.show) {
               var flId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
               var dpt  = flId ? flId.split('.').length : 1;
-              var msg  = dpt >= 3
-                ? i18n.t('dragonfire.warp_confirm_dungeon', 'Leave this dungeon? Progress will be saved.')
-                : i18n.t('dragonfire.warp_confirm_home', 'Warp home? You can return here later.');
+              var msg;
+              if (dpt >= 3) {
+                // Check if this is a completed floor (100% readiness)
+                var warpScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
+                  ? ReadinessCalc.getCoreScore(flId) : 0;
+                msg = warpScore >= 1.0
+                  ? i18n.t('dragonfire.warp_confirm_reset', 'Dungeon reset complete. Return to entrance?')
+                  : i18n.t('dragonfire.warp_confirm_dungeon', 'Leave this dungeon? Progress will be saved.');
+              } else {
+                msg = i18n.t('dragonfire.warp_confirm_home', 'Warp home? You can return here later.');
+              }
               DialogBox.show({
                 text: msg,
                 speaker: '🐉',
@@ -793,6 +807,13 @@ var Game = (function () {
     // Only init gameplay-specific modules once (or re-init on retry)
     Minimap.init(document.getElementById('minimap'));
     HUD.init();
+
+    // Wire readiness tier-crossing callback from HUD.
+    // Fires when readiness crosses 25/50/75/100% — we handle the
+    // celebration toast and quest target update here because game.js
+    // has access to DungeonSchedule for context-aware messaging.
+    HUD.setOnTierCross(_onReadinessTierCross);
+
     CardSystem.init();
     // Refresh status bar now that CardSystem has the starting hand/deck
     if (typeof StatusBar !== 'undefined') { StatusBar.updateDeck(); StatusBar.updateBag(); }
@@ -1004,6 +1025,11 @@ var Game = (function () {
         if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onDayChange) {
           DungeonSchedule.onDayChange(newDay);
 
+          // Redeploy dump truck for today's hero day (or park at home)
+          if (typeof DumpTruckSpawner !== 'undefined') {
+            DumpTruckSpawner.onDayChange(newDay);
+          }
+
           // R-5: Morning report — dawn Toast sequence with per-group status
           if (typeof MorningReport !== 'undefined') {
             MorningReport.onDayChange(newDay);
@@ -1184,6 +1210,11 @@ var Game = (function () {
     // DungeonSchedule — staggered per-group hero days (§9–§13)
     if (typeof DungeonSchedule !== 'undefined') {
       DungeonSchedule.init();
+    }
+
+    // DumpTruckSpawner — deploy truck on active hero day floor
+    if (typeof DumpTruckSpawner !== 'undefined') {
+      DumpTruckSpawner.init();
     }
 
     // ── BedPeek → overnight hero run → mailbox report pipeline ──
@@ -2702,6 +2733,11 @@ var Game = (function () {
           DayCycle.setPaused(curDepth === 2);
         }
 
+        // Refresh dump truck tiles — floor grid may have just been created
+        if (typeof DumpTruckSpawner !== 'undefined') {
+          DumpTruckSpawner.refresh();
+        }
+
         // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic)
         _onFloorArrive(FloorManager.getFloor());
       }
@@ -2715,6 +2751,11 @@ var Game = (function () {
 
     // Generate Floor 0 and wire movement callbacks
     _generateAndWire();
+
+    // Start overworld music for the initial floor (title music persists)
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.onFloorChange(startFloorId);
+    }
 
     // Trigger per-floor arrival hooks for the starting floor (NPC spawns,
     // ambient barks, gate logic). _onFloorArrive is normally fired by the
@@ -2976,10 +3017,40 @@ var Game = (function () {
 
     // Seed blood splatter from corpse tiles on dungeon floors (depth 3+).
     // Only on first visit — cached floors keep their cleaned state.
+    // Uses isSeeded() to distinguish "never visited" from "fully cleaned":
+    // an empty blood map (all scrubbed) must NOT trigger re-seeding.
     if (typeof CleaningSystem !== 'undefined' && depth >= 3) {
       var fd = FloorManager.getFloorData();
-      if (fd && CleaningSystem.getDirtyTiles(floorId).length === 0) {
+      if (fd && !CleaningSystem.isSeeded(floorId)) {
         CleaningSystem.seedFromCorpses(floorId, fd.grid, fd.gridW, fd.gridH);
+      }
+    }
+
+    // Register pre-placed corpses from blockout data into CorpseRegistry.
+    // These are environmental corpses (fallen heroes/monsters the Hero already
+    // killed) — they exist as CORPSE tiles in the grid but need rich metadata
+    // for the salvage/harvest/reanimate flow to work.
+    // Only on first visit — skip if corpses already registered (floor revisit).
+    if (typeof CorpseRegistry !== 'undefined' && depth >= 3) {
+      var corpFd = FloorManager.getFloorData();
+      if (corpFd && corpFd.corpseData && corpFd.corpseData.length > 0) {
+        for (var _ci = 0; _ci < corpFd.corpseData.length; _ci++) {
+          var cd = corpFd.corpseData[_ci];
+          if (!CorpseRegistry.hasCorpse(cd.x, cd.y, floorId)) {
+            CorpseRegistry.register(cd.x, cd.y, floorId, {
+              type:    cd.enemyType || 'unknown',
+              name:    cd.name || cd.enemyType || 'Fallen Creature',
+              emoji:   cd.emoji || '💀',
+              maxHp:   cd.hp || 10,
+              hp:      0,
+              str:     cd.str || 2,
+              suit:    cd.suit || 'spade',
+              tags:    cd.tags || [],
+              isElite: !!cd.isElite,
+              lootProfile: cd.lootProfile || null
+            });
+          }
+        }
       }
     }
 
@@ -3014,10 +3085,11 @@ var Game = (function () {
       }
     }
 
-    // IO-8: Auto-create CrateSystem containers for CHEST tiles on floor load.
-    // Crates are created by BreakableSpawner; chests are hand-authored in grids
-    // so we scan after the grid is loaded. Skip if containers already exist
-    // (floor revisit with cached data).
+    // IO-8: Auto-create CrateSystem containers for CHEST and BREAKABLE tiles
+    // on floor load. Chests are hand-authored; BREAKABLEs are placed by
+    // BreakableSpawner on generated floors but must be scanned on blockout
+    // floors where BreakableSpawner never runs. Skip if containers already
+    // exist (floor revisit with cached data).
     if (typeof CrateSystem !== 'undefined') {
       var chestFd = FloorManager.getFloorData();
       if (chestFd && chestFd.grid) {
@@ -3028,7 +3100,8 @@ var Game = (function () {
                    : (chestFd.biome || 'cellar');
         for (var cy = 0; cy < cH; cy++) {
           for (var cx = 0; cx < cW; cx++) {
-            if (cGrid[cy][cx] === TILES.CHEST && !CrateSystem.hasContainer(cx, cy, floorId)) {
+            var cTile = cGrid[cy][cx];
+            if (cTile === TILES.CHEST && !CrateSystem.hasContainer(cx, cy, floorId)) {
               // Home chest on Floor 1.6 at (19,3): large stash + work keys in slot 0
               if (floorId === '1.6' && cx === 19 && cy === 3) {
                 var homeChest = CrateSystem.createChest(cx, cy, floorId, cBiome, { stash: true });
@@ -3042,6 +3115,12 @@ var Game = (function () {
               } else {
                 CrateSystem.createChest(cx, cy, floorId, cBiome);
               }
+            }
+            // BREAKABLE tiles on blockout floors need crate containers too.
+            // Generated floors get these from BreakableSpawner, but blockouts
+            // place BREAKABLE tiles directly in the grid array.
+            if (cTile === TILES.BREAKABLE && !CrateSystem.hasContainer(cx, cy, floorId)) {
+              CrateSystem.createCrate(cx, cy, floorId, cBiome);
             }
           }
         }
@@ -4215,6 +4294,60 @@ var Game = (function () {
     _refreshPanels();
   }
 
+  // ── Readiness tier-crossing handler ─────────────────────────────────
+  // Called by HUD when readiness crosses a quarter-tier boundary.
+  // Tier 4 (100%) triggers the "Dungeon Reset" celebration toast and
+  // refreshes the quest waypoint to point at the exit.
+
+  function _onReadinessTierCross(tier, floorId) {
+    if (tier === 4) {
+      // ── 100% — Dungeon Reset ──────────────────────────────────────
+      // Build context-aware message from DungeonSchedule contract.
+      var label = '';
+      var reportTo = '';
+      if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getGroupForFloor) {
+        var groupId = DungeonSchedule.getGroupForFloor(floorId);
+        if (groupId) {
+          // Resolve the group's display label
+          var next = DungeonSchedule.getNextGroup();
+          if (next && next.groupId === groupId) {
+            label = next.label || '';
+          } else {
+            // Check full schedule for label
+            var sched = DungeonSchedule.getSchedule ? DungeonSchedule.getSchedule() : [];
+            for (var si = 0; si < sched.length; si++) {
+              if (sched[si].groupId === groupId) { label = sched[si].label || ''; break; }
+            }
+          }
+        }
+      }
+
+      // Determine who to report to (NPC name or generic "Dispatch")
+      reportTo = i18n.t('readiness.report_dispatch', 'Dispatch');
+
+      var msg = '✅ ' + i18n.t('readiness.dungeon_reset', 'Dungeon Reset');
+      if (label) msg += ' — ' + label + ' ' + i18n.t('readiness.ready', 'ready');
+      msg += '. ' + i18n.t('readiness.report_to', 'Report to') + ' ' + reportTo + '.';
+
+      if (typeof Toast !== 'undefined') {
+        Toast.show(msg, 'success');
+      }
+
+      // Refresh quest diamond — now points at STAIRS_UP
+      _updateQuestTarget();
+
+      // Log for debug
+      console.log('[Game] Readiness 100% on ' + floorId +
+                  (label ? ' (' + label + ')' : '') + ' — dungeon reset.');
+    } else if (tier === 2) {
+      // 50% milestone — subtle encouragement
+      if (typeof Toast !== 'undefined') {
+        Toast.show('📊 ' + i18n.t('readiness.halfway', 'Halfway there') + ' — 50%', 'info');
+      }
+    }
+    // Tiers 1 and 3 handled by HUD's notch tone only — no toast needed.
+  }
+
   // ── Quest waypoint targeting ────────────────────────────────────────
   // Sets the minimap quest diamond based on current floor and game state.
   //
@@ -4329,12 +4462,34 @@ var Game = (function () {
     }
 
     if (floorId === lobbyId) {
-      // In the dungeon lobby — point at stairs down
+      // In the dungeon lobby — check if ALL group floors are readiness-complete.
+      // If all done, point at the exit door (back to exterior / dispatch).
+      // If not all done, point at stairs down (next floor to clean).
+      var allFloorsDone = true;
+      if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore) {
+        for (var fi = 0; fi < nextGroup.floorIds.length; fi++) {
+          if (ReadinessCalc.getCoreScore(nextGroup.floorIds[fi]) < (nextGroup.target || 0.6)) {
+            allFloorsDone = false;
+            break;
+          }
+        }
+      }
+
       var lobbyData = FloorManager.getFloorData();
-      if (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn) {
-        Minimap.setQuestTarget({ x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y });
+      if (allFloorsDone) {
+        // All floors done — point at exit door (back toward dispatch)
+        if (lobbyData && lobbyData.doors && lobbyData.doors.doorExit) {
+          Minimap.setQuestTarget({ x: lobbyData.doors.doorExit.x, y: lobbyData.doors.doorExit.y });
+        } else {
+          Minimap.setQuestTarget(null);
+        }
       } else {
-        Minimap.setQuestTarget(null);
+        // Floors remain — point at stairs down
+        if (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn) {
+          Minimap.setQuestTarget({ x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y });
+        } else {
+          Minimap.setQuestTarget(null);
+        }
       }
       return;
     }
@@ -4516,6 +4671,23 @@ var Game = (function () {
         Toast.show(i18n.t('toast.food_instant', 'Ate something. ♥ +' + (effect.hp || 0)), 'hp');
       }
       AudioSystem.play('pickup', { volume: 0.5 });
+    } else if (pickup.type === 'supply') {
+      // Supply consumables (Silk Spider, Trap Kit) — add to bag
+      var supplyItem = { id: pickup.itemId, type: 'consumable', subtype: 'supply' };
+      // Try to look up full item data from ItemDB if available
+      if (typeof ItemDB !== 'undefined' && ItemDB.get) {
+        var full = ItemDB.get(pickup.itemId);
+        if (full) supplyItem = JSON.parse(JSON.stringify(full));
+      }
+      var added = CardAuthority.addToBag(supplyItem);
+      if (added) {
+        var sName = supplyItem.name || pickup.itemId;
+        var sEmoji = supplyItem.emoji || '📦';
+        Toast.show(sEmoji + ' ' + sName, 'item');
+        AudioSystem.play('pickup', { volume: 0.5 });
+      } else {
+        Toast.show(i18n.t('toast.bag_full', 'Bag full!'), 'warning');
+      }
     }
     HUD.updatePlayer(Player.state());
     SessionStats.inc('itemsCollected');
@@ -4738,12 +4910,29 @@ var Game = (function () {
     }
 
     // C7: Trap re-arm — face an EMPTY tile that was formerly a TRAP
+    // Phase 2: requires Trap Kit (ITM-116) or Trap Spring (ITM-092) consumable
+    var TRAP_KIT_ID    = 'ITM-116';
+    var TRAP_SPRING_ID = 'ITM-092';
     if (typeof TrapRearm !== 'undefined') {
       var rearmFloorId = FloorManager.getCurrentFloorId();
       if (TrapRearm.canRearm(fx, fy, rearmFloorId)) {
+        // Check for consumable in bag
+        var _hasTrapConsumable = function () {
+          var bag = CardAuthority.getBag();
+          for (var bi = 0; bi < bag.length; bi++) {
+            if (bag[bi] && (bag[bi].id === TRAP_KIT_ID || bag[bi].id === TRAP_SPRING_ID)) return bag[bi].id;
+          }
+          return null;
+        };
+        var trapItemId = _hasTrapConsumable();
+        if (!trapItemId) {
+          Toast.show(i18n.t('toast.need_trap_kit', 'Need a Trap Kit 🪜 or Trap Spring 🪤'), 'warning');
+          return;
+        }
         if (TrapRearm.rearm(fx, fy, rearmFloorId, floorData.grid)) {
+          CardAuthority.removeFromBagById(trapItemId);
           AudioSystem.play('ui-confirm', { volume: 0.4 });
-          Toast.show('⚙️ ' + i18n.t('toast.trap_rearmed', 'Trap re-armed!'), 'loot');
+          Toast.show('⚙️ ' + i18n.t('toast.trap_rearmed', 'Trap re-armed! (−1 ' + (trapItemId === TRAP_KIT_ID ? 'Trap Kit' : 'Trap Spring') + ')'), 'loot');
           if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('⚙️ Armed!', fx, fy, 'loot');
           if (typeof SessionStats !== 'undefined') SessionStats.inc('trapsRearmed');
           // R-2: Trigger readiness bar sweep preview
@@ -5689,6 +5878,11 @@ var Game = (function () {
       );
     }
 
+    // Enemy creature bark tick — atmospheric sounds on depth-3+ floors
+    if (EnemyAI.tickEnemyBarks) {
+      EnemyAI.tickEnemyBarks(enemies, p, deltaMs, floorData.biome);
+    }
+
     // Dispatcher grab choreography (Floor 1 gate sequence)
     if (!_gateUnlocked && _dispatcherEntity && _dispatcherPhase !== 'done') {
       _tickDispatcherChoreography(deltaMs);
@@ -5697,7 +5891,7 @@ var Game = (function () {
     CombatBridge.checkEnemyAggro(p.x, p.y);
 
     // ── Fire crackle ambient (proximity-based) ──
-    // Check tiles within 3 Manhattan distance for bonfire/hearth/bed.
+    // Check tiles within 3 Manhattan distance for bonfire/hearth/bed/torch.
     // Play crackle at volume scaled by inverse distance.
     _fireCrackleTimer = (_fireCrackleTimer || 0) + deltaMs;
     if (_fireCrackleTimer >= 2000) {  // Check every 2s
@@ -5709,7 +5903,7 @@ var Game = (function () {
       for (var fy = Math.max(0, py - 3); fy <= Math.min(gh - 1, py + 3); fy++) {
         for (var fx = Math.max(0, px - 3); fx <= Math.min(gw - 1, px + 3); fx++) {
           var ft = grid[fy][fx];
-          if (ft === TILES.BONFIRE || ft === TILES.HEARTH || ft === TILES.BED) {
+          if (ft === TILES.BONFIRE || ft === TILES.HEARTH || ft === TILES.BED || ft === TILES.TORCH_LIT) {
             var md = Math.abs(fx - px) + Math.abs(fy - py);
             if (md < nearestDist) nearestDist = md;
           }

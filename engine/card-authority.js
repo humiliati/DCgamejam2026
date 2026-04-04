@@ -357,6 +357,8 @@ var CardAuthority = (function () {
     }
     _state.hand = hand;
     _emit('hand:changed', { hand: getHand() });
+    // Card deal sound (new hand drawn)
+    if (typeof AudioSystem !== 'undefined') AudioSystem.playRandom('card-deal', { volume: 0.45 });
     return hand;
   }
 
@@ -445,6 +447,8 @@ var CardAuthority = (function () {
     if (typeof SeededRNG !== 'undefined' && SeededRNG.shuffle) {
       SeededRNG.shuffle(_state.deck);
     }
+    // Deck shuffle sound
+    if (typeof AudioSystem !== 'undefined') AudioSystem.playRandom('card-shuffle', { volume: 0.4 });
   }
 
   /**

@@ -267,6 +267,11 @@ var DoorContracts = (function () {
       targetDoor = doorTarget;
       // Avoid the opposite transition point
       avoidDoor = _spawnDir === 'advance' ? doors.stairsDn : doors.stairsUp;
+      // If no natural avoid target (parent floors with no stairs),
+      // infer the building interior side to prevent spawning inside walls.
+      if (!avoidDoor) {
+        avoidDoor = _inferInteriorSide(grid, W, H, targetDoor);
+      }
     } else if (_spawnDir === 'advance') {
       // Going deeper: spawn near stairs up (the way back)
       targetDoor = doors.stairsUp;
@@ -313,6 +318,67 @@ var DoorContracts = (function () {
     _sourceFloorId = null;
 
     return { x: spawn.x, y: spawn.y, dir: dir };
+  }
+
+  /**
+   * Infer which side of a door is the building interior (enclosed) vs
+   * exterior (open walkway). Used to synthesize an avoidDoor point when
+   * the parent floor has no stairs to use as a natural avoid target.
+   *
+   * Checks perpendicular open-space depth: the side with LESS depth is
+   * the enclosed interior. Returns a point 3 tiles into the interior,
+   * so findSpawnNearDoor() will score exterior tiles higher.
+   *
+   * @returns {{ x: number, y: number } | null}
+   */
+  function _inferInteriorSide(grid, W, H, doorPos) {
+    var dx = doorPos.x, dy = doorPos.y;
+
+    // Check if door is in a horizontal wall (walls flanking E/W)
+    var wallEW = false, wallNS = false;
+    if (dx > 0 && dx < W - 1) {
+      var west = grid[dy][dx - 1], east = grid[dy][dx + 1];
+      wallEW = (west === TILES.WALL || west === TILES.PILLAR) &&
+               (east === TILES.WALL || east === TILES.PILLAR);
+    }
+    if (dy > 0 && dy < H - 1) {
+      var north = grid[dy - 1][dx], south = grid[dy + 1][dx];
+      wallNS = (north === TILES.WALL || north === TILES.PILLAR) &&
+               (south === TILES.WALL || south === TILES.PILLAR);
+    }
+
+    if (wallEW) {
+      // Door in horizontal wall — compare N vs S open depth
+      var nDepth = 0, sDepth = 0;
+      for (var n = 1; n <= 6; n++) {
+        if (dy - n >= 0 && TILES.isWalkable(grid[dy - n][dx])) nDepth++;
+        else break;
+      }
+      for (var s = 1; s <= 6; s++) {
+        if (dy + s < H && TILES.isWalkable(grid[dy + s][dx])) sDepth++;
+        else break;
+      }
+      // Interior = side with less depth; place avoid point 3 tiles in
+      if (nDepth <= sDepth) return { x: dx, y: Math.max(0, dy - 3) };
+      return { x: dx, y: Math.min(H - 1, dy + 3) };
+    }
+
+    if (wallNS) {
+      // Door in vertical wall — compare W vs E open depth
+      var wDepth = 0, eDepth = 0;
+      for (var w = 1; w <= 6; w++) {
+        if (dx - w >= 0 && TILES.isWalkable(grid[dy][dx - w])) wDepth++;
+        else break;
+      }
+      for (var e = 1; e <= 6; e++) {
+        if (dx + e < W && TILES.isWalkable(grid[dy][dx + e])) eDepth++;
+        else break;
+      }
+      if (wDepth <= eDepth) return { x: Math.max(0, dx - 3), y: dy };
+      return { x: Math.min(W - 1, dx + 3), y: dy };
+    }
+
+    return null; // Can't determine wall orientation — no synthetic avoid
   }
 
   /**

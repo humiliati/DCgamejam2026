@@ -28,7 +28,7 @@
 
 BarkLibrary.register('ambient.approach', [
   { text: '🗣️ "Early shift, huh?"',                                          weight: 3 },
-  { text: '🗣️ "Watch your step — cobblestones are slippery at dawn."',       weight: 2 },
+  { text: '🗣️ "Watch your step - cobblestones are slippery at dawn."',       weight: 2 },
   { text: '🗣️ "The Guild notice board is already up. Heroes coming."',        weight: 2 },
   { text: '🗣️ "You the new Gleaner? Good luck in there."',                    weight: 1 },
   { text: '🗣️ "Smells like smoke from the lower cellars again..."',           weight: 1, style: 'bubble' }
@@ -157,7 +157,7 @@ BarkLibrary.register('npc.dispatcher.gate.intro', [
 
 BarkLibrary.register('npc.dispatcher.gate.direction', [
   {
-    text:    'Keys are at your bunk. Home door — north side of the Promenade, follow the wall east. Can\'t miss it.',
+    text:    'Keys are at your bunk. Home door - north side of the Promenade, follow the wall east. Can\'t miss it.',
     speaker: 'Dispatcher',
     style:   'dialog',
     weight:  1,
@@ -299,7 +299,7 @@ BarkLibrary.register('npc.promenade.vendor', [
 ], { cooldownMs: 20000 });
 
 BarkLibrary.register('interior.guild', [
-  { text: '🗣️ "Work order board\'s updated — Coral Cellars is priority."',           weight: 3 },
+  { text: '🗣️ "Work order board\'s updated - Coral Cellars is priority."',           weight: 3 },
   { text: '🗣️ "Forty percent readiness? Heroes won\'t even bother."',                weight: 3 },
   { text: '🗣️ "The Taskmaster wants a full crate audit before hero day."',           weight: 2 },
   { text: '🗣️ "New recruit asked if heroes ever say thank you. We all laughed."',    weight: 2 },
@@ -343,7 +343,7 @@ BarkLibrary.register('interior.bookshelf.guild', [
 
 BarkLibrary.register('interior.bookshelf.inn', [
   { text: '📜 Old journals and traveller\'s diaries. Smells like pipe tobacco.', weight: 3, style: 'toast' },
-  { text: '📜 A history book — "The Dragon Compact, Vol. 7."',                  weight: 2, style: 'toast' },
+  { text: '📜 A history book - "The Dragon Compact, Vol. 7."',                  weight: 2, style: 'toast' },
   { text: '📜 Someone left a bookmark on a chapter about the Nesting Caves.',   weight: 1, style: 'toast' },
   { text: '📜 A torn page reads: "...the heroes do not know what sleeps below."', weight: 0.5, style: 'toast', oneShot: true }
 ], { cooldownMs: 8000 });
@@ -363,7 +363,7 @@ BarkLibrary.register('interior.bookshelf.home', [
 BarkLibrary.register('interior.bar.inn', [
   { text: '🍺 The ale is cold and tastes faintly of seaweed. Not bad.',     weight: 3, style: 'toast' },
   { text: '☕ Strong coffee. The innkeeper nods approvingly.',               weight: 2, style: 'toast' },
-  { text: '🧃 Coral tonic — slightly fizzy, vaguely medicinal.',            weight: 2, style: 'toast' },
+  { text: '🧃 Coral tonic - slightly fizzy, vaguely medicinal.',            weight: 2, style: 'toast' },
   { text: '🍺 "On the house," the barkeep says. "You look like you need it."', weight: 1, style: 'toast' }
 ], { cooldownMs: 5000 });
 
@@ -491,7 +491,7 @@ BarkLibrary.register('npc.resident.angry', [
   { text: 'I said get out! What part of "private" confuses you?',                        speaker: 'Resident', style: 'bubble', weight: 3 },
   { text: 'Still here?! I\'ll call the Admiralty if you don\'t leave.',                  speaker: 'Resident', style: 'bubble', weight: 2 },
   { text: 'OUT. Now. Before I lose my patience entirely.',                                speaker: 'Resident', style: 'bubble', weight: 2 },
-  { text: 'Heroes barge in, Gleaners barge in — does nobody knock anymore?!',            speaker: 'Resident', style: 'bubble', weight: 1 }
+  { text: 'Heroes barge in, Gleaners barge in - does nobody knock anymore?!',            speaker: 'Resident', style: 'bubble', weight: 1 }
 ], { cooldownMs: 10000 });
 
 BarkLibrary.register('npc.innkeeper.ambient', [
@@ -721,7 +721,7 @@ BarkLibrary.register('ambient.class.shadow', [
 ], { cooldownMs: 90000 });
 
 BarkLibrary.register('ambient.class.sentinel', [
-  { text: '🗣️ "The {class} can take a beating. Good — the dungeon gives them daily."', weight: 3 },
+  { text: '🗣️ "The {class} can take a beating. Good - the dungeon gives them daily."', weight: 3 },
   { text: '🗣️ "Reliable as clockwork, {callsign}. The Guild\'s own little tank."',     weight: 2 },
   { text: '🗣️ "{callsign} the {class}. Endures everything. Even the paperwork."',      weight: 2, style: 'bubble' },
   { text: '🗣️ "If they gave out medals for stubbornness, {callsign}..."',               weight: 1 }
@@ -747,7 +747,7 @@ BarkLibrary.register('npc.guild.callsign', [
   { text: 'Keep it up, {callsign}. One day they\'ll write songs about the janitor.',     speaker: 'Ren (Veteran)', style: 'bubble', weight: 2 },
   { text: '{callsign} the {class}. Around here we just call you "the new one."',         speaker: 'Sable (Clerk)', style: 'bubble', weight: 2 },
   { text: 'Agent {callsign}, your readiness report is due. Very heroic paperwork.',      speaker: 'Sable (Clerk)', style: 'bubble', weight: 1 },
-  { text: '{callsign}! Are you really a {class}? That\'s so cool! I mean — for a Gleaner.', speaker: 'Pip (Rookie)', style: 'bubble', weight: 3 },
+  { text: '{callsign}! Are you really a {class}? That\'s so cool! I mean - for a Gleaner.', speaker: 'Pip (Rookie)', style: 'bubble', weight: 3 },
   { text: 'Do you think if I train hard enough I could be a {class} too, {callsign}?',  speaker: 'Pip (Rookie)', style: 'bubble', weight: 2 }
 ], { cooldownMs: 45000 });
 
@@ -758,7 +758,7 @@ BarkLibrary.register('npc.guild.callsign', [
 BarkLibrary.register('npc.dispatcher.warn.mild', [
   { text: 'Two incidents in a row. I\'m noticing.',                      speaker: 'Dispatcher', style: 'bubble', weight: 3 },
   { text: 'The Guild doesn\'t track your accidents, Gleaner. I do.',     speaker: 'Dispatcher', style: 'bubble', weight: 2 },
-  { text: 'Getting sloppy. This isn\'t a vacation — it\'s a contract.', speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'Getting sloppy. This isn\'t a vacation - it\'s a contract.', speaker: 'Dispatcher', style: 'bubble', weight: 2 },
   { text: 'I have to file paperwork every time you collapse. Don\'t make it a habit.', speaker: 'Dispatcher', style: 'bubble', weight: 1 }
 ], { cooldownMs: 0 });
 
@@ -796,4 +796,230 @@ BarkLibrary.register('mailbox.report.angry', [
   { text: 'I hope you\'re proud. The Gleaner before you lasted three seasons. You won\'t last one.', weight: 2 },
   { text: 'Next run, we hire our own Gleaner. You\'re done.',                       weight: 1 }
 ], { cooldownMs: 0 });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DAY-OF-CYCLE BARKS — POST-HERO CLEANUP (Day 1 after Hero Day)
+// ═══════════════════════════════════════════════════════════════════════
+// The day after heroes tore through. Townspeople gossip about the
+// carnage. Tone: weary, impressed, slightly horrified.
+
+BarkLibrary.register('ambient.promenade.day1', [
+  { text: '\uD83D\uDDE3\uFE0F "Did you see what the Hero did to floor three? Unrecognisable."',     weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "Cleanup crews have been down there since dawn. Still not done."',    weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "They left scorch marks on the CEILING. How?"',                       weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Someone found a shattered shield near the entrance. Huge thing."',   weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The Guild posted triple-rate contracts. Must be bad down there."',   weight: 1 },
+  { text: '\uD83D\uDDE3\uFE0F "Smells like ozone and old copper. Hero aftermath."',                 weight: 1, style: 'bubble' }
+], { cooldownMs: 35000 });
+
+BarkLibrary.register('ambient.lanternrow.day1', [
+  { text: '\uD83D\uDDE3\uFE0F "Foundry is buying scale fragments in bulk today. Post-hero premium."', weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "The Watchman locked himself in his office. Won\'t talk to anyone."',  weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Supply wagons clogging the row. Restock day."',                       weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Armory sold out of trap kits by noon. Every Gleaner needs them."',    weight: 1 }
+], { cooldownMs: 40000 });
+
+BarkLibrary.register('npc.guild_veteran.day1', [
+  { text: 'Worst mess I\'ve seen in three seasons. Take extra rags.',                speaker: 'Ren (Veteran)', style: 'bubble', weight: 3 },
+  { text: 'The Hero was efficient this time. Almost surgical. That worries me.',      speaker: 'Ren (Veteran)', style: 'bubble', weight: 2 },
+  { text: 'Start from the bottom floor, work up. Trust me on this.',                 speaker: 'Ren (Veteran)', style: 'bubble', weight: 1 }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('npc.guild_clerk.day1', [
+  { text: 'Damage reports flooding in. I need more coffee.',                          speaker: 'Sable (Clerk)', style: 'bubble', weight: 3 },
+  { text: 'The invoices from yesterday\'s hero run don\'t add up. Again.',           speaker: 'Sable (Clerk)', style: 'bubble', weight: 2 },
+  { text: 'Filing backlog is three days deep. We\'ll catch up. Probably.',           speaker: 'Sable (Clerk)', style: 'bubble', weight: 1 }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('npc.guild_rookie.day1', [
+  { text: 'I saw the aftermath. I don\'t want to talk about it.',                    speaker: 'Pip (Rookie)', style: 'bubble', weight: 3 },
+  { text: 'Is it always this bad? After the heroes, I mean?',                        speaker: 'Pip (Rookie)', style: 'bubble', weight: 2 },
+  { text: 'I thought cleaning was boring. Then I saw what heroes leave behind.',      speaker: 'Pip (Rookie)', style: 'bubble', weight: 1 }
+], { cooldownMs: 30000 });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DAY-OF-CYCLE BARKS — ROUTINE DAY (Day 2, mid-cycle)
+// ═══════════════════════════════════════════════════════════════════════
+// Normal working day. Townspeople are calm. Prep work continues.
+// Tone: routine, mundane, occasionally anticipatory.
+
+BarkLibrary.register('ambient.promenade.day2', [
+  { text: '\uD83D\uDDE3\uFE0F "Quiet day. The kind that makes you forget what\'s below."',         weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "Mid-cycle. Prices are stable, streets are clean. Normal."',          weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "The fishing boats came in early today. Good haul, they say."',      weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Two more days until heroes. Better enjoy the peace."',               weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The Guild wants higher readiness this cycle. Ambitious."',          weight: 1 },
+  { text: '\uD83D\uDDE3\uFE0F "Saw a poster: \'Volunteer for deep floor duty.\' No thanks."',     weight: 1, style: 'bubble' }
+], { cooldownMs: 35000 });
+
+BarkLibrary.register('ambient.lanternrow.day2', [
+  { text: '\uD83D\uDDE3\uFE0F "Slow day on the Row. Perfect for restocking."',                     weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "The Dispatcher posted new training schedules. Check the board."',   weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "It\'s the calm before the storm. Enjoy it."',                       weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Foundry workers doing maintenance runs. Routine."',                 weight: 1 }
+], { cooldownMs: 40000 });
+
+BarkLibrary.register('npc.guild_veteran.day2', [
+  { text: 'Use the downtime wisely. Practice trap work.',                             speaker: 'Ren (Veteran)', style: 'bubble', weight: 3 },
+  { text: 'Mid-cycle lull. The smart ones prep now, panic later.',                    speaker: 'Ren (Veteran)', style: 'bubble', weight: 2 },
+  { text: 'Twelve years, and the quiet days still feel like a warning.',              speaker: 'Ren (Veteran)', style: 'bubble', weight: 1 }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('npc.guild_clerk.day2', [
+  { text: 'Inventory day. Please log your salvage before you head out.',              speaker: 'Sable (Clerk)', style: 'bubble', weight: 3 },
+  { text: 'Mid-cycle reports are due. Don\'t make me chase you.',                    speaker: 'Sable (Clerk)', style: 'bubble', weight: 2 }
+], { cooldownMs: 35000 });
+
+BarkLibrary.register('npc.guild_rookie.day2', [
+  { text: 'Is it always this quiet between hero days?',                              speaker: 'Pip (Rookie)', style: 'bubble', weight: 3 },
+  { text: 'I cleaned the training room twice. Running out of things to do.',         speaker: 'Pip (Rookie)', style: 'bubble', weight: 2 },
+  { text: 'Two days until the next hero. Do you think we\'ll be ready?',             speaker: 'Pip (Rookie)', style: 'bubble', weight: 1 }
+], { cooldownMs: 30000 });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MISSING TIME-OF-DAY FILLS
+// ═══════════════════════════════════════════════════════════════════════
+
+// Approach — night (sparse, player shouldn't be here this late)
+BarkLibrary.register('ambient.approach.night', [
+  { text: '\uD83D\uDDE3\uFE0F "Nobody should be out here this late."',                              weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "The courtyard echoes at night. Unsettling."',                       weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Even the maintenance crews have gone home."',                       weight: 1 }
+], { cooldownMs: 60000 });
+
+// Lantern Row — morning
+BarkLibrary.register('ambient.lanternrow.morning', [
+  { text: '\uD83D\uDDE3\uFE0F "Shops opening up. Fresh inventory on the racks."',                  weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "Morning shift, Gleaner? The early bird gets the contract."',        weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Coffee cart is set up near the Foundry stall. Recommend it."',      weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The Dispatcher was here before dawn. He never sleeps."',            weight: 1 }
+], { cooldownMs: 35000 });
+
+// Interior: inn at night (different vibe from daytime)
+BarkLibrary.register('interior.inn.night', [
+  { text: '\uD83D\uDDE3\uFE0F "Late drinker, huh? Pull up a stool."',                              weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "The night crowd is quieter. Everyone\'s tired."',                   weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Kitchen\'s closed, but there\'s bread and cheese on the counter."', weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The bard passed out an hour ago. Blessed silence."',                weight: 1, style: 'bubble' }
+], { cooldownMs: 50000 });
+
+// Interior: guild at heroday
+BarkLibrary.register('interior.guild.heroday', [
+  { text: '\uD83D\uDDE3\uFE0F "All stations reporting in. Hero ETA: imminent."',                   weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "Final readiness check underway. Don\'t leave until it\'s filed."', weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The Guild Master is watching the floor stats. No pressure."',       weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "Someone brought pastries. Morale boost before the carnage."',       weight: 1, style: 'bubble' }
+], { cooldownMs: 35000 });
+
+// Interior: bazaar at heroday
+BarkLibrary.register('interior.bazaar.heroday', [
+  { text: '\uD83D\uDDE3\uFE0F "Closing early today. Hero Day makes everyone nervous."',            weight: 3 },
+  { text: '\uD83D\uDDE3\uFE0F "Last-minute supply run? Smart. Prices go up after the hero hits."', weight: 2 },
+  { text: '\uD83D\uDDE3\uFE0F "The Tide vendor doubled her security. Must have good stock."',      weight: 1 }
+], { cooldownMs: 40000 });
+
+// Dispatcher ambient: time variants
+BarkLibrary.register('npc.dispatcher.ambient.morning', [
+  { text: 'Dawn briefing in five. Don\'t be late.',                                   speaker: 'Dispatcher', style: 'bubble', weight: 3 },
+  { text: 'Fresh contracts on the board. Prioritise the deep floors.',                speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'Morning report says readiness is at forty. Not good enough.',              speaker: 'Dispatcher', style: 'bubble', weight: 1 }
+], { cooldownMs: 60000 });
+
+BarkLibrary.register('npc.dispatcher.ambient.dusk', [
+  { text: 'Heading home soon? File your report first.',                               speaker: 'Dispatcher', style: 'bubble', weight: 3 },
+  { text: 'The dungeon doesn\'t close at sundown, but you should.',                  speaker: 'Dispatcher', style: 'bubble', weight: 2 },
+  { text: 'Night shift pays double. But the risks triple.',                           speaker: 'Dispatcher', style: 'bubble', weight: 1 }
+], { cooldownMs: 60000 });
+
+BarkLibrary.register('npc.dispatcher.ambient.night', [
+  { text: 'Still here? You\'re either dedicated or lost.',                            speaker: 'Dispatcher', style: 'bubble', weight: 3 },
+  { text: 'Curfew\'s approaching. Wrap it up, Gleaner.',                             speaker: 'Dispatcher', style: 'bubble', weight: 2 }
+], { cooldownMs: 90000 });
+
+// Innkeeper: time variants
+BarkLibrary.register('npc.innkeeper.morning', [
+  { text: 'Breakfast is on the table. Eat before you head down.',                     speaker: 'Innkeeper', style: 'bubble', weight: 3 },
+  { text: 'Fresh bread this morning. The baker outdid herself.',                      speaker: 'Innkeeper', style: 'bubble', weight: 2 }
+], { cooldownMs: 35000 });
+
+BarkLibrary.register('npc.innkeeper.night', [
+  { text: 'Last call was an hour ago. You need a room or a door.',                    speaker: 'Innkeeper', style: 'bubble', weight: 3 },
+  { text: 'The late crowd\'s mostly gone. I\'m closing up.',                         speaker: 'Innkeeper', style: 'bubble', weight: 2 }
+], { cooldownMs: 45000 });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ENEMY / CREATURE PROXIMITY BARKS (depth-3 dungeon floors)
+// ═══════════════════════════════════════════════════════════════════════
+// These fire from enemies on depth-3+ floors when the player is within
+// bark radius. Atmospheric, non-verbal. The creatures make sounds
+// regardless of awareness state — it's ambient dungeon life.
+
+// Cellar biome — rats, spiders, mold shamblers
+BarkLibrary.register('enemy.cellar', [
+  { text: '... skittering claws on wet stone.',                                       weight: 3, style: 'bubble' },
+  { text: '... a low squeak echoes down the corridor.',                               weight: 3, style: 'bubble' },
+  { text: '... something scurries behind the crates.',                                weight: 2, style: 'bubble' },
+  { text: '... the faint clicking of mandibles in the dark.',                         weight: 2, style: 'bubble' },
+  { text: '... a wet, dragging sound. Mold? Something worse?',                        weight: 2, style: 'bubble' },
+  { text: '... tiny eyes glint from a crack in the wall.',                            weight: 1, style: 'bubble' },
+  { text: '... a rattling hiss. Whatever it is, it knows you\'re here.',             weight: 1, style: 'bubble' },
+  { text: '... webs tremble in a draft that shouldn\'t exist.',                      weight: 0.5, style: 'bubble' }
+], { cooldownMs: 25000 });
+
+// Cellar: awareness-specific barks (enemy has noticed the player)
+BarkLibrary.register('enemy.cellar.alert', [
+  { text: '... the squeaking stops. Silence. Worse than noise.',                      weight: 3, style: 'bubble' },
+  { text: '... something is watching you from the shadows.',                          weight: 3, style: 'bubble' },
+  { text: '... claws scraping stone. Getting closer.',                                weight: 2, style: 'bubble' },
+  { text: '... a guttural snarl from around the corner.',                             weight: 2, style: 'bubble' },
+  { text: '... it hissed. That was directed at you.',                                weight: 1, style: 'bubble' }
+], { cooldownMs: 15000 });
+
+// Foundry biome — soot imps, iron golems, slag hounds
+BarkLibrary.register('enemy.foundry', [
+  { text: '... the clang of metal on stone. Rhythmic. Mechanical.',                   weight: 3, style: 'bubble' },
+  { text: '... a dry cackling from the pipes overhead.',                              weight: 3, style: 'bubble' },
+  { text: '... heavy footfalls. Something large, moving slowly.',                     weight: 2, style: 'bubble' },
+  { text: '... sparks fly from a dark alcove. Something is alive in there.',          weight: 2, style: 'bubble' },
+  { text: '... the hiss of steam. Or breath. Hard to tell.',                          weight: 2, style: 'bubble' },
+  { text: '... a low growl reverberates through the ironwork.',                       weight: 1, style: 'bubble' },
+  { text: '... molten drip. The air shimmers with heat.',                             weight: 1, style: 'bubble' },
+  { text: '... something scrapes a claw against a pipe. Testing.',                    weight: 0.5, style: 'bubble' }
+], { cooldownMs: 25000 });
+
+BarkLibrary.register('enemy.foundry.alert', [
+  { text: '... the clanging stopped. It\'s listening.',                               weight: 3, style: 'bubble' },
+  { text: '... heavy breathing from the dark. Close.',                                weight: 2, style: 'bubble' },
+  { text: '... sparks and a snarl. It saw you.',                                     weight: 2, style: 'bubble' },
+  { text: '... grinding metal. Something is turning toward you.',                     weight: 1, style: 'bubble' }
+], { cooldownMs: 15000 });
+
+// Sealab biome — deep sea specimens, corrupted researchers
+BarkLibrary.register('enemy.sealab', [
+  { text: '... bubbling from somewhere below the grating.',                           weight: 3, style: 'bubble' },
+  { text: '... a wet slap against glass. Something inside the tank moved.',           weight: 3, style: 'bubble' },
+  { text: '... the hum of containment fields. One of them is flickering.',            weight: 2, style: 'bubble' },
+  { text: '... dripping. Constant. The walls are damp with something.',               weight: 2, style: 'bubble' },
+  { text: '... a garbled voice on a broken intercom. Words you can\'t quite catch.',  weight: 1, style: 'bubble' },
+  { text: '... bioluminescent glow pulses in the dark. Once. Twice.',                 weight: 0.5, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('enemy.sealab.alert', [
+  { text: '... the tank glass cracked. Something is pressing from inside.',           weight: 3, style: 'bubble' },
+  { text: '... a shriek that doesn\'t sound human. Or animal.',                      weight: 2, style: 'bubble' },
+  { text: '... the containment hum changed pitch. It knows.',                         weight: 1, style: 'bubble' }
+], { cooldownMs: 18000 });
+
+// Generic dungeon enemy bark — fallback for unrecognised biomes
+BarkLibrary.register('enemy.generic', [
+  { text: '... something moves in the darkness ahead.',                               weight: 3, style: 'bubble' },
+  { text: '... a scraping sound. Stone on stone.',                                    weight: 3, style: 'bubble' },
+  { text: '... breath that isn\'t yours.',                                            weight: 2, style: 'bubble' },
+  { text: '... footsteps. Not your own.',                                             weight: 1, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('enemy.generic.alert', [
+  { text: '... it stopped moving. It\'s waiting.',                                    weight: 3, style: 'bubble' },
+  { text: '... you hear it clearly now. Close. Very close.',                          weight: 2, style: 'bubble' }
+], { cooldownMs: 18000 });
 

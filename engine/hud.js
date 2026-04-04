@@ -8,6 +8,12 @@ var HUD = (function () {
 
   var _prevBattery = -1;  // Track previous battery for spent animation
 
+  // ── Readiness tier-crossing callback ──────────────────────────────
+  // Wired by game.js orchestrator. Fires when readiness crosses a
+  // quarter-tier boundary (25%, 50%, 75%, 100%). game.js uses this
+  // for quest target updates and context-aware toasts.
+  var _onTierCross = null;  // function(tier, floorId) — tier: 1–4
+
   function init() {
     _els.hp = document.getElementById('hud-hp');
     _els.hpFill = document.getElementById('hud-hp-fill');
@@ -682,26 +688,26 @@ var HUD = (function () {
     var newTier = _getTier(newScore);
     if (newTier > oldTier) {
       _rdyLastTier = newTier;
-      // Play tier tone (stub audio calls)
-      if (typeof AudioSystem !== 'undefined' && AudioSystem.playSFX) {
+      // Play tier tone
+      if (typeof AudioSystem !== 'undefined') {
         if (newTier === 4) {
-          AudioSystem.playSFX('readiness-fanfare');
+          AudioSystem.play('readiness-fanfare', { volume: 0.7 });
           // Celebration FX — coin rain + bar pulse (spawned on next render)
           _celebPending = true;
-          // Dragonfire exit Toast (delayed 400ms so celebration lands first)
-          setTimeout(function () {
-            if (typeof Toast !== 'undefined') {
-              Toast.show(
-                '\uD83D\uDD25 ' + (typeof i18n !== 'undefined'
-                  ? i18n.t('readiness.exit_enabled', 'Dragonfire exit enabled!')
-                  : 'Dragonfire exit enabled!'),
-                'success'
-              );
-            }
-          }, 400);
         } else {
-          AudioSystem.playSFX('readiness-notch');
+          AudioSystem.play('ui-confirm', { volume: 0.5 });
         }
+      }
+      // Notify orchestrator (game.js) — handles toasts, quest waypoint, etc.
+      // Deferred to next frame so celebration particles spawn first.
+      if (_onTierCross) {
+        var floorId = (typeof FloorManager !== 'undefined')
+          ? FloorManager.getCurrentFloorId() : '';
+        var capturedTier = newTier;
+        var capturedFloor = floorId;
+        setTimeout(function () {
+          if (_onTierCross) _onTierCross(capturedTier, capturedFloor);
+        }, 400);
       }
     }
   }
@@ -718,6 +724,7 @@ var HUD = (function () {
     hideFloorTransition: hideFloorTransition,
     setAdvantage: setAdvantage,
     renderReadinessBar: renderReadinessBar,
-    triggerReadinessSweep: triggerReadinessSweep
+    triggerReadinessSweep: triggerReadinessSweep,
+    setOnTierCross: function (fn) { _onTierCross = fn; }
   };
 })();

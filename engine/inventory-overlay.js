@@ -85,6 +85,8 @@ var InventoryOverlay = (function () {
   function mount(canvas) {
     if (_mounted) unmount();
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.35 });
+
     _canvas = canvas || document.getElementById('view-canvas');
     if (!_canvas) return;
 
@@ -132,6 +134,8 @@ var InventoryOverlay = (function () {
    * Called when Face 2 closes or menu closes.
    */
   function unmount() {
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.3 });
+
     if (_burnTimeout) {
       clearTimeout(_burnTimeout);
       _burnTimeout = null;

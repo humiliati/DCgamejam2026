@@ -1,6 +1,7 @@
 # Cobweb & Trap Strategy Roadmap
 
 **Created**: 2026-03-30 | **Updated**: 2026-04-04 | **Status**: Phases 1–2 complete, Phase 4 partial, Phases 3/5–7 planned
+**Phase 2 completion**: Consumable resources (Silk Spider, Trap Kit) fully wired — item defs, shop, loot drops, cost checks, prompts, starter loadout
 **Depends on**: Phase C (cleaning loop), Phase E (hero cycle), Phase F (economy tuning)
 
 ---
@@ -60,23 +61,33 @@ Spider deployment and cobweb tearing now have immediate gold consequences:
 - VFX: coin burst on install, tear particle effect on destruction
 - This creates the core lesson: deploy carefully, exit via a different path
 
-### 2.1 Spider Resource (Planned)
-- New consumable item: **Silk Spider** (🕷️)
-- Found in dungeon loot, purchased from Tide Council shop
-- Deploying a cobweb consumes 1 Silk Spider from bag/equipped
-- Cost creates the first-cobweb lesson: deploy → tear accidentally → "that was my only spider"
-- Rarity tiers: Common Spider (1 web), Fat Spider (2 webs from 1 deploy), Queen Spider (reinforced web, 2 hits to destroy)
+### ✅ 2.1 Spider Resource (Apr 4)
+- **Silk Spider** (🕷️ ITM-115): consumable, 5g shop price, stackable ×10
+- `CobwebNode.tryInteract()` requires 1 Silk Spider in bag — consumed on successful deploy
+- "Need a Silk Spider 🕷️" toast when attempting to deploy without one
+- Prompt shows inventory count: "🕷️ Deploy Spider +2g (×N)"
+- Drops from cellar crate breakables (20% chance) and common chests (35% chance)
+- Available at shop (SUPPLY_STOCK unlimited)
+- Net cost per web: 5g spider − 2g install reward = **3g**
+- Future rarity tiers: Fat Spider (2 webs from 1 deploy), Queen Spider (reinforced, 2 hits to destroy)
 
-### 2.2 Trap Parts (Planned)
-- New consumable: **Trap Kit** (⚙️)
-- Required to re-arm traps (currently free)
-- Found in breakable crates, crafted from salvage parts
-- Cost makes the player choose: re-arm this trap or save the kit for a deeper floor
+### ✅ 2.2 Trap Parts (Apr 4)
+- **Trap Kit** (🪜 ITM-116): consumable, 3g shop price, stackable ×10
+- Also accepts legacy **Trap Spring** (🪤 ITM-092, 2g) — either works
+- `game.js _interact()` checks for ITM-116 or ITM-092 in bag before calling `TrapRearm.rearm()`
+- "Need a Trap Kit 🪜 or Trap Spring 🪤" toast when attempting without one
+- Prompt shows inventory count: "⚙️ Re-arm trap (×N)"
+- Drops from foundry furnace drums (25% chance) and common chests (35% chance)
+- Lab cabinets (sealab) drop either spider or kit (20% chance)
+- Available at shop (SUPPLY_STOCK unlimited)
 
-### 2.3 Price Curve (Planned)
-- Early floors: spiders and kits are common drops, nearly free
-- Deep floors: resources become scarce, player must choose which corridors to web/trap
-- Economy tuning ties into DOC-2 §16 Phase 8 and Phase F tasks
+### ✅ 2.3 Starter Loadout & Drop Curve (Apr 4)
+- **Starter bag**: 3× Silk Spider + 2× Trap Kit seeded in `CardSystem.init()`
+- Enough for the first nested-dungeon run without needing to shop first
+- **Breakable loot integration**: `loot-tables.js` resolves new `supply` drop type from breakable loot tables
+- `_applyPickup()` in game.js handles `supply` type → `CardAuthority.addToBag()` with toast + audio
+- Drop distribution biased by biome: cellar → spiders, foundry → trap kits, sealab → both
+- **Price curve** (future): deeper floors could reduce supply drop rates for scarcity pressure
 
 ---
 
@@ -212,7 +223,7 @@ Work orders (C4/C8) currently set a flat readiness target. Phase 3 adds **embell
 | Phase | Status | Depends On | Files Modified | New Files |
 |-------|--------|-----------|----------------|-----------|
 | 1 | ✅ Done | Phase C | game.js, hazard-system.js, interact-prompt.js, readiness-calc.js, index.html | trap-rearm.js |
-| 2 | 🔶 Partial (coin loop done, consumable cost planned) | Phase E (hero cycle), Phase F (economy) | game.js, cobweb-system.js, cobweb-node.js, readiness-calc.js | — |
+| 2 | ✅ Done (coins + consumable cost + loot + shop + starter) | — | game.js, cobweb-system.js, cobweb-node.js, readiness-calc.js, card-system.js, shop.js, interact-prompt.js, loot-tables.js | items.json (ITM-115, ITM-116) |
 | 3 | ⬜ Planned | Phase 2, C4 (work orders) | work-order-system.js, game.js | — |
 | 4 | 🔶 Partial (biome tint, corridor projection, tear particles done; billow + hover planned) | — (visual only) | cobweb-renderer.js, game.js | — |
 | 5 | ⬜ Planned | Phase 2 (resource cost) | cobweb-system.js, trap-rearm.js, loot-tables.json | — |

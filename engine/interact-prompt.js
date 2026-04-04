@@ -45,6 +45,26 @@ var InteractPrompt = (function () {
   var _clickFlash = 0;       // Click feedback flash timer (ms remaining)
   var _inactive   = false;   // True when tile is non-interactive (empty bookshelf)
 
+  /**
+   * Check if any peek overlay with its own action button is active.
+   * These peeks render DOM buttons that duplicate the canvas prompt.
+   */
+  function _anyPeekActive() {
+    var peeks = [
+      typeof CratePeek    !== 'undefined' && CratePeek,
+      typeof CorpsePeek   !== 'undefined' && CorpsePeek,
+      typeof MerchantPeek !== 'undefined' && MerchantPeek,
+      typeof DoorPeek     !== 'undefined' && DoorPeek,
+      typeof TorchPeek    !== 'undefined' && TorchPeek,
+      typeof PuzzlePeek   !== 'undefined' && PuzzlePeek,
+      typeof BookshelfPeek!== 'undefined' && BookshelfPeek
+    ];
+    for (var i = 0; i < peeks.length; i++) {
+      if (peeks[i] && peeks[i].isActive && peeks[i].isActive()) return true;
+    }
+    return false;
+  }
+
   function init() {
     ACTION_MAP[TILES.CHEST]     = { action: 'interact.open',   icon: '' };
     ACTION_MAP[TILES.BONFIRE]   = { action: 'interact.rest',   icon: '🔥' };
@@ -105,6 +125,11 @@ var InteractPrompt = (function () {
     if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
       _visible = false; return;
     }
+
+    // Yield to active peek overlays that have their own DOM action buttons.
+    // Without this guard, both the canvas InteractPrompt and the peek's DOM
+    // button render simultaneously — producing stacked redundant prompts.
+    if (_anyPeekActive()) { _visible = false; return; }
 
     var floorData = FloorManager.getFloorData();
     if (!floorData) { _visible = false; return; }
@@ -188,10 +213,18 @@ var InteractPrompt = (function () {
     if (typeof TrapRearm !== 'undefined') {
       var trFlId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
       if (TrapRearm.canRearm(fx, fy, trFlId)) {
+        // Phase 2: show count of trap consumables in bag
+        var _trapKitCount = 0;
+        if (typeof CardAuthority !== 'undefined') {
+          var _trBag = CardAuthority.getBag();
+          for (var _ti = 0; _ti < _trBag.length; _ti++) {
+            if (_trBag[_ti] && (_trBag[_ti].id === 'ITM-116' || _trBag[_ti].id === 'ITM-092')) _trapKitCount++;
+          }
+        }
         _visible = true;
-        _actionText = i18n.t('interact.rearm', 'Re-arm trap');
+        _actionText = i18n.t('interact.rearm', 'Re-arm trap') + '  (\u00D7' + _trapKitCount + ')';
         _iconText = '⚙️';
-        _hintText = i18n.t('hint.rearm', '');
+        _hintText = _trapKitCount > 0 ? '' : i18n.t('hint.need_kit', 'Need Trap Kit or Spring');
         return;
       }
     }

@@ -94,6 +94,8 @@ var MenuBox = (function () {
   function open(context, opts) {
     if (_state === 'open' || _state === 'folding_up') return;
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.3 });
+
     opts = opts || {};
     _context = context || 'pause';
     _startFace = opts.startFace || 0;
@@ -119,6 +121,8 @@ var MenuBox = (function () {
 
   function close() {
     if (_state === 'closed' || _state === 'folding_down') return;
+
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.25 });
 
     _state = 'folding_down';
     _foldTimer = 0;

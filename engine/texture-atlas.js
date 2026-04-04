@@ -966,49 +966,60 @@ var TextureAtlas = (function () {
   // ── Stairs down (dark stone with chevron arrow + step lines) ──
 
   function _genStairsDown(id, p) {
+    // HD descending staircase — chunky stone steps with 3-tier edges
+    // and two fat filled chevrons (▼▼) pointing down. Should read
+    // "stairs going deeper" at a glance from TV distance.
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y, w, h) {
       var cx = w / 2;
 
-      // Stone base with noise
-      var pn = (_hash(x + 2000, y + 2100) - 0.5) * 10;
-      var r = p.stoneR + pn;
-      var g = p.stoneG + pn;
-      var b = p.stoneB + pn;
-
-      // Horizontal step lines every 10px (perspective depth cue)
-      var stepBand = (y % 10);
-      if (stepBand < 1) {
-        r = p.stepR + pn * 0.5;
-        g = p.stepG + pn * 0.5;
-        b = p.stepB + pn * 0.5;
+      // ── Frame (3-tier dark stone rim) ──
+      var edgeDist = Math.min(x, w - 1 - x, y, h - 1 - y);
+      if (edgeDist < 3) {
+        var fTier = edgeDist === 0 ? 0.4 : (edgeDist === 1 ? 0.55 : 0.7);
+        return {
+          r: _clamp(p.stoneR * fTier),
+          g: _clamp(p.stoneG * fTier),
+          b: _clamp(p.stoneB * fTier)
+        };
       }
 
-      // Down-pointing chevron (▼) in center — 3 nested V-shapes
-      // Each chevron: centerX = cx, apex at y=offset, legs spread 1px per row
+      // ── Stone step bands (10px tall, 3-tier shaded) ──
+      var stepH = 10;
+      var stepLocal = y % stepH;
+      var stepEdge = Math.min(stepLocal, stepH - 1 - stepLocal);
+      var stepTier = stepEdge < 1 ? 0.78 : (stepEdge < 3 ? 0.9 : 1.0);
+      // Step lip highlight (top 2px of each step)
+      if (stepLocal < 2) {
+        stepTier = 1.12;
+      }
+
+      var pn = (_hash(x + 2000, y + 2100) - 0.5) * 5;
+      var r = p.stoneR * stepTier + pn;
+      var g = p.stoneG * stepTier + pn;
+      var b = p.stoneB * stepTier + pn;
+
+      // ── Down-pointing filled chevrons (2 fat V-shapes) ──
+      // Solid filled arrows, 4px thick legs, strong color contrast.
       var chevrons = [
-        { apex: 18, size: 14 },
-        { apex: 32, size: 14 },
-        { apex: 46, size: 12 }
+        { apex: 16, size: 16 },
+        { apex: 36, size: 16 }
       ];
       for (var ci = 0; ci < chevrons.length; ci++) {
         var ch = chevrons[ci];
         var dy = y - ch.apex;
         if (dy >= 0 && dy < ch.size) {
-          var halfW = dy * 0.8 + 2;
+          var halfW = dy * 0.9 + 2;
           var dist = Math.abs(x - cx);
-          if (dist <= halfW && dist >= halfW - 2.5) {
-            r = p.arrowR;
-            g = p.arrowG;
-            b = p.arrowB;
+          // Filled: everything inside the V shape (not just the outline)
+          if (dist <= halfW && dist >= halfW - 4) {
+            // 3-tier: bright center of leg, dark edges
+            var legEdge = Math.min(dist - (halfW - 4), halfW - dist);
+            var lTier = legEdge < 1 ? 0.8 : (legEdge > 2 ? 1.15 : 1.0);
+            r = p.arrowR * lTier;
+            g = p.arrowG * lTier;
+            b = p.arrowB * lTier;
           }
         }
-      }
-
-      // Frame
-      if (x < 2 || x >= w - 2 || y < 2 || y >= h - 2) {
-        r = p.stoneR * 0.5;
-        g = p.stoneG * 0.5;
-        b = p.stoneB * 0.5;
       }
 
       return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
@@ -1018,49 +1029,60 @@ var TextureAtlas = (function () {
   // ── Stairs up (lighter stone with upward chevrons + warm glow) ──
 
   function _genStairsUp(id, p) {
+    // HD ascending staircase — lighter stone steps with warm gradient
+    // and two fat filled chevrons (▲▲) pointing up. Warm amber color
+    // communicates "safety, return to surface."
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y, w, h) {
       var cx = w / 2;
 
-      // Stone base with noise + warm vertical gradient (lighter at top)
-      var warmth = 1.0 + (1.0 - y / h) * 0.15;
-      var pn = (_hash(x + 2200, y + 2300) - 0.5) * 10;
-      var r = p.stoneR * warmth + pn;
-      var g = p.stoneG * warmth + pn;
-      var b = p.stoneB * warmth + pn * 0.7;
-
-      // Horizontal step lines every 10px
-      var stepBand = (y % 10);
-      if (stepBand < 1) {
-        r = p.stepR * warmth + pn * 0.5;
-        g = p.stepG * warmth + pn * 0.5;
-        b = p.stepB * warmth + pn * 0.3;
+      // ── Frame (3-tier warm stone rim) ──
+      var edgeDist = Math.min(x, w - 1 - x, y, h - 1 - y);
+      if (edgeDist < 3) {
+        var fTier = edgeDist === 0 ? 0.5 : (edgeDist === 1 ? 0.65 : 0.8);
+        return {
+          r: _clamp(p.stoneR * fTier),
+          g: _clamp(p.stoneG * fTier),
+          b: _clamp(p.stoneB * fTier * 0.9)
+        };
       }
 
-      // Up-pointing chevrons (▲) — apex at top, legs go down
+      // Warm vertical gradient (lighter at top = light coming from above)
+      var warmth = 1.0 + (1.0 - y / h) * 0.18;
+
+      // ── Stone step bands (10px tall, 3-tier shaded + warm gradient) ──
+      var stepH = 10;
+      var stepLocal = y % stepH;
+      var stepEdge = Math.min(stepLocal, stepH - 1 - stepLocal);
+      var stepTier = stepEdge < 1 ? 0.78 : (stepEdge < 3 ? 0.9 : 1.0);
+      // Step lip highlight (top 2px bright)
+      if (stepLocal < 2) {
+        stepTier = 1.15;
+      }
+
+      var pn = (_hash(x + 2200, y + 2300) - 0.5) * 5;
+      var r = p.stoneR * warmth * stepTier + pn;
+      var g = p.stoneG * warmth * stepTier + pn;
+      var b = p.stoneB * warmth * stepTier + pn * 0.7;
+
+      // ── Up-pointing filled chevrons (2 fat ▲ shapes) ──
       var chevrons = [
-        { apex: 14, size: 12 },
-        { apex: 28, size: 14 },
-        { apex: 44, size: 14 }
+        { apex: 18, size: 16 },
+        { apex: 38, size: 16 }
       ];
       for (var ci = 0; ci < chevrons.length; ci++) {
         var ch = chevrons[ci];
         var dy = ch.apex - y;  // Inverted: apex at top
         if (dy >= 0 && dy < ch.size) {
-          var halfW = dy * 0.8 + 2;
+          var halfW = dy * 0.9 + 2;
           var dist = Math.abs(x - cx);
-          if (dist <= halfW && dist >= halfW - 2.5) {
-            r = p.arrowR;
-            g = p.arrowG;
-            b = p.arrowB;
+          if (dist <= halfW && dist >= halfW - 4) {
+            var legEdge = Math.min(dist - (halfW - 4), halfW - dist);
+            var lTier = legEdge < 1 ? 0.8 : (legEdge > 2 ? 1.15 : 1.0);
+            r = p.arrowR * lTier;
+            g = p.arrowG * lTier;
+            b = p.arrowB * lTier;
           }
         }
-      }
-
-      // Frame
-      if (x < 2 || x >= w - 2 || y < 2 || y >= h - 2) {
-        r = p.stoneR * 0.6;
-        g = p.stoneG * 0.6;
-        b = p.stoneB * 0.5;
       }
 
       return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
@@ -1070,77 +1092,121 @@ var TextureAtlas = (function () {
   // ── Locked door (wood + iron bands + chain/padlock overlay) ──
 
   function _genDoorLocked(id, p) {
+    // HD locked door — dark wood planks with iron bands, a thick
+    // diagonal chain X, and a chunky padlock. Every element has
+    // 3-tier edge shading. Should read "locked, can't pass" instantly.
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y, w, h) {
       var cx = w / 2;
       var cy = h / 2;
+      var S = w;
 
-      // Start from wooden door base
-      if (x < 2 || x >= w - 2 || y < 2 || y >= h - 2) {
-        return { r: _clamp(p.bandR - 15), g: _clamp(p.bandG - 15), b: _clamp(p.bandB - 15) };
+      // ── Outer frame (3-tier dark iron rim) ──
+      var edgeDist = Math.min(x, S - 1 - x, y, S - 1 - y);
+      if (edgeDist < 3) {
+        var fTier = edgeDist === 0 ? 0.55 : (edgeDist === 1 ? 0.72 : 0.88);
+        return {
+          r: _clamp(p.bandR * fTier),
+          g: _clamp(p.bandG * fTier),
+          b: _clamp(p.bandB * fTier)
+        };
       }
 
-      // Horizontal bands every 16px
-      var bandZone = (y % 16) < 2;
-      var r, g, b;
-      if (bandZone) {
-        var bn = (_hash(x + 700, y) - 0.5) * 6;
-        r = p.bandR + bn;
-        g = p.bandG + bn;
-        b = p.bandB + bn;
-      } else {
-        // Wood grain
-        var grain = Math.sin(x * 0.5 + _hash(x, 0) * 2) * 0.5 + 0.5;
-        var mult = grain < 0.25 ? 0.8 : 1.0;
-        var pn = (_hash(x + 800, y + 900) - 0.5) * 8;
-        r = p.baseR * mult + pn;
-        g = p.baseG * mult + pn * 0.7;
-        b = p.baseB * mult + pn * 0.4;
+      // ── Padlock (drawn first so chain overlaps behind it) ──
+      // Body: 10×12 rect centered below midpoint
+      var lockCX = cx, lockCY = cy + 5;
+      var lx = x - lockCX, ly = y - lockCY;
+      var lockW = 5, lockH = 6;
+      var inLockBody = lx >= -lockW && lx <= lockW && ly >= 0 && ly <= lockH * 2;
+      // Shackle: thick U-arc above lock body
+      var shDist = Math.sqrt(lx * lx + (ly + 2) * (ly + 2));
+      var inShackle = ly >= -6 && ly < 1 && shDist >= 3 && shDist <= 5.5;
+
+      if (inLockBody) {
+        var lEdge = Math.min(lx + lockW, lockW - lx, ly, lockH * 2 - ly);
+        var lTier = lEdge < 1 ? 0.7 : (lEdge < 3 ? 1.0 : 1.15);
+        // Keyhole: dark vertical slot
+        if (Math.abs(lx) < 1.5 && ly >= 4 && ly <= 8) {
+          return { r: 12, g: 10, b: 8 };
+        }
+        return {
+          r: _clamp(p.lockR * lTier),
+          g: _clamp(p.lockG * lTier),
+          b: _clamp(p.lockB * lTier * 0.9)
+        };
+      }
+      if (inShackle) {
+        var shEdge = Math.abs(shDist - 4.25);
+        var shTier = shEdge < 0.5 ? 1.1 : 0.85;
+        return {
+          r: _clamp(p.chainR * shTier),
+          g: _clamp(p.chainG * shTier),
+          b: _clamp(p.chainB * shTier)
+        };
       }
 
-      // Chain: diagonal cross pattern across center (X shape)
-      var chainThick = 2;
-      // Diagonal from top-left to bottom-right through center
+      // ── Chain X (thick 5px diagonals with link segments) ──
+      var chainHalf = 3;
       var d1 = Math.abs((x - cx) - (y - cy));
-      // Diagonal from top-right to bottom-left through center
       var d2 = Math.abs((x - cx) + (y - cy));
-      // Only in center region (within 18px of center)
-      var nearCenter = Math.abs(x - cx) < 18 && Math.abs(y - cy) < 18;
+      var nearCenter = Math.abs(x - cx) < 22 && Math.abs(y - cy) < 22;
+      var onChainA = d1 < chainHalf && nearCenter;
+      var onChainB = d2 < chainHalf && nearCenter;
 
-      if (nearCenter && (d1 < chainThick || d2 < chainThick)) {
-        // Chain links: modulate brightness every 4px for link pattern
-        var linkPhase = (d1 < chainThick)
-          ? ((x + y) % 4) < 2
-          : ((x - y + 64) % 4) < 2;
-        var linkMult = linkPhase ? 1.0 : 0.7;
-        r = p.chainR * linkMult;
-        g = p.chainG * linkMult;
-        b = p.chainB * linkMult;
+      if (onChainA || onChainB) {
+        var cDist = onChainA ? d1 : d2;
+        // 3-tier: bright center ridge, dark edges
+        var cTier = cDist < 1 ? 1.15 : (cDist < 2 ? 1.0 : 0.8);
+        // Link segments: alternating bright/dark every 5px
+        var linkParam = onChainA ? (x + y) : (x - y + S);
+        var linkPhase = ((linkParam % 5) < 3) ? 1.0 : 0.72;
+        return {
+          r: _clamp(p.chainR * cTier * linkPhase),
+          g: _clamp(p.chainG * cTier * linkPhase),
+          b: _clamp(p.chainB * cTier * linkPhase)
+        };
       }
 
-      // Padlock: centered, just below center (5x7 rect + 3px shackle arc)
-      var lockX = x - cx;
-      var lockY = y - (cy + 2);
-      if (lockX >= -3 && lockX <= 3 && lockY >= 0 && lockY <= 7) {
-        // Lock body
-        r = p.lockR;
-        g = p.lockG;
-        b = p.lockB;
-        // Keyhole (1px dark dot at center of lock body)
-        if (lockX >= -1 && lockX <= 0 && lockY >= 2 && lockY <= 4) {
-          r = 20; g = 18; b = 15;
+      // ── Iron bands (3 horizontal, 5px tall, 3-tier shaded) ──
+      var bandH = 4;
+      var bandPositions = [6, Math.floor(S / 2) - 2, S - 10];
+      for (var bi = 0; bi < bandPositions.length; bi++) {
+        if (y >= bandPositions[bi] && y < bandPositions[bi] + bandH) {
+          var bLocal = y - bandPositions[bi];
+          var bEdge = Math.min(bLocal, bandH - 1 - bLocal);
+          var bTier = bEdge < 1 ? 0.8 : 1.1;
+          var bn = (_hash(x + 700, y) - 0.5) * 4;
+          return {
+            r: _clamp(p.bandR * bTier + bn),
+            g: _clamp(p.bandG * bTier + bn),
+            b: _clamp(p.bandB * bTier + bn)
+          };
         }
       }
-      // Shackle (arc above lock body)
-      if (lockY >= -4 && lockY < 0) {
-        var shDist = Math.sqrt(lockX * lockX + (lockY + 2) * (lockY + 2));
-        if (shDist >= 2 && shDist <= 3.5) {
-          r = p.chainR;
-          g = p.chainG;
-          b = p.chainB;
-        }
-      }
 
-      return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
+      // ── Wood plank body ──
+      // Vertical planks ~10px wide, dark wood (door is old/weathered)
+      var plankW = 10;
+      var plankIdx = Math.floor(x / plankW);
+      var plankLocal = x - plankIdx * plankW;
+      if (plankLocal < 1) {
+        return {
+          r: _clamp(p.baseR * 0.4),
+          g: _clamp(p.baseG * 0.4),
+          b: _clamp(p.baseB * 0.35)
+        };
+      }
+      var plankTone = (_hash(plankIdx, 44) - 0.5) * 14;
+      var plankEdge = Math.min(plankLocal - 1, plankW - 1 - plankLocal);
+      var pTier = plankEdge < 2 ? 0.85 : (plankEdge > 4 ? 1.06 : 1.0);
+      var grain = Math.sin(y * (_hash(plankIdx, 0) * 2 + 0.3) + plankIdx * 3) * 0.5 + 0.5;
+      var gMult = grain < 0.2 ? 0.84 : (grain > 0.75 ? 1.04 : 1.0);
+      var pn = (_hash(x + 800, y + 900) - 0.5) * 3;
+
+      return {
+        r: _clamp((p.baseR + plankTone) * pTier * gMult + pn),
+        g: _clamp((p.baseG + plankTone * 0.7) * pTier * gMult + pn * 0.7),
+        b: _clamp((p.baseB + plankTone * 0.4) * pTier * gMult + pn * 0.4)
+      };
     });
   }
 
@@ -1753,53 +1819,100 @@ var TextureAtlas = (function () {
   // ── Breakable crate (wooden slats + cross-braces + nails) ──
 
   function _genCrateWood(id, p) {
+    // HD breakable crate — horizontal slat planks held by dark cross-
+    // braces, dome-head iron nails at intersections. Each plank has
+    // per-plank color variation + 3-tier edge shading so the crate
+    // reads as "smashable wooden box" at TV distance.
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
       var S = TEX_SIZE;
-      // Border frame (3px thick edge)
-      var frameW = 3;
-      var onFrame = x < frameW || x >= S - frameW || y < frameW || y >= S - frameW;
-
-      // Cross-brace: two diagonal strips forming an X
       var cx = S / 2, cy = S / 2;
+
+      // ── Frame / rim (3-tier shaded border) ──
+      var frameW = 3;
+      var edgeDist = Math.min(x, S - 1 - x, y, S - 1 - y);
+      if (edgeDist < frameW) {
+        var fTier = edgeDist === 0 ? 0.6 : (edgeDist === 1 ? 0.78 : 0.92);
+        var fn = (_hash(x + 500, y + 501) - 0.5) * 4;
+        return {
+          r: _clamp(p.braceR * fTier + fn),
+          g: _clamp(p.braceG * fTier + fn),
+          b: _clamp(p.braceB * fTier + fn)
+        };
+      }
+
+      // ── Cross-brace (X-shape, 4px wide, 3-tier shaded) ──
       var dx = x - cx, dy = y - cy;
-      var onBraceA = Math.abs(dx - dy) < 3;   // top-left to bottom-right
-      var onBraceB = Math.abs(dx + dy) < 3;   // top-right to bottom-left
-      var onBrace = onBraceA || onBraceB;
+      var distA = Math.abs(dx - dy);   // top-left → bottom-right
+      var distB = Math.abs(dx + dy);   // top-right → bottom-left
+      var braceHalf = 2.5;
+      var onBraceA = distA < braceHalf;
+      var onBraceB = distB < braceHalf;
+      if (onBraceA || onBraceB) {
+        var bDist = onBraceA ? distA : distB;
+        var bTier = bDist < 0.8 ? 1.1 : (bDist < 1.6 ? 1.0 : 0.8);
+        var bn = (_hash(x + 510, y + 511) - 0.5) * 4;
+        return {
+          r: _clamp(p.braceR * bTier + bn),
+          g: _clamp(p.braceG * bTier + bn),
+          b: _clamp(p.braceB * bTier + bn)
+        };
+      }
 
-      // Horizontal slat lines every 8px
-      var slatLine = (y % 8 === 0 || y % 8 === 1) && !onFrame;
-
-      // Nail heads at brace-frame intersections and center cross
-      var onNail = false;
+      // ── Dome-head nails at 5 key points ──
       var nailPositions = [
-        [frameW, frameW], [S - frameW - 1, frameW],
-        [frameW, S - frameW - 1], [S - frameW - 1, S - frameW - 1],
+        [frameW + 1, frameW + 1], [S - frameW - 2, frameW + 1],
+        [frameW + 1, S - frameW - 2], [S - frameW - 2, S - frameW - 2],
         [cx, cy]
       ];
       for (var ni = 0; ni < nailPositions.length; ni++) {
         var ndx = x - nailPositions[ni][0];
         var ndy = y - nailPositions[ni][1];
-        if (ndx * ndx + ndy * ndy < 4) { onNail = true; break; }
+        var nDist = Math.sqrt(ndx * ndx + ndy * ndy);
+        if (nDist < 2.5) {
+          // Dome highlight: bright top-left, dark bottom-right
+          var nShade = (ndx < 0 && ndy < 0) ? 1.2 : 0.85;
+          var nHighlight = Math.max(0, 1 - nDist * 0.45) * 20;
+          return {
+            r: _clamp(p.nailR * nShade + nHighlight),
+            g: _clamp(p.nailG * nShade + nHighlight),
+            b: _clamp(p.nailB * nShade + nHighlight * 0.8)
+          };
+        }
       }
 
-      // Wood grain noise
-      var grain = _hash(x * 2, y + 500) * 0.3 - 0.15;
-      var slatDark = slatLine ? -15 : 0;
+      // ── Horizontal plank body ──
+      // Planks are ~8px tall with 1px dark gaps between them.
+      var plankH = 8;
+      var plankIdx = Math.floor((y - frameW) / plankH);
+      var plankLocal = (y - frameW) - plankIdx * plankH;
 
-      if (onNail) {
-        return { r: p.nailR, g: p.nailG, b: p.nailB };
-      }
-      if (onFrame || onBrace) {
+      // Plank gap (dark seam)
+      if (plankLocal < 1 && y > frameW && y < S - frameW) {
         return {
-          r: _clamp(p.braceR + grain * 40),
-          g: _clamp(p.braceG + grain * 30),
-          b: _clamp(p.braceB + grain * 20)
+          r: _clamp(p.braceR * 0.45),
+          g: _clamp(p.braceG * 0.45),
+          b: _clamp(p.braceB * 0.35)
         };
       }
+
+      // Per-plank color variation
+      var plankTone = (_hash(plankIdx + 30, 88) - 0.5) * 16;
+
+      // 3-tier: dark top/bottom edges → bright center
+      var plankEdge = Math.min(plankLocal, plankH - 1 - plankLocal);
+      var pTier = plankEdge < 1 ? 0.84 : (plankEdge > 3 ? 1.08 : 1.0);
+
+      // Horizontal wood grain (broad streaks per plank)
+      var grainSeed = _hash(0, plankIdx * 5 + 11) * 2.5 + 0.3;
+      var grain = Math.sin(x * grainSeed + plankIdx * 4.0) * 0.5 + 0.5;
+      var grainMult = grain < 0.2 ? 0.85 : (grain > 0.75 ? 1.05 : 1.0);
+
+      var pn = (_hash(x + 520, y + 521) - 0.5) * 3;
+
       return {
-        r: _clamp(p.baseR + grain * 50 + slatDark),
-        g: _clamp(p.baseG + grain * 35 + slatDark),
-        b: _clamp(p.baseB + grain * 20 + slatDark)
+        r: _clamp((p.baseR + plankTone) * pTier * grainMult + pn),
+        g: _clamp((p.baseG + plankTone * 0.7) * pTier * grainMult + pn * 0.7),
+        b: _clamp((p.baseB + plankTone * 0.4) * pTier * grainMult + pn * 0.4)
       };
     });
   }
@@ -2118,41 +2231,138 @@ var TextureAtlas = (function () {
   // ── Stash chest texture (reinforced wood box with iron bands) ──
 
   function _genStashChest(id, p) {
+    // HD interactive chest — chunky plank structure with iron bands,
+    // dome-rivet studs, brass hasp/latch, 3-tier edge shading on
+    // every structural element. Should read "openable container" at
+    // TV distance. Reference: HD-Minecraft reinforced chest.
     _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
       var S = TEX_SIZE;
+      var cx = S / 2;
 
-      // Iron bands — horizontal at y=8, y=S/2, y=S-8
-      var bandY = (y % Math.floor(S / 2));
-      var isBand = bandY < 4 || (y >= 6 && y < 10) || (y >= S - 10 && y < S - 6);
-      if (isBand) {
-        var bNoise = (_hash(x + 700, y + 701) - 0.5) * 6;
-        // Rivet dots every 12px
-        var isRivet = (x % 12 < 3 && (y === 7 || y === 8 || y === S - 9 || y === S - 8));
+      // ── Structural zones ──
+      var frameW = 3;          // Outer rim
+      var bandH = 5;           // Iron band height
+      // Three horizontal iron bands
+      var band1Top = 5;
+      var band2Top = Math.floor(S / 2) - 2;  // Center
+      var band3Top = S - 10;
+      var onBand = (y >= band1Top && y < band1Top + bandH) ||
+                   (y >= band2Top && y < band2Top + bandH) ||
+                   (y >= band3Top && y < band3Top + bandH);
+
+      // ── Outer frame (3-tier shaded rim) ──
+      var edgeDist = Math.min(x, S - 1 - x, y, S - 1 - y);
+      if (edgeDist < frameW) {
+        var tier = edgeDist === 0 ? 0.6 : (edgeDist === 1 ? 0.75 : 0.9);
+        var fn = (_hash(x + 700, y + 701) - 0.5) * 4;
         return {
-          r: _clamp(p.bandR + bNoise + (isRivet ? 20 : 0)),
-          g: _clamp(p.bandG + bNoise + (isRivet ? 22 : 0)),
-          b: _clamp(p.bandB + bNoise + (isRivet ? 25 : 0))
+          r: _clamp(p.bandR * tier + fn),
+          g: _clamp(p.bandG * tier + fn),
+          b: _clamp(p.bandB * tier + fn)
         };
       }
 
-      // Latch (center, at vertical midpoint)
-      if (x >= S / 2 - 4 && x < S / 2 + 4 && y >= S / 2 - 3 && y < S / 2 + 3) {
+      // ── Dome-head rivets on bands ──
+      // Placed every 10px along each band, 2px radius with highlight
+      if (onBand) {
+        var bandLocalY;
+        if (y >= band1Top && y < band1Top + bandH) bandLocalY = y - band1Top;
+        else if (y >= band2Top && y < band2Top + bandH) bandLocalY = y - band2Top;
+        else bandLocalY = y - band3Top;
+
+        // Check for rivet (every 10px, centered on band)
+        var rivetPhase = ((x - 4) % 10);
+        var rivetDx = rivetPhase - 1.5;  // center of 3px rivet
+        var rivetDy = bandLocalY - Math.floor(bandH / 2);
+        var rivetDist = Math.sqrt(rivetDx * rivetDx + rivetDy * rivetDy);
+        if (rivetDist < 2.2) {
+          // Dome rivet: bright highlight at top-left, dark edge
+          var rivetLight = Math.max(0, 1 - rivetDist * 0.5) * 0.4;
+          var rivetShade = (rivetDx < 0 && rivetDy < 0) ? 1.25 : 0.9;
+          return {
+            r: _clamp((p.bandR + 30) * rivetShade + rivetLight * 50),
+            g: _clamp((p.bandG + 32) * rivetShade + rivetLight * 55),
+            b: _clamp((p.bandB + 35) * rivetShade + rivetLight * 60)
+          };
+        }
+
+        // Iron band body — 3-tier shading: dark edges, bright center
+        var bandEdge = Math.min(bandLocalY, bandH - 1 - bandLocalY);
+        var bandTier = bandEdge < 1 ? 0.8 : (bandEdge > 2 ? 1.1 : 1.0);
+        var bNoise = (_hash(x + 710, y + 711) - 0.5) * 5;
         return {
-          r: _clamp(p.latchR),
-          g: _clamp(p.latchG),
-          b: _clamp(p.latchB)
+          r: _clamp(p.bandR * bandTier + bNoise),
+          g: _clamp(p.bandG * bandTier + bNoise),
+          b: _clamp(p.bandB * bandTier + bNoise)
         };
       }
 
-      // Wood body — vertical grain
-      var grain = Math.sin(x * 0.35 + _hash(x, 0) * 2.5) * 0.5 + 0.5;
-      var darkGrain = grain < 0.25 ? 0.7 : 1.0;
-      var wNoise = (_hash(x + 800, y + 801) - 0.5) * 10;
+      // ── Brass hasp + latch (center of chest face) ──
+      // Hasp plate: 10×8 rectangle, slightly above center
+      var haspL = cx - 5, haspR = cx + 5;
+      var haspT = band2Top - 4, haspB = band2Top;
+      if (x >= haspL && x < haspR && y >= haspT && y < haspB) {
+        var hEdge = Math.min(x - haspL, haspR - 1 - x, y - haspT, haspB - 1 - y);
+        var hTier = hEdge < 1 ? 0.75 : (hEdge > 1 ? 1.15 : 1.0);
+        return {
+          r: _clamp(p.latchR * hTier),
+          g: _clamp(p.latchG * hTier),
+          b: _clamp(p.latchB * hTier)
+        };
+      }
+      // Latch tongue (hangs below center band)
+      var tongueL = cx - 3, tongueR = cx + 3;
+      var tongueT = band2Top + bandH, tongueB = tongueT + 6;
+      if (x >= tongueL && x < tongueR && y >= tongueT && y < tongueB) {
+        var tEdge = Math.min(x - tongueL, tongueR - 1 - x);
+        var tTier = tEdge < 1 ? 0.8 : 1.1;
+        return {
+          r: _clamp(p.latchR * tTier * 0.9),
+          g: _clamp(p.latchG * tTier * 0.9),
+          b: _clamp(p.latchB * tTier * 0.85)
+        };
+      }
+      // Keyhole (dark circle in latch tongue)
+      var khDx = x - cx, khDy = y - (tongueT + 3);
+      if (khDx * khDx + khDy * khDy < 2.5) {
+        return { r: 15, g: 12, b: 10 };
+      }
+
+      // ── Wood plank body ──
+      // Vertical planks ~10px wide with 1px dark gap between them.
+      // Each plank has per-plank color variation + 3-tier edge shading.
+      var plankW = 10;
+      var plankIdx = Math.floor(x / plankW);
+      var plankLocal = x - plankIdx * plankW;
+
+      // Plank gap (dark seam between planks)
+      if (plankLocal < 1) {
+        return {
+          r: _clamp(p.woodR * 0.45),
+          g: _clamp(p.woodG * 0.45),
+          b: _clamp(p.woodB * 0.35)
+        };
+      }
+
+      // Per-plank color variation (strong, like shrub clusters)
+      var plankTone = (_hash(plankIdx, 77) - 0.5) * 20;
+
+      // 3-tier shading within plank (dark edges → bright center)
+      var plankEdge = Math.min(plankLocal - 1, plankW - 1 - plankLocal);
+      var plankTier = plankEdge < 2 ? 0.85 : (plankEdge > 4 ? 1.08 : 1.0);
+
+      // Wood grain — broad vertical streaks per plank
+      var grainSeed = _hash(plankIdx * 3, 0) * 3.0 + 0.2;
+      var grain = Math.sin(y * grainSeed + plankIdx * 5.0) * 0.5 + 0.5;
+      var grainMult = grain < 0.2 ? 0.82 : (grain > 0.75 ? 1.06 : 1.0);
+
+      // Minimal per-pixel noise (2-3 levels, not smooth)
+      var pn = (_hash(x + 800, y + 801) - 0.5) * 4;
 
       return {
-        r: _clamp(p.woodR * darkGrain + wNoise),
-        g: _clamp(p.woodG * darkGrain + wNoise * 0.7),
-        b: _clamp(p.woodB * darkGrain + wNoise * 0.4)
+        r: _clamp((p.woodR + plankTone) * plankTier * grainMult + pn),
+        g: _clamp((p.woodG + plankTone * 0.7) * plankTier * grainMult + pn * 0.7),
+        b: _clamp((p.woodB + plankTone * 0.4) * plankTier * grainMult + pn * 0.4)
       };
     });
   }

@@ -4,6 +4,7 @@
  * 20×16 interior. Warm tavern space entered from The Promenade (Floor 1).
  * Features a main taproom with bar counter, dining area, guest rooms,
  * and a cozy hearth. DOOR_EXIT at south returns to Floor 1.
+ * STAIRS_DN at (7,9) in back corridor leads to Inn Cellar (1.2.1, proc-gen cellar).
  *
  * Biome: 'inn' — warm wood plank walls, amber lamplight, wooden floor.
  *
@@ -40,7 +41,7 @@
     [ 1, 0, 0,28, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,25, 0, 1], // 6  side table  | open            | guest bookshelf
     [ 1, 0, 0, 0, 0, 1, 0, 0,28, 0, 0,28, 0, 0, 0, 1, 0, 0, 0, 1], // 7  hearth room | dining TABLEs   | guest room
     [ 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], // 8  hearth wall | taproom mid     | guest wall
-    [ 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], // 9             | corridor        |
+    [ 1, 1, 1, 1, 1, 1, 0, 5, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], // 9  STAIRS_DN(7,9)→Inn Cellar 1.2.1
     [ 1, 1, 1, 1, 1, 1, 0, 0, 0,10, 0,10, 0, 0, 0, 1, 1, 1, 1, 1], //10             | hall pillars    |
     [ 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //11             | entry open      |
     [ 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1], //12             | entry open      |
@@ -74,7 +75,7 @@
       rooms: ROOMS.slice(),
       doors: {
         stairsUp: null,
-        stairsDn: null,
+        stairsDn: { x: 7, y: 9 },    // STAIRS_DN — to Inn Cellar (1.2.1)
         doorExit: { x: 10, y: 15 }
       },
       doorTargets: { '10,15': '1' },  // DOOR_EXIT → The Promenade

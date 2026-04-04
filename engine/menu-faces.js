@@ -1328,7 +1328,9 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillText('Discover lore by exploring the world', x + w / 2, ty + 2);
 
-    // ── Section 6: Weekly timer / Hero Day cycle ──
+    // ── Section 6: Faction Hero Schedule ──
+    // Three aggressing factions (♠ ♣ ♦) each have a scheduled hero day.
+    // Shows suit, label, hero day, readiness status, and days remaining.
     ty += Math.round(16 * S);
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
@@ -1340,80 +1342,122 @@ var MenuFaces = (function () {
     ctx.fillStyle = COL.dim;
     ctx.font = F_SECTION + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('WEEKLY CYCLE', x + PAD, ty + Math.round(6 * S));
-    ty += Math.round(14 * S);
+    ctx.fillText('HERO SCHEDULE', x + PAD, ty + Math.round(6 * S));
+    ty += Math.round(16 * S);
 
-    if (typeof DayCycle !== 'undefined') {
-      var _dayNum = DayCycle.getDay();
-      var _daysLeft = DayCycle.daysUntilHeroDay();
-      var _heroActive = (_daysLeft === 0);
-      var _weekPips = [];
-      // Build 7-day pip row: current day, hero days highlighted
-      for (var _wp = 0; _wp < 7; _wp++) {
-        var futureDay = _dayNum + _wp - (_dayNum % 7) + _wp;
-        _weekPips.push(_wp);
+    if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getSchedule) {
+      var _schGroups = DungeonSchedule.getSchedule();
+      var _schCurrentDay = (typeof DayCycle !== 'undefined') ? DayCycle.getDay() : 0;
+      var _schRowH = Math.max(24, Math.round(28 * S));
+      var _schGap = Math.round(4 * S);
+      var _suitColors = { '\u2660': '#b0c4d0', '\u2663': '#c0a0e0', '\u2666': '#e0a060', '\u2665': '#e06070' };
+
+      for (var _gi = 0; _gi < _schGroups.length; _gi++) {
+        var _grp = _schGroups[_gi];
+        var _gx = x + PAD;
+        var _gy = ty;
+        var _gw = w - PAD * 2;
+        var _gh = _schRowH;
+
+        // Row state: resolved / hero day today / upcoming
+        var _gDaysAway = _grp.resolved ? -1 : Math.max(0, _grp.actualDay - _schCurrentDay);
+        var _gIsToday = (!_grp.resolved && _gDaysAway === 0);
+        var _gIsResolved = _grp.resolved;
+        var _gSuitCol = _suitColors[_grp.suit] || 'rgba(255,255,255,0.5)';
+
+        // Row background
+        ctx.fillStyle = _gIsToday ? 'rgba(255,80,60,0.15)'
+                      : _gIsResolved ? 'rgba(255,255,255,0.03)'
+                      : (_hoverSlot === 960 + _gi) ? 'rgba(255,255,255,0.08)'
+                      : 'rgba(255,255,255,0.04)';
+        _roundRectFill(ctx, _gx, _gy, _gw, _gh, Math.round(3 * S));
+
+        // Hover border
+        if (_hoverSlot === 960 + _gi) {
+          ctx.strokeStyle = _gSuitCol;
+          ctx.lineWidth = 1;
+          _roundRectStroke(ctx, _gx, _gy, _gw, _gh, Math.round(3 * S));
+        }
+
+        // Suit symbol (left)
+        var _suitX = _gx + Math.round(10 * S);
+        ctx.font = 'bold ' + Math.max(14, Math.round(16 * S)) + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = _gSuitCol;
+        ctx.fillText(_grp.suit || '?', _suitX, _gy + _gh / 2 + Math.round(5 * S));
+
+        // Label + floor IDs
+        var _lblX = _suitX + Math.round(22 * S);
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.fillStyle = _gIsResolved ? 'rgba(255,255,255,0.3)' : COL.text;
+        ctx.fillText(_grp.label, _lblX, _gy + _gh / 2 + Math.round(1 * S));
+
+        // Status text (right side)
+        ctx.textAlign = 'right';
+        var _statusX = _gx + _gw - Math.round(10 * S);
+        if (_gIsResolved) {
+          // Show star rating
+          var _stars = (_grp.result && _grp.result.stars) ? _grp.result.stars : 0;
+          var _starStr = '';
+          for (var _si = 0; _si < 5; _si++) _starStr += (_si < _stars ? '\u2605' : '\u2606');
+          ctx.fillStyle = 'rgba(240,208,112,0.6)';
+          ctx.fillText(_starStr, _statusX, _gy + _gh / 2 + Math.round(1 * S));
+        } else if (_gIsToday) {
+          ctx.fillStyle = 'rgba(255,80,60,0.9)';
+          ctx.font = 'bold ' + F_SMALL + 'px monospace';
+          ctx.fillText('\u2694 TODAY', _statusX, _gy + _gh / 2 + Math.round(1 * S));
+        } else {
+          // Days remaining + readiness hint
+          ctx.fillStyle = _gDaysAway <= 1 ? 'rgba(255,160,60,0.8)' : 'rgba(255,255,255,0.4)';
+          var _daysTxt = _gDaysAway + ' day' + (_gDaysAway !== 1 ? 's' : '');
+          ctx.fillText(_daysTxt, _statusX, _gy + _gh / 2 + Math.round(1 * S));
+        }
+
+        // Off-schedule warning
+        if (!_grp.resolved && !_grp.onSchedule) {
+          ctx.textAlign = 'right';
+          ctx.font = Math.max(8, Math.round(9 * S)) + 'px monospace';
+          ctx.fillStyle = 'rgba(255,120,60,0.6)';
+          ctx.fillText('SHIFTED', _statusX, _gy + _gh - Math.round(3 * S));
+        }
+
+        // Hit zone for hover tooltip
+        _hitZones.push({ x: _gx, y: _gy, w: _gw, h: _gh, slot: 960 + _gi, action: 'inspect' });
+
+        // Hover detail tooltip
+        if (_hoverSlot === 960 + _gi) {
+          var _hovFloors = _grp.floorIds.join(', ');
+          var _hovHero = _grp.heroType || 'Unknown';
+          var _hovTarget = Math.round((_grp.target || 0.6) * 100) + '%';
+          var _hovDesc = _grp.label + ' — ' + _hovHero + ' arrives Day ' + _grp.actualDay;
+          _hovDesc += '. Target: ' + _hovTarget + ' readiness.';
+          _hovDesc += ' Floors: ' + _hovFloors + '.';
+          if (_gIsResolved) {
+            var _hovScore = _grp.result ? Math.round(_grp.result.coreScore * 100) : 0;
+            _hovDesc = _grp.label + ' — Completed! Score: ' + _hovScore + '%.';
+          }
+          if (!_grp.onSchedule && !_gIsResolved) _hovDesc += ' (Death-shifted)';
+          _hoverDetail = { item: { name: (_grp.suit || '') + ' ' + _grp.label, description: _hovDesc, emoji: _grp.suit || '\u2694' },
+            x: _gx + _gw, y: _gy };
+        }
+
+        ty += _gh + _schGap;
       }
 
-      var pipW = Math.max(12, Math.round(18 * S));
-      var pipH = Math.max(8, Math.round(10 * S));
-      var pipGap = Math.round(4 * S);
-      var totalPipW = 7 * pipW + 6 * pipGap;
-      var pipStartX = x + (w - totalPipW) / 2;
-      var pipY = ty;
-      var dayOfWeek = _dayNum % 7;
-      var _weekDayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-      for (var _pi = 0; _pi < 7; _pi++) {
-        var _px = pipStartX + _pi * (pipW + pipGap);
-        var isCurrent = (_pi === dayOfWeek);
-        var _futDay = _dayNum - dayOfWeek + _pi;
-        var isHeroDay = (_futDay >= 0 && _futDay % 3 === 0);
-
-        ctx.fillStyle = isCurrent ? 'rgba(240,208,112,0.6)'
-                      : isHeroDay ? 'rgba(255,80,60,0.3)'
-                      : 'rgba(255,255,255,0.08)';
-        _roundRectFill(ctx, _px, pipY, pipW, pipH, Math.round(2 * S));
-        ctx.strokeStyle = isCurrent ? COL.accent : 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = isCurrent ? 1.5 : 0.5;
-        _roundRectStroke(ctx, _px, pipY, pipW, pipH, Math.round(2 * S));
-
-        // Day abbreviation below pip
-        ctx.font = Math.max(8, Math.round(9 * S)) + 'px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = isCurrent ? COL.accent : 'rgba(255,255,255,0.3)';
-        ctx.fillText(_weekDayNames[_pi], _px + pipW / 2, pipY + pipH + Math.round(8 * S));
-
-        // Hit zone for hover
-        _hitZones.push({ x: _px, y: pipY, w: pipW, h: pipH + Math.round(10 * S),
-          slot: 950 + _pi, action: 'inspect' });
-      }
-
-      ty = pipY + pipH + Math.round(16 * S);
-
-      // Hero Day countdown text
-      ctx.font = F_SMALL + 'px monospace';
-      ctx.textAlign = 'center';
-      if (_heroActive) {
-        ctx.fillStyle = 'rgba(255,80,60,0.9)';
-        ctx.fillText('\u2694 HERO DAY \u2014 The Hero is active. Stay alert.', x + w / 2, ty + 2);
-      } else {
-        ctx.fillStyle = 'rgba(255,200,100,0.6)';
-        ctx.fillText('\u2694 Next Hero Day in ' + _daysLeft + ' day' + (_daysLeft !== 1 ? 's' : ''), x + w / 2, ty + 2);
-      }
-
-      // Hover detail for weekly pips
-      for (var _phi = 0; _phi < 7; _phi++) {
-        if (_hoverSlot === 950 + _phi) {
-          var hovFut = _dayNum - dayOfWeek + _phi;
-          var hovIsHero = (hovFut >= 0 && hovFut % 3 === 0);
-          var hovDesc = _weekDayNames[_phi] + (hovIsHero ? ' \u2014 Hero Day! Dungeon enemies refreshed.' : ' \u2014 Safe day for cleaning.');
-          if (_phi === dayOfWeek) hovDesc = 'Today: ' + hovDesc;
-          _hoverDetail = { item: { name: _weekDayNames[_phi], description: hovDesc, emoji: hovIsHero ? '\u2694' : '\uD83D\uDCC5' },
-            x: pipStartX + _phi * (pipW + pipGap) + pipW, y: pipY };
+      // Combo streak display
+      if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getCombo) {
+        var _combo = DungeonSchedule.getCombo();
+        if (_combo.streak > 0) {
+          ty += Math.round(4 * S);
+          ctx.font = F_SMALL + 'px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(240,208,112,0.7)';
+          ctx.fillText('\u2605 Streak: \u00D7' + _combo.multiplier.toFixed(1), x + w / 2, ty + 2);
+          ty += Math.round(12 * S);
         }
       }
 
-      ty += Math.round(14 * S);
+      ty += Math.round(6 * S);
     }
 
     // ── Day/time info + hint ──
@@ -2699,6 +2743,7 @@ var MenuFaces = (function () {
   var _settingsState = { row: 0 };   // 0–2 = sliders, 3+ = toggles, then language
   var _settingsLocked = false;       // When true, ←/→ adjusts slider, W/S blocked
   var _f3ScrollY = 0;                // Scroll offset for Face 3 overflow
+  var _f3AutoScroll = true;          // true = keyboard nav snaps, false = wheel driving
 
   var _SLIDER_DEFS = [
     { key: 'master', labelKey: 'settings.master', label: 'Master Volume',
@@ -2722,6 +2767,7 @@ var MenuFaces = (function () {
     if (_settingsLocked) return; // Locked on a slider — block navigation
     var n = _SETTINGS_ROW_COUNT;
     _settingsState.row = ((_settingsState.row + dir) % n + n) % n;
+    _f3AutoScroll = true; // Keyboard nav → snap to selected row
   }
 
   /**
@@ -2778,6 +2824,7 @@ var MenuFaces = (function () {
     _settingsState.row = 0;
     _settingsLocked = false;
     _f3ScrollY = 0;
+    _f3AutoScroll = true;
   }
 
   /**
@@ -3242,18 +3289,19 @@ var MenuFaces = (function () {
     ctx.textAlign = 'left';
     ctx.restore(); // End scroll clip + translate
 
-    // ── Auto-scroll to selected row ──
+    // ── Auto-scroll to selected row (only after keyboard nav) ──
     var totalContentH = contentBottom - clipTop;
     var maxScroll = Math.max(0, totalContentH - clipH);
-    // Estimate selected row Y position for auto-scroll
-    var estRowY = 0;
-    var estRowH = Math.max(18, Math.round(22 * S));
-    var estSliderRowH = Math.max(26, Math.round(36 * S));
-    for (var sr = 0; sr < _settingsState.row; sr++) {
-      estRowY += (sr < _SLIDER_DEFS.length) ? estSliderRowH : estRowH;
+    if (_f3AutoScroll) {
+      var estRowY = 0;
+      var estRowH = Math.max(18, Math.round(22 * S));
+      var estSliderRowH = Math.max(26, Math.round(36 * S));
+      for (var sr = 0; sr < _settingsState.row; sr++) {
+        estRowY += (sr < _SLIDER_DEFS.length) ? estSliderRowH : estRowH;
+      }
+      if (estRowY - _f3ScrollY < 0) _f3ScrollY = estRowY;
+      if (estRowY + estSliderRowH - _f3ScrollY > clipH) _f3ScrollY = estRowY + estSliderRowH - clipH;
     }
-    if (estRowY - _f3ScrollY < 0) _f3ScrollY = estRowY;
-    if (estRowY + estSliderRowH - _f3ScrollY > clipH) _f3ScrollY = estRowY + estSliderRowH - clipH;
     _f3ScrollY = Math.max(0, Math.min(maxScroll, _f3ScrollY));
 
     // ── Scrollbar ──
@@ -3276,6 +3324,7 @@ var MenuFaces = (function () {
   /** Scroll Face 3 content by delta pixels. Called on scroll_up/scroll_down. */
   function handleSettingsScroll(delta) {
     _f3ScrollY = Math.max(0, _f3ScrollY + delta);
+    _f3AutoScroll = false; // Wheel driving — don't snap back
   }
 
   // ── Hit zone management ────────────────────────────────────────

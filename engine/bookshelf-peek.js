@@ -176,7 +176,7 @@ var BookshelfPeek = (function () {
       navParts.push('[ESC] DISCONNECT');
       page = '> ' + page.replace(/\n/g, '\n> '); // CRT prompt prefix
     } else {
-      pageLabel = '\u2014 Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' \u2014';
+      pageLabel = '- Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' -';
       if (_currentPage > 0) navParts.push('[A] \u2190 Prev');
       if (_currentPage < book.pages.length - 1) navParts.push('[D] Next \u2192');
       navParts.push('[Esc] Close');
@@ -325,6 +325,33 @@ var BookshelfPeek = (function () {
       var floorData = (typeof FloorManager !== 'undefined') ? FloorManager.getFloorData() : null;
       if (!floorData) return false;
       return !!_resolveBook(fx, fy, floorData);
+    },
+
+    /**
+     * Register the book catalog from a JS data file (Layer 5).
+     * Called by data/books.js at load time — eliminates the XHR dependency
+     * that fails silently on file:// in Chromium-based browsers.
+     * @param {object} data - The parsed books.json structure ({ books: [...] })
+     */
+    registerCatalog: function (data) {
+      var books = data.books || data || [];
+      if (!Array.isArray(books)) books = [];
+      _catalog = books;
+      _catalogById = {};
+      _catalogByBiome = {};
+      _catalogByCategory = {};
+      for (var i = 0; i < _catalog.length; i++) {
+        var book = _catalog[i];
+        _catalogById[book.id] = book;
+        if (!_catalogByBiome[book.biome]) _catalogByBiome[book.biome] = [];
+        _catalogByBiome[book.biome].push(book);
+        if (book.category) {
+          if (!_catalogByCategory[book.category]) _catalogByCategory[book.category] = [];
+          _catalogByCategory[book.category].push(book);
+        }
+      }
+      _loaded = true;
+      console.log('[BookshelfPeek] Registered ' + _catalog.length + ' books via script');
     }
   };
 })();

@@ -254,6 +254,63 @@ var HeroSystem = (function () {
     return manifest;
   }
 
+  // ── PW-1: Grime grid allocation from carnage ─────────────────
+  // Grime intensity by hero archetype (per PW roadmap §5.2):
+  //   Seeker/Crusader: heavy (200–255) — they fight hard, leave blood
+  //   Scholar: moderate (120–160) — reagent spills, magical residue
+  //   Shadow: light (80–140) — minimal trace, surgical
+  var _GRIME_INTENSITY = {};
+  _GRIME_INTENSITY[HERO_TYPES.SEEKER]   = { floorMin: 200, floorMax: 255, wallMin: 180, wallMax: 240 };
+  _GRIME_INTENSITY[HERO_TYPES.CRUSADER] = { floorMin: 200, floorMax: 255, wallMin: 180, wallMax: 240 };
+  _GRIME_INTENSITY[HERO_TYPES.SCHOLAR]  = { floorMin: 120, floorMax: 160, wallMin: 100, wallMax: 140 };
+  _GRIME_INTENSITY[HERO_TYPES.SHADOW]   = { floorMin: 80,  floorMax: 140, wallMin: 60,  wallMax: 120 };
+
+  // Cardinal direction offsets for adjacent wall detection
+  var _ADJ_DX = [0, 1, 0, -1];
+  var _ADJ_DY = [-1, 0, 1, 0];
+
+  /**
+   * Allocate grime grids on tiles affected by hero carnage.
+   * Floor tiles (dirty, kill, smash) get 4×4 grids.
+   * Adjacent wall tiles get 16×16 grids (blood splatter on walls).
+   */
+  function _allocateCarnageGrime(floorId, grid, gridW, gridH, manifest) {
+    var intensity = _GRIME_INTENSITY[manifest.heroType] || _GRIME_INTENSITY[HERO_TYPES.SEEKER];
+    var tiles = manifest.tiles;
+
+    for (var i = 0; i < tiles.length; i++) {
+      var t = tiles[i];
+      var tx = t.x, ty = t.y;
+
+      // Only dirty/kill/smash tiles generate grime
+      if (t.type !== 'dirty' && t.type !== 'kill' && t.type !== 'smash') continue;
+
+      // Floor grime: randomized within archetype range
+      var floorLevel = intensity.floorMin +
+        Math.floor(SeededRNG.random() * (intensity.floorMax - intensity.floorMin + 1));
+
+      if (!GrimeGrid.has(floorId, tx, ty)) {
+        GrimeGrid.allocateFloor(floorId, tx, ty, floorLevel);
+      }
+
+      // Wall grime: check 4 cardinal neighbors for solid walls
+      // Kill and smash sites splatter adjacent walls; dirty tiles don't
+      if (t.type === 'kill' || t.type === 'smash') {
+        for (var d = 0; d < 4; d++) {
+          var wx = tx + _ADJ_DX[d];
+          var wy = ty + _ADJ_DY[d];
+          if (wx < 0 || wx >= gridW || wy < 0 || wy >= gridH) continue;
+          if (!TILES.isOpaque(grid[wy][wx])) continue;
+          if (GrimeGrid.has(floorId, wx, wy)) continue;
+
+          var wallLevel = intensity.wallMin +
+            Math.floor(SeededRNG.random() * (intensity.wallMax - intensity.wallMin + 1));
+          GrimeGrid.allocateWall(floorId, wx, wy, wallLevel);
+        }
+      }
+    }
+  }
+
   /**
    * Apply carnage to a dungeon floor and narrate the results.
    * Called from Game._onFloorArrive when entering a dungeon on Hero Day.
@@ -278,6 +335,11 @@ var HeroSystem = (function () {
     );
 
     _carnageAppliedFloors[floorId] = true;
+
+    // ── PW-1: Allocate GrimeGrids on carnage tiles ──────────────
+    if (typeof GrimeGrid !== 'undefined' && manifest.tiles.length > 0) {
+      _allocateCarnageGrime(floorId, floorData.grid, floorData.gridW, floorData.gridH, manifest);
+    }
 
     // Narrate
     _narrateCarnage(manifest);

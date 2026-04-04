@@ -211,6 +211,11 @@ var CleaningSystem = (function () {
    * @param {number} gridH
    */
   function seedFromCorpses(floorId, grid, gridW, gridH) {
+    // Ensure the blood map exists for this floor even if no corpse tiles
+    // are found.  This marks the floor as "seeded" so revisits don't
+    // re-seed after the player has cleaned everything.
+    if (!_bloodMap[floorId]) _bloodMap[floorId] = {};
+
     // Walk the grid looking for CORPSE tiles
     for (var y = 0; y < gridH; y++) {
       for (var x = 0; x < gridW; x++) {
@@ -219,6 +224,15 @@ var CleaningSystem = (function () {
         }
       }
     }
+  }
+
+  /**
+   * Has blood ever been seeded on this floor?
+   * Returns true if seedFromCorpses has run (even if all blood is now
+   * cleaned).  Used by floor-load to avoid re-seeding on revisit.
+   */
+  function isSeeded(floorId) {
+    return _bloodMap[floorId] !== undefined;
   }
 
   // ── Public API ──────────────────────────────────────────────────
@@ -234,6 +248,7 @@ var CleaningSystem = (function () {
     getStats:        getStats,
     clearFloor:      clearFloor,
     seedFromCorpses: seedFromCorpses,
+    isSeeded:        isSeeded,
     MAX_BLOOD:       MAX_BLOOD,
     TOOL_SPEED:      TOOL_SPEED
   });

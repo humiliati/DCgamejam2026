@@ -146,6 +146,16 @@
     // ── Row 6: shrub strip south of buildings ──
     fillRange(grid[6], 1, W - 2, SB);
 
+    // Punch 3-wide PATH gaps in the shrub strip at each building door
+    // so players can actually walk from the grass buffer (row 7) to doors (row 5).
+    var doorXs = [7, 14, 22, 28, 34, 40, 46];
+    for (var d = 0; d < doorXs.length; d++) {
+      var dx = doorXs[d];
+      grid[6][dx - 1] = GR;   // left shoulder
+      grid[6][dx]     = PT;   // aligned with door
+      grid[6][dx + 1] = GR;   // right shoulder
+    }
+
     // ── Rows 7–9: grass buffer ──
     for (y = 7; y <= 9; y++) fillRange(grid[y], 1, W - 2, GR);
 

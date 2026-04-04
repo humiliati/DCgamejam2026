@@ -323,6 +323,20 @@ var DayCycle = (function () {
     }
   }
 
+  /**
+   * Get the day-of-cycle bark suffix.
+   * Hero Day = day 0 of cycle (handled by getBarkTimeSuffix → 'heroday').
+   * Day 1 after hero = post-carnage cleanup day → 'day1'.
+   * Day 2 after hero = routine/prep day → 'day2'.
+   * Returns null on hero days (already handled) or if no suffix applies.
+   */
+  function getDayCycleSuffix() {
+    var dayInCycle = _day % HERO_DAY_INTERVAL;
+    if (dayInCycle === 0) return null;  // hero day — handled by time suffix
+    if (dayInCycle === 1) return 'day1';
+    return 'day2';
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  LIFECYCLE
   // ═══════════════════════════════════════════════════════════════
@@ -560,6 +574,7 @@ var DayCycle = (function () {
     getSunIntensity:      getSunIntensity,
     getAtmosphereTint:    getAtmosphereTint,
     getBarkTimeSuffix:    getBarkTimeSuffix,
+    getDayCycleSuffix:    getDayCycleSuffix,
 
     // Callbacks
     setOnPhaseChange:     setOnPhaseChange,

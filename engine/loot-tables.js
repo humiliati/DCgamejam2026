@@ -32,21 +32,27 @@ var LootTables = (function () {
    */
   function init() {
     if (_loaded) return;
+    // Try XHR first (works over http://), fall back to <script> global (file://)
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', 'data/loot-tables.json', false);
       xhr.send();
-      if (xhr.status === 200) {
+      if ((xhr.status === 200 || xhr.status === 0) && xhr.responseText && xhr.responseText.length > 2) {
         _data = JSON.parse(xhr.responseText);
         _loaded = true;
         console.log('[LootTables] Loaded v' + _data.version);
-      } else {
-        console.warn('[LootTables] HTTP ' + xhr.status + ' — using fallback');
-        _data = _fallback();
-        _loaded = true;
       }
     } catch (e) {
-      console.error('[LootTables] Load failed:', e);
+      // XHR failed (file:// CORS) — fall through to global
+    }
+    // Fallback: pick up <script src="data/loot-tables.js"> global
+    if (!_loaded && typeof LOOT_TABLES_DATA !== 'undefined') {
+      _data = LOOT_TABLES_DATA;
+      _loaded = true;
+      console.log('[LootTables] Loaded v' + _data.version + ' (script fallback)');
+    }
+    if (!_loaded) {
+      console.warn('[LootTables] No data — using inline fallback');
       _data = _fallback();
       _loaded = true;
     }
@@ -134,6 +140,12 @@ var LootTables = (function () {
     if (table.salvage && table.salvage.enabled !== false && _roll() < (table.salvage.chance || 0)) {
       var salPool = table.salvage.pool || [];
       if (salPool.length) drops.push({ type: 'salvage', partId: salPool[_randInt(0, salPool.length - 1)] });
+    }
+
+    // Supply consumables (Silk Spider, Trap Kit — Phase 2 embellishment resources)
+    if (table.supply && table.supply.enabled !== false && _roll() < (table.supply.chance || 0)) {
+      var supPool = table.supply.pool || [];
+      if (supPool.length) drops.push({ type: 'supply', itemId: supPool[_randInt(0, supPool.length - 1)] });
     }
 
     return drops;

@@ -70,7 +70,13 @@ var EnemyAI = (function () {
       isElite: opts.isElite || false,
       nonLethal: opts.nonLethal || false,   // Training NPC — defeat won't kill
       fleeImmunity: 0,                      // ms remaining before can re-engage
-      color: opts.color || '#c44'
+      color: opts.color || '#c44',
+
+      // Bark system — proximity-based creature sounds on depth-3+ floors
+      barkPool: opts.barkPool || null,       // e.g. 'enemy.cellar'
+      barkRadius: opts.barkRadius || 5,      // Manhattan distance for bark range
+      _barkTimer: 8000 + Math.random() * 12000, // Stagger initial bark timing
+      _barkInterval: opts.barkInterval || 20000  // ms between barks
     };
   }
 
@@ -146,6 +152,81 @@ var EnemyAI = (function () {
         AudioSystem.play('enemy-alert', { volume: 0.35 });
       } else if (newState === AWARENESS.SUSPICIOUS && prevS === AWARENESS.UNAWARE) {
         AudioSystem.play('ui-signal', { volume: 0.2 });
+      }
+    }
+  }
+
+  // ── Enemy proximity barks ──────────────────────────────────────────
+  // Depth-3+ creatures emit atmospheric sounds when the player is nearby.
+  // Unlike NPC barks (managed by NpcSystem), enemy barks are simple:
+  // proximity check + cooldown timer. No dialogue, no speaker — just
+  // disembodied dungeon atmosphere.
+
+  /**
+   * Tick bark timers for all enemies on the current floor.
+   * Called from Game tick loop alongside EnemyAI.updateEnemy.
+   * @param {Array} enemies - All enemy entities on the floor
+   * @param {Object} player - { x, y }
+   * @param {number} deltaMs - Tick delta
+   * @param {string} biome - Current floor biome (for pool fallback)
+   */
+  function tickEnemyBarks(enemies, player, deltaMs, biome) {
+    if (typeof BarkLibrary === 'undefined') return;
+
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.hp <= 0) continue;
+      if (e.npcType) continue;        // NpcSystem handles NPC barks
+      if (!e.barkPool) continue;       // No bark pool assigned
+
+      var dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+      if (dist > e.barkRadius) {
+        // Out of range — slowly reset timer for prompt bark on re-entry
+        e._barkTimer = Math.min(e._barkTimer, 5000);
+        continue;
+      }
+
+      e._barkTimer -= deltaMs;
+      if (e._barkTimer <= 0) {
+        // Choose pool: alert variant if enemy is suspicious+, else base
+        var pool = e.barkPool;
+        var state = getAwarenessState(e.awareness);
+        if (state === AWARENESS.ALERTED || state === AWARENESS.ENGAGED) {
+          var alertPool = e.barkPool + '.alert';
+          if (BarkLibrary.hasPool(alertPool)) pool = alertPool;
+        }
+        BarkLibrary.fire(pool);
+        // Randomise next bark interval (80%-120% of base)
+        e._barkTimer = e._barkInterval * (0.8 + Math.random() * 0.4);
+      }
+    }
+  }
+
+  /**
+   * Assign bark pools to enemies based on floor ID.
+   * Called after enemy spawn to wire up bark pools for depth-3+ floors.
+   * Uses _resolveBiome (which maps floor ID → cellar/foundry/sealab)
+   * rather than floorData.biome (which may be 'dungeon', 'watchpost', etc.)
+   * @param {Array} enemies - Spawned enemy entities
+   * @param {string} floorId - Current floor ID string
+   */
+  function assignBarkPools(enemies, floorId) {
+    var biome = _resolveBiome(floorId || '');
+    // Map enemy biome to bark pool key
+    var poolMap = {
+      cellar:  'enemy.cellar',
+      foundry: 'enemy.foundry',
+      sealab:  'enemy.sealab'
+    };
+    var pool = poolMap[biome] || 'enemy.generic';
+    // Only check if the pool actually exists
+    if (typeof BarkLibrary !== 'undefined' && !BarkLibrary.hasPool(pool)) {
+      pool = 'enemy.generic';
+    }
+
+    for (var i = 0; i < enemies.length; i++) {
+      if (!enemies[i].barkPool && !enemies[i].npcType) {
+        enemies[i].barkPool = pool;
       }
     }
   }
@@ -384,6 +465,28 @@ var EnemyAI = (function () {
     return 'sealab';
   }
 
+  // ── Type → emoji shorthand (for blockout enemySpawns) ──────────
+  var _TYPE_EMOJI = {
+    rat:          '🐀', spider:     '🕷️', crawler:   '🕷️',
+    corpse:       '🧟', zombie:     '🧟', shambler:  '🧟',
+    bone_guard:   '💀', skeleton:   '💀',
+    wraith:       '👻', ghost:      '👻',
+    toad:         '🐸', hound:      '🐕', rot_hound: '🐕',
+    imp:          '👺', soot_imp:   '👺',
+    golem:        '🤖', iron_golem: '🤖',
+    slag_hound:   '🐺', brute:      '🦾', scrap_brute: '🦾',
+    clockwork:    '⚙️', sprite:     '✨',
+    stalker:      '🦈', eel:        '🐍', shock_eel: '🐍',
+    drone:        '🔬', deep_crawler: '🦀', crab:    '🦀',
+    slime:        '💧', enforcer:   '⚓',
+    hero_shadow:  '👤', warden:     '🛡️', boss:     '👑'
+  };
+
+  function _resolveEmoji(type) {
+    if (!type) return '💀';
+    return _TYPE_EMOJI[type.toLowerCase()] || '💀';
+  }
+
   // ── Legacy fallback (used if enemies.json fails to load) ───────
   var _LEGACY_TYPES = [
     { name: 'Bone Guard',       emoji: '💀', hp: 4, str: 2, dex: 1, suit: 'spade' },
@@ -406,6 +509,39 @@ var EnemyAI = (function () {
     var rooms = floorData.rooms;
     var W = floorData.gridW;
     var H = floorData.gridH;
+
+    // ── Hand-authored enemy spawns from blockout data ──
+    // When a blockout provides explicit enemySpawns, use those instead
+    // of random generation. Preserves the curated discovery flow
+    // (e.g. rats first, warden last on Floor 2.2.1).
+    if (floorData.enemySpawns && floorData.enemySpawns.length > 0) {
+      var placed = [];
+      for (var si = 0; si < floorData.enemySpawns.length; si++) {
+        var spawn = floorData.enemySpawns[si];
+        if (spawn.x < 0 || spawn.x >= W || spawn.y < 0 || spawn.y >= H) continue;
+        if (playerSpawn && spawn.x === playerSpawn.x && spawn.y === playerSpawn.y) continue;
+
+        placed.push(createEnemy({
+          x: spawn.x,
+          y: spawn.y,
+          name: spawn.name || spawn.type || 'Enemy',
+          emoji: spawn.emoji || _resolveEmoji(spawn.type),
+          hp: spawn.hp || 5,
+          str: spawn.str || 1,
+          dex: spawn.dex || 1,
+          stealth: spawn.stealth || 0,
+          awarenessRange: spawn.awarenessRange || 4,
+          suit: spawn.suit || 'spade',
+          lootProfile: spawn.lootProfile || null,
+          isElite: !!spawn.isElite,
+          nonLethal: !!spawn.nonLethal,
+          tags: spawn.tags || [],
+          path: null,
+          facing: spawn.facing || SeededRNG.pick(['north', 'south', 'east', 'west'])
+        }));
+      }
+      return placed;
+    }
 
     // Calculate depth and dungeon level for scaling
     var parts = String(floorId).split('.');
@@ -534,6 +670,8 @@ var EnemyAI = (function () {
     AWARENESS: AWARENESS,
     PATH_TYPES: PATH_TYPES,
     SIGHT_RANGE: SIGHT_RANGE,
-    FLEE_IMMUNITY_MS: FLEE_IMMUNITY_MS
+    FLEE_IMMUNITY_MS: FLEE_IMMUNITY_MS,
+    tickEnemyBarks: tickEnemyBarks,
+    assignBarkPools: assignBarkPools
   };
 })();

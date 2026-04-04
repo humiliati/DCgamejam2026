@@ -172,6 +172,8 @@ var DoorPeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) _destroyBox();
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.4 });
+
     // Create a door-variant box — no spin
     _boxId = BoxAnim.create('door', _container, { spin: false });
     _active = true;
@@ -335,6 +337,8 @@ var DoorPeek = (function () {
   function _hide() {
     if (!_active) { _timer = 0; return; }
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.3 });
+
     if (_opened && _boxId) {
       BoxAnim.close(_boxId);
     }
@@ -373,6 +377,7 @@ var DoorPeek = (function () {
   return {
     init: init,
     update: update,
-    forceHide: forceHide
+    forceHide: forceHide,
+    isActive: function () { return _active; }
   };
 })();

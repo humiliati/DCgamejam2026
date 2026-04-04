@@ -2,8 +2,17 @@
  * DungeonSchedule — staggered per-group hero day schedule, death-shift,
  * combo multiplier, and arc summary.
  *
- * Owns the 8-day jam arc timeline. Each dungeon group (A, B, C) has its own
- * hero day. When a hero day arrives, this module snapshots readiness,
+ * Owns the 3-day hero cycle. Three aggressing factions (♠ ♣ ♦) each ravage
+ * one dungeon at a different floor. Floor 0 (♥ Heart) is the host's home
+ * territory — no readiness tracking.
+ *
+ *   Day 3:  ♠ Spade   — Soft Cellar   (1.3.1)            — Seeker
+ *   Day 6:  ♣ Club    — Hero's Wake   (2.2.1, 2.2.2)     — Scholar
+ *   Day 8:  ♦ Diamond — Ironhold      (3.1.1–3.1.3)      — Crusader
+ *
+ * Side-quest dungeons (1.2.1, 3.2.1, etc.) are NOT on the hero schedule.
+ *
+ * When a hero day arrives, this module snapshots readiness,
  * delegates to HeroRun.executeRun(), delivers the report to MailboxPeek,
  * and updates the combo streak.
  *
@@ -29,30 +38,33 @@ var DungeonSchedule = (function () {
    */
   var JAM_CONTRACTS = Object.freeze([
     {
-      groupId:       'soft_cellar',
+      groupId:       'spade',
       label:         'Soft Cellar',
-      floorIds:      ['1.3.1'],
-      scheduledDay:  2,
+      suit:          '♠',
+      floorIds:      ['1.3.1'],         // Floor 1 → Cellar Entrance → Soft Cellar
+      scheduledDay:  3,
       heroType:      'Seeker',
       comboEligible: true,
       target:        0.6               // 60% core readiness to pass
     },
     {
-      groupId:       'heros_wake',
+      groupId:       'club',
       label:         "Hero's Wake",
-      floorIds:      ['2.2.1', '2.2.2'],
-      scheduledDay:  5,
+      suit:          '♣',
+      floorIds:      ['2.2.1', '2.2.2'], // Floor 2 → Watchman's Post → Wake B1/B2
+      scheduledDay:  6,
       heroType:      'Scholar',
       comboEligible: true,
       target:        0.6
     },
     {
-      groupId:       'heart',
-      label:         'Heart Dungeon',
-      floorIds:      ['0.1.1'],         // Floor 0.N.N — placeholder ID
+      groupId:       'diamond',
+      label:         'Ironhold Depths',
+      suit:          '♦',
+      floorIds:      ['3.1.1', '3.1.2', '3.1.3'],  // Floor 3 → Armory → Ironhold B1-B3
       scheduledDay:  8,
       heroType:      'Crusader',
-      comboEligible: false,             // employer-managed, exempt from combo
+      comboEligible: true,
       target:        0.6
     }
   ]);
@@ -94,6 +106,7 @@ var DungeonSchedule = (function () {
       _contracts.push({
         groupId:       c.groupId,
         label:         c.label,
+        suit:          c.suit || null,        // ♠ ♣ ♦ faction symbol
         floorIds:      c.floorIds.slice(),   // defensive copy
         scheduledDay:  c.scheduledDay,
         actualDay:     c.scheduledDay,        // may shift on death
@@ -409,6 +422,7 @@ var DungeonSchedule = (function () {
       out.push({
         groupId:       c.groupId,
         label:         c.label,
+        suit:          c.suit,
         floorIds:      c.floorIds,
         scheduledDay:  c.scheduledDay,
         actualDay:     c.actualDay,
@@ -479,6 +493,7 @@ var DungeonSchedule = (function () {
     return {
       groupId:      best.groupId,
       label:        best.label,
+      suit:         best.suit,
       floorIds:     best.floorIds,
       target:       best.target,
       actualDay:    best.actualDay,
@@ -513,6 +528,7 @@ var DungeonSchedule = (function () {
       groups.push({
         groupId:      c.groupId,
         label:        c.label,
+        suit:         c.suit,
         resolved:     c.resolved,
         onSchedule:   c.onSchedule,
         stars:        stars,

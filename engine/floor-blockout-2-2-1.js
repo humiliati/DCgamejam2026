@@ -60,7 +60,7 @@
  *   - Wounded Vault Warden ×1 (triggered after hero exit)
  *
  * Tile legend:
- *   0=EMPTY  1=WALL  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
+ *   0=EMPTY  1=WALL  5=STAIRS_DN  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
  *   11=BREAKABLE  19=CORPSE  27=BED  28=TABLE
  *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS
  */
@@ -74,7 +74,7 @@
   var GRID = [
     //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
     [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  north wall
-    [ 1, 0, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0,39,19, 0, 0, 0, 0,19,39, 0, 0, 1], // 1  North Hall — 3 corpses + 3 detritus (9,1)(13,1)(20,1)
+    [ 1, 5, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0,39,19, 0, 0, 0, 0,19,39, 0, 0, 1], // 1  North Hall — STAIRS_DN(1,1) to B2, 3 corpses + 3 detritus
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 2  triggered trap (10,2) — COMBAT TRIGGER ZONE
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 3  crate toppled by hero (14,3)
     [ 1, 0, 0, 0, 1, 1,30, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,31, 1,31, 0, 0, 0, 1], // 4  inner block N face — lit(6,4), unlit(17,4),(19,4)
@@ -170,13 +170,13 @@
   // CORPSE tiles (19) in grid + metadata for CorpseRegistry loot.
 
   var CORPSE_DATA = [
-    { x: 8,  y: 1,  enemyType: 'bone_sentinel',  name: 'Bone Sentinel',  hp: 12 },
-    { x: 14, y: 1,  enemyType: 'vault_warden',   name: 'Vault Warden',   hp: 15 },
-    { x: 19, y: 1,  enemyType: 'crystal_golem',  name: 'Crystal Golem',  hp: 20 },
-    { x: 2,  y: 7,  enemyType: 'bone_sentinel',  name: 'Bone Sentinel',  hp: 12 },
-    { x: 21, y: 6,  enemyType: 'crystal_golem',  name: 'Crystal Golem',  hp: 20 },
-    { x: 8,  y: 10, enemyType: 'bone_sentinel',  name: 'Bone Sentinel',  hp: 12 },
-    { x: 11, y: 14, enemyType: 'vault_warden',   name: 'Vault Warden',   hp: 15 }
+    { x: 8,  y: 1,  enemyType: 'bone_sentinel', name: 'Bone Sentinel', emoji: '💀', hp: 12, str: 3, suit: 'spade', lootProfile: 'undead'  },
+    { x: 14, y: 1,  enemyType: 'vault_warden',  name: 'Vault Warden',  emoji: '🛡️', hp: 15, str: 4, suit: 'club',  lootProfile: 'armored' },
+    { x: 19, y: 1,  enemyType: 'crystal_golem', name: 'Crystal Golem', emoji: '🤖', hp: 20, str: 5, suit: 'heart', lootProfile: 'golem'   },
+    { x: 2,  y: 7,  enemyType: 'bone_sentinel', name: 'Bone Sentinel', emoji: '💀', hp: 12, str: 3, suit: 'spade', lootProfile: 'undead'  },
+    { x: 21, y: 6,  enemyType: 'crystal_golem', name: 'Crystal Golem', emoji: '🤖', hp: 20, str: 5, suit: 'heart', lootProfile: 'golem'   },
+    { x: 8,  y: 10, enemyType: 'bone_sentinel', name: 'Bone Sentinel', emoji: '💀', hp: 12, str: 3, suit: 'spade', lootProfile: 'undead'  },
+    { x: 11, y: 14, enemyType: 'vault_warden',  name: 'Vault Warden',  emoji: '🛡️', hp: 15, str: 4, suit: 'club',  lootProfile: 'armored' }
   ];
 
   // ── Rat Spawns ───────────────────────────────────────────────────
@@ -187,10 +187,10 @@
   // enemy forces the issue.
 
   var ENEMY_SPAWNS = [
-    { x: 11, y: 17, type: 'rat', hp: 3, str: 1 },  // foyer — first encounter
-    { x: 15, y: 10, type: 'rat', hp: 3, str: 1 },  // south corridor
-    { x: 2,  y: 5,  type: 'rat', hp: 3, str: 1 },  // west passage
-    { x: 21, y: 8,  type: 'rat', hp: 4, str: 1 }   // east passage (slightly tougher)
+    { x: 11, y: 17, type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // foyer — first encounter
+    { x: 15, y: 10, type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // south corridor
+    { x: 2,  y: 5,  type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // west passage
+    { x: 21, y: 8,  type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 4, str: 1, dex: 1, suit: 'spade', lootProfile: 'organic' }   // east passage (slightly tougher)
   ];
 
   // ── Cobweb Positions ─────────────────────────────────────────────
@@ -239,7 +239,7 @@
       rooms: ROOMS.slice(),
       doors: {
         stairsUp: { x: 11, y: 21 },  // STAIRS_UP → Watchman's Post (2.2)
-        stairsDn: null,
+        stairsDn: { x: 1, y: 1 },    // STAIRS_DN → Deepwatch Vaults B2 (2.2.2)
         doorExit: null
       },
       doorTargets: { '11,21': '2.2' },

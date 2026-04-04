@@ -628,19 +628,40 @@ var NpcSystem = (function () {
    */
   function _resolveTimedBarkPool(basePool) {
     if (typeof DayCycle === 'undefined') return basePool;
+
+    // Layer 1: time-of-day suffix (heroday, morning, dusk, night)
     var suffix = DayCycle.getBarkTimeSuffix();
-    if (!suffix) return basePool;
+    if (suffix) {
+      var timedPool = basePool + '.' + suffix;
+      if (BarkLibrary.hasPool(timedPool)) return timedPool;
 
-    var timedPool = basePool + '.' + suffix;
-    if (BarkLibrary.hasPool(timedPool)) return timedPool;
+      // For NPC pools like "npc.guild_veteran.ambient", try replacing
+      // the last segment: "npc.guild_veteran.heroday"
+      var parts = basePool.split('.');
+      if (parts.length >= 3) {
+        parts[parts.length - 1] = suffix;
+        var altPool = parts.join('.');
+        if (BarkLibrary.hasPool(altPool)) return altPool;
+      }
+    }
 
-    // For NPC pools like "npc.guild_veteran.ambient", try replacing
-    // the last segment: "npc.guild_veteran.heroday"
-    var parts = basePool.split('.');
-    if (parts.length >= 3) {
-      parts[parts.length - 1] = suffix;
-      var altPool = parts.join('.');
-      if (BarkLibrary.hasPool(altPool)) return altPool;
+    // Layer 2: day-of-cycle suffix (day1, day2) — checked when no
+    // time-specific pool was found. This gives post-hero-day and
+    // routine-day flavour without needing every time+day combination.
+    if (DayCycle.getDayCycleSuffix) {
+      var daySuffix = DayCycle.getDayCycleSuffix();
+      if (daySuffix) {
+        var dayPool = basePool + '.' + daySuffix;
+        if (BarkLibrary.hasPool(dayPool)) return dayPool;
+
+        // NPC alt: replace last segment
+        var dParts = basePool.split('.');
+        if (dParts.length >= 3) {
+          dParts[dParts.length - 1] = daySuffix;
+          var dAltPool = dParts.join('.');
+          if (BarkLibrary.hasPool(dAltPool)) return dAltPool;
+        }
+      }
     }
 
     return basePool;
@@ -1338,6 +1359,183 @@ var NpcSystem = (function () {
         barkPool:     'faction.admiralty',
         barkRadius:   3,
         barkInterval: 30000
+      }
+    ]);
+
+    // ── Floor 3: The Garrison (frontier exterior, 52×52) ──────────
+    // Admiralty-dominant militarised slum. 12 NPCs:
+    //   3 Admiralty uniformed (patrol, gate guard, pier lookout)
+    //   1 Tide envoy (north clearing, near bonfire)
+    //   1 Foundry worker (east arm, highway freight hauler)
+    //   7 Non-faction citizens (hawkers, beggars, drifters, fisherman)
+    register('3', [
+      // ── Admiralty (3) ──
+      {
+        id:           'floor3_admiralty_gate',
+        type:         TYPES.INTERACTIVE,
+        x: 8, y: 25,
+        facing:       'west',
+        emoji:        '💂',
+        name:         'Gate Sentry',
+        role:         'admiralty_member',
+        talkable:     true,
+        patrolPoints: null,
+        barkPool:     'faction.admiralty',
+        barkRadius:   4,
+        barkInterval: 20000,
+        dialoguePool: 'faction.admiralty'
+      },
+      {
+        id:           'floor3_admiralty_patrol',
+        type:         TYPES.AMBIENT,
+        x: 24, y: 22,
+        facing:       'south',
+        emoji:        '👮',
+        name:         'Admiralty Patrol',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 24, y: 22 }, { x: 28, y: 22 }, { x: 28, y: 28 }, { x: 24, y: 28 }],
+        stepInterval: 1400,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 24000
+      },
+      {
+        id:           'floor3_admiralty_pier',
+        type:         TYPES.AMBIENT,
+        x: 25, y: 40,
+        facing:       'south',
+        emoji:        '🪖',
+        name:         'Pier Lookout',
+        role:         'admiralty_member',
+        patrolPoints: [{ x: 25, y: 40 }, { x: 25, y: 44 }],
+        stepInterval: 2000,
+        barkPool:     'faction.admiralty',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      // ── Tide envoy (1) — near north bonfire ──
+      {
+        id:           'floor3_tide_envoy',
+        type:         TYPES.INTERACTIVE,
+        x: 22, y: 8,
+        facing:       'east',
+        emoji:        '🧙',
+        name:         'Tide Envoy',
+        role:         'tide_member',
+        talkable:     true,
+        patrolPoints: [{ x: 22, y: 8 }, { x: 24, y: 6 }],
+        stepInterval: 2200,
+        barkPool:     'faction.tide',
+        barkRadius:   3,
+        barkInterval: 28000,
+        dialoguePool: 'faction.tide'
+      },
+      // ── Foundry worker (1) — east highway freight ──
+      {
+        id:           'floor3_foundry_hauler',
+        type:         TYPES.AMBIENT,
+        x: 40, y: 24,
+        facing:       'east',
+        emoji:        '🔧',
+        name:         'Foundry Hauler',
+        role:         'foundry_member',
+        patrolPoints: [{ x: 40, y: 24 }, { x: 46, y: 24 }],
+        stepInterval: 1200,
+        barkPool:     'faction.foundry',
+        barkRadius:   3,
+        barkInterval: 26000
+      },
+      // ── Non-faction citizens (7) ──
+      {
+        id:           'floor3_hawker_1',
+        type:         TYPES.AMBIENT,
+        x: 20, y: 20,
+        facing:       'south',
+        emoji:        '🧑',
+        name:         'Street Hawker',
+        patrolPoints: [{ x: 20, y: 20 }, { x: 20, y: 24 }],
+        stepInterval: 1600,
+        barkPool:     'ambient.garrison',
+        barkRadius:   3,
+        barkInterval: 22000
+      },
+      {
+        id:           'floor3_drifter_1',
+        type:         TYPES.AMBIENT,
+        x: 30, y: 26,
+        facing:       'west',
+        emoji:        '🧔',
+        name:         'Drifter',
+        patrolPoints: [{ x: 30, y: 26 }, { x: 26, y: 26 }],
+        stepInterval: 1800,
+        barkPool:     'ambient.garrison',
+        barkRadius:   3,
+        barkInterval: 32000
+      },
+      {
+        id:           'floor3_beggar_1',
+        type:         TYPES.AMBIENT,
+        x: 14, y: 25,
+        facing:       'east',
+        emoji:        '🧎',
+        name:         'Beggar',
+        patrolPoints: null,
+        barkPool:     'ambient.garrison',
+        barkRadius:   2,
+        barkInterval: 18000
+      },
+      {
+        id:           'floor3_citizen_2',
+        type:         TYPES.AMBIENT,
+        x: 22, y: 30,
+        facing:       'north',
+        emoji:        '👩',
+        name:         'Washerwoman',
+        patrolPoints: [{ x: 22, y: 30 }, { x: 24, y: 30 }],
+        stepInterval: 2000,
+        barkPool:     'ambient.garrison',
+        barkRadius:   3,
+        barkInterval: 30000
+      },
+      {
+        id:           'floor3_fisherman',
+        type:         TYPES.INTERACTIVE,
+        x: 24, y: 46,
+        facing:       'south',
+        emoji:        '🎣',
+        name:         'Old Fisherman',
+        talkable:     true,
+        patrolPoints: null,
+        barkPool:     'ambient.pier',
+        barkRadius:   4,
+        barkInterval: 35000,
+        dialoguePool: 'ambient.pier'
+      },
+      {
+        id:           'floor3_trader_highway',
+        type:         TYPES.AMBIENT,
+        x: 38, y: 26,
+        facing:       'east',
+        emoji:        '🐴',
+        name:         'Caravan Trader',
+        patrolPoints: [{ x: 38, y: 26 }, { x: 48, y: 26 }],
+        stepInterval: 1000,
+        barkPool:     'ambient.highway',
+        barkRadius:   3,
+        barkInterval: 24000
+      },
+      {
+        id:           'floor3_urchin_1',
+        type:         TYPES.AMBIENT,
+        x: 26, y: 19,
+        facing:       'south',
+        emoji:        '👦',
+        name:         'Street Urchin',
+        patrolPoints: [{ x: 26, y: 19 }, { x: 30, y: 23 }, { x: 22, y: 27 }],
+        stepInterval: 900,
+        barkPool:     'ambient.garrison',
+        barkRadius:   2,
+        barkInterval: 20000
       }
     ]);
   }

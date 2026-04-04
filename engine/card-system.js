@@ -112,6 +112,19 @@ var CardSystem = (function () {
         CardAuthority.addToBackup(starters[s]);
       }
       CardAuthority.resetDeck();
+
+      // Phase 2: Seed starter embellishment consumables into bag
+      // 3 Silk Spiders + 2 Trap Kits — enough for the first nested-dungeon run
+      var STARTER_SUPPLIES = [
+        { id: 'ITM-115', name: 'Silk Spider', emoji: '\uD83D\uDD77\uFE0F', type: 'consumable', subtype: 'supply' },
+        { id: 'ITM-115', name: 'Silk Spider', emoji: '\uD83D\uDD77\uFE0F', type: 'consumable', subtype: 'supply' },
+        { id: 'ITM-115', name: 'Silk Spider', emoji: '\uD83D\uDD77\uFE0F', type: 'consumable', subtype: 'supply' },
+        { id: 'ITM-116', name: 'Trap Kit',    emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' },
+        { id: 'ITM-116', name: 'Trap Kit',    emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' }
+      ];
+      for (var si = 0; si < STARTER_SUPPLIES.length; si++) {
+        CardAuthority.addToBag(STARTER_SUPPLIES[si]);
+      }
     }
   }
 

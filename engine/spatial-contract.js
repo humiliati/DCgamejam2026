@@ -77,6 +77,14 @@ var SpatialContract = (function () {
       fogDistance:       opts.fogDistance || 14,     // Distance where fog starts biting
       fogColor:         opts.fogColor || { r: 40, g: 50, b: 60 },  // Blueish haze
       waterColor:       opts.waterColor || { r: 15, g: 35, b: 65 }, // Deep ocean blue for WATER tile floor
+
+      // ── Terminus fog veil ──
+      // Soft atmospheric gradient band at the horizon that masks the
+      // floor/sky seam and softens wall pop-in at render distance.
+      // height: fraction of screen height (0.15 = 15% above + below horizon)
+      // opacity: peak alpha at horizon center (0.7 default, 0 disables)
+      terminusFog:      opts.terminusFog || { height: 0.15, opacity: 0.7 },
+
       ceilingType:      CEILING.SKY,
       skyPreset:        opts.skyPreset || 'cedar',   // Skybox preset name
       ceilColor:        opts.ceilColor || '#2a3a4a',

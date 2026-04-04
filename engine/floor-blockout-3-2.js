@@ -4,6 +4,7 @@
  * 14×10 interior. Admiralty-faction shop in The Garrison (Floor 3).
  * Tucked into a slum shack in the NE quadrant of the center hub.
  * Sells naval supplies, restocking gear, and occasional combat cards.
+ * STAIRS_DN at (9,7) in corridor neck leads to Foundry Stores (3.2.1, proc-gen foundry).
  *
  * Biome: 'shop' — warm lamplight, display cases, stone floor.
  *
@@ -16,7 +17,7 @@
  *   - quartermaster at (7,2) — behind counter, Admiralty faction
  *
  * Tile legend:
- *   0=EMPTY  1=WALL  4=DOOR_EXIT  10=PILLAR  12=SHOP
+ *   0=EMPTY  1=WALL  4=DOOR_EXIT  5=STAIRS_DN  10=PILLAR  12=SHOP
  *   25=BOOKSHELF  26=BAR_COUNTER  30=TORCH_LIT
  */
 (function () {
@@ -35,7 +36,7 @@
     [ 1, 0,12,12,12,12,12,12,12,12,12,12, 0, 1], // 4  SHOP tiles (face N to browse)
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 5  customer floor
     [ 1,30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,30, 1], // 6  torches
-    [ 1, 1, 1, 1, 0, 0,10, 0,10, 0, 0, 1, 1, 1], // 7  corridor neck + pillars
+    [ 1, 1, 1, 1, 0, 0,10, 0,10, 5, 0, 1, 1, 1], // 7  corridor neck + pillars + STAIRS_DN(9,7)
     [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1], // 8  spawn row
     [ 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1]  // 9  DOOR_EXIT (6,9)
   ];
@@ -62,7 +63,7 @@
       rooms: ROOMS.slice(),
       doors: {
         stairsUp: null,
-        stairsDn: null,
+        stairsDn: { x: 9, y: 7 },    // STAIRS_DN — to Foundry Stores (3.2.1)
         doorExit: { x: 6, y: 9 }   // DOOR_EXIT — back to The Garrison
       },
       doorTargets: { '6,9': '3' },  // DOOR_EXIT → The Garrison (Floor 3)

@@ -73,6 +73,14 @@ var CobwebNode = (function () {
   var _promptHovered = false; // Pointer is over the prompt box
   var _lastFloorId   = null;  // Cached for handlePointerClick
 
+  // ── Success flash state ──────────────────────────────────────────
+  var _successFlashT  = 0;      // Remaining ms for success flash (0 = idle)
+  var SUCCESS_FLASH_MS = 400;   // Duration of green flash after deploy
+
+  // ── Manual dismiss state ─────────────────────────────────────────
+  var _dismissed      = false;  // Player manually dismissed prompt (resets on turn-away)
+  var _dismissHitBox  = null;   // { x, y, w, h } for [X] close button
+
   // ── Floor depth helper ────────────────────────────────────────────
 
   /** Returns depth level: "1" → 1, "1.1" → 2, "2.2.1" → 3, etc. */
@@ -92,7 +100,12 @@ var CobwebNode = (function () {
    */
   function update(dt, floorId) {
     _pulseT += dt;
+
+    // Tick success flash
+    if (_successFlashT > 0) _successFlashT = Math.max(0, _successFlashT - dt);
+
     _visible    = [];
+    var wasFacing = _facingElig;
     _facingElig = false;
     _facingX    = -1;
     _facingY    = -1;
@@ -135,8 +148,13 @@ var CobwebNode = (function () {
       }
     }
 
-    // Fade prompt in/out based on facing eligibility
-    if (_facingElig) {
+    // Reset dismiss when player turns away from an eligible tile
+    if (!_facingElig && wasFacing) {
+      _dismissed = false;
+    }
+
+    // Fade prompt in/out based on facing eligibility + dismiss state
+    if (_facingElig && !_dismissed) {
       _promptAlpha = Math.min(1, _promptAlpha + dt / FADE_SPEED);
     } else {
       _promptAlpha = Math.max(0, _promptAlpha - dt / FADE_OUT_SPEED);
@@ -187,20 +205,68 @@ var CobwebNode = (function () {
    * @param {string} floorId
    * @returns {boolean}
    */
+  var SPIDER_ITEM_ID = 'ITM-115';
+
+  /**
+   * Count how many Silk Spiders the player currently has in bag.
+   * @returns {number}
+   */
+  function _spiderCount() {
+    if (typeof CardAuthority === 'undefined') return 0;
+    var bag = CardAuthority.getBag();
+    var count = 0;
+    for (var i = 0; i < bag.length; i++) {
+      if (bag[i] && bag[i].id === SPIDER_ITEM_ID) count++;
+    }
+    return count;
+  }
+
+  /**
+   * Consume one Silk Spider from the player's bag.
+   * @returns {boolean} true if consumed
+   */
+  function _consumeSpider() {
+    if (typeof CardAuthority === 'undefined') return false;
+    return !!CardAuthority.removeFromBagById(SPIDER_ITEM_ID);
+  }
+
   function tryInteract(floorId) {
     if (!_facingElig || _facingX < 0) return false;
     if (typeof CobwebSystem === 'undefined') return false;
     if (_depth(floorId) < 3) return false;
 
+    // Phase 2: require a Silk Spider consumable
+    if (_spiderCount() <= 0) {
+      if (typeof Toast !== 'undefined') {
+        Toast.show(
+          (typeof i18n !== 'undefined')
+            ? i18n.t('cobweb.need_spider', 'Need a Silk Spider \uD83D\uDD77\uFE0F')
+            : 'Need a Silk Spider \uD83D\uDD77\uFE0F',
+          'warning'
+        );
+      }
+      return false;
+    }
+
     var ok = CobwebSystem.install(_facingX, _facingY, floorId, 'standalone');
 
-    if (ok && typeof AudioSystem !== 'undefined') {
-      // Phase 2 integration: add 'cobweb_deploy' cue to AudioSystem.
-      // Fallback to 'step' as placeholder until the cue is registered.
-      AudioSystem.play('step', { volume: 0.4 });
+    if (ok) {
+      _consumeSpider();
+      _successFlashT = SUCCESS_FLASH_MS;
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('step', { volume: 0.4 });
+      }
     }
 
     return ok;
+  }
+
+  /**
+   * Get the player's current Silk Spider count. Used by prompt renderer.
+   * @returns {number}
+   */
+  function getSpiderCount() {
+    return _spiderCount();
   }
 
   /** True when the spider-deployment prompt is currently fading in/out. */
@@ -259,90 +325,178 @@ var CobwebNode = (function () {
 
   /**
    * Render the "[OK] 🕷️ Deploy Spider" prompt near the bottom of the viewport.
-   * Stores hit box for pointer click/hover detection.
+   * Features: success flash after deploy, [X] dismiss button, out-of-stock hint.
+   * Stores hit boxes for pointer click/hover detection.
    */
   function _renderPrompt(ctx, vpW, vpH) {
+    var sc = _spiderCount();
+    var isFlashing = _successFlashT > 0;
+
+    // ── Text content ───────────────────────────────────────────────
     var keyLbl = (typeof i18n !== 'undefined')
       ? i18n.t('interact.key', '[OK]')
       : '[OK]';
-    var action = (typeof i18n !== 'undefined')
-      ? i18n.t('cobweb.deploy', 'Deploy Spider')
-      : 'Deploy Spider';
-    var full = '\uD83D\uDD77\uFE0F ' + action + '  +2g';  // 🕷️ Deploy Spider  +2g
 
+    var full;
+    if (isFlashing) {
+      full = '\u2714 Cobweb installed!  +2g';  // ✔ Cobweb installed!  +2g
+    } else if (sc <= 0) {
+      full = '\uD83D\uDD77\uFE0F No Silk Spiders';    // 🕷️ No Silk Spiders
+    } else {
+      var action = (typeof i18n !== 'undefined')
+        ? i18n.t('cobweb.deploy', 'Deploy Spider')
+        : 'Deploy Spider';
+      full = '\uD83D\uDD77\uFE0F ' + action + '  +2g  (\u00D7' + sc + ')';
+    }
+
+    // ── Measure & layout ───────────────────────────────────────────
     ctx.save();
     ctx.globalAlpha = _promptAlpha;
     ctx.font        = 'bold 18px monospace';
 
-    var keyW  = ctx.measureText(keyLbl).width;
+    var keyW  = isFlashing ? 0 : ctx.measureText(keyLbl).width;
     ctx.font  = '18px monospace';
-    var txtW  = ctx.measureText(' ' + full).width;
-    var PAD   = 20;
-    var BOX_W = PAD * 2 + keyW + txtW;
-    var BOX_H = 48;
-    var BOX_X = (vpW - BOX_W) / 2;
-    var BOX_Y = vpH - 140;  // Sits above the standard InteractPrompt zone
+    var txtW  = ctx.measureText((isFlashing ? '' : ' ') + full).width;
+    var PAD      = 20;
+    var CLOSE_W  = 32;      // Width of [X] dismiss zone
+    var BOX_W    = PAD * 2 + keyW + txtW + CLOSE_W;
+    var BOX_H    = 48;
+    var BOX_X    = (vpW - BOX_W) / 2;
+    var BOX_Y    = vpH - 140;
 
-    // Store hit box for pointer interaction
-    _promptHitBox = { x: BOX_X, y: BOX_Y, w: BOX_W, h: BOX_H };
+    // Store hit boxes
+    _promptHitBox  = { x: BOX_X, y: BOX_Y, w: BOX_W - CLOSE_W, h: BOX_H };
+    _dismissHitBox = { x: BOX_X + BOX_W - CLOSE_W, y: BOX_Y, w: CLOSE_W, h: BOX_H };
 
-    // Check pointer hover
+    // ── Pointer hover detection ────────────────────────────────────
     _promptHovered = false;
+    var _dismissHovered = false;
     if (typeof InputManager !== 'undefined' && InputManager.getPointer) {
       var ptr = InputManager.getPointer();
-      if (ptr && ptr.active &&
-          ptr.x >= BOX_X && ptr.x <= BOX_X + BOX_W &&
-          ptr.y >= BOX_Y && ptr.y <= BOX_Y + BOX_H) {
-        _promptHovered = true;
+      if (ptr && ptr.active) {
+        if (ptr.x >= _dismissHitBox.x && ptr.x <= _dismissHitBox.x + _dismissHitBox.w &&
+            ptr.y >= _dismissHitBox.y && ptr.y <= _dismissHitBox.y + _dismissHitBox.h) {
+          _dismissHovered = true;
+        } else if (ptr.x >= BOX_X && ptr.x <= BOX_X + BOX_W &&
+                   ptr.y >= BOX_Y && ptr.y <= BOX_Y + BOX_H) {
+          _promptHovered = true;
+        }
       }
     }
 
-    // Background panel (brighter on hover)
+    // ── Background ─────────────────────────────────────────────────
+    var flashT = isFlashing ? (_successFlashT / SUCCESS_FLASH_MS) : 0;
+    var bgColor;
+    if (isFlashing) {
+      // Green flash that fades: bright green → dark
+      var gr = Math.floor(40 + 60 * flashT);
+      var gg = Math.floor(80 + 120 * flashT);
+      bgColor = 'rgba(' + gr + ',' + gg + ',40,0.92)';
+    } else if (_promptHovered) {
+      bgColor = 'rgba(20,30,30,0.9)';
+    } else {
+      bgColor = 'rgba(10,8,18,0.82)';
+    }
+
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
-    ctx.fillStyle = _promptHovered ? 'rgba(20,30,30,0.9)' : 'rgba(10,8,18,0.82)';
+    ctx.fillStyle = bgColor;
     ctx.fill();
 
-    // Border (brighter + thicker on hover)
-    ctx.strokeStyle = _promptHovered ? '#aaffcc' : NODE_COLOR;
-    ctx.lineWidth   = _promptHovered ? 2 : 1;
+    // ── Border ─────────────────────────────────────────────────────
+    var borderColor;
+    if (isFlashing) {
+      borderColor = '#80ff80';
+    } else if (sc <= 0) {
+      borderColor = '#886644';  // Dim / unavailable
+    } else if (_promptHovered) {
+      borderColor = '#aaffcc';
+    } else {
+      borderColor = NODE_COLOR;
+    }
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth   = (_promptHovered || isFlashing) ? 2 : 1;
     _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
     ctx.stroke();
 
-    // Hover glow
-    if (_promptHovered) {
-      ctx.shadowColor = NODE_COLOR;
-      ctx.shadowBlur  = 10;
+    // Hover / flash glow
+    if (_promptHovered || isFlashing) {
+      ctx.shadowColor = isFlashing ? '#80ff80' : NODE_COLOR;
+      ctx.shadowBlur  = isFlashing ? (14 * flashT) : 10;
       _roundRect(ctx, BOX_X, BOX_Y, BOX_W, BOX_H, 6);
       ctx.stroke();
       ctx.shadowBlur  = 0;
     }
 
-    // [OK] label (gold, bold — brighter on hover)
+    // ── Text ───────────────────────────────────────────────────────
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font         = 'bold 18px monospace';
-    ctx.fillStyle    = _promptHovered ? '#ffe080' : '#f0d070';
-    ctx.fillText(keyLbl, BOX_X + PAD, BOX_Y + BOX_H / 2);
+    var textX = BOX_X + PAD;
 
-    // Action text (brighter on hover)
-    ctx.font      = '18px monospace';
-    ctx.fillStyle = _promptHovered ? '#fff' : '#d8d0c0';
-    ctx.fillText(' ' + full, BOX_X + PAD + keyW, BOX_Y + BOX_H / 2);
+    if (isFlashing) {
+      // Success text — bright green, bold
+      ctx.font      = 'bold 18px monospace';
+      ctx.fillStyle = '#b0ffb0';
+      ctx.fillText(full, textX, BOX_Y + BOX_H / 2);
+    } else {
+      // [OK] label (gold, bold — dimmed when out of stock)
+      ctx.font      = 'bold 18px monospace';
+      ctx.fillStyle = sc <= 0 ? '#887744' : (_promptHovered ? '#ffe080' : '#f0d070');
+      ctx.fillText(keyLbl, textX, BOX_Y + BOX_H / 2);
+
+      // Action text (dimmed when out of stock)
+      ctx.font      = '18px monospace';
+      ctx.fillStyle = sc <= 0 ? '#776655' : (_promptHovered ? '#fff' : '#d8d0c0');
+      ctx.fillText(' ' + full, textX + keyW, BOX_Y + BOX_H / 2);
+    }
+
+    // ── [X] dismiss button ─────────────────────────────────────────
+    var closeX = BOX_X + BOX_W - CLOSE_W;
+    // Vertical separator
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(closeX, BOX_Y + 8);
+    ctx.lineTo(closeX, BOX_Y + BOX_H - 8);
+    ctx.stroke();
+
+    // X glyph
+    ctx.font      = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = _dismissHovered ? '#ff8888' : 'rgba(255,255,255,0.45)';
+    ctx.fillText('\u00D7', closeX + CLOSE_W / 2, BOX_Y + BOX_H / 2);  // ×
+
+    // [BACK] hint below dismiss (small, faint)
+    if (!isFlashing) {
+      ctx.font      = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillText('[BACK]', BOX_X + BOX_W - 6, BOX_Y + BOX_H + 13);
+    }
 
     ctx.restore();
   }
 
   /**
-   * Handle a pointer click on the deployment prompt.
+   * Handle a pointer click on the deployment prompt or dismiss button.
    * Returns true if the click was consumed.
    */
   function handlePointerClick() {
-    if (_promptAlpha < 0.05 || !_promptHitBox) return false;
-    if (!_facingElig) return false;
+    if (_promptAlpha < 0.05) return false;
 
     if (typeof InputManager !== 'undefined' && InputManager.getPointer) {
       var ptr = InputManager.getPointer();
-      if (ptr && ptr.active &&
+      if (!ptr || !ptr.active) return false;
+
+      // [X] dismiss button click
+      if (_dismissHitBox &&
+          ptr.x >= _dismissHitBox.x && ptr.x <= _dismissHitBox.x + _dismissHitBox.w &&
+          ptr.y >= _dismissHitBox.y && ptr.y <= _dismissHitBox.y + _dismissHitBox.h) {
+        _dismissed = true;
+        return true;
+      }
+
+      // Deploy prompt click
+      if (_promptHitBox && _facingElig &&
           ptr.x >= _promptHitBox.x && ptr.x <= _promptHitBox.x + _promptHitBox.w &&
           ptr.y >= _promptHitBox.y && ptr.y <= _promptHitBox.y + _promptHitBox.h) {
         if (_lastFloorId) {
@@ -350,6 +504,22 @@ var CobwebNode = (function () {
         }
         return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * Handle key input for the cobweb prompt.
+   * BACK / Escape dismisses the prompt (hides it until player turns away).
+   *
+   * @param {string} key - 'Escape' | 'Backspace' | 'GoBack'
+   * @returns {boolean} true if key was consumed
+   */
+  function handleKey(key) {
+    if (_promptAlpha < 0.05) return false;
+    if (key === 'Escape' || key === 'Backspace' || key === 'GoBack' || key === 'Back') {
+      _dismissed = true;
+      return true;
     }
     return false;
   }
@@ -375,6 +545,9 @@ var CobwebNode = (function () {
     render:             render,
     tryInteract:        tryInteract,
     handlePointerClick: handlePointerClick,
-    isPromptVisible:    isPromptVisible
+    handleKey:          handleKey,
+    isPromptVisible:    isPromptVisible,
+    getSpiderCount:     getSpiderCount,
+    SPIDER_ITEM_ID:     SPIDER_ITEM_ID
   });
 })();

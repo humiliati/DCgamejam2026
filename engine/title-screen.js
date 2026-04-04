@@ -96,6 +96,7 @@ var TitleScreen = (function () {
         e.preventDefault();
         _settingsScroll += (e.deltaY > 0 ? 40 : -40);
         _settingsScroll = Math.max(0, Math.min(_settingsMaxScroll, _settingsScroll));
+        _settingsAutoScroll = false;  // User is driving scroll — don't snap back
       }
     };
     window.addEventListener('keydown', _keyHandler);
@@ -184,6 +185,7 @@ var TitleScreen = (function () {
   function _navigateUp() {
     if (_phase === 0 && _settingsOpen) {
       _settingsSelected = (_settingsSelected - 1 + _settingsItemCount()) % _settingsItemCount();
+      _settingsAutoScroll = true;  // Keyboard nav — snap scroll to selection
     } else if (_phase === 0) {
       _selected = (_selected - 1 + TITLE_OPTIONS.length) % TITLE_OPTIONS.length;
     } else if (_phase === 2) {
@@ -194,6 +196,7 @@ var TitleScreen = (function () {
   function _navigateDown() {
     if (_phase === 0 && _settingsOpen) {
       _settingsSelected = (_settingsSelected + 1) % _settingsItemCount();
+      _settingsAutoScroll = true;  // Keyboard nav — snap scroll to selection
     } else if (_phase === 0) {
       _selected = (_selected + 1) % TITLE_OPTIONS.length;
     } else if (_phase === 2) {
@@ -263,6 +266,8 @@ var TitleScreen = (function () {
       } else if (_selected === 2) {
         _settingsOpen = true;
         _settingsSelected = 0;
+        _settingsScroll = 0;
+        _settingsAutoScroll = true;
       }
     } else if (_phase === 1) {
       _phase = 2;
@@ -1012,6 +1017,7 @@ var TitleScreen = (function () {
   // Scroll state for settings panel
   var _settingsScroll = 0;
   var _settingsMaxScroll = 0;
+  var _settingsAutoScroll = true;  // Only auto-scroll after keyboard nav, not every frame
 
   function _loadSettings() {
     try {
@@ -1148,17 +1154,19 @@ var TitleScreen = (function () {
     totalH += lineH; // BACK button
     _settingsMaxScroll = Math.max(0, totalH - contentH);
 
-    // Auto-scroll to keep selected item visible
-    var selY = 0;
-    var navCount = 0;
-    for (var ai = 0; ai < SETTINGS_ITEMS.length; ai++) {
-      if (SETTINGS_ITEMS[ai].type === 'header') { selY += headerH; continue; }
-      if (navCount === _settingsSelected) break;
-      navCount++;
-      selY += lineH;
+    // Auto-scroll to keep selected item visible (only after keyboard nav)
+    if (_settingsAutoScroll) {
+      var selY = 0;
+      var navCount = 0;
+      for (var ai = 0; ai < SETTINGS_ITEMS.length; ai++) {
+        if (SETTINGS_ITEMS[ai].type === 'header') { selY += headerH; continue; }
+        if (navCount === _settingsSelected) break;
+        navCount++;
+        selY += lineH;
+      }
+      if (selY - _settingsScroll < 0) _settingsScroll = selY;
+      if (selY + lineH - _settingsScroll > contentH) _settingsScroll = selY + lineH - contentH;
     }
-    if (selY - _settingsScroll < 0) _settingsScroll = selY;
-    if (selY + lineH - _settingsScroll > contentH) _settingsScroll = selY + lineH - contentH;
     _settingsScroll = Math.max(0, Math.min(_settingsMaxScroll, _settingsScroll));
 
     // Clip to content area
@@ -1343,6 +1351,11 @@ var TitleScreen = (function () {
     _hoveredZoneIdx = -1;
     _loadSettings();
     _bindInput();
+
+    // Start title music
+    if (typeof AudioMusicManager !== 'undefined') {
+      AudioMusicManager.startTitle();
+    }
   }
 
   function stop() {

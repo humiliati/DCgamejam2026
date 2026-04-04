@@ -185,10 +185,14 @@ var FloorManager = (function () {
 
     // Depth 3+: dungeon biomes — based on parent interior
     var parent = _parentId(floor);
+    // Floor 0 building interiors (depth 3: 0.5.N) — accessed from exterior via doorTargets
+    if (parent === '0.5') return 'cellar_entry';  // Approach building basements
     if (parent === '1.1') return 'cellar';       // Coral Cellars
+    if (parent === '1.2') return 'cellar';       // Inn Cellar (Driftwood Inn basement)
     if (parent === '1.3') return 'cellar';       // Soft Cellar (tutorial dungeon)
     if (parent === '2.2') return 'catacomb';     // Hero's Wake (catacombs)
     if (parent === '3.1') return 'foundry';      // Ironhold Depths
+    if (parent === '3.2') return 'foundry';      // Quartermaster Vaults
 
     // Deep fallback: use dungeon level for biome progression
     var parts = floor.split('.');
@@ -703,6 +707,7 @@ var FloorManager = (function () {
           renderDistance: 24,
           fogDistance: 20,
           fogColor: { r: 30, g: 40, b: 55 },
+          terminusFog: { height: 0.18, opacity: 0.75 },
           ceilColor: '#1a2a3a',
           floorColor: '#3a4a3a',
           gridSize: { w: 50, h: 36 },
@@ -745,6 +750,7 @@ var FloorManager = (function () {
           gridSize: { w: 50, h: 36 },
           roomCount: { min: 7, max: 7 },
           skyPreset: 'lantern',
+          terminusFog: { height: 0.20, opacity: 0.72 },
           parallax: [
             { depth: 0.95, color: '#b06040', height: 0.10 },
             { depth: 0.85, color: '#4a2030', height: 0.12 }
@@ -764,6 +770,7 @@ var FloorManager = (function () {
           gridSize: { w: 52, h: 52 },
           roomCount: { min: 5, max: 5 },
           skyPreset: 'frontier',
+          terminusFog: { height: 0.22, opacity: 0.80 },
           parallax: [
             { depth: 0.95, color: '#161220', height: 0.15 },
             { depth: 0.85, color: '#1a1220', height: 0.12 }
@@ -952,6 +959,47 @@ var FloorManager = (function () {
     }
 
     // ── Depth 3+: Nested dungeon ──
+
+    // The Approach building interiors (0.5.N) — depth 3 by ID convention
+    // but functionally interior rooms accessed from floor 0 exterior.
+    // Use interior contract, not nestedDungeon.
+    if (floor === '0.5.1') {
+      return SpatialContract.interior(Object.assign({
+        label: 'Upper Facade',
+        wallHeight: 2.0, renderDistance: 12, fogDistance: 10,
+        fogColor: { r: 15, g: 12, b: 8 },
+        ceilColor: '#1a1818', floorColor: '#3a3028',
+        gridSize: { w: 14, h: 10 }, roomCount: { min: 2, max: 3 }
+      }, biomeTextures));
+    }
+    if (floor === '0.5.2') {
+      return SpatialContract.interior(Object.assign({
+        label: 'Old Shack',
+        wallHeight: 1.8, renderDistance: 10, fogDistance: 8,
+        fogColor: { r: 12, g: 10, b: 6 },
+        ceilColor: '#1a1818', floorColor: '#3a3028',
+        gridSize: { w: 12, h: 10 }, roomCount: { min: 2, max: 2 }
+      }, biomeTextures));
+    }
+    if (floor === '0.5.3') {
+      return SpatialContract.interior(Object.assign({
+        label: 'Root Cellar',
+        wallHeight: 1.8, renderDistance: 10, fogDistance: 8,
+        fogColor: { r: 10, g: 8, b: 6 },
+        ceilColor: '#1a1818', floorColor: '#3a3028',
+        gridSize: { w: 12, h: 10 }, roomCount: { min: 2, max: 2 }
+      }, biomeTextures));
+    }
+    if (floor === '0.5.4') {
+      return SpatialContract.interior(Object.assign({
+        label: 'Old Keep',
+        wallHeight: 2.2, renderDistance: 14, fogDistance: 10,
+        fogColor: { r: 12, g: 10, b: 14 },
+        ceilColor: '#1a1818', floorColor: '#2a2020',
+        gridSize: { w: 16, h: 12 }, roomCount: { min: 3, max: 4 }
+      }, biomeTextures));
+    }
+
     var parts = floor.split('.');
     var dungeonLevel = parseInt(parts[parts.length - 1], 10) || 1;
 
@@ -1610,6 +1658,10 @@ var FloorManager = (function () {
         _floorData.contract = contract;
         // Depth 1-2 floors are safe zones (no enemies); depth 3+ spawns enemies
         _enemies = _depth(_floorId) >= 3 ? EnemyAI.spawnEnemies(_floorData, _floorId, null) : [];
+        // Assign biome-appropriate bark pools to dungeon enemies
+        if (_enemies.length > 0 && EnemyAI.assignBarkPools) {
+          EnemyAI.assignBarkPools(_enemies, _floorId);
+        }
         _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
       }
     } else if (_floorId === '0') {
@@ -1648,6 +1700,9 @@ var FloorManager = (function () {
       }
 
       _enemies = EnemyAI.spawnEnemies(_floorData, _floorId, null);
+      if (_enemies.length > 0 && EnemyAI.assignBarkPools) {
+        EnemyAI.assignBarkPools(_enemies, _floorId);
+      }
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     }
 
@@ -1751,6 +1806,9 @@ var FloorManager = (function () {
     // (skip depth 1-2 — no enemies in exterior/interior safe zones)
     if (!fromCache && _depth(_floorId) >= 3) {
       _enemies = EnemyAI.spawnEnemies(_floorData, _floorId, { x: spawn.x, y: spawn.y });
+      if (_enemies.length > 0 && EnemyAI.assignBarkPools) {
+        EnemyAI.assignBarkPools(_enemies, _floorId);
+      }
       _floorCache[_floorId].enemies = _enemies;
     }
 

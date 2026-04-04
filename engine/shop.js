@@ -82,7 +82,9 @@ var Shop = (function () {
     { id: 'ITM-089', name: 'Mop Head',          emoji: '🧹', shopPrice: 4, category: 'tool',    subtype: 'mop',    desc: 'Mid-tier clean speed. 5 uses.' },
     { id: 'ITM-090', name: 'Scrub Brush',       emoji: '🧹', shopPrice: 8, category: 'tool',    subtype: 'brush',  desc: 'Fast cleaning. 8 uses. Worth every coin.' },
     { id: 'ITM-091', name: 'Bone Powder',       emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
-    { id: 'ITM-092', name: 'Trap Spring',       emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' }
+    { id: 'ITM-092', name: 'Trap Spring',       emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' },
+    { id: 'ITM-115', name: 'Silk Spider',       emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' },
+    { id: 'ITM-116', name: 'Trap Kit',          emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' }
   ];
 
   // ── Internal state ────────────────────────────────────────────────

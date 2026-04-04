@@ -290,7 +290,10 @@ var Raycaster = (function () {
           }
           _cDep++;
 
-          // Inject back-face for short walls on first step past the tile
+          if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
+
+          // Inject back-face for short walls on first step past the tile.
+          // Bounds-checked above — back-face coordinates are always in-grid.
           if (_needBackFace && _lc < _MAX_LAYERS) {
             _layerBuf[_lc].mx = _cMX;
             _layerBuf[_lc].my = _cMY;
@@ -299,8 +302,6 @@ var Raycaster = (function () {
             _lc++;
             _needBackFace = false;
           }
-
-          if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
           var _cT = grid[_cMY][_cMX];
           if (TILES.isOpaque(_cT) || TILES.isDoor(_cT)) {
             var _cH = SpatialContract.getWallHeight(_contract, _cMX, _cMY, _rooms, _cT, _cellHeights);
@@ -477,13 +478,23 @@ var Raycaster = (function () {
 
         // Draw textured wall column — WALL tiles (brick) get vertical tiling
         // so patterns repeat on tall facades. All other tiles stretch.
+        // PW-1 hook: if this wall tile has a grime grid, use the per-pixel
+        // path so grime tint can be composited. Otherwise fast ctx.drawImage.
         var shiftedTop = flatTop - vertShift;
-        _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
-                         drawStart, drawEnd, col, wallHeightMult, hitTile);
+        var _fgGrime = (typeof GrimeGrid !== 'undefined')
+          ? GrimeGrid.get(_bloodFloorId, mapX, mapY) : null;
+        if (_fgGrime) {
+          _drawTiledColumnPixel(ctx, tex, texX, shiftedTop, lineHeight,
+                                drawStart, drawEnd, col, wallHeightMult, hitTile,
+                                _fgGrime, wallX);
+        } else {
+          _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
+                           drawStart, drawEnd, col, wallHeightMult, hitTile);
+        }
 
         // Wall decor sprites (drawn before overlays so fog/shade affect them)
         _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
-                         mapX, mapY, side, stepX, stepY);
+                         shiftedTop, mapX, mapY, side, stepX, stepY);
 
         // Side shading (side=1 faces are darker, matching flat-color convention)
         if (side === 1) {
@@ -748,6 +759,41 @@ var Raycaster = (function () {
       _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor);
     }
 
+    // ── Terminus fog veil (exterior FADE floors only) ────────────
+    // Draws a soft atmospheric gradient band centered on the horizon
+    // to mask two artifacts:
+    //   1. Horizon seam — floor fog color vs sky gradient color mismatch
+    //   2. Wall pop-in — buildings beyond renderDistance popping in
+    //
+    // The veil is a vertical gradient: transparent at edges, opaque
+    // fog color at center (horizon line). It covers ~15% of screen
+    // height above and below the horizon. Interior/dungeon floors
+    // use CLAMP or DARKNESS fog which have intentional hard cutoffs,
+    // so the veil is skipped for those models.
+    if (_contract && _contract.fogModel === 'fade' && _contract.terminusFog) {
+      var _tf = _contract.terminusFog;
+      var _tfOpacity = _tf.opacity || 0;
+      if (_tfOpacity > 0.01) {
+        var veilH = Math.floor(h * (_tf.height || 0.15));
+        var veilTop = Math.max(0, Math.floor(halfH) - veilH);
+        var veilBot = Math.min(h, Math.floor(halfH) + veilH);
+        var veilTotalH = veilBot - veilTop;
+        if (veilTotalH > 4) {
+          var _tfR = fogColor.r, _tfG = fogColor.g, _tfB = fogColor.b;
+          var _tfMid = _tfOpacity.toFixed(3);
+          var _tfSide = (_tfOpacity * 0.6).toFixed(3);
+          var veilGrad = ctx.createLinearGradient(0, veilTop, 0, veilBot);
+          veilGrad.addColorStop(0,    'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',0)');
+          veilGrad.addColorStop(0.35, 'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfSide + ')');
+          veilGrad.addColorStop(0.5,  'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfMid + ')');
+          veilGrad.addColorStop(0.65, 'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfSide + ')');
+          veilGrad.addColorStop(1,    'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',0)');
+          ctx.fillStyle = veilGrad;
+          ctx.fillRect(0, veilTop, w, veilTotalH);
+        }
+      }
+    }
+
     // ── Render particles (above sprites, below HUD) ──
     // dt is estimated from frame timing since render() doesn't receive it.
     // CombatFX or game.js calls updateParticles() separately if precision matters.
@@ -847,6 +893,114 @@ var Raycaster = (function () {
     }
   }
 
+  // ── Per-pixel wall column renderer (PW-1 grime hook) ─────────
+  // Reads texture data directly and writes via ImageData, enabling
+  // per-pixel grime tinting. Only used for wall columns that have a
+  // GrimeGrid — clean columns keep the fast ctx.drawImage path above.
+  //
+  // Pre-allocated 1-pixel-wide column buffer (shared across calls).
+  var _wallColImgData = null;
+  var _wallColBuf = null;   // Uint8ClampedArray alias for _wallColImgData.data
+  var _wallColBufH = 0;     // allocated height
+
+  // Grime tint target color (brownish-green, PW-1 §5.3)
+  var _GRIME_R = 82, _GRIME_G = 68, _GRIME_B = 46;
+
+  /**
+   * Per-pixel wall column renderer with grime tint.
+   *
+   * Replicates _drawTiledColumn logic but samples texture pixels manually
+   * so grime can be composited per-pixel. The grime grid is a Uint8Array
+   * of resolution×resolution subcells — the wallU selects the horizontal
+   * subcell and the vertical V within the column selects the vertical one.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Object} tex         - TextureAtlas entry { canvas, width, height, data }
+   * @param {number} texX        - Source texture column (integer pixel index)
+   * @param {number} wallTop     - Unshifted top pixel of the full wall strip
+   * @param {number} lineH       - Total wall height in pixels
+   * @param {number} drawStart   - Visible top pixel (clamped to screen)
+   * @param {number} drawEnd     - Visible bottom pixel (clamped to screen)
+   * @param {number} col         - Screen column X
+   * @param {number} whMult      - Wall height multiplier (tileWallHeights)
+   * @param {number} tileType    - TILES constant
+   * @param {Object} grimeGrid   - { data: Uint8Array, res: number } or null
+   * @param {number} wallU       - UV coordinate along wall face (0..1)
+   */
+  function _drawTiledColumnPixel(ctx, tex, texX, wallTop, lineH,
+                                  drawStart, drawEnd, col, whMult, tileType,
+                                  grimeGrid, wallU) {
+    var stripH = drawEnd - drawStart + 1;
+    if (stripH <= 0 || lineH <= 0) return;
+
+    // Lazy-init / grow the shared column buffer
+    if (!_wallColImgData || _wallColBufH < _height) {
+      _wallColImgData = ctx.createImageData(1, _height);
+      _wallColBuf = _wallColImgData.data;
+      _wallColBufH = _height;
+    }
+
+    var shouldTile = (tileType === TILES.WALL) && (whMult > 1.001);
+    var texData = tex.data;
+    var texW = tex.width;
+    var texH = tex.height;
+
+    // Grime subcell X is constant for the entire column (same U)
+    var grimeRes = grimeGrid ? grimeGrid.res : 0;
+    var grimeData = grimeGrid ? grimeGrid.data : null;
+    var grimeSubX = 0;
+    if (grimeGrid) {
+      grimeSubX = Math.floor(wallU * grimeRes);
+      if (grimeSubX >= grimeRes) grimeSubX = grimeRes - 1;
+    }
+
+    for (var py = 0; py < stripH; py++) {
+      var screenY = drawStart + py;
+
+      // Compute V coordinate within the wall (0..1)
+      var v;
+      if (!shouldTile) {
+        v = (screenY - wallTop) / lineH;
+      } else {
+        // Tiled walls: V wraps per tile repeat
+        var globalV = (screenY - wallTop) / lineH * whMult;
+        v = globalV - Math.floor(globalV);
+      }
+
+      // Sample source texel
+      var srcY = Math.floor(v * texH);
+      if (srcY < 0) srcY = 0;
+      if (srcY >= texH) srcY = texH - 1;
+      var srcIdx = (srcY * texW + texX) * 4;
+      var r = texData[srcIdx];
+      var g = texData[srcIdx + 1];
+      var b = texData[srcIdx + 2];
+      var a = texData[srcIdx + 3];
+
+      // ── GrimeGrid tint (PW-1 §5.3) ──
+      // Subcell lookup: grimeSubX is column-constant, subY varies per pixel.
+      if (grimeData) {
+        var grimeSubY = Math.floor(v * grimeRes);
+        if (grimeSubY >= grimeRes) grimeSubY = grimeRes - 1;
+        var grime = grimeData[grimeSubY * grimeRes + grimeSubX];
+        if (grime > 0) {
+          var ga = (grime / 255) * 0.6;  // max 60% opacity
+          r = r * (1 - ga) + _GRIME_R * ga;
+          g = g * (1 - ga) + _GRIME_G * ga;
+          b = b * (1 - ga) + _GRIME_B * ga;
+        }
+      }
+
+      var bufIdx = py * 4;
+      _wallColBuf[bufIdx]     = r;
+      _wallColBuf[bufIdx + 1] = g;
+      _wallColBuf[bufIdx + 2] = b;
+      _wallColBuf[bufIdx + 3] = a;
+    }
+
+    ctx.putImageData(_wallColImgData, col, drawStart, 0, 0, 1, stripH);
+  }
+
   // ── Wall decor rendering ──────────────────────────────────────
   // Draws small alpha-transparent sprites pinned to wall faces.
   // Called after the wall texture and before fog/brightness overlays
@@ -894,9 +1048,10 @@ var Raycaster = (function () {
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} col - Screen column
    * @param {number} wallX - UV coordinate along the wall face (0..1)
-   * @param {number} drawStart - Top pixel of the wall strip
-   * @param {number} drawEnd - Bottom pixel of the wall strip
+   * @param {number} drawStart - Top pixel of the wall strip (clamped to screen)
+   * @param {number} drawEnd - Bottom pixel of the wall strip (clamped to screen)
    * @param {number} lineHeight - Full height of the wall in pixels (may exceed screen)
+   * @param {number} wallTop - UNCLAMPED top pixel of the full wall strip
    * @param {number} mapX - Grid X of hit cell
    * @param {number} mapY - Grid Y of hit cell
    * @param {number} sd - DDA side
@@ -904,7 +1059,7 @@ var Raycaster = (function () {
    * @param {number} stY - Step Y
    */
   function _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
-                            mapX, mapY, sd, stX, stY) {
+                            wallTop, mapX, mapY, sd, stX, stY) {
     if (!_wallDecor) return;
     var row = _wallDecor[mapY];
     if (!row) return;
@@ -915,8 +1070,7 @@ var Raycaster = (function () {
     var items = cell[face];
     if (!items || items.length === 0) return;
 
-    var stripH = drawEnd - drawStart + 1;
-    if (stripH <= 0) return;
+    if (drawEnd - drawStart < 0) return;
 
     for (var di = 0; di < items.length; di++) {
       var d = items[di];
@@ -951,11 +1105,13 @@ var Raycaster = (function () {
       var vMin = vCenter - vExtent / 2;
       var vMax = vCenter + vExtent / 2;
 
-      // Map to screen pixels within the wall strip
+      // Map to screen pixels within the FULL (unclamped) wall strip.
+      // Using wallTop + lineHeight (not drawStart + stripH) so sprite
+      // position is stable regardless of screen clamping — fixes the
+      // "flag waving" warping artifact on peripheral walls.
       // wallV 0=top of wall, 1=bottom → sprite vMin/vMax are 0=bottom, 1=top
-      // So screenTop = drawStart + (1 - vMax) * stripH
-      var spriteTop = drawStart + (1 - vMax) * stripH;
-      var spriteBot = drawStart + (1 - vMin) * stripH;
+      var spriteTop = wallTop + (1 - vMax) * lineHeight;
+      var spriteBot = wallTop + (1 - vMin) * lineHeight;
       var spriteH = spriteBot - spriteTop;
       if (spriteH < 1) continue;
 
@@ -984,7 +1140,7 @@ var Raycaster = (function () {
           // Glow center in screen Y (sprite vertical center)
           var gCY = (dTop + dBot) * 0.5;
           // Glow center in screen X (sprite horizontal center)
-          var spriteCX = drawStart + (1 - d.anchorV) * stripH; // approximate
+          var spriteCX = wallTop + (1 - d.anchorV) * lineHeight; // approximate
           // Column offset from sprite U center → horizontal falloff
           var uCenter = d.anchorU;
           var uDist = Math.abs(wallX - uCenter) / (d.scale * 0.5 + 0.001);
@@ -1084,11 +1240,19 @@ var Raycaster = (function () {
       if (texX >= tex.width) texX = tex.width - 1;
 
       // Draw textured wall column — only WALL tiles tile their texture
-      _drawTiledColumn(ctx, tex, texX, flatTop, lineH, drStart, drEnd, col, wh, L.tile);
+      // PW-1 hook: per-pixel path for grimed back-layer walls.
+      var _blGrime = (typeof GrimeGrid !== 'undefined')
+        ? GrimeGrid.get(_bloodFloorId, L.mx, L.my) : null;
+      if (_blGrime) {
+        _drawTiledColumnPixel(ctx, tex, texX, flatTop, lineH, drStart, drEnd, col, wh, L.tile,
+                              _blGrime, wx);
+      } else {
+        _drawTiledColumn(ctx, tex, texX, flatTop, lineH, drStart, drEnd, col, wh, L.tile);
+      }
 
       // Wall decor on back layers
       _renderWallDecor(ctx, col, wx, drStart, drEnd, lineH,
-                       L.mx, L.my, L.sd, stepX, stepY);
+                       flatTop, L.mx, L.my, L.sd, stepX, stepY);
 
       // Side shading
       if (L.sd === 1) {
@@ -1239,6 +1403,15 @@ var Raycaster = (function () {
 
       var rowOffset = row * w * 4;
 
+      // ── Per-tile cache ──
+      // getBlood() does string concat + hash lookup — expensive per-pixel.
+      // Cache the result and only re-query when the tile coordinate changes.
+      // PW-1: also caches floor grime grid for sub-tile tinting.
+      var prevTileGX = -1, prevTileGY = -1;
+      var cachedBlood = 0;
+      var cachedFloorGrime = null;  // PW-1: { data: Uint8Array, res: number } or null
+      var _hasGrimeGrid = (typeof GrimeGrid !== 'undefined');
+
       for (var col = 0; col < w; col++) {
         // Compute grid tile coordinates (used for per-tile texture and blood)
         var tileGX = Math.floor(floorX);
@@ -1293,12 +1466,41 @@ var Raycaster = (function () {
         var g = curTexData[texIdx + 1] * bright;
         var b = curTexData[texIdx + 2] * bright;
 
-        // Blood splatter tint — red overlay on dirty tiles
+        // ── Dirt/grime tint — blood overlay or sub-tile grime grid ──
+        // Per-tile cache: only re-query when tile coordinate changes.
+        // PW-1: when GrimeGrid exists for this tile, use subcell grime
+        // tint instead of flat blood level. No grid = old blood fallback.
         if (_bloodFloorId && typeof CleaningSystem !== 'undefined') {
-          var blood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
-          if (blood > 0) {
-            // Blood intensity: 0.15–0.45 depending on blood level (1–3)
-            var bloodAlpha = 0.15 * blood;
+          if (tileGX !== prevTileGX || tileGY !== prevTileGY) {
+            cachedBlood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
+            cachedFloorGrime = _hasGrimeGrid
+              ? GrimeGrid.get(_bloodFloorId, tileGX, tileGY) : null;
+            prevTileGX = tileGX;
+            prevTileGY = tileGY;
+          }
+
+          if (cachedFloorGrime) {
+            // PW-1 §5.3: sub-tile grime tint (4×4 floor grid)
+            // UV within tile = fractional part of world floor coords
+            var floorFracX = floorX - tileGX;
+            var floorFracY = floorY - tileGY;
+            var fgRes = cachedFloorGrime.res;
+            var fgSubX = Math.floor(floorFracX * fgRes);
+            var fgSubY = Math.floor(floorFracY * fgRes);
+            if (fgSubX >= fgRes) fgSubX = fgRes - 1;
+            if (fgSubY >= fgRes) fgSubY = fgRes - 1;
+            if (fgSubX < 0) fgSubX = 0;
+            if (fgSubY < 0) fgSubY = 0;
+            var fgLevel = cachedFloorGrime.data[fgSubY * fgRes + fgSubX];
+            if (fgLevel > 0) {
+              var fga = (fgLevel / 255) * 0.6;
+              r = r * (1 - fga) + _GRIME_R * fga;
+              g = g * (1 - fga) + _GRIME_G * fga;
+              b = b * (1 - fga) + _GRIME_B * fga;
+            }
+          } else if (cachedBlood > 0) {
+            // Legacy blood tint — flat per-tile overlay (no grime grid)
+            var bloodAlpha = 0.15 * cachedBlood;
             r = r * (1 - bloodAlpha) + 140 * bloodAlpha;
             g = g * (1 - bloodAlpha * 1.3);
             b = b * (1 - bloodAlpha * 1.3);

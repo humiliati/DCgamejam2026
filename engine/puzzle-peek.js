@@ -204,6 +204,8 @@ var PuzzlePeek = (function () {
   function _show(tile, fx, fy, floorData) {
     if (_active) return;
 
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-popup', { volume: 0.4 });
+
     _cleanupId++;      // Cancel any in-flight DOM cleanup from a prior _hide()
     _active    = true;
     _timer     = 0;
@@ -380,6 +382,8 @@ var PuzzlePeek = (function () {
 
   function _hide() {
     if (!_active) { _timer = 0; return; }
+
+    if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui-click', { volume: 0.3 });
 
     _container.style.opacity       = '0';
     _container.style.pointerEvents = 'none';

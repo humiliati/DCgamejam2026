@@ -1,4 +1,11 @@
-{
+/**
+ * Book catalog - Layer 5 data file.
+ *
+ * Self-registers with BookshelfPeek at load time, bypassing the XHR
+ * path that fails silently on file:// in Chromium-based browsers.
+ * Source of truth: this file IS the book data (books.json is retired).
+ */
+BookshelfPeek.registerCatalog({
   "meta": {
     "version": 1,
     "description": "Book and document data for bookshelf peek interactions. Each entry has a unique id, a display title, an emoji icon, and one or more pages of text. Books are assigned to bookshelves via floor data (floorData.books[]).",
@@ -893,3 +900,4 @@
     }
   ]
 }
+);

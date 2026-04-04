@@ -149,8 +149,8 @@
     for (y = 24; y <= 27; y++) grid[y][18] = PT;
     // East entrance (col 33, rows 24–27)
     for (y = 24; y <= 27; y++) grid[y][33] = PT;
-    // North entrance (row 18, cols 24–27)
-    fillRange(grid[18], 24, 27, PT);
+    // North entrance (row 18, cols 23–28) — widened for comfortable access
+    fillRange(grid[18], 23, 28, PT);
     // South entrance (row 33, cols 24–27)
     fillRange(grid[33], 24, 27, PT);
 
@@ -246,9 +246,10 @@
     // Bonfire in forest clearing
     grid[6][23] = BF;
 
-    // Path from center up through forest
-    for (y = 5; y <= 17; y++) grid[y][24] = PT;
-    for (y = 5; y <= 17; y++) grid[y][25] = PT;
+    // Path from center up through forest to north facade door at (25,1)
+    // Extends to row 2 so players have a clear walkable corridor to the door
+    for (y = 2; y <= 17; y++) grid[y][24] = PT;
+    for (y = 2; y <= 17; y++) grid[y][25] = PT;
 
     // East half (cols 26–33): water + boardwalk edge
     fillRect(grid, 28, 2, 33, 17, WA);
