@@ -178,6 +178,10 @@ var FloorManager = (function () {
       if (floor === '2.1') return 'office';      // Dispatcher's Office
       if (floor === '2.2') return 'watchpost';   // Watchman's Post
       if (floor === '2.3') return 'shop';        // Armorer's Workshop (Foundry shop)
+      if (floor === '2.4') return 'shop';        // Chandler's Shop (Tide shop)
+      if (floor === '2.5') return 'shop';        // The Apothecary (Tide shop)
+      if (floor === '2.6') return 'shop';        // The Cartographer (Admiralty shop)
+      if (floor === '2.7') return 'shop';        // The Tea House (Tide social)
       if (floor === '3.1') return 'armory';      // Armory
       if (floor === '3.2') return 'shop';        // Quartermaster's Shop (Admiralty shop)
       return 'bazaar';  // fallback for unknown interiors
@@ -200,6 +204,30 @@ var FloorManager = (function () {
     if (dungeonLevel <= 2) return 'cellar';
     if (dungeonLevel <= 5) return 'foundry';
     return 'sealab';
+  }
+
+  /**
+   * Classify a floor as a dungeon (cellar/catacomb/foundry/sealab) vs
+   * exterior (promenade/lantern/frontier/etc.) or interior (bazaar/inn/
+   * home/shop/armory/cellar_entry/etc.).
+   *
+   * This is the canonical check for "should dungeon-only systems run
+   * here?" — reshuffle, blood seeding, trap re-arm, cobweb scan, work
+   * orders, corpse registry, raycaster blood tint, etc.
+   *
+   * Depth alone is NOT sufficient: depth-3 floor IDs like 0.5.1 are
+   * interior stubs (biome 'cellar_entry'), not real dungeons. Keying
+   * off biome keeps the classifier honest as new floors are added.
+   *
+   * @param {string} [floorId] - Floor ID (defaults to current)
+   * @returns {boolean}
+   */
+  function isDungeonFloor(floorId) {
+    var biome = getBiome(floorId);
+    return biome === 'cellar'   ||
+           biome === 'catacomb' ||
+           biome === 'foundry'  ||
+           biome === 'sealab';
   }
 
   /**
@@ -553,11 +581,13 @@ var FloorManager = (function () {
             4:  'door_wood_asc',    // DOOR_EXIT — back to exterior
             5:  'stairs_down',      // STAIRS_DN — to Hero's Wake
             6:  'stairs_up',        // STAIRS_UP
+            7:  'stash_chest',      // CHEST — supply chest (iron-bound)
             10: 'stone_cathedral',  // PILLAR — stone columns
             25: 'bookshelf',        // BOOKSHELF — records shelves
             28: 'table_wood'        // TABLE — planning table
           }),
           tileWallHeights: Object.freeze({
+            7:  0.7,               // CHEST — waist-height stash box
             10: 2.2,               // PILLAR — imposing columns
             28: 0.7                // TABLE — planning table height
           }),
@@ -754,7 +784,8 @@ var FloorManager = (function () {
           parallax: [
             { depth: 0.95, color: '#b06040', height: 0.10 },
             { depth: 0.85, color: '#4a2030', height: 0.12 }
-          ]
+          ],
+          audio: { musicId: 'music-tavern-jam' }   // Lantern Row — boardwalk energy
         }, biomeTextures));
       }
       if (floor === '3') {
@@ -774,7 +805,8 @@ var FloorManager = (function () {
           parallax: [
             { depth: 0.95, color: '#161220', height: 0.15 },
             { depth: 0.85, color: '#1a1220', height: 0.12 }
-          ]
+          ],
+          audio: { musicId: 'music-empire' }   // The Garrison — frontier military
         }, biomeTextures));
       }
       // Generic exterior fallback
@@ -909,6 +941,80 @@ var FloorManager = (function () {
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
             26: -0.05,   // BAR_COUNTER — display case height
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.4') {
+        return SpatialContract.interior(Object.assign({
+          label: "The Chandler's Shop",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 26, g: 18, b: 10 },
+          ceilColor: '#2c1e10',
+          floorColor: '#5e4a32',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — display case height
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.5') {
+        return SpatialContract.interior(Object.assign({
+          label: "The Apothecary",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 20, g: 24, b: 14 },
+          ceilColor: '#1e241a',
+          floorColor: '#4a5232',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — display case height
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.6') {
+        return SpatialContract.interior(Object.assign({
+          label: "The Cartographer",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 16, g: 18, b: 26 },
+          ceilColor: '#1a1c28',
+          floorColor: '#4a4c58',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — chart counter height
+            28: -0.10,   // TABLE — chart table
+            30:  0       // TORCH_LIT — flush with wall
+          })
+        }, biomeTextures));
+      }
+      if (floor === '2.7') {
+        return SpatialContract.interior(Object.assign({
+          label: "The Tea House",
+          wallHeight: 2.0,
+          renderDistance: 12,
+          fogDistance: 10,
+          fogColor: { r: 28, g: 20, b: 14 },
+          ceilColor: '#2e2014',
+          floorColor: '#5e4a36',
+          gridSize: { w: 16, h: 12 },
+          roomCount: { min: 2, max: 3 },
+          tileHeightOffsets: Object.freeze({
+            4:  0.05,    // DOOR_EXIT — slight step at entrance
+            26: -0.05,   // BAR_COUNTER — tea service counter
+            28: -0.10,   // TABLE — low seating tables
             30:  0       // TORCH_LIT — flush with wall
           })
         }, biomeTextures));
@@ -1088,9 +1194,9 @@ var FloorManager = (function () {
     [1,1,21,22,34,22,22,22,22,22,22,22,22,34,34,22,22,22,22,22,22,22,22,34,34,22,22,22,22,22,22,22,22,34,34,34,34,34,34,34,34,34,34,1,1,1,1,21,21,21], // 4  pod tops (NW, NC, NE)
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,34,34,1,1,1,1,21,21,21], // 5  pod interiors
     [1,1,21,22,34,22,34,21,21,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,1,1,1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 6  NW trees + NE shack top + facade widens
-    [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,1,34,34,1,34,22,34,34,34,34,34,34,34,34,1,1,2,1,1,1,21,21,21], // 7  NE shack int + DOOR(43,7)→0.5.1
-    [1,1,21,22,34,22,34,34,21,34,34,34,22,34,34,22,34,34,18,34,34,34,22,34,34,22,34,1,34,34,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 8  NC campfire(18,8)
-    [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,1,2,1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 9  NE shack DOOR(28,9) + facade
+    [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 7  NE shack solid; upper facade solid (interiors deferred — see BUILDING_INTERIORS_ROADMAP)
+    [1,1,21,22,34,22,34,34,21,34,34,34,22,34,34,22,34,34,18,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 8  NC campfire(18,8); NE shack solid
+    [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 9  NE shack front wall solid (door deferred)
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //10  pod interiors
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,18,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //11  NE bonfire(29,11) outside shack
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //12  pod interiors
@@ -1106,10 +1212,10 @@ var FloorManager = (function () {
     [1,1,21,22,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //22  pod tops (SW, SC, SE) — open NORTH
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //23  pod interiors
     [1,1,21,22,34,22,34,34,34,34,37,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //24  SW mailbox(10,24)
-    [1,1,21,22,34,22,34,1,2,1,1,34,22,34,34,22,34,34,21,34,18,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //25  SW house DOOR(8,25) + SC bonfire(20,25) + SE tree
-    [1,1,21,22,34,22,34,1,34,34,1,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //26  SW house int + SC tree + SE tree
-    [1,1,21,22,34,22,34,1,34,34,1,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,34,34,34,1,1,21,21,21], //27  SW house + SC tree — facade courtyard opens
-    [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,21,34,22,34,34,34,34,34,34,34,34,1,2,34,34,1,1,21,21,21], //28  SW house bottom + DOOR(42,28)→0.5.2
+    [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,21,34,18,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //25  SW house front wall solid (door deferred — see BUILDING_INTERIORS_ROADMAP); SC bonfire(20,25)
+    [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //26  SW house solid; SC tree + SE tree
+    [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,34,34,34,1,1,21,21,21], //27  SW house solid; SC tree — facade courtyard opens
+    [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,21,34,22,34,34,34,34,34,34,34,34,1,1,34,34,1,1,21,21,21], //28  SW house bottom; lower facade solid (interior deferred)
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,34,34,34,1,1,21,21,21], //29  pod interiors — courtyard
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,34,34,1,1,1,1,21,21,21], //30  pod interiors
     [1,1,21,22,34,22,22,22,22,22,22,22,22,34,34,22,22,22,22,22,22,22,22,34,34,22,22,22,22,22,22,22,22,34,34,34,34,34,34,34,34,34,34,1,1,1,1,21,21,21], //31  pod bottoms (closed)
@@ -1154,11 +1260,11 @@ var FloorManager = (function () {
       },
       doorTargets: {
         '44,17': '1',     // Roman arch → The Promenade
-        '44,18': '1',     // Roman arch lower tile → The Promenade
-        '43,7':  '0.5.1', // Upper facade building entrance
-        '28,9':  '0.5.2', // NE shack interior
-        '8,25':  '0.5.3', // SW house interior
-        '42,28': '0.5.4'  // Lower facade building entrance (courtyard)
+        '44,18': '1'      // Roman arch lower tile → The Promenade
+        // Building interiors (NE shack, SW house, upper/lower facade) are
+        // deferred — walls are solid for now. Re-enable once the 0.5.N
+        // interior stubs are authored as proper cellar_entry rooms.
+        // See docs/BUILDING_INTERIORS_ROADMAP.md (to be written).
       },
       gridW: _FLOOR0_W,
       gridH: _FLOOR0_H,
@@ -1877,6 +1983,72 @@ var FloorManager = (function () {
     _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
   }
 
+  // ── Torch decor sync (live wall-decor update on extinguish/relight) ─
+
+  /**
+   * Look up floorData for a given floorId — current floor or cache.
+   * Private helper for mutations that need to work on any loaded floor.
+   */
+  function _resolveFloorData(floorId) {
+    if (!floorId) return null;
+    if (_floorId === floorId && _floorData) return _floorData;
+    var entry = _floorCache[String(floorId)];
+    return entry ? entry.floorData : null;
+  }
+
+  /**
+   * Swap a torch's wall-decor entry between lit (cavity glow) and unlit
+   * (charred bracket). Single source of truth for both the water-bottle
+   * extinguish path (TorchPeek) and the pressure-wash extinguish path
+   * (TorchHitResolver). Operates on the current floor OR any cached floor
+   * so cross-floor updates (e.g. future scripted events) stay coherent.
+   *
+   * Mirror of the initial decor emission in _buildWallDecorFromGrid so the
+   * visual state exactly matches a fresh-from-generation torch. Any change
+   * to the generator's decor_torch emission must be mirrored here — the
+   * pair is the contract.
+   *
+   * @param {string} floorId
+   * @param {number} x
+   * @param {number} y
+   * @param {boolean} isLit
+   * @returns {boolean} true if a decor entry was updated, false if no decor
+   *                    existed at that tile (e.g. isolated torch with no
+   *                    walkable neighbor — decor is only built on faces
+   *                    facing walkable tiles).
+   */
+  function syncTorchDecor(floorId, x, y, isLit) {
+    var fd = _resolveFloorData(floorId);
+    if (!fd || !fd.wallDecor) return false;
+    var decor = fd.wallDecor;
+    if (!decor[y] || !decor[y][x]) return false;
+
+    var cell = decor[y][x];
+    var faces = ['n', 's', 'e', 'w'];
+    var touched = false;
+    for (var f = 0; f < faces.length; f++) {
+      var arr = cell[faces[f]];
+      if (!arr) continue;
+      for (var d = 0; d < arr.length; d++) {
+        if (arr[d].spriteId !== 'decor_torch') continue;
+        if (isLit) {
+          arr[d].scale = 0.25;
+          arr[d].cavityGlow = true;
+          arr[d].glowR = 255; arr[d].glowG = 140; arr[d].glowB = 40; arr[d].glowA = 0.3;
+        } else {
+          arr[d].scale = 0.2;
+          arr[d].cavityGlow = false;
+          delete arr[d].glowR;
+          delete arr[d].glowG;
+          delete arr[d].glowB;
+          delete arr[d].glowA;
+        }
+        touched = true;
+      }
+    }
+    return touched;
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
@@ -1913,6 +2085,7 @@ var FloorManager = (function () {
 
     // Lookups
     getBiome: getBiome,
+    isDungeonFloor: isDungeonFloor,
     getBiomeColors: getBiomeColors,
     getFloorContract: getFloorContract,
     getFloorLabel: getFloorLabel,
@@ -1923,6 +2096,9 @@ var FloorManager = (function () {
     // Cache
     clearCache: clearCache,
     invalidateCache: invalidateCache,
+
+    // Torch decor sync (live wall-decor updates on extinguish/relight)
+    syncTorchDecor: syncTorchDecor,
 
     /**
      * Get cached floorData for a previously-visited floor (read-only).

@@ -51,7 +51,7 @@ var CardFan = (function () {
   //   Non-combat: 2.5x base (150% larger) for easy inspection
   var COMBAT_SCALE     = 2.0;
   var EXPLORE_SCALE    = 2.5;
-  var COMBAT_LIFT      = 80;   // px additional upward shift in combat (increased for status bar clearance)
+  var COMBAT_LIFT      = 160;  // px additional upward shift in combat — must clear 128px status bar with margin
   var EXPLORE_LIFT     = 140;  // px additional upward shift in explore (NCH overlay) — cards must clear status bar
 
   // ── Derived (recalculated on open) ──────────────────────────────
@@ -163,7 +163,13 @@ var CardFan = (function () {
 
     _minimizeBtnEl = document.createElement('button');
     _minimizeBtnEl.id = 'fan-minimize-btn';
+    _minimizeBtnEl.className = 'a11y-btn';
+    _minimizeBtnEl.type = 'button';
     _minimizeBtnEl.textContent = '✕';
+    // aria-label is authoritative for screen readers; title is kept for
+    // mouse hover tooltips. Both say the same thing for consistency.
+    _minimizeBtnEl.setAttribute('aria-label', 'Close hand');
+    _minimizeBtnEl.setAttribute('aria-keyshortcuts', 'Enter Space Escape');
     _minimizeBtnEl.title = 'Close hand';
     _minimizeBtnEl.style.cssText =
       'position:absolute; z-index:20;' +
@@ -175,6 +181,7 @@ var CardFan = (function () {
       'box-shadow:0 2px 8px rgba(180,40,40,0.5);' +
       'transition:background 0.15s, transform 0.15s;';
     _minimizeBtnEl.addEventListener('mouseenter', function () {
+      if (_minimizeBtnEl.getAttribute('aria-disabled') === 'true') return;
       _minimizeBtnEl.style.background = 'rgba(220,50,50,0.95)';
       _minimizeBtnEl.style.transform = 'scale(1.15)';
     });
@@ -184,7 +191,19 @@ var CardFan = (function () {
     });
     _minimizeBtnEl.addEventListener('click', function (e) {
       e.stopPropagation();
+      if (_minimizeBtnEl.getAttribute('aria-disabled') === 'true') return;
       minimize();
+    });
+    // Escape as a keyboard-accelerator close is a near-universal
+    // convention. Native <button> already handles Enter/Space; this
+    // handler adds Escape so a focused Magic Remote user can dismiss
+    // the hand without leaving the button.
+    _minimizeBtnEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (_minimizeBtnEl.getAttribute('aria-disabled') !== 'true') minimize();
+      }
     });
     vp.appendChild(_minimizeBtnEl);
   }
@@ -215,23 +234,62 @@ var CardFan = (function () {
 
   // ── Dice button (combat accessibility attack) ───────────────────
 
+  // Sibling visually-hidden live region. Paired with aria-describedby
+  // on the button so screen readers announce stack state changes as
+  // the player builds — "stack: 2 cards, 5 damage" etc. Kept as a
+  // module-local so we only ever append one to the DOM.
+  var _diceLiveEl = null;
+
+  // :focus-visible ring and aria-disabled dimming live in a shared
+  // `.a11y-btn` class defined in index.html. Any runtime-created
+  // button that wants keyboard-accessible behaviour adds that class
+  // — no per-module stylesheet injection needed.
+
   /**
    * Create the dice button DOM element.
    * In combat, this button gives accessibility controllers a reliable
-   * click target to:
+   * click/enter target to:
    *   - No stack: fire a random card at 1.0× baseline thrust
    *   - Stack built: fire the stack at the full thrust-cap multiplier
    *     (equivalent to the swipe-up gesture for controllers that can't
    *     perform a reliable swipe)
+   *
+   * Accessibility notes:
+   *   - Native <button> → Enter and Space activate it out of the box
+   *   - type="button" so we never accidentally submit a form ancestor
+   *   - aria-label is authoritative and updated on every state change
+   *     to reflect the actual action (random vs fire N-card, damage)
+   *   - aria-describedby points at a visually-hidden live region that
+   *     announces stack/damage changes as they happen
+   *   - :focus-visible ring in phosphor amber matches game theme and
+   *     ONLY shows for keyboard focus, not mouse clicks
+   *   - aria-disabled + dimmed style when the action isn't meaningful
+   *   - Native title kept for mouse hover tooltips (unchanged)
    */
   function _createDiceBtn() {
     if (_diceBtn) return;
     var vp = document.getElementById('viewport');
     if (!vp) return;
 
+    // Visually-hidden live region (sr-only). Sits next to the button
+    // so aria-describedby resolves without layout cost.
+    _diceLiveEl = document.createElement('span');
+    _diceLiveEl.id = 'fan-dice-live';
+    _diceLiveEl.setAttribute('aria-live', 'polite');
+    _diceLiveEl.setAttribute('aria-atomic', 'true');
+    _diceLiveEl.style.cssText =
+      'position:absolute; width:1px; height:1px; padding:0; margin:-1px;' +
+      'overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;';
+    vp.appendChild(_diceLiveEl);
+
     _diceBtn = document.createElement('button');
     _diceBtn.id = 'fan-dice-btn';
+    _diceBtn.className = 'a11y-btn';
+    _diceBtn.type = 'button';
     _diceBtn.textContent = '\uD83C\uDFB2';
+    _diceBtn.setAttribute('aria-label', 'Random attack');
+    _diceBtn.setAttribute('aria-describedby', 'fan-dice-live');
+    _diceBtn.setAttribute('aria-keyshortcuts', 'Enter Space');
     _diceBtn.title = 'Random attack';
     _diceBtn.style.cssText =
       'position:absolute; z-index:16;' +
@@ -243,9 +301,9 @@ var CardFan = (function () {
       'display:none; align-items:center; justify-content:center;' +
       'font-family:monospace; pointer-events:auto;' +
       'box-shadow:0 2px 14px rgba(100,60,255,0.5);' +
-      'transition:background 0.15s, transform 0.15s, border-color 0.2s;' +
-      'outline:none;';
+      'transition:background 0.15s, transform 0.15s, border-color 0.2s;';
     _diceBtn.addEventListener('mouseenter', function () {
+      if (_diceBtn.getAttribute('aria-disabled') === 'true') return;
       _diceBtn.style.background = 'rgba(80,55,180,0.95)';
       _diceBtn.style.transform  = 'scale(1.12)';
     });
@@ -255,27 +313,69 @@ var CardFan = (function () {
     });
     _diceBtn.addEventListener('click', function (e) {
       e.stopPropagation();
+      if (_diceBtn.getAttribute('aria-disabled') === 'true') return;
       _handleDiceAction();
     });
 
     vp.appendChild(_diceBtn);
   }
 
+  // Remember the last announced label so the live region only fires
+  // when the state actually changes — chatty aria-live regions make
+  // screen readers unusable.
+  var _diceLastAnnounced = '';
+
   /**
-   * Sync dice button label/colour to current stack state.
+   * Sync dice button label/colour/aria to current stack state.
    * Call whenever the stack changes or the button becomes visible.
    */
   function _updateDiceBtn() {
     if (!_diceBtn) return;
+
     var hasStack = typeof CardStack !== 'undefined' && !CardStack.isEmpty();
+    var canAct = _open && _inCombat();
+
+    var label;      // aria-label / title (functional description)
+    var announce;   // live region text (state change)
+
     if (hasStack) {
-      _diceBtn.title = 'Fire stack (' + CardStack.getSize() + ' cards) — full thrust';
+      // Pull the authoritative damage estimate from StackPreview so the
+      // a11y label matches the visual HUD exactly. Falls back to a
+      // plain count if StackPreview isn't present.
+      var est = null;
+      if (typeof StackPreview !== 'undefined' && StackPreview.getEstimate) {
+        est = StackPreview.getEstimate();
+      }
+      var size = CardStack.getSize();
+      if (est && est.hasStack) {
+        label = 'Commit ' + size + '-card stack for ' + est.damage + ' damage';
+        var parts = ['Stack: ' + size + ' cards, ' + est.damage + ' damage'];
+        if (est.suitAdv && est.suitMult > 1.01) parts.push('suit advantage');
+        else if (est.suitAdv && est.suitMult < 0.99) parts.push('suit resisted');
+        if (est.mono.monoSuit && est.mono.bonus > 0) parts.push('mono-suit bonus');
+        announce = parts.join(', ');
+      } else {
+        label = 'Commit ' + size + '-card stack at full thrust';
+        announce = 'Stack: ' + size + ' cards ready';
+      }
       _diceBtn.style.background   = 'rgba(140,90,20,0.88)';
       _diceBtn.style.borderColor  = 'rgba(255,200,60,0.9)';
     } else {
-      _diceBtn.title = 'Random attack';
+      label = 'Random attack — fire a single card at baseline thrust';
+      announce = 'No stack built. Random attack ready.';
       _diceBtn.style.background  = 'rgba(50,30,120,0.88)';
       _diceBtn.style.borderColor = 'rgba(140,100,255,0.7)';
+    }
+
+    _diceBtn.setAttribute('aria-label', label);
+    _diceBtn.title = label;
+    _diceBtn.setAttribute('aria-disabled', canAct ? 'false' : 'true');
+
+    // Only push to the live region when the announcement actually
+    // changes — avoids flooding screen readers every animation frame.
+    if (_diceLiveEl && announce !== _diceLastAnnounced) {
+      _diceLastAnnounced = announce;
+      _diceLiveEl.textContent = announce;
     }
   }
 
@@ -522,9 +622,16 @@ var CardFan = (function () {
   /**
    * Test a point against the fan card bounding boxes.
    * Returns card index or -1.
+   *
+   * @param {number} px - Canvas-space X
+   * @param {number} py - Canvas-space Y
+   * @param {number} [excludeIdx] - Optional card index to skip (e.g. the
+   *   card currently being dragged, so its own static arc slot doesn't
+   *   self-match and starve the drop-target detection).
    */
-  function hitTest(px, py) {
+  function hitTest(px, py, excludeIdx) {
     if (!_open || !_canvas) return -1;
+    if (typeof excludeIdx !== 'number') excludeIdx = -1;
     var h = _canvas.height;
     var cx = _canvas.width / 2;
 
@@ -537,6 +644,7 @@ var CardFan = (function () {
 
     // Test from top (front) card to back for correct overlap order
     for (var i = _cards.length - 1; i >= 0; i--) {
+      if (i === excludeIdx) continue;
       var c = _cards[i];
       if (c.playing) continue;
 
@@ -673,8 +781,10 @@ var CardFan = (function () {
       _playAudio('card-pickup', { volume: 0.4 });
     }
 
-    // During drag: update hover to the card under pointer (for drop target)
-    _hoverIdx = hitTest(px, py);
+    // During drag: update hover to the card under pointer (for drop target).
+    // Exclude the source card so its own static arc slot doesn't eclipse
+    // the real drop target underneath the pointer.
+    _hoverIdx = hitTest(px, py, _drag.cardIdx);
 
     // External drag: if pointer is above the fan area, show ghost overlay
     if (_drag.started && !_inCombat() && _externalDropHandler) {
@@ -716,9 +826,11 @@ var CardFan = (function () {
       return;
     }
 
-    // Drag completed — determine action
+    // Drag completed — determine action.
+    // Exclude the source card from hitTest so its own static arc slot
+    // doesn't self-match and block stack/reorder drops.
     var dragIdx = _drag.cardIdx;
-    var dropIdx = hitTest(px, py);
+    var dropIdx = hitTest(px, py, dragIdx);
 
     // Check for swipe-up-to-fire gesture
     var dy = _drag.startY - py;  // Positive = upward

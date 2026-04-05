@@ -166,6 +166,7 @@ var AUDIO_MANIFEST = {
   "music-crystal-shield":    { "src": "music/crystalshield.webm",      "category": "music" },
   "music-desert-village":    { "src": "music/desertvillage.webm",      "category": "music" },
   "music-dungeon-guest":     { "src": "music/dungeon_guest.webm",      "category": "music" },
+  "music-insidearea":        { "src": "music/insidearea.webm",         "category": "music" },
   "music-empire":            { "src": "music/empire.webm",             "category": "music" },
   "music-garden":            { "src": "music/garden.webm",             "category": "music" },
   "music-godling":           { "src": "music/godling.webm",            "category": "music" },

@@ -338,7 +338,7 @@ var DumpTruckSpawner = (function () {
 
     var activeGroupId = null;
 
-    // Check DungeonSchedule for a group whose hero day is today
+    // ── 1) Exact match: any unresolved contract whose actualDay is today ──
     if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getSchedule) {
       var schedule = DungeonSchedule.getSchedule();
       var today = DungeonSchedule.getCurrentDay
@@ -349,6 +349,28 @@ var DumpTruckSpawner = (function () {
         if (!entry.resolved && entry.actualDay === today) {
           activeGroupId = entry.groupId;
           break;
+        }
+      }
+
+      // ── 2) Fallback: DayCycle says today IS a hero day but no contract
+      //        matched. This can happen when the game's current day hasn't
+      //        been handed to DungeonSchedule yet (e.g. at player deploy
+      //        spawn on a brand-new game, before any onDayChange fires).
+      //        In that case deploy to the NEXT upcoming unresolved group
+      //        rather than parking at home — the user should always see
+      //        the truck on-site for an active hero day. ──
+      if (!activeGroupId &&
+          typeof DayCycle !== 'undefined' && DayCycle.isHeroDay &&
+          DayCycle.isHeroDay() &&
+          DungeonSchedule.getNextGroup) {
+        var next = DungeonSchedule.getNextGroup();
+        if (next && DEPLOY_SITES[next.groupId]) {
+          activeGroupId = next.groupId;
+          if (typeof console !== 'undefined') {
+            console.log('[DumpTruckSpawner] Hero-day fallback: no contract ' +
+                        'matches day ' + today + ', deploying to next group "' +
+                        next.groupId + '" (scheduled day ' + next.actualDay + ').');
+          }
         }
       }
     }

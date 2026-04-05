@@ -458,7 +458,7 @@ BookshelfPeek.registerCatalog({
       "icon": "📘",
       "category": "tip",
       "pages": [
-        "Welcome to the Coral Bazaar!\n\nFace a vendor and press OK to open the shop.\nBrowse with A/D. Buy with OK. Exit with Escape.",
+        "Welcome to the Coral Bazaar!\n\nFace a vendor and press OK to open the shop.\nBrowse with A/D. Buy with OK. Close with Backspace.",
         "Vendors sell cards in their faction's suit.\nTide Council: ♥ Hearts - healing and magic.\nThe Foundry: ♦ Diamonds - gear and combat.\nThe Admiralty: ♣ Clubs - defence and tactics.",
         "Tip: Check the card's power value AND suit.\nA high-power card in the wrong suit won't\nwin against the right counter.\nBuild a balanced deck - don't go all-in on one suit."
       ],
@@ -724,7 +724,7 @@ BookshelfPeek.registerCatalog({
       "icon": "\uD83D\uDDA5\uFE0F",
       "category": "terminal",
       "pages": [
-        "GLEANER DISPATCH SYSTEM v2.1\nNODE: HOME-BUNK-06\nSTATUS: ONLINE\nOPERATOR: [YOU]\n\nWelcome, Gleaner. This terminal receives your work orders, shift schedules, and dungeon telemetry. Reports from completed hero runs will also be delivered here.\n\nPress [D] to cycle through records.\nPress [Esc] to disconnect.",
+        "GLEANER DISPATCH SYSTEM v2.1\nNODE: HOME-BUNK-06\nSTATUS: ONLINE\nOPERATOR: [YOU]\n\nWelcome, Gleaner. This terminal receives your work orders, shift schedules, and dungeon telemetry. Reports from completed hero runs will also be delivered here.\n\nPress [D] to cycle through records.\nPress [Back] to disconnect.",
         "ACTIVE SHIFT SCHEDULE:\n> Check your mailbox for current assignments.\n> Hero days are posted 2 days in advance.\n> Report to the dungeon lobby BEFORE your shift.\n> Bring supplies. The dungeon doesn't provide.\n\nTIP: The readiness bar in your HUD shows your progress. Hit the target before hero arrival."
       ],
       "biome": "home"

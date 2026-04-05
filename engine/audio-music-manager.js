@@ -1,51 +1,42 @@
 /**
  * AudioMusicManager — BGM state machine for Dungeon Gleaner.
  *
- * Manages which music track plays based on game context:
- *   - Title screen → overworld: Mood Bober persists clean through
- *     deployment to Floor 0, Floor 1
- *   - Floor 2 (Lantern Row): tavern-jam
- *   - Floor 3 (Garrison): empire
- *   - Building interiors (floorN.N): parent track continues, muffled +
- *     volume-ducked via lowpass filter (spatial contract)
- *   - Deep dungeons (floorN.N.N): dungeon-specific music
- *   - Cinematic focus: slight volume duck
- *   - Combat: fight music
+ * Single source of truth for music state is now the SpatialContract's
+ * `audio` block on each floor. This module is a thin applicator:
  *
- * Depends on: AudioSystem (Layer 0), FloorManager (Layer 1)
+ *   onFloorChange(id) → ask FloorManager for the target contract →
+ *   read contract.audio → apply musicId / muffleHz / bgmVolume.
+ *
+ * Special sentinels the music manager understands:
+ *   musicId === '__inherit_parent__'  — walk up the floor-id chain to
+ *       the first ancestor contract whose audio.musicId is a concrete
+ *       track. Used by interior contracts so buildings default to
+ *       "keep parent exterior's track, muffled + ducked".
+ *   musicId === null                  — leave whatever is playing alone
+ *       (useful for no-op exterior transitions where the parent root
+ *       has already started the track).
+ *
+ * Non-floor contexts (title screen, combat) still live here since they
+ * are not tied to a spatial contract.
+ *
+ * Depends on: AudioSystem (Layer 0), FloorManager (Layer 1), SpatialContract
  * Layer: 2 (called by title-screen, floor-transition, cinematic-camera)
  */
 var AudioMusicManager = (function () {
   'use strict';
 
-  // ── Track mapping ────────────────────────────────────────────────
-  // Key = floor ID prefix, value = manifest music key.
-  // Lookup walks from most-specific to least-specific.
+  // ── Non-floor tracks (title + combat) ────────────────────────────
+  // Floor-bound tracks live in the SpatialContract audio block.
+  var TITLE_TRACK     = 'music-mood-bober';
+  var TITLE_FADE_IN_MS = 3000;   // Gradual fade-in on the title screen
+  var COMBAT_TRACK    = 'music-fightwave';
 
-  var FLOOR_MUSIC = {
-    // ── Overworld exteriors ──
-    'title':  'music-mood-bober',      // Title screen
-    '0':      'music-mood-bober',      // Tutorial / Floor 0
-    '1':      'music-mood-bober',      // The Promenade
-    '2':      'music-tavern-jam',      // Lantern Row (boardwalk energy)
-    '3':      'music-empire',          // The Garrison (frontier military)
+  // Cinematic duck is global, not contract-bound.
+  var CINEMATIC_BGM_VOLUME = 0.35;
 
-    // ── Dungeon depths (floorN.N.N) — override parent ──
-    // Add specific dungeon tracks here as they're assigned:
-    // '1.2.1': 'music-dungeon-guest',
-
-    // ── Default dungeon fallback ──
-    '_dungeon': 'music-dungeon-guest',
-
-    // ── Combat ──
-    '_combat':  'music-fightwave'
-  };
-
-  // ── Interior muffle settings ─────────────────────────────────────
-  var INTERIOR_MUFFLE_FREQ = 800;    // Lowpass cutoff Hz for building interiors
-  var INTERIOR_BGM_VOLUME  = 0.35;   // BGM volume inside buildings
-  var CINEMATIC_BGM_VOLUME = 0.35;   // BGM volume during cinematic focus
-  var NORMAL_BGM_VOLUME    = 0.6;    // Default BGM volume (matches AudioSystem default)
+  // Fallback applied if a floor has no contract (e.g. uninitialized
+  // bootstrap or a test harness).
+  var FALLBACK_VOLUME = 0.6;
 
   // ── State ────────────────────────────────────────────────────────
   var _currentContext = null;  // 'title', floor ID, or '_combat'
@@ -55,74 +46,58 @@ var AudioMusicManager = (function () {
 
   // ── Helpers ──────────────────────────────────────────────────────
 
-  /**
-   * Get the depth of a floor ID (number of dot-separated segments).
-   * '1' = 1, '1.2' = 2, '1.2.3' = 3
-   */
-  function _getDepth(floorId) {
-    if (!floorId) return 0;
-    return floorId.split('.').length;
-  }
-
-  /**
-   * Get the parent floor ID. '1.2.3' → '1.2', '1.2' → '1', '1' → null
-   */
-  function _getParent(floorId) {
+  function _parentId(floorId) {
     if (!floorId) return null;
-    var parts = floorId.split('.');
+    var parts = String(floorId).split('.');
     if (parts.length <= 1) return null;
     parts.pop();
     return parts.join('.');
   }
 
   /**
-   * Get the root exterior floor. '1.2.3' → '1', '2.4' → '2'
+   * Resolve a floor's audio block. Never returns null.
    */
-  function _getRoot(floorId) {
-    if (!floorId) return null;
-    return floorId.split('.')[0];
+  function _audioFor(floorId) {
+    if (!floorId || typeof FloorManager === 'undefined' ||
+        typeof SpatialContract === 'undefined') {
+      return { musicId: null, muffleHz: null, bgmVolume: FALLBACK_VOLUME, ambientBed: null };
+    }
+    try {
+      var contract = FloorManager.getFloorContract(floorId);
+      return SpatialContract.getAudio(contract);
+    } catch (e) {
+      return { musicId: null, muffleHz: null, bgmVolume: FALLBACK_VOLUME, ambientBed: null };
+    }
   }
 
   /**
-   * Resolve which music track should play for a given floor ID.
-   * Checks specific floor first, then parent, then root, then dungeon fallback.
+   * Walk up the floor-id chain until we find an ancestor whose audio
+   * block has a concrete (non-sentinel) musicId. Returns that musicId
+   * or null if the chain is exhausted without one.
    */
-  function _resolveTrack(floorId) {
-    if (!floorId) return null;
-
-    // Direct match (most specific)
-    if (FLOOR_MUSIC[floorId]) return FLOOR_MUSIC[floorId];
-
-    // Depth-3+: check dungeon-specific, then fallback
-    var depth = _getDepth(floorId);
-    if (depth >= 3) {
-      // Check parent building
-      var parent = _getParent(floorId);
-      if (parent && FLOOR_MUSIC[parent]) return null;  // Will use dungeon fallback
-      return FLOOR_MUSIC['_dungeon'];
+  function _resolveInheritedTrack(floorId) {
+    var cursor = _parentId(floorId);
+    var guard  = 8;   // depth safety
+    while (cursor && guard-- > 0) {
+      var audio = _audioFor(cursor);
+      if (audio.musicId && audio.musicId !== '__inherit_parent__') {
+        return audio.musicId;
+      }
+      cursor = _parentId(cursor);
     }
-
-    // Depth-2 (building interior): use parent floor's track (muffled)
-    if (depth === 2) {
-      var root = _getRoot(floorId);
-      if (FLOOR_MUSIC[root]) return FLOOR_MUSIC[root];
-    }
-
     return null;
   }
 
   /**
-   * Determine if the current floor is a building interior (depth 2).
+   * Resolve the concrete track a floor should play. Handles the
+   * '__inherit_parent__' sentinel by walking the chain.
    */
-  function _isInterior(floorId) {
-    return _getDepth(floorId) === 2;
-  }
-
-  /**
-   * Determine if the current floor is a deep dungeon (depth 3+).
-   */
-  function _isDungeon(floorId) {
-    return _getDepth(floorId) >= 3;
+  function _resolveTrack(floorId) {
+    var audio = _audioFor(floorId);
+    if (audio.musicId === '__inherit_parent__') {
+      return _resolveInheritedTrack(floorId);
+    }
+    return audio.musicId || null;
   }
 
   // ── Public API ───────────────────────────────────────────────────
@@ -132,8 +107,7 @@ var AudioMusicManager = (function () {
    */
   function init() {
     _initialized = true;
-    console.log('[MusicManager] Initialized. ' +
-      Object.keys(FLOOR_MUSIC).length + ' floor-to-track mappings.');
+    console.log('[MusicManager] Initialized. Contract-driven audio.');
   }
 
   /**
@@ -142,17 +116,17 @@ var AudioMusicManager = (function () {
   function startTitle() {
     _currentContext = 'title';
     _inCombat = false;
-    var track = FLOOR_MUSIC['title'];
-    if (track) {
-      AudioSystem.setMuffle(false);
-      AudioSystem.setMusicVolume(NORMAL_BGM_VOLUME);
-      AudioSystem.playMusic(track);
-    }
+    AudioSystem.setMuffle(false);
+    AudioSystem.setMusicVolume(FALLBACK_VOLUME);
+    // Cold-start from silence with a gradual fade so the title screen
+    // breathes in rather than slamming to full volume.
+    if (TITLE_TRACK) AudioSystem.playMusic(TITLE_TRACK, TITLE_FADE_IN_MS);
   }
 
   /**
    * Notify that the player has transitioned to a new floor.
-   * Handles music continuity, muffle, and dungeon switches.
+   * Reads the target floor's spatial-contract audio block and applies
+   * musicId / muffleHz / bgmVolume.
    *
    * @param {string} floorId - Target floor ID (e.g. '1', '1.2', '1.2.3')
    */
@@ -164,36 +138,25 @@ var AudioMusicManager = (function () {
     }
 
     _currentContext = floorId;
-    var depth = _getDepth(floorId);
+    var audio = _audioFor(floorId);
     var track = _resolveTrack(floorId);
 
-    // Depth 3+ → dungeon: hard switch to dungeon music, clear muffle
-    if (depth >= 3) {
-      var dungeonTrack = track || FLOOR_MUSIC['_dungeon'];
+    // ── Muffle ──
+    if (audio.muffleHz) {
+      AudioSystem.setMuffle(true, audio.muffleHz);
+    } else {
       AudioSystem.setMuffle(false);
-      AudioSystem.setMusicVolume(NORMAL_BGM_VOLUME);
-      if (dungeonTrack) AudioSystem.playMusic(dungeonTrack);
-      return;
     }
 
-    // Depth 2 → building interior: keep parent track, muffle + duck
-    if (depth === 2) {
-      var parentTrack = FLOOR_MUSIC[_getRoot(floorId)];
-      if (parentTrack) {
-        // If a different track is playing, crossfade to parent's track
-        var currentTrack = AudioSystem.getCurrentMusic();
-        if (currentTrack !== parentTrack) {
-          AudioSystem.playMusic(parentTrack);
-        }
-      }
-      AudioSystem.setMuffle(true, INTERIOR_MUFFLE_FREQ);
-      AudioSystem.setMusicVolume(INTERIOR_BGM_VOLUME);
-      return;
-    }
+    // ── Volume ──
+    var vol = (typeof audio.bgmVolume === 'number') ? audio.bgmVolume : FALLBACK_VOLUME;
+    AudioSystem.setMusicVolume(vol);
 
-    // Depth 1 → exterior: clear muffle, restore volume, play track
-    AudioSystem.setMuffle(false);
-    AudioSystem.setMusicVolume(NORMAL_BGM_VOLUME);
+    // ── Track ──
+    // Only crossfade if the target is concrete AND different from what's
+    // currently playing. A null track (or a chain that resolved to null)
+    // means "keep whatever is playing" — this is the correct behavior for
+    // interior → parent transitions where the music should continue.
     if (track) {
       var current = AudioSystem.getCurrentMusic();
       if (current !== track) {
@@ -223,10 +186,9 @@ var AudioMusicManager = (function () {
     if (_inCombat) return;
     _inCombat = true;
     _preCombatCtx = _currentContext;
-    var combatTrack = FLOOR_MUSIC['_combat'];
-    if (combatTrack) {
+    if (COMBAT_TRACK) {
       AudioSystem.setMuffle(false);
-      AudioSystem.playMusic(combatTrack);
+      AudioSystem.playMusic(COMBAT_TRACK);
     }
   }
 
@@ -249,17 +211,25 @@ var AudioMusicManager = (function () {
     return {
       context: _currentContext,
       inCombat: _inCombat,
-      depth: _getDepth(_currentContext)
+      resolvedTrack: _currentContext ? _resolveTrack(_currentContext) : null
     };
   }
 
   /**
-   * Update the track mapping at runtime (e.g., assign a specific dungeon track).
-   * @param {string} floorId - Floor ID key
-   * @param {string} trackKey - Manifest music key
+   * Runtime override for a specific floor's audio. Rarely needed now
+   * that audio lives on the spatial contract — prefer editing the
+   * contract in floor-manager. Kept as a thin compatibility shim for
+   * any callers that still expect to poke a track in at runtime: it
+   * delegates to AudioSystem.playMusic directly if the current context
+   * matches the targeted floor.
+   *
+   * @param {string} floorId
+   * @param {string} trackKey
    */
   function setFloorTrack(floorId, trackKey) {
-    FLOOR_MUSIC[floorId] = trackKey;
+    if (_currentContext === floorId && trackKey) {
+      AudioSystem.playMusic(trackKey);
+    }
   }
 
   return {

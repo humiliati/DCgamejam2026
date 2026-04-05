@@ -304,8 +304,12 @@ var AudioSystem = (function () {
    * Uses <audio> element streaming — no full decode into memory.
    *
    * @param {string} name - Manifest key (e.g. 'music-graveyard')
+   * @param {number} [fadeInMs] - Optional cold-start fade-in duration in
+   *        milliseconds. Only used when nothing is currently playing —
+   *        the crossfade branch keeps its own FADE_MS ramp. Pass a large
+   *        value (e.g. 3000) for cinematic title-screen entrances.
    */
-  function playMusic(name) {
+  function playMusic(name, fadeInMs) {
     if (!_ready || !_musicEl) return;
     if (name === _musicName) return;  // Already playing
 
@@ -329,8 +333,20 @@ var AudioSystem = (function () {
         _bgmGain.gain.linearRampToValueAtTime(_volumes.bgm, _ctx.currentTime + FADE_MS / 1000);
       }, FADE_MS);
     } else {
+      // Cold start. If a fadeInMs was requested, ramp _bgmGain from 0
+      // to the current target volume over that duration. Otherwise start
+      // at full volume immediately (legacy behavior).
       _musicEl.src = url;
-      _musicEl.play().catch(function () {});
+      var playPromise = _musicEl.play();
+      if (playPromise && playPromise.catch) playPromise.catch(function () {});
+
+      if (fadeInMs && fadeInMs > 0 && _bgmGain && _ctx) {
+        // Master mute/volume is handled at _masterGain, so _bgmGain's
+        // target is just _volumes.bgm (matching _applyVolumes).
+        _bgmGain.gain.cancelScheduledValues(_ctx.currentTime);
+        _bgmGain.gain.setValueAtTime(0, _ctx.currentTime);
+        _bgmGain.gain.linearRampToValueAtTime(_volumes.bgm, _ctx.currentTime + fadeInMs / 1000);
+      }
     }
 
     _musicName = name;

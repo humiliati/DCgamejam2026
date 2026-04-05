@@ -264,12 +264,12 @@ Step PW-3: Spray interaction + Brush system + Torch hit                    (3h)
   │  Creates: brush kernels (base, fan, cyclone), pressure multiplier,
   │           torch extinguish on spray (flame→empty, fuel_dry→empty)
   │
-Step PW-4: Hose Reel (backward walk exit) + MinimapNav distance gate       (2h)
+Step PW-4: Hose Reel (retrace-path auto-exit) + MinimapNav distance gate   (2h)
   │  Creates: engine/hose-reel.js (Layer 3), engine/hose-overlay.js (Layer 2)
   │  Modifies: minimap-nav.js (min distance gate: 5+itemN),
   │            game.js (reel input binding, floor transition resume)
   │  Depends: PW-2 (hose path exists), PW-3 (spray proven)
-  │  Note: Player walks backward (facing opposite of travel) during reel.
+  │  Note: Reel retraces the recorded hose path with normal forward pathing.
   │        Reel bypasses minimap click distance gate.
   │
 Step PW-5: Nozzle items + Readiness integration + Regression               (2h)

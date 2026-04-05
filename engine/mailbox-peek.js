@@ -147,7 +147,7 @@ var MailboxPeek = (function () {
         _pagePrev();
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
         _pageNext();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === 'Escape' || e.key === 'Backspace') {
         _hide();
       }
     });
@@ -203,7 +203,7 @@ var MailboxPeek = (function () {
     if (_pending.length > 1) {
       footer += (_currentIndex + 1) + ' of ' + _pending.length + '  |  ';
     }
-    footer += '[F] Collect All  |  [Esc] Close';
+    footer += '[F] Collect All  |  [Back] Close';
     if (_pending.length > 1) {
       footer += '  |  A/D to page';
     }
@@ -230,7 +230,7 @@ var MailboxPeek = (function () {
     if (_collected.length > 1) {
       footer += '  |  [A] \u2190 [D] \u2192';
     }
-    footer += '  |  [Esc] Close</div>';
+    footer += '  |  [Back] Close</div>';
 
     _overlay.innerHTML = html + footer;
   }
@@ -250,7 +250,7 @@ var MailboxPeek = (function () {
 
     _overlay.innerHTML = '<div style="text-align:center;">' +
       '\uD83D\uDCED No new mail.' + nextInfo +
-      '<br/><br/><span style="font-size:12px;color:#888;">[Esc] Close</span>' +
+      '<br/><br/><span style="font-size:12px;color:#888;">[Back] Close</span>' +
       '</div>';
   }
 

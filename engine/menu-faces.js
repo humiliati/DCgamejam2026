@@ -218,6 +218,8 @@ var MenuFaces = (function () {
       _renderShopInfo(ctx, x, y, w, h);
     } else if (context === 'harvest') {
       _renderHarvestLoot(ctx, x, y, w, h);
+    } else if (context === 'corpse') {
+      _renderCorpseSlots(ctx, x, y, w, h);
     } else {
       _renderMinimap(ctx, x, y, w, h);
     }
@@ -399,7 +401,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - Math.round(6 * S));
+    ctx.fillText('[Q/E] Browse   [BACK] Resume', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
   }
 
@@ -632,7 +634,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
+    ctx.fillText(i18n.t('shop.bonfire_hint', '[BACK] Close   [Q/E] Browse'),
                  x + w / 2, y + h - Math.round(6 * S));
   }
 
@@ -714,7 +716,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('shop.browse_hint', '[Q/E] Browse panes   [ESC] Leave'),
+    ctx.fillText(i18n.t('shop.browse_hint', '[Q/E] Browse panes   [BACK] Leave'),
                  x + w / 2, y + h - Math.round(6 * S));
   }
 
@@ -953,7 +955,7 @@ var MenuFaces = (function () {
     var hintY = ty + (lastRow + 1) * (tileS + tileGap) + Math.round(8 * S);
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
-    ctx.fillText('[Q/E] View bag   [ESC] Leave', x + w / 2, hintY);
+    ctx.fillText('[Q/E] View bag   [BACK] Leave', x + w / 2, hintY);
     ctx.textAlign = 'left';
   }
 
@@ -1021,6 +1023,377 @@ var MenuFaces = (function () {
     ctx.fillText('💰 ' + Player.state().currency, x + w / 2, curY);
   }
 
+  // ── Corpse restock helpers ──────────────────────────────────────
+
+  /** Get the corpse container for the current restock session, or null. */
+  function _getCorpseContainer() {
+    if (typeof Game === 'undefined' || !Game.getCorpseTarget) return null;
+    if (typeof CrateSystem === 'undefined') return null;
+    var t = Game.getCorpseTarget();
+    if (t.x < 0) return null;
+    return CrateSystem.getContainer(t.x, t.y, t.floorId) || null;
+  }
+
+  var FRAME_LABEL = {};
+  FRAME_LABEL['hp_food']  = 'Food';
+  FRAME_LABEL['energy']   = 'Energy';
+  FRAME_LABEL['battery']  = 'Battery';
+  FRAME_LABEL['scroll']   = 'Scroll';
+  FRAME_LABEL['gem']      = 'Gem';
+  FRAME_LABEL['wildcard'] = 'Any';
+  FRAME_LABEL['suit_card'] = 'Card';
+
+  var FRAME_EMOJI = {};
+  FRAME_EMOJI['hp_food']  = '\u2764\uFE0F';
+  FRAME_EMOJI['energy']   = '\u26A1';
+  FRAME_EMOJI['battery']  = '\uD83D\uDD0B';
+  FRAME_EMOJI['scroll']   = '\uD83D\uDCDC';
+  FRAME_EMOJI['gem']      = '\uD83D\uDC8E';
+  FRAME_EMOJI['wildcard'] = '\u2B50';
+  FRAME_EMOJI['suit_card'] = '\uD83C\uDCCF';
+
+  var SUIT_EMOJI_C = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+
+  /**
+   * Face 0 — 'corpse': Shows the corpse stock slots.
+   * Filled slots show what's inside; empty slots show what's needed.
+   * When all slots are full, shows a [Seal] button.
+   */
+  function _renderCorpseSlots(ctx, x, y, w, h) {
+    var S   = Math.min(w, h) / 400;
+    var ty  = _drawTitle(ctx, x, y, w, 'CORPSE STOCK', '\u2620\uFE0F', S);
+    var F_B = Math.max(10, Math.round(14 * S));
+    var F_S = Math.max(9,  Math.round(12 * S));
+
+    var c = _getCorpseContainer();
+    if (!c) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('No restock container found.', x + w / 2, ty + 30 * S);
+      return;
+    }
+
+    if (c.sealed) {
+      ctx.fillStyle = '#6f6';
+      ctx.font = 'bold ' + F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u2714 Sealed — ready to reanimate', x + w / 2, ty + 24 * S);
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_S + 'px monospace';
+      ctx.fillText('Face the corpse and press OK', x + w / 2, ty + 42 * S);
+      return;
+    }
+
+    var slots  = c.slots;
+    var n      = slots.length;
+    var SLOT_W = Math.max(48, Math.round(Math.min((w - 24) / n, 64) * S * 1.4));
+    var SLOT_H = SLOT_W;
+    var GAP    = Math.round(8 * S);
+    var rowW   = n * SLOT_W + (n - 1) * GAP;
+    var startX = x + (w - rowW) / 2;
+    var slotY  = ty + Math.round(10 * S);
+    var allFilled = true;
+
+    ctx.textAlign = 'center';
+    for (var i = 0; i < n; i++) {
+      var sl = slots[i];
+      if (!sl.filled) allFilled = false;
+      var sx = startX + i * (SLOT_W + GAP);
+
+      // Slot background
+      var frameColor = sl.frameTag === CrateSystem.FRAME.SUIT_CARD
+        ? (CrateSystem.SUIT_FRAME_COLOR[sl.suit] || '#f44')
+        : (CrateSystem.FRAME_COLOR[sl.frameTag] || '#888');
+      ctx.fillStyle = sl.filled ? 'rgba(60,80,60,0.7)' : 'rgba(30,20,40,0.6)';
+      _roundRectFill(ctx, sx, slotY, SLOT_W, SLOT_H, 6);
+      ctx.strokeStyle = sl.filled ? '#6f6' : frameColor;
+      ctx.lineWidth   = 1.5;
+      _roundRectStroke(ctx, sx, slotY, SLOT_W, SLOT_H, 6);
+
+      // Content emoji
+      var emoji, label;
+      if (sl.filled && sl.item) {
+        emoji = sl.item.emoji || FRAME_EMOJI[sl.frameTag] || '?';
+        label = sl.item.name ? sl.item.name.split(' ')[0] : '';
+      } else {
+        emoji = sl.frameTag === CrateSystem.FRAME.SUIT_CARD
+          ? (SUIT_EMOJI_C[sl.suit] || '\u2660')
+          : (FRAME_EMOJI[sl.frameTag] || '?');
+        label = sl.frameTag === CrateSystem.FRAME.SUIT_CARD
+          ? (sl.suit ? sl.suit[0].toUpperCase() + sl.suit.slice(1) : 'Card')
+          : (FRAME_LABEL[sl.frameTag] || '?');
+      }
+      ctx.font = Math.round(SLOT_W * 0.42) + 'px sans-serif';
+      ctx.fillStyle = sl.filled ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+      ctx.fillText(emoji, sx + SLOT_W / 2, slotY + SLOT_H * 0.55);
+
+      ctx.font = F_S + 'px monospace';
+      ctx.fillStyle = sl.filled ? '#6f6' : frameColor;
+      ctx.fillText(label, sx + SLOT_W / 2, slotY + SLOT_H + Math.round(10 * S));
+    }
+
+    // Hint below slots
+    var hintY = slotY + SLOT_H + Math.round(26 * S);
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_S + 'px monospace';
+    ctx.textAlign = 'center';
+
+    if (allFilled) {
+      // ── Seal button ──────────────────────────────────────────────
+      var btnW = Math.round(120 * S);
+      var btnH = Math.round(34 * S);
+      var btnX = x + (w - btnW) / 2;
+      var btnY = hintY + Math.round(4 * S);
+      var isBtnHov = (_hoverSlot === 1300);
+      ctx.fillStyle = isBtnHov ? 'rgba(100,200,100,0.35)' : 'rgba(60,120,60,0.25)';
+      _roundRectFill(ctx, btnX, btnY, btnW, btnH, 5);
+      ctx.strokeStyle = isBtnHov ? '#8f8' : '#4a8';
+      ctx.lineWidth   = 1.5;
+      _roundRectStroke(ctx, btnX, btnY, btnW, btnH, 5);
+      ctx.fillStyle = isBtnHov ? '#bfb' : '#8f8';
+      ctx.font = 'bold ' + F_B + 'px monospace';
+      ctx.fillText('\u2728 SEAL', x + w / 2, btnY + btnH * 0.65);
+      _hitZones.push({ x: btnX, y: btnY, w: btnW, h: btnH, slot: 1300, action: 'corpse_seal' });
+    } else {
+      ctx.fillText('Deposit items \u2192 face 1   cards \u2192 face 2', x + w / 2, hintY);
+    }
+
+    ctx.textAlign = 'left';
+  }
+
+  /**
+   * Face 1 — 'corpse': Bag items the player can deposit into resource slots.
+   * Items that match an empty slot are highlighted and clickable.
+   */
+  function _renderCorpseDepositBag(ctx, x, y, w, h) {
+    var S   = Math.min(w, h) / 400;
+    var ty  = _drawTitle(ctx, x, y, w, 'DEPOSIT ITEMS', '\uD83C\uDF92', S);
+    var F_B = Math.max(10, Math.round(14 * S));
+    var F_S = Math.max(9,  Math.round(12 * S));
+
+    var c   = _getCorpseContainer();
+    var bag = CardAuthority.getBag();
+
+    if (!c || c.sealed) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(c && c.sealed ? '\u2714 Already sealed' : 'No container', x + w / 2, ty + 24 * S);
+      return;
+    }
+
+    // Collect which frame tags still need filling
+    var neededTags = {};
+    var suitNeeded = null;
+    for (var si = 0; si < c.slots.length; si++) {
+      if (!c.slots[si].filled) {
+        if (c.slots[si].frameTag === CrateSystem.FRAME.SUIT_CARD) {
+          suitNeeded = c.slots[si].suit;
+        } else {
+          neededTags[c.slots[si].frameTag] = true;
+        }
+      }
+    }
+    var hasEmptyResourceSlots = Object.keys(neededTags).length > 0 ||
+      (c.slots.some(function(s) { return !s.filled && s.frameTag !== CrateSystem.FRAME.SUIT_CARD; }));
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_S + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click an item to deposit it', x + w / 2, ty + Math.round(8 * S));
+    ty += Math.round(20 * S);
+
+    if (bag.length === 0) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.fillText('Bag is empty', x + w / 2, ty + 24 * S);
+      return;
+    }
+
+    // 4-column grid of bag items — highlight those that match needed slots
+    var cols    = 4;
+    var slotSz  = Math.max(28, Math.min(Math.floor((w - 20 * S) / cols), Math.round(44 * S)));
+    var slotGap = Math.round(5 * S);
+    var gridW   = cols * (slotSz + slotGap);
+    var gridX   = x + (w - gridW) / 2;
+
+    for (var i = 0; i < bag.length; i++) {
+      var item    = bag[i];
+      var col     = i % cols;
+      var row     = Math.floor(i / cols);
+      var sx      = gridX + col * (slotSz + slotGap);
+      var sySl    = ty + row * (slotSz + slotGap);
+      var isHov   = (_hoverSlot === 1100 + i);
+
+      // Check if item is useful: wildcard accepts anything, typed slots need match
+      var itemTag = item.crateFillTag || null;
+      var useful  = hasEmptyResourceSlots && (
+        neededTags[CrateSystem.FRAME.WILDCARD] ||        // wildcard slot open
+        (itemTag && neededTags[itemTag]) ||              // exact tag match
+        (item.category === 'food' && neededTags[CrateSystem.FRAME.HP_FOOD]) ||
+        (item.subtype  === 'food' && neededTags[CrateSystem.FRAME.HP_FOOD]) ||
+        (item.category === 'energy' && neededTags[CrateSystem.FRAME.ENERGY]) ||
+        (item.subtype  === 'tonic' && neededTags[CrateSystem.FRAME.ENERGY]) ||
+        (item.category === 'battery' && neededTags[CrateSystem.FRAME.BATTERY]) ||
+        (item.category === 'scroll' && neededTags[CrateSystem.FRAME.SCROLL]) ||
+        (item.category === 'gem' && neededTags[CrateSystem.FRAME.GEM]) ||
+        true  // fallback: always allow (fillSlot will pick wildcard slot if any)
+      );
+
+      // Draw slot with highlight for useful items
+      var bgColor = isHov && useful ? 'rgba(80,120,80,0.5)' :
+                    useful ? 'rgba(40,80,40,0.3)' : 'rgba(30,20,40,0.4)';
+      var borderColor = isHov && useful ? '#8f8' :
+                        useful ? '#4a8' : 'rgba(255,255,255,0.15)';
+
+      ctx.fillStyle = bgColor;
+      _roundRectFill(ctx, sx, sySl, slotSz, slotSz, 4);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      _roundRectStroke(ctx, sx, sySl, slotSz, slotSz, 4);
+
+      ctx.font = Math.round(slotSz * 0.5) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(item.emoji || '?', sx + slotSz / 2, sySl + slotSz * 0.62);
+
+      if (useful) {
+        _hitZones.push({ x: sx, y: sySl, w: slotSz, h: slotSz, slot: 1100 + i, action: 'deposit_bag_item' });
+      }
+    }
+
+    var rows = Math.ceil(bag.length / cols);
+    var hintY = ty + rows * (slotSz + slotGap) + Math.round(6 * S);
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_S + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[Q/E] Switch   [BACK] Leave', x + w / 2, hintY);
+    ctx.textAlign = 'left';
+  }
+
+  /**
+   * Face 2 — 'corpse': Hand cards the player can sacrifice into the SUIT_CARD slot.
+   */
+  function _renderCorpseDepositCards(ctx, x, y, w, h) {
+    var S   = Math.min(w, h) / 400;
+    var ty  = _drawTitle(ctx, x, y, w, 'SACRIFICE CARD', '\uD83C\uDCCF', S);
+    var F_B = Math.max(10, Math.round(14 * S));
+    var F_S = Math.max(9,  Math.round(12 * S));
+
+    var c = _getCorpseContainer();
+    if (!c || c.sealed) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(c && c.sealed ? '\u2714 Already sealed' : 'No container', x + w / 2, ty + 24 * S);
+      return;
+    }
+
+    // Find the SUIT_CARD slot
+    var suitSlot = null;
+    for (var si = 0; si < c.slots.length; si++) {
+      if (c.slots[si].frameTag === CrateSystem.FRAME.SUIT_CARD) {
+        suitSlot = c.slots[si]; break;
+      }
+    }
+
+    if (!suitSlot) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('No suit card slot on this corpse', x + w / 2, ty + 24 * S);
+      return;
+    }
+
+    if (suitSlot.filled) {
+      ctx.fillStyle = '#6f6';
+      ctx.font = 'bold ' + F_B + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u2714 Card slot filled', x + w / 2, ty + 24 * S);
+      if (suitSlot.item) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_S + 'px monospace';
+        ctx.fillText((suitSlot.item.emoji || '') + ' ' + (suitSlot.item.name || ''), x + w / 2, ty + 42 * S);
+      }
+      return;
+    }
+
+    var neededSuit = suitSlot.suit || null;
+    var suitSymbol = neededSuit ? (SUIT_EMOJI_C[neededSuit] || neededSuit) : '?';
+
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_S + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Needs ' + suitSymbol + ' ' + (neededSuit || 'any') + ' card', x + w / 2, ty + Math.round(8 * S));
+    ty += Math.round(22 * S);
+
+    var hand = CardAuthority.getHand();
+    if (hand.length === 0) {
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_B + 'px monospace';
+      ctx.fillText('Hand is empty', x + w / 2, ty + 24 * S);
+      return;
+    }
+
+    // Show hand cards; highlight those that match needed suit
+    var CARD_W  = Math.max(52, Math.round(70 * S));
+    var CARD_H  = Math.round(CARD_W * 1.35);
+    var CARD_GAP = Math.round(8 * S);
+    var cols    = Math.max(1, Math.floor((w - 8 * S) / (CARD_W + CARD_GAP)));
+    var gridW   = Math.min(hand.length, cols) * (CARD_W + CARD_GAP) - CARD_GAP;
+    var gridX   = x + (w - gridW) / 2;
+
+    for (var i = 0; i < hand.length; i++) {
+      var card    = hand[i];
+      var col     = i % cols;
+      var row     = Math.floor(i / cols);
+      var cx2     = gridX + col * (CARD_W + CARD_GAP);
+      var cy2     = ty + row * (CARD_H + CARD_GAP);
+      var matches = !neededSuit || card.suit === neededSuit;
+      var isHov   = (_hoverSlot === 1200 + i);
+
+      // Card background
+      var suitColor = (CrateSystem.SUIT_FRAME_COLOR && card.suit)
+        ? (CrateSystem.SUIT_FRAME_COLOR[card.suit] || '#888')
+        : '#888';
+      ctx.fillStyle = isHov && matches ? 'rgba(60,40,80,0.8)' :
+                      matches ? 'rgba(40,20,60,0.6)' : 'rgba(20,15,25,0.5)';
+      _roundRectFill(ctx, cx2, cy2, CARD_W, CARD_H, 5);
+      ctx.strokeStyle = isHov && matches ? suitColor :
+                        matches ? suitColor : 'rgba(255,255,255,0.1)';
+      ctx.lineWidth   = matches ? 2 : 1;
+      _roundRectStroke(ctx, cx2, cy2, CARD_W, CARD_H, 5);
+
+      // Card content
+      ctx.textAlign = 'center';
+      ctx.font = Math.round(CARD_W * 0.4) + 'px sans-serif';
+      ctx.fillStyle = matches ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.25)';
+      ctx.fillText(card.emoji || SUIT_EMOJI_C[card.suit] || '\uD83C\uDCCF', cx2 + CARD_W / 2, cy2 + CARD_H * 0.44);
+
+      ctx.font = F_S + 'px monospace';
+      ctx.fillStyle = matches ? suitColor : 'rgba(255,255,255,0.2)';
+      var cardLabel = card.name ? card.name.substring(0, 8) : (card.id || '');
+      ctx.fillText(cardLabel, cx2 + CARD_W / 2, cy2 + CARD_H * 0.72);
+
+      ctx.font = F_S + 'px monospace';
+      ctx.fillStyle = matches ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)';
+      ctx.fillText(SUIT_EMOJI_C[card.suit] || '', cx2 + CARD_W / 2, cy2 + CARD_H * 0.88);
+
+      if (matches) {
+        _hitZones.push({ x: cx2, y: cy2, w: CARD_W, h: CARD_H, slot: 1200 + i, action: 'deposit_hand_card' });
+      }
+    }
+
+    var rows = Math.ceil(hand.length / cols);
+    var hintY2 = ty + rows * (CARD_H + CARD_GAP) + Math.round(6 * S);
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_S + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[Q/E] Switch   [BACK] Leave', x + w / 2, hintY2);
+    ctx.textAlign = 'left';
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  FACE 1 — STASH / BUY
   // ═══════════════════════════════════════════════════════════════
@@ -1044,6 +1417,8 @@ var MenuFaces = (function () {
       _renderShopBuy(ctx, x, y, w, h);
     } else if (context === 'harvest') {
       _renderHarvestBag(ctx, x, y, w, h);
+    } else if (context === 'corpse') {
+      _renderCorpseDepositBag(ctx, x, y, w, h);
     } else {
       _renderJournal(ctx, x, y, w, h);
     }
@@ -1498,7 +1873,7 @@ var MenuFaces = (function () {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = F_HINT + 'px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('[Q/E] Browse   [ESC] Resume', x + w / 2, y + h - Math.round(6 * S));
+    ctx.fillText('[Q/E] Browse   [BACK] Resume', x + w / 2, y + h - Math.round(6 * S));
     ctx.textAlign = 'left';
   }
 
@@ -1652,7 +2027,7 @@ var MenuFaces = (function () {
     // Hint
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = Math.max(9, Math.round(11 * S)) + 'px monospace';
-    ctx.fillText(i18n.t('shop.bonfire_hint', '[ESC] Close   [Q/E] Browse'),
+    ctx.fillText(i18n.t('shop.bonfire_hint', '[BACK] Close   [Q/E] Browse'),
                  x + w / 2, y + h - Math.round(6 * S));
   }
 
@@ -1829,10 +2204,76 @@ var MenuFaces = (function () {
 
     ctx.textAlign = 'center';
     var lastRow = positions.length > 0 ? positions[positions.length - 1].row : 0;
-    var hintY = ty + (lastRow + 1) * (TILE_SIZE + TILE_GAP) + 8;
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px monospace';
-    ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, hintY);
+    var supplyStartY = ty + (lastRow + 1) * (TILE_SIZE + TILE_GAP) + 6;
+
+    // ── Supply section ────────────────────────────────────────────
+    // Rendered directly below the card grid — always-available items
+    // from this faction's catalog (faction-split, never sold out).
+    var supplyStock = (typeof Shop !== 'undefined' && Shop.getSupplyStock)
+      ? Shop.getSupplyStock() : [];
+
+    if (supplyStock.length > 0) {
+      var sy = supplyStartY;
+
+      // Divider + heading
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, sy); ctx.lineTo(x + w - 8, sy);
+      ctx.stroke();
+      sy += 4;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = 'bold ' + Math.max(9, Math.round(11 * S)) + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('SUPPLIES  (unlimited)', x + 8, sy + 8);
+      sy += 16;
+
+      // One row per supply item
+      var ROW_H = Math.max(22, Math.round(26 * S));
+      var gold = Player.state().currency;
+
+      for (var si = 0; si < supplyStock.length; si++) {
+        var sup = supplyStock[si];
+        var canBuy = gold >= sup.shopPrice;
+        var isHov  = (_hoverSlot === 1000 + si);
+
+        // Row background on hover
+        if (isHov && canBuy) {
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(x + 4, sy, w - 8, ROW_H - 2);
+        }
+
+        // Emoji + name
+        ctx.fillStyle = canBuy ? (isHov ? '#fff' : 'rgba(255,255,255,0.85)') : 'rgba(255,255,255,0.35)';
+        ctx.font = Math.max(9, Math.round(12 * S)) + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(sup.emoji + ' ' + sup.name, x + 10, sy + ROW_H * 0.62);
+
+        // Price (right-aligned, gold colour when affordable)
+        ctx.fillStyle = canBuy ? COL.currency : '#844';
+        ctx.textAlign = 'right';
+        ctx.fillText(sup.shopPrice + 'g', x + w - 8, sy + ROW_H * 0.62);
+
+        // Hit zone (slot 1000+i so game.js can decode it)
+        if (canBuy) {
+          _hitZones.push({ x: x + 4, y: sy, w: w - 8, h: ROW_H - 2,
+                           slot: 1000 + si, action: 'buy_supply' });
+        }
+
+        sy += ROW_H;
+      }
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '12px monospace';
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, sy + 6);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '12px monospace';
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, supplyStartY + 6);
+    }
     ctx.textAlign = 'left';
   }
 
@@ -1852,6 +2293,8 @@ var MenuFaces = (function () {
       _renderShopSell(ctx, x, y, w, h);
     } else if (context === 'harvest') {
       _renderInventory(ctx, x, y, w, h);
+    } else if (context === 'corpse') {
+      _renderCorpseDepositCards(ctx, x, y, w, h);
     } else {
       _renderInventory(ctx, x, y, w, h);
     }
@@ -2507,7 +2950,7 @@ var MenuFaces = (function () {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = '11px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+      ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
 
     } else {
       // ── Single panel: BAG only (exterior/dungeon bonfires) ────────
@@ -2529,7 +2972,7 @@ var MenuFaces = (function () {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = '11px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('[Q/E] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
     }
     ctx.textAlign = 'left';
   }
@@ -2730,7 +3173,7 @@ var MenuFaces = (function () {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '11px monospace';
-    ctx.fillText('[W/S] Select   [Scroll] Adjust   [←/→] Switch pane   [ESC] Leave', x + w / 2, y + h - 8);
+    ctx.fillText('[W/S] Select   [Scroll] Adjust   [←/→] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
     ctx.textAlign = 'left';
   }
 
@@ -3250,7 +3693,7 @@ var MenuFaces = (function () {
       ctx.fillStyle = resumeHov ? '#aaffaa' : COL.text;
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(i18n.t('menu.resume', 'Return to Game') + '  [ESC]', x + w / 2, exitY + exitBtnH * 0.65);
+      ctx.fillText(i18n.t('menu.resume', 'Return to Game') + '  [BACK]', x + w / 2, exitY + exitBtnH * 0.65);
       _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
 
       // Quit to Title button
@@ -3276,7 +3719,7 @@ var MenuFaces = (function () {
       ctx.fillStyle = closeHov ? '#aaffaa' : COL.text;
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('[ESC] ' + i18n.t('shop.close', 'Close'), x + w / 2, exitY + exitBtnH * 0.65);
+      ctx.fillText('[BACK] ' + i18n.t('shop.close', 'Close'), x + w / 2, exitY + exitBtnH * 0.65);
       _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
     }
 

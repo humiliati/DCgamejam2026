@@ -9,13 +9,21 @@
  * neutral grey palette with warm document-amber accents.
  *
  * Rooms:
- *   1. Dispatch room (north) — dispatch desk (TABLE), mission board (BOOKSHELF)
- *   2. Reception (south)     — DOOR_EXIT, waiting bench, pillars
+ *   1. Dispatch room (north) — dispatch desk (TABLE), filing shelves (BOOKSHELF)
+ *   2. Reception (south)     — DOOR_EXIT, entry vestibule, waiting bench
  *
  * Purpose:
  *   - Mission briefing hub (Dispatcher NPC assigns work orders)
  *   - Filing shelf lore (guild charter, work order templates)
  *   - No rest point (deliberate — creates pressure to return to inn/home)
+ *
+ * Entry clearance:
+ *   - Row 9 has pillars flanking the door tile at (6,9) and (8,9) to form
+ *     a vestibule. This forces door-contracts' spawn search to land at
+ *     (7,9) deterministically (the only walkable ring-1 tile), with a
+ *     clean forward view north through the divider gap to the dispatch
+ *     desk. Waiting-area bookshelves live in the dispatch room (row 5)
+ *     so nothing obstructs the player's view on entry.
  *
  * NPC zones:
  *   - Dispatcher NPC (DISPATCHER) behind desk — blocks, forces conversation
@@ -38,11 +46,11 @@
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 2  dispatch room
     [ 1, 0, 0, 0,10, 0,28,28,28,28, 0,10, 0, 0, 0, 1], // 3  dispatch desk (6-9,3) + pillars
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 4  front of desk (dispatcher stands here)
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 5  open area
+    [ 1, 0,25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,25, 0, 1], // 5  waiting-area shelves (moved from row 8)
     [ 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1], // 6  divider wall with gaps
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 7  reception area
-    [ 1, 0,25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,25, 0, 1], // 8  waiting area shelves
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 9  spawn area
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 7  reception area (clear)
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 8  reception (clear)
+    [ 1, 0, 0, 0, 0, 0,10, 0,10, 0, 0, 0, 0, 0, 0, 1], // 9  vestibule pillars flank spawn (7,9)
     [ 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1], //10  DOOR_EXIT (7,10)
     [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  //11  south wall
   ];
@@ -57,8 +65,8 @@
   var BOOKS = [
     { x: 1,  y: 1,  bookId: 'lore_gleaner_guild_charter' },   // Guild charter
     { x: 14, y: 1,  bookId: 'notice_work_order_template' },    // Work order template
-    { x: 2,  y: 8,  bookId: 'tip_dispatch_protocol' },         // Dispatch protocol guide
-    { x: 13, y: 8,  bookId: 'lore_hero_arrival' }              // Hero arrival report
+    { x: 2,  y: 5,  bookId: 'tip_dispatch_protocol' },         // Dispatch protocol guide
+    { x: 13, y: 5,  bookId: 'lore_hero_arrival' }              // Hero arrival report
   ];
 
   function build() {

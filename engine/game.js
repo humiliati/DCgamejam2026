@@ -51,6 +51,11 @@ var Game = (function () {
   var _bonfirePendingX = -1;   // Bonfire tile position for deferred rest
   var _bonfirePendingY = -1;   // (rest executes from menu, not from interact)
 
+  // Corpse-restock menu: tile coordinates + floor for the active corpse session
+  var _corpsePendingX     = -1;
+  var _corpsePendingY     = -1;
+  var _corpsePendingFloor = '';
+
   // ── Bark / Gate NPC state ─────────────────────────────────────────
   // Tracks whether the Day-1 Dispatcher gate encounter has been resolved.
   // Before resolution the dungeon entrance tiles are logically locked —
@@ -251,6 +256,27 @@ var Game = (function () {
         if (typeof ViewportRing !== 'undefined' && ViewportRing.clearVictoryGlow) {
           ViewportRing.clearVictoryGlow();
         }
+        // Per-reason snap feedback. 'reeled' is the clean exit (handled by
+        // HoseReel's own ceremony) and 'energy_exhausted' toasts from the
+        // step handler above — both skipped here. Everything else gets a
+        // surfaced message so the player understands why the line dropped.
+        if (typeof Toast === 'undefined') return;
+        var msg = null;
+        switch (reason) {
+          case 'wrong_building':
+            msg = '💢 Hose snapped — wrong building';
+            break;
+          case 'dropped_exterior':
+            msg = '🧵 Hose dropped — you left without rolling up';
+            break;
+          case 'combat_damage':
+            msg = '💥 Hose ripped off — took a hit';
+            break;
+          case 'bonfire_warp':
+            msg = '✨ Hose left behind — bonfire warp';
+            break;
+        }
+        if (msg) Toast.show(msg, 'warning');
       });
     }
     if (typeof DPad !== 'undefined') {
@@ -409,6 +435,13 @@ var Game = (function () {
     // W / S — navigate between sliders when Face 3 is active.
     InputManager.on('step_forward', function (type) {
       if (type !== 'press') return;
+
+      // BookshelfPeek intercept: W scrolls long book pages up
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        BookshelfPeek.handleKey('KeyW');
+        return;
+      }
+
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
         MenuFaces.handleSettingsNav(-1);
@@ -416,6 +449,12 @@ var Game = (function () {
     });
     InputManager.on('step_back', function (type) {
       if (type !== 'press') return;
+
+      // BookshelfPeek intercept: S scrolls long book pages down
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        BookshelfPeek.handleKey('KeyS');
+        return;
+      }
 
       // PeekSlots intercept: S key seals container during FILLING
       if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
@@ -433,6 +472,11 @@ var Game = (function () {
     // inventory/face content scroll on other faces (post-jam).
     // This is now the PRIMARY way to adjust sliders (←/→ navigates faces).
     InputManager.on('scroll_up', function (type) {
+      // BookshelfPeek intercept: wheel scroll through long book pages
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        if (typeof DialogBox !== 'undefined' && DialogBox.scroll) DialogBox.scroll(-1);
+        return;
+      }
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
         if (MenuFaces.isSettingsLocked()) {
@@ -443,6 +487,10 @@ var Game = (function () {
       }
     });
     InputManager.on('scroll_down', function (type) {
+      if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
+        if (typeof DialogBox !== 'undefined' && DialogBox.scroll) DialogBox.scroll(+1);
+        return;
+      }
       if (!ScreenManager.isPaused()) return;
       if (MenuBox.getCurrentFace() === 3 && typeof MenuFaces !== 'undefined') {
         if (MenuFaces.isSettingsLocked()) {
@@ -504,6 +552,14 @@ var Game = (function () {
             _takeHarvestItem(hit.slot);
           } else if (hit.action === 'buy') {
             _shopBuy(hit.slot);
+          } else if (hit.action === 'buy_supply') {
+            _shopBuySupply(hit.slot - 1000);  // strip 1000 offset → supply index
+          } else if (hit.action === 'deposit_bag_item') {
+            _corpseDepositBagItem(hit.slot - 1100);  // strip 1100 offset → bag index
+          } else if (hit.action === 'deposit_hand_card') {
+            _corpseDepositHandCard(hit.slot - 1200);  // strip 1200 offset → hand index
+          } else if (hit.action === 'corpse_seal') {
+            _corpseSeal();
           } else if (hit.action === 'sell') {
             _shopSellFromHand(hit.slot);
           } else if (hit.action === 'sellPart') {
@@ -1051,7 +1107,9 @@ var Game = (function () {
       // Register night-locked buildings (closed at dusk/night, muffled barks)
       DayCycle.registerNightLock('1.1', { muffledBarkPool: 'muffled.bazaar' });   // Coral Bazaar
       DayCycle.registerNightLock('1.2', { muffledBarkPool: 'muffled.inn' });      // Driftwood Inn
-      DayCycle.registerNightLock('1.6', { muffledBarkPool: 'muffled.house' });    // Gleaner's Home (late night)
+      // NOTE: 1.6 (Gleaner's Home) is intentionally NOT night-locked —
+      // the player bunk must always be accessible so curfew/rest flows
+      // can't strand the player outside their own house.
       DayCycle.registerNightLock('2.1', { muffledBarkPool: 'muffled.guild' });    // Dispatcher's Office
 
       // Phase change notifications + HUD day counter refresh
@@ -2728,6 +2786,82 @@ var Game = (function () {
           }
         }
       });
+
+      // ── Floor 3 — Immigrant Inspector (Vivec arch gate) ─────────────
+      // Stationary checkpoint NPC at (48,25) blocking the Grand Arch to
+      // Floor 4. Checks the player's journal for a `rent_receipt_book`
+      // entry (proof of residence) before stamping papers. Actual unlock
+      // wiring is handled elsewhere — see NpcSystem.getGateCheck().
+      NpcSystem.registerTree('floor3_inspector', {
+        root: 'greeting',
+        nodes: {
+          greeting: {
+            text: '\uD83D\uDEC2 "Halt. This is the Grand Arch crossing. No one passes to Vivec without proof of residence. Utility bill, rent receipt, lease — something stamped, something recent. Show me your papers."',
+            choices: [
+              { label: 'Show rent receipt', next: 'check_papers' },
+              { label: 'What counts as proof?', next: 'requirements' },
+              { label: 'Why is the gate locked?', next: 'why_locked' },
+              { label: 'What\u2019s on the other side?', next: 'whats_beyond' },
+              { label: 'I\u2019ll be back', next: null }
+            ]
+          },
+          requirements: {
+            text: '"Anything that puts your name on a roof in this district. A stamped rent receipt from the safehouse landlord is the fastest. The pay-rent ledger issues a receipt book — bring that, open to the current week, and I can stamp you through. No receipt, no crossing."',
+            choices: [
+              { label: 'Where do I pay rent?', next: 'where_pay' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          where_pay: {
+            text: '"Safehouse on Lantern Row. The landlord keeps the ledger. Pay the week, get the stamp, bring it back here. I don\u2019t care how you earn it — Guild contract, scavenge, shopkeep charity. Just don\u2019t miss the deadline. The archway closes for late payers at end of week two."',
+            choices: [
+              { label: 'Understood', next: null }
+            ]
+          },
+          why_locked: {
+            text: '"Vivec doesn\u2019t take drifters. Every soul that crosses has to be accounted for — taxed, logged, housed. If we let unpapered travelers through, the city\u2019s census collapses and the Admiralty stops funding the arch. So the arch stays locked. The paperwork is the gate."',
+            choices: [
+              { label: 'Seems bureaucratic', next: 'bureaucratic' },
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          bureaucratic: {
+            text: '"Bureaucracy is what separates a city from a camp. The crowd behind you — they\u2019d tell you the same if they weren\u2019t so tired of telling it."',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          whats_beyond: {
+            text: '"Vivec. Proper city. Canals, towers, light that doesn\u2019t come from a bonfire. If you make it across before the deadline you\u2019ll see it with your own eyes. If you don\u2019t — well. That\u2019s not my problem to carry."',
+            choices: [
+              { label: 'Back', next: 'greeting' }
+            ]
+          },
+          check_papers: {
+            // TODO: Wire to Journal.hasBook(\'rent_receipt_book\') — on success
+            // set flags \'locked_door_3:51,25\' and \'locked_door_3:51,26\' and
+            // route to `accepted`. On failure route to `rejected`. Until
+            // wired, always routes to `rejected` as a stub (see gateCheck
+            // tag on NpcSystem floor3_inspector def).
+            text: '"Let me see... hm. I don\u2019t see a rent receipt in your journal. No stamp, no crossing. Come back when you\u2019ve paid your week."',
+            choices: [
+              { label: 'I\u2019ll pay and return', next: null }
+            ]
+          },
+          rejected: {
+            text: '"No receipt. Move aside — there are people behind you."',
+            choices: [
+              { label: '...', next: null }
+            ]
+          },
+          accepted: {
+            text: '\uD83D\uDEC2\u2705 "Stamped. The arch is open to you. Don\u2019t lose the receipt — you\u2019ll need it on the Vivec side too. Safe crossing, citizen."',
+            choices: [
+              { label: 'Thank you', next: null }
+            ]
+          }
+        }
+      });
     }
 
     // NCH widget (draggable card-hand capsule)
@@ -3092,22 +3226,24 @@ var Game = (function () {
       _ambientBarkTimer = null;
     }
 
-    // C6: Reshuffle deck on floor transition — fresh hand for each floor.
-    // Only reshuffle when entering dungeons (depth 3+) to keep town safe.
-    var depth = floorId.split('.').length;
-    if (typeof CardAuthority !== 'undefined' && depth >= 3) {
+    // C6: Reshuffle deck on dungeon entry — fresh deck for each run.
+    // Gate on biome (isDungeonFloor) rather than ID depth so interior
+    // stubs like 0.5.N (depth 3 by ID convention) don't trigger dungeon-
+    // only systems. The hand is rebuilt by the normal combat flow; we
+    // don't auto-draw here (that caused phantom "Drew 5" toasts on
+    // traversal, obscuring the actual deck state).
+    var isDungeon = (typeof FloorManager !== 'undefined' && FloorManager.isDungeonFloor)
+      ? FloorManager.isDungeonFloor(floorId)
+      : false;
+    if (typeof CardAuthority !== 'undefined' && isDungeon) {
       CardAuthority.resetDeck();
-      CardAuthority.drawHand();
-      if (typeof Toast !== 'undefined') {
-        Toast.show('\u267B\uFE0F Deck reshuffled \u2014 drew ' + CardAuthority.getHand().length, 'dim');
-      }
     }
 
     // Seed blood splatter from corpse tiles on dungeon floors (depth 3+).
     // Only on first visit — cached floors keep their cleaned state.
     // Uses isSeeded() to distinguish "never visited" from "fully cleaned":
     // an empty blood map (all scrubbed) must NOT trigger re-seeding.
-    if (typeof CleaningSystem !== 'undefined' && depth >= 3) {
+    if (typeof CleaningSystem !== 'undefined' && isDungeon) {
       var fd = FloorManager.getFloorData();
       if (fd && !CleaningSystem.isSeeded(floorId)) {
         CleaningSystem.seedFromCorpses(floorId, fd.grid, fd.gridW, fd.gridH);
@@ -3119,7 +3255,7 @@ var Game = (function () {
     // killed) — they exist as CORPSE tiles in the grid but need rich metadata
     // for the salvage/harvest/reanimate flow to work.
     // Only on first visit — skip if corpses already registered (floor revisit).
-    if (typeof CorpseRegistry !== 'undefined' && depth >= 3) {
+    if (typeof CorpseRegistry !== 'undefined' && isDungeon) {
       var corpFd = FloorManager.getFloorData();
       if (corpFd && corpFd.corpseData && corpFd.corpseData.length > 0) {
         for (var _ci = 0; _ci < corpFd.corpseData.length; _ci++) {
@@ -3147,17 +3283,17 @@ var Game = (function () {
 
     // Wire blood floor ID to raycaster so floor tiles render blood tint
     if (typeof Raycaster !== 'undefined' && Raycaster.setBloodFloorId) {
-      Raycaster.setBloodFloorId(depth >= 3 ? floorId : null);
+      Raycaster.setBloodFloorId(isDungeon ? floorId : null);
     }
 
     // C7: Scan trap positions on floor load for re-arm tracking
-    if (typeof TrapRearm !== 'undefined' && depth >= 3) {
+    if (typeof TrapRearm !== 'undefined' && isDungeon) {
       var trapFd = FloorManager.getFloorData();
       if (trapFd) TrapRearm.onFloorLoad(floorId, trapFd.grid, trapFd.gridW, trapFd.gridH);
     }
 
     // Cobweb system: scan eligible positions on floor load (depth 3+)
-    if (typeof CobwebSystem !== 'undefined' && depth >= 3) {
+    if (typeof CobwebSystem !== 'undefined' && isDungeon) {
       var cobFd = FloorManager.getFloorData();
       if (cobFd) {
         CobwebSystem.onFloorLoad(cobFd, floorId);
@@ -3215,9 +3351,11 @@ var Game = (function () {
       }
     }
 
-    // C8: Work order posting and evaluation on floor transitions
+    // C8: Work order posting and evaluation on floor transitions.
+    // Posting gated by biome (dungeon-only) so interior stubs like 0.5.N
+    // can't auto-complete empty orders and pay out phantom gold.
     if (typeof WorkOrderSystem !== 'undefined') {
-      if (depth >= 3) {
+      if (isDungeon) {
         // Arriving at a dungeon floor — post an order if none active
         var existingOrder = WorkOrderSystem.getOrder(floorId);
         if (!existingOrder || existingOrder.status !== 'active') {
@@ -3228,7 +3366,7 @@ var Game = (function () {
                         ' - ' + Math.round(newOrder.target * 100) + '%', 'info');
           }
         }
-      } else if (depth <= 2) {
+      } else {
         // Returning to surface/interior — evaluate any active dungeon orders
         var evalResult = WorkOrderSystem.evaluate();
         if (evalResult.completed.length > 0) {
@@ -3303,6 +3441,46 @@ var Game = (function () {
    * One-shot: guarded by Player.flags.heroWakeArrival.
    */
   function _onArriveHeroWake() {
+    var fd = FloorManager.getFloorData();
+    if (!fd) return;
+
+    // ── Spawn override (every entry from the parent floor) ──────────
+    // DoorContracts.applyContract on the authored 24×24 Q-shape picks
+    // (12, 21) facing EAST — one tile east of the STAIRS_UP tile, with
+    // _bestFacingDir rotating the player away from the door on the X
+    // axis since the spawn ends up on the same row as the stair. That
+    // lands the player staring at the east foyer wall with the hero
+    // at (11, 11) completely off-screen to their left.
+    //
+    // The blockout declares the correct spawn as (11, 20) facing NORTH
+    // — one tile directly north of the stair, centered in the 8-wide
+    // foyer, with an unobstructed sightline through the row-13 doorway
+    // to the hero in the junction. Apply that here whenever the player
+    // arrived from Watchman's Post (2.2). Skip on 2.2.2 → 2.2.1 returns
+    // (those come up via STAIRS_DN into the North Hall, a different
+    // part of the map with its own correct facing).
+    if (_previousFloorId === '2.2' || _previousFloorId === null) {
+      if (typeof Player !== 'undefined' && Player.setPos && Player.setDir) {
+        Player.setPos(11, 20);
+        Player.setDir(3); // NORTH per direction convention
+        if (Player.resetLookOffset) Player.resetLookOffset();
+      }
+      if (typeof MC !== 'undefined' && MC.init) {
+        MC.init({
+          x: 11,
+          y: 20,
+          dir: 3,
+          collisionCheck: FloorManager.getCollisionCheck
+            ? FloorManager.getCollisionCheck()
+            : null,
+          onMoveStart: null,
+          onMoveFinish: null,
+          onBump: null,
+          onTurnFinish: null
+        });
+      }
+    }
+
     // One-shot guard. If the player has already triggered this scene,
     // skip everything (including the wounded warden spawn — they already
     // killed or bypassed it on the previous visit).
@@ -3310,8 +3488,6 @@ var Game = (function () {
       _heroWakeState.phase = 'done';
       return;
     }
-
-    var fd = FloorManager.getFloorData();
     if (!fd || !fd.heroScript) {
       console.warn('[Game] _onArriveHeroWake: no heroScript on floor data');
       return;
@@ -4586,7 +4762,8 @@ var Game = (function () {
       // tier 4 is a data edge case; the glow is tied to the cleaning
       // completion fantasy which only exists at depth 3.
       if (typeof ViewportRing !== 'undefined' && ViewportRing.setVictoryGlow &&
-          _floorDepth(floorId) >= 3) {
+          typeof FloorManager !== 'undefined' && FloorManager.isDungeonFloor &&
+          FloorManager.isDungeonFloor(floorId)) {
         ViewportRing.setVictoryGlow(floorId);
       }
 
@@ -4723,10 +4900,12 @@ var Game = (function () {
 
     var floorId = (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId)
       ? FloorManager.getCurrentFloorId() : '1';
-    var depth = _floorDepth(floorId);
+    var inDungeon = (typeof FloorManager !== 'undefined' && FloorManager.isDungeonFloor)
+      ? FloorManager.isDungeonFloor(floorId)
+      : (_floorDepth(floorId) >= 3);
     var hoseOn = (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive());
 
-    var shouldBeActive = (depth >= 3) && hoseOn;
+    var shouldBeActive = inDungeon && hoseOn;
     WaterCursorFX.setActive(shouldBeActive);
   }
 
@@ -4828,6 +5007,46 @@ var Game = (function () {
     // Get the next unresolved dungeon group from the schedule.
     var nextGroup = (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup)
       ? DungeonSchedule.getNextGroup() : null;
+
+    // ── Tutorial override ────────────────────────────────────────
+    // Per docs/Tutorial_world_roadmap.md §2.1, the first-pass chain is:
+    //   Floor 0 → 1 → gate → 1.6 → back to gate → 2 → 2.1 → 2.2 → 2.2.1
+    // The CLUB group ("Hero's Wake", 2.2.1/2.2.2) is the mandatory first
+    // dungeon because 2.2.1 hosts the Hero reveal cinematic (guarded by
+    // Player.flags.heroWakeArrival). As of the day-0 rebase the schedule
+    // legitimately puts CLUB first (scheduledDay 0 < spade 3 < diamond 6),
+    // so getNextGroup() naturally returns club on day 0 and this override
+    // is a no-op for a fresh game. Kept as a safety net for the case
+    // where the player dies on a side-dungeon before heroWakeArrival
+    // fires and club's actualDay gets death-shifted past another group.
+    var _heroRevealed = (typeof Player !== 'undefined' && Player.hasFlag)
+      ? Player.hasFlag('heroWakeArrival') : false;
+    if (!_heroRevealed && typeof DungeonSchedule !== 'undefined' &&
+        DungeonSchedule.getSchedule) {
+      var _schedList = DungeonSchedule.getSchedule();
+      var _clubContract = null;
+      for (var _sci = 0; _sci < _schedList.length; _sci++) {
+        if (_schedList[_sci].groupId === 'club' && !_schedList[_sci].resolved) {
+          _clubContract = _schedList[_sci];
+          break;
+        }
+      }
+      if (_clubContract) {
+        var _curDay = (DungeonSchedule.getCurrentDay)
+          ? DungeonSchedule.getCurrentDay() : 0;
+        nextGroup = {
+          groupId:    _clubContract.groupId,
+          label:      _clubContract.label,
+          suit:       _clubContract.suit,
+          floorIds:   _clubContract.floorIds,
+          target:     _clubContract.target,
+          actualDay:  _clubContract.actualDay,
+          daysAway:   Math.max(0, _clubContract.actualDay - _curDay),
+          heroType:   _clubContract.heroType,
+          onSchedule: _clubContract.onSchedule
+        };
+      }
+    }
 
     if (!nextGroup || !nextGroup.floorIds || nextGroup.floorIds.length === 0) {
       // Arc complete or schedule not initialized — legitimately no marker.
@@ -5434,14 +5653,12 @@ var Game = (function () {
       }
       _openVendorDialog(shopFaction);
     } else if (tile === TILES.CORPSE) {
-      // If a CrateSystem container exists (restock slots), open slot-filling UI
+      // Open the corpse-restock menu (or fallback to harvest for loot-only corpses).
+      // _openCorpseMenu handles both container and no-container cases, and ensures
+      // CorpsePeek + CrateUI are dismissed before the pause menu opens.
       var corpseFloorId = FloorManager.getCurrentFloorId();
-      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
-          CrateSystem.hasContainer(fx, fy, corpseFloorId)) {
-        if (PeekSlots.tryOpen(fx, fy, corpseFloorId)) return;
-      }
-      // Fallback: necro-salvage (harvest parts from the Hero's mess)
-      _harvestCorpse(fx, fy);
+      _openCorpseMenu(fx, fy, corpseFloorId);
+      return;
     } else if (tile === TILES.DETRITUS) {
       // Face + OK: pick up detritus item directly into bag
       _collectDetritus(fx, fy);
@@ -5898,6 +6115,188 @@ var Game = (function () {
     ScreenManager.toPause();
   }
 
+  // ── Corpse restock menu ─────────────────────────────────────────────
+
+  /**
+   * Open the corpse-restock pause menu.
+   *
+   * Can be called two ways:
+   *   _openCorpseMenu()           — reads tile from CorpsePeek.getTarget()
+   *   _openCorpseMenu(fx, fy, floorId) — called directly from _interact()
+   *
+   * Falls back to _harvestCorpse when the tile has no CrateSystem container
+   * (i.e. it's a loot-only corpse with no restock slots).
+   */
+  function _openCorpseMenu(optX, optY, optFloorId) {
+    var tx, ty, tFloor;
+
+    if (optX !== undefined && optX >= 0) {
+      // Called from _interact() with known coordinates
+      tx     = optX;
+      ty     = optY;
+      tFloor = optFloorId || FloorManager.getCurrentFloorId();
+    } else {
+      // Called from CorpsePeek button — read the facing tile
+      var target = (typeof CorpsePeek !== 'undefined' && CorpsePeek.getTarget)
+        ? CorpsePeek.getTarget() : null;
+      if (!target || target.x < 0) return;
+      tx     = target.x;
+      ty     = target.y;
+      tFloor = target.floorId || FloorManager.getCurrentFloorId();
+    }
+
+    _corpsePendingX     = tx;
+    _corpsePendingY     = ty;
+    _corpsePendingFloor = tFloor;
+
+    // No container → fall back to harvest (loot-only corpse)
+    if (typeof CrateSystem === 'undefined' ||
+        !CrateSystem.hasContainer(tx, ty, tFloor)) {
+      _harvestCorpse(tx, ty);
+      return;
+    }
+
+    // Dismiss the peek overlay and any CrateUI that may already be open
+    if (typeof CorpsePeek !== 'undefined' && CorpsePeek.forceHide) CorpsePeek.forceHide();
+    _collapseAllPeeks();
+
+    _pendingMenuContext = 'corpse';
+    _pendingMenuFace   = 0;
+    ScreenManager.toPause();
+  }
+
+  /**
+   * Deposit a bag item into the first matching empty resource slot on the
+   * currently-open corpse container. Slot range: hit.slot = 1100 + bagIdx.
+   */
+  function _corpseDepositBagItem(bagIdx) {
+    if (typeof CrateSystem === 'undefined') return;
+    var container = CrateSystem.getContainer(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
+    if (!container || container.sealed) return;
+
+    var bag = CardAuthority.getBag();
+    var item = bag[bagIdx];
+    if (!item) return;
+
+    // Find first unfilled resource slot that accepts this item
+    var slots = container.slots;
+    var targetSlotIdx = -1;
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i].filled) continue;
+      if (slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD) continue; // hand-card only
+      // Wildcard accepts anything; typed slots need a category match
+      var frameTag = slots[i].frameTag;
+      var matches = (frameTag === CrateSystem.FRAME.WILDCARD) ||
+                    (item.crateFillTag && item.crateFillTag === frameTag) ||
+                    (item.category === 'food' && frameTag === CrateSystem.FRAME.HP_FOOD) ||
+                    (item.category === 'energy' && frameTag === CrateSystem.FRAME.ENERGY) ||
+                    (item.category === 'battery' && frameTag === CrateSystem.FRAME.BATTERY) ||
+                    (item.category === 'scroll' && frameTag === CrateSystem.FRAME.SCROLL) ||
+                    (item.category === 'gem' && frameTag === CrateSystem.FRAME.GEM) ||
+                    (item.subtype  === 'food' && frameTag === CrateSystem.FRAME.HP_FOOD) ||
+                    (item.subtype  === 'tonic' && frameTag === CrateSystem.FRAME.ENERGY) ||
+                    (item.category === 'salvage' && frameTag === CrateSystem.FRAME.WILDCARD);
+      if (matches) { targetSlotIdx = i; break; }
+    }
+    // No typed match: accept into any empty wildcard slot
+    if (targetSlotIdx < 0) {
+      for (var wi = 0; wi < slots.length; wi++) {
+        if (!slots[wi].filled && slots[wi].frameTag !== CrateSystem.FRAME.SUIT_CARD) {
+          targetSlotIdx = wi; break;
+        }
+      }
+    }
+    if (targetSlotIdx < 0) {
+      Toast.show(i18n.t('toast.no_slot', 'No matching slot'), 'warning');
+      return;
+    }
+
+    var result = CrateSystem.fillSlot(_corpsePendingX, _corpsePendingY, _corpsePendingFloor, targetSlotIdx, item);
+    if (result) {
+      CardAuthority.removeFromBag(bagIdx);
+      var bonus = result.matched ? ' \u2713' : '';
+      Toast.show(item.emoji + ' ' + item.name + ' \u2192 corpse slot' + bonus, 'info');
+      AudioSystem.play('ui-confirm', { volume: 0.4 });
+      HUD.updatePlayer(Player.state());
+      _refreshPanels();
+    }
+  }
+
+  /**
+   * Deposit a hand card into the SUIT_CARD slot of the current corpse container.
+   * Slot range: hit.slot = 1200 + handIdx.
+   */
+  function _corpseDepositHandCard(handIdx) {
+    if (typeof CrateSystem === 'undefined') return;
+    var container = CrateSystem.getContainer(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
+    if (!container || container.sealed) return;
+
+    var hand = CardAuthority.getHand();
+    var card = hand[handIdx];
+    if (!card) return;
+
+    // Find the SUIT_CARD slot (must match suit)
+    var slots = container.slots;
+    var targetSlotIdx = -1;
+    for (var i = 0; i < slots.length; i++) {
+      if (!slots[i].filled && slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD) {
+        targetSlotIdx = i; break;
+      }
+    }
+    if (targetSlotIdx < 0) {
+      Toast.show(i18n.t('toast.suit_slot_full', 'Suit slot already filled'), 'info');
+      return;
+    }
+    if (slots[targetSlotIdx].suit && slots[targetSlotIdx].suit !== card.suit) {
+      Toast.show('\u2660 Need ' + slots[targetSlotIdx].suit + ' card', 'warning');
+      return;
+    }
+
+    var result = CrateSystem.fillSlot(_corpsePendingX, _corpsePendingY, _corpsePendingFloor, targetSlotIdx, card);
+    if (result) {
+      CardAuthority.removeFromHand(handIdx);
+      var suitEmoji = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
+      Toast.show((card.emoji || suitEmoji[card.suit] || '\uD83C\uDCCF') + ' ' + card.name + ' \u2192 suit slot', 'loot');
+      AudioSystem.play('card-deal', { volume: 0.5 });
+      HUD.updatePlayer(Player.state());
+      _refreshPanels();
+    }
+  }
+
+  /**
+   * Seal the current corpse container (all slots must be filled first).
+   * Grants coins, triggers reanimate flag, closes the menu.
+   */
+  function _corpseSeal() {
+    if (typeof CrateSystem === 'undefined') return;
+    if (!CrateSystem.canSeal(_corpsePendingX, _corpsePendingY, _corpsePendingFloor)) {
+      Toast.show(i18n.t('toast.fill_slots', 'Fill all slots first!'), 'warning');
+      AudioSystem.play('ui-fail');
+      return;
+    }
+
+    var result = CrateSystem.seal(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
+    if (!result) return;
+
+    var msg = '\u2728 Sealed! +' + result.totalCoins + 'g';
+    if (result.canReanimate) msg += '  \u2620\uFE0F Ready to reanimate!';
+    Toast.show(msg, 'loot');
+
+    CardAuthority.addGold(result.totalCoins);
+
+    if (typeof ParticleFX !== 'undefined' && _canvas) {
+      var cx = _canvas.width / 2;
+      var cy = _canvas.height * 0.4;
+      if (result.totalCoins >= 5) ParticleFX.coinRain(cx, cy, result.totalCoins);
+      else if (result.totalCoins > 0) ParticleFX.coinBurst(cx, cy, Math.max(3, result.totalCoins));
+    }
+
+    HUD.updatePlayer(Player.state());
+
+    // Close the menu once sealed
+    if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
+  }
+
   /**
    * Take a staged loot item by slot index (1-5 keys → 0-4).
    * Called during harvest MenuBox from number key handlers.
@@ -5994,6 +6393,46 @@ var Game = (function () {
       AudioSystem.play('ui-fail');
     } else if (result.reason === 'sold_out') {
       Toast.show(i18n.t('shop.sold_out', 'Sold out'), 'dim');
+    }
+  }
+
+  /**
+   * Player clicks a supply row in the shop face supply section.
+   * supplyIndex is the position in the faction's getSupplyStock() array.
+   * Purchases are unlimited — no sold-out state.
+   */
+  function _shopBuySupply(supplyIndex) {
+    if (typeof Shop === 'undefined') return;
+    // Ensure shop session is open for the current faction/floor before buying
+    if (!Shop.isOpen()) {
+      var _sf = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1';
+      var _faction = Shop.getCurrentFaction ? Shop.getCurrentFaction() : 'tide';
+      Shop.open(_faction, parseInt(_sf, 10) || 1);
+    }
+
+    var result = Shop.buySupply(supplyIndex);
+    if (result.ok) {
+      var item = result.item;
+      Toast.show(
+        item.emoji + ' ' + i18n.t('toast.bought', 'Bought') + ' ' + item.name + '  −' + result.cost + 'g',
+        'currency'
+      );
+      AudioSystem.playRandom('coin', { volume: 0.4 });
+      if (typeof ParticleFX !== 'undefined') {
+        var cx2 = _canvas ? _canvas.width / 2 : 320;
+        var cy2 = _canvas ? _canvas.height * 0.55 : 240;
+        if (result.cost >= 5) ParticleFX.coinBurst(cx2, cy2, Math.min(8, Math.floor(result.cost / 3)));
+      }
+      HUD.updatePlayer(Player.state());
+      if (typeof StatusBar !== 'undefined' && StatusBar.updateBag) StatusBar.updateBag();
+      _refreshPanels();
+    } else if (result.reason === 'no_gold') {
+      var stock = Shop.getSupplyStock ? Shop.getSupplyStock() : [];
+      var needed = stock[supplyIndex] ? stock[supplyIndex].shopPrice - CardAuthority.getGold() : 0;
+      Toast.show(i18n.t('shop.need_gold', 'Need') + ' ' + needed + 'g ' + i18n.t('shop.more', 'more'), 'warning');
+      AudioSystem.play('ui-fail');
+    } else if (result.reason === 'bag_full') {
+      Toast.show(i18n.t('toast.bag_full', 'Bag is full!'), 'warning');
     }
   }
 
@@ -6207,6 +6646,12 @@ var Game = (function () {
     // Close the pause/bonfire menu first
     ScreenManager.toGame();
 
+    // PW-2: Bonfire fast-travel drops the hose. The line can't follow a
+    // teleport, and the player didn't roll it up — spec §2.3.
+    if (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive()) {
+      HoseState.onBonfireWarp();
+    }
+
     // Determine direction — ascending if target is shallower
     var srcDepth = FloorManager.getFloor().split('.').length;
     var tgtDepth = targetFloorId.split('.').length;
@@ -6315,10 +6760,36 @@ var Game = (function () {
     var p = Player.state();
     var hasNpcSystem = typeof NpcSystem !== 'undefined';
 
+    // Cinematic lockout — while a scripted beat is holding input (e.g. the
+    // Hero Wake encounter on 2.2.1), freeze enemy AI awareness/aggro so the
+    // cinematic camera cannot race combat initiation. Without this guard the
+    // game deadlocks between "cinematic locks input" and "combat opens over
+    // cinematic" the instant nearby enemies trip ENGAGED.
+    var _cinLocking = (typeof CinematicCamera !== 'undefined' &&
+                       CinematicCamera.isInputLocked && CinematicCamera.isInputLocked());
+    var _heroWakeLock = (_heroWakeState && _heroWakeState.phase === 'playing');
+    if (_cinLocking || _heroWakeLock) {
+      // Still tick the scripted hero so the authored path advances, but
+      // skip enemy AI, aggro checks, and bark ticks entirely.
+      if (_heroWakeLock && typeof HeroSystem !== 'undefined' && HeroSystem.tickScriptedHero) {
+        var _despawnedLocked = HeroSystem.tickScriptedHero({ x: p.x, y: p.y }, deltaMs);
+        if (_despawnedLocked && _heroWakeState.combatTrigger && !_heroWakeState.triggerSpawned) {
+          _spawnWoundedWarden(_heroWakeState.combatTrigger);
+        }
+      }
+      return;
+    }
+
     for (var i = 0; i < enemies.length; i++) {
       if (enemies[i].hp <= 0) continue;
       // NpcSystem entities get patrol/bark tick instead of enemy AI
       if (enemies[i].npcType && hasNpcSystem) continue;
+      // Friendly entities (Dispatcher gate NPC, quest givers, vendors spawned
+      // outside NpcSystem) must not run the hostile awareness/chase loop —
+      // otherwise their awareness climbs past the UNAWARE threshold and the
+      // raycaster paints ❓/❗/⚔ indicators above them. Their own logic (e.g.
+      // _tickDispatcherChoreography) drives any movement they need.
+      if (enemies[i].friendly) continue;
       EnemyAI.updateEnemy(enemies[i], p, floorData.grid, floorData.gridW, floorData.gridH, deltaMs);
     }
 
@@ -6335,6 +6806,20 @@ var Game = (function () {
     // Enemy creature bark tick — atmospheric sounds on depth-3+ floors
     if (EnemyAI.tickEnemyBarks) {
       EnemyAI.tickEnemyBarks(enemies, p, deltaMs, floorData.biome);
+    }
+
+    // Scripted hero tick (Floor 2.2.1 Hero Wake cinematic).
+    // tickScriptedHero advances the hero along its authored path.
+    // Return value:
+    //   undefined — no scripted hero active (most floors)
+    //   null      — hero is still walking
+    //   object    — hero just reached end of path, this is the entity
+    // On despawn, we spawn the wounded Vault Warden combat trigger.
+    if (_heroWakeState.phase === 'playing' && typeof HeroSystem !== 'undefined' && HeroSystem.tickScriptedHero) {
+      var despawned = HeroSystem.tickScriptedHero({ x: p.x, y: p.y }, deltaMs);
+      if (despawned && _heroWakeState.combatTrigger && !_heroWakeState.triggerSpawned) {
+        _spawnWoundedWarden(_heroWakeState.combatTrigger);
+      }
     }
 
     // Dispatcher grab choreography (Floor 1 gate sequence)
@@ -6744,6 +7229,78 @@ var Game = (function () {
       });
     }
 
+    // ── Scripted hero sprite (Floor 2.2.1 Hero Wake cinematic) ──
+    // HeroSystem tracks the scripted hero entity independently of the
+    // enemies array (so it isn't swept by EnemyAI). We push it into the
+    // sprite list here with the gold glow + oversized scale from the
+    // Seeker hero def, using prevX/prevY/_lerpT for smooth movement.
+    if (typeof HeroSystem !== 'undefined' && HeroSystem.getScriptedHero) {
+      var shero = HeroSystem.getScriptedHero();
+      if (shero) {
+        // Advance per-frame lerp for smooth tile-to-tile walk
+        if (HeroSystem.updateScriptedLerp) {
+          HeroSystem.updateScriptedLerp(frameDt / 1000);
+        }
+        var hrX, hrY;
+        if (shero._prevX !== undefined && shero._lerpT !== undefined && shero._lerpT < 1) {
+          var hT = shero._lerpT;
+          var hEased = 1 - (1 - hT) * (1 - hT) * (1 - hT);
+          hrX = shero._prevX + (shero.x - shero._prevX) * hEased;
+          hrY = shero._prevY + (shero.y - shero._prevY) * hEased;
+        } else {
+          hrX = shero.x;
+          hrY = shero.y;
+        }
+        // Resolve stacked-sprite for the hero NPC (ninja head, black
+        // jacket, black jeans, varying weapon) — all hero antagonists
+        // share this silhouette, only the weapon changes per archetype.
+        var heroStackKey = 'hero_' + (shero.heroType || 'seeker');
+        var heroStackDef = (typeof EnemySprites !== 'undefined' && EnemySprites.getStack)
+          ? EnemySprites.getStack(heroStackKey) : null;
+        var heroStack = null;
+        if (heroStackDef) {
+          heroStack = {
+            head:   heroStackDef.head   || '',
+            torso:  heroStackDef.torso  || '',
+            legs:   heroStackDef.legs   || '',
+            hat: heroStackDef.hat
+              ? { emoji: heroStackDef.hat, scale: heroStackDef.hatScale || 0.5, behind: !!heroStackDef.hatBehind }
+              : null,
+            backWeapon: heroStackDef.backWeapon
+              ? { emoji: heroStackDef.backWeapon, scale: heroStackDef.backWeaponScale || 0.4, offsetX: heroStackDef.backWeaponOffsetX || 0.3 }
+              : null,
+            frontWeapon: heroStackDef.frontWeapon
+              ? { emoji: heroStackDef.frontWeapon, scale: heroStackDef.frontWeaponScale || 0.65, offsetX: heroStackDef.frontWeaponOffsetX || -0.22 }
+              : null,
+            headMods:  heroStackDef.headMods  || null,
+            torsoMods: heroStackDef.torsoMods || null,
+            tintHue:   heroStackDef.tintHue,
+            tintColor: heroStackDef.tintColor,
+            tintAlpha: heroStackDef.tintAlpha
+          };
+        }
+        _sprites.push({
+          x: hrX,
+          y: hrY,
+          id: shero.id,
+          emoji: shero.emoji,
+          stack: heroStack,
+          color: null,
+          scale: shero.scale || 1.5,
+          facing: shero.facing,
+          friendly: false,
+          awareness: 0,
+          glow: shero.glow || '#d4af37',
+          glowRadius: shero.glowRadius || 14,
+          tint: shero.tint || null,
+          particleEmoji: shero.particleEmoji || null,
+          overlayText: null,
+          bobY: shero.bobY || 0,
+          scaleAdd: 0
+        });
+      }
+    }
+
     // ── Vendor NPC sprites (behind counter, facing player) ──────────
     if (typeof NpcComposer !== 'undefined' && floorData.shops) {
       for (var vi = 0; vi < floorData.shops.length; vi++) {
@@ -7016,7 +7573,16 @@ var Game = (function () {
     /** Public interact — delegates to _interact(). Used by CratePeek
      *  action button and other DOM click targets that need to fire the
      *  same interact path as the keyboard OK / InteractPrompt. */
-    interact: function () { _interact(); }
+    interact: function () { _interact(); },
+
+    /** Open the corpse-restock menu for the corpse CorpsePeek is showing.
+     *  Called from CorpsePeek._onActionClick() when "Restock" is pressed. */
+    openCorpseMenu: function () { _openCorpseMenu(); },
+
+    /** Return current corpse-menu target (for MenuFaces to read slot data). */
+    getCorpseTarget: function () {
+      return { x: _corpsePendingX, y: _corpsePendingY, floorId: _corpsePendingFloor };
+    }
   };
 })();
 

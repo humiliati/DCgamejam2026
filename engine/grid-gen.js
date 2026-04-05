@@ -507,7 +507,19 @@ var GridGen = (function () {
         if (adjWall) candidates.push({ x: rx, y: ry });
       }
     }
-    return candidates.length > 0 ? SeededRNG.pick(candidates) : { x: room.cx, y: room.cy };
+    if (candidates.length > 0) return SeededRNG.pick(candidates);
+    // Fallback: only return room center if it's actually empty. Otherwise
+    // scan the room interior for any empty tile. Never return a wall/solid
+    // tile — that would place stairs inside a wall and break spawn logic.
+    if (grid[room.cy] && grid[room.cy][room.cx] === TILES.EMPTY) {
+      return { x: room.cx, y: room.cy };
+    }
+    for (var fy = room.y; fy < room.y + room.h; fy++) {
+      for (var fx = room.x; fx < room.x + room.w; fx++) {
+        if (grid[fy] && grid[fy][fx] === TILES.EMPTY) return { x: fx, y: fy };
+      }
+    }
+    return null;
   }
 
   return {

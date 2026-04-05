@@ -38,7 +38,7 @@
     [ 1,30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,30, 1], // 6  torches
     [ 1, 1, 1, 1, 0, 0,10, 0,10, 5, 0, 1, 1, 1], // 7  corridor neck + pillars + STAIRS_DN(9,7)
     [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1], // 8  spawn row
-    [ 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1]  // 9  DOOR_EXIT (6,9)
+    [ 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1]  // 9  DOOR_EXIT (7,9) — aligned with spawn between pillars
   ];
 
   var SPAWN = { x: 7, y: 8, dir: 3 }; // facing NORTH
@@ -64,9 +64,9 @@
       doors: {
         stairsUp: null,
         stairsDn: { x: 9, y: 7 },    // STAIRS_DN — to Foundry Stores (3.2.1)
-        doorExit: { x: 6, y: 9 }   // DOOR_EXIT — back to The Garrison
+        doorExit: { x: 7, y: 9 }   // DOOR_EXIT — back to The Garrison
       },
-      doorTargets: { '6,9': '3' },  // DOOR_EXIT → The Garrison (Floor 3)
+      doorTargets: { '7,9': '3' },  // DOOR_EXIT → The Garrison (Floor 3)
       gridW: W,
       gridH: H,
       biome: 'shop',

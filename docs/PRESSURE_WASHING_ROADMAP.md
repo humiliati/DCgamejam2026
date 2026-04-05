@@ -8,9 +8,9 @@
 
 ## 1. Design Vision
 
-The player carries a pressure hose through dungeons. The hose is a physical line that trails behind, records the player's path, costs energy to drag, enables sub-tile grime cleaning on walls and floors, and provides a "roll up hose" auto-exit that walks the player backward along the hose path. The hose is optional — players who skip it can still do basic tile-level scrubbing with rags/mops, but the hose unlocks the full cleaning system (sub-tile grime grids, beam shaping via nozzle items, efficient wall cleaning).
+The player carries a pressure hose through dungeons. The hose is a physical line that trails behind, records the player's path, costs energy to drag, enables sub-tile grime cleaning on walls and floors, and provides a "roll up hose" auto-exit that retraces the hose path back to the truck. The hose is optional — players who skip it can still do basic tile-level scrubbing with rags/mops, but the hose unlocks the full cleaning system (sub-tile grime grids, beam shaping via nozzle items, efficient wall cleaning).
 
-**Core fantasy**: You are a secretive hazmat operative winding a hose through a dungeon, methodically pressure-washing blood off walls while a hero's carnage is still warm. When you're done (or out of energy), you hit "roll up hose" and walk backwards out, reeling the line in behind you.
+**Core fantasy**: You are a secretive hazmat operative winding a hose through a dungeon, methodically pressure-washing blood off walls while a hero's carnage is still warm. When you're done (or out of energy), you hit "roll up hose" and the line reels itself in as you retrace your route back to the truck.
 
 ---
 
@@ -125,7 +125,7 @@ Player presses a dedicated button (or selects from interact menu) to begin rolli
 1. Locks manual movement input
 2. Reverses `HoseState.path` into a movement queue
 3. Feeds the reversed path into `MovementController` step by step
-4. **Player walks backward** — facing opposite of travel direction (the "someone winding up a hose" look)
+4. Player paths normally — faces the direction of travel as each step advances
 5. As each tile is traversed, the hose path shrinks (visual: minimap line retracts)
 6. On reaching the truck tile (or building entrance), hose state clears
 
@@ -144,13 +144,12 @@ HoseReel = {
   _advance: function() {
     if (!_reelPath.length) { _arrive(); return; }
     var next = _reelPath.shift();
-    // Calculate direction FROM current TO next (which is backward along hose)
+    // Calculate direction FROM current TO next (retracing the hose path)
     var dx = next.x - MC.getGridPos().x;
     var dy = next.y - MC.getGridPos().y;
     var moveDir = _deltaToDir(dx, dy);
-    // Face OPPOSITE of movement direction (walking backward)
-    var faceDir = (moveDir + 2) % 4;
-    MC.startTurn(faceDir);
+    // Face the direction of travel — normal pathing
+    MC.startTurn(moveDir);
     MC.startMove(moveDir);
     // HoseState.path.pop() — shrink hose as we retract
   }
@@ -158,7 +157,6 @@ HoseReel = {
 ```
 
 Key difference from MinimapNav click-to-move:
-- Player faces **opposite** of travel direction (backward walk)
 - Path is predetermined (the hose breadcrumb), not computed by Pathfind
 - Hose path visually retracts on minimap as player reels
 - Cannot be interrupted by clicking (commitment — you chose to leave)
@@ -393,7 +391,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 |--------|-------|------|------------|---------|
 | GrimeGrid | 1 | `engine/grime-grid.js` | TILES | Sub-tile grime data per tile |
 | HoseState | 1 | `engine/hose-state.js` | — | Hose attachment, path, kink tracking, energy drain |
-| HoseReel | 3 | `engine/hose-reel.js` | HoseState, MovementController, FloorTransition | Roll-up auto-exit (backward walk) |
+| HoseReel | 3 | `engine/hose-reel.js` | HoseState, MovementController, FloorTransition | Roll-up auto-exit (retraces hose path) |
 | HosePeek | 3 | `engine/hose-peek.js` | HoseState, InteractPrompt | Truck interaction → attach hose |
 | CleaningTruck | 3 | `engine/cleaning-truck.js` | HeroSystem, TILES, BonfireSprites pattern | Spawn/despawn truck + hose sprite on hero day |
 | HoseOverlay | 2 | `engine/hose-overlay.js` | HoseState, Minimap | Draw hose path + kink dots on minimap |
@@ -416,7 +414,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 
 | Module | Reason |
 |--------|--------|
-| EyesOnly `ropeManager.js` | Designed for temporary lever-pull interactions (deploy→resolve→consume). Not a persistent trail system. The hose needs continuous path recording, cross-floor survival, and backward reel-up — none of which RopeManager provides. MinimapNav + Pathfind + MC already have the movement queue infrastructure we need. |
+| EyesOnly `ropeManager.js` | Designed for temporary lever-pull interactions (deploy→resolve→consume). Not a persistent trail system. The hose needs continuous path recording, cross-floor survival, and retracing reel-up — none of which RopeManager provides. MinimapNav + Pathfind + MC already have the movement queue infrastructure we need. |
 
 ---
 
@@ -457,7 +455,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 
 ### Phase PW-4: Hose Reel + MinimapNav Gate (2h)
 
-1. `hose-reel.js` — reverse path, feed to MC, backward-facing walk, floor transition handling
+1. `hose-reel.js` — reverse path, feed to MC, normal forward pathing, floor transition handling
 2. `hose-overlay.js` — minimap hose path line + kink dots
 3. MinimapNav distance gate — reject clicks within 5+itemN tiles
 4. Wire "roll up hose" to input (button or interact menu option)

@@ -107,7 +107,9 @@ var DialogBox = (function () {
       choiceTimer:  0,      // ms since choices appeared
       hoverChoice:  -1,     // Pointer-hovered choice index
       focusBtn:     0,      // Keyboard-focused button index (←/→ to move)
-      fastForward:  false   // Player holding advance key
+      fastForward:  false,  // Player holding advance key
+      scrollLine:   0,      // Top visible line when body overflows maxBodyH
+      maxScrollLine:0       // Computed each frame from wrapped line count
     };
   }
 
@@ -426,7 +428,7 @@ var DialogBox = (function () {
     // Measure text height
     ctx.font = '13px monospace';
     var lines = _wrapText(ctx, revealedText, boxW - BOX_PAD * 2 - (_active.portrait ? PORTRAIT_SIZE + 12 : 0));
-    var textH = lines.length * LINE_H;
+    var fullTextLines = lines; // may be sliced below if scrolling
 
     // Choices height
     var choicesH = 0;
@@ -446,12 +448,31 @@ var DialogBox = (function () {
       hintH = 20;
     }
 
+    // ── Clamp body height to the viewport so long content (e.g. books
+    //    with many lines per page) no longer overflows off-screen. Compute
+    //    the maximum boxH that still fits above the card tray + status bar,
+    //    then derive how many wrapped lines are visible and slice.
+    var _sbEl = document.getElementById('status-bar');
+    var _sbH  = (_sbEl && _sbEl.offsetHeight) ? _sbEl.offsetHeight : 0;
+    var maxBoxH = vpH - BOX_MARGIN - NAME_H - BOX_MARGIN - 72 - _sbH;
+    if (maxBoxH < 120) maxBoxH = 120;
+    var maxBodyH = maxBoxH - BOX_PAD * 2 - choicesH - buttonsH - hintH;
+    if (maxBodyH < LINE_H) maxBodyH = LINE_H;
+    var maxVisibleLines = Math.max(1, Math.floor(maxBodyH / LINE_H));
+    var overflow = fullTextLines.length > maxVisibleLines;
+    var maxScrollLine = overflow ? (fullTextLines.length - maxVisibleLines) : 0;
+    _state.maxScrollLine = maxScrollLine;
+    if (_state.scrollLine > maxScrollLine) _state.scrollLine = maxScrollLine;
+    if (_state.scrollLine < 0) _state.scrollLine = 0;
+    var visibleLines = overflow
+      ? fullTextLines.slice(_state.scrollLine, _state.scrollLine + maxVisibleLines)
+      : fullTextLines;
+    var textH = visibleLines.length * LINE_H;
+
     var boxH = BOX_PAD * 2 + textH + choicesH + buttonsH + hintH;
     // Lift box above the status-bar DOM overlay (which renders at z-index:12
     // over the canvas). When the bar is visible its offsetHeight clears the
     // canvas-drawn box from being covered by the opaque paper background.
-    var _sbEl = document.getElementById('status-bar');
-    var _sbH  = (_sbEl && _sbEl.offsetHeight) ? _sbEl.offsetHeight : 0;
     var boxY  = vpH - boxH - BOX_MARGIN - 72 - _sbH; // Above card tray + status bar
 
     // ── Name box (above main box) ──
@@ -501,8 +522,38 @@ var DialogBox = (function () {
     ctx.fillStyle = COL.text;
 
     var textY = boxY + BOX_PAD;
-    for (var i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], textX, textY + i * LINE_H);
+    for (var i = 0; i < visibleLines.length; i++) {
+      ctx.fillText(visibleLines[i], textX, textY + i * LINE_H);
+    }
+
+    // ── Scrollbar (when wrapped body overflows the box) ──
+    if (overflow) {
+      var sbBarX = boxX + boxW - BOX_PAD + 4;
+      var sbBarY = textY;
+      var sbBarW = 4;
+      var sbBarH = visibleLines.length * LINE_H;
+      // Track
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(sbBarX, sbBarY, sbBarW, sbBarH);
+      // Thumb — proportional to visible / total
+      var thumbFrac = maxVisibleLines / fullTextLines.length;
+      var thumbH    = Math.max(18, sbBarH * thumbFrac);
+      var thumbY    = sbBarY + (sbBarH - thumbH) *
+                      (maxScrollLine > 0 ? (_state.scrollLine / maxScrollLine) : 0);
+      ctx.fillStyle = 'rgba(240,208,112,0.55)';
+      ctx.fillRect(sbBarX, thumbY, sbBarW, thumbH);
+      // Top/bottom indicators (▲ ▼) when more content exists in that direction
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (_state.scrollLine > 0) {
+        ctx.fillStyle = 'rgba(240,208,112,0.8)';
+        ctx.fillText('\u25B2', sbBarX + sbBarW / 2, sbBarY + 2);
+      }
+      if (_state.scrollLine < maxScrollLine) {
+        ctx.fillStyle = 'rgba(240,208,112,0.8)';
+        ctx.fillText('\u25BC', sbBarX + sbBarW / 2, sbBarY + sbBarH - 2);
+      }
     }
 
     // ── Page indicator (multi-page) ──
@@ -777,6 +828,22 @@ var DialogBox = (function () {
     ctx.closePath();
   }
 
+  // ── Scroll (body overflow navigation) ─────────────────────────
+
+  /**
+   * Scroll the body text by `delta` wrapped lines. Positive = down.
+   * No-op if the dialog is not currently overflowing.
+   * @param {number} delta - Lines to scroll (e.g. -1, +1, -5 for page up)
+   * @returns {boolean} true if the dialog consumed the scroll
+   */
+  function scroll(delta) {
+    if (!_active || !_state) return false;
+    if (!_state.maxScrollLine) return false; // no overflow → let caller handle
+    _state.scrollLine = Math.max(0,
+      Math.min(_state.maxScrollLine, (_state.scrollLine || 0) + delta));
+    return true;
+  }
+
   // ── Interrupt (walk away, combat start) ───────────────────────
 
   /**
@@ -808,6 +875,7 @@ var DialogBox = (function () {
     render: render,
     handlePointerClick: handlePointerClick,
     handleKey: handleKey,
+    scroll: scroll,
     PRIORITY: PRIORITY
   };
 })();

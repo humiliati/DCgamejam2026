@@ -161,7 +161,15 @@ var NpcSystem = (function () {
 
       factionId:     def.factionId    || null,
       role:          def.role         || null,    // NpcComposer role key (e.g. 'tide_member')
-      blocksMovement:def.blocksMovement || (def.type === TYPES.DISPATCHER)
+      blocksMovement:def.blocksMovement || (def.type === TYPES.DISPATCHER),
+
+      // Gate-check tag — forward-compat metadata for NPCs that gate a
+      // locked door on journal-book presence. See floor3_inspector for
+      // the canonical example. Consumed by Game._interact() after the
+      // dialogue tree wraps to decide whether to set unlock flags.
+      // Shape: { requiredBookId, unlockFlags:[], targetFloor,
+      //          rejectBarkPool, acceptBarkPool }
+      gateCheck:     def.gateCheck    || null
     };
   }
 
@@ -1536,6 +1544,92 @@ var NpcSystem = (function () {
         barkPool:     'ambient.garrison',
         barkRadius:   2,
         barkInterval: 20000
+      },
+
+      // ── Vivec Arch gate — Immigrant Inspector + aloof bark crowd ──
+      // The eastern arch at (51,25)/(51,26) is LOCKED_DOOR. The Inspector
+      // is the narrative gate-check: his dialogue tree checks the player
+      // journal for a `rent_receipt_book` entry (proof of residence) and,
+      // when present, sets the unlock flag on both LOCKED_DOOR tiles.
+      //
+      // The crowd is decorative — four aloof onlookers who bark immigration
+      // chatter (weather-beaten gossip, envy, rumor). They don't block the
+      // path; they create ambience so the gate scene feels populated.
+      {
+        id:           'floor3_inspector',
+        type:         TYPES.INTERACTIVE,
+        x: 48, y: 25,
+        facing:       'west',
+        emoji:        '🛂',
+        name:         'Immigrant Inspector',
+        role:         'admiralty_member',
+        talkable:     true,
+        patrolPoints: null,             // Stationary — stands in the archway
+        barkPool:     'npc.inspector.ambient',
+        barkRadius:   5,
+        barkInterval: 18000,
+        dialogueTree: null,             // Tree registered in game.js init
+        // ── Gate-check tag (wiring deferred) ──
+        // When the dialogue tree wraps, game.js will consult this tag to
+        // decide whether to call Player.setFlag() on the arch LOCKED_DOOR
+        // tiles. See npc-system.js `getGateCheck(npcId)` accessor below.
+        gateCheck: {
+          requiredBookId: 'rent_receipt_book',
+          unlockFlags:    ['locked_door_3:51,25', 'locked_door_3:51,26'],
+          targetFloor:    '4',
+          rejectBarkPool: 'npc.inspector.reject',
+          acceptBarkPool: 'npc.inspector.accept'
+        }
+      },
+      {
+        id:           'floor3_crowd_1',
+        type:         TYPES.AMBIENT,
+        x: 46, y: 21,
+        facing:       'south',
+        emoji:        '🧕',
+        name:         'Hopeful',
+        patrolPoints: [{ x: 46, y: 21 }, { x: 47, y: 21 }],
+        stepInterval: 2600,
+        barkPool:     'ambient.vivec_crowd',
+        barkRadius:   4,
+        barkInterval: 21000
+      },
+      {
+        id:           'floor3_crowd_2',
+        type:         TYPES.AMBIENT,
+        x: 47, y: 22,
+        facing:       'south',
+        emoji:        '🧑‍🦱',
+        name:         'Weary Traveler',
+        patrolPoints: null,
+        barkPool:     'ambient.vivec_crowd',
+        barkRadius:   4,
+        barkInterval: 24000
+      },
+      {
+        id:           'floor3_crowd_3',
+        type:         TYPES.AMBIENT,
+        x: 46, y: 28,
+        facing:       'north',
+        emoji:        '👴',
+        name:         'Old Petitioner',
+        patrolPoints: null,
+        barkPool:     'ambient.vivec_crowd',
+        barkRadius:   4,
+        barkInterval: 26000
+      },
+      {
+        id:           'floor3_crowd_4',
+        type:         TYPES.AMBIENT,
+        x: 47, y: 29,
+        facing:       'north',
+        emoji:        '🧔‍♀️',
+        name:         'Disappointed Applicant',
+        patrolPoints: [{ x: 47, y: 29 }, { x: 48, y: 28 }],
+        stepInterval: 2800,
+        barkPool:     'ambient.vivec_crowd',
+        barkRadius:   4,
+        barkInterval: 22000
       }
     ]);
   }
@@ -1599,6 +1693,28 @@ var NpcSystem = (function () {
       + Object.keys(_defs).join(', '));
   }
 
+  /**
+   * Look up the `gateCheck` tag on a registered NPC definition. Returns
+   * null if the NPC does not exist or does not carry a gate-check tag.
+   *
+   * Used by post-dialogue hooks that need to decide whether to set door
+   * unlock flags based on the player's journal contents. The canonical
+   * consumer is the Immigrant Inspector on Floor 3 (floor3_inspector).
+   *
+   * @param {string} npcId
+   * @returns {Object|null}
+   */
+  function getGateCheck(npcId) {
+    var floors = Object.keys(_defs);
+    for (var i = 0; i < floors.length; i++) {
+      var defs = _defs[floors[i]];
+      for (var j = 0; j < defs.length; j++) {
+        if (defs[j].id === npcId) return defs[j].gateCheck || null;
+      }
+    }
+    return null;
+  }
+
   // ── Public API ────────────────────────────────────────────────────
 
   return Object.freeze({
@@ -1613,6 +1729,7 @@ var NpcSystem = (function () {
     clearActive:  clearActive,
     findById:     findById,
     findAtTile:   findAtTile,
-    isTalkable:   isTalkable
+    isTalkable:   isTalkable,
+    getGateCheck: getGateCheck
   });
 })();

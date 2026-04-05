@@ -51,6 +51,12 @@ var HoseState = (function () {
   var _kinkCount = 0;
   var _energyDrained = 0;         // Accumulated energy cost since attach
   var _lastCancelReason = null;   // String code for debug/UI messaging
+  var _enteredSubtree = false;    // True once the player has stepped into the
+                                  // origin building subtree at least once. Used
+                                  // to enforce the "ascend back to exterior
+                                  // without reel-up drops the hose" rule — the
+                                  // origin exterior is only a safe floor BEFORE
+                                  // the player crosses the threshold.
 
   // ── Listeners ────────────────────────────────────────────────
   // Other modules subscribe so they know when hose attaches/detaches/kinks.
@@ -132,6 +138,10 @@ var HoseState = (function () {
     _kinkCount = 0;
     _energyDrained = 0;
     _lastCancelReason = null;
+    // If pickup happened inside the subtree already (edge case — truck spawned
+    // on a building interior), latch immediately. Otherwise wait for the first
+    // descendant step.
+    _enteredSubtree = _isDescendantBuilding(currentFloorId, buildingId);
 
     _emit('attach', buildingId, exteriorFloorId);
     return true;
@@ -176,12 +186,19 @@ var HoseState = (function () {
     // Floor change: validate building membership
     if (floorId !== _currentFloorId) {
       _currentFloorId = floorId;
-      if (!_isDescendantBuilding(floorId, _originBuildingId) &&
-          floorId !== _originFloorId) {
-        // Player left the valid subtree — hose snaps
+      var inSubtree = _isDescendantBuilding(floorId, _originBuildingId);
+      if (!inSubtree && floorId !== _originFloorId) {
+        // Player left the valid subtree entirely — hose snaps
         detach('wrong_building');
         return { kinked: false, drainThisStep: 0 };
       }
+      if (!inSubtree && floorId === _originFloorId && _enteredSubtree) {
+        // Ascended back to the origin exterior after having entered the
+        // building subtree — spec §2.3: walking out without roll-up drops it.
+        detach('dropped_exterior');
+        return { kinked: false, drainThisStep: 0 };
+      }
+      if (inSubtree) _enteredSubtree = true;
     }
 
     var key = floorId + ':' + x + ',' + y;
@@ -213,11 +230,17 @@ var HoseState = (function () {
   function onFloorEnter(newFloorId) {
     if (!_active) return false;
     _currentFloorId = newFloorId;
-    if (!_isDescendantBuilding(newFloorId, _originBuildingId) &&
-        newFloorId !== _originFloorId) {
+    var inSubtree = _isDescendantBuilding(newFloorId, _originBuildingId);
+    if (!inSubtree && newFloorId !== _originFloorId) {
       detach('wrong_building');
       return false;
     }
+    if (!inSubtree && newFloorId === _originFloorId && _enteredSubtree) {
+      // Spec §2.3: ascending back to exterior without reel-up drops the hose.
+      detach('dropped_exterior');
+      return false;
+    }
+    if (inSubtree) _enteredSubtree = true;
     return true;
   }
 
@@ -240,6 +263,7 @@ var HoseState = (function () {
     _path = [];
     _visitedKeys = {};
     _kinkCount = 0;
+    _enteredSubtree = false;
   }
 
   // ── Reel-up support ──────────────────────────────────────────
@@ -317,6 +341,7 @@ var HoseState = (function () {
     _kinkCount = 0;
     _energyDrained = 0;
     _lastCancelReason = null;
+    _enteredSubtree = false;
   }
 
   // ── Public API ───────────────────────────────────────────────

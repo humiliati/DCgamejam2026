@@ -35,6 +35,12 @@ var CombatEngine = (function () {
   var _drawsThisRound  = 0;       // Draws taken this round
   var _drawsPerRound   = 1;       // Configurable per-turn draw count
 
+  // Stun gate: true when the enemy is stunned for the current round.
+  // Latched at round start (before StatusSystem.tick decays duration)
+  // and consumed by both the opening commit in _enterStacking and the
+  // mid-round beat gate in update(). Cleared on phase exit.
+  var _stunSkipRound = false;
+
   // ── Timing constants (ms) ─────────────────────────────────────────
   var FACING_TIME = 250;          // Time for turn-to-face (matches MC.ROT_TIME)
   var BEAT_DURATION = 600;        // Time each countdown beat displays
@@ -122,6 +128,31 @@ var CombatEngine = (function () {
       Player.restoreEnergy(player.maxEnergy || 5);
     }
 
+    // ── Build this enemy's attack-card draw pile ──
+    // EnemyDeck resolves enemy.id → data/enemy-decks.json entry →
+    // shuffled pile of EATK-### cards. Enemies without a registered
+    // deck fall back to a generic Strike inside EnemyDeck itself.
+    if (typeof EnemyDeck !== 'undefined') {
+      EnemyDeck.beginCombatFor(enemy);
+
+      // Boss/elite decks can override CardStack greed (stack size target).
+      // e.g. Bone Sovereign / The Archivist run greed 3 to feel chunkier.
+      var greedOverride = EnemyDeck.getGreedFor(enemy);
+      if (greedOverride !== null && typeof CardStack !== 'undefined'
+          && typeof CardStack.setEnemyGreed === 'function') {
+        CardStack.setEnemyGreed(greedOverride);
+      }
+    }
+
+    // ── Clear any stale status carryover ──
+    // Safety: between combat sessions the same enemy instance could be
+    // re-entered (e.g. fled and re-engaged). StatusSystem is combat-
+    // scoped, so we reset both sides at the start too, not just end.
+    if (typeof StatusSystem !== 'undefined') {
+      StatusSystem.clearAll(enemy);
+      if (typeof Player !== 'undefined') StatusSystem.clearAll(Player.state());
+    }
+
     // Begin countdown phase
     _setPhase('countdown');
 
@@ -197,8 +228,13 @@ var CombatEngine = (function () {
       if (_enemyBeatTimer >= ENEMY_BEAT_INTERVAL) {
         _enemyBeatTimer -= ENEMY_BEAT_INTERVAL;
 
-        // Enemy commits a card (via CardStack enemy AI)
-        if (typeof CardStack !== 'undefined' && !CardStack.isEnemyStackReady()) {
+        // Enemy commits a card (via CardStack enemy AI) — stunned
+        // enemies stay silent for the full round, not just the opening
+        // beat. _stunSkipRound is latched in _enterStacking BEFORE the
+        // tick decrements the stun duration, so a 1-turn stun applied
+        // last round cleanly gates this entire round's commits.
+        if (typeof CardStack !== 'undefined' && !_stunSkipRound
+            && !CardStack.isEnemyStackReady()) {
           var aiCard = _getEnemyAICard();
           if (aiCard) {
             CardStack.enemyCommitCard(aiCard);
@@ -244,22 +280,69 @@ var CombatEngine = (function () {
   /**
    * Enter the stacking phase for a new round.
    * Resets enemy beat timer, draws per-turn card from backup, clears stacks.
+   * Also: ticks status effects on both sides (DoT + duration decay) and
+   * skips the enemy's opening commit if they're stunned this round.
    */
   function _enterStacking() {
     _round++;
     _enemyBeatTimer = 0;
     _drawsThisRound = 0;
 
-    // Tick status duration — clear expired statuses, keep ongoing ones
-    if (_enemy && _enemy.spriteState && _enemy.spriteState !== 'idle' && _enemy.spriteState !== 'dead') {
-      if (_enemy.statusDuration && _enemy.statusDuration > 0) {
-        _enemy.statusDuration--;
-        if (_enemy.statusDuration <= 0) {
-          _enemy.spriteState = 'idle';
-          _enemy.statusDuration = 0;
+    // ── Tick status effects on both sides ────────────────────────────
+    // StatusSystem handles poisoned/burning/bleeding DoT, stun/root CC,
+    // and duration decay. One tick per round on the round boundary —
+    // the moment the player sees their HP bar pulse matches the moment
+    // new cards become committable.
+    //
+    // IMPORTANT ORDER: we latch the CC flags BEFORE ticking, because
+    // tick() decrements duration and a 1-turn stun applied last round
+    // would otherwise expire before we ever check it. Latch → tick →
+    // commit gate reads the latched value. This gives a stun applied
+    // on round N the exact lifetime "skip round N+1".
+    var enemyStunnedThisRound = false;
+    if (typeof StatusSystem !== 'undefined' && _enemy) {
+      enemyStunnedThisRound = StatusSystem.hasCC(_enemy, 'stun');
+    }
+
+    var enemyDied = false;
+    var playerDied = false;
+    if (typeof StatusSystem !== 'undefined') {
+      if (_enemy) {
+        var eReport = StatusSystem.tick(_enemy);
+        if (eReport.damageDealt > 0) {
+          SessionStats.inc('damageDealt', eReport.damageDealt);
+        }
+        // Sync visual state for EnemySprites / EnemyIntent. If the last
+        // DoT killed the enemy we leave spriteState alone — the death
+        // path below handles it.
+        if (_enemy.hp > 0) {
+          _enemy.spriteState = StatusSystem.getVisualState(_enemy);
+        } else {
+          enemyDied = true;
         }
       }
-      // Statuses without explicit duration persist until replaced
+      if (typeof Player !== 'undefined') {
+        var pState = Player.state();
+        var pReport = StatusSystem.tick(pState);
+        if (pReport.damageDealt > 0) {
+          SessionStats.inc('damageTaken', pReport.damageDealt);
+        }
+        if (pState.hp <= 0) playerDied = true;
+      }
+    }
+
+    // If DoT ticks ended the fight, short-circuit into resolution.
+    if (enemyDied) {
+      _setPhase('victory');
+      _active = false;
+      if (_onEnd) _onEnd('victory', _enemy);
+      return;
+    }
+    if (playerDied) {
+      _setPhase('defeat');
+      _active = false;
+      if (_onEnd) _onEnd('defeat', _enemy);
+      return;
     }
 
     // Clear stacks from previous round
@@ -268,8 +351,12 @@ var CombatEngine = (function () {
       CardStack.clearEnemyStack();
     }
 
-    // Enemy commits their first card immediately (no free beats)
-    if (typeof CardStack !== 'undefined') {
+    // ── Enemy opening commit ──
+    // Stunned enemies skip their opening commit AND any mid-round beats
+    // for this round. _stunSkipRound is consumed by update()'s stacking
+    // timer gate below so the enemy stays silent until next round.
+    _stunSkipRound = enemyStunnedThisRound;
+    if (typeof CardStack !== 'undefined' && !enemyStunnedThisRound) {
       var aiCard = _getEnemyAICard();
       if (aiCard) CardStack.enemyCommitCard(aiCard);
     }
@@ -278,16 +365,25 @@ var CombatEngine = (function () {
   }
 
   /**
-   * Simple enemy AI card generator (stub — will be replaced).
-   * Generates a card from the enemy's stats.
+   * Pull the enemy's next committed card from their deck (data/enemy-
+   * decks.json → data/enemy-cards.json). EnemyDeck.drawNextFor handles
+   * shuffle/reshuffle and falls back to a suit-aware generic Strike if
+   * the enemy has no registered deck — so combat never hard-crashes on
+   * missing data.
    */
   function _getEnemyAICard() {
     if (!_enemy) return null;
+    if (typeof EnemyDeck !== 'undefined') {
+      var card = EnemyDeck.drawNextFor(_enemy);
+      if (card) return card;
+    }
+    // Absolute last-ditch fallback (EnemyDeck module missing entirely)
     var str = _enemy.str || 1;
     return {
       id: 'AI-' + (_enemy.id || 'enemy'),
       name: _enemy.name + ' Strike',
-      emoji: _enemy.emoji || '💀',
+      emoji: _enemy.emoji || '\ud83d\udc80',
+      suit: _enemy.suit || 'spade',
       effects: [{ type: 'damage', value: Math.max(1, str), target: 'player' }],
       synergyTags: ['melee']
     };
@@ -348,8 +444,27 @@ var CombatEngine = (function () {
       playerDmg += stackEffects.stackSize - 1;
     }
 
-    // Apply thrust multiplier (already baked into stackEffects.damage,
-    // but str bonus should also benefit)
+    // ── Mono-suit bonus (was dead code — toast-only) ─────────────────
+    // SynergyEngine.checkMonoSuitBonus returns { monoSuit, suit, bonus }
+    // where bonus = stackSize - 1 when every card shares a suit. The
+    // toast module was rendering the bragging number but nothing was
+    // ever adding it to actual damage. A mono-spade 3-stack should hit
+    // for stack size bonus (+2) AND mono-suit bonus (+2), not just +2.
+    // Track the flat bonus separately so fireStack's result carries it
+    // for the HUD/log.
+    var monoInfo = { monoSuit: false, suit: null, bonus: 0 };
+    if (typeof SynergyEngine !== 'undefined' && stackEffects.cards) {
+      monoInfo = SynergyEngine.checkMonoSuitBonus(stackEffects.cards);
+      if (monoInfo.monoSuit && monoInfo.bonus > 0) {
+        playerDmg += monoInfo.bonus;
+      }
+    }
+
+    // ── Thrust (single application point) ──
+    // CardStack.computeStackEffects now returns RAW card damage. This
+    // is the only place thrust is applied to the player side, and it
+    // multiplies the sum (str + card damage + stack-size bonus) so all
+    // three scale linearly with thrust — the original design intent.
     if (stackEffects.thrust > 1.01) {
       playerDmg = Math.floor(playerDmg * stackEffects.thrust);
     }
@@ -450,33 +565,75 @@ var CombatEngine = (function () {
       thrust: stackEffects.thrust,
       sharedTags: stackEffects.sharedTags,
       suitMult: suitMult,
-      suitLabel: suitLabel
+      suitLabel: suitLabel,
+      monoSuit: monoInfo.monoSuit,
+      monoSuitSuit: monoInfo.suit,
+      monoSuitBonus: monoInfo.bonus
     };
 
-    // ── Apply player status effects to enemy ──
-    // Cards with { type: 'status', status: 'poisoned', ... } set spriteState
-    // so EnemySprites renders visual FX and EnemyIntent reads the condition.
-    if (stackEffects.statuses && stackEffects.statuses.length > 0) {
-      for (var si = 0; si < stackEffects.statuses.length; si++) {
-        var st = stackEffects.statuses[si];
-        if (st.status && st.target !== 'player') {
-          _enemy.spriteState = st.status;
-          // Duration tracking (ticks remaining) — consumed by future status system
-          if (st.duration) _enemy.statusDuration = st.duration;
+    // ── Apply player status effects to enemy (real entries, not just
+    //    spriteState strings) ──────────────────────────────────────────
+    // StatusSystem stores each status as an array entry on _enemy._statuses
+    // and ticks them at round boundaries. spriteState is derived from the
+    // highest-priority active status so EnemySprites + EnemyIntent stay
+    // in sync with the real status stack.
+    var pState = (typeof Player !== 'undefined') ? Player.state() : null;
+    if (typeof StatusSystem !== 'undefined') {
+      if (stackEffects.statuses && stackEffects.statuses.length > 0) {
+        StatusSystem.applyBatch(stackEffects.statuses, {
+          playerEntity:    pState,
+          enemyEntity:     _enemy,
+          selfEntity:      pState,      // player cards' 'self' = player
+          fallbackEntity:  _enemy
+        });
+      }
+
+      // Enemy-applied statuses land on the player — the gap the old code
+      // flagged with a TODO comment. This is why EATK-005 Spore Burst
+      // etc. now actually does what it says on the card.
+      if (enemyStackFX.statuses && enemyStackFX.statuses.length > 0) {
+        StatusSystem.applyBatch(enemyStackFX.statuses, {
+          playerEntity:    pState,
+          enemyEntity:     _enemy,
+          selfEntity:      _enemy,      // enemy cards' 'self' = enemy
+          fallbackEntity:  pState
+        });
+      }
+    }
+
+    // ── Apply 'heal' effects (self-heal on drain cards like EATK-012) ──
+    // Cards can carry { type: 'heal', value, target } — we apply it to
+    // whichever side committed the card. For enemy cards that means
+    // self-heal on _enemy; player drain cards aren't in the DB yet but
+    // the symmetric path is here for when they land.
+    if (enemyStackFX && enemyStackFX.cards) {
+      // CardStack doesn't expose enemy cards via computeEnemyStackEffects,
+      // so walk _enemyStack directly through the public accessor.
+    }
+    if (typeof CardStack !== 'undefined' && CardStack.getEnemyStack) {
+      var eStack = CardStack.getEnemyStack();
+      for (var hi = 0; hi < eStack.length; hi++) {
+        var hCard = eStack[hi];
+        if (!hCard || !hCard.effects) continue;
+        for (var hj = 0; hj < hCard.effects.length; hj++) {
+          var hEff = hCard.effects[hj];
+          if (hEff.type === 'heal' && hEff.target === 'self' && _enemy) {
+            var healAmt = hEff.value || 0;
+            _enemy.hp = Math.min(_enemy.maxHp || _enemy.hp + healAmt, _enemy.hp + healAmt);
+          }
         }
       }
     }
 
-    // ── Apply enemy status effects to player (from enemy stack) ──
-    if (enemyStackFX.statuses && enemyStackFX.statuses.length > 0) {
-      for (var ei = 0; ei < enemyStackFX.statuses.length; ei++) {
-        var est = enemyStackFX.statuses[ei];
-        if (est.status && est.target === 'player') {
-          // Player status effects handled by Player module in the future
-          // For now: log it for the HUD
-          result.playerStatus = est.status;
-        }
-      }
+    // ── Sync enemy visual state from its active status stack ────────
+    // StatusSystem.getVisualState returns the highest-priority status
+    // id (stunned > burning > poisoned/bleeding > rooted) or 'idle'.
+    // Only override when no explicit state is set by a card effect
+    // somewhere else in the pipeline — auto-derived HP states still win
+    // for the <25% enraged look.
+    if (typeof StatusSystem !== 'undefined' && _enemy) {
+      var vs = StatusSystem.getVisualState(_enemy);
+      if (vs !== 'idle') _enemy.spriteState = vs;
     }
 
     // ── Auto-derive spriteState from HP when no explicit status ──

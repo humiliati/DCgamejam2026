@@ -35,6 +35,13 @@ var InputManager = (function () {
     'Enter':      'interact',
     'KeyI':       'inventory',
     'KeyM':       'map_toggle',
+    // 'pause' action = "close / back / menu". Backspace is the PRIMARY binding
+    // because browsers reserve Escape for exiting fullscreen and pointer-lock
+    // (preventDefault can't override that; it's a hardcoded user-safety escape
+    // hatch). Escape stays as a secondary binding for muscle memory when the
+    // game is windowed. In fullscreen on Chromium/webOS we additionally call
+    // navigator.keyboard.lock(['Escape']) — see _initKeyboardLock() below.
+    'Backspace':  'pause',
     'Escape':     'pause',
     'Digit1':     'card_0',
     'Digit2':     'card_1',
@@ -91,6 +98,38 @@ var InputManager = (function () {
       _keysDown = {};
       _downEdge = {};
       _upEdge = {};
+    });
+
+    _initKeyboardLock();
+  }
+
+  // ── Keyboard Lock API ──────────────────────────────────
+  // When we enter fullscreen in Chromium-family browsers (Chrome, Edge, Brave,
+  // webOS Chromium), request exclusive capture of Escape so the browser stops
+  // treating it as "exit fullscreen" and delivers it as a normal keydown.
+  // The browser shows a one-time "Press and hold Esc to exit fullscreen" hint —
+  // that's the required user-safety tradeoff and cannot be suppressed.
+  //
+  // Firefox and Safari do not implement navigator.keyboard.lock; on those
+  // browsers Escape continues to exit fullscreen, and players should use the
+  // Backspace binding instead. The itch.io embed iframe already carries the
+  // `allow="fullscreen"` policy; keyboard-lock inherits it automatically.
+  function _initKeyboardLock() {
+    if (!(navigator.keyboard && typeof navigator.keyboard.lock === 'function')) {
+      return; // unsupported — Backspace rebind is the fallback
+    }
+    document.addEventListener('fullscreenchange', function () {
+      if (document.fullscreenElement) {
+        navigator.keyboard.lock(['Escape']).then(function () {
+          console.log('[Input] Keyboard lock acquired for Escape (fullscreen)');
+        }).catch(function (err) {
+          console.warn('[Input] Keyboard lock denied:', err);
+        });
+      } else {
+        // Leaving fullscreen releases the lock automatically, but call
+        // unlock() defensively in case the browser kept it.
+        if (navigator.keyboard.unlock) navigator.keyboard.unlock();
+      }
     });
   }
 

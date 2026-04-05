@@ -290,15 +290,23 @@ var Skybox = (function () {
     // Kept as a separate preset (rather than adding water:true to frontier)
     // so the in-game Floor 3 exterior raycaster path — which calls render()
     // directly — stays untouched. Only renderFull() reads .water/.oceanFloor.
+    // Vaporwave retune (Apr 5): zenith deep purple, horizon magenta/pink,
+    // magenta-tinged clouds, silhouette city mountains in the same deep
+    // purple-black as DeployCutscene. Mountains pinned at depth 0 so the
+    // distant silhouette stays still while the cloud bands drift — depth
+    // in _renderMountains is a scroll multiplier (not an occlusion order),
+    // so 0 = static. Bottom half renders the ocean floor skybox (glass
+    // porthole with caustics + creature bands + seabed) instead of a
+    // flat mirrored reflection.
     frontier_title: {
-      zenith:  { r: 10, g: 12, b: 28 },
-      horizon: { r: 50, g: 32, b: 22 },
+      zenith:  { r: 18, g: 11, b: 34 },    // #120b22 — deep purple night
+      horizon: { r: 184, g: 17, b: 110 },  // #b8116e — hot magenta dusk band
       clouds: [
-        { y: 0.12, h: 0.10, depth: 0.2, speed: 0.0001, scale: 90, threshold: 0.48, opacity: 0.25, r: 80, g: 60, b: 70, seed: 300 },
-        { y: 0.30, h: 0.12, depth: 0.35, speed: 0.00014, scale: 60, threshold: 0.46, opacity: 0.2, r: 60, g: 45, b: 55, seed: 310 }
+        { y: 0.12, h: 0.10, depth: 0.2, speed: 0.0001, scale: 90, threshold: 0.48, opacity: 0.30, r: 184, g: 17, b: 198, seed: 300 },
+        { y: 0.30, h: 0.12, depth: 0.35, speed: 0.00014, scale: 60, threshold: 0.46, opacity: 0.22, r: 140, g: 40, b: 160, seed: 310 }
       ],
-      mountains: { depth: 0.9, scale: 120, maxHeight: 0.25, color: 'rgba(18,14,24,0.95)', seed: 900, shaped: true },
-      water: true,        // Bottom half: rippled reflection of dusk sky + skyline
+      mountains: { depth: 0, scale: 120, maxHeight: 0.25, color: 'rgba(18,11,34,0.96)', seed: 900, shaped: true },
+      oceanFloor: true,   // Bottom half: glass porthole view down into the deep
       stars: true
     }
   };

@@ -294,6 +294,18 @@ var DoorContracts = (function () {
 
     var spawn = findSpawnNearDoor(grid, W, H, targetDoor, avoidDoor, GUARDRAIL_STEPS);
 
+    // ── Safety net: guarantee spawn is on a safe walkable tile ──
+    // findSpawnNearDoor falls back to the targetDoor position itself if its
+    // ring search finds no _isSpawnSafe candidate. That can leave the player
+    // sitting on a stairs tile (re-trigger loop) or, on pathological procgen
+    // layouts where post-gen passes (bookshelves, hazards, breakables,
+    // torch conversion) have blocked candidate tiles, on a tile that was
+    // emptied at gen time but overwritten afterward. BFS outward from the
+    // targetDoor through walkable tiles until we find a genuinely safe one.
+    if (!spawn || !grid[spawn.y] || !_isSpawnSafe(grid[spawn.y][spawn.x])) {
+      spawn = _bfsSafeSpawn(grid, W, H, targetDoor) || spawn || targetDoor;
+    }
+
     // Set guardrail protect on the target door
     if (_spawnDir) {
       _protect = {
@@ -432,6 +444,57 @@ var DoorContracts = (function () {
     // Reject hazards
     if (TILES.isHazard && TILES.isHazard(tile)) return false;
     return true;
+  }
+
+  /**
+   * BFS outward from a seed tile through walkable neighbors until a
+   * spawn-safe tile is found. Used as a last-resort safety net when
+   * findSpawnNearDoor's ring search fails or returns an unsafe tile.
+   *
+   * The walk traverses any walkable tile (including stairs/doors) so it
+   * can step off a stairs tile onto a safe floor neighbor, but it only
+   * RETURNS a tile that passes _isSpawnSafe (not a stair/door/hazard).
+   *
+   * Returns null if no safe tile is reachable within a reasonable bound.
+   */
+  function _bfsSafeSpawn(grid, W, H, seed) {
+    if (!seed || seed.x == null || seed.y == null) return null;
+    if (seed.x < 0 || seed.x >= W || seed.y < 0 || seed.y >= H) return null;
+    if (!grid[seed.y]) return null;
+
+    var seen = {};
+    var startKey = seed.x + ',' + seed.y;
+    seen[startKey] = true;
+    var queue = [[seed.x, seed.y]];
+    var head = 0;
+    var MAX_VISITS = 512;
+    var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+    while (head < queue.length && head < MAX_VISITS) {
+      var cur = queue[head++];
+      var cx = cur[0], cy = cur[1];
+      var ct = grid[cy] && grid[cy][cx];
+      // Return the first safe tile we find (skips the seed if it's unsafe,
+      // e.g. a stairs tile). Respect border — don't spawn on the outer edge.
+      if (cx > 0 && cx < W - 1 && cy > 0 && cy < H - 1 && _isSpawnSafe(ct)) {
+        return { x: cx, y: cy };
+      }
+      // Traverse through any walkable tile (including stairs/doors) so we
+      // can step off the seed and reach the adjacent room interior.
+      for (var i = 0; i < 4; i++) {
+        var nx = cx + DIRS[i][0];
+        var ny = cy + DIRS[i][1];
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        var k = nx + ',' + ny;
+        if (seen[k]) continue;
+        if (!grid[ny]) continue;
+        if (!TILES.isWalkable(grid[ny][nx])) continue;
+        seen[k] = true;
+        queue.push([nx, ny]);
+      }
+    }
+
+    return null;
   }
 
   /**

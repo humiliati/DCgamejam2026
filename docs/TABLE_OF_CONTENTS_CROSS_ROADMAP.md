@@ -551,14 +551,14 @@ All documents with scope summaries and section inventories. Each document now in
 > **Scope**: Comprehensive audit mapping DG containers to EyesOnly, 9 confirmed bugs, 6-phase fix plan, transfer matrix, consistency checklist, decision log.
 
 ### DOC-48: PRESSURE_WASHING_ROADMAP.md
-> **Scope**: Pressure washing system — hose pickup from cleaning truck (hero day spawn), sub-tile grime grids (4×4 floor, 16×16 wall), brush/spray interaction with nozzle items, hose path recording with kink detection (0.7× pressure stacking), "roll up hose" backward-walk auto-exit via repurposed MinimapNav, minimap click distance gate (5+itemN), torch extinguish via spray (zero fuel hydration — intentionally inferior to TorchPeek careful method), cleaning truck as BPRD-style vehicle with bobbing 🧵 cutout. EyesOnly RopeManager explicitly rejected in favor of MinimapNav + MC movement queue.
+> **Scope**: Pressure washing system — hose pickup from cleaning truck (hero day spawn), sub-tile grime grids (4×4 floor, 16×16 wall), brush/spray interaction with nozzle items, hose path recording with kink detection (0.7× pressure stacking), "roll up hose" retrace-path auto-exit via repurposed MinimapNav, minimap click distance gate (5+itemN), torch extinguish via spray (zero fuel hydration — intentionally inferior to TorchPeek careful method), cleaning truck as BPRD-style vehicle with bobbing 🧵 cutout. EyesOnly RopeManager explicitly rejected in favor of MinimapNav + MC movement queue.
 
 | Section | Content |
 |---|---|
 | §1 Design Vision | Core fantasy, hose-as-optional-upgrade |
 | §2 Hose Object | Truck spawn, HosePeek, HoseState lifecycle, building validation, energy cost |
 | §3 Hose Path | Trail recording, kink detection, minimap overlay |
-| §4 Roll Up Hose | Reel-in auto-exit, backward walk, MinimapNav distance gate |
+| §4 Roll Up Hose | Reel-in auto-exit, retraces recorded path, MinimapNav distance gate |
 | §5 Sub-Tile Grime Grid | Dual resolution (4×4 floor, 16×16 wall), rendering as translucent tint |
 | §6 Beam/Spray Interaction | Aiming, brush kernels, nozzle modifiers, pressure/kink effect |
 | §7 Torch Extinguish | Hose spray extinguish (zero hydration), adjacent splash, dependency on LIGHT_AND_TORCH Phase 3 |

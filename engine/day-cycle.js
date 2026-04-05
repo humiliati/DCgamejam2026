@@ -403,12 +403,14 @@ var DayCycle = (function () {
   var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   var DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  // Suit symbols for hero-day cycle (matches game.js _DUNGEON_SUITS)
-  // Each hero day corresponds to a dungeon faction's suit.
+  // Suit symbols for hero-day cycle. Order matches DungeonSchedule
+  // JAM_CONTRACTS: club leads the arc (day 0 starting crisis at 2.2),
+  // then spade (day 3), then diamond (day 6). Each hero day corresponds
+  // to a dungeon faction's suit on a 3-day cadence.
   var HERO_SUITS = [
-    { sym: '\u2660', color: '#8888ff', name: 'spade'   },  // ♠ blue dungeon
-    { sym: '\u2666', color: '#ff6666', name: 'diamond'  },  // ♦ red dungeon
-    { sym: '\u2663', color: '#66cc66', name: 'club'     }   // ♣ green dungeon
+    { sym: '\u2663', color: '#66cc66', name: 'club'    },  // ♣ green dungeon — day 0 crisis
+    { sym: '\u2660', color: '#8888ff', name: 'spade'   },  // ♠ blue dungeon  — day 3
+    { sym: '\u2666', color: '#ff6666', name: 'diamond' }   // ♦ red dungeon   — day 6
   ];
 
   function getDay()     { return _day; }

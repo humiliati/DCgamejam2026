@@ -1000,13 +1000,15 @@ var TextureAtlas = (function () {
 
       // ── Down-pointing filled chevrons (2 fat V-shapes) ──
       // Solid filled arrows, 4px thick legs, strong color contrast.
+      // apex/size define the draw band [apex, apex+size); point-of-V sits
+      // at the BOTTOM of the band (wide at top, narrow at bottom = ▼).
       var chevrons = [
         { apex: 16, size: 16 },
         { apex: 36, size: 16 }
       ];
       for (var ci = 0; ci < chevrons.length; ci++) {
         var ch = chevrons[ci];
-        var dy = y - ch.apex;
+        var dy = (ch.apex + ch.size - 1) - y;
         if (dy >= 0 && dy < ch.size) {
           var halfW = dy * 0.9 + 2;
           var dist = Math.abs(x - cx);
@@ -1065,13 +1067,14 @@ var TextureAtlas = (function () {
       var b = p.stoneB * warmth * stepTier + pn * 0.7;
 
       // ── Up-pointing filled chevrons (2 fat ▲ shapes) ──
+      // apex = bottom of draw band; shape is narrow at top, wide at bottom.
       var chevrons = [
         { apex: 18, size: 16 },
         { apex: 38, size: 16 }
       ];
       for (var ci = 0; ci < chevrons.length; ci++) {
         var ch = chevrons[ci];
-        var dy = ch.apex - y;  // Inverted: apex at top
+        var dy = y - (ch.apex - ch.size + 1);  // narrow top, wide bottom
         if (dy >= 0 && dy < ch.size) {
           var halfW = dy * 0.9 + 2;
           var dist = Math.abs(x - cx);

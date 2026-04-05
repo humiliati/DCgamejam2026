@@ -85,10 +85,40 @@ var StatusBar = (function () {
     _tooltipPreview = document.getElementById('sb-tooltip-preview');
 
     if (_tooltipArea) {
+      // Use mousedown instead of click for the scrollbar guard: a click
+      // on the native scrollbar track/thumb does NOT fire a DOM click in
+      // Chromium, but mousedown DOES target the scrolling element. By
+      // checking target === _tooltipHistory at mousedown we can detect
+      // scrollbar interaction and skip the collapse toggle that would
+      // otherwise fire on the subsequent click bubble.
+      var _suppressNextToggle = false;
+      _tooltipArea.addEventListener('mousedown', function (e) {
+        // A mousedown whose target is the scrollable element itself
+        // (not a child) means the user pressed on the scrollbar — mark
+        // the next click so the toggle handler ignores it.
+        if (_tooltipHistory && e.target === _tooltipHistory) {
+          _suppressNextToggle = true;
+        }
+      });
       _tooltipArea.addEventListener('click', function (e) {
         // Don't toggle expand when clicking dialogue choices
         if (e.target.closest('.sb-dialogue-choice')) return;
         if (e.target.closest('.sb-dialogue-entry')) return;
+        // NEVER collapse mid-dialogue. A player clicking fast through a
+        // tree will sometimes miss the choice pill and hit the panel's
+        // padding / gap area; without this guard the container click
+        // handler toggles _setExpanded(false) and the reply options
+        // disappear behind the collapsed footer, stranding the player
+        // in an inactive-looking bar with no expand hint visible.
+        if (_dialogueActive) return;
+        // Clicks landing inside the scrollable history panel must NOT
+        // collapse the tooltip: the player may be dragging the scroll
+        // thumb, clicking the track to page through older entries, or
+        // selecting text. Only clicks outside the history area (the
+        // latest row, preview row, or background) toggle expand state.
+        if (_tooltipExpanded && _tooltipHistory &&
+            _tooltipHistory.contains(e.target)) return;
+        if (_suppressNextToggle) { _suppressNextToggle = false; return; }
         e.stopPropagation();
         _setExpanded(!_tooltipExpanded);
       });
@@ -263,6 +293,18 @@ var StatusBar = (function () {
       newState = 'normal';
     }
 
+    // During combat the combat_lock cinematic runs and the render loop
+    // calls setCinematicMode('cinema', ...) every frame. The 'cinema'
+    // branch normally lifts the tooltip by barPx to float it above the
+    // letterbox bar — but during combat the CardFan owns the bottom
+    // footer region and a lifted tooltip translates directly over the
+    // player's hand. Clamp the state to 'normal' whenever _inCombat so
+    // the tooltip stays pinned to the bottom, out of the card fan's way.
+    if (_inCombat && newState === 'cinema') {
+      newState = 'normal';
+      barPx = 0;
+    }
+
     if (newState === _cinemaState) return;
     _cinemaState = newState;
 
@@ -348,10 +390,30 @@ var StatusBar = (function () {
   // ── Combat mode ─────────────────────────────────────────────────
 
   function setCombat(active, round, advantage, energy) {
+    var wasInCombat = _inCombat;
     _inCombat = active;
     _combatRound = round || 0;
     _advantage = advantage || '';
     _combatEnergy = energy || 0;
+
+    // Entering combat: collapse the tooltip footer so the expanded
+    // history panel can never occlude the CardFan hand. Burst
+    // auto-expand is also suppressed while _inCombat (see pushTooltip).
+    // We also clear any leftover cinema lift transform — the
+    // combat_lock cinematic will keep firing setCinematicMode every
+    // frame, but the _inCombat clamp inside setCinematicMode pins it
+    // to 'normal'; however the existing _cinemaState may still be
+    // 'cinema' from the pre-combat hero cutscene, which would cause
+    // the early-return (newState === _cinemaState) to skip the reset.
+    // Force the state and transform to normal synchronously here.
+    if (active && !wasInCombat) {
+      forceCollapse();
+      if (_tooltipArea) {
+        _tooltipArea.style.visibility = '';
+        _tooltipArea.style.transform  = '';
+      }
+      _cinemaState = 'normal';
+    }
 
     if (!_visible) return;
 
@@ -391,6 +453,25 @@ var StatusBar = (function () {
     // Cancel any pending auto-collapse when toggling
     if (_autoCollapseId) { clearTimeout(_autoCollapseId); _autoCollapseId = null; }
 
+    // When expanding, anchor the history viewport to the bottom so the
+    // newest entry is immediately above the current/dialogue row. The
+    // rebuild-time snap is skipped while collapsed to avoid thrash, so
+    // this covers the common case of "accumulate tooltips, then open
+    // the panel" — without it the panel opens pinned at the oldest row.
+    if (expanded && _tooltipHistory) {
+      // Defer one frame so the browser has applied the sb-expanded
+      // max-height before we read scrollHeight.
+      if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(function () {
+          if (_tooltipExpanded && _tooltipHistory) {
+            _tooltipHistory.scrollTop = _tooltipHistory.scrollHeight;
+          }
+        });
+      } else {
+        _tooltipHistory.scrollTop = _tooltipHistory.scrollHeight;
+      }
+    }
+
     // When expanding (from any source), start a gracious auto-collapse
     // timer so the tooltip doesn't stay expanded forever.
     if (expanded && !_dialogueActive) {
@@ -408,6 +489,49 @@ var StatusBar = (function () {
     if (_tooltipExpanded && !_dialogueActive) {
       _setExpanded(false);
     }
+  }
+
+  /**
+   * Unconditionally collapse the tooltip footer — tears down any active
+   * dialogue, cancels pending auto-collapse timers, and drops burst
+   * counters so a subsequent bark volley can't immediately re-expand.
+   * Called on combat entry so the expanded tooltip panel can never
+   * cover the CardFan hand. Safe to call repeatedly.
+   */
+  function forceCollapse() {
+    if (_dialogueActive) {
+      // Tear down the dialogue tree first. clearDialogue() would defer
+      // the actual collapse by AUTO_COLLAPSE_MS, so we clear its state
+      // flags here and then force-collapse synchronously below.
+      _dialogueActive = false;
+      _dialogueActiveHtml = '';
+      _dialogueTree   = null;
+      _dialogueNpc    = null;
+      _dialogueNodeId = null;
+      _dialogueNpcPos = null;
+      _dialoguePinned = false;
+      _activePriority = PRIORITY.NORMAL;
+      if (_tooltipHistory) _tooltipHistory.classList.remove('sb-dialogue-mode');
+      if (_tooltipLatest) {
+        _tooltipLatest.style.display = '';
+        _setLatestText(_history.length > 0 ? _history[0].text : 'Ready.');
+      }
+      if (_dialogueNpcId && typeof KaomojiCapsule !== 'undefined') {
+        KaomojiCapsule.stopSpeech(_dialogueNpcId);
+      }
+      _dialogueNpcId = null;
+      if (_dialogueOnEnd) {
+        var fn = _dialogueOnEnd;
+        _dialogueOnEnd = null;
+        try { fn(); } catch (e) {}
+      }
+      _rebuildHistory();
+      _rebuildPreview();
+    }
+    if (_autoCollapseId) { clearTimeout(_autoCollapseId); _autoCollapseId = null; }
+    if (_burstResetId)   { clearTimeout(_burstResetId);   _burstResetId   = null; }
+    _burstCount = 0;
+    _setExpanded(false);
   }
 
   function pushTooltip(text, category) {
@@ -444,14 +568,25 @@ var StatusBar = (function () {
     _rebuildHistory();
     _rebuildPreview();
 
-    // ── Burst detection: auto-expand on rapid entries ──
-    _burstCount++;
-    if (_burstResetId) clearTimeout(_burstResetId);
-    _burstResetId = setTimeout(function () { _burstCount = 0; }, BURST_WINDOW_MS);
+    // ── Burst detection: auto-expand ONLY on rapid NPC barks ──
+    // System messages, loot pickups, combat events, door transitions,
+    // and cinematic/monologue prints must NOT count toward burst — only
+    // genuine NPC bark chatter (category 'npc') should trigger the
+    // history panel to pop open. This keeps auto-expand meaningful and
+    // prevents the history from fluttering open during normal play.
+    // During combat the CardFan hand occupies the footer zone — a burst
+    // auto-expand would cover the player's attack cards, so suppress it
+    // entirely while _inCombat is true. Barks still log to history and
+    // update the latest row; they just can't pop the panel open.
+    if (category === 'npc' && !_inCombat) {
+      _burstCount++;
+      if (_burstResetId) clearTimeout(_burstResetId);
+      _burstResetId = setTimeout(function () { _burstCount = 0; }, BURST_WINDOW_MS);
 
-    if (!_tooltipExpanded && _burstCount >= BURST_THRESHOLD) {
-      // _setExpanded(true) schedules its own auto-collapse timer
-      _setExpanded(true);
+      if (!_tooltipExpanded && _burstCount >= BURST_THRESHOLD) {
+        // _setExpanded(true) schedules its own auto-collapse timer
+        _setExpanded(true);
+      }
     }
 
     // Flash the expand hint when new entry arrives (if collapsed)
@@ -527,8 +662,35 @@ var StatusBar = (function () {
     if (!tree || !tree.nodes || !tree.root) return;
     if (!_tooltipHistory) return;
 
-    // Cancel any pending auto-collapse
+    // Combat hard-block: the CardFan owns the bottom footer during a
+    // fight, so an inline dialogue tree (expanded history + reply pills)
+    // would render directly on top of the player's hand. Log the NPC's
+    // opening line to history for scroll-back after combat and fire the
+    // onEnd callback so the caller's state machine doesn't stall, but
+    // do NOT enter dialogue mode or expand the panel.
+    if (_inCombat) {
+      var rootNode = tree.nodes[tree.root];
+      if (rootNode && rootNode.text) {
+        var speakerLbl = (npc && ((npc.emoji || '') + ' ' + (npc.name || '')).trim()) || '';
+        var histLine = (speakerLbl ? speakerLbl + ': ' : '') + '\u201c' + rootNode.text + '\u201d';
+        _history.unshift({ text: histLine, time: _timestamp(), category: 'dialogue' });
+        if (_history.length > MAX_HISTORY) _history.length = MAX_HISTORY;
+        _rebuildPreview();
+      }
+      if (typeof onEnd === 'function') {
+        try { onEnd(); } catch (e) {}
+      }
+      return;
+    }
+
+    // Cancel every pending timer that could collapse the panel out from
+    // under the new dialogue. _autoCollapseId covers both the expand-
+    // timeout and the post-clearDialogue timer; _burstResetId is cleared
+    // defensively so a trailing bark burst from before the dialogue
+    // opened can't be counted against the new one.
     if (_autoCollapseId) { clearTimeout(_autoCollapseId); _autoCollapseId = null; }
+    if (_burstResetId)   { clearTimeout(_burstResetId);   _burstResetId   = null; }
+    _burstCount = 0;
 
     _dialogueActive = true;
     _dialogueNpcId  = npc.id || null;
@@ -730,10 +892,16 @@ var StatusBar = (function () {
     _rebuildHistory();
     _rebuildPreview();
 
-    // Schedule auto-collapse — tooltip minimizes after dialogue ends
+    // Schedule auto-collapse — tooltip minimizes after dialogue ends.
+    // The timer must check _dialogueActive at fire time: the onEnd
+    // callback above (or any code running in the next 5s) may chain
+    // into a fresh pushDialogue, and without this guard the stale
+    // timer would collapse the brand-new dialogue tree and wipe its
+    // reply options from the history panel.
     if (_tooltipExpanded) {
       if (_autoCollapseId) clearTimeout(_autoCollapseId);
       _autoCollapseId = setTimeout(function () {
+        if (_dialogueActive) return;
         _setExpanded(false);
       }, AUTO_COLLAPSE_MS);
     }
@@ -806,6 +974,16 @@ var StatusBar = (function () {
     }
 
     _tooltipHistory.innerHTML = html;
+
+    // Anchor the viewport to the bottom so the newest entry is the row
+    // immediately above the latest/dialogue row. Without this the
+    // scrollable panel stays pinned to the top after a rebuild, making
+    // the second-from-bottom visible row one of the OLDEST entries
+    // (confusing rolodex order). Only snap-to-bottom when the panel is
+    // expanded, to avoid thrashing scroll state while collapsed.
+    if (_tooltipExpanded && _tooltipHistory.scrollHeight > 0) {
+      _tooltipHistory.scrollTop = _tooltipHistory.scrollHeight;
+    }
   }
 
   // ── Gold coin-wheel ticker ──────────────────────────────────────
@@ -915,6 +1093,7 @@ var StatusBar = (function () {
     selectChoice:      _onDialogueChoice,
     checkWalkAway:     checkWalkAway,
     collapseIfIdle:    collapseIfIdle,
+    forceCollapse:     forceCollapse,
     setOnFlee: function (fn) { _onFleeCallback = fn; }
   };
 })();

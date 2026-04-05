@@ -132,7 +132,7 @@
     ],
     "shopPool": [],
     "biomeDrops": [],
-    "starterDeck": true,
+    "starterDeck": false,
     "description": "A shard of ice. ♣ enemies take ×1.5.",
     "_designNote": "Starter ♠. Completes the suit trio.",
     "suit": "spade"
@@ -192,7 +192,7 @@
     ],
     "shopPool": [],
     "biomeDrops": [],
-    "starterDeck": true,
+    "starterDeck": false,
     "description": "2 damage + burn (1 DOT). The damage keeps giving.",
     "_designNote": "Starter status card. Introduces burn DOT.",
     "suit": "diamond"
@@ -219,7 +219,7 @@
     ],
     "shopPool": [],
     "biomeDrops": [],
-    "starterDeck": true,
+    "starterDeck": false,
     "description": "3 temp HP. Solid frost defense.",
     "_designNote": "Starter ♠ defense. Shows suit cards can also be defensive.",
     "suit": "spade"
@@ -246,7 +246,7 @@
     ],
     "shopPool": [],
     "biomeDrops": [],
-    "starterDeck": true,
+    "starterDeck": false,
     "description": "4 ♣ damage. Loud. Effective.",
     "_designNote": "Starter ♣ heavy. Shows ♣ as raw damage suit.",
     "suit": "club"

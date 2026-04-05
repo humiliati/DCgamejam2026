@@ -218,9 +218,12 @@
     // Grand Arch facade at east end
     // Arch structure: WALL facade rows 22–29 at cols 49–50
     fillRect(grid, 49, 22, 50, 29, W1);
-    // Arch opening: DOOR at (51, 25)/(51, 26) → Floor 4
-    grid[25][51] = DR;
-    grid[26][51] = DR;
+    // Arch opening: LOCKED_DOOR at (51, 25)/(51, 26) → Floor 4 (Vivec)
+    // The arch is sealed by the Immigrant Inspector — players must present
+    // proof of residence (a rent_receipt_book journal entry) before passing.
+    // See npc-system.js `floor3_inspector` + game.js dialogue tree.
+    grid[25][51] = 24;  // LOCKED_DOOR
+    grid[26][51] = 24;  // LOCKED_DOOR
     // Clear arch passage
     grid[25][49] = _; grid[25][50] = _;
     grid[26][49] = _; grid[26][50] = _;
@@ -267,6 +270,13 @@
     // Tree flanking left side of facade
     grid[0][18] = TR; grid[0][19] = TR; grid[1][18] = TR; grid[1][19] = TR;
     // Row 0 tree border already set
+
+    // Landing pad — clear a 5-wide PATH strip in front of the door so the
+    // return spawn from 3.1 always lands on path, not on an adjacent shrub
+    // or tree scattered by the earlier forest decoration pass. Without this,
+    // DoorContracts ring-search could legitimately pick a grass tile whose
+    // visual neighbors are dense enough to feel like "stuck in shrubs".
+    fillRect(grid, 23, 2, 27, 4, PT);
 
     // ═══════════════════════════════════════════════════════════
     //  SOUTH ARM — rows 34–51, cols 22–29
@@ -356,8 +366,19 @@
         // ── NE shack (Quartermaster's Shop) ──
         '31,20': '3.2',
         // ── East arch (forward to Floor 4 — Vivec) ──
+        // NOTE: Arch tiles are LOCKED_DOOR — player cannot pass without
+        // proof of residence. Inspector NPC `floor3_inspector` gates passage.
         '51,25': '4',
         '51,26': '4'
+      },
+      // Locked-door metadata — consumed by floor-transition._tryUnlockLockedDoor
+      // to show "proof of residence" rejection text. The Immigrant Inspector
+      // NPC is the canonical unlock path: his dialogue tree checks the journal
+      // for a `rent_receipt_book` and calls Player.setFlag('locked_door_3:51,25')
+      // + ('locked_door_3:51,26') to mark both arch tiles as unlocked.
+      lockedDoors: {
+        '51,25': { keyId: 'rent_receipt_book', keyName: 'proof of residence (see the Inspector)' },
+        '51,26': { keyId: 'rent_receipt_book', keyName: 'proof of residence (see the Inspector)' }
       },
       gridW: W,
       gridH: H,

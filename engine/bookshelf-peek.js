@@ -173,13 +173,15 @@ var BookshelfPeek = (function () {
       pageLabel = '[RECORD ' + (_currentPage + 1) + '/' + book.pages.length + ']';
       if (_currentPage > 0) navParts.push('[A] << PREV');
       if (_currentPage < book.pages.length - 1) navParts.push('[D] NEXT >>');
-      navParts.push('[ESC] DISCONNECT');
+      navParts.push('[W/S] SCROLL');
+      navParts.push('[BACK] DISCONNECT');
       page = '> ' + page.replace(/\n/g, '\n> '); // CRT prompt prefix
     } else {
       pageLabel = '- Page ' + (_currentPage + 1) + ' of ' + book.pages.length + ' -';
       if (_currentPage > 0) navParts.push('[A] \u2190 Prev');
       if (_currentPage < book.pages.length - 1) navParts.push('[D] Next \u2192');
-      navParts.push('[Esc] Close');
+      navParts.push('[W/S] Scroll');
+      navParts.push('[Back] Close');
     }
 
     var navHint = '\n\n' + navParts.join('   ');
@@ -212,6 +214,28 @@ var BookshelfPeek = (function () {
         if (typeof AudioSystem !== 'undefined') AudioSystem.play('page-turn');
         _renderPage();
       }
+      return true;
+    }
+    // Vertical scroll within a long page (W/S or ArrowUp/ArrowDown).
+    // Delegates to DialogBox.scroll which no-ops when the page fits.
+    if (key === 'KeyW' || key === 'ArrowUp' || key === 'KeyI') {
+      if (typeof DialogBox !== 'undefined' && DialogBox.scroll) {
+        DialogBox.scroll(-1);
+      }
+      return true;
+    }
+    if (key === 'KeyS' || key === 'ArrowDown' || key === 'KeyK') {
+      if (typeof DialogBox !== 'undefined' && DialogBox.scroll) {
+        DialogBox.scroll(+1);
+      }
+      return true;
+    }
+    if (key === 'PageUp') {
+      if (typeof DialogBox !== 'undefined' && DialogBox.scroll) DialogBox.scroll(-5);
+      return true;
+    }
+    if (key === 'PageDown') {
+      if (typeof DialogBox !== 'undefined' && DialogBox.scroll) DialogBox.scroll(+5);
       return true;
     }
     if (key === 'Escape') {

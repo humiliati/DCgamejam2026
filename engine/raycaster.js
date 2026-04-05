@@ -754,9 +754,21 @@ var Raycaster = (function () {
       }
     }
 
-    // ── Render sprites ──
+    // ── Sprite + terminus-veil sandwich ──────────────────────────
+    // The terminus fog veil (below) masks wall pop-in at the horizon
+    // on exterior FADE floors. Historically all sprites were drawn
+    // before the veil, so close-range NPCs/props standing near the
+    // horizon line were painted over by the veil and looked like
+    // they were fading into fog only a few tiles away. Fix: split
+    // the sprite pass around the veil. Distant sprites (≥ NEAR_SPRITE_DIST
+    // tiles) render first and can be masked by the veil as intended;
+    // close sprites render after the veil and punch through it so
+    // they always appear at full fidelity.
+    var NEAR_SPRITE_DIST = 2.0;
+
+    // Distant sprite pass — masked by veil along with distant walls.
     if (sprites && sprites.length > 0) {
-      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor);
+      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, NEAR_SPRITE_DIST, null);
     }
 
     // ── Terminus fog veil (exterior FADE floors only) ────────────
@@ -792,6 +804,12 @@ var Raycaster = (function () {
           ctx.fillRect(0, veilTop, w, veilTotalH);
         }
       }
+    }
+
+    // Near sprite pass — punches through the veil so close NPCs and
+    // props are never painted into the horizon band.
+    if (sprites && sprites.length > 0) {
+      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, 0, NEAR_SPRITE_DIST);
     }
 
     // ── Render particles (above sprites, below HUD) ──
@@ -1763,7 +1781,9 @@ var Raycaster = (function () {
 
       // ── Main slot emoji ──
       // Determine if this slot should receive hue tint (clothes only by default)
-      var wantTint = (stack.tintHue !== null && stack.tintHue !== undefined && spriteH > 10);
+      var hasHueTint   = (stack.tintHue !== null && stack.tintHue !== undefined);
+      var hasColorTint = !!(stack.tintColor && typeof stack.tintColor.r === 'number');
+      var wantTint = ((hasHueTint || hasColorTint) && spriteH > 10);
       if (wantTint) {
         var tSlots = stack.tintSlots || _DEFAULT_TINT_SLOTS;
         wantTint = !!tSlots[si];
@@ -1797,9 +1817,17 @@ var Raycaster = (function () {
         tc.fillText(slotEmoji, tHalf, tHalf);
 
         // 2) Paint hue ONLY on glyph pixels (source-atop)
+        //    Stacks may override with a direct tintColor (e.g. pure black
+        //    for hero antagonists) and a stronger tintAlpha to achieve a
+        //    true darken/black wash that hue rotation cannot produce.
         tc.globalCompositeOperation = 'source-atop';
-        tc.globalAlpha = 0.22;
-        var rgb = _hueToRgb(stack.tintHue);
+        tc.globalAlpha = (typeof stack.tintAlpha === 'number') ? stack.tintAlpha : 0.22;
+        var rgb;
+        if (stack.tintColor && typeof stack.tintColor.r === 'number') {
+          rgb = stack.tintColor;
+        } else {
+          rgb = _hueToRgb(stack.tintHue);
+        }
         tc.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
         tc.fillRect(0, 0, tSize, tSize);
 
@@ -1955,7 +1983,13 @@ var Raycaster = (function () {
     return { r: c, g: 0, b: x };
   }
 
-  function _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor) {
+  function _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, minDist, maxDist) {
+    // Optional distance window — lets callers split sprite rendering
+    // into "distant" and "near" passes sandwiching the terminus fog
+    // veil so close sprites punch through the horizon band. Defaults
+    // to no filter (render everything in the normal render distance).
+    var hasMin = (typeof minDist === 'number');
+    var hasMax = (typeof maxDist === 'number');
     var sorted = [];
     for (var i = 0; i < sprites.length; i++) {
       var s = sprites[i];
@@ -1963,6 +1997,8 @@ var Raycaster = (function () {
       var dy = (s.y + 0.5) - py;
       var dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 0.3 || dist > renderDist) continue;
+      if (hasMin && dist <  minDist) continue;
+      if (hasMax && dist >= maxDist) continue;
 
       var angle = Math.atan2(dy, dx) - pDir;
       while (angle > Math.PI) angle -= 2 * Math.PI;
@@ -2355,7 +2391,12 @@ var Raycaster = (function () {
       }
 
       // Exploration awareness glyph (only when capsule is NOT shown)
-      if (!_capsuleRendered && s.awareness !== undefined && spriteH > 8) {
+      // Friendly entities (Dispatcher, vendors, quest givers) never show the
+      // hostile ❓/❗/⚔ ladder even if their awareness field gets nudged —
+      // they're not threats, so painting an alert indicator would lie to the
+      // player. Gated here in addition to the EnemyAI skip in game.js so the
+      // visual stays quiet regardless of how awareness was mutated.
+      if (!_capsuleRendered && !s.friendly && s.awareness !== undefined && spriteH > 8) {
         var awarenessState = typeof EnemyAI !== 'undefined'
           ? EnemyAI.getAwarenessState(s.awareness)
           : null;

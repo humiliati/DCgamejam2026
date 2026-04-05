@@ -6,9 +6,14 @@
  * one dungeon at a different floor. Floor 0 (♥ Heart) is the host's home
  * territory — no readiness tracking.
  *
+ * The arc opens with a Hero's Wake crisis at Dungeon 2.2 — the player is
+ * deployed into that situation on day 0, which is why club leads the arc.
+ * After that, factions rotate on a 3-day cadence matching DayCycle's
+ * HERO_DAY_INTERVAL.
+ *
+ *   Day 0:  ♣ Club    — Hero's Wake   (2.2.1, 2.2.2)     — Scholar  (starting crisis)
  *   Day 3:  ♠ Spade   — Soft Cellar   (1.3.1)            — Seeker
- *   Day 6:  ♣ Club    — Hero's Wake   (2.2.1, 2.2.2)     — Scholar
- *   Day 8:  ♦ Diamond — Ironhold      (3.1.1–3.1.3)      — Crusader
+ *   Day 6:  ♦ Diamond — Ironhold      (3.1.1–3.1.3)      — Crusader
  *
  * Side-quest dungeons (1.2.1, 3.2.1, etc.) are NOT on the hero schedule.
  *
@@ -38,22 +43,22 @@ var DungeonSchedule = (function () {
    */
   var JAM_CONTRACTS = Object.freeze([
     {
+      groupId:       'club',
+      label:         "Hero's Wake",
+      suit:          '♣',
+      floorIds:      ['2.2.1', '2.2.2'], // Floor 2 → Watchman's Post → Wake B1/B2
+      scheduledDay:  0,                  // STARTING CRISIS — heroes at 2.2 day 0
+      heroType:      'Scholar',
+      comboEligible: true,
+      target:        0.6                // 60% core readiness to pass
+    },
+    {
       groupId:       'spade',
       label:         'Soft Cellar',
       suit:          '♠',
       floorIds:      ['1.3.1'],         // Floor 1 → Cellar Entrance → Soft Cellar
       scheduledDay:  3,
       heroType:      'Seeker',
-      comboEligible: true,
-      target:        0.6               // 60% core readiness to pass
-    },
-    {
-      groupId:       'club',
-      label:         "Hero's Wake",
-      suit:          '♣',
-      floorIds:      ['2.2.1', '2.2.2'], // Floor 2 → Watchman's Post → Wake B1/B2
-      scheduledDay:  6,
-      heroType:      'Scholar',
       comboEligible: true,
       target:        0.6
     },
@@ -62,7 +67,7 @@ var DungeonSchedule = (function () {
       label:         'Ironhold Depths',
       suit:          '♦',
       floorIds:      ['3.1.1', '3.1.2', '3.1.3'],  // Floor 3 → Armory → Ironhold B1-B3
-      scheduledDay:  8,
+      scheduledDay:  6,
       heroType:      'Crusader',
       comboEligible: true,
       target:        0.6

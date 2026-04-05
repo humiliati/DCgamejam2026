@@ -1,0 +1,177 @@
+{
+  "_schema": {
+    "id": "EATK-### — enemy attack card id (distinct namespace from ACT-### player cards)",
+    "suit": "spade | club | diamond | heart — for EnemyIntent telegraph coloring + player RPS read",
+    "effects": "Same schema as player cards: { type: 'damage'|'defense'|'status'|'heal', value, duration?, status? }",
+    "intentType": "High-level telegraph category: BASIC | BRACE | DOT | BURST | CC | DRAIN — raycaster/HUD can use this for glyph hints",
+    "synergyTags": "Tag intersection for any future enemy stacking rules (parallel to player synergyTags)",
+    "_note": "Design intent — why this card exists and which enemies should use it"
+  },
+
+  "cards": [
+    {
+      "id": "EATK-001",
+      "name": "Rend",
+      "emoji": "\u2694\ufe0f",
+      "suit": "spade",
+      "intentType": "BASIC",
+      "effects": [{ "type": "damage", "value": 3, "target": "player" }],
+      "synergyTags": ["melee", "spade"],
+      "_note": "Baseline \u2660 strike. Assigned to most cellar grunts as their go-to beat."
+    },
+    {
+      "id": "EATK-002",
+      "name": "Gnaw",
+      "emoji": "\ud83e\uddb7",
+      "suit": "spade",
+      "intentType": "DOT",
+      "effects": [
+        { "type": "damage", "value": 2, "target": "player" },
+        { "type": "status", "status": "bleeding", "value": 1, "duration": 3, "target": "player" }
+      ],
+      "synergyTags": ["melee", "bleed", "spade"],
+      "_note": "Light bite + 1 dmg/turn bleed for 3 rounds. Rats and hounds open with this."
+    },
+    {
+      "id": "EATK-003",
+      "name": "Bone Brace",
+      "emoji": "\ud83d\udee1\ufe0f",
+      "suit": "spade",
+      "intentType": "BRACE",
+      "effects": [{ "type": "defense", "value": 4, "target": "self" }],
+      "synergyTags": ["defensive", "spade"],
+      "_note": "Skeletal enemies use this when HP drops. Turns a round into a bracing read \u2014 player must either out-stack or pivot."
+    },
+    {
+      "id": "EATK-004",
+      "name": "Crushing Slam",
+      "emoji": "\ud83d\udca5",
+      "suit": "spade",
+      "intentType": "BURST",
+      "effects": [{ "type": "damage", "value": 6, "target": "player" }],
+      "synergyTags": ["melee", "heavy", "spade"],
+      "_note": "Big telegraphed spike. Elite / boss signature. Players must commit defense when they see it."
+    },
+    {
+      "id": "EATK-005",
+      "name": "Spore Burst",
+      "emoji": "\ud83c\udf44",
+      "suit": "club",
+      "intentType": "DOT",
+      "effects": [
+        { "type": "damage", "value": 2, "target": "player" },
+        { "type": "status", "status": "poisoned", "value": 2, "duration": 3, "target": "player" }
+      ],
+      "synergyTags": ["status", "poison", "club"],
+      "_note": "Mold/fungus attackers. 2 dmg + 2 poison/turn x3 \u2014 heaviest DoT enemy card."
+    },
+    {
+      "id": "EATK-006",
+      "name": "Corrosive Spit",
+      "emoji": "\ud83e\udd22",
+      "suit": "club",
+      "intentType": "DOT",
+      "effects": [
+        { "type": "damage", "value": 1, "target": "player" },
+        { "type": "status", "status": "poisoned", "value": 1, "duration": 2, "target": "player" }
+      ],
+      "synergyTags": ["status", "poison", "club"],
+      "_note": "Lighter poison variant. Toads, slimes."
+    },
+    {
+      "id": "EATK-007",
+      "name": "Shock Bite",
+      "emoji": "\u26a1",
+      "suit": "club",
+      "intentType": "CC",
+      "effects": [
+        { "type": "damage", "value": 2, "target": "player" },
+        { "type": "status", "status": "stunned", "value": 1, "duration": 1, "target": "player" }
+      ],
+      "synergyTags": ["cc", "stun", "club"],
+      "_note": "Eels, shock beasts. Stuns player 1 round \u2014 skips their next draw. Used sparingly, feels nasty."
+    },
+    {
+      "id": "EATK-008",
+      "name": "Ensnare",
+      "emoji": "\ud83d\udd78\ufe0f",
+      "suit": "club",
+      "intentType": "CC",
+      "effects": [
+        { "type": "damage", "value": 1, "target": "player" },
+        { "type": "status", "status": "rooted", "value": 0, "duration": 2, "target": "player" }
+      ],
+      "synergyTags": ["cc", "root", "club"],
+      "_note": "Webs the player. Rooted is currently a visual tag (no tick damage) \u2014 foundation for future movement-lock mechanic."
+    },
+    {
+      "id": "EATK-009",
+      "name": "Crystal Lance",
+      "emoji": "\ud83d\udd37",
+      "suit": "diamond",
+      "intentType": "BASIC",
+      "effects": [{ "type": "damage", "value": 4, "target": "player" }],
+      "synergyTags": ["ranged", "precision", "diamond"],
+      "_note": "Precise \u2666 strike. Foundry constructs. Slightly above baseline because \u2666 enemies tend to have fewer moves."
+    },
+    {
+      "id": "EATK-010",
+      "name": "Ember Flare",
+      "emoji": "\ud83d\udd25",
+      "suit": "diamond",
+      "intentType": "DOT",
+      "effects": [
+        { "type": "damage", "value": 2, "target": "player" },
+        { "type": "status", "status": "burning", "value": 2, "duration": 2, "target": "player" }
+      ],
+      "synergyTags": ["fire", "burn", "diamond"],
+      "_note": "Ember sprites, forge creatures. Burning ticks 2 dmg/turn for 2 rounds."
+    },
+    {
+      "id": "EATK-011",
+      "name": "Magma Carapace",
+      "emoji": "\ud83e\udea8",
+      "suit": "diamond",
+      "intentType": "BRACE",
+      "effects": [{ "type": "defense", "value": 5, "target": "self" }],
+      "synergyTags": ["defensive", "diamond"],
+      "_note": "Golems and slag hounds. Bigger brace than Bone Brace to read as \u2018this thing is tough.\u2019"
+    },
+    {
+      "id": "EATK-012",
+      "name": "Blood Drain",
+      "emoji": "\ud83e\ude78",
+      "suit": "heart",
+      "intentType": "DRAIN",
+      "effects": [
+        { "type": "damage", "value": 3, "target": "player" },
+        { "type": "heal", "value": 2, "target": "self" }
+      ],
+      "synergyTags": ["drain", "heart"],
+      "_note": "\u2665 signature. Deals damage AND heals enemy. Wraiths, vampiric enemies."
+    },
+    {
+      "id": "EATK-013",
+      "name": "Rupture",
+      "emoji": "\ud83e\ude78",
+      "suit": "heart",
+      "intentType": "DOT",
+      "effects": [
+        { "type": "damage", "value": 3, "target": "player" },
+        { "type": "status", "status": "bleeding", "value": 2, "duration": 3, "target": "player" }
+      ],
+      "synergyTags": ["bleed", "heart"],
+      "_note": "Heavy bleed opener. Bosses and elites that want to pressure a long fight."
+    },
+    {
+      "id": "EATK-014",
+      "name": "Feral Swipe",
+      "emoji": "\ud83d\udc3e",
+      "suit": "spade",
+      "intentType": "BASIC",
+      "effects": [{ "type": "damage", "value": 2, "target": "player" }],
+      "synergyTags": ["melee", "fast", "spade"],
+      "_note": "Low-HP \u2018weak enemy\u2019 baseline strike \u2014 rats, imps, small pests."
+    }
+  ]
+}

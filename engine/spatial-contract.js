@@ -167,7 +167,18 @@ var SpatialContract = (function () {
       timeFreeze:       false,   // Time passes on the surface
       timeRate:         opts.timeRate || 24,  // Game-minutes per real minute (Stardew pacing: 1440/24 = 60 real min per day)
       canNest:          true,    // Can contain doors to floorsN.N
-      maxNestDepth:     2        // Can go N → N.N → N.N.N
+      maxNestDepth:     2,       // Can go N → N.N → N.N.N
+
+      // ── Audio contract ──
+      // AudioMusicManager reads this on floor change. musicId is the
+      // manifest key (or special sentinel). muffleHz=null disables the
+      // lowpass filter. bgmVolume is the target music channel volume.
+      audio:            _mergeAudio({
+        musicId:     'music-mood-bober',
+        muffleHz:    null,
+        bgmVolume:   0.6,
+        ambientBed:  null
+      }, opts.audio)
     });
   }
 
@@ -245,7 +256,18 @@ var SpatialContract = (function () {
       timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
       timeRate:         0,       // Frozen — shops/inns are safe havens (matches timeFreeze)
       canNest:          true,    // Can contain doors to floorsN.N.N
-      maxNestDepth:     1
+      maxNestDepth:     1,
+
+      // ── Audio contract ──
+      // Default: inherit the parent exterior's track, muffled via lowpass
+      // and volume-ducked. Biomes may override musicId for a dedicated
+      // interior cue, or muffleHz/bgmVolume for a drier or wetter feel.
+      audio:            _mergeAudio({
+        musicId:     '__inherit_parent__',
+        muffleHz:    800,
+        bgmVolume:   0.35,
+        ambientBed:  null
+      }, opts.audio)
     });
   }
 
@@ -334,7 +356,18 @@ var SpatialContract = (function () {
       timeFreeze:       false,   // Time ticks in the dungeons — pressure!
       timeRate:         opts.timeRate || 12,  // Half exterior rate — dungeons eat time but aren't oppressive
       canNest:          false,   // Bottom of the hierarchy
-      maxNestDepth:     0
+      maxNestDepth:     0,
+
+      // ── Audio contract ──
+      // Default dungeon cue is 'insidearea' — tense sub-basement pulse.
+      // Muffle is null (underground isn't muffled — it's dry and reverby).
+      // Deeper dungeons or specific sub-dungeons can override musicId.
+      audio:            _mergeAudio({
+        musicId:     'music-insidearea',
+        muffleHz:    null,
+        bgmVolume:   0.6,
+        ambientBed:  null
+      }, opts.audio)
     });
   }
 
@@ -573,6 +606,19 @@ var SpatialContract = (function () {
     return contract.parallax || null;
   }
 
+  /**
+   * Get the audio block for a contract. Never returns null — a missing
+   * audio block yields a neutral fallback so callers can always read
+   * .musicId / .muffleHz / .bgmVolume without defensive checks.
+   *
+   * @param {Object} contract
+   * @returns {Object} { musicId, muffleHz, bgmVolume, ambientBed }
+   */
+  function getAudio(contract) {
+    if (contract && contract.audio) return contract.audio;
+    return { musicId: null, muffleHz: null, bgmVolume: 0.6, ambientBed: null };
+  }
+
   // ── Presets for common scenarios ──
 
   var PRESETS = {
@@ -720,6 +766,25 @@ var SpatialContract = (function () {
    * @param {Object|null} overrides - Biome-specific tile table (may be null/undefined)
    * @returns {Object} Frozen merged table
    */
+  /**
+   * Merge audio contract overrides onto defaults. Missing override keys
+   * fall through to defaults; present keys replace them. Supports the
+   * sentinel '__inherit_parent__' musicId for interior contracts.
+   *
+   * @param {Object} defaults - Base audio block from constructor
+   * @param {Object|null} overrides - Caller opts.audio (may be null)
+   * @returns {Object} Frozen merged audio block
+   */
+  function _mergeAudio(defaults, overrides) {
+    if (!overrides) return Object.freeze(defaults);
+    return Object.freeze({
+      musicId:    overrides.musicId    !== undefined ? overrides.musicId    : defaults.musicId,
+      muffleHz:   overrides.muffleHz   !== undefined ? overrides.muffleHz   : defaults.muffleHz,
+      bgmVolume:  overrides.bgmVolume  !== undefined ? overrides.bgmVolume  : defaults.bgmVolume,
+      ambientBed: overrides.ambientBed !== undefined ? overrides.ambientBed : defaults.ambientBed
+    });
+  }
+
   function _mergeTileTable(defaults, overrides) {
     if (!overrides) return defaults;
     if (!defaults) return overrides;
@@ -776,6 +841,7 @@ var SpatialContract = (function () {
     getFogFactor: getFogFactor,
     getGradients: getGradients,
     getParallax: getParallax,
+    getAudio: getAudio,
 
     // Presets
     PRESETS: PRESETS,

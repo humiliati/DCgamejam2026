@@ -365,13 +365,20 @@ var EnemyAI = (function () {
     var stepX = dx !== 0 ? (dx > 0 ? 1 : -1) : 0;
     var stepY = dy !== 0 ? (dy > 0 ? 1 : -1) : 0;
 
+    // Enemy-vs-player collision: refuse to step onto the player's tile.
+    // Proximity combat start fires on adjacency instead. CombatBridge
+    // _pushEnemyOffPlayer() is a fallback if we end up sharing a tile.
+    var _px = player.x, _py = player.y;
+    var _okE = !(enemy.x + stepX === _px && enemy.y === _py);
+    var _okS = !(enemy.x === _px && enemy.y + stepY === _py);
+
     // Try primary direction first
     if (Math.abs(dx) >= Math.abs(dy)) {
-      if (_tryMove(enemy, enemy.x + stepX, enemy.y, grid, W, H)) return;
-      if (stepY && _tryMove(enemy, enemy.x, enemy.y + stepY, grid, W, H)) return;
+      if (_okE && _tryMove(enemy, enemy.x + stepX, enemy.y, grid, W, H)) return;
+      if (stepY && _okS && _tryMove(enemy, enemy.x, enemy.y + stepY, grid, W, H)) return;
     } else {
-      if (_tryMove(enemy, enemy.x, enemy.y + stepY, grid, W, H)) return;
-      if (stepX && _tryMove(enemy, enemy.x + stepX, enemy.y, grid, W, H)) return;
+      if (_okS && _tryMove(enemy, enemy.x, enemy.y + stepY, grid, W, H)) return;
+      if (stepX && _okE && _tryMove(enemy, enemy.x + stepX, enemy.y, grid, W, H)) return;
     }
   }
 

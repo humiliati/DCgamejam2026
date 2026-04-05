@@ -56,8 +56,9 @@ var TorchPeek = (function () {
     if (!_container) {
       _container = document.createElement('div');
       _container.id = 'torch-peek-container';
-      _container.style.cssText =
-        'position:absolute; top:50%; left:50%;' +
+      // top:40% — lift ~10vh so Interact button clears freelook ring hitbox.
+       _container.style.cssText =
+        'position:absolute; top:40%; left:50%;' +
         'transform:translate(-50%,-50%);' +
         'z-index:18; pointer-events:none; opacity:0;' +
         'transition:opacity 0.3s ease;';
@@ -149,27 +150,25 @@ var TorchPeek = (function () {
   }
 
   /**
-   * Hose extinguish: called when player has hose active and clicks a flame slot.
-   * Uses pressure-wash FX instead of consuming a water bottle from inventory.
+   * Hose extinguish: called when player has hose active and clicks a flame
+   * slot inside the torch peek UI. Routes through TorchHitResolver so the
+   * "hose is always destructive" rule (PRESSURE_WASHING_ROADMAP §7.1) is
+   * enforced consistently — deliberate peek-click and PW-3 spray collateral
+   * share the same extinguish pipeline. Dry fuel below the flame gets
+   * blown out regardless of whether this was targeted or accidental.
+   *
+   * After the resolver fires we still need to refresh THIS peek's slot UI
+   * since the resolver doesn't know we're open.
    */
   function _hoseExtinguish(e) {
     if (e) e.stopPropagation();
     if (!_active) return;
+    if (typeof TorchHitResolver === 'undefined') return;
 
-    var floorId   = typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : '0';
-    var floorData = typeof FloorManager !== 'undefined' ? FloorManager.getFloorData() : null;
-
-    if (typeof TorchState === 'undefined' || !floorData) return;
-
-    if (TorchState.extinguish(floorId, _facingX, _facingY, floorData.grid)) {
-      // Pressure-wash burst at the torch tile's world position
-      if (typeof WaterCursorFX !== 'undefined') {
-        WaterCursorFX.spawnBurst(_facingX, _facingY, { count: 18, speedMult: 1.4, upward: false });
-      }
-      _onTorchExtinguished();
+    var floorId = typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : '0';
+    var summary = TorchHitResolver.onHoseHit(floorId, _facingX, _facingY);
+    if (summary && summary.count > 0) {
       _refreshSlotDisplay();
-      if (typeof SessionStats !== 'undefined') SessionStats.inc('torchesExtinguished');
-      if (typeof Toast !== 'undefined') Toast.show('\uD83D\uDCA7 Hose: torch doused', 'info');
     }
   }
 
@@ -563,35 +562,15 @@ var TorchPeek = (function () {
   }
 
   function _updateWallDecor(isLit) {
-    if (typeof FloorManager === 'undefined') return;
-    var floorData = FloorManager.getFloorData();
-    if (!floorData || !floorData.wallDecor) return;
-
-    var decor = floorData.wallDecor;
-    if (!decor[_facingY] || !decor[_facingY][_facingX]) return;
-
-    var cell = decor[_facingY][_facingX];
-    var faces = ['n', 's', 'e', 'w'];
-    for (var f = 0; f < faces.length; f++) {
-      var arr = cell[faces[f]];
-      if (!arr) continue;
-      for (var d = 0; d < arr.length; d++) {
-        if (arr[d].spriteId === 'decor_torch') {
-          if (isLit) {
-            arr[d].scale = 0.25;
-            arr[d].cavityGlow = true;
-            arr[d].glowR = 255; arr[d].glowG = 140; arr[d].glowB = 40; arr[d].glowA = 0.3;
-          } else {
-            arr[d].scale = 0.2;
-            arr[d].cavityGlow = false;
-            delete arr[d].glowR;
-            delete arr[d].glowG;
-            delete arr[d].glowB;
-            delete arr[d].glowA;
-          }
-        }
-      }
-    }
+    // Single source of truth lives on FloorManager so every extinguish /
+    // relight path (this peek, TorchHitResolver, future PW-3 spray) shares
+    // the same decor mutation. See FloorManager.syncTorchDecor.
+    if (typeof FloorManager === 'undefined' || !FloorManager.syncTorchDecor) return;
+    var floorId = FloorManager.getCurrentFloorId
+      ? FloorManager.getCurrentFloorId()
+      : null;
+    if (!floorId) return;
+    FloorManager.syncTorchDecor(floorId, _facingX, _facingY, isLit);
   }
 
   function _refreshSlotDisplay() {

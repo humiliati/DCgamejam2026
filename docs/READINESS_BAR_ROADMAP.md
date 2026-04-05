@@ -1218,3 +1218,81 @@ the "check results before advancing" guard.
 | §14.5 Fix | → mailbox-peek.js MAILBOX_POS | Stale position bug |
 | §14.7 Plan | → §7 Phase R-5a | Priority insertion |
 | §14 Mailbox | → CORE_GAME_LOOP §17.2 | Death penalty → report flavor text |
+
+---
+
+## 15. Readiness Bar — Three-Bar Debrief Integration (post-jam target)
+
+### 15.1 Intent
+
+The single-floor canvas-rendered readiness bar is an interim placement.
+The target UX groups **all active dungeon floors' readiness bars together**
+inside the DebriefFeed left-column panel, with the **relevant bar
+highlighted** according to scheduling context (player location, hero
+location, hero day). The player should be able to glance at the debrief
+feed and immediately see all three dungeon chains' prep state at once —
+not rely on navigating between floors to poll each score.
+
+### 15.2 Why Now Is Too Early
+
+Building this before the core loop is finished would couple readiness UI
+to DungeonSchedule hero tracking before either subsystem is stable. The
+interim top-left canvas placement (§1.1 footnote) solves the immediate
+minimap-collision bug, preserves all existing FX juice (pump/rescind/
+sweep/celebration), and does not create throwaway work — the canvas FX
+stack needs to be ported to DOM regardless when this slice lands.
+
+### 15.3 Scope
+
+Three horizontal bars stacked inside the DebriefFeed panel, one per
+dungeon chain (currently 1.3, 1.4, 1.5 — expandable). Each bar:
+
+- Shows that floor's core readiness as a DOM-backed `<div>` fill
+- Shows the floor label and % next to the fill
+- Has three visual states: **dim** (idle, no attention needed),
+  **active** (the floor the player is currently on), **urgent** (hero
+  day or hero currently running this chain)
+- Plays a muted version of the existing pump/rescind/sweep FX via CSS
+  transitions and keyframes (no canvas needed)
+- The overhealing (teal >100%) segment extends past the track the same
+  way §1.3d specifies
+
+### 15.4 Highlight Rule
+
+Only one bar is "urgent" at a time. Selection priority:
+
+1. If a hero is currently running dungeon chain X → X is **urgent**
+   (red/gold pulse, mirrors hero-progress in real time)
+2. Else if today is the hero day for chain X → X is **urgent** (steady
+   gold glow, player should focus prep here)
+3. Else the bar for the player's **current floor** is **active**
+   (no-op if none, e.g. player is on home floor)
+4. All other bars are **dim**
+
+Hero location and hero day come from `DungeonSchedule` — no new state
+authority. DebriefFeed subscribes to DungeonSchedule tick events and
+recomputes highlight state each frame it renders.
+
+### 15.5 Tasks (not yet scheduled)
+
+| Task | Est | Depends On | Notes |
+|------|-----|------------|-------|
+| Port canvas FX stack (pump, rescind, sweep, celeb coins, tier glow) to CSS | 2h | §1.3 preserved semantics | One keyframe per FX, driven by class toggles from JS |
+| `ReadinessBar` DOM component (one instance per chain) | 1h | FX port | Accepts floorId + highlight state |
+| DebriefFeed slot for three bars | 30m | DOM component | Added below pip-rows, above overhealing spillover area |
+| DungeonSchedule → DebriefFeed highlight wiring | 45m | DungeonSchedule tick stability | Subscribe; no new state |
+| Remove canvas `renderReadinessBar` + delete FX state from `hud.js` | 30m | All above | Clean up vestigial canvas path |
+| Taskmaster peek reconciliation (shows per-floor readiness on clipboard) | 30m | §11.4 CORE_GAME_LOOP | Make sure numbers match |
+
+**Total**: ~5h. Not in any current sprint — flagged by user 2026-04-05 as
+"getting ahead of schedule". Revisit when the core loop (cleaning /
+restocking / hero-day rotation) is stable and hero-location tracking in
+DungeonSchedule has landed its final shape.
+
+### 15.6 Interim State (shipping now)
+
+- Canvas bar moved from top-right to top-left of viewport canvas
+- No more minimap-frame occlusion
+- All FX preserved
+- Single bar, current floor only (no multi-floor grouping yet)
+- Still gated on `depth >= 3` — only dungeon floors render the bar

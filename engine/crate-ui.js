@@ -359,7 +359,7 @@ var CrateUI = (function () {
         ctx.fillText('[F] SEAL', sealX + SEAL_BTN_W / 2, btnRowY + SEAL_BTN_H / 2);
       }
 
-      // [ESC] Close button — to the right of seal
+      // [BACK] Close button — to the right of seal
       var closeX = sealX + SEAL_BTN_W + 16;
       var closeY = btnRowY + (SEAL_BTN_H - CLOSE_BTN_H) / 2;
       var closeHover = ptr && ptr.active &&
@@ -406,7 +406,7 @@ var CrateUI = (function () {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = chCloseHover ? 'rgba(220,210,180,0.9)' : 'rgba(150,140,120,0.6)';
-      ctx.fillText('[ESC] Close', chCloseX + CLOSE_BTN_W / 2, btnRowY + CLOSE_BTN_H / 2);
+      ctx.fillText('[BACK] Close', chCloseX + CLOSE_BTN_W / 2, btnRowY + CLOSE_BTN_H / 2);
     }
 
     // ── Bag Strip (deposit mode, unsealed only) ──────────────────

@@ -65,8 +65,10 @@ var MerchantPeek = (function () {
     if (!_container) {
       _container = document.createElement('div');
       _container.id = 'merchant-peek-container';
-      _container.style.cssText =
-        'position:absolute; top:50%; left:50%;' +
+      // top:40% — lift ~10vh so Shop button clears freelook ring hitbox.
+       // (Transform retains -55% Y to preserve the merchant-specific nudge.)
+       _container.style.cssText =
+        'position:absolute; top:40%; left:50%;' +
         'transform:translate(-50%,-55%);' +
         'z-index:18; pointer-events:none; opacity:0;' +
         'transition:opacity 0.3s ease;';
@@ -141,7 +143,7 @@ var MerchantPeek = (function () {
       _labelLayer.appendChild(_actionBtn);
     }
 
-    // Close button — [ESC] Close
+    // Close button — [BACK] Close
     _closeBtn = document.getElementById('merchant-peek-close');
     if (!_closeBtn) {
       _closeBtn = document.createElement('button');

@@ -38,7 +38,7 @@ var CardAuthority = (function () {
   //  CONSTANTS
   // ═══════════════════════════════════════════════════════════════════
 
-  var MAX_HAND    = 5;
+  var MAX_HAND    = 4;
   var MAX_BACKUP  = 30;   // D1: expandable via equip items post-jam
   var BASE_BAG    = 21;   // DEPTH3 §4: was 12, now 21+N (N from equipped bag_slots)
   var MAX_BAG     = BASE_BAG;  // Legacy compat — use getMaxBag() for live value

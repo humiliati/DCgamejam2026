@@ -241,6 +241,63 @@ var TorchState = (function () {
   }
 
   /**
+   * Pressure-wash extinguish: the destructive hose-spray path.
+   *
+   * Distinct from the water-bottle `extinguish()` above — this is the
+   * "fast, careless" method per PRESSURE_WASHING_ROADMAP §7.1:
+   *
+   *   1. Flame slot       → 'empty'    (fire knocked out, zero hydration)
+   *   2. fuel_dry slots   → 'empty'    (water blast ruins dry fuel)
+   *   3. fuel_hydrated    → survives   (already wet, water can't hurt it)
+   *   4. Tile flips TORCH_LIT → TORCH_UNLIT
+   *
+   * Junk (non-fuel items in fuel_dry slots) is also blown out since it's
+   * classified as fuel_dry internally — spec treats anything in a dry slot
+   * as destroyable collateral.
+   *
+   * The caller is responsible for side effects (light source removal, wall
+   * decor sync, toast, stats) — TorchState is data-only and doesn't depend
+   * on Lighting / FloorManager / Toast. See TorchHitResolver for the
+   * full side-effect chain.
+   *
+   * @param {string} floorId
+   * @param {number} x
+   * @param {number} y
+   * @param {number[][]} grid — current floor grid (mutated in place)
+   * @returns {{ extinguished: boolean, slotsRuined: number, slotsSurvived: number }|null}
+   *          null if no torch at that tile; otherwise a summary.
+   *          extinguished=true only when the torch was actually lit.
+   */
+  function pressureWashExtinguish(floorId, x, y, grid) {
+    var torch = getTorch(floorId, x, y);
+    if (!torch) return null;
+    if (torch.tile !== TILES.TORCH_LIT) {
+      return { extinguished: false, slotsRuined: 0, slotsSurvived: 0 };
+    }
+
+    var ruined = 0;
+    var survived = 0;
+
+    // Slot 0 is the flame slot on a lit torch — water knocks it out flat.
+    torch.slots[0] = { state: 'empty', item: null };
+
+    // Fuel slots: destroy dry, keep hydrated.
+    for (var i = 1; i < SLOTS_PER_TORCH; i++) {
+      var s = torch.slots[i];
+      if (s.state === 'fuel_dry') {
+        torch.slots[i] = { state: 'empty', item: null };
+        ruined++;
+      } else if (s.state === 'fuel_hydrated') {
+        survived++;
+      }
+      // 'empty' slots stay empty — nothing to count
+    }
+
+    _setUnlit(torch, grid);
+    return { extinguished: true, slotsRuined: ruined, slotsSurvived: survived };
+  }
+
+  /**
    * Fill an empty slot with a fuel item.
    * @param {number} slotIdx - 0-based slot index
    * @param {string} itemId  - item being placed
@@ -379,9 +436,10 @@ var TorchState = (function () {
     isTorchFuel:     isTorchFuel,
     isWater:         isWater,
 
-    extinguish:      extinguish,
-    fillSlot:        fillSlot,
-    hydrateSlot:     hydrateSlot,
+    extinguish:              extinguish,
+    pressureWashExtinguish:  pressureWashExtinguish,
+    fillSlot:                fillSlot,
+    hydrateSlot:             hydrateSlot,
 
     getReadiness:    getReadiness,
     getCounts:       getCounts,

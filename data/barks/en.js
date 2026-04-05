@@ -326,7 +326,7 @@ BarkLibrary.register('home.mailbox', [
 ], { cooldownMs: 5000 });
 
 BarkLibrary.register('home.bed', [
-  { text: '🛏️ Sleep until dawn? [OK] Rest  [Esc] Cancel',         weight: 1, style: 'dialog', oneShot: false },
+  { text: '🛏️ Sleep until dawn? [OK] Rest  [Back] Cancel',         weight: 1, style: 'dialog', oneShot: false },
 ], { cooldownMs: 0 });
 
 // ── Cozy interior interactions ─────────────────────────────────────
@@ -1022,4 +1022,54 @@ BarkLibrary.register('enemy.generic.alert', [
   { text: '... it stopped moving. It\'s waiting.',                                    weight: 3, style: 'bubble' },
   { text: '... you hear it clearly now. Close. Very close.',                          weight: 2, style: 'bubble' }
 ], { cooldownMs: 18000 });
+
+// ── Floor 3 — Immigrant Inspector (Vivec arch gate) ─────────────────
+// Stationary checkpoint NPC at (48,25). Ambient barks run while the
+// player is nearby but hasn't engaged in dialogue. The reject/accept
+// pools are reserved for post-dialogue outcomes (wiring deferred).
+
+BarkLibrary.register('npc.inspector.ambient', [
+  { text: '🛂 "Papers. Papers. No papers, no passage."',                              weight: 3 },
+  { text: '🛂 "Next! ... still no one with papers today."',                           weight: 3 },
+  { text: '🛂 "Rent receipt or proof of residence. Those are the rules."',           weight: 3 },
+  { text: '🛂 "You\'d be surprised how many think a shopping list counts."',         weight: 2, style: 'bubble' },
+  { text: '🛂 "Vivec waits. The arch does not."',                                    weight: 2 },
+  { text: '🛂 "Crowd keeps getting bigger. Deadline keeps getting closer."',         weight: 1 }
+], { cooldownMs: 22000 });
+
+BarkLibrary.register('npc.inspector.reject', [
+  { text: '🛂 "No receipt. Step aside."',                                            weight: 3 },
+  { text: '🛂 "The ledger says no. Come back with a stamp."',                        weight: 2 }
+], { cooldownMs: 15000 });
+
+BarkLibrary.register('npc.inspector.accept', [
+  { text: '🛂✅ "Stamped. Safe crossing, citizen."',                                  weight: 3 },
+  { text: '🛂✅ "About time someone paid their week. Go on."',                        weight: 2 }
+], { cooldownMs: 15000 });
+
+// ── Floor 3 — Aloof Vivec arch crowd ────────────────────────────────
+// Four ambient loiterers to the north and south shoulders of the arch
+// approach. They have been waiting a while. The tone is resigned envy,
+// weather-beaten gossip, and the occasional flash of hope — world-
+// building for the rent/paperwork pressure without spelling it out.
+
+BarkLibrary.register('ambient.vivec_crowd', [
+  // Resigned / tired
+  { text: '🗣️ "Fourth day in this line. Fourth day."',                                weight: 3 },
+  { text: '🗣️ "The Inspector stamped someone yesterday. Heard it from a gull."',     weight: 3, style: 'bubble' },
+  { text: '🗣️ "My receipt\u2019s dated wrong. Clerk wouldn\'t fix it. Back to the landlord."', weight: 3 },
+  // Envy / resentment
+  { text: '🗣️ "Rich folk just walk through. Stamped before they even arrive."',     weight: 2 },
+  { text: '🗣️ "They say Vivec has running water. Can you imagine."',                 weight: 2, style: 'bubble' },
+  // Gossip / rumor
+  { text: '🗣️ "Heard the deadline\u2019s real. End of week two, arch shuts for good."', weight: 2 },
+  { text: '🗣️ "Tide envoy got through last week. Paid his rent three months early."', weight: 2 },
+  { text: '🗣️ "Old man said he saw the Inspector smile once. I don\'t believe him."', weight: 1 },
+  // Hope / nudge
+  { text: '🗣️ "If you\'ve got coin, pay your week. Don\'t wait like I did."',         weight: 2 },
+  { text: '🗣️ "The safehouse landlord is strict but fair. Just bring the ledger."', weight: 2 },
+  // Weather / ambience
+  { text: '🗣️ "Wind\u2019s cold off the arch. Vivec side\u2019s warmer, they say."',  weight: 1, style: 'bubble' },
+  { text: '🗣️ "..."',                                                                 weight: 0.5, style: 'bubble' }
+], { cooldownMs: 28000 });
 

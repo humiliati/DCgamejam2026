@@ -186,8 +186,15 @@
   // crates, and doesn't realize they're "cleaning" until the formidable
   // enemy forces the issue.
 
+  // Foyer rat (first encounter) sits in the SW corner beside the crate
+  // cluster, not on the central (11,y) sight-line from the spawn through
+  // the doorway — the Hero Wake cinematic aims the camera straight up
+  // that axis and any enemy sprite in the aisle reads as obstructing
+  // the hero reveal. From (6,18) the rat is still visibly in the foyer
+  // as "spice", but the player has to physically turn west to see it
+  // once control returns, so it never fights the cinematic for focus.
   var ENEMY_SPAWNS = [
-    { x: 11, y: 17, type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // foyer — first encounter
+    { x: 6,  y: 18, type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // foyer SW corner — first encounter, off cinematic axis
     { x: 15, y: 10, type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // south corridor
     { x: 2,  y: 5,  type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 3, str: 1, dex: 2, suit: 'spade', lootProfile: 'organic' },  // west passage
     { x: 21, y: 8,  type: 'rat', name: 'Dungeon Rat', emoji: '🐀', hp: 4, str: 1, dex: 1, suit: 'spade', lootProfile: 'organic' }   // east passage (slightly tougher)

@@ -61,7 +61,7 @@ var CratePeek = (function () {
   var _innerLabel = null;  // "? LOOT ?" text
   var _subLabel   = null;
   var _actionBtn  = null;  // Visible click target
-  var _closeBtn   = null;  // [ESC] Close
+  var _closeBtn   = null;  // [BACK] Close
 
   // ── Init ───────────────────────────────────────────────────────
 
@@ -70,8 +70,11 @@ var CratePeek = (function () {
     if (!_container) {
       _container = document.createElement('div');
       _container.id = 'crate-peek-container';
-      _container.style.cssText =
-        'position:absolute; top:50%; left:50%;' +
+      // top:40% lifts whole peek ~10vh above center so the Smash button
+       // (margin-top:130px below container) clears the MouseLook freelook
+       // ring hitbox. See corpse-peek.js for the same fix rationale.
+       _container.style.cssText =
+        'position:absolute; top:40%; left:50%;' +
         'transform:translate(-50%,-50%);' +
         'z-index:18; pointer-events:none; opacity:0;' +
         'transition:opacity 0.3s ease;';

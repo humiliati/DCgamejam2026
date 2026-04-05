@@ -15,9 +15,9 @@ i18n.register('hi', {
 
   // ── Character Creation ──
   'create.callsign_header': 'अपना कोडनेम चुनें',
-  'create.callsign_hint':   '[← →] ब्राउज़   [Enter] पुष्टि   [Esc] वापस',
+  'create.callsign_hint':   '[← →] ब्राउज़   [Enter] पुष्टि   [वापस]',
   'create.avatar_header':   'अपना वर्ग चुनें',
-  'create.avatar_hint':     '[↑ ↓] ब्राउज़   [Enter] तैनात   [Esc] वापस',
+  'create.avatar_hint':     '[↑ ↓] ब्राउज़   [Enter] तैनात   [वापस]',
   'create.deploying':       'तैनाती...',
 
   // ── HUD ──

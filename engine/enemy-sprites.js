@@ -283,7 +283,16 @@ var EnemySprites = (function () {
       headMods:  def.headMods  || null,
       torsoMods: def.torsoMods || null,
       corpse: def.corpse || '💀',
-      tintHue: (def.tintHue !== undefined && def.tintHue !== null) ? def.tintHue : null
+      tintHue: (def.tintHue !== undefined && def.tintHue !== null) ? def.tintHue : null,
+      // Optional direct-color tint (overrides hue) + alpha override.
+      // Used for monochrome stacks (e.g. black-clad hero NPCs) where a
+      // hue rotation cannot produce pure black.
+      tintColor: def.tintColor || null,
+      tintAlpha: (typeof def.tintAlpha === 'number') ? def.tintAlpha : null,
+      // Per-slot tint mask override — lets stacks with a single populated
+      // slot (e.g. ground-dwelling rats in `legs`) opt that slot into
+      // hue tinting, since the default raycaster mask is [head:off, torso:on, legs:on].
+      tintSlots: def.tintSlots || null
     };
     // Also register legacy poses for backward compat (getEmoji fallback)
     _poseRegistry[enemyType] = {
@@ -385,7 +394,10 @@ var EnemySprites = (function () {
           frontWeapon: stackDef.frontWeapon ? { emoji: stackDef.frontWeapon, scale: stackDef.frontWeaponScale, offsetX: stackDef.frontWeaponOffsetX } : null,
           headMods:  stackDef.headMods,
           torsoMods: stackDef.torsoMods,
-          tintHue: stackDef.tintHue
+          tintHue: stackDef.tintHue,
+          tintColor: stackDef.tintColor,
+          tintAlpha: stackDef.tintAlpha,
+          tintSlots: stackDef.tintSlots
         };
         // Legacy fallback emoji = head or torso (first non-empty slot)
         result.emoji = stackDef.head || stackDef.torso || emoji;
@@ -520,9 +532,14 @@ var EnemySprites = (function () {
     });
 
     // ENM-003  Dungeon Rat  ♠ — non-lethal filler
+    // Ground-dwelling creature: emoji lives in the foot (legs) slot so it
+    // scurries along the floor plane instead of hovering at head height.
+    // tintSlots override lets the suit wash paint the legs (the one
+    // populated slot) since default tintSlots = [false, true, true].
     registerStack('dungeon_rat', {
-      head: '🐀', torso: '', legs: '',
+      head: '', torso: '', legs: '🐀',
       tintHue: SUIT_TINT.spade,
+      tintSlots: [false, false, true],
       corpse: '🦴'
     });
 
@@ -547,10 +564,11 @@ var EnemySprites = (function () {
     });
 
     // ENM-006  Cave Toad  ♦ — diamond suit intro in cellar
+    // Ground dweller: glyph lives in the legs slot.
     registerStack('cave_toad', {
-      head: '🐸', torso: '', legs: '',
-      headMods: [{ emoji: '💎', scale: 0.18, offsetX: 0.3, offsetY: -0.1 }],
+      head: '', torso: '', legs: '🐸',
       tintHue: SUIT_TINT.diamond,
+      tintSlots: [false, false, true],
       corpse: '💎'
     });
 
@@ -677,10 +695,11 @@ var EnemySprites = (function () {
     });
 
     // ENM-023  Deep Crawler  ♠ — high HP brute
+    // Ground dweller: crab glyph in the legs slot.
     registerStack('deep_crawler', {
-      head: '🦀', torso: '', legs: '',
-      headMods: [{ emoji: '💧', scale: 0.18, offsetX: -0.3, offsetY: 0.1 }],
+      head: '', torso: '', legs: '🦀',
       tintHue: SUIT_TINT.spade,
+      tintSlots: [false, false, true],
       corpse: '🦴'
     });
 
@@ -752,31 +771,39 @@ var EnemySprites = (function () {
     //  HERO ANTAGONIST STACKS (story encounters)
     // ================================================================
 
+    // Hero antagonists share a uniform silhouette — ninja head, black
+    // jacket, black jeans — only the weapon varies between archetypes.
+    // The tintColor + tintAlpha darken the jacket/jeans to true black;
+    // hue rotation alone can't produce black, which is why these stacks
+    // bypass tintHue and paint rgb(0,0,0) directly over the clothing
+    // glyphs via the raycaster's source-atop tint pass.
+    var _HERO_BLACK = { r: 0, g: 0, b: 0 };
+    var _HERO_BLACK_ALPHA = 0.72;
     registerStack('hero_seeker', {
-      head: '😤', torso: '🥷', legs: '🥾',
-      hat: '⛑️', hatScale: 0.5,
-      frontWeapon: '⚔️', frontWeaponScale: 0.75, frontWeaponOffsetX: -0.2,
+      head: '🥷', torso: '🧥', legs: '👖',
+      frontWeapon: '⚔️', frontWeaponScale: 0.75, frontWeaponOffsetX: -0.22,
       backWeapon: '🛡️', backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
-      tintHue: 45,
+      tintColor: _HERO_BLACK, tintAlpha: _HERO_BLACK_ALPHA,
       corpse: '💀'
     });
     registerStack('hero_scholar', {
-      head: '🧐', torso: '🥼', legs: '👖',
-      hat: '🎓', hatScale: 0.5,
-      frontWeapon: '🪄', frontWeaponScale: 0.6,
+      head: '🥷', torso: '🧥', legs: '👖',
+      frontWeapon: '🪄', frontWeaponScale: 0.65, frontWeaponOffsetX: -0.22,
+      tintColor: _HERO_BLACK, tintAlpha: _HERO_BLACK_ALPHA,
       corpse: '💀'
     });
     registerStack('hero_shadow', {
-      head: '😈', torso: '🖤', legs: '🦿',
-      frontWeapon: '🗡️', frontWeaponScale: 0.6,
-      backWeapon: '🏹', backWeaponScale: 0.4,
+      head: '🥷', torso: '🧥', legs: '👖',
+      frontWeapon: '🗡️', frontWeaponScale: 0.65, frontWeaponOffsetX: -0.22,
+      backWeapon: '🏹', backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
+      tintColor: _HERO_BLACK, tintAlpha: _HERO_BLACK_ALPHA,
       corpse: '💀'
     });
     registerStack('hero_crusader', {
-      head: '😠', torso: '🦺', legs: '🥾',
-      hat: '👑', hatScale: 0.5,
-      frontWeapon: '🔱', frontWeaponScale: 0.7,
-      backWeapon: '🛡️', backWeaponScale: 0.4,
+      head: '🥷', torso: '🧥', legs: '👖',
+      frontWeapon: '🔱', frontWeaponScale: 0.72, frontWeaponOffsetX: -0.22,
+      backWeapon: '🛡️', backWeaponScale: 0.4, backWeaponOffsetX: 0.3,
+      tintColor: _HERO_BLACK, tintAlpha: _HERO_BLACK_ALPHA,
       corpse: '💀'
     });
 

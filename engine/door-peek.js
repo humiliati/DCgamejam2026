@@ -46,8 +46,9 @@ var DoorPeek = (function () {
     if (!_container) {
       _container = document.createElement('div');
       _container.id = 'door-peek-container';
-      _container.style.cssText =
-        'position:absolute; top:50%; left:50%;' +
+      // top:40% — lift ~10vh so Enter button clears freelook ring hitbox.
+       _container.style.cssText =
+        'position:absolute; top:40%; left:50%;' +
         'transform:translate(-50%,-50%);' +
         'z-index:18; pointer-events:none; opacity:0;' +
         'transition:opacity 0.3s ease;';

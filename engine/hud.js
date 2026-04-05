@@ -106,13 +106,93 @@ var HUD = (function () {
     }
   }
 
+  // ── Rolling combat log ────────────────────────────────────────────
+  //
+  // `#combat-log` used to be a single text node that every call
+  // overwrote. It is now a rolling history of the last COMBAT_LOG_MAX
+  // lines — newest at the bottom, older lines dimmer, each line
+  // auto-fading after COMBAT_LOG_TTL_MS. Call signature is unchanged,
+  // so every existing showCombatLog caller keeps working.
+  //
+  // Also deduplicates consecutive identical lines: the same string
+  // fired twice in quick succession (e.g. two ticks of the same
+  // status) bumps a count on the existing line instead of spamming a
+  // fresh row.
+
+  var COMBAT_LOG_MAX = 5;
+  var COMBAT_LOG_TTL_MS = 4500;
+  var _logLines = []; // [{ el, text, count, timer }]
+
+  function _pruneLogLines() {
+    while (_logLines.length > COMBAT_LOG_MAX) {
+      var oldest = _logLines.shift();
+      if (oldest.timer) clearTimeout(oldest.timer);
+      if (oldest.el && oldest.el.parentNode) {
+        oldest.el.parentNode.removeChild(oldest.el);
+      }
+    }
+    // Re-stamp age classes so CSS can dim older lines
+    for (var i = 0; i < _logLines.length; i++) {
+      var ageFromNewest = _logLines.length - 1 - i;
+      _logLines[i].el.className = 'combat-log-line age-' + ageFromNewest;
+    }
+  }
+
+  function _removeLogLine(entry) {
+    var idx = _logLines.indexOf(entry);
+    if (idx >= 0) _logLines.splice(idx, 1);
+    if (entry.el) {
+      entry.el.classList.add('fading');
+      // Allow CSS fade-out to finish, then remove
+      setTimeout(function () {
+        if (entry.el && entry.el.parentNode) {
+          entry.el.parentNode.removeChild(entry.el);
+        }
+      }, 350);
+    }
+    _pruneLogLines();
+  }
+
   function showCombatLog(text) {
     if (_els.combatOverlay) _els.combatOverlay.classList.add('active');
-    if (_els.combatLog) _els.combatLog.textContent = text;
+    if (!_els.combatLog) return;
+
+    // Dedup: if the newest line is the same text, bump its count and
+    // refresh its timer instead of adding a new row.
+    var newest = _logLines[_logLines.length - 1];
+    if (newest && newest.text === text) {
+      newest.count++;
+      newest.el.textContent = text + '  ×' + newest.count;
+      if (newest.timer) clearTimeout(newest.timer);
+      (function (entry) {
+        entry.timer = setTimeout(function () { _removeLogLine(entry); }, COMBAT_LOG_TTL_MS);
+      })(newest);
+      return;
+    }
+
+    var line = document.createElement('div');
+    line.className = 'combat-log-line age-0';
+    line.textContent = text;
+    _els.combatLog.appendChild(line);
+
+    var entry = { el: line, text: text, count: 1, timer: null };
+    _logLines.push(entry);
+    entry.timer = setTimeout(function () { _removeLogLine(entry); }, COMBAT_LOG_TTL_MS);
+
+    _pruneLogLines();
+  }
+
+  function clearCombatLog() {
+    for (var i = 0; i < _logLines.length; i++) {
+      if (_logLines[i].timer) clearTimeout(_logLines[i].timer);
+    }
+    _logLines = [];
+    if (_els.combatLog) _els.combatLog.innerHTML = '';
   }
 
   function hideCombat() {
     if (_els.combatOverlay) _els.combatOverlay.classList.remove('active');
+    clearCombatLog();
   }
 
   function showFloorTransition(text) {
@@ -137,7 +217,13 @@ var HUD = (function () {
 
   // ── C2: Readiness HUD bar (canvas-rendered) ──────────────────────
   // Rendered on dungeon floors (depth ≥ 3) showing floor readiness %.
-  // Small bar in the upper-right corner of the viewport.
+  // Anchored to the TOP-LEFT of the viewport canvas, immediately right of
+  // the debrief feed DOM panel. Prior placement at top-right collided
+  // underneath #minimap-frame (a DOM overlay, z-index above canvas) and
+  // animated invisibly behind it — see READINESS_BAR_ROADMAP §1.1, which
+  // always specified left-column placement. This is the canvas-space
+  // approximation until the bar is migrated to DOM as part of the
+  // 3-bar-in-debrief target (§X of READINESS_BAR_ROADMAP, post-jam).
   //
   // §1.3 Animated behaviors (READINESS_BAR_ROADMAP):
   //   a) Interaction sweep — 200ms bright highlight preview during action
@@ -148,7 +234,7 @@ var HUD = (function () {
   // ── Bar geometry ───────────────────────────────────────────────
   var _rdyW   = 120;  // Full width
   var _rdyH   = 14;   // Height (slightly taller for readability)
-  var _rdyPad = 12;   // Right padding
+  var _rdyPad = 12;   // Left padding (canvas x-origin is right of debrief feed)
   var _rdyY   = 10;   // Top offset
   var _rdyRad = 4;    // Corner radius
 
@@ -461,7 +547,7 @@ var HUD = (function () {
 
         // Extra credit coin drip — single coin per increment above 1.0
         if (actualScore > 1.0 && _rdyPrevScore >= 1.0) {
-          _spawnExtraCreditCoin(vpW - _rdyW - _rdyPad, _rdyY, _rdyW, _rdyH);
+          _spawnExtraCreditCoin(_rdyPad, _rdyY, _rdyW, _rdyH);
         }
       } else if (delta < -0.001) {
         // Score decreased (rare — hero trashed floor) → snap down
@@ -521,7 +607,10 @@ var HUD = (function () {
     var corePct    = Math.min(1, displayPct);
     var extraPct   = Math.max(0, displayPct - 1);
 
-    var barX = vpW - _rdyW - _rdyPad;
+    // Anchor to viewport canvas top-left. Canvas x=0 is already right of
+    // the debrief-feed DOM panel (see #viewport flex layout), so _rdyPad
+    // alone positions us snug against it — no minimap collision.
+    var barX = _rdyPad;
     var barY = _rdyY;
     var coreFillW = Math.round(corePct * _rdyW);
     var extraFillW = Math.round(Math.min(1, extraPct) * _rdyW);
@@ -634,15 +723,16 @@ var HUD = (function () {
       ctx.stroke();
     }
 
-    // Percentage label
+    // Percentage label — drawn to the right of the bar now that we anchor
+    // top-left. Left-aligned so it grows into the viewport, not off-canvas.
     ctx.font = '11px monospace';
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillStyle = extraPct > 0 ? 'rgba(100,220,180,0.95)' : '#e0d8c8';
     var labelPct = Math.round(actualScore * 100); // show actual, not animated
     var pctLabel = labelPct + '%';
     if (extraPct > 0) pctLabel += ' \u2605';
-    ctx.fillText(pctLabel, barX - 6, barY + 1);
+    ctx.fillText(pctLabel, barX + _rdyW + 6, barY + 1);
 
     // "READINESS" label
     ctx.textAlign = 'left';
@@ -719,6 +809,7 @@ var HUD = (function () {
     updateFloor: updateFloor,
     updateCards: updateCards,
     showCombatLog: showCombatLog,
+    clearCombatLog: clearCombatLog,
     hideCombat: hideCombat,
     showFloorTransition: showFloorTransition,
     hideFloorTransition: hideFloorTransition,

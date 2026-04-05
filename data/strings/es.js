@@ -20,9 +20,9 @@ i18n.register('es', {
 
   // ── Character Creation ──
   'create.callsign_header': 'ELIGE TU INDICATIVO',
-  'create.callsign_hint':   '[← →] Navegar   [Enter] Confirmar   [Esc] Atrás',
+  'create.callsign_hint':   '[← →] Navegar   [Enter] Confirmar   [Atrás]',
   'create.avatar_header':   'ELIGE TU CLASE',
-  'create.avatar_hint':     '[↑ ↓] Navegar   [Enter] Desplegar   [Esc] Atrás',
+  'create.avatar_hint':     '[↑ ↓] Navegar   [Enter] Desplegar   [Atrás]',
   'create.deploying':       'DESPLEGANDO...',
 
   // ── HUD ──

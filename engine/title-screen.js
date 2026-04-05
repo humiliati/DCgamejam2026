@@ -23,18 +23,30 @@ var TitleScreen = (function () {
   var _selected = 0;      // Currently highlighted option index
   var _deployTimer = 0;
 
-  // ── Glow theme colors ─────────────────────────────────────────────
-  var GLOW_COLOR       = 'rgb(176,255,189)';
-  var GLOW_SPREAD      = 'rgba(123,255,160,0.78)';
-  var GLOW_DIM         = 'rgba(123,255,160,0.25)';
-  var PAPER_BG         = 'rgba(30,28,24,0.92)';
-  var PAPER_CARD       = 'rgba(42,38,32,0.95)';
-  var PAPER_CARD_SEL   = 'rgba(24,40,28,0.95)';
-  var PAPER_BORDER     = 'rgba(200,180,120,0.4)';
-  var PAPER_BORDER_SEL = 'rgba(176,255,189,0.7)';
-  var TEXT_WARM         = '#e8dcc8';
-  var TEXT_DIM          = '#888070';
-  var TEXT_MUTED        = '#5a5548';
+  // ── Vaporwave theme colors ───────────────────────────────────────
+  // Unified with DeployCutscene's synthwave palette so title → callsign →
+  // class selection → deploy cutscene all read as one visual aesthetic.
+  // Canonical palette source: engine/deploy-cutscene.js CSS.
+  //   BG_DEEP      #120b12   panel black-purple
+  //   BG_PURPLE    #2e0d3f   main backdrop
+  //   MAGENTA      #b811c6   glow accent
+  //   CYAN         #2afce0   grid / selected border
+  //   SUN_YELLOW   #fcff1a   hot title accent
+  //   SUN_AMBER    #fbe54f   warm accent
+  var GLOW_COLOR       = 'rgb(42,252,224)';              // cyan #2afce0
+  var GLOW_SPREAD      = 'rgba(184,17,198,0.78)';        // magenta spread
+  var GLOW_DIM         = 'rgba(184,17,198,0.25)';
+  var PAPER_BG         = 'rgba(18,11,18,0.92)';          // #120b12 @ 0.92
+  var PAPER_CARD       = 'rgba(46,13,63,0.92)';          // #2e0d3f @ 0.92
+  var PAPER_CARD_SEL   = 'rgba(42,252,224,0.10)';        // cyan wash
+  var PAPER_BORDER     = 'rgba(184,17,198,0.45)';        // magenta border
+  var PAPER_BORDER_SEL = 'rgba(42,252,224,0.85)';        // cyan selected
+  var TEXT_WARM         = '#e8e0ff';                     // cool lavender-white
+  var TEXT_DIM          = '#8890c0';                     // muted lavender
+  var TEXT_MUTED        = '#544870';                     // deep muted purple
+  var ACCENT_YELLOW     = '#fcff1a';                     // hot title glow
+  var ACCENT_MAGENTA    = '#b811c6';
+  var ACCENT_CYAN       = '#2afce0';
 
   // ── CRT font stack (console, NOT Courier) ─────────────────────────
   var CRT_FONT = "'Classic Console Neue', Consolas, Monaco, 'Lucida Console', monospace";
@@ -42,6 +54,22 @@ var TitleScreen = (function () {
   // ── Hover tracking ────────────────────────────────────────────────
   var _mouseX = -1, _mouseY = -1;
   var _hoveredZoneIdx = -1;
+
+  // ── Freelook ring (for parallax slide) ───────────────────────────
+  // Mirrors the in-game MouseLook ring: inner 60% of the ring radius is
+  // a dead zone, outer 40% drives a signed (-1..1) look offset on each
+  // axis with a quadratic-ish acceleration curve. The title screen uses
+  // it to slide the horizon parallax layers (canton, waterfront, arch)
+  // back and forth when the cursor drifts toward the edges, so the
+  // backdrop feels alive even while the menus are static.
+  var LOOK_HITBOX_FRAC   = 0.45;  // ring radius as fraction of min(w,h)
+  var LOOK_DEAD_FRAC     = 0.55;  // inner dead zone
+  var LOOK_ACCEL_POWER   = 1.8;
+  var LOOK_SMOOTH        = 0.08;  // lerp weight per render frame
+  var _lookTargetX       = 0;     // raw target in [-1, 1]
+  var _lookTargetY       = 0;
+  var _lookX             = 0;     // smoothed output
+  var _lookY             = 0;
 
   // ── Callsign data ─────────────────────────────────────────────────
 
@@ -426,20 +454,32 @@ var TitleScreen = (function () {
     var w = _canvas.width;
     var h = _canvas.height;
 
+    // ── Freelook ring update ───────────────────────────────────────
+    // Drive the parallax slide from the current mouse position using
+    // the same inner-dead-zone / outer-acceleration-curve model as the
+    // in-game MouseLook ring. Cursor near center = no slide; cursor
+    // drifting toward the edge = smooth horizontal/vertical parallax.
+    _updateLookTarget(w, h);
+    _lookX += (_lookTargetX - _lookX) * LOOK_SMOOTH;
+    _lookY += (_lookTargetY - _lookY) * LOOK_SMOOTH;
+
     // Background: Floor 3 east-facing arch view (frontier_title preset).
-    // Parallax cloud bands + shaped Vivec-canton city silhouette + star
-    // field up top, rippled dusk water reflection below — "standing on
-    // the south boardwalk at golden hour looking at the Grand Arch".
-    // See SKYBOX_ROADMAP.md Phase 5d.
+    // Canton/Vivec silhouette + drifting magenta cloud bands up top,
+    // ocean-floor porthole view down below.
     if (typeof Skybox !== 'undefined') {
       Skybox.renderFull(_ctx, w, h, performance.now(), 'frontier_title');
     } else {
-      _ctx.fillStyle = '#0a0a0a';
+      _ctx.fillStyle = '#120b22';
       _ctx.fillRect(0, 0, w, h);
     }
 
-    // Subtle paper-toned border accent
-    _ctx.strokeStyle = 'rgba(200,180,120,0.2)';
+    // ── Horizon band parallax (canton / waterfront / grand arch) ──
+    // Layers slide by depth-weighted fraction of the look offset so the
+    // near grand arch shifts most and the distant canton shifts least.
+    _drawVaporwaveEmbellishments(w, h, _lookX, _lookY);
+
+    // Subtle magenta vaporwave border accent
+    _ctx.strokeStyle = PAPER_BORDER;
     _ctx.lineWidth = 2;
     _roundRect(_ctx, 16, 16, w - 32, h - 32, 8);
     _ctx.stroke();
@@ -468,7 +508,262 @@ var TitleScreen = (function () {
     }
   }
 
+  /**
+   * Compute freelook target (_lookTargetX/Y) from current mouse position.
+   * Hidden circular ring centered on the canvas — inner 55% is a dead
+   * zone, outer 45% drives a quadratic acceleration curve on each axis.
+   * When the cursor is off-canvas (_mouseX<0) the target collapses to 0
+   * so the parallax drifts back to rest.
+   */
+  function _updateLookTarget(w, h) {
+    if (_mouseX < 0 || _mouseY < 0) {
+      _lookTargetX = 0;
+      _lookTargetY = 0;
+      return;
+    }
+    var cx = w / 2;
+    var cy = h / 2;
+    var dx = _mouseX - cx;
+    var dy = _mouseY - cy;
+    var ringR = Math.min(w, h) * LOOK_HITBOX_FRAC;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.0001) {
+      _lookTargetX = 0;
+      _lookTargetY = 0;
+      return;
+    }
+    var radial = Math.min(1, dist / ringR);
+    if (radial < LOOK_DEAD_FRAC) {
+      _lookTargetX = 0;
+      _lookTargetY = 0;
+      return;
+    }
+    // Remap [deadFrac..1] → [0..1] then apply acceleration curve
+    var remapped = (radial - LOOK_DEAD_FRAC) / (1 - LOOK_DEAD_FRAC);
+    var accel = Math.pow(remapped, LOOK_ACCEL_POWER);
+    var nx = dx / dist;
+    var ny = dy / dist;
+    _lookTargetX = nx * accel;
+    _lookTargetY = ny * accel;
+  }
+
   // ── Drawing helpers ───────────────────────────────────────────────
+
+  /**
+   * Horizon band parallax — adapted from docs/vivec-parallax-concept.html.
+   * Drawn on top of Skybox.renderFull between the sky and the water line.
+   *
+   * Layer stack (back → front):
+   *   L1 — Canton skyline      (Vivec megablocks + temple spire)
+   *   L2 — Industrial waterfront (warehouses, cranes, bridges)
+   *   L3 — Grand Arch facade   (Floor 4 gate, focal point, cyan arch glow)
+   *
+   * The skybox's own shaped mountain (Mt. Tabor analog at depth 0.9) stays
+   * as the farthest back layer, so we skip L0/L1 from the concept doc.
+   * Vivec's warm amber palette is re-tinted to vaporwave: deep purple/black
+   * silhouettes, magenta canton window lights, cyan arch spill.
+   */
+  function _drawVaporwaveEmbellishments(w, h, lookX, lookY) {
+    var horizonY = Math.floor(h / 2);  // Skybox.renderFull splits at h/2
+    var ctx = _ctx;
+
+    // Parallax slide budgets — horizontal is generous, vertical subtle.
+    // Canton = deepest (moves least), waterfront = mid, arch = nearest
+    // (moves most). lookX/lookY are signed offsets in [-1, 1]. Names
+    // deliberately NOT "lx/ly" — canton's light-position loop reuses
+    // those via `var` hoisting, which would clobber outer params.
+    var look_x = lookX || 0;
+    var look_y = lookY || 0;
+    var CANTON_PX = Math.min(w, h) * 0.022;
+    var WATER_PX  = Math.min(w, h) * 0.038;
+    var ARCH_PX   = Math.min(w, h) * 0.065;
+    var V_PX      = Math.min(w, h) * 0.010;
+    var cantonDX  = -look_x * CANTON_PX;  // cursor-right pushes scene left
+    var waterDX   = -look_x * WATER_PX;
+    var archDX    = -look_x * ARCH_PX;
+    var cantonDY  = -look_y * V_PX * 0.4;
+    var waterDY   = -look_y * V_PX * 0.7;
+    var archDY    = -look_y * V_PX;
+
+    // Deterministic 1D value noise — mirrors vivec-parallax-concept.html
+    function vHash(x) {
+      x = ((x >> 16) ^ x) * 0x45d9f3b;
+      x = ((x >> 16) ^ x) * 0x45d9f3b;
+      x = (x >> 16) ^ x;
+      return ((x & 0x7fffffff) / 0x7fffffff);
+    }
+    function vNoise(x) {
+      var xi = Math.floor(x);
+      var xf = x - xi;
+      var t = xf * xf * (3 - 2 * xf);
+      return vHash(xi) * (1 - t) + vHash(xi + 1) * t;
+    }
+
+    ctx.save();
+
+    // ═══ LAYER 1 — Canton skyline (Vivec megablocks + temple spire) ═══
+    ctx.save();
+    ctx.translate(cantonDX, cantonDY);
+    ctx.fillStyle = 'rgba(14,8,28,0.94)';
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    for (var cx = 0; cx < w; cx++) {
+      var wx = cx * 0.006 + 200;
+
+      // Base canton mass — wide blocks, step-quantized into Vivec tiers
+      var base = vNoise(wx + 800) * 0.6 + vNoise(wx * 3 + 850) * 0.3;
+      var canton = Math.floor(base * 4) / 4;
+      canton = Math.max(canton, base * 0.5);
+
+      // Temple spire — tall narrow peak slightly right of center
+      var spireCenter = w * 0.55;
+      var spireDist = Math.abs(cx - spireCenter);
+      var spire = 0;
+      if (spireDist < 22) spire = (1 - spireDist / 22) * 0.9;
+
+      // Bridge-tower pylons — periodic tall spikes
+      var pylon = vNoise(wx * 5 + 900);
+      var pylonSpike = (pylon > 0.82) ? (pylon - 0.82) * 4.0 : 0;
+
+      var mh = (canton + pylonSpike + spire) * h * 0.16;
+
+      // City is EAST = right 80% of screen, fade in from left
+      var cityFade = Math.min(1, Math.max(0, (cx - w * 0.18) / (w * 0.12)));
+      mh *= cityFade;
+
+      ctx.lineTo(cx, horizonY - mh);
+    }
+    ctx.lineTo(w, horizonY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Canton window lights — magenta/pink pixels scattered on canton mass
+    for (var li = 0; li < 180; li++) {
+      var lx = w * 0.22 + vHash(li * 31 + 1) * w * 0.75;
+      var lyT = vHash(li * 37 + 3);
+      var ly = horizonY - lyT * h * 0.14;
+      if (ly < horizonY - 3 && vHash(li * 41 + 5) > 0.42) {
+        var la = 0.35 + vHash(li * 43 + 7) * 0.55;
+        // Mix magenta and cyan lights (80/20)
+        if (vHash(li * 47 + 9) > 0.8) {
+          ctx.fillStyle = 'rgba(42,252,224,' + la.toFixed(2) + ')';
+        } else {
+          ctx.fillStyle = 'rgba(252,80,198,' + la.toFixed(2) + ')';
+        }
+        ctx.fillRect(Math.floor(lx), Math.floor(ly), 2, 1);
+      }
+    }
+    ctx.restore();  // End canton layer transform
+
+    // ═══ LAYER 2 — Industrial waterfront (cranes, bridges, warehouses) ═══
+    ctx.save();
+    ctx.translate(waterDX, waterDY);
+    ctx.fillStyle = 'rgba(8,4,16,0.96)';
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    for (var ix = 0; ix < w; ix++) {
+      var iwx = ix * 0.01 + 400;
+
+      // Warehouse roofline — mid-height, step-quantized
+      var roof = vNoise(iwx + 600) * 0.5 + vNoise(iwx * 2.5 + 650) * 0.25;
+      roof = Math.floor(roof * 6) / 6;
+
+      // Crane booms — tall thin spikes
+      var crane = vNoise(iwx * 4 + 700);
+      var craneSpike = 0;
+      if (crane > 0.80) {
+        craneSpike = (crane - 0.80) * 5.0;
+        var arm = vNoise(iwx * 8 + 750);
+        if (arm > 0.7) craneSpike += 0.06;
+      }
+
+      // Smokestack — periodic thin tall elements
+      var stack = vNoise(iwx * 6 + 720);
+      var stackSpike = (stack > 0.85) ? (stack - 0.85) * 6.0 : 0;
+
+      // Bridge arcs — Burnside/Steel analogs
+      var bridgeArc = 0;
+      var b1 = Math.abs(ix - w * 0.40) / (w * 0.08);
+      if (b1 < 1) bridgeArc = Math.max(bridgeArc, (1 - b1 * b1) * 0.15);
+      if (Math.abs(ix - w * 0.34) < 3 || Math.abs(ix - w * 0.46) < 3) bridgeArc = Math.max(bridgeArc, 0.35);
+      var b2 = Math.abs(ix - w * 0.72) / (w * 0.06);
+      if (b2 < 1) bridgeArc = Math.max(bridgeArc, (1 - b2 * b2) * 0.12);
+      if (Math.abs(ix - w * 0.67) < 3 || Math.abs(ix - w * 0.77) < 3) bridgeArc = Math.max(bridgeArc, 0.30);
+
+      var imh = (roof + craneSpike + stackSpike + bridgeArc) * h * 0.10;
+      var indFade = Math.min(1, Math.max(0, (ix - w * 0.13) / (w * 0.18)));
+      imh *= indFade;
+
+      ctx.lineTo(ix, horizonY - imh);
+    }
+    ctx.lineTo(w, horizonY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Magenta waterfront rim light — replaces vivec's amber glow
+    var wfGrad = ctx.createLinearGradient(0, horizonY - 16, 0, horizonY);
+    wfGrad.addColorStop(0, 'rgba(184,17,198,0)');
+    wfGrad.addColorStop(1, 'rgba(252,80,198,0.22)');
+    ctx.fillStyle = wfGrad;
+    ctx.fillRect(w * 0.18, horizonY - 16, w * 0.82, 16);
+
+    ctx.restore();  // End waterfront layer transform
+
+    // ═══ LAYER 3 — Grand Arch facade (Floor 4 gate, focal point) ═══
+    ctx.save();
+    ctx.translate(archDX, archDY);
+    var archCenter = Math.floor(w * 0.52);
+    var archWidth  = Math.max(60, Math.floor(w * 0.065));
+    var archHeight = Math.floor(h * 0.18);
+    var wallH      = Math.floor(h * 0.075);
+    var wallExtend = Math.floor(w * 0.14);
+
+    // Wall flanks
+    ctx.fillStyle = '#0f0620';
+    ctx.fillRect(archCenter - archWidth / 2 - wallExtend, horizonY - wallH, wallExtend, wallH);
+    ctx.fillRect(archCenter + archWidth / 2, horizonY - wallH, wallExtend, wallH);
+
+    // Arch pillars + top bar
+    ctx.fillStyle = '#180a2a';
+    ctx.fillRect(archCenter - archWidth / 2 - 10, horizonY - archHeight, 10, archHeight);
+    ctx.fillRect(archCenter + archWidth / 2,      horizonY - archHeight, 10, archHeight);
+    ctx.fillRect(archCenter - archWidth / 2 - 10, horizonY - archHeight, archWidth + 20, 12);
+
+    // Decorative cap — magenta highlight
+    ctx.fillStyle = '#2a0d3d';
+    ctx.fillRect(archCenter - archWidth / 2 - 14, horizonY - archHeight - 5, archWidth + 28, 5);
+
+    // Arch opening — cyan light spilling through (replaces vivec amber)
+    var archGlow = ctx.createRadialGradient(
+      archCenter, horizonY - archHeight * 0.35, 8,
+      archCenter, horizonY - archHeight * 0.35, archWidth * 0.75
+    );
+    archGlow.addColorStop(0.0, 'rgba(42,252,224,0.38)');
+    archGlow.addColorStop(0.5, 'rgba(184,17,198,0.18)');
+    archGlow.addColorStop(1.0, 'rgba(184,17,198,0)');
+    ctx.fillStyle = archGlow;
+    ctx.fillRect(archCenter - archWidth / 2 - 4, horizonY - archHeight + 12, archWidth + 8, archHeight - 12);
+
+    // Lantern dots on arch pillars + magenta halos
+    ctx.fillStyle = 'rgba(252,80,198,0.95)';
+    ctx.fillRect(archCenter - archWidth / 2 - 5, horizonY - archHeight + 22, 3, 3);
+    ctx.fillRect(archCenter + archWidth / 2 + 2, horizonY - archHeight + 22, 3, 3);
+    ctx.fillStyle = 'rgba(252,80,198,0.18)';
+    ctx.beginPath();
+    ctx.arc(archCenter - archWidth / 2 - 4, horizonY - archHeight + 23, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(archCenter + archWidth / 2 + 4, horizonY - archHeight + 23, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();  // End Grand Arch layer transform
+
+    // Thin cyan horizon line — sky/water seam highlight (no parallax)
+    ctx.fillStyle = 'rgba(42,252,224,0.22)';
+    ctx.fillRect(w * 0.12, horizonY - 1, w * 0.88, 1);
+
+    ctx.restore();  // End outer _drawVaporwaveEmbellishments save
+  }
 
   function _roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -541,7 +836,7 @@ var TitleScreen = (function () {
 
     // Button body
     _roundRect(ctx, x, y, w, h, r);
-    ctx.fillStyle = hovered ? 'rgba(24,40,28,0.95)' : (selected ? 'rgba(20,35,24,0.92)' : PAPER_BG);
+    ctx.fillStyle = hovered ? 'rgba(46,13,63,0.95)' : (selected ? PAPER_CARD_SEL : PAPER_BG);
     ctx.fill();
 
     // Inner glow border
@@ -559,9 +854,9 @@ var TitleScreen = (function () {
       var refW = w * 0.6;
       var refX = x + (w - refW) / 2;
       var grad = ctx.createLinearGradient(refX, refY, refX + refW, refY);
-      grad.addColorStop(0, 'rgba(176,255,189,0)');
-      grad.addColorStop(0.5, hovered ? 'rgba(176,255,189,0.25)' : 'rgba(176,255,189,0.12)');
-      grad.addColorStop(1, 'rgba(176,255,189,0)');
+      grad.addColorStop(0, 'rgba(42,252,224,0)');
+      grad.addColorStop(0.5, hovered ? 'rgba(42,252,224,0.30)' : 'rgba(42,252,224,0.15)');
+      grad.addColorStop(1, 'rgba(42,252,224,0)');
       ctx.fillStyle = grad;
       ctx.fillRect(refX, refY, refW, 3);
     }
@@ -581,22 +876,22 @@ var TitleScreen = (function () {
     var scrollY = h * 0.20 - 64;
 
     _ctx.save();
-    // Scroll body — warm parchment with torn-edge feel
+    // Scroll body — deep purple vaporwave panel
     var scrollGrad = _ctx.createLinearGradient(scrollX, scrollY, scrollX, scrollY + scrollH);
-    scrollGrad.addColorStop(0, 'rgba(62,52,38,0.85)');
-    scrollGrad.addColorStop(0.1, 'rgba(48,40,28,0.92)');
-    scrollGrad.addColorStop(0.9, 'rgba(48,40,28,0.92)');
-    scrollGrad.addColorStop(1, 'rgba(62,52,38,0.85)');
+    scrollGrad.addColorStop(0, 'rgba(46,13,63,0.85)');
+    scrollGrad.addColorStop(0.1, 'rgba(18,11,18,0.92)');
+    scrollGrad.addColorStop(0.9, 'rgba(18,11,18,0.92)');
+    scrollGrad.addColorStop(1, 'rgba(46,13,63,0.85)');
     _roundRect(_ctx, scrollX, scrollY, scrollW, scrollH, 6);
     _ctx.fillStyle = scrollGrad;
     _ctx.fill();
-    // Scroll border — warm gold accent
-    _ctx.strokeStyle = 'rgba(200,170,80,0.45)';
+    // Scroll border — magenta accent
+    _ctx.strokeStyle = PAPER_BORDER;
     _ctx.lineWidth = 1.5;
     _roundRect(_ctx, scrollX, scrollY, scrollW, scrollH, 6);
     _ctx.stroke();
-    // Ruled lines (paper feel)
-    _ctx.strokeStyle = 'rgba(200,180,120,0.08)';
+    // Ruled lines — cyan hairlines
+    _ctx.strokeStyle = 'rgba(42,252,224,0.08)';
     _ctx.lineWidth = 1;
     for (var rl = 0; rl < 5; rl++) {
       var rlY = scrollY + 20 + rl * 22;
@@ -612,15 +907,15 @@ var TitleScreen = (function () {
     // Outer glow halo
     _ctx.shadowColor = GLOW_SPREAD;
     _ctx.shadowBlur = 35;
-    _ctx.fillStyle = 'rgba(176,255,189,0.04)';
+    _ctx.fillStyle = 'rgba(252,255,26,0.10)';
     _ctx.font = 'bold 72px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
     _ctx.fillText(i18n.t('title.game_name', 'DUNGEON GLEANER'), cx, h * 0.20);
-    // Core text
+    // Core text — hot yellow sun accent
     _ctx.shadowColor = GLOW_COLOR;
     _ctx.shadowBlur = 12;
-    _ctx.fillStyle = '#fff';
+    _ctx.fillStyle = ACCENT_YELLOW;
     _ctx.fillText(i18n.t('title.game_name', 'DUNGEON GLEANER'), cx, h * 0.20);
     _ctx.shadowBlur = 0;
     _ctx.restore();
@@ -642,6 +937,14 @@ var TitleScreen = (function () {
       i18n.t('title.credits', 'Credits'),
       i18n.t('title.settings', 'Settings')
     ];
+
+    // Unify keyboard + mouse cursor: if the mouse is hovering one of the
+    // title buttons, that row wins and the keyboard selection follows it.
+    // This prevents two buttons lighting up at once (keyboard + hover).
+    var titleZoneBase = _hitZones.length;
+    if (_hoveredZoneIdx >= titleZoneBase && _hoveredZoneIdx < titleZoneBase + labels.length) {
+      _selected = _hoveredZoneIdx - titleZoneBase;
+    }
 
     for (var i = 0; i < labels.length; i++) {
       var by = startY + i * (btnH + gap);
@@ -809,7 +1112,7 @@ var TitleScreen = (function () {
     _ctx.fillStyle = TEXT_MUTED;
     _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
-    _ctx.fillText(i18n.t('create.callsign_hint', '[\u2190 \u2192] Browse   [Enter] Confirm   [Esc] Back'), cx, h * 0.92);
+    _ctx.fillText(i18n.t('create.callsign_hint', '[\u2190 \u2192] Browse   [Enter] Confirm   [Back]'), cx, h * 0.92);
   }
 
   function _renderAvatar(w, h) {
@@ -884,7 +1187,7 @@ var TitleScreen = (function () {
       // Stat badge (right side)
       _ctx.font = '13px ' + CRT_FONT;
       _ctx.textAlign = 'right';
-      _ctx.fillStyle = isSelected ? GLOW_COLOR : 'rgba(176,255,189,0.4)';
+      _ctx.fillStyle = isSelected ? GLOW_COLOR : 'rgba(184,17,198,0.55)';
       var statLabel = '+' + AVATARS[i].stat.toUpperCase();
       _ctx.fillText(statLabel, ax + cardW - 12, ay + 82);
       _ctx.textAlign = 'left';
@@ -934,7 +1237,7 @@ var TitleScreen = (function () {
 
     // Lore text — word-wrapped
     _ctx.font = '14px ' + CRT_FONT;
-    _ctx.fillStyle = isPreviewHovered ? 'rgba(136,128,112,0.7)' : 'rgba(200,180,120,0.6)';
+    _ctx.fillStyle = isPreviewHovered ? 'rgba(136,136,180,0.75)' : 'rgba(200,180,255,0.75)';
     var loreLines = _wrapText(_ctx, ava.lore || '', gridW - 40);
     var loreY = detailY + 48;
     for (var li = 0; li < loreLines.length && li < 4; li++) {
@@ -986,7 +1289,7 @@ var TitleScreen = (function () {
     _ctx.fillStyle = TEXT_MUTED;
     _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
-    _ctx.fillText(i18n.t('create.avatar_hint', '[\u2190 \u2192 \u2191 \u2193] Browse   [Enter] Deploy   [Esc] Back'), cx, h - 12);
+    _ctx.fillText(i18n.t('create.avatar_hint', '[\u2190 \u2192 \u2191 \u2193] Browse   [Enter] Deploy   [Back]'), cx, h - 12);
   }
 
   function _renderDeploy(w, h) {
@@ -1211,7 +1514,7 @@ var TitleScreen = (function () {
           _ctx.shadowColor = GLOW_DIM;
           _ctx.shadowBlur = 8;
           _ctx.font = 'bold 20px ' + CRT_FONT;
-          _ctx.fillStyle = 'rgba(200,180,120,0.7)';
+          _ctx.fillStyle = ACCENT_CYAN;
           _ctx.textAlign = 'center';
           _ctx.textBaseline = 'middle';
           _ctx.fillText(entry.label, cx, ey);
@@ -1290,7 +1593,7 @@ var TitleScreen = (function () {
 
       _ctx.fillStyle = 'rgba(255,255,255,0.06)';
       _ctx.fillRect(sbX, contentTop, sbW, sbH);
-      _ctx.fillStyle = 'rgba(200,180,120,0.4)';
+      _ctx.fillStyle = 'rgba(184,17,198,0.55)';
       _ctx.fillRect(sbX, thumbY, sbW, thumbH);
     }
 
@@ -1298,7 +1601,7 @@ var TitleScreen = (function () {
     _ctx.textAlign = 'center';
     _ctx.fillStyle = TEXT_MUTED;
     _ctx.font = '14px ' + CRT_FONT;
-    _ctx.fillText('[Esc] Back   [Scroll] Navigate', cx, panelY + panelH - 14);
+    _ctx.fillText('[Back]   [Scroll] Navigate', cx, panelY + panelH - 14);
   }
 
   function _renderSettings(w, h) {
@@ -1386,7 +1689,7 @@ var TitleScreen = (function () {
         var hy = drawY + headerH / 2;
         if (hy > contentTop - headerH && hy < contentTop + contentH + headerH) {
           // Divider line
-          _ctx.strokeStyle = 'rgba(200,180,120,0.25)';
+          _ctx.strokeStyle = 'rgba(184,17,198,0.35)';
           _ctx.lineWidth = 1;
           _ctx.beginPath();
           _ctx.moveTo(rowX, drawY + 4);
@@ -1394,7 +1697,7 @@ var TitleScreen = (function () {
           _ctx.stroke();
 
           _ctx.font = 'bold 16px ' + CRT_FONT;
-          _ctx.fillStyle = 'rgba(200,180,120,0.6)';
+          _ctx.fillStyle = ACCENT_CYAN;
           _ctx.textAlign = 'left';
           _ctx.textBaseline = 'middle';
           _ctx.fillText(item.label, rowX + 8, drawY + headerH / 2 + 4);
@@ -1499,7 +1802,7 @@ var TitleScreen = (function () {
       _ctx.fillStyle = 'rgba(255,255,255,0.06)';
       _ctx.fillRect(sbX, contentTop, sbW, sbH);
       // Thumb
-      _ctx.fillStyle = 'rgba(200,180,120,0.4)';
+      _ctx.fillStyle = 'rgba(184,17,198,0.55)';
       _ctx.fillRect(sbX, thumbY, sbW, thumbH);
 
       // Clickable scrollbar hit zone — maps click Y to scroll position
@@ -1524,7 +1827,7 @@ var TitleScreen = (function () {
     _ctx.font = '14px ' + CRT_FONT;
     var hintText = gpConnected
       ? '[Esc/B] Back   [Enter/A] Toggle   [\u2191\u2193] Navigate'
-      : '[Esc] Back   [Enter] Toggle   [\u2191\u2193] Navigate';
+      : '[Back]   [Enter] Toggle   [\u2191\u2193] Navigate';
     _ctx.fillText(hintText, cx, panelY + panelH - 14);
   }
 

@@ -126,7 +126,14 @@ var Player = (function () {
   }
 
   function damage(amount) {
+    if (!amount || amount <= 0) return;
     _state.hp = Math.max(0, _state.hp - amount);
+    // PW-2: HP loss snaps the hose (spec §2.3 — combat damage cancels).
+    // The hose fantasy assumes the player is tiptoeing through carnage; a
+    // hero/hazard landing a hit jerks the line off the reel.
+    if (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive()) {
+      HoseState.onCombatDamage();
+    }
   }
 
   function spendEnergy(amount) {

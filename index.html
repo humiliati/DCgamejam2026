@@ -12,7 +12,8 @@
     #splash-overlay {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       z-index: 200;
-      background: #080812;
+      /* Vaporwave vertical gradient: deep purple zenith → magenta dusk */
+      background: linear-gradient(180deg, #120b22 0%, #2e0d3f 55%, #b8116e 100%);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       opacity: 1;
@@ -26,53 +27,57 @@
       pointer-events: none;
     }
 
-    /* Title text above cube */
+    /* Title text above cube — hot yellow with magenta glow */
     .splash-title {
       font-family: 'Courier New', monospace;
       font-size: 64px; font-weight: bold;
-      color: #c8c8ff;
+      color: #fcff1a;
       letter-spacing: 10px;
       text-transform: uppercase;
-      text-shadow: 0 0 30px rgba(96,96,232,0.7), 0 0 100px rgba(96,96,232,0.3), 0 2px 0 rgba(0,0,0,0.5);
+      text-shadow:
+        0 0 30px rgba(184,17,198,0.85),
+        0 0 100px rgba(42,252,224,0.35),
+        0 2px 0 rgba(0,0,0,0.5);
       margin-bottom: 40px;
       opacity: 0;
       animation: splash-text-in 0.8s ease-out 0.3s forwards;
     }
 
-    /* Subtitle below cube */
+    /* Subtitle below cube — cyan */
     .splash-subtitle {
       font-family: 'Courier New', monospace;
       font-size: 24px;
-      color: #667;
+      color: #2afce0;
       letter-spacing: 6px;
       text-transform: uppercase;
-      text-shadow: 0 0 12px rgba(96,96,232,0.3);
+      text-shadow: 0 0 12px rgba(42,252,224,0.45);
       margin-top: 40px;
       opacity: 0;
       animation: splash-text-in 0.6s ease-out 0.6s forwards;
     }
 
-    /* "Press any key" prompt */
+    /* "Press any key" prompt — muted lavender */
     .splash-prompt {
       position: absolute;
       bottom: 48px;
       font-family: 'Courier New', monospace;
       font-size: 20px;
-      color: #556;
+      color: #8890c0;
       letter-spacing: 4px;
+      text-shadow: 0 0 8px rgba(184,17,198,0.4);
       opacity: 0;
       animation: splash-blink 2s ease-in-out 1.2s infinite;
     }
 
     /* ── Easter egg: click counter glow intensifies ── */
     .splash-variant.ee-warm {
-      --box-glow: rgba(180,140,255,0.6);
+      --box-glow: rgba(42,252,224,0.7);
     }
     .splash-variant.ee-hot {
-      --box-glow: rgba(255,140,200,0.7);
+      --box-glow: rgba(252,80,198,0.8);
     }
     .splash-variant.ee-fire {
-      --box-glow: rgba(255,200,80,0.8);
+      --box-glow: rgba(252,255,26,0.85);
     }
     @keyframes ee-sparkle {
       0%   { filter: brightness(1); }
@@ -90,13 +95,13 @@
       bottom: 80px;
       font-family: 'Courier New', monospace;
       font-size: 11px;
-      color: rgba(140,140,255,0);
+      color: rgba(42,252,224,0);
       letter-spacing: 2px;
       transition: color 0.8s ease;
       pointer-events: none;
     }
     .splash-secret.visible {
-      color: rgba(140,140,255,0.5);
+      color: rgba(42,252,224,0.55);
     }
 
     @keyframes splash-text-in {
@@ -260,7 +265,7 @@
       transform: translateZ(var(--box-d, 60px)) rotateX(-160deg);
     }
     #splash-overlay.envelop-bg {
-      background: radial-gradient(circle at center, rgba(96,96,232,0.9) 0%, rgba(8,8,18,1) 70%);
+      background: radial-gradient(circle at center, rgba(184,17,198,0.9) 0%, rgba(18,11,34,1) 70%);
       transition: background 0.8s ease;
     }
 
@@ -273,20 +278,24 @@
       100% { transform: rotate3d(0,1,0,360deg); }
     }
 
-    /* ═══ Variant: Splash (arcane blue, 200px) ═══ */
+    /* ═══ Variant: Splash (vaporwave magenta/cyan, 200px) ═══ */
     .box3d-wrap.splash-variant {
       --box-size: 200px;
       --box-d: 100px;
       --box-half: -110px;
       --bevel-w: 3px;
-      --box-dark: #0b0b66;
-      --box-dark2: #0a0a4e;
-      --box-light: #6060e8;
-      --box-floor: #0a0a4f;
-      --box-ceil: #2e2e2e;
-      --box-glow: rgba(140,140,255,0.5);
+      --box-dark: #2e0d3f;
+      --box-dark2: #120b22;
+      --box-light: #b811c6;
+      --box-floor: #0a0414;
+      /* Ceiling stays dark so the opened-lid reveal contrasts the interior
+       * orb. The cyan accent rides as a subtle radial highlight in .bf-top
+       * rather than as the base color — preserves the omnidirectional bloom
+       * when the lid swings open. */
+      --box-ceil: #1a0a24;
+      --box-glow: rgba(252,80,198,0.65);
     }
-    /* Textured faces: arcane circuit-rune pattern */
+    /* Textured faces: synthwave grid pattern in cyan */
     .box3d-wrap.splash-variant .bf-back,
     .box3d-wrap.splash-variant .bf-left,
     .box3d-wrap.splash-variant .bf-right {
@@ -294,50 +303,58 @@
         repeating-linear-gradient(
           0deg,
           transparent 0px, transparent 18px,
-          rgba(120,120,255,0.06) 18px, rgba(120,120,255,0.06) 19px
+          rgba(42,252,224,0.10) 18px, rgba(42,252,224,0.10) 19px
         ),
         repeating-linear-gradient(
           90deg,
           transparent 0px, transparent 18px,
-          rgba(120,120,255,0.06) 18px, rgba(120,120,255,0.06) 19px
+          rgba(42,252,224,0.10) 18px, rgba(42,252,224,0.10) 19px
         ),
-        linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8));
+        linear-gradient(to top, var(--box-dark, #2e0d3f), var(--box-light, #b811c6));
     }
     .box3d-wrap.splash-variant .bf-top {
       background:
-        radial-gradient(circle at 50% 50%, rgba(200,200,255,0.08) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(42,252,224,0.22) 0%, transparent 60%),
         repeating-linear-gradient(
           45deg,
           transparent 0px, transparent 12px,
-          rgba(120,120,255,0.05) 12px, rgba(120,120,255,0.05) 13px
+          rgba(42,252,224,0.10) 12px, rgba(42,252,224,0.10) 13px
         ),
-        var(--box-ceil, #2e2e2e);
+        var(--box-ceil, #1a0a24);
     }
     .box3d-wrap.splash-variant .bf-bottom {
       background:
-        radial-gradient(circle at 50% 50%, rgba(80,80,200,0.15) 0%, transparent 70%),
-        var(--box-floor, #0a0a4f);
+        radial-gradient(circle at 50% 50%, rgba(252,80,198,0.32) 0%, transparent 70%),
+        var(--box-floor, #0a0414);
     }
-    /* Lid: arcane sigil center glow + grid */
+    /* Lid: magenta sigil center glow + cyan grid */
     .box3d-wrap.splash-variant .box3d-lid .box3d-face {
       background:
-        radial-gradient(circle at 50% 50%, rgba(180,180,255,0.15) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(252,255,26,0.18) 0%, transparent 50%),
         repeating-linear-gradient(
           0deg,
           transparent 0px, transparent 18px,
-          rgba(120,120,255,0.06) 18px, rgba(120,120,255,0.06) 19px
+          rgba(42,252,224,0.10) 18px, rgba(42,252,224,0.10) 19px
         ),
         repeating-linear-gradient(
           90deg,
           transparent 0px, transparent 18px,
-          rgba(120,120,255,0.06) 18px, rgba(120,120,255,0.06) 19px
+          rgba(42,252,224,0.10) 18px, rgba(42,252,224,0.10) 19px
         ),
-        linear-gradient(to top, var(--box-dark, #0b0b66), var(--box-light, #6060e8));
+        linear-gradient(to top, var(--box-dark, #2e0d3f), var(--box-light, #b811c6));
     }
-    /* Splash interior glow: richer, layered — orb planes inherit this */
+    /* Splash interior glow: single-hue magenta ramp so the 3 rotated glow
+     * planes (gp0/gp1/gp2) additively reinforce into a 3D omnidirectional
+     * orb instead of neutralizing into a flat patch. Hot white-pink core →
+     * magenta mid → deep magenta outer → transparent. A single hue family
+     * is REQUIRED for the fake-3D-sphere trick to read as volumetric. */
     .box3d-wrap.splash-variant .box3d-glow {
       background:
-        radial-gradient(circle, rgba(180,180,255,0.7) 0%, rgba(140,140,255,0.4) 30%, rgba(96,96,232,0.15) 60%, transparent 100%);
+        radial-gradient(circle,
+          rgba(255,220,240,0.75) 0%,
+          rgba(252,80,198,0.48)  28%,
+          rgba(184,17,198,0.22)  60%,
+          transparent            100%);
     }
 
     /* ═══ Variant: Treasure Chest (gold/amber, 200×140 non-square) ═══ */
@@ -1154,14 +1171,38 @@
       pointer-events: none;
     }
     #combat-overlay.active { display: block; }
+    /* ── Rolling combat log ──
+       Stacked history of the last ~5 events, newest at the bottom.
+       Older lines are progressively dimmer so the eye lands on the
+       most recent resolution without losing the immediate past.
+       Each .combat-log-line is created by HUD.showCombatLog.     */
     #combat-log {
       position: absolute; bottom: 24px; left: 32px; right: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
       font-family: var(--font-terminal);
-      font-size: 28px; color: var(--phosphor-bright);
+      letter-spacing: 0.03em;
+      pointer-events: none;
+    }
+    .combat-log-line {
+      font-size: 26px;
+      color: var(--phosphor-bright);
       text-shadow: 0 0 8px var(--phosphor-glow), 0 1px 2px #000;
       text-align: center;
-      letter-spacing: 0.03em;
+      transition: opacity 320ms ease-out, transform 320ms ease-out;
+      transform: translateY(0);
+      opacity: 1;
     }
+    /* Newest line: full intensity.
+       Older lines fade to muted phosphor so the stack reads as depth. */
+    .combat-log-line.age-0 { font-size: 28px; opacity: 1.0; }
+    .combat-log-line.age-1 { font-size: 22px; opacity: 0.72; }
+    .combat-log-line.age-2 { font-size: 19px; opacity: 0.52; }
+    .combat-log-line.age-3 { font-size: 17px; opacity: 0.36; }
+    .combat-log-line.age-4 { font-size: 16px; opacity: 0.22; }
+    .combat-log-line.fading { opacity: 0; transform: translateY(-6px); }
 
     /* ── Floor transition ── */
     #floor-transition {
@@ -1174,6 +1215,33 @@
     #floor-transition.active { display: flex; }
 
     /* (debug-toggle removed — minimap is now embedded in HUD frame) */
+
+    /* ═══════════════════════════════════════════════════════════════
+       Shared accessibility button styles (.a11y-btn)
+
+       Any runtime-created <button> that wants keyboard-reachable
+       accessibility behaviour opts in by adding class="a11y-btn".
+       Provides:
+         - :focus-visible amber phosphor ring (keyboard/Magic Remote
+           focus only — never flashes on mouse clicks)
+         - aria-disabled="true" dim + not-allowed cursor
+       Inline styles cannot express :focus-visible, so this must live
+       in static CSS rather than in JS inline styles. Kept minimal and
+       side-effect-free — the button still owns its own visual theme
+       (background, border, size) via inline styles or its own class.
+       ═══════════════════════════════════════════════════════════════ */
+    .a11y-btn:focus { outline: none; }
+    .a11y-btn:focus-visible {
+      outline: 3px solid #ffe066;
+      outline-offset: 3px;
+      box-shadow: 0 2px 14px rgba(255,224,102,0.7),
+                  0 0 0 6px rgba(255,224,102,0.25);
+    }
+    .a11y-btn[aria-disabled="true"] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: saturate(0.4);
+    }
 
     /* ═══════════════════════════════════════════════════════════════
        CRT TERMINAL THEME — Retro-futuristic phosphor aesthetic
@@ -1558,9 +1626,23 @@
       height: auto;
       max-height: 50vh;
     }
-    .sb-tooltip-history::-webkit-scrollbar { width: 4px; }
-    .sb-tooltip-history::-webkit-scrollbar-thumb { background: var(--desk-brown); border-radius: 2px; }
-    .sb-tooltip-history::-webkit-scrollbar-track { background: rgba(107,91,74,0.08); }
+    /* Scrollbar — sized for reliable cursor interaction. A 4px track is
+       effectively unclickable; 12px gives the player a real target for
+       dragging the thumb or clicking the track to page through history. */
+    .sb-tooltip-history::-webkit-scrollbar { width: 12px; }
+    .sb-tooltip-history::-webkit-scrollbar-thumb {
+      background: var(--desk-brown);
+      border-radius: 6px;
+      border: 2px solid var(--paper);
+      min-height: 32px;
+    }
+    .sb-tooltip-history::-webkit-scrollbar-thumb:hover {
+      background: #6b5b4a;
+    }
+    .sb-tooltip-history::-webkit-scrollbar-track {
+      background: rgba(107,91,74,0.12);
+      border-radius: 6px;
+    }
     .sb-tooltip-entry {
       padding: 2px 0;
       display: flex;
@@ -2218,12 +2300,16 @@
   <script src="engine/lighting.js"></script>
   <script src="engine/stealth.js"></script>
   <script src="engine/enemy-ai.js"></script>
+  <script src="engine/enemy-deck.js"></script>
+  <script src="engine/status-system.js"></script>
   <script src="engine/combat-engine.js"></script>
   <script src="engine/synergy-engine.js"></script>
   <script src="engine/card-authority.js"></script>
   <script src="engine/card-transfer.js"></script>
   <script src="engine/card-stack.js"></script>
   <script src="engine/card-system.js"></script>
+  <script src="engine/stack-preview.js"></script>
+  <script src="engine/damage-floaters.js"></script>
   <script src="engine/loot-tables.js"></script>
   <script src="engine/world-items.js"></script>
   <script src="engine/input.js"></script>
@@ -2314,6 +2400,10 @@
   <script src="engine/floor-blockout-2-2-1.js"></script>
   <script src="engine/floor-blockout-2-2-2.js"></script>
   <script src="engine/floor-blockout-2-3.js"></script>
+  <script src="engine/floor-blockout-2-4.js"></script>
+  <script src="engine/floor-blockout-2-5.js"></script>
+  <script src="engine/floor-blockout-2-6.js"></script>
+  <script src="engine/floor-blockout-2-7.js"></script>
   <script src="engine/floor-blockout-3.js"></script>
   <script src="engine/floor-blockout-3-1.js"></script>
   <script src="engine/floor-blockout-3-2.js"></script>
@@ -2333,6 +2423,7 @@
   <script src="engine/crate-peek.js"></script>
   <script src="engine/chest-peek.js"></script>
   <script src="engine/corpse-peek.js"></script>
+  <script src="engine/torch-hit-resolver.js"></script>
   <script src="engine/torch-peek.js"></script>
   <script src="engine/merchant-peek.js"></script>
   <script src="engine/peek-slots.js"></script>

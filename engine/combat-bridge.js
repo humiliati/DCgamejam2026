@@ -58,6 +58,14 @@ var CombatBridge = (function () {
     _facingTimer = 0;
     _lastBeatMsg = '';
     _entryPos = null;
+
+    // Live stack readout: build its DOM once so it's ready the first
+    // time combat starts. It stays hidden until show() is called.
+    if (typeof StackPreview !== 'undefined') StackPreview.init();
+
+    // Ephemeral damage numerals — Layer-2 overlay, spawned from the
+    // resolution impact moment below. init() is idempotent.
+    if (typeof DamageFloaters !== 'undefined') DamageFloaters.init();
   }
 
   // ── Face toward enemy ─────────────────────────────────────────────
@@ -83,6 +91,58 @@ var CombatBridge = (function () {
    */
   function _isAlreadyFacing(dir) {
     return Player.getDir() === dir;
+  }
+
+  /**
+   * Same-tile push. If the enemy has arrived on the player's exact
+   * tile (e.g. a chaser with no collision walked straight through the
+   * player), shove it to an adjacent walkable tile before combat
+   * starts. Without this, _directionToEnemy() returns a degenerate
+   * axis (dx === dy === 0) and the player turns to a random direction.
+   *
+   * Returns true if the enemy was pushed (or was never on the tile),
+   * false only if there was nowhere to push to.
+   */
+  function _pushEnemyOffPlayer(enemy) {
+    var p = Player.getPos();
+    if (enemy.x !== p.x || enemy.y !== p.y) return true;
+
+    if (typeof FloorManager === 'undefined') return false;
+    var coll = FloorManager.getCollisionCheck && FloorManager.getCollisionCheck();
+    if (!coll) return false;
+
+    // Prefer pushing in the direction the player is currently facing
+    // (so the shove feels like the enemy stepped INTO us from behind
+    // and we turned to meet it). Fall back through the other cardinals.
+    var playerDir = Player.getDir();
+    var offsets = [
+      { dx:  1, dy:  0 }, // EAST  (0)
+      { dx:  0, dy:  1 }, // SOUTH (1)
+      { dx: -1, dy:  0 }, // WEST  (2)
+      { dx:  0, dy: -1 }  // NORTH (3)
+    ];
+
+    // Rotate so the player's facing direction is first
+    var order = [];
+    for (var i = 0; i < 4; i++) order.push(offsets[(playerDir + i) % 4]);
+
+    for (var oi = 0; oi < order.length; oi++) {
+      var nx = p.x + order[oi].dx;
+      var ny = p.y + order[oi].dy;
+      var res = coll(p.x, p.y, nx, ny, 0);
+      if (res && !res.blocked) {
+        // No enemy-on-enemy collision check needed: the combat lock
+        // prevents any further AI ticks, and the pushed tile is
+        // vacated the moment this combat ends.
+        enemy._prevX = enemy.x;
+        enemy._prevY = enemy.y;
+        enemy._lerpT = 0;
+        enemy.x = nx;
+        enemy.y = ny;
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── Combat start ──────────────────────────────────────────────────
@@ -112,6 +172,12 @@ var CombatBridge = (function () {
 
     MC.cancelAll();
     MC.resetRepeat();
+
+    // If the enemy ran onto the player's tile (no enemy-vs-player
+    // collision on the patrol/chase move), shove it to an adjacent
+    // walkable tile before we compute which way to face. Otherwise
+    // dx === dy === 0 and the player turns to an arbitrary cardinal.
+    _pushEnemyOffPlayer(enemy);
 
     var dirToEnemy = _directionToEnemy(enemy);
     var wasAlreadyFacing = _isAlreadyFacing(dirToEnemy);
@@ -166,6 +232,11 @@ var CombatBridge = (function () {
           HUD.showCombatLog(beatMsg);
         }
       }
+
+      // Live stack preview — recomputes damage/suit/tags/thrust from
+      // current CardStack + SynergyEngine state each frame. Gates on
+      // phase internally so it only renders during stacking/selecting.
+      if (typeof StackPreview !== 'undefined') StackPreview.tick();
     }
   }
 
@@ -173,9 +244,17 @@ var CombatBridge = (function () {
    * Actually initialize combat after the player is facing the enemy.
    */
   function _beginCombat(enemy) {
-    // Interrupt any active tooltip dialogue
-    if (typeof StatusBar !== 'undefined' && StatusBar.clearDialogue) {
-      StatusBar.clearDialogue();
+    // Interrupt any active tooltip dialogue and force-collapse the
+    // tooltip footer. If a bark volley or a dialogue tree has the
+    // history panel expanded, it must not cover the CardFan hand the
+    // player is about to use to select attack cards. setCombat(true)
+    // flips the _inCombat flag so burst auto-expand is suppressed for
+    // the duration of the fight, and calls forceCollapse() internally
+    // to tear down any in-flight expand/dialogue state synchronously.
+    if (typeof StatusBar !== 'undefined') {
+      if (StatusBar.clearDialogue) StatusBar.clearDialogue();
+      if (StatusBar.setCombat)     StatusBar.setCombat(true, 1, '', 0);
+      if (StatusBar.forceCollapse) StatusBar.forceCollapse();
     }
 
     // ── Combat start audio (Pass 7) ──
@@ -208,10 +287,13 @@ var CombatBridge = (function () {
 
     var player = Player.state();
 
-    // When enemy is ambushed, make them turn to face the player
-    if (_pendingAmbushHint === 'enemy_ambushed') {
-      var p = Player.getPos();
-      EnemyAI.faceToward(enemy, p);
+    // Enemy always turns to face the player on combat start. Ambush
+    // ordering is already captured by _pendingAmbushHint above — the
+    // visual face-off should happen regardless so the two fighters
+    // look at each other while the cinematic bars slam in.
+    {
+      var _pFace = Player.getPos();
+      EnemyAI.faceToward(enemy, _pFace);
     }
 
     // Start the engine — pass ambush hint so advantage is set correctly
@@ -259,6 +341,12 @@ var CombatBridge = (function () {
         EnemyIntent.onCombatEvent('ambushed');
       }
     }
+
+    // ── Live stack preview HUD ──
+    // Hidden during countdown narration (StackPreview.tick gates on
+    // phase === 'stacking' || 'selecting'), but we flip the _active
+    // flag now so the tick loop starts polling.
+    if (typeof StackPreview !== 'undefined') StackPreview.show();
 
     // Clear the hint after use
     _pendingAmbushHint = null;
@@ -542,6 +630,12 @@ var CombatBridge = (function () {
   // ── Combat end handler ────────────────────────────────────────────
 
   function _onCombatEnd(result, enemy) {
+    // Release the StatusBar combat lock so burst auto-expand and the
+    // bottom-bar round/energy HUD revert to exploration mode.
+    if (typeof StatusBar !== 'undefined' && StatusBar.setCombat) {
+      StatusBar.setCombat(false, 0, '', 0);
+    }
+
     // ── Restore floor music after combat ──
     if (typeof AudioMusicManager !== 'undefined') {
       AudioMusicManager.onCombatEnd();
@@ -558,6 +652,24 @@ var CombatBridge = (function () {
 
     // ── Clear intent telegraph (Pass 8) ──
     if (typeof EnemyIntent !== 'undefined') EnemyIntent.endCombat();
+
+    // ── Hide live stack preview ──
+    if (typeof StackPreview !== 'undefined') StackPreview.hide();
+
+    // ── Clear any in-flight damage floaters ──
+    if (typeof DamageFloaters !== 'undefined') DamageFloaters.reset();
+
+    // ── Clear combat-scoped state (statuses + enemy draw pile) ──
+    // StatusSystem is combat-scoped by design — nothing should bleed
+    // into exploration. EnemyDeck pile gets nuked so re-engagement
+    // starts from a freshly shuffled deck rather than mid-rotation.
+    if (typeof StatusSystem !== 'undefined') {
+      StatusSystem.clearAll(enemy);
+      if (typeof Player !== 'undefined') StatusSystem.clearAll(Player.state());
+    }
+    if (typeof EnemyDeck !== 'undefined') {
+      EnemyDeck.clearPileFor(enemy);
+    }
 
     // End combat tracking
     if (typeof CombatReport !== 'undefined') CombatReport.endTracking(result);
@@ -580,6 +692,12 @@ var CombatBridge = (function () {
       //   - No loot, no gold, no collectibles
       //   - Slots emptied, no readiness score
       // ══════════════════════════════════════════════════════════════
+
+      // Enemy death sting — fires before loot roll so the defeat registers
+      // even when there's no loot (repeat defeats).
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('enemy-death', { volume: 0.6 });
+      }
 
       var corpseX = enemy.x;
       var corpseY = enemy.y;
@@ -750,6 +868,11 @@ var CombatBridge = (function () {
         setTimeout(function () { HUD.hideCombat(); }, 2000);
       } else {
         // Lethal defeat — inventory wipe, debuffs, rescue home
+        // Player death cue: sharp hit + low rumble underlay.
+        if (typeof AudioSystem !== 'undefined') {
+          AudioSystem.play('enemy-death', { volume: 0.7 });
+          AudioSystem.play('atmosphere-dive', { volume: 0.5 });
+        }
         var dropped = Player.onDeath();
         Player.fullRestore();
 
@@ -757,10 +880,10 @@ var CombatBridge = (function () {
         var currentFloor = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
         var depth = currentFloor ? currentFloor.split('.').length : 1;
 
-        // §10: Death-shift — shift this group's hero day
-        if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.onPlayerDeath) {
-          DungeonSchedule.onPlayerDeath(currentFloor);
-        }
+        // §10: Death-shift is fired by the rescue callback in game.js
+        // (single canonical site for both combat and hazard deaths).
+        // Do NOT call DungeonSchedule.onPlayerDeath from here — that
+        // path was double-firing the shift for combat deaths only.
 
         // Route through rescue callback (same path as environmental death)
         if (_onDeathRescue) {
@@ -778,6 +901,9 @@ var CombatBridge = (function () {
 
     } else if (result === 'flee') {
       // ── Flee: apply immunity, step player back ──
+      if (typeof AudioSystem !== 'undefined') {
+        AudioSystem.play('card-fold', { volume: 0.55 });
+      }
       EnemyAI.applyFleeImmunity(enemy);
 
       // Step back one tile (opposite of facing direction)
@@ -933,7 +1059,25 @@ var CombatBridge = (function () {
 
       var impactTime = timing.slideAwayMs + timing.lungeStaggerMs +
                        Math.floor(timing.lungeMs * ENEMY_LUNGE_PEAK_PCT);
+      var _stackEffects = stackEffects;
       setTimeout(function () {
+        // ── Damage floaters (independent of CombatFX) ──
+        // Spawned at the impact frame so the numbers land with the
+        // lunge peak, the hit sound, and the HUD flash all together.
+        if (typeof DamageFloaters !== 'undefined') {
+          if (_result.playerDmg > 0) {
+            DamageFloaters.show({ amount: _result.playerDmg, kind: 'player-dealt' });
+          }
+          if (_result.enemyDmg > 0) {
+            var parried = _stackEffects && _stackEffects.defense > 0 &&
+                          _stackEffects.defense >= _result.enemyDmg;
+            DamageFloaters.show({
+              amount: _result.enemyDmg,
+              kind: parried ? 'blocked' : 'enemy-dealt'
+            });
+          }
+        }
+
         if (typeof CombatFX === 'undefined') return;
         if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
         if (_result.playerDmg > 0) CombatFX.flashFrame('energy');
@@ -953,6 +1097,9 @@ var CombatBridge = (function () {
             } else {
               AudioSystem.playRandom('hit-spade', { volume: 0.45 });
             }
+          } else {
+            // Enemy whiffed — dodge / miss cue
+            AudioSystem.play('disadvantage', { volume: 0.4 });
           }
         }
       }, impactTime);
@@ -1032,6 +1179,16 @@ var CombatBridge = (function () {
       var impactTime = timing.slideAwayMs + timing.lungeStaggerMs +
                        Math.floor(timing.lungeMs * ENEMY_LUNGE_PEAK_PCT);
       setTimeout(function () {
+        // ── Damage floaters (legacy single-card path) ──
+        if (typeof DamageFloaters !== 'undefined') {
+          if (_result.playerDmg > 0) {
+            DamageFloaters.show({ amount: _result.playerDmg, kind: 'player-dealt' });
+          }
+          if (_result.enemyDmg > 0) {
+            DamageFloaters.show({ amount: _result.enemyDmg, kind: 'enemy-dealt' });
+          }
+        }
+
         if (typeof CombatFX === 'undefined') return;
         if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
         if (_card.effects) {
@@ -1118,6 +1275,9 @@ var CombatBridge = (function () {
   // ── Game over ─────────────────────────────────────────────────────
 
   function _gameOver() {
+    if (typeof AudioSystem !== 'undefined') {
+      AudioSystem.play('ui-fail2', { volume: 0.7 });
+    }
     if (_onGameOver) _onGameOver();
   }
 

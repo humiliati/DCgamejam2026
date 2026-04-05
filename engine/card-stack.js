@@ -311,7 +311,14 @@ var CardStack = (function () {
   /**
    * Compute the aggregate effects of the stack (pre-synergy).
    * Sums damage, defense, healing across all cards.
-   * Thrust multiplier applies to damage effects only.
+   *
+   * IMPORTANT: damage here is RAW (no thrust multiplier). CombatEngine
+   * .fireStack is the single source of thrust application — it adds the
+   * player's str and stack-size bonus to this raw card damage, then
+   * multiplies the total by thrust once. This keeps thrust scaling
+   * linear across str/cards/stack bonus and prevents the prior
+   * double-application bug where card damage was thrust-multiplied
+   * inside this function and then again at the sum level.
    *
    * @returns {{ damage: number, defense: number, healing: number,
    *             statuses: Array, cards: Array }}
@@ -340,8 +347,10 @@ var CardStack = (function () {
       }
     }
 
-    // Apply thrust multiplier to damage
-    damage = Math.floor(damage * _thrust);
+    // Thrust is NOT applied here — CombatEngine.fireStack owns the
+    // single thrust multiplication point. We still surface _thrust on
+    // the payload so consumers (StackPreview, combat log) can display
+    // the value without needing to touch CardStack internals.
 
     return {
       damage: damage,

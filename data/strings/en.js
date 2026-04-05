@@ -26,9 +26,9 @@ i18n.register('en', {
 
   // ── Character Creation ──────────────────────────────────────────
   'create.callsign_header': 'CHOOSE YOUR CALLSIGN',
-  'create.callsign_hint':   '[← →] Browse   [Enter] Confirm   [Esc] Back',
+  'create.callsign_hint':   '[← →] Browse   [Enter] Confirm   [Back]',
   'create.avatar_header':   'CHOOSE YOUR CLASS',
-  'create.avatar_hint':     '[↑ ↓] Browse   [Enter] Deploy   [Esc] Back',
+  'create.avatar_hint':     '[↑ ↓] Browse   [Enter] Deploy   [Back]',
   'create.deploying':       'DEPLOYING...',
 
   // ── HUD ─────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ i18n.register('en', {
   // ── Dragonfire MenuBox ─────────────────────────────────────────
   'shop.bonfire_title':    'DRAGONFIRE',
   'shop.bonfire_restored': 'HP & Energy restored',
-  'shop.bonfire_hint':     '[ESC] Close   [Q/E] Browse',
+  'shop.bonfire_hint':     '[BACK] Close   [Q/E] Browse',
   'shop.stash_title':      'STASH',
   'shop.stash_desc':       'Items stored here survive death',
   'shop.stash_capacity':   'slots',
@@ -130,19 +130,19 @@ i18n.register('en', {
   'shop.vendor_name':      'MERCHANT',
   'shop.vendor_desc':      'A weary traveler with wares to trade',
   'shop.currency':         'gold',
-  'shop.browse_hint':      '[Q/E] Browse panes   [ESC] Leave',
+  'shop.browse_hint':      '[Q/E] Browse panes   [BACK] Leave',
   'shop.buy_title':        'BUY',
-  'shop.buy_hint':         '[1-5] Buy   [ESC] Close',
+  'shop.buy_hint':         '[1-5] Buy   [BACK] Close',
   'shop.sell_title':       'SELL',
   'shop.sell_desc':        'Select items to sell',
-  'shop.sell_hint':        '[1-5] Sell card   [ESC] Close',
+  'shop.sell_hint':        '[1-5] Sell card   [BACK] Close',
   'shop.close':            'Close',
 
   // ── Harvest MenuBox ────────────────────────────────────────────
   'harvest.title':         'REMAINS',
   'harvest.empty':         'Nothing remains.',
   'harvest.take_hint':     'to take',
-  'harvest.nav_hint':      '[Q/E] View bag   [ESC] Leave',
+  'harvest.nav_hint':      '[Q/E] View bag   [BACK] Leave',
 
   // ── Faction Shops ─────────────────────────────────────────────
   'shop.tide_name':        'TIDE COUNCIL',
@@ -174,8 +174,8 @@ i18n.register('en', {
   // Updated buy/sell pane titles & hints
   'shop.buy_title':        'BUY CARDS',
   'shop.sell_title':       'SELL CARDS',
-  'shop.buy_hint':         '[1-5] Buy   [Q/E] Switch pane   [ESC] Leave',
-  'shop.sell_hint':        '[1-5] Sell   [Q/E] Switch pane   [ESC] Leave',
+  'shop.buy_hint':         '[1-5] Buy   [Q/E] Switch pane   [BACK] Leave',
+  'shop.sell_hint':        '[1-5] Sell   [Q/E] Switch pane   [BACK] Leave',
 
   // ── Dialog Box ──────────────────────────────────────────────────
   'dialog.continue':    '[ Enter / Click to continue ]',
