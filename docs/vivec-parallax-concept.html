@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Portlandia-Vivec Parallax — Floor 3 East View</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a12; color: #ccc; font-family: 'Courier New', monospace; overflow-x: hidden; }
+  h1 { text-align: center; padding: 16px; font-size: 14px; color: #888; letter-spacing: 2px; }
+  .scene-wrap { position: relative; width: 100%; max-width: 960px; margin: 0 auto; }
+  canvas { display: block; width: 100%; image-rendering: pixelated; }
+  .legend { padding: 12px 24px; font-size: 11px; line-height: 1.8; color: #777; max-width: 960px; margin: 0 auto; }
+  .legend b { color: #aaa; }
+  .swatch { display: inline-block; width: 12px; height: 12px; vertical-align: middle; margin-right: 4px; border: 1px solid #444; }
+</style>
+</head>
+<body>
+<h1>PORTLANDIA-VIVEC — FLOOR 3 EAST PARALLAX (facing Floor 4 gate)</h1>
+
+<div class="scene-wrap">
+  <canvas id="sky" width="960" height="400"></canvas>
+</div>
+
+<div class="legend">
+  <b>PARALLAX LAYERS (back → front):</b><br>
+  <span class="swatch" style="background:#1a1528"></span><b>Layer 0 — Sky gradient</b> (frontier dusk: deep indigo zenith → amber-haze horizon)<br>
+  <span class="swatch" style="background:#1c1a2a"></span><b>Layer 1 — Mt. Tabor peak</b> (depth 0.95) — single volcanic cone, Portland's Hood analog. Distant, misty.<br>
+  <span class="swatch" style="background:#1e1520"></span><b>Layer 2 — Canton skyline</b> (depth 0.85) — Vivec megablocks: massive flat-top step pyramids, bridge tower pylons, temple spire at center. The "impossible city."<br>
+  <span class="swatch" style="background:#2a1a18"></span><b>Layer 3 — Industrial waterfront</b> (depth 0.7) — cranes, smokestacks, bridge spans (Burnside/Steel analogs), warehouse rooflines. Warm amber glow from below.<br>
+  <span class="swatch" style="background:#3a2820"></span><b>Layer 4 — Grand Arch facade</b> (depth 0.5) — the Floor 4 gate. Massive ceremonial arch flanked by shorter wall, visible at screen center. Warm lantern spill.<br>
+  <span class="swatch" style="background:#0c1e30"></span><b>Water band</b> — harbor reflection strip below horizon, connects boardwalk to city<br>
+  <br>
+  <b>DESIGN INTENT:</b> Player stands on Floor 3 frontier (cool, sparse) and looks east toward civilization's peak.
+  The city is warm amber against cool indigo sky — a beacon pulling you forward. Canton blocks read as
+  alien megastructure (Vivec) but the cranes/bridges ground it as Portland waterfront. The grand arch
+  is the focal point — it's where Floor 4 begins.
+</div>
+
+<script>
+(function() {
+  var C = document.getElementById('sky');
+  var ctx = C.getContext('2d');
+  var W = C.width, H = C.height;
+
+  // ── Noise ──
+  function hash(x) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return (x & 0x7fffffff) / 0x7fffffff;
+  }
+  function noise1D(x) {
+    var xi = Math.floor(x);
+    var xf = x - xi;
+    var t = xf * xf * (3 - 2 * xf); // smoothstep
+    return hash(xi) * (1 - t) + hash(xi + 1) * t;
+  }
+
+  // ── Sky gradient (frontier dusk) ──
+  var skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0.0,  '#0a0818');  // deep indigo zenith
+  skyGrad.addColorStop(0.3,  '#1a1530');  // mid purple
+  skyGrad.addColorStop(0.55, '#2a1828');  // warm purple transition
+  skyGrad.addColorStop(0.72, '#4a2820');  // amber haze
+  skyGrad.addColorStop(0.82, '#6a4028');  // warm horizon glow
+  skyGrad.addColorStop(0.88, '#4a3020');  // horizon line
+  skyGrad.addColorStop(1.0,  '#1a1510');  // below horizon (water)
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Stars (sparse, upper sky only) ──
+  for (var s = 0; s < 80; s++) {
+    var sx = hash(s * 7 + 1) * W;
+    var sy = hash(s * 13 + 3) * H * 0.45;
+    var sb = 0.3 + hash(s * 19 + 5) * 0.7;
+    var sr = 1 + Math.floor(hash(s * 23 + 7) * 1.5);
+    ctx.fillStyle = 'rgba(200,190,220,' + (sb * 0.6) + ')';
+    ctx.fillRect(Math.floor(sx), Math.floor(sy), sr, sr);
+  }
+
+  // ── Clouds (thin, high, wispy) ──
+  ctx.globalAlpha = 0.15;
+  for (var cx = 0; cx < W; cx++) {
+    var cn = noise1D(cx * 0.008 + 100);
+    if (cn > 0.45) {
+      var ch = (cn - 0.45) * 180;
+      ctx.fillStyle = '#6a5060';
+      ctx.fillRect(cx, H * 0.18 - ch * 0.3, 1, ch * 0.6);
+    }
+    var cn2 = noise1D(cx * 0.012 + 300);
+    if (cn2 > 0.5) {
+      var ch2 = (cn2 - 0.5) * 120;
+      ctx.fillStyle = '#5a4050';
+      ctx.fillRect(cx, H * 0.28 - ch2 * 0.2, 1, ch2 * 0.4);
+    }
+  }
+  ctx.globalAlpha = 1.0;
+
+  var horizonY = H * 0.82;
+
+  // ═══════════════════════════════════════════════════════════
+  //  LAYER 1 — Mt. Tabor (distant volcanic peak)
+  //  Single broad cone, misty, barely visible against deep sky
+  // ═══════════════════════════════════════════════════════════
+  ctx.fillStyle = '#161220';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  for (var x = 0; x < W; x++) {
+    // Broad gaussian peak centered at 65% of screen width
+    var peakCenter = W * 0.65;
+    var peakWidth = W * 0.25;
+    var dist = (x - peakCenter) / peakWidth;
+    var peak = Math.exp(-dist * dist * 2.5) * H * 0.28;
+    // Secondary shoulder
+    var shoulder = Math.exp(-Math.pow((x - W * 0.58) / (W * 0.35), 2) * 3) * H * 0.12;
+    // Subtle noise on ridge
+    var ridge = noise1D(x * 0.015 + 500) * 8;
+    var mh = Math.max(peak, shoulder) + ridge;
+    ctx.lineTo(x, horizonY - mh);
+  }
+  ctx.lineTo(W, horizonY);
+  ctx.closePath();
+  ctx.fill();
+
+  // ═══════════════════════════════════════════════════════════
+  //  LAYER 2 — Canton skyline (Vivec megablocks)
+  //  Massive flat-top step pyramids, temple spire, bridge pylons
+  // ═══════════════════════════════════════════════════════════
+  ctx.fillStyle = '#1a1220';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+
+  for (var x = 0; x < W; x++) {
+    var wx = x * 0.006 + 200; // world coordinate
+
+    // Base canton mass — wide blocks
+    var base = noise1D(wx + 800) * 0.6 + noise1D(wx * 3 + 850) * 0.3;
+
+    // Step-quantize into canton levels (3-4 tiers)
+    var canton = Math.floor(base * 4) / 4;
+
+    // Flatten tops more aggressively (Vivec's signature flat cantons)
+    canton = Math.max(canton, base * 0.5);
+
+    // Temple spire — tall narrow peak near center-right
+    var spireCenter = W * 0.55;
+    var spireDist = Math.abs(x - spireCenter);
+    var spire = 0;
+    if (spireDist < 20) {
+      spire = (1 - spireDist / 20) * 0.9; // tall thin spike
+    }
+
+    // Bridge tower pylons — periodic tall thin elements
+    var pylon = noise1D(wx * 5 + 900);
+    var pylonSpike = (pylon > 0.82) ? (pylon - 0.82) * 4.0 : 0;
+
+    // Combine
+    var mh = (canton + pylonSpike + spire) * H * 0.22;
+
+    // Only show in the right 70% of screen (city is EAST = right side)
+    var cityFade = Math.min(1, Math.max(0, (x - W * 0.2) / (W * 0.15)));
+    mh *= cityFade;
+
+    ctx.lineTo(x, horizonY - mh);
+  }
+  ctx.lineTo(W, horizonY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Canton window lights (tiny amber dots scattered on canton mass)
+  for (var li = 0; li < 200; li++) {
+    var lx = W * 0.25 + hash(li * 31 + 1) * W * 0.7;
+    var ly = horizonY - hash(li * 37 + 3) * H * 0.18;
+    // Only draw if above horizon and within canton area
+    if (ly < horizonY - 4 && hash(li * 41 + 5) > 0.4) {
+      var la = 0.2 + hash(li * 43 + 7) * 0.5;
+      ctx.fillStyle = 'rgba(220,160,60,' + la + ')';
+      ctx.fillRect(Math.floor(lx), Math.floor(ly), 2, 1);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  LAYER 3 — Industrial waterfront (cranes, bridges, warehouses)
+  //  Portland's working waterfront meets Vivec's lower city
+  // ═══════════════════════════════════════════════════════════
+  ctx.fillStyle = '#22160e';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+
+  for (var x = 0; x < W; x++) {
+    var wx = x * 0.01 + 400;
+
+    // Warehouse roofline — mid-height, irregular
+    var roof = noise1D(wx + 600) * 0.5 + noise1D(wx * 2.5 + 650) * 0.25;
+
+    // Step quantize for flat warehouse roofs
+    roof = Math.floor(roof * 6) / 6;
+
+    // Crane booms — tall thin spikes
+    var crane = noise1D(wx * 4 + 700);
+    var craneSpike = 0;
+    if (crane > 0.8) {
+      craneSpike = (crane - 0.8) * 5.0;
+      // Crane arm horizontal jut
+      var arm = noise1D(wx * 8 + 750);
+      if (arm > 0.7) craneSpike += 0.06;
+    }
+
+    // Smokestack — periodic thin tall elements
+    var stack = noise1D(wx * 6 + 720);
+    var stackSpike = (stack > 0.85) ? (stack - 0.85) * 6.0 : 0;
+
+    // Bridge spans — broad low arcs (Burnside/Steel Bridge analog)
+    var bridgeArc = 0;
+    // Bridge 1: centered around 40% screen width
+    var b1dist = Math.abs(x - W * 0.4) / (W * 0.08);
+    if (b1dist < 1) bridgeArc = Math.max(bridgeArc, (1 - b1dist * b1dist) * 0.15);
+    // Bridge 1 towers
+    if (Math.abs(x - W * 0.34) < 4 || Math.abs(x - W * 0.46) < 4) bridgeArc = Math.max(bridgeArc, 0.35);
+
+    // Bridge 2: centered around 70% screen width
+    var b2dist = Math.abs(x - W * 0.72) / (W * 0.06);
+    if (b2dist < 1) bridgeArc = Math.max(bridgeArc, (1 - b2dist * b2dist) * 0.12);
+    if (Math.abs(x - W * 0.67) < 3 || Math.abs(x - W * 0.77) < 3) bridgeArc = Math.max(bridgeArc, 0.3);
+
+    var mh = (roof + craneSpike + stackSpike + bridgeArc) * H * 0.14;
+
+    // Fade in from left (wilderness → city transition)
+    var indFade = Math.min(1, Math.max(0, (x - W * 0.15) / (W * 0.2)));
+    mh *= indFade;
+
+    ctx.lineTo(x, horizonY - mh);
+  }
+  ctx.lineTo(W, horizonY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Warm glow along waterfront (amber light spill from below)
+  var glowGrad = ctx.createLinearGradient(0, horizonY - 20, 0, horizonY);
+  glowGrad.addColorStop(0, 'rgba(180,100,40,0)');
+  glowGrad.addColorStop(1, 'rgba(180,100,40,0.15)');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(W * 0.2, horizonY - 20, W * 0.8, 20);
+
+  // ═══════════════════════════════════════════════════════════
+  //  LAYER 4 — Grand Arch facade (Floor 4 gate)
+  //  Centered, massive, ceremonial. THE focal point.
+  // ═══════════════════════════════════════════════════════════
+  var archCenter = W * 0.52;
+  var archWidth = 80;
+  var archHeight = H * 0.25;
+  var wallHeight = H * 0.10;
+  var wallExtend = 160;
+
+  // Wall flanks
+  ctx.fillStyle = '#2e1c12';
+  // Left wall
+  ctx.fillRect(archCenter - archWidth / 2 - wallExtend, horizonY - wallHeight,
+               wallExtend, wallHeight);
+  // Right wall
+  ctx.fillRect(archCenter + archWidth / 2, horizonY - wallHeight,
+               wallExtend, wallHeight);
+
+  // Arch structure
+  ctx.fillStyle = '#382418';
+  ctx.fillRect(archCenter - archWidth / 2 - 12, horizonY - archHeight, 12, archHeight); // left pillar
+  ctx.fillRect(archCenter + archWidth / 2, horizonY - archHeight, 12, archHeight);       // right pillar
+  // Arch top bar
+  ctx.fillRect(archCenter - archWidth / 2 - 12, horizonY - archHeight, archWidth + 24, 14);
+  // Decorative cap
+  ctx.fillStyle = '#44301e';
+  ctx.fillRect(archCenter - archWidth / 2 - 16, horizonY - archHeight - 6, archWidth + 32, 6);
+
+  // Arch opening — warm light spilling through
+  var archGlow = ctx.createRadialGradient(
+    archCenter, horizonY - archHeight * 0.3, 10,
+    archCenter, horizonY - archHeight * 0.3, archWidth * 0.6
+  );
+  archGlow.addColorStop(0, 'rgba(200,140,60,0.25)');
+  archGlow.addColorStop(0.5, 'rgba(180,100,40,0.1)');
+  archGlow.addColorStop(1, 'rgba(180,100,40,0)');
+  ctx.fillStyle = archGlow;
+  ctx.fillRect(archCenter - archWidth / 2, horizonY - archHeight + 14, archWidth, archHeight - 14);
+
+  // Lanterns on arch pillars
+  ctx.fillStyle = 'rgba(255,180,60,0.8)';
+  ctx.fillRect(archCenter - archWidth / 2 - 6, horizonY - archHeight + 20, 3, 3);
+  ctx.fillRect(archCenter + archWidth / 2 + 3, horizonY - archHeight + 20, 3, 3);
+  // Lantern glow
+  ctx.fillStyle = 'rgba(255,180,60,0.15)';
+  ctx.beginPath();
+  ctx.arc(archCenter - archWidth / 2 - 5, horizonY - archHeight + 21, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(archCenter + archWidth / 2 + 5, horizonY - archHeight + 21, 12, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ═══════════════════════════════════════════════════════════
+  //  WATER BAND — harbor reflection below horizon
+  // ═══════════════════════════════════════════════════════════
+  var waterTop = horizonY;
+  var waterH = H - horizonY;
+
+  // Dark water base
+  var waterGrad = ctx.createLinearGradient(0, waterTop, 0, H);
+  waterGrad.addColorStop(0, '#0c1e2a');
+  waterGrad.addColorStop(0.3, '#081520');
+  waterGrad.addColorStop(1, '#040a10');
+  ctx.fillStyle = waterGrad;
+  ctx.fillRect(0, waterTop, W, waterH);
+
+  // Reflection streaks (vertical amber streaks from city lights)
+  for (var rx = 0; rx < W; rx++) {
+    var rn = noise1D(rx * 0.02 + 1000);
+    if (rn > 0.55 && rx > W * 0.2) {
+      var ra = (rn - 0.55) * 1.2;
+      var rh = 10 + rn * 40;
+      ctx.fillStyle = 'rgba(180,120,50,' + (ra * 0.12) + ')';
+      ctx.fillRect(rx, waterTop, 1, rh);
+    }
+  }
+
+  // Ripple highlights
+  for (var ri = 0; ri < 60; ri++) {
+    var rix = hash(ri * 53 + 1) * W;
+    var riy = waterTop + 2 + hash(ri * 59 + 3) * waterH * 0.6;
+    var riw = 4 + hash(ri * 61 + 5) * 12;
+    ctx.fillStyle = 'rgba(100,130,160,' + (0.05 + hash(ri * 67 + 7) * 0.08) + ')';
+    ctx.fillRect(Math.floor(rix), Math.floor(riy), riw, 1);
+  }
+
+  // Horizon line (thin bright strip where sky meets water)
+  ctx.fillStyle = 'rgba(160,100,50,0.3)';
+  ctx.fillRect(W * 0.15, horizonY - 1, W * 0.85, 2);
+
+  // ═══════════════════════════════════════════════════════════
+  //  LABELS (for design review, not in-game)
+  // ═══════════════════════════════════════════════════════════
+  ctx.font = '10px Courier New';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillText('MT. TABOR', W * 0.60, horizonY - H * 0.23);
+  ctx.fillText('CANTON BLOCKS', W * 0.42, horizonY - H * 0.13);
+  ctx.fillText('TEMPLE SPIRE', W * 0.52, horizonY - H * 0.19);
+  ctx.fillText('BRIDGE', W * 0.37, horizonY - H * 0.06);
+  ctx.fillText('BRIDGE', W * 0.69, horizonY - H * 0.05);
+  ctx.fillText('CRANES', W * 0.28, horizonY - H * 0.08);
+  ctx.fillText('GRAND ARCH → FLOOR 4', archCenter - 60, horizonY - archHeight - 12);
+  ctx.fillText('← WILDERNESS', 10, horizonY - 10);
+  ctx.fillText('HARBOR', W * 0.45, waterTop + 20);
+
+})();
+</script>
+</body>
+</html>

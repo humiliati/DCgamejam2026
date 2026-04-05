@@ -111,6 +111,9 @@ var CardFan = (function () {
   var _canvas     = null;
   var _openTimer  = 0;        // ms since fan opened
 
+  // ── Dice button (accessibility combat attack) ───────────────────
+  var _diceBtn = null;  // DOM button: random attack or fire stack
+
   // ── External drop system (cross-zone drag to inventory) ─────────
   // Registered by Game.js to bridge fan → MenuFaces drag zones.
   // Signature: fn({ cardIdx, card, screenX, screenY }) → boolean
@@ -138,13 +141,13 @@ var CardFan = (function () {
 
   function init(canvas) {
     _canvas = canvas;
-    if (_canvas) {
-      _canvas.addEventListener('pointerdown', _onPointerDown, false);
-      _canvas.addEventListener('pointermove', _onPointerMove, false);
-      _canvas.addEventListener('pointerup', _onPointerUp, false);
-      _canvas.addEventListener('pointercancel', _onPointerCancel, false);
-    }
+    // Pointer listeners are NOT added to the canvas here.
+    // They are added to the window in open() and removed in close().
+    // This ensures events are captured even when DOM overlays (status-bar,
+    // nch-widget, etc.) sit in front of the canvas and would otherwise
+    // intercept pointer events before they reach it.
     _createMinimizeBtn();
+    _createDiceBtn();
   }
 
   /**
@@ -207,6 +210,110 @@ var CardFan = (function () {
       _minimizeBtnEl.style.bottom = '140px';
       _minimizeBtnEl.style.left = 'auto';
       _minimizeBtnEl.style.top = 'auto';
+    }
+  }
+
+  // ── Dice button (combat accessibility attack) ───────────────────
+
+  /**
+   * Create the dice button DOM element.
+   * In combat, this button gives accessibility controllers a reliable
+   * click target to:
+   *   - No stack: fire a random card at 1.0× baseline thrust
+   *   - Stack built: fire the stack at the full thrust-cap multiplier
+   *     (equivalent to the swipe-up gesture for controllers that can't
+   *     perform a reliable swipe)
+   */
+  function _createDiceBtn() {
+    if (_diceBtn) return;
+    var vp = document.getElementById('viewport');
+    if (!vp) return;
+
+    _diceBtn = document.createElement('button');
+    _diceBtn.id = 'fan-dice-btn';
+    _diceBtn.textContent = '\uD83C\uDFB2';
+    _diceBtn.title = 'Random attack';
+    _diceBtn.style.cssText =
+      'position:absolute; z-index:16;' +
+      'right:20px; bottom:72px;' +
+      'width:56px; height:56px; border-radius:50%;' +
+      'background:rgba(50,30,120,0.88);' +
+      'border:2px solid rgba(140,100,255,0.7);' +
+      'color:#fff; font-size:26px; cursor:pointer;' +
+      'display:none; align-items:center; justify-content:center;' +
+      'font-family:monospace; pointer-events:auto;' +
+      'box-shadow:0 2px 14px rgba(100,60,255,0.5);' +
+      'transition:background 0.15s, transform 0.15s, border-color 0.2s;' +
+      'outline:none;';
+    _diceBtn.addEventListener('mouseenter', function () {
+      _diceBtn.style.background = 'rgba(80,55,180,0.95)';
+      _diceBtn.style.transform  = 'scale(1.12)';
+    });
+    _diceBtn.addEventListener('mouseleave', function () {
+      _updateDiceBtn();
+      _diceBtn.style.transform = 'scale(1)';
+    });
+    _diceBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      _handleDiceAction();
+    });
+
+    vp.appendChild(_diceBtn);
+  }
+
+  /**
+   * Sync dice button label/colour to current stack state.
+   * Call whenever the stack changes or the button becomes visible.
+   */
+  function _updateDiceBtn() {
+    if (!_diceBtn) return;
+    var hasStack = typeof CardStack !== 'undefined' && !CardStack.isEmpty();
+    if (hasStack) {
+      _diceBtn.title = 'Fire stack (' + CardStack.getSize() + ' cards) — full thrust';
+      _diceBtn.style.background   = 'rgba(140,90,20,0.88)';
+      _diceBtn.style.borderColor  = 'rgba(255,200,60,0.9)';
+    } else {
+      _diceBtn.title = 'Random attack';
+      _diceBtn.style.background  = 'rgba(50,30,120,0.88)';
+      _diceBtn.style.borderColor = 'rgba(140,100,255,0.7)';
+    }
+  }
+
+  /**
+   * Handle the dice button tap.
+   *
+   * No stack → select a random card, push it as a 1-card stack, fire at
+   *            baseline (1.0×) thrust.
+   * Stack built → fire the existing stack at the full thrust cap
+   *              (accessibility replacement for swipe-up gesture).
+   */
+  function _handleDiceAction() {
+    if (!_open || !_inCombat()) return;
+    if (typeof CardStack === 'undefined') return;
+
+    if (!CardStack.isEmpty()) {
+      // Fire the prepared stack at max thrust (swipe-up equivalent)
+      var cap = (typeof CardStack.getThrustCap === 'function')
+        ? CardStack.getThrustCap() : 1.05;
+      var stackForAnim = CardStack.getStack().slice();
+      startFireAnim(stackForAnim);
+      _playAudio('card-fire', { volume: 0.55 });
+      if (typeof CombatBridge !== 'undefined') {
+        CombatBridge.fireStack(cap);
+      }
+    } else {
+      // No stack — pick a random playable card and fire it at baseline
+      if (_cards.length === 0) return;
+      var rIdx = Math.floor(Math.random() * _cards.length);
+      var c = _cards[rIdx];
+      CardStack.clear();
+      CardStack.pushCard(c.card, c.handIndex);
+      var animStack = CardStack.getStack().slice();
+      startFireAnim(animStack);
+      _playAudio('card-fire', { volume: 0.55 });
+      if (typeof CombatBridge !== 'undefined') {
+        CombatBridge.fireStack(CardStack.fireBaseline());
+      }
     }
   }
 
@@ -277,6 +384,20 @@ var CardFan = (function () {
     PIVOT_Y_OFF = Math.floor(BASE_PIVOT_Y * modeScale) - (inCombat ? COMBAT_LIFT : EXPLORE_LIFT);
 
     _buildFan();
+
+    // Attach window-level pointer listeners.
+    // Listening on window (rather than canvas) ensures events are received even
+    // when DOM elements with higher z-index sit over the canvas area.
+    window.addEventListener('pointerdown',   _onPointerDown,   false);
+    window.addEventListener('pointermove',   _onPointerMove,   false);
+    window.addEventListener('pointerup',     _onPointerUp,     false);
+    window.addEventListener('pointercancel', _onPointerCancel, false);
+
+    // Show dice button in combat
+    if (_inCombat() && _diceBtn) {
+      _diceBtn.style.display = 'flex';
+      _updateDiceBtn();
+    }
   }
 
   /** Close the fan (sweep down). */
@@ -286,6 +407,15 @@ var CardFan = (function () {
     _hoverIdx = -1;
     _selectedIdx = -1;
     _drag = null;
+
+    // Remove window-level pointer listeners
+    window.removeEventListener('pointerdown',   _onPointerDown,   false);
+    window.removeEventListener('pointermove',   _onPointerMove,   false);
+    window.removeEventListener('pointerup',     _onPointerUp,     false);
+    window.removeEventListener('pointercancel', _onPointerCancel, false);
+
+    // Hide dice button
+    if (_diceBtn) _diceBtn.style.display = 'none';
 
     // Clean up maximized state if active
     if (_maximized) {
@@ -840,6 +970,9 @@ var CardFan = (function () {
   function _notifyStackChange() {
     if (typeof CardStack === 'undefined') return;
 
+    // Keep dice button label / colour in sync with stack state
+    _updateDiceBtn();
+
     var stackCards = CardStack.getCards();
     var tags = CardStack.getSharedTags();
 
@@ -1168,7 +1301,12 @@ var CardFan = (function () {
       if (reorderDropIdx === _drag.cardIdx) reorderDropIdx = -1;
     }
 
-    // ── Second pass: render cards ──
+    // ── Second pass: render cards (hovered/selected card rendered LAST for z-order) ──
+    // Determine which index should render on top. If the pointer is dragging
+    // that card, the drag ghost handles it — skip the on-top pass.
+    var topIdx = _hoverIdx;
+    if (_drag && _drag.started && _drag.cardIdx === topIdx) topIdx = -1;
+
     for (var i = 0; i < _cards.length; i++) {
       var c = _cards[i];
 
@@ -1192,6 +1330,9 @@ var CardFan = (function () {
         ctx.restore();
         continue;
       }
+
+      // Skip hovered card — render it after all others so it appears on top
+      if (i === topIdx) continue;
 
       // If this card is the reorder drop target, shift it slightly to show the gap
       if (reorderDropIdx === i) {
@@ -1230,6 +1371,23 @@ var CardFan = (function () {
             ctx.setLineDash([]);
             ctx.restore();
           }
+        }
+      }
+    }
+
+    // ── 2.8 pass: hovered / selected card rendered last for correct z-order ──
+    // This ensures the active card always appears above its neighbors in the fan,
+    // regardless of its index position in the arc.
+    if (topIdx >= 0 && topIdx < _cards.length && !_cards[topIdx].playing) {
+      if (_openTimer >= _cards[topIdx].dealTimer) {
+        if (reorderDropIdx === topIdx) {
+          ctx.save();
+          var topShiftDir = (_drag && _drag.cardIdx < topIdx) ? 1 : -1;
+          ctx.translate(topShiftDir * CARD_W * 0.15, 0);
+          _renderCard(ctx, _cards[topIdx], topIdx, cx, pivotY, h, false);
+          ctx.restore();
+        } else {
+          _renderCard(ctx, _cards[topIdx], topIdx, cx, pivotY, h, false);
         }
       }
     }

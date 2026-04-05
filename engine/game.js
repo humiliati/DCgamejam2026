@@ -150,21 +150,16 @@ var Game = (function () {
     if (typeof BarkLibrary !== 'undefined') {
       BarkLibrary.setDisplay(function (bark, opts) {
         var style = (opts && opts.style) || bark.style || 'info';
-        if (style === 'dialog' && typeof DialogBox !== 'undefined') {
-          // Pass speaker and text to DialogBox separately — DialogBox owns
-          // the speaker label; do NOT prepend it into the text line.
-          DialogBox.show({
-            speaker: bark.speaker || '',
-            lines:   [bark.text]
-          });
-        } else if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
-          // Route barks to tooltip footer — persistent, scrollable history.
+        // All NPC barks — including 'dialog'-style ones — route to the
+        // StatusBar inline tooltip footer. DialogBox canvas overlay caused
+        // button z-ordering issues (stuck behind status bar) and movement
+        // lock when players couldn't reach the dismiss button.
+        if (typeof StatusBar !== 'undefined' && StatusBar.pushTooltip) {
           var text = bark.speaker
             ? bark.speaker + ': \u201c' + bark.text + '\u201d'
             : bark.text;
           StatusBar.pushTooltip(text, 'npc');
         } else if (typeof Toast !== 'undefined') {
-          // Fallback to top-right toast if StatusBar not available.
           var text2 = bark.speaker
             ? bark.speaker + ': ' + bark.text
             : bark.text;
@@ -3849,8 +3844,17 @@ var Game = (function () {
     var ps = (typeof Player !== 'undefined' && Player.state) ? Player.state() : {};
     var playerClass = ps.avatarName || ps.className || 'Gleaner';
     var callsign = ps.callsign || 'Operative';
-    // TODO: wire faction name + suit symbol from current hero cycle
-    var factionName = '\u2660 Guild';
+    // Resolve faction name from the next scheduled hero group.
+    // DungeonSchedule tracks which hero type (Seeker/Scholar/Crusader)
+    // is incoming; we pluralise heroType and prepend the suit glyph.
+    // Falls back to 'the Heroes' if schedule is unavailable.
+    var factionName = 'the Heroes';
+    if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup) {
+      var _dsNext = DungeonSchedule.getNextGroup();
+      if (_dsNext && _dsNext.heroType) {
+        factionName = (_dsNext.suit ? _dsNext.suit + ' ' : '') + _dsNext.heroType + 's';
+      }
+    }
 
     // Callback to close cinematic after dialogue ends
     var _closeCinematic = function () {
@@ -5450,7 +5454,13 @@ var Game = (function () {
       if (typeof CrateSystem !== 'undefined' &&
           CrateSystem.hasContainer(fx, fy, crateFloorId)) {
         // Quick-fill pass: auto-slot matching bag items
-        if (_quickFillCrate(fx, fy, crateFloorId)) return; // Sealed — done
+        if (_quickFillCrate(fx, fy, crateFloorId)) {
+          // Crate sealed — collapse the peek overlay that triggered this
+          if (typeof CratePeek !== 'undefined' && CratePeek.isActive()) {
+            CratePeek.handleKey('Escape');
+          }
+          return;
+        }
         // Still has empties: open manual slot UI
         if (typeof PeekSlots !== 'undefined' &&
             PeekSlots.tryOpen(fx, fy, crateFloorId)) {

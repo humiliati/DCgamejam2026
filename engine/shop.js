@@ -65,27 +65,123 @@ var Shop = (function () {
   };
 
   // ── Supply stock (DEPTH3 §5) ───────────────────────────────────────
-  // Unlimited supply items sold at every faction shop. Cheap crate-fill
-  // consumables + cleaning tools + utility items. Always available
-  // regardless of card refresh schedule. Data from items.json ITM-080–092.
+  // Faction-split supply catalogs force players to visit multiple shops
+  // to fully restock for a dungeon run. SUPPLY_STOCK is the universal
+  // fallback (used when faction is unknown). FACTION_SUPPLIES is the
+  // canonical source; getSupplyStock() returns the correct list for the
+  // currently-open faction.
+  //
+  // Design intent (shop-hopping pressure):
+  //   Tide    (1.1) — food/HP fillers, water, basic cleaning, bone powder,
+  //                   silk spiders. Cheapest overall; good first-stop.
+  //   Foundry (2.3) — battery/energy fillers, TORCH OIL (exclusive),
+  //                   traps, mid-tier mop. Mandatory if dungeons are dark.
+  //   Admiralty (3.2) — scroll/gem fillers, premium scrub brush
+  //                     (exclusive), corpse powder, trap kits, spiders.
+  //                     Required for clean full-clears and deep crates.
+  //
+  // Exclusives create hard dependencies:
+  //   Torch Oil  → Foundry only   (lit torches = visibility in depth-3+)
+  //   Scrub Brush → Admiralty only (fastest cleaning; needed for time pressure)
+  //   Dead Cell  → Foundry only   (BATTERY crate slots need this)
+  //   Glass Bead → Admiralty only  (GEM crate slots need this)
 
+  /** Universal fallback — used when faction is null/unknown. */
   var SUPPLY_STOCK = [
-    { id: 'ITM-080', name: 'Stale Rations',    emoji: '🍞', shopPrice: 2, category: 'food',    subtype: 'supply', crateFillTag: 'HP_FOOD',  desc: 'Barely edible. Fills an HP crate slot.' },
-    { id: 'ITM-081', name: 'Dead Cell',         emoji: '🔋', shopPrice: 3, category: 'battery', subtype: 'supply', crateFillTag: 'BATTERY',  desc: 'Drained but accepted by crate scanners.' },
-    { id: 'ITM-082', name: 'Weak Tonic',        emoji: '🧪', shopPrice: 2, category: 'energy',  subtype: 'supply', crateFillTag: 'ENERGY',   desc: 'Fizzy and flat. Fills an energy crate slot.' },
-    { id: 'ITM-083', name: 'Scrap Parchment',   emoji: '📜', shopPrice: 4, category: 'scroll',  subtype: 'supply', crateFillTag: 'SCROLL',   desc: 'Blank but official. Fills a scroll crate slot.' },
-    { id: 'ITM-084', name: 'Glass Bead',        emoji: '💎', shopPrice: 5, category: 'gem',     subtype: 'supply', crateFillTag: 'GEM',      desc: 'Pretty enough for a crate frame.' },
-    { id: 'ITM-085', name: 'Generic Salvage',   emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
-    { id: 'ITM-086', name: 'Torch Oil',         emoji: '🛢️', shopPrice: 3, category: 'fuel',    subtype: 'supply', desc: 'Refuels a torch. 3 units of fuel.' },
-    { id: 'ITM-087', name: 'Water Bottle',      emoji: '💧', shopPrice: 1, category: 'water',   subtype: 'supply', desc: 'Drink, clean, or douse. Never wrong to buy.' },
-    { id: 'ITM-088', name: 'Cleaning Rag',      emoji: '🧹', shopPrice: 1, category: 'tool',    subtype: 'rag',    desc: 'Basic cleaning tool. 3 uses, slow.' },
-    { id: 'ITM-089', name: 'Mop Head',          emoji: '🧹', shopPrice: 4, category: 'tool',    subtype: 'mop',    desc: 'Mid-tier clean speed. 5 uses.' },
-    { id: 'ITM-090', name: 'Scrub Brush',       emoji: '🧹', shopPrice: 8, category: 'tool',    subtype: 'brush',  desc: 'Fast cleaning. 8 uses. Worth every coin.' },
-    { id: 'ITM-091', name: 'Bone Powder',       emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
-    { id: 'ITM-092', name: 'Trap Spring',       emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' },
-    { id: 'ITM-115', name: 'Silk Spider',       emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' },
-    { id: 'ITM-116', name: 'Trap Kit',          emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' }
+    { id: 'ITM-080', name: 'Stale Rations',  emoji: '🍞', shopPrice: 2, category: 'food',    subtype: 'supply', crateFillTag: 'HP_FOOD',  desc: 'Barely edible. Fills an HP crate slot.' },
+    { id: 'ITM-085', name: 'Generic Salvage',emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
+    { id: 'ITM-087', name: 'Water Bottle',   emoji: '💧', shopPrice: 1, category: 'water',   subtype: 'supply', desc: 'Drink, clean, or douse. Never wrong to buy.' },
+    { id: 'ITM-088', name: 'Cleaning Rag',   emoji: '🧹', shopPrice: 1, category: 'tool',    subtype: 'rag',    desc: 'Basic cleaning tool. 3 uses, slow.' },
+    { id: 'ITM-091', name: 'Bone Powder',    emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
+    { id: 'ITM-092', name: 'Trap Spring',    emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' }
   ];
+
+  /**
+   * Per-faction supply catalogs.
+   *
+   * Tide Council (Floor 1.1 — Coral Bazaar)
+   *   Best for: HP crate fillers, energy tonics, cleaning basics,
+   *             corpse powder, silk spiders. Cheapest first-stop.
+   *
+   * The Foundry (Floor 2.3 — Armorer's Workshop)
+   *   Best for: battery crates, EXCLUSIVE torch oil, traps.
+   *   Players who skip Foundry cannot relight torches.
+   *
+   * The Admiralty (Floor 3.2 — Quartermaster's Shop)
+   *   Best for: scroll + gem crates, EXCLUSIVE scrub brush,
+   *             premium trap kits, silk spiders for garrison runs.
+   */
+  var FACTION_SUPPLIES = {
+
+    // ── Tide Council ── food biome, coastal territory ───────────────
+    tide: [
+      // Crate fillers (Tide biomes: cellar/coral → food + energy)
+      { id: 'ITM-080', name: 'Stale Rations',  emoji: '🍞', shopPrice: 2, category: 'food',    subtype: 'supply', crateFillTag: 'HP_FOOD',  desc: 'Barely edible. Fills an HP crate slot.' },
+      { id: 'ITM-082', name: 'Weak Tonic',      emoji: '🧪', shopPrice: 2, category: 'energy',  subtype: 'supply', crateFillTag: 'ENERGY',   desc: 'Fizzy and flat. Fills an energy crate slot.' },
+      { id: 'ITM-083', name: 'Scrap Parchment', emoji: '📜', shopPrice: 4, category: 'scroll',  subtype: 'supply', crateFillTag: 'SCROLL',   desc: 'Blank but official. Fills a scroll crate slot.' },
+      // Universal wildcard — sold everywhere
+      { id: 'ITM-085', name: 'Generic Salvage', emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
+      // Cleaning & utility
+      { id: 'ITM-087', name: 'Water Bottle',    emoji: '💧', shopPrice: 1, category: 'water',   subtype: 'supply', desc: 'Drink, clean, or douse. Never wrong to buy.' },
+      { id: 'ITM-088', name: 'Cleaning Rag',    emoji: '🧹', shopPrice: 1, category: 'tool',    subtype: 'rag',    desc: 'Basic cleaning tool. 3 uses, slow.' },
+      // Corpse processing (Tide deals in monster biology)
+      { id: 'ITM-091', name: 'Bone Powder',     emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
+      // Cobweb deployment (Tide holds the coastal/cellar territory)
+      { id: 'ITM-115', name: 'Silk Spider',     emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' }
+    ],
+
+    // ── The Foundry ── mechanical biome, torch-lit industry ─────────
+    foundry: [
+      // Crate fillers (Foundry biomes: foundry/sealab → battery + energy)
+      { id: 'ITM-081', name: 'Dead Cell',        emoji: '🔋', shopPrice: 3, category: 'battery', subtype: 'supply', crateFillTag: 'BATTERY',  desc: 'Drained but accepted by crate scanners.' },
+      { id: 'ITM-082', name: 'Weak Tonic',       emoji: '🧪', shopPrice: 2, category: 'energy',  subtype: 'supply', crateFillTag: 'ENERGY',   desc: 'Fizzy and flat. Fills an energy crate slot.' },
+      // Universal wildcard
+      { id: 'ITM-085', name: 'Generic Salvage',  emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
+      // EXCLUSIVE: Torch Oil — only the Foundry fuels torches.
+      // Players cannot relight TORCH_UNLIT tiles without visiting here.
+      { id: 'ITM-086', name: 'Torch Oil',        emoji: '🛢️', shopPrice: 3, category: 'fuel',    subtype: 'supply', desc: 'Refuels a torch. 3 units of fuel. Foundry exclusive.' },
+      // Cleaning (mid-tier)
+      { id: 'ITM-089', name: 'Mop Head',         emoji: '🧹', shopPrice: 4, category: 'tool',    subtype: 'mop',    desc: 'Mid-tier clean speed. 5 uses.' },
+      // Trap rearm (Foundry manufactures the hardware)
+      { id: 'ITM-092', name: 'Trap Spring',      emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' },
+      { id: 'ITM-116', name: 'Trap Kit',         emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' }
+    ],
+
+    // ── The Admiralty ── garrison/sealab biome, premium military ────
+    admiralty: [
+      // Crate fillers (Admiralty biomes: garrison/sealab → scroll + gem)
+      { id: 'ITM-083', name: 'Scrap Parchment',  emoji: '📜', shopPrice: 4, category: 'scroll',  subtype: 'supply', crateFillTag: 'SCROLL',   desc: 'Blank but official. Fills a scroll crate slot.' },
+      { id: 'ITM-084', name: 'Glass Bead',        emoji: '💎', shopPrice: 5, category: 'gem',     subtype: 'supply', crateFillTag: 'GEM',      desc: 'Pretty enough for a crate frame.' },
+      // Universal wildcard
+      { id: 'ITM-085', name: 'Generic Salvage',   emoji: '🦴', shopPrice: 3, category: 'salvage', subtype: 'supply', crateFillTag: 'WILDCARD', desc: 'Fits any crate slot. The duct tape of supplies.' },
+      // Cleaning (basic rag + EXCLUSIVE premium brush)
+      { id: 'ITM-088', name: 'Cleaning Rag',      emoji: '🧹', shopPrice: 1, category: 'tool',    subtype: 'rag',    desc: 'Basic cleaning tool. 3 uses, slow.' },
+      { id: 'ITM-090', name: 'Scrub Brush',       emoji: '🧹', shopPrice: 8, category: 'tool',    subtype: 'brush',  desc: 'Fast cleaning. 8 uses. Worth every coin. Admiralty exclusive.' },
+      // Corpse processing (military mandate — clear the fallen)
+      { id: 'ITM-091', name: 'Bone Powder',       emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
+      // Trap kit (garrison defenses are Admiralty responsibility)
+      { id: 'ITM-116', name: 'Trap Kit',          emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' },
+      // Cobweb deployment (west wing of garrison is spider territory)
+      { id: 'ITM-115', name: 'Silk Spider',       emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' }
+    ]
+  };
+
+  /**
+   * Refresh cycle per faction: how many days between inventory rehydrations,
+   * and which day-offset the cycle starts on.
+   *
+   *   Tide:      every 2 days, offset 0  (Days 0,2,4,6,8…)
+   *   Foundry:   every 3 days, offset 1  (Days 1,4,7,10…)
+   *   Admiralty: every 4 days, offset 2  (Days 2,6,10…)
+   *
+   * Staggered offsets mean all three shops are never fresh on the same
+   * day — there is always pressure to buy now vs. wait for a refresh.
+   */
+  var FACTION_CYCLE = {
+    tide:      { period: 2, offset: 0 },
+    foundry:   { period: 3, offset: 1 },
+    admiralty: { period: 4, offset: 2 }
+  };
 
   // ── Internal state ────────────────────────────────────────────────
 
@@ -98,8 +194,24 @@ var Shop = (function () {
   // ── Lifecycle ─────────────────────────────────────────────────────
 
   /**
+   * Return which refresh cycle index a faction is currently on.
+   * The cache key includes this so _buildInventory() is re-run when
+   * the faction's scheduled cycle ticks over (even mid-session).
+   *
+   * @param {string} factionId
+   * @param {number} day — current game day (integer)
+   * @returns {number} monotonically increasing cycle index
+   */
+  function _getCycleIndex(factionId, day) {
+    var cfg = FACTION_CYCLE[factionId];
+    if (!cfg || cfg.period <= 0) return 0;
+    return Math.floor(Math.max(0, day - cfg.offset) / cfg.period);
+  }
+
+  /**
    * Open the shop for a given faction and floor.
-   * Rebuilds inventory only if faction or floor changed.
+   * Rebuilds card inventory when faction, floor, rep tier, OR the
+   * faction's day-based refresh cycle changes.
    *
    * @param {string} factionId - 'tide' | 'foundry' | 'admiralty'
    * @param {number} floor
@@ -109,8 +221,10 @@ var Shop = (function () {
     _floor     = floor || 1;
     _open      = true;
 
-    var repTier = getRepTier();
-    var key = _factionId + '_' + _floor + '_' + repTier;
+    var repTier  = getRepTier();
+    var day      = (typeof DayCycle !== 'undefined' && DayCycle.getDay) ? DayCycle.getDay() : 0;
+    var cycleIdx = _getCycleIndex(_factionId, day);
+    var key = _factionId + '_' + _floor + '_' + repTier + '_' + cycleIdx;
     if (key !== _cacheKey) {
       _buildInventory();
       _cacheKey = key;
@@ -351,16 +465,17 @@ var Shop = (function () {
   // ── Supply purchases (DEPTH3 §5) ─────────────────────────────────
 
   /**
-   * Buy a supply item by index into SUPPLY_STOCK.
+   * Buy a supply item by index into the current faction's supply list.
    * Unlimited stock — never sells out. Deducts gold, adds item to bag.
    *
-   * @param {number} supplyIndex - Index into SUPPLY_STOCK array
+   * @param {number} supplyIndex - Index into getSupplyStock() array
    * @returns {Object} { ok, reason?, item?, cost? }
    */
   function buySupply(supplyIndex) {
     if (!_open) return { ok: false, reason: 'shop_closed' };
 
-    var template = SUPPLY_STOCK[supplyIndex];
+    var stock    = getSupplyStock();
+    var template = stock[supplyIndex];
     if (!template) return { ok: false, reason: 'invalid_supply' };
 
     var price = template.shopPrice || 1;
@@ -396,12 +511,14 @@ var Shop = (function () {
   }
 
   /**
-   * Get the supply stock array (read-only reference).
-   * Always the same items — unlimited, never depleted.
+   * Get the supply stock list for the currently-open faction.
+   * Returns the faction-specific catalog from FACTION_SUPPLIES, or the
+   * universal SUPPLY_STOCK fallback when faction is unknown/unset.
+   * Unlimited stock — items in this list never sell out.
    * @returns {Array}
    */
   function getSupplyStock() {
-    return SUPPLY_STOCK;
+    return FACTION_SUPPLIES[_factionId] || SUPPLY_STOCK;
   }
 
   // ── Reputation ────────────────────────────────────────────────────

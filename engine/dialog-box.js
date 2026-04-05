@@ -447,7 +447,12 @@ var DialogBox = (function () {
     }
 
     var boxH = BOX_PAD * 2 + textH + choicesH + buttonsH + hintH;
-    var boxY = vpH - boxH - BOX_MARGIN - 72; // Above card tray area
+    // Lift box above the status-bar DOM overlay (which renders at z-index:12
+    // over the canvas). When the bar is visible its offsetHeight clears the
+    // canvas-drawn box from being covered by the opaque paper background.
+    var _sbEl = document.getElementById('status-bar');
+    var _sbH  = (_sbEl && _sbEl.offsetHeight) ? _sbEl.offsetHeight : 0;
+    var boxY  = vpH - boxH - BOX_MARGIN - 72 - _sbH; // Above card tray + status bar
 
     // ── Name box (above main box) ──
     if (_active.speaker) {
