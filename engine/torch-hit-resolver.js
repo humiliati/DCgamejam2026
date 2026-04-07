@@ -132,6 +132,12 @@ var TorchHitResolver = (function () {
     if (typeof FloorManager === 'undefined' || typeof TorchState === 'undefined') {
       return result;
     }
+
+    // SC-A: Hose extinguish is a depth-3+ dungeon mechanic only.
+    // Surface/interior torches (depth 1-2) are decorative infrastructure.
+    var depth = floorId ? String(floorId).split('.').length : 1;
+    if (depth < 3) return result;
+
     var fd = FloorManager.getFloorData();
     if (!fd || !fd.grid) return result;
     // The resolver only touches the currently-active floor. Cross-floor

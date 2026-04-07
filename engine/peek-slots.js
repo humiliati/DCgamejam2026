@@ -91,16 +91,27 @@ var PeekSlots = (function () {
     _container = container;
     _state     = STATE.FILLING;
 
-    // Open CrateUI
-    if (typeof CrateUI !== 'undefined') {
+    // SC-B: Route by container type + chest lifecycle phase.
+    //   Crates & corpses → always deposit mode (RestockSurface).
+    //   Chests in 'loot' or 'stash' phase → withdraw mode (CrateUI).
+    //   Chests in 'empty' phase + D3+ → deposit/restock mode (RestockSurface).
+    //   Chests in 'restocked' phase → sealed, shouldn't reach here.
+    var isChest = container.type === CrateSystem.TYPE.CHEST;
+    var chestPhase = isChest ? (container.phase || 'loot') : null;
+    var isDepositMode = !isChest ||
+                        (chestPhase === 'empty' && container.demandRefill);
+
+    if (isDepositMode && typeof RestockBridge !== 'undefined') {
+      // RS-1+: unified restock surface handles all deposit interactions
+      RestockBridge.open(x, y, floorId);
+    } else if (typeof CrateUI !== 'undefined') {
+      // Withdraw path: loot-phase chests, stash chests, or RestockBridge not loaded
       CrateUI.open(x, y, floorId);
     }
 
-    // Register DragDrop zones only for deposit containers (crate/corpse)
-    // and dungeon chests that demand refilling. Surface/interior chests
-    // (demandRefill === false) are withdraw-only — no deposit zones.
-    var isDepositMode = (container.type !== CrateSystem.TYPE.CHEST) ||
-                        container.demandRefill;
+    // Register DragDrop zones for deposit containers (RestockWheel also
+    // registers its own zones, but PeekSlots zones remain as a secondary
+    // fallback until RS-1 is fully proven — can be removed post-migration).
     if (isDepositMode) {
       _registerSlotZones();
     }
@@ -119,8 +130,10 @@ var PeekSlots = (function () {
   function close() {
     if (_state === STATE.IDLE) return;
 
-    // Close CrateUI
-    if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
+    // Close restock surface (or legacy CrateUI)
+    if (typeof RestockBridge !== 'undefined' && RestockBridge.isActive()) {
+      RestockBridge.close();
+    } else if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
       CrateUI.close();
     }
 
@@ -147,9 +160,11 @@ var PeekSlots = (function () {
     if (_state !== STATE.FILLING) return false;
     if (typeof CrateSystem === 'undefined') return false;
 
-    // Chests don't seal — they're withdraw-only containers (or refill-only
-    // for dungeon depth, but sealing is still a crate/corpse mechanic).
-    if (_container && _container.type === CrateSystem.TYPE.CHEST) return false;
+    // SC-B: Chests in 'empty' phase + D3+ (demandRefill) are sealable after
+    // restocking. All other chests (loot, stash) are withdraw-only.
+    if (_container && _container.type === CrateSystem.TYPE.CHEST) {
+      if (!_container.demandRefill || _container.phase !== 'empty') return false;
+    }
 
     if (!CrateSystem.canSeal(_targetX, _targetY, _floorId)) {
       if (typeof Toast !== 'undefined') {
@@ -159,6 +174,17 @@ var PeekSlots = (function () {
     }
 
     var result = CrateSystem.seal(_targetX, _targetY, _floorId);
+
+    // Track seal stats
+    if (typeof SessionStats !== 'undefined') {
+      SessionStats.inc('containersSealed');
+      if (_container && _container.type === CrateSystem.TYPE.CRATE) SessionStats.inc('cratesSealed');
+    }
+
+    // SC-B: Advance chest phase from 'empty' → 'restocked' after seal.
+    if (_container && _container.type === CrateSystem.TYPE.CHEST) {
+      CrateSystem.setPhase(_targetX, _targetY, _floorId, 'restocked');
+    }
 
     // Announce reward
     if (typeof Toast !== 'undefined') {
@@ -191,8 +217,11 @@ var PeekSlots = (function () {
       }
     }
 
-    // Trigger CrateUI seal VFX (white flash, gold flash, bouncing text)
-    if (typeof CrateUI !== 'undefined' && CrateUI.triggerSealVFX) {
+    // Trigger seal VFX — prefer RestockSurface when open, fall back to CrateUI
+    if (typeof RestockSurface !== 'undefined' && RestockSurface.isOpen &&
+        RestockSurface.isOpen() && RestockSurface.triggerSealVFX) {
+      RestockSurface.triggerSealVFX();
+    } else if (typeof CrateUI !== 'undefined' && CrateUI.triggerSealVFX) {
       CrateUI.triggerSealVFX();
     }
 

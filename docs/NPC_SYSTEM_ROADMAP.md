@@ -285,6 +285,8 @@ The existing Dispatcher gate encounter:
 2. `Game._onBump()` detects the bump, then fires bark cascade: `npc.dispatcher.gate.intro` → `npc.dispatcher.gate.direction` → `npc.dispatcher.gate.nudge`.
 3. When player returns from Floor 1.6 with keys, `_onPickupWorkKeys()` removes the entity and invalidates the floor cache.
 
+> **Extraction note:** `_onPickupWorkKeys()` was extracted from `game.js` to `engine/home-events.js` as `HomeEvents.onPickupWorkKeys()`.
+
 ### 7.3 The Force-Facing Mechanic (Roadmap)
 
 Fable's "character stops you and talks" mechanic requires:

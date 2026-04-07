@@ -139,16 +139,38 @@ var ChestPeek = (function () {
 
     if (_subLabel) {
       _subLabel.textContent = '';
-      // Show depleted state if chest container has been emptied
-      var _isDepleted = false;
+      // SC-B/B+: Sub-label reflects lifecycle phase + rehydration status.
+      var _phase = 'loot';
+      var _chestContainer = null;
       if (typeof CrateSystem !== 'undefined') {
         var chestFloorId = FloorManager.getCurrentFloorId();
-        _isDepleted = CrateSystem.isDepleted(fx, fy, chestFloorId);
+        _phase = CrateSystem.getPhase(fx, fy, chestFloorId) || 'loot';
+        _chestContainer = CrateSystem.getContainer(fx, fy, chestFloorId);
+      }
+      var _subText;
+      switch (_phase) {
+        case 'empty':
+          // D3+ chests: restock via deposit. D1/D2 non-home: show days until rehydration.
+          if (_chestContainer && _chestContainer.demandRefill) {
+            _subText = '\u2192 restock';
+          } else if (_chestContainer && _chestContainer.lootedDay !== null &&
+                     typeof DayCycle !== 'undefined') {
+            var _daysLeft = (_chestContainer.lootedDay + CrateSystem.REHYDRATE_COOLDOWN)
+                          - DayCycle.getDay();
+            _subText = _daysLeft > 0
+              ? '\u231B refills in ' + _daysLeft + ' day' + (_daysLeft > 1 ? 's' : '')
+              : '\u2014 empty';
+          } else {
+            _subText = '\u2014 empty';
+          }
+          break;
+        case 'restocked':  _subText = '\u2714 restocked'; break;
+        case 'stash':      _subText = '\u2192 storage';   break;
+        default:           _subText = '\u2192 take loot';  break;
       }
       _subLabel.appendChild(document.createTextNode('treasure chest'));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode(
-        _isDepleted ? '\u2014 empty' : '\u2192 take loot'));
+      _subLabel.appendChild(document.createTextNode(_subText));
       _subLabel.style.color = 'rgba(255,210,100,0)';
     }
 

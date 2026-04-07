@@ -181,6 +181,15 @@ var MerchantPeek = (function () {
     if (!_container || typeof BoxAnim === 'undefined') return;
     if (typeof FloorManager === 'undefined') return;
 
+    // Suppress peek while any StatusBar dialogue is active (VendorDialog,
+    // NPC barks, etc.) — prevents the peek from re-showing over the
+    // dialogue tree after collapseAllPeeks() dismissed it.
+    if (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive &&
+        StatusBar.isDialogueActive()) {
+      if (_active) _hide();
+      return;
+    }
+
     var floorData = FloorManager.getFloorData();
     if (!floorData) { _hide(); return; }
 

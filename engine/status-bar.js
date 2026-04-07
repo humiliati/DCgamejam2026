@@ -24,6 +24,7 @@ var StatusBar = (function () {
   var _biomeEl    = null;
   var _headingEl  = null;
   var _goldEl     = null;  // #sb-gold — currency display
+  var _btnPause   = null;  // #sb-pause — hamburger menu button
   var _visible    = false;
 
   // Tooltip footer (rolodex layout)
@@ -77,6 +78,7 @@ var StatusBar = (function () {
     _biomeEl    = document.getElementById('sb-biome');
     _headingEl  = document.getElementById('sb-heading');
     _goldEl     = document.getElementById('sb-gold');
+    _btnPause   = document.getElementById('sb-pause');
 
     // Tooltip footer (rolodex layout)
     _tooltipArea    = document.getElementById('sb-tooltip-area');
@@ -253,6 +255,25 @@ var StatusBar = (function () {
         }
       });
     }
+
+    // Pause/hamburger button → toggle pause menu at Face 0 (default minimap)
+    if (_btnPause) {
+      _btnPause.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (typeof ScreenManager !== 'undefined') {
+          if (ScreenManager.isPaused()) {
+            if (typeof MenuBox !== 'undefined') MenuBox.close();
+            ScreenManager.resumeGameplay();
+          } else if (ScreenManager.isPlaying()) {
+            if (typeof Game !== 'undefined' && Game.requestPause) {
+              Game.requestPause('pause', 0);
+            } else {
+              ScreenManager.toPause();
+            }
+          }
+        }
+      });
+    }
   }
 
   // ── Show / Hide ─────────────────────────────────────────────────
@@ -420,6 +441,8 @@ var StatusBar = (function () {
     if (_inCombat) {
       // Swap compass to FLEE indicator during combat
       if (_btnMap) _btnMap.textContent = '!';
+      // Hide pause button during combat (combat flow manages itself)
+      if (_btnPause) _btnPause.style.display = 'none';
       // Update floor area with combat info
       if (_floorEl) {
         _floorEl.innerHTML = 'Round <span>' + _combatRound + '</span>';
@@ -433,6 +456,7 @@ var StatusBar = (function () {
     } else {
       // Restore compass label
       if (_btnMap) _btnMap.textContent = 'N';
+      if (_btnPause) _btnPause.style.display = '';
       _updateMapBtn();
     }
   }
@@ -727,7 +751,10 @@ var StatusBar = (function () {
       });
     }
 
-    _renderDialogueNode(tree.root);
+    // Dynamic root: if tree.root is a function, call it to resolve the
+    // starting node (allows flag-gated greeting variants).
+    var rootNode = typeof tree.root === 'function' ? tree.root() : tree.root;
+    _renderDialogueNode(rootNode);
   }
 
   /**
@@ -773,12 +800,29 @@ var StatusBar = (function () {
     html += '<span class="sb-dialogue-text">' + _escHtml(node.text || '') + '</span>';
 
     if (node.choices && node.choices.length > 0) {
+      // ── showIf gate: filter choices by player flag conditions ──
+      // Each choice may have showIf: { flag: 'flagName' } (must be truthy)
+      // or showIf: { flag: 'flagName', value: false } (must be falsy).
+      // Choices without showIf are always visible.
+      var visible = [];
+      for (var vi = 0; vi < node.choices.length; vi++) {
+        var vc = node.choices[vi];
+        if (vc.showIf && typeof Player !== 'undefined') {
+          var flagVal = Player.getFlag ? Player.getFlag(vc.showIf.flag)
+                      : (Player.state().flags && Player.state().flags[vc.showIf.flag]);
+          var want = vc.showIf.value !== undefined ? vc.showIf.value : true;
+          if (want ? !flagVal : !!flagVal) continue;  // condition not met — skip
+        }
+        visible.push({ orig: vi, choice: vc });
+      }
+
       html += '<span class="sb-dialogue-choices">';
-      for (var i = 0; i < node.choices.length; i++) {
-        var c = node.choices[i];
+      for (var i = 0; i < visible.length; i++) {
+        var c = visible[i].choice;
+        var origIdx = visible[i].orig;
         var visitedCls = c.visited ? ' sb-dialogue-choice-visited' : '';
-        var keyNum = i + 1;  // 1-indexed for display
-        html += '<span class="sb-dialogue-choice' + visitedCls + '" data-choice-idx="' + i + '">' +
+        var keyNum = i + 1;  // 1-indexed for display (renumbered after filter)
+        html += '<span class="sb-dialogue-choice' + visitedCls + '" data-choice-idx="' + origIdx + '">' +
                 '<span class="sb-choice-key">' + keyNum + '</span>' +
                 _escHtml(c.label || c.text || 'Continue') + '</span>';
       }

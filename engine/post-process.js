@@ -172,6 +172,62 @@ var PostProcess = (function () {
     }
   }
 
+  // ── Hose Mist (PW-2 discovery reinforcement) ────────────────────
+  // When the player is carrying the pressure hose, a very faint
+  // cool-blue radial haze drifts across the viewport center.  This
+  // sits UNDER ViewportRing's edge bloom so the two layers stack:
+  //   mist (center → mid) + glow (mid → edge)
+  //
+  // Depth-tiered like the blue glow in ViewportRing:
+  //   depth 1 (exterior):   barely-there condensation
+  //   depth 2 (lobby):      light humidity haze
+  //   depth ≥3 (dungeon):   visible water mist from active hose
+  //
+  // Toggled by PostProcess.setHoseMist(true/false), driven from
+  // game.js HoseState attach/detach listeners.
+  var _mistActive = false;
+  var _mistPhase  = 0;     // animation accumulator (ms)
+
+  function _hoseMist(ctx, w, h, dt) {
+    if (!_mistActive) return;
+
+    _mistPhase += (dt || 16);
+
+    // ── Depth tier ──
+    var depth = 1;
+    if (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId) {
+      depth = String(FloorManager.getCurrentFloorId()).split('.').length;
+    }
+    var tierAlpha;
+    if (depth >= 3)      tierAlpha = 0.07;   // dungeon: visible mist
+    else if (depth === 2) tierAlpha = 0.045;  // lobby: light haze
+    else                  tierAlpha = 0.025;  // exterior: condensation hint
+
+    // Gentle breath cycle (~6s period, ±30% swing)
+    var breath = 1.0 + 0.30 * Math.sin(_mistPhase / 3000);
+    var alpha  = tierAlpha * breath;
+
+    // Radial gradient: clear center → misty mid → fade at edge.
+    // The gradient is slightly off-center (shifted up and left) so it
+    // reads as atmospheric drift rather than a uniform overlay.
+    var cx = w * 0.48;
+    var cy = h * 0.46;
+    var innerR = Math.min(w, h) * 0.10;
+    var outerR = Math.min(w, h) * 0.58;
+
+    var grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+    grad.addColorStop(0.00, 'rgba(160,200,220,0)');                              // clear center
+    grad.addColorStop(0.40, 'rgba(140,190,215,' + (alpha * 0.6).toFixed(4) + ')');  // building
+    grad.addColorStop(0.75, 'rgba(120,175,210,' + alpha.toFixed(4) + ')');           // peak mist
+    grad.addColorStop(1.00, 'rgba(100,160,200,0)');                              // fade to edge (ViewportRing glow takes over)
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
   // ── Effect Registry ────────────────────────────────────────────
 
   var EFFECT_MAP = {
@@ -268,6 +324,11 @@ var PostProcess = (function () {
       if (fn) fn(ctx, w, h);
     }
 
+    // Hose mist: state-driven extra pass, independent of the profile
+    // pipeline. Runs after profile effects so the mist sits on top of
+    // vignette/grain/colorgrade but under ViewportRing's edge bloom.
+    if (_mistActive) _hoseMist(ctx, w, h, dt);
+
     _lastFrameMs = performance.now() - t0;
     _frameCount++;
   }
@@ -278,14 +339,29 @@ var PostProcess = (function () {
   // Default profile
   _effects = PROFILES['default'].slice();
 
+  /**
+   * Toggle the hose mist overlay. Called by game.js on HoseState
+   * attach/detach events.
+   * @param {boolean} on
+   */
+  function setHoseMist(on) {
+    _mistActive = !!on;
+    if (!on) _mistPhase = 0;
+  }
+
+  /** Query mist state (for debug/HUD). */
+  function isHoseMistActive() { return _mistActive; }
+
   return Object.freeze({
-    setProfile:     setProfile,
-    setColorGrade:  setColorGrade,
-    setBudget:      setBudget,
-    setEnabled:     setEnabled,
-    isEnabled:      isEnabled,
-    apply:          apply,
-    getLastFrameMs: getLastFrameMs,
-    PROFILES:       PROFILES
+    setProfile:         setProfile,
+    setColorGrade:      setColorGrade,
+    setBudget:          setBudget,
+    setEnabled:         setEnabled,
+    isEnabled:          isEnabled,
+    apply:              apply,
+    getLastFrameMs:     getLastFrameMs,
+    setHoseMist:        setHoseMist,
+    isHoseMistActive:   isHoseMistActive,
+    PROFILES:           PROFILES
   });
 })();

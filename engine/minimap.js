@@ -624,6 +624,13 @@ var Minimap = (function () {
       MinimapNav.drawOverlay(ctx);
     }
 
+    // Hose trail overlay (PW-4) — draws on top of nav path
+    if (typeof HoseOverlay !== 'undefined') {
+      HoseOverlay.setRenderParams(tileSize, offsetX, offsetY);
+      var _hoFloorId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
+      HoseOverlay.drawOverlay(ctx, _hoFloorId);
+    }
+
     // Draw compass in bottom-left corner (rotates to show north)
     _drawCompass(ctx, player.dir);
 

@@ -92,9 +92,20 @@ var CrateUI = (function () {
 
   /**
    * Open the slot UI for a container at (x, y, floorId).
+   * RS-5: delegates to RestockBridge (unified surface) when available.
    * Container must already exist in CrateSystem.
    */
   function open(x, y, floorId) {
+    // RS-5: Prefer unified RestockSurface via RestockBridge
+    if (typeof RestockBridge !== 'undefined' && typeof RestockSurface !== 'undefined') {
+      var mode = RestockBridge.detectMode(x, y, floorId);
+      if (mode) {
+        RestockBridge.open(x, y, floorId, mode);
+        return;
+      }
+    }
+
+    // Legacy path (RestockSurface not loaded or detectMode returned null)
     if (typeof CrateSystem === 'undefined') return;
     var c = CrateSystem.getContainer(x, y, floorId);
     if (!c) return;
@@ -121,13 +132,22 @@ var CrateUI = (function () {
   }
 
   function close() {
+    // RS-5: Close unified surface if it's the active path
+    if (typeof RestockBridge !== 'undefined' && RestockBridge.isActive()) {
+      RestockBridge.close();
+      return;
+    }
     _open = false;
     _selectedSlot    = -1;
     _selectedBagIdx  = -1;
     _selectedHandIdx = -1;
   }
 
-  function isOpen() { return _open; }
+  function isOpen() {
+    // RS-5: Report open if unified surface is active
+    if (typeof RestockBridge !== 'undefined' && RestockBridge.isActive()) return true;
+    return _open;
+  }
 
   // ── Update (fade + seal flash) ──────────────────────────────────
 
@@ -1366,7 +1386,11 @@ var CrateUI = (function () {
             ? CardAuthority.removeFromHand(h)
             : hand.splice(h, 1)[0];
           if (card) {
-            CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+            var suitResult = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+            if (typeof SessionStats !== 'undefined') SessionStats.inc('slotsFilled');
+            if (suitResult && suitResult.coins > 0 && typeof Toast !== 'undefined') {
+              Toast.show('+' + suitResult.coins + 'g \u2714 suit match!', 'loot');
+            }
           }
           return;
         }
@@ -1391,7 +1415,14 @@ var CrateUI = (function () {
       ? CardAuthority.removeFromBag(0)
       : bag.splice(0, 1)[0];
     if (item) {
-      CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+      var fillResult = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+      if (typeof SessionStats !== 'undefined') SessionStats.inc('slotsFilled');
+      if (fillResult && fillResult.coins > 0 && typeof Toast !== 'undefined') {
+        var fillMsg = '+' + fillResult.coins + 'g';
+        if (fillResult.matched) fillMsg += ' \u2714 match!';
+        Toast.show(fillMsg, fillResult.matched ? 'loot' : 'info');
+      }
+      if (typeof AudioSystem !== 'undefined') AudioSystem.play(fillResult && fillResult.matched ? 'slot-match' : 'slot-fill');
     }
   }
 
@@ -1433,6 +1464,25 @@ var CrateUI = (function () {
     // even when fully emptied. The depleted flag marks them as empty for
     // visual feedback (ChestPeek shows "— empty", CrateUI shows "chest emptied")
     // but the CHEST tile stays in the grid.
+
+    // SC-B: If the chest just transitioned to 'empty' phase and is a D3+
+    // restockable chest, auto-close withdraw UI and toast the restock hint.
+    // The player can re-interact to open in restock/deposit mode.
+    var _c = CrateSystem.getContainer(_containerX, _containerY, _floorId);
+    if (_c && _c.phase === 'empty' && _c.demandRefill) {
+      if (typeof Toast !== 'undefined') {
+        Toast.show('\u2728 Chest emptied \u2014 restock to earn coins', 'info');
+      }
+      // Brief delay so the player sees the last withdraw feedback,
+      // then close the withdraw UI. Next interaction opens RestockSurface.
+      setTimeout(function () {
+        if (typeof PeekSlots !== 'undefined') {
+          PeekSlots.close();
+        } else {
+          close();
+        }
+      }, 600);
+    }
   }
 
   // ── Container type helper ───────────────────────────────────────

@@ -1,6 +1,6 @@
 # Debug Notes Screener
 
-**Updated**: 2026-03-31 | **Status key**: ✅ Fixed | 🔧 In Progress | ❌ Open | 📋 Deferred
+**Updated**: 2026-04-07 | **Status key**: ✅ Fixed | 🔧 In Progress | ❌ Open | 📋 Deferred
 
 ---
 
@@ -28,27 +28,23 @@
 
 ---
 
-## DN-03: Debrief feed time redundant and doesn't update 📋
+## DN-03: Debrief feed time redundant and doesn't update ✅
 
 **Reported** (Figure 1): Time row in debrief feed is static/redundant with the weekly time indicator in HUD.
 
-**EyesOnly reference**: Debrief feed has NO time display. Only resource rows with block character bars (█▒░).
-
-**Status**: Deferred to inventory roadmap Phase 2. Remove time row entirely, match EyesOnly format.
+**Fix (P1.3)**: Time row removed. Header shows callsign only. Time lives in the minimap day counter.
 
 **File**: `engine/debrief-feed.js`
 
 ---
 
-## DN-04: Debrief feed contents illegibly small 📋
+## DN-04: Debrief feed contents illegibly small ✅
 
 **Reported** (Figure 2): All debrief feed content too small to read.
 
-**EyesOnly reference**: Uses container-query scaling `clamp(8px, 12cqh, 56px)`, block character bars with resource-colored text.
+**Fix (P1.3)**: Dynamic S-factor scaling — base font-size on `#debrief-feed` now computed from `panelWidth / 273` in JS. All child CSS font sizes converted to `em` units that inherit the dynamic base. Feed tail (last 2 events) embedded in unified view. Bar heights scale with S.
 
-**Status**: Deferred to inventory roadmap Phase 2. Adopt clamp-style scaling based on container height.
-
-**File**: `engine/debrief-feed.js`
+**Files**: `engine/debrief-feed.js`, `index.html` (CSS)
 
 ---
 
@@ -80,13 +76,11 @@
 
 ---
 
-## DN-07: All non-HUD menus/panels too small 📋
+## DN-07: All non-HUD menus/panels too small ✅
 
 **Reported**: Pause menu, systems menu, inventories, shops, bonfires, puzzles — all render at tiny sizes. Hilariously small click targets.
 
-**Current state**: MenuBox fills 70% viewport width × 80% viewport height (menu-box.js lines 414-416). Face renderers use hardcoded pixel sizes (equip slots 80×48px, bag slots 56px, hand slots 50×67.5px).
-
-**Status**: Deferred to inventory roadmap Phase 3. Requires scaling up MenuBox dimensions and all Face renderer element sizes.
+**Fix (P1.1 + P1.2)**: MenuBox `_renderFace()` padding now viewport-scaled (`vpScale = min(w,h)/400`). All face sub-renderers converted from hardcoded px fonts to S-factor or ts-relative scaling: `_drawSlot`, `_drawHoverTooltip`, `_renderDeckSection`, `_renderBag`, `_renderShopSell`, `_drawEmptyTile`, `_drawItemTile`, `_renderStash`, `_renderShopBuy`. Rarity dots, position offsets, and price tags also scaled.
 
 **Files**: `engine/menu-box.js`, `engine/menu-faces.js`
 
@@ -102,6 +96,8 @@
 
 **Remaining work**: Verify dispatcher has `talkable: true` set. Verify dialogue tree / bark pool is registered for dispatcher NPC. The dispatcher gate bump path (game.js `_onBump` → `_showDispatcherGateDialog`) is separate from the general NPC interact path — need to confirm both work.
 
+> **Extraction note:** `_showDispatcherGateDialog()` was extracted from `game.js` to `engine/dispatcher-choreography.js` as `DispatcherChoreography.showDispatcherGateDialog()`.
+
 **Files changed**: `engine/interact-prompt.js`
 
 ---
@@ -116,27 +112,23 @@
 
 ---
 
-## DN-10: DECK button opens System menu instead of Inventory ❌
+## DN-10: DECK button opens System menu instead of Inventory ✅
 
 **Reported** (Figure 5): Clicking DECK button pulls up Face 3 (SYSTEM) instead of Face 2 (INVENTORY).
 
-**Root cause**: `status-bar.js` line 145: `Game.requestPause('pause', 3)` — passes face index 3 instead of 2.
-
-**Fix**: One-line change: `3` → `2`. Deferred to inventory roadmap Phase 1 (awaiting design decision sign-off).
+**Fix**: `Game.requestPause('pause', 2, 'deck')` — now correctly passes face index 2. Fixed during Sprint 0 / CardAuthority migration.
 
 **File**: `engine/status-bar.js`
 
 ---
 
-## DN-11: Deck quantity denominator wrong ❌
+## DN-11: Deck quantity denominator wrong ✅
 
 **Reported** (Figure 5): Backup deck quantity display is broken.
 
-**Root cause**: `status-bar.js` line 210-212 shows `handSize / deckSize` where `deckSize = CardSystem.getDeckSize()` returns `_deck.length` (remaining draw pile), not `_collection.length` (total owned cards). After drawing cards, denominator shrinks misleadingly.
+**Fix**: Now uses `CardAuthority.getHandSize()` + `CardAuthority.getBackupSize()` for accurate `handSize / (handSize + backupSize)` display. Fixed during Sprint 0 / CardAuthority migration.
 
-**Fix**: Use `CardSystem.getCollection().length` for denominator. Deferred to inventory roadmap Phase 1.
-
-**File**: `engine/status-bar.js`, `engine/card-system.js`
+**File**: `engine/status-bar.js`
 
 ---
 
@@ -162,4 +154,4 @@
 
 ---
 
-*Last reviewed: 2026-03-31 by audit session*
+*Last reviewed: 2026-04-07 — P1 menu usability pass*

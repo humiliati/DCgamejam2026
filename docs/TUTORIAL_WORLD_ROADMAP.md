@@ -595,6 +595,8 @@ The south wall of Floor 1 funnels into a 2-3 tile passage. The Dispatcher NPC st
 
 Implementation: The Dispatcher NPC has a collision mask that blocks the gate passage. When `_onPickupWorkKeys()` fires (player interacts with chest in Floor 1.6), the Dispatcher's collision mask is removed and he steps aside. The gate passage becomes walkable. On return, the Dispatcher delivers a final bark and the player passes through to Floor 2.
 
+> **Extraction note:** `_onPickupWorkKeys()` was extracted from `game.js` to `engine/home-events.js` as `HomeEvents.onPickupWorkKeys()`.
+
 ### 8.3 Floor 2 Dungeon Building — The Fake Lock (Narrative Only)
 
 The dungeon building entrance on Floor 2 is a **normal DOOR tile**. It was never locked. The Dispatcher told the player it was locked (twice — at the gate and in his office), but the Hero party left it open when they breached. This is a pure narrative subversion, not a mechanical one.

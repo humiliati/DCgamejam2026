@@ -43,6 +43,8 @@
 | Seal reward d100 + corpse reanimation | ✅ | Working |
 | Corpse-peek.js | ✅ | BoxAnim coffin reveal |
 | Shop round-trip (buy restock supplies) | ✅ | B5 — 3-face MenuBox (info/buy/sell), _shopBuy/_shopSellFromHand/_shopSellPart handlers wired |
+
+> **Extraction note:** `_shopBuy()`, `_shopSellFromHand()`, and `_shopSellPart()` were extracted from `game.js` to `engine/shop-actions.js` as `ShopActions.buy()`, `ShopActions.sellFromHand()`, and `ShopActions.sellPart()`.
 | Bag inventory viewer | ✅ | B6 — Unified inventory face: equipped slots, bag wheel, hand strip, deck wheel, incinerator, hover tooltips |
 | Stash transfer at bonfire | ✅ | B7 — Stash face in bonfire context, bag→stash face, DragDrop zones registered |
 

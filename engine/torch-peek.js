@@ -196,6 +196,11 @@ var TorchPeek = (function () {
     var tile = floorData.grid[fy][fx];
     if (!TILES.isTorch(tile)) { _hide(); return; }
 
+    // SC-A: Torch peek/refuel is a depth-3+ dungeon mechanic only.
+    // Surface/interior torches (depth 1-2) are decorative infrastructure.
+    var _torchDepth = floorData.floorId ? String(floorData.floorId).split('.').length : 1;
+    if (_torchDepth < 3) { _hide(); return; }
+
     // Same tile we were already peeking at — hold steady
     if (_active && _facingTile === tile && _facingX === fx && _facingY === fy) {
       return;

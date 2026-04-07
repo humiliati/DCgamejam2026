@@ -127,7 +127,10 @@ var Shop = (function () {
       // Corpse processing (Tide deals in monster biology)
       { id: 'ITM-091', name: 'Bone Powder',     emoji: '💀', shopPrice: 3, category: 'corpse',  subtype: 'supply', desc: 'Corpse processing reagent.' },
       // Cobweb deployment (Tide holds the coastal/cellar territory)
-      { id: 'ITM-115', name: 'Silk Spider',     emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' }
+      { id: 'ITM-115', name: 'Silk Spider',     emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' },
+      // PW-5 nozzles: Tide sells the cheap water basics
+      { id: 'ITM-120', name: 'Tin Cone Tip',    emoji: '\uD83D\uDCAB', shopPrice: 12, category: 'tool', subtype: 'nozzle_cone', equipSlot: 'active', desc: 'Cheap ring spray. Fixed diameter. Hose attachment.' },
+      { id: 'ITM-124', name: 'Needle Tip',      emoji: '\uD83D\uDC8E', shopPrice: 12, category: 'tool', subtype: 'nozzle_beam', equipSlot: 'active', desc: 'Pinpoint spray. High wall damage. Hose attachment.' }
     ],
 
     // ── The Foundry ── mechanical biome, torch-lit industry ─────────
@@ -144,6 +147,10 @@ var Shop = (function () {
       { id: 'ITM-089', name: 'Mop Head',         emoji: '🧹', shopPrice: 4, category: 'tool',    subtype: 'mop',    desc: 'Mid-tier clean speed. 5 uses.' },
       // Trap rearm (Foundry manufactures the hardware)
       { id: 'ITM-092', name: 'Trap Spring',      emoji: '⚙️', shopPrice: 2, category: 'trap',    subtype: 'supply', desc: 'Re-arms a spent trap.' },
+      // PW-5 nozzles: Foundry makes the mechanical hardware
+      { id: 'ITM-120', name: 'Tin Cone Tip',      emoji: '\uD83D\uDCAB', shopPrice: 12, category: 'tool', subtype: 'nozzle_cone', equipSlot: 'active', desc: 'Cheap ring spray. Fixed diameter. Hose attachment.' },
+      { id: 'ITM-128', name: 'Flat Tip',          emoji: '\uD83C\uDF0A', shopPrice: 12, category: 'tool', subtype: 'nozzle_fan',  equipSlot: 'active', desc: 'Fixed horizontal spray. Decent floor coverage. Hose attachment.' },
+      { id: 'ITM-129', name: 'Foundry Fan Nozzle',emoji: '\uD83C\uDF0A', shopPrice: 25, category: 'tool', subtype: 'nozzle_fan',  equipSlot: 'active', desc: 'Scroll to rotate: — \\ | / —. Foundry standard. Hose attachment.' },
       { id: 'ITM-116', name: 'Trap Kit',         emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' }
     ],
 
@@ -162,7 +169,11 @@ var Shop = (function () {
       // Trap kit (garrison defenses are Admiralty responsibility)
       { id: 'ITM-116', name: 'Trap Kit',          emoji: '🪜', shopPrice: 3, category: 'trap',    subtype: 'supply', desc: 'Re-arms a consumed trap. Sturdier than a loose spring.' },
       // Cobweb deployment (west wing of garrison is spider territory)
-      { id: 'ITM-115', name: 'Silk Spider',       emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' }
+      { id: 'ITM-115', name: 'Silk Spider',       emoji: '🕷️', shopPrice: 5, category: 'cobweb',  subtype: 'supply', desc: 'Deploy at a corridor choke for a cobweb. +2g on install.' },
+      // PW-5 nozzles: Admiralty stocks advanced tech
+      { id: 'ITM-125', name: 'Focused Jet',       emoji: '\uD83D\uDC8E', shopPrice: 25, category: 'tool', subtype: 'nozzle_beam',    equipSlot: 'active', desc: 'Scroll to defocus: laser to scatter. Hose attachment.' },
+      { id: 'ITM-133', name: 'Turbine Head',      emoji: '\uD83C\uDF00', shopPrice: 25, category: 'tool', subtype: 'nozzle_cyclone', equipSlot: 'active', desc: 'Scroll to chase the revolution. Match phase for power. Hose attachment.' },
+      { id: 'ITM-130', name: 'Tempest Blade',     emoji: '\uD83C\uDF0A', shopPrice: 65, category: 'tool', subtype: 'nozzle_fan',     equipSlot: 'active', desc: 'Rotatable fan + thrust narrowing. Premium. Hose attachment.' }
     ]
   };
 
@@ -492,16 +503,20 @@ var Shop = (function () {
     // Deduct gold
     CardAuthority.spendGold(price);
 
-    // Create a fresh item instance from the template
+    // Create a fresh item instance from the template.
+    // Most supply items are type:'supply'. Equipment (nozzles, tools) keep
+    // their original type + equipSlot so the equip UI and modifier lookups
+    // can identify them correctly.
     var item = {
       id: template.id,
       name: template.name,
       emoji: template.emoji,
       category: template.category,
       subtype: template.subtype,
-      type: 'supply',
+      type: template.equipSlot ? 'equipment' : 'supply',
       shopPrice: template.shopPrice
     };
+    if (template.equipSlot)    item.equipSlot = template.equipSlot;
     if (template.crateFillTag) item.crateFillTag = template.crateFillTag;
 
     // Add to bag

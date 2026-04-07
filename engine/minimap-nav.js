@@ -106,6 +106,17 @@ var MinimapNav = (function () {
     // Already there?
     if (pos.x === gx && pos.y === gy) return;
 
+    // ── Distance gate (PW-4) ────────────────────────────────────────
+    // Reject clicks that are too close. Minimap nav is a strategic tool
+    // for known territory, not a lazy one-tile shortcut. Items can reduce
+    // the minimum distance (e.g., "Pathfinder's Compass" adds bonus range).
+    // HoseReel bypasses this gate entirely (uses navigateTo / its own path).
+    var _manhattanDist = Math.abs(gx - pos.x) + Math.abs(gy - pos.y);
+    var _itemBonus = (typeof Player !== 'undefined' && Player.getFlag)
+      ? (Player.getFlag('minimapRangeBonus') || 0) : 0;
+    var _minDist = Math.max(2, 5 - _itemBonus);
+    if (_manhattanDist < _minDist) return;
+
     // Run pathfinding
     var path = Pathfind.find(
       floorData.grid, floorData.gridW, floorData.gridH,

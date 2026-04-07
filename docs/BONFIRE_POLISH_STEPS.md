@@ -130,6 +130,8 @@ DayCycle module is fully implemented. Skybox Phases 1–4 shipped (sky color cyc
 - Menu faces (Map, Journal) show time and day info
 - **§7a** `restAtBonfire()` advances game clock — handles paused interior floors (unpause → advance → re-pause)
 - **§7b** WELL_RESTED gated on **bedtime before midnight** (`sleepHour >= 6`). Post-midnight rest (00:00–05:59) = you stayed up too late, no buff. Unified across all 3 rest paths: bonfire, home door (`_doHomeDoorRest`), bed peek (`BedPeek`)
+
+> **Extraction note:** `_doHomeDoorRest()` was extracted from `game.js` to `engine/home-events.js` as `HomeEvents.doHomeDoorRest()`.
 - **§7c** TIRED cleared via `StatusEffect.remove('TIRED', 'manual')` on every bonfire rest
 - **§7d** JAM BUILD: rest-until-dawn via `_minutesUntilDawn()` — always wake at 06:00. Post-jam: switch to `ADVANCE.REST` (480 min / 8h) when curfew is no longer automatic failstate. Commented path preserved in code
 - **TIRED trigger moved from 21:00 → 19:00** (night phase start). TIRED now fires at nightfall (~7pm), matching the design doc pressure curve. `isTiredHour()` simplified to `_phase === PHASES.NIGHT`

@@ -312,3 +312,5 @@ Every interior NPC dialogue tree should cover three mandatory topics and one opt
 4. **Dialogue history in panel** — Render full conversation transcript in the history panel (not just plain text summaries)
 5. **Portrait/avatar column** — Add small emoji avatar in history entries for NPC speech (distinct from game action tooltips)
 6. **Dispatcher → pushDialogue migration** — Reroute `_showDispatcherGateDialog()` from DialogBox.show() to StatusBar.pushDialogue() (requires converting procedural callback branching to `{ root, nodes }` tree format)
+
+> **Extraction note:** `_showDispatcherGateDialog()` was extracted from `game.js` to `engine/dispatcher-choreography.js` as `DispatcherChoreography.showDispatcherGateDialog()`.

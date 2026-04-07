@@ -10,6 +10,8 @@
 | Module | Role in the quest chain |
 |---|---|
 | `engine/game.js :: _updateQuestTarget()` | The brain. Computes a single `{x, y}` target from `_gateUnlocked`, `_dispatcherPhase`, current `floorId`, `DungeonSchedule.getNextGroup()`, `ReadinessCalc.getCoreScore()`, and `FloorManager.getFloorCache()`. Calls `Minimap.setQuestTarget()`. |
+
+> **Extraction note:** `_updateQuestTarget()` was extracted from `game.js` to `engine/quest-waypoint.js` as `QuestWaypoint.update()`.
 | `engine/minimap.js :: setQuestTarget / _drawQuestMarker` | Pure renderer. Pulsing green diamond at a tile coordinate. No fallback, no "sticky" state — if you pass `null`, the marker vanishes that frame. |
 | `engine/dungeon-schedule.js :: getNextGroup()` | Returns the soonest unresolved contract `{groupId, floorIds, target, actualDay, daysAway, ...}` or `null`. The three jam contracts are `spade→['1.3.1']`, `club→['2.2.1','2.2.2']`, `diamond→['3.1.1','3.1.2','3.1.3']`, all at target 0.6. |
 | `engine/readiness-calc.js :: getCoreScore(floorId)` | 0.0–1.0 snapshot of how ready a floor is for its hero run. Drives the "readiness met" branch. |

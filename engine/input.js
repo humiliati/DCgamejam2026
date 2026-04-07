@@ -51,6 +51,7 @@ var InputManager = (function () {
     'Period':     'descend',
     'Comma':      'ascend',
     'KeyF':       'flee',
+    'KeyR':       'reel',
     'Tab':        'tab_focus'
   };
 

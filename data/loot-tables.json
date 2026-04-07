@@ -124,7 +124,7 @@
       "currency": { "chance": 0.65, "min": 2, "max": 5 },
       "battery":  { "chance": 0.50, "min": 1, "max": 2 },
       "salvage":  { "chance": 0.30, "pool": ["scrap", "ember"] },
-      "supply":   { "chance": 0.25, "pool": ["ITM-116"] },
+      "supply":   { "chance": 0.25, "pool": ["ITM-116", "ITM-120", "ITM-124", "ITM-128", "ITM-132"] },
       "nothing":  { "chance": 0.20 }
     },
     "slag_bin": {
@@ -141,7 +141,7 @@
       "card":     { "chance": 0.35 },
       "battery":  { "chance": 0.45, "min": 1, "max": 2 },
       "salvage":  { "chance": 0.25, "pool": ["crystal", "ichor"] },
-      "supply":   { "chance": 0.20, "pool": ["ITM-115", "ITM-116"] },
+      "supply":   { "chance": 0.20, "pool": ["ITM-115", "ITM-116", "ITM-121", "ITM-125", "ITM-129", "ITM-133"] },
       "nothing":  { "chance": 0.15 }
     },
     "specimen_tank": {
@@ -159,7 +159,7 @@
       "battery":  { "chance": 0.40, "min": 1, "max": 2 },
       "food":     { "chance": 0.40, "pool": "common_food" },
       "salvage":  { "chance": 0.30, "pool": ["bone", "scrap", "crystal"] },
-      "supply":   { "chance": 0.35, "pool": ["ITM-115", "ITM-116"] }
+      "supply":   { "chance": 0.35, "pool": ["ITM-115", "ITM-116", "ITM-122", "ITM-126", "ITM-130", "ITM-134"] }
     }
   },
 

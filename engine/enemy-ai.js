@@ -665,6 +665,21 @@ var EnemyAI = (function () {
     _faceToward(enemy, target);
   }
 
+  /**
+   * Tick patrol-only movement for friendly (reanimated) entities.
+   * Skips awareness, chase, and sight — just runs the patrol path.
+   * Called from the game loop for entities with `friendly: true` + a path.
+   */
+  function tickFriendlyPatrol(entity, grid, gridW, gridH, deltaMs) {
+    if (!entity.friendly || !entity.path) return;
+    // Respect mosey delay: negative pathTimer means "stay put"
+    if (entity.pathTimer < 0) {
+      entity.pathTimer += deltaMs;
+      return;
+    }
+    _updatePatrol(entity, grid, gridW, gridH, deltaMs);
+  }
+
   return {
     createEnemy: createEnemy,
     updateEnemy: updateEnemy,
@@ -674,6 +689,7 @@ var EnemyAI = (function () {
     applyFleeImmunity: applyFleeImmunity,
     canEngage: canEngage,
     faceToward: faceToward,
+    tickFriendlyPatrol: tickFriendlyPatrol,
     AWARENESS: AWARENESS,
     PATH_TYPES: PATH_TYPES,
     SIGHT_RANGE: SIGHT_RANGE,

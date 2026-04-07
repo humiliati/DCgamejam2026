@@ -87,8 +87,27 @@ var CleaningSystem = (function () {
 
   // ── Cleaning ────────────────────────────────────────────────────
 
+  // ── Non-hose scrub → GrimeGrid tuning ──────────────────────────
+  // A 4×4 floor grid has 16 subcells at ~180–200 grime each.
+  // Target: 6–8 OK presses to fully clean one tile without a hose.
+  //
+  // Each press applies a cleanKernel centered on a cycling subcell
+  // with radius 1 (covers 3×3 = 9 subcells, falloff reduces edges).
+  // Strength 60 means center drops 60/press, neighbors ~30/press.
+  //   Center: 200 / 60 ≈ 3.3 presses → clean after 4
+  //   Edges:  200 / 30 ≈ 6.7 presses → clean after 7
+  // The sweep index cycles across subcells so coverage is even.
+  // Net result: ~6–8 presses to fully clear a tile.
+  var SCRUB_GRIME_STRENGTH = 60;    // subcell grime removed at kernel center
+  var SCRUB_GRIME_RADIUS   = 1;     // kernel radius (3×3 coverage)
+  var _scrubSweepIndex     = 0;     // cycling center for non-hose scrub
+
   /**
-   * Scrub one layer of blood from a tile. Returns true if scrub succeeded.
+   * Scrub one layer of blood from a tile AND clean GrimeGrid subcells
+   * if present. Returns true if any cleaning happened (blood or grime).
+   *
+   * The non-hose path applies a modest GrimeGrid kernel each press.
+   * For floor tiles this yields ~6–8 presses to fully clean.
    *
    * @param {number} x - Tile X
    * @param {number} y - Tile Y
@@ -102,23 +121,51 @@ var CleaningSystem = (function () {
     var cooldown = Math.round(CLEAN_TIME_MS * mult);
     if (now - _lastCleanTime < cooldown) return false;
 
+    var bloodCleaned = false;
+    var grimeCleaned = false;
+
+    // ── Legacy blood layer ───────────────────────────────────────
     var map = _bloodMap[floorId];
-    if (!map) return false;
-
-    var key = x + ',' + y;
-    var level = map[key];
-    if (!level || level <= 0) return false;
-
-    level--;
-    _lastCleanTime = now;
-
-    if (level <= 0) {
-      delete map[key];
-    } else {
-      map[key] = level;
+    if (map) {
+      var key = x + ',' + y;
+      var level = map[key];
+      if (level && level > 0) {
+        level--;
+        if (level <= 0) {
+          delete map[key];
+        } else {
+          map[key] = level;
+        }
+        bloodCleaned = true;
+      }
     }
 
-    return true;
+    // ── GrimeGrid subcell cleaning (non-hose path) ──────────────
+    if (typeof GrimeGrid !== 'undefined') {
+      var g = GrimeGrid.get(floorId, x, y);
+      if (g && g.res > 0) {
+        // Cycle the kernel center across subcells for even coverage.
+        // The sweep walks a 2D raster across the grid resolution.
+        var totalSub = g.res * g.res;
+        var idx = _scrubSweepIndex % totalSub;
+        _scrubSweepIndex++;
+        var subX = idx % g.res;
+        var subY = Math.floor(idx / g.res);
+
+        // Tool-speed scaling: better tools clean grime faster too
+        var toolMult = (toolSubtype && TOOL_SPEED[toolSubtype]) || TOOL_SPEED['rag'];
+        // Invert: lower TOOL_SPEED mult = faster → higher strength
+        var strength = Math.round(SCRUB_GRIME_STRENGTH / toolMult);
+
+        GrimeGrid.cleanKernel(floorId, x, y, subX, subY, strength, SCRUB_GRIME_RADIUS);
+        grimeCleaned = true;
+      }
+    }
+
+    if (bloodCleaned || grimeCleaned) {
+      _lastCleanTime = now;
+    }
+    return bloodCleaned || grimeCleaned;
   }
 
   // ── Query ───────────────────────────────────────────────────────
@@ -133,10 +180,22 @@ var CleaningSystem = (function () {
   }
 
   /**
-   * Check if a tile has blood on it.
+   * Check if a tile has blood or grime on it.
+   * Checks both the legacy blood layer AND the GrimeGrid so that
+   * tiles with only sub-tile grime (no flat blood) are still interactive.
    */
   function isDirty(x, y, floorId) {
-    return getBlood(x, y, floorId) > 0;
+    if (getBlood(x, y, floorId) > 0) return true;
+    // GrimeGrid: tile is dirty if any subcell is non-zero
+    if (typeof GrimeGrid !== 'undefined') {
+      var g = GrimeGrid.get(floorId, x, y);
+      if (g) {
+        for (var i = 0; i < g.data.length; i++) {
+          if (g.data[i] > 0) return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -158,24 +217,45 @@ var CleaningSystem = (function () {
 
   /**
    * Calculate cleaning readiness for a floor (0.0 = all dirty, 1.0 = all clean).
-   * If there are no blood tiles tracked, returns 1.0 (fully clean).
+   * Combines legacy blood readiness AND GrimeGrid readiness (weighted average).
+   * If there are no blood tiles or grime grids tracked, returns 1.0.
    */
   function getReadiness(floorId) {
+    // Legacy blood readiness
+    var bloodReadiness = 1.0;
     var map = _bloodMap[floorId];
-    if (!map) return 1.0;
-
-    var totalBlood = 0;
-    var count = 0;
-    for (var key in map) {
-      if (map.hasOwnProperty(key)) {
-        totalBlood += map[key];
-        count++;
+    if (map) {
+      var totalBlood = 0;
+      var count = 0;
+      for (var key in map) {
+        if (map.hasOwnProperty(key)) {
+          totalBlood += map[key];
+          count++;
+        }
+      }
+      if (count > 0) {
+        bloodReadiness = 1.0 - (totalBlood / (count * MAX_BLOOD));
       }
     }
-    if (count === 0) return 1.0;
 
-    // Max possible blood = count * MAX_BLOOD. Readiness = 1 - (actual / max)
-    return 1.0 - (totalBlood / (count * MAX_BLOOD));
+    // GrimeGrid readiness (sub-tile precision)
+    var grimeReadiness = 1.0;
+    var hasGrime = false;
+    if (typeof GrimeGrid !== 'undefined') {
+      var gc = GrimeGrid.getGridCount(floorId);
+      if (gc > 0) {
+        grimeReadiness = GrimeGrid.getFloorCleanliness(floorId);
+        hasGrime = true;
+      }
+    }
+
+    // If both systems have data, weight grime higher (it's the primary
+    // visual indicator). If only one has data, use that one.
+    if (hasGrime && map && Object.keys(map).length > 0) {
+      return bloodReadiness * 0.3 + grimeReadiness * 0.7;
+    }
+    if (hasGrime) return grimeReadiness;
+    return bloodReadiness;
   }
 
   /**
@@ -221,6 +301,46 @@ var CleaningSystem = (function () {
       for (var x = 0; x < gridW; x++) {
         if (grid[y][x] === TILES.CORPSE) {
           addBlood(x, y, floorId, grid, gridW, gridH, MAX_BLOOD);
+
+          // PW-1: Also allocate GrimeGrid subcells on corpse-adjacent
+          // walkable tiles (matching the blood splatter radius) so the
+          // raycaster renders sub-tile grime, not just flat blood tint.
+          if (typeof GrimeGrid !== 'undefined') {
+            _seedGrimeAround(floorId, x, y, grid, gridW, gridH);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Allocate GrimeGrid subcells around a corpse site.
+   * Mirrors addBlood's splatter radius + falloff logic so grime
+   * visually matches the blood placement.
+   * @private
+   */
+  function _seedGrimeAround(floorId, cx, cy, grid, gridW, gridH) {
+    for (var dy = -SPLATTER_RADIUS; dy <= SPLATTER_RADIUS; dy++) {
+      for (var dx = -SPLATTER_RADIUS; dx <= SPLATTER_RADIUS; dx++) {
+        var tx = cx + dx;
+        var ty = cy + dy;
+        if (tx < 0 || tx >= gridW || ty < 0 || ty >= gridH) continue;
+
+        var tile = grid[ty][tx];
+        var dist = Math.abs(dx) + Math.abs(dy);
+        if (dist > SPLATTER_RADIUS) continue;
+
+        // Floor grime on walkable tiles
+        if (TILES.isWalkable(tile) && !GrimeGrid.has(floorId, tx, ty)) {
+          // Closer tiles get heavier grime (180 center, 120 edge)
+          var floorLevel = 180 - (dist * 30);
+          GrimeGrid.allocateFloor(floorId, tx, ty, floorLevel);
+        }
+
+        // Wall grime on adjacent opaque tiles (kill splatter on walls)
+        if (dist <= 1 && TILES.isOpaque(tile) && !GrimeGrid.has(floorId, tx, ty)) {
+          var wallLevel = 160 - (dist * 40);
+          GrimeGrid.allocateWall(floorId, tx, ty, wallLevel);
         }
       }
     }

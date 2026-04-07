@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CSS Orb Component — Pure Sphere</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #111;
+    color: #ddd;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  h1 { font-size: 14px; color: #888; margin: 12px 0 4px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONTROLS
+     ═══════════════════════════════════════════════════════ */
+
+  #controls {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    padding: 8px 16px; background: #1a1a1a; border-bottom: 1px solid #333;
+    width: 100%; font-size: 11px;
+  }
+  #controls label { color: #aaa; display: flex; align-items: center; gap: 4px; }
+  #controls input[type="range"] { width: 80px; accent-color: #f80; }
+  #controls select, #controls input[type="number"] {
+    background: #222; color: #ccc; border: 1px solid #444;
+    border-radius: 3px; padding: 2px 4px; font-size: 11px;
+  }
+  .state-btn {
+    padding: 4px 12px; font-size: 11px; cursor: pointer;
+    background: #222; color: #aaa; border: 1px solid #444; border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .state-btn:hover { background: #333; color: #fff; }
+  .state-btn.active { background: #c44; color: #fff; border-color: #f66; }
+
+  /* ═══════════════════════════════════════════════════════
+     STAGE — centers the orb
+     ═══════════════════════════════════════════════════════ */
+
+  #stage {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    position: relative; width: 100%;
+    background:
+      radial-gradient(circle at 50% 60%, rgba(60,30,0,0.3) 0%, transparent 50%),
+      #111;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     ORB — the CSS sphere
+     ═══════════════════════════════════════════════════════
+
+     Architecture (from the reference CSS):
+     - 1 container (.orb) that spins via @keyframes
+     - 9 ring wrappers (.orb-ring), each rotated 20° apart
+     - 9 circle slices (.orb-slice) per ring, each rotateY 40° apart
+     - Total: 81 translucent circles arranged as a geodesic shell
+
+     The --orb-size, --orb-speed, and per-ring --bg vars are
+     configurable via CSS custom properties.
+  */
+
+  .orb {
+    --orb-size: 200px;
+    --orb-speed: 8s;
+    width: var(--orb-size);
+    height: var(--orb-size);
+    position: relative;
+    transform-style: preserve-3d;
+    perspective: 10000px;
+    animation: orb-spin var(--orb-speed) linear infinite;
+  }
+
+  .orb.paused { animation-play-state: paused; }
+
+  .orb-ring,
+  .orb-slice {
+    width: var(--orb-size);
+    height: var(--orb-size);
+    position: absolute;
+    top: 0; left: 0;
+    transform-style: preserve-3d;
+  }
+
+  .orb-ring {
+    transform: rotate(calc(var(--ring) * 20deg));
+  }
+
+  .orb-slice {
+    border-radius: 50%;
+    background: var(--bg);
+    transform: rotateY(calc(var(--slice) * 40deg));
+  }
+
+  @keyframes orb-spin {
+    0%   { transform: rotateX(0deg) rotateY(0deg); }
+    100% { transform: rotateX(360deg) rotateY(360deg); }
+  }
+
+  /* ── State: LIT (default) ── */
+  /* warm fire colors, 8s spin */
+
+  /* ── State: EMBER (hover) ── */
+  .orb.ember {
+    --orb-speed: 3s;
+  }
+  .orb.ember .orb-slice {
+    animation: ember-pulse 0.8s ease-in-out infinite;
+    animation-delay: calc(var(--ring) * 0.08s + var(--slice) * 0.04s);
+  }
+  @keyframes ember-pulse {
+    0%   { opacity: 0.3; filter: brightness(0.3); }
+    50%  { opacity: 1;   filter: brightness(1.2); }
+    100% { opacity: 0.3; filter: brightness(0.3); }
+  }
+
+  /* ── State: UNLIT (smoke drift) ── */
+  .orb.unlit {
+    --orb-speed: 20s;
+  }
+  .orb.unlit .orb-slice {
+    animation: smoke-drift 3s ease-in-out infinite;
+    animation-delay: calc(var(--ring) * 0.15s + var(--slice) * 0.1s);
+  }
+  @keyframes smoke-drift {
+    0%   { opacity: 0.15; filter: brightness(0.6); }
+    50%  { opacity: 0.4;  filter: brightness(1.0); }
+    100% { opacity: 0.15; filter: brightness(0.6); }
+  }
+
+  /* ── Info panel ── */
+  #info {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #1a1a1a; border-top: 1px solid #333;
+    padding: 8px 16px; font-size: 10px; color: #666;
+    font-family: Consolas, monospace;
+  }
+  #info code { color: #f80; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>State:
+    <button class="state-btn active" data-state="lit">🔥 Lit</button>
+    <button class="state-btn" data-state="ember">🟠 Ember</button>
+    <button class="state-btn" data-state="unlit">⬛ Unlit</button>
+  </label>
+  <label>Size: <input type="range" id="ctl-size" min="40" max="400" value="200">
+    <input type="number" id="ctl-size-num" value="200" style="width:48px"></label>
+  <label>Speed: <input type="range" id="ctl-speed" min="1" max="20" value="8">
+    <span id="ctl-speed-lbl">8s</span></label>
+  <label>Rings: <input type="range" id="ctl-rings" min="3" max="18" value="9">
+    <span id="ctl-rings-lbl">9</span></label>
+  <label>Slices: <input type="range" id="ctl-slices" min="3" max="18" value="9">
+    <span id="ctl-slices-lbl">9</span></label>
+  <label>Palette:
+    <select id="ctl-palette">
+      <option value="fire">🔥 Fire (torch lit)</option>
+      <option value="ember">🟠 Ember (orange/black)</option>
+      <option value="rainbow">🌈 Rainbow (demo)</option>
+      <option value="ice">🧊 Ice (blue/cyan)</option>
+      <option value="poison">☠️ Poison (green)</option>
+      <option value="arcane">🔮 Arcane (purple)</option>
+      <option value="holy">✨ Holy (gold/white)</option>
+      <option value="smoke">💨 Smoke (extinguished)</option>
+    </select>
+  </label>
+</div>
+
+<div id="stage">
+  <div style="display:flex;flex-direction:column;align-items:center;">
+    <div class="orb" id="orb"></div>
+  </div>
+</div>
+
+<div id="info">
+  <span id="info-text">81 elements (9 rings × 9 slices) · 200px · 8s rotation</span>
+  &nbsp;·&nbsp;
+  <code>orb-component.html</code> — pure CSS sphere · integrates with peek-workbench.html
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ════════════════════════════════════════════════════
+  //  PALETTES
+  // ════════════════════════════════════════════════════
+
+  var PALETTES = {
+    fire: [
+      '#ff220088', '#ff440088', '#ff660088', '#ff880088', '#ffaa0088',
+      '#ff660088', '#ff440088', '#cc330088', '#ff880088'
+    ],
+    ember: [
+      '#ff550088', '#0a0a0a88', '#ff660088', '#0a0a0a88', '#ff440088',
+      '#0a0a0a88', '#ff770088', '#0a0a0a88', '#ff550088'
+    ],
+    rainbow: [
+      '#ff000088', '#ff00ff88', '#ffff0088', '#00ff0088', '#00ffff88',
+      '#0000ff88', '#dc1ddf88', '#ffa50088', '#e5b2ca88'
+    ],
+    ice: [
+      '#0088ff88', '#00bbff88', '#00eeff88', '#44ccff88', '#0066cc88',
+      '#22aadd88', '#0099ee88', '#44ddff88', '#0077dd88'
+    ],
+    poison: [
+      '#00cc0088', '#44ff0088', '#22aa2288', '#00ff4488', '#33cc3388',
+      '#00ee0088', '#66ff2288', '#11bb1188', '#44dd4488'
+    ],
+    arcane: [
+      '#8800ff88', '#aa44ff88', '#cc00ff88', '#6622cc88', '#9933ff88',
+      '#bb22ee88', '#7711dd88', '#dd55ff88', '#9944ee88'
+    ],
+    holy: [
+      '#ffdd4488', '#ffeeaa88', '#ffcc2288', '#ffffcc88', '#ffbb0088',
+      '#ffeedd88', '#ffdd6688', '#fff5cc88', '#ffcc4488'
+    ],
+    smoke: [
+      '#88888866', '#aaaaaa55', '#66666666', '#99999955', '#bbbbbb44',
+      '#77777766', '#cccccc44', '#55555566', '#99999955'
+    ]
+  };
+
+  // ════════════════════════════════════════════════════
+  //  STATE
+  // ════════════════════════════════════════════════════
+
+  var state = {
+    size: 200,
+    speed: 8,
+    rings: 9,
+    slices: 9,
+    palette: 'fire',
+    mode: 'lit'     // lit | ember | unlit
+  };
+
+  var orbEl = document.getElementById('orb');
+  var infoEl = document.getElementById('info-text');
+
+  // ════════════════════════════════════════════════════
+  //  BUILD ORB DOM
+  // ════════════════════════════════════════════════════
+
+  function buildOrb() {
+    orbEl.innerHTML = '';
+    var colors = PALETTES[state.palette] || PALETTES.fire;
+
+    for (var r = 0; r < state.rings; r++) {
+      var ring = document.createElement('div');
+      ring.className = 'orb-ring';
+      ring.style.setProperty('--ring', r);
+
+      var bg = colors[r % colors.length];
+
+      for (var s = 0; s < state.slices; s++) {
+        var slice = document.createElement('div');
+        slice.className = 'orb-slice';
+        slice.style.setProperty('--slice', s);
+        slice.style.setProperty('--bg', bg);
+        ring.appendChild(slice);
+      }
+      orbEl.appendChild(ring);
+    }
+
+    updateInfo();
+  }
+
+  // ════════════════════════════════════════════════════
+  //  APPLY STATE
+  // ════════════════════════════════════════════════════
+
+  function applyState() {
+    // Size
+    orbEl.style.setProperty('--orb-size', state.size + 'px');
+
+    // Speed
+    orbEl.style.setProperty('--orb-speed', state.speed + 's');
+
+    // Mode classes
+    orbEl.classList.remove('ember', 'unlit', 'paused');
+
+    if (state.mode === 'ember') {
+      orbEl.classList.add('ember');
+    } else if (state.mode === 'unlit') {
+      // Switch to smoke palette and slow drift
+      state.palette = 'smoke';
+      document.getElementById('ctl-palette').value = 'smoke';
+      orbEl.classList.add('unlit');
+      buildOrb();
+    }
+
+    updateInfo();
+  }
+
+  function updateInfo() {
+    var total = state.rings * state.slices;
+    infoEl.textContent = total + ' elements (' + state.rings + ' rings \u00d7 ' +
+      state.slices + ' slices) \u00b7 ' + state.size + 'px \u00b7 ' +
+      state.speed + 's rotation \u00b7 ' + state.palette + ' \u00b7 ' + state.mode;
+  }
+
+  // ════════════════════════════════════════════════════
+  //  CONTROLS
+  // ════════════════════════════════════════════════════
+
+  // Size
+  var sizeRange = document.getElementById('ctl-size');
+  var sizeNum = document.getElementById('ctl-size-num');
+  function onSize(v) { state.size = +v; sizeRange.value = v; sizeNum.value = v; applyState(); }
+  sizeRange.addEventListener('input', function() { onSize(this.value); });
+  sizeNum.addEventListener('input', function() { onSize(this.value); });
+
+  // Speed
+  var speedRange = document.getElementById('ctl-speed');
+  var speedLbl = document.getElementById('ctl-speed-lbl');
+  speedRange.addEventListener('input', function() {
+    state.speed = +this.value;
+    speedLbl.textContent = this.value + 's';
+    applyState();
+  });
+
+  // Rings
+  var ringsRange = document.getElementById('ctl-rings');
+  var ringsLbl = document.getElementById('ctl-rings-lbl');
+  ringsRange.addEventListener('input', function() {
+    state.rings = +this.value;
+    ringsLbl.textContent = this.value;
+    buildOrb();
+    applyState();
+  });
+
+  // Slices
+  var slicesRange = document.getElementById('ctl-slices');
+  var slicesLbl = document.getElementById('ctl-slices-lbl');
+  slicesRange.addEventListener('input', function() {
+    state.slices = +this.value;
+    slicesLbl.textContent = this.value;
+    buildOrb();
+    applyState();
+  });
+
+  // Palette
+  document.getElementById('ctl-palette').addEventListener('change', function() {
+    state.palette = this.value;
+    buildOrb();
+    applyState();
+  });
+
+  // State buttons
+  document.querySelectorAll('.state-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      state.mode = btn.dataset.state;
+      document.querySelectorAll('.state-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      // Auto-switch palette based on state
+      if (state.mode === 'ember' && state.palette !== 'ember') {
+        state.palette = 'ember';
+        document.getElementById('ctl-palette').value = 'ember';
+        buildOrb();
+      } else if (state.mode === 'unlit' && state.palette !== 'smoke') {
+        // applyState handles smoke switch, but ensure buildOrb runs
+      } else if (state.mode === 'lit' && (state.palette === 'ember' || state.palette === 'smoke')) {
+        state.palette = 'fire';
+        document.getElementById('ctl-palette').value = 'fire';
+        buildOrb();
+      }
+      applyState();
+    });
+  });
+
+  // ════════════════════════════════════════════════════
+  //  INIT
+  // ════════════════════════════════════════════════════
+
+  buildOrb();
+  applyState();
+
+})();
+</script>
+</body>
+</html>

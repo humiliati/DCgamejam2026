@@ -58,6 +58,8 @@ if (tile === TILES.CHEST) {
 
 `_updateQuestTarget()` has two phases: `!_gateUnlocked` (Phase 1: get keys) and `_gateUnlocked` (Phase 2: head to dungeon). There is no Phase 0 for "meet the dispatcher." On Floor 1, the quest marker immediately points at the Home door (34,9) even though the player hasn't encountered the Dispatcher NPC yet.
 
+> **Extraction note:** `_updateQuestTarget()` was extracted from `game.js` to `engine/quest-waypoint.js` as `QuestWaypoint.update()`.
+
 **Fix:** Split the pre-unlock phase using `_dispatcherPhase`:
 
 ```javascript
@@ -127,6 +129,8 @@ The door wall on Floor 0 is far enough away that it falls outside the draw dista
 After the chest tile is removed from the grid (depleted), `_updateQuestTarget()` still points at (19,3). The fix for BUG-3 partially addresses this — once `_gateUnlocked = true`, the quest target switches to Phase 2 (head to dungeon). But there's a timing gap: the key is withdrawn → `_onPickupWorkKeys()` fires → `_gateUnlocked = true` → but `_updateQuestTarget()` isn't called again until the next floor transition.
 
 **Fix:** Call `_updateQuestTarget()` inside `_onPickupWorkKeys()` immediately after setting `_gateUnlocked = true`.
+
+> **Extraction note:** `_onPickupWorkKeys()` was extracted from `game.js` to `engine/home-events.js` as `HomeEvents.onPickupWorkKeys()`.
 
 ---
 

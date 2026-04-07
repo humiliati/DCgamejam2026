@@ -37,6 +37,14 @@
  *   • Cobweb + fire interaction: web catches fire, spreads hazard
  *   • Cobweb + wind draft: decorative particle drift
  *   • Enemy pathfinding: EnemyAI avoids standalone cobwebs (stealth-breaker cost)
+ *
+ * SC-E — Aesthetic cobwebs (D1/D2):
+ *   New type 'aesthetic' — decorative cobwebs that:
+ *   • Render identically to standalone (barrier web visual)
+ *   • Break when walked through (same as standalone)
+ *   • Re-spawn on every floor load from floorData.aestheticCobwebs[]
+ *   • Do not contribute to readiness scoring
+ *   • Skip CobwebNode interaction (no install prompt, no Silk Spider cost)
  * ──────────────────────────────────────────────────────────────────────────
  *
  * Layer 1 — zero deps beyond TILES (engine/tiles.js)
@@ -161,6 +169,16 @@ var CobwebSystem = (function () {
       floorData.grid, floorData.gridW, floorData.gridH
     );
     if (!_cobwebs[floorId]) _cobwebs[floorId] = {};
+
+    // SC-E: Auto-install aesthetic cobwebs from floor blockout data.
+    // These re-spawn on every floor load — always present, never persistent.
+    // Format: floorData.aestheticCobwebs = [{ x, y, corridorDir? }]
+    if (floorData.aestheticCobwebs) {
+      for (var ai = 0; ai < floorData.aestheticCobwebs.length; ai++) {
+        var ac = floorData.aestheticCobwebs[ai];
+        install(ac.x, ac.y, floorId, 'aesthetic', ac.corridorDir || 'H');
+      }
+    }
   }
 
   /**
@@ -203,22 +221,25 @@ var CobwebSystem = (function () {
    * @param {number} x
    * @param {number} y
    * @param {string} floorId
-   * @param {string} [type]  - 'wall_overlay' | 'standalone' (default 'standalone')
-   * @returns {boolean}        true if installed successfully
+   * @param {string} [type]       - 'wall_overlay' | 'standalone' | 'aesthetic' (default 'standalone')
+   * @param {string} [dirOverride] - Force corridorDir ('H'|'V') — used by aesthetic cobwebs
+   * @returns {boolean}             true if installed successfully
    */
-  function install(x, y, floorId, type) {
+  function install(x, y, floorId, type, dirOverride) {
     type = type || 'standalone';
 
     if (!_cobwebs[floorId]) _cobwebs[floorId] = {};
 
-    // Standalone type requires corridor eligibility
+    // Standalone type requires corridor eligibility.
+    // Aesthetic cobwebs skip this check — they're hand-placed in blockouts.
     if (type === 'standalone' && !isEligiblePosition(x, y, floorId)) {
       return false;
     }
 
     var key = _key(x, y);
     var existing = _cobwebs[floorId][key];
-    if (existing && existing.state === 'intact') {
+    // Aesthetic cobwebs overwrite on every floor load (re-spawn).
+    if (existing && existing.state === 'intact' && type !== 'aesthetic') {
       return false; // already has an intact cobweb
     }
 
@@ -226,7 +247,7 @@ var CobwebSystem = (function () {
       x: x, y: y,
       state: 'intact',
       type: type,
-      corridorDir: getCorridorDir(x, y, floorId) || 'H',
+      corridorDir: dirOverride || getCorridorDir(x, y, floorId) || 'H',
       installedAt: Date.now()
     };
     return true;
@@ -321,7 +342,10 @@ var CobwebSystem = (function () {
   function onEntityMove(x, y, floorId) {
     if (!hasAt(x, y, floorId)) return false;
     var cob = getAt(x, y, floorId);
-    if (!cob || cob.type !== 'standalone') return false;
+    if (!cob) return false;
+    // Only standalone and aesthetic cobwebs break on walk-through.
+    // Aesthetic cobwebs re-spawn on next floor load (onFloorLoad).
+    if (cob.type !== 'standalone' && cob.type !== 'aesthetic') return false;
     return destroy(x, y, floorId);
   }
 
@@ -356,7 +380,13 @@ var CobwebSystem = (function () {
    * @returns {number}
    */
   function getReadinessBonus(floorId) {
-    return getIntact(floorId).length * READINESS_BONUS_PER_COBWEB;
+    // SC-E: Aesthetic cobwebs don't count toward readiness.
+    var intact = getIntact(floorId);
+    var count = 0;
+    for (var i = 0; i < intact.length; i++) {
+      if (intact[i].type !== 'aesthetic') count++;
+    }
+    return count * READINESS_BONUS_PER_COBWEB;
   }
 
   /**

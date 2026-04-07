@@ -262,6 +262,8 @@ Phase 3 was expanded to include the full death→corpse→loot→reanimate lifec
 - **3d Bone transition**: When looted dry, `buildSprites()` gates on `lootState !== DRY` for stack piles, falling through to single bone emoji (🦴). Clean visual transition — pile vanishes, bone remains.
 - **3e Reanimation**: `DeathAnim.startReanimate()` reverses the collapse — legs plant first, torso follows, head snaps to attention with spring overshoot wobble. Hat drops on at the end with bounce. `_harvestCorpse()` checks `CorpseRegistry.isFullyHydrated()` before loot — if hydration is full, triggers stand-up animation and spawns friendly NPC.
 
+> **Extraction note:** `_harvestCorpse()` was extracted from `game.js` to `engine/corpse-actions.js` as `CorpseActions.harvestCorpse()`.
+
 ### Original Phase 3 Spec (for reference)
 
 ### 3.1 Stack Wobble on State Change

@@ -23,6 +23,12 @@ var MovementController = (function () {
   var KEY_REPEAT_DELAY = 400; // ms before held key starts repeating
   var KEY_REPEAT_RATE  = 180; // ms between repeats once repeating
 
+  // ── Speed override ──
+  // External systems (e.g., HoseReel) can temporarily scale walk/turn
+  // animation duration. 1 = normal, 0.5 = twice as fast, 2 = half speed.
+  // Applied multiplicatively alongside Player.getWalkTimeMultiplier().
+  var _speedOverride = 1;
+
   // ── Head bob ──
   // Subtle vertical oscillation during movement (Doom/EotB feel).
   // bobPhase accumulates during WALK actions; the raycaster reads bobY.
@@ -325,8 +331,9 @@ var MovementController = (function () {
       // Apply debuff walk-time multiplier (e.g. GROGGY → 1.25× slower)
       var walkMult = (typeof Player !== 'undefined' && Player.getWalkTimeMultiplier)
         ? Player.getWalkTimeMultiplier() : 1;
-      var totTime = next.actionType === ACTION_MOVE ? (WALK_TIME * walkMult) :
-                    next.actionType === ACTION_ROT ? ROT_TIME : BUMP_TIME;
+      var spdMult = _speedOverride * walkMult;
+      var totTime = next.actionType === ACTION_MOVE ? (WALK_TIME * spdMult) :
+                    next.actionType === ACTION_ROT ? (ROT_TIME * _speedOverride) : BUMP_TIME;
 
       // Double-time acceleration
       if ((next.doubleTime && _moveOffs > 0.5) || (cur.doubleTime && _moveOffs < 0.5)) {
@@ -521,6 +528,10 @@ var MovementController = (function () {
     getBobY: getBobY,
     effRot: effRot,
     effPos: effPos,
+
+    // Speed override
+    setSpeedOverride: function (v) { _speedOverride = Math.max(0.1, v || 1); },
+    getSpeedOverride: function ()  { return _speedOverride; },
 
     // Control
     cancelQueued: cancelQueued,

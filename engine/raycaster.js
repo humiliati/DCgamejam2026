@@ -2473,11 +2473,170 @@ var Raycaster = (function () {
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
+  // ── Pointer ray query (PW-3 squeegee aim) ─────────────────────────
+  //
+  // Casts a single ray from the player's eye through a screen-space
+  // pixel and returns the wall hit info: tile coordinates, UV on the
+  // face, perpendicular distance, and which subcell the pointer is
+  // aimed at for the grime grid. Used by SpraySystem to map Magic
+  // Remote / mouse cursor position to a specific grime subcell.
+  //
+  // Returns null if the ray doesn't hit an opaque/door tile within
+  // render distance, or if required globals aren't available.
+
+  /**
+   * @param {number} screenX — pixel column on canvas (0..width-1)
+   * @param {number} screenY — pixel row on canvas (0..height-1)
+   * @param {Array[]} grid — 2D tile grid
+   * @param {number} gridW
+   * @param {number} gridH
+   * @returns {Object|null} { tileX, tileY, wallU, wallV, perpDist, side,
+   *                          subX, subY, grimeRes }  or null
+   */
+  function castScreenRay(screenX, screenY, grid, gridW, gridH) {
+    if (!_canvas || !grid) return null;
+    var w = _width;
+    var h = _height;
+    if (w < 1 || h < 1) return null;
+
+    // Reconstruct player eye state (same sources as render())
+    var MC = (typeof MovementController !== 'undefined') ? MovementController : null;
+    if (!MC || typeof Player === 'undefined') return null;
+    var rp = MC.getRenderPos();
+    var ps = Player.state();
+    var pDir = rp.angle + (ps.lookOffset || 0);
+    var px = rp.x + 0.5;
+    var py = rp.y + 0.5;
+    var pitch = ps.lookPitch || 0;
+
+    var fov = Math.PI / 3;
+    var halfFov = fov / 2;
+    var rawHalfH = h / 2;
+    var pitchShift = pitch * rawHalfH;
+    var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
+    var renderDist = _contract ? _contract.renderDistance : 16;
+    var baseWallH = _contract ? _contract.wallHeight : 1.0;
+
+    // ── Horizontal: screen column → ray angle ──
+    var cameraX = (2 * screenX / w) - 1;
+    var rayAngle = pDir + Math.atan(cameraX * Math.tan(halfFov));
+    var rayDirX = Math.cos(rayAngle);
+    var rayDirY = Math.sin(rayAngle);
+
+    // ── DDA setup (identical to render loop) ──
+    var mapX = Math.floor(px);
+    var mapY = Math.floor(py);
+    var deltaDistX = Math.abs(1 / (rayDirX || 1e-10));
+    var deltaDistY = Math.abs(1 / (rayDirY || 1e-10));
+    var stepX, stepY, sideDistX, sideDistY;
+
+    if (rayDirX < 0) { stepX = -1; sideDistX = (px - mapX) * deltaDistX; }
+    else              { stepX = 1;  sideDistX = (mapX + 1 - px) * deltaDistX; }
+    if (rayDirY < 0) { stepY = -1; sideDistY = (py - mapY) * deltaDistY; }
+    else              { stepY = 1;  sideDistY = (mapY + 1 - py) * deltaDistY; }
+
+    // ── DDA traversal ──
+    var hit = false;
+    var side = 0;
+    var hitTile = 0;
+    var depth = 0;
+
+    while (!hit && depth < renderDist) {
+      if (sideDistX < sideDistY) {
+        sideDistX += deltaDistX; mapX += stepX; side = 0;
+      } else {
+        sideDistY += deltaDistY; mapY += stepY; side = 1;
+      }
+      depth++;
+      if (mapX < 0 || mapX >= gridW || mapY < 0 || mapY >= gridH) break;
+      var tile = grid[mapY][mapX];
+      if (typeof TILES !== 'undefined' && (TILES.isOpaque(tile) || TILES.isDoor(tile))) {
+        hit = true;
+        hitTile = tile;
+      }
+    }
+
+    if (!hit) return null;
+
+    // ── Perpendicular distance ──
+    var perpDist;
+    if (side === 0) {
+      perpDist = (mapX - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
+    } else {
+      perpDist = (mapY - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
+    }
+    perpDist = Math.abs(perpDist);
+    if (perpDist < 0.2) perpDist = 0.2;
+
+    // ── Wall U coordinate (horizontal position on face, 0..1) ──
+    var wallU;
+    if (side === 0) {
+      wallU = py + perpDist * rayDirY;
+    } else {
+      wallU = px + perpDist * rayDirX;
+    }
+    wallU = wallU - Math.floor(wallU);
+    if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+      wallU = 1 - wallU;
+    }
+
+    // ── Wall V coordinate (vertical position on face, 0..1) ──
+    // Derived from screenY: invert the projection formula
+    //   drawStart = halfH - lineHeight/2 + vertShift
+    //   screenY maps linearly within [drawStart..drawEnd] to V [0..1]
+    var wallHeightMult = baseWallH;
+    if (_contract && typeof SpatialContract !== 'undefined') {
+      wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
+    }
+    var lineHeight = Math.max(2, Math.floor((h * wallHeightMult) / perpDist));
+    var heightOffset = (_contract && typeof SpatialContract !== 'undefined')
+      ? SpatialContract.getTileHeightOffset(_contract, hitTile) : 0;
+    var vertShift = Math.floor((h * heightOffset) / perpDist);
+    var baseLineH = Math.floor((h * baseWallH) / perpDist);
+    var flatBottom = Math.floor(halfH + baseLineH / 2);
+    var flatTop = flatBottom - lineHeight;
+    var drawStart = flatTop - vertShift;
+    var drawEnd = flatBottom - vertShift;
+
+    // V = fraction of wall column from top (0) to bottom (1)
+    var wallV = (screenY - drawStart) / (drawEnd - drawStart);
+    wallV = Math.max(0, Math.min(1, wallV));
+
+    // ── Map UV to grime grid subcell ──
+    var grimeRes = 0;
+    var subX = 0;
+    var subY = 0;
+    if (typeof GrimeGrid !== 'undefined') {
+      var gGrid = GrimeGrid.get(
+        (typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : ''),
+        mapX, mapY
+      );
+      if (gGrid) {
+        grimeRes = gGrid.res;
+        subX = Math.min(grimeRes - 1, Math.floor(wallU * grimeRes));
+        subY = Math.min(grimeRes - 1, Math.floor(wallV * grimeRes));
+      }
+    }
+
+    return {
+      tileX: mapX,
+      tileY: mapY,
+      wallU: wallU,
+      wallV: wallV,
+      perpDist: perpDist,
+      side: side,
+      subX: subX,
+      subY: subY,
+      grimeRes: grimeRes
+    };
+  }
+
   return {
     init: init,
     render: render,
     setBiomeColors: setBiomeColors,
     setContract: setContract,
-    setBloodFloorId: function (id) { _bloodFloorId = id; }
+    setBloodFloorId: function (id) { _bloodFloorId = id; },
+    castScreenRay: castScreenRay
   };
 })();

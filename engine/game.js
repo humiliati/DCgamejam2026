@@ -51,43 +51,11 @@ var Game = (function () {
   var _bonfirePendingX = -1;   // Bonfire tile position for deferred rest
   var _bonfirePendingY = -1;   // (rest executes from menu, not from interact)
 
-  // Corpse-restock menu: tile coordinates + floor for the active corpse session
-  var _corpsePendingX     = -1;
-  var _corpsePendingY     = -1;
-  var _corpsePendingFloor = '';
-
-  // ── Bark / Gate NPC state ─────────────────────────────────────────
-  // Tracks whether the Day-1 Dispatcher gate encounter has been resolved.
-  // Before resolution the dungeon entrance tiles are logically locked —
-  // the Dispatcher NPC is spawned on that tile and blocks movement.
-  // After the player retrieves their work keys from home (Floor 1.6)
-  // the gate is unlocked and the Dispatcher despawns.
+  // Corpse-restock state — delegated to CorpseActions module
+  // Dispatcher choreography state — delegated to DispatcherChoreography module
 
   var _gateUnlocked = false;       // Has the player retrieved their work keys?
   var _hoseEnergyPrior = 0;        // PW-2: last-seen HoseState.getEnergyDrained()
-  var _dispatcherSpawnId = 'npc_dispatcher_gate';  // Stable entity id
-
-  // ── Dispatcher choreography state (§11d / DOC-51) ────────────
-  var _dispatcherPhase = 'idle';   // idle → spawned → barking → rushing → grabbing → dialogue → done
-  var _dispatcherEntity = null;    // Reference to the dispatcher enemy entity
-  var _dispatcherRushTimer = 0;    // Ms until next rush step
-  var _dispatcherBarkTimer = 0;    // Ms until grab after bark
-  var DISPATCHER_RUSH_STEP_MS = 100;   // Move 1 tile every 100ms (10x normal speed)
-  var DISPATCHER_BARK_DELAY_MS = 800;  // Pause after bark before rushing
-  var DISPATCHER_GRAB_RANGE = 2;       // Tiles away to trigger grab
-  var DISPATCHER_TRIGGER_RANGE = 7;    // Tiles from gate door to trigger sequence
-  var DISPATCHER_SPAWN_BEHIND = 6;     // Tiles behind player to spawn
-
-  // ── Ambient bark timer (Floor 1 morning) ─────────────────────────
-  // When the player first arrives at Floor 1 (The Promenade) we fire
-  // ambient townsperson barks on a loose interval to populate the world
-  // with sound while the player navigates toward the dungeon entrance.
-
-  var _ambientBarkTimer = null;
-
-  // Ambient bark interval range (18–28 s, randomised per fire)
-  var _AMBIENT_BARK_MIN_MS   = 18000;
-  var _AMBIENT_BARK_RANGE_MS = 10000;
 
   // ── Sprint 2: Floor transition tracking for DayCycle ──────────────
   var _previousFloorId = null;
@@ -104,25 +72,54 @@ var Game = (function () {
   // ── Passive time drip timer (exterior floors) ──────────────────
   var _passiveTimeTimer = 0;
 
-  // ── Hero Wake cinematic state (Floor 2.2.1 first-entry reveal) ─
-  // The hero stands in the junction at (11,11), shouts at the unseen
-  // Wounded Vault Warden, then walks clockwise around the ring and
-  // despawns in the west passage. When the hero despawns, the wounded
-  // warden is spawned in the North Hall as a mid-corridor blocker.
-  // Guarded by Player.flags.heroWakeArrival — one-shot per save.
-  var _heroWakeState = {
-    phase: 'idle',          // 'idle' | 'playing' | 'done'
-    combatTrigger: null,    // Copy of floorData.heroScript.combatTrigger
-    triggerSpawned: false,  // Has the wounded warden been spawned yet
-    timeoutIds: []          // setTimeout handles for cleanup on interrupt
-  };
+  // ── Hero Wake cinematic state — delegated to HeroWake module ────
+  // HeroWake.getState() returns { phase, combatTrigger, triggerSpawned }
+  // Local alias used by _tick for the cinematic lock + warden spawn.
 
   // ── Initialization ─────────────────────────────────────────────────
 
   function init() {
     _canvas = document.getElementById('view-canvas');
 
+    // Wire shared helpers module
+    GameActions.init({ canvas: _canvas, gateUnlocked: _gateUnlocked });
+
+    // Wire Phase 2 extracted modules
+    if (typeof HomeEvents !== 'undefined') {
+      HomeEvents.init({ isGateUnlocked: _gateUnlocked, onKeysPickedUp: _updateQuestTarget });
+    }
+    if (typeof CorpseActions !== 'undefined') {
+      CorpseActions.init({
+        requestPause: function (ctx, face) {
+          _pendingMenuContext = ctx;
+          _pendingMenuFace = face;
+          ScreenManager.toPause();
+        }
+      });
+    }
+    if (typeof DispatcherChoreography !== 'undefined') {
+      DispatcherChoreography.init({
+        onPickupWorkKeys: _onPickupWorkKeys,
+        updateQuestTarget: _updateQuestTarget,
+        changeState: function (state) { _changeState(state === 'GAME_OVER' ? S.GAME_OVER : S.GAME_OVER); }
+      });
+    }
+    if (typeof QuestWaypoint !== 'undefined') {
+      QuestWaypoint.init({
+        getDispatcherPhase: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getPhase() : 'done';
+        },
+        getDispatcherEntity: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getEntity() : null;
+        },
+        findGateDoorPos: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.findGateDoorPos() : null;
+        }
+      });
+    }
+
     // ── Phase 1: Core systems (always needed) ──
+    if (typeof ItemDB !== 'undefined') ItemDB.init();  // Sync-load data/items.json
     LootTables.init();   // Sync-load data/loot-tables.json before floor gen
     TextureAtlas.init();
     UISprites.init();
@@ -244,12 +241,20 @@ var Game = (function () {
       HoseState.on('attach', function () {
         _hoseEnergyPrior = 0;
         // Viewport glow hook: ViewportRing polls HoseState.isActive() each frame.
+        // PostProcess mist: subtle cool-blue haze while carrying the hose.
+        if (typeof PostProcess !== 'undefined' && PostProcess.setHoseMist) {
+          PostProcess.setHoseMist(true);
+        }
         if (typeof AudioSystem !== 'undefined') AudioSystem.play('ui_confirm', { volume: 0.4 });
         _evaluateCursorFxGating();
       });
       HoseState.on('detach', function (reason) {
         _hoseEnergyPrior = 0;
         _evaluateCursorFxGating();
+        // Drop the mist overlay alongside the edge glow.
+        if (typeof PostProcess !== 'undefined' && PostProcess.setHoseMist) {
+          PostProcess.setHoseMist(false);
+        }
         // Victory glow is tied to hose-carry: dropping the hose (manually
         // or via energy exhaustion / subtree exit) ends the ceremony. The
         // explicit "roll up hose" evac button will be the clean exit.
@@ -511,7 +516,10 @@ var Game = (function () {
 
           // PeekSlots intercept: number keys fill container slots during FILLING
           if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
-            if (typeof CrateUI !== 'undefined') {
+            // RS-1: route through RestockBridge if active, else legacy CrateUI
+            if (typeof RestockBridge !== 'undefined' && RestockBridge.isActive()) {
+              RestockBridge.handleKey(String(slot + 1));
+            } else if (typeof CrateUI !== 'undefined') {
               CrateUI.handleKey(String(slot + 1));
             }
             return;
@@ -745,6 +753,16 @@ var Game = (function () {
       }
     });
 
+    // ── R key: Roll up hose (PW-4) ──
+    InputManager.on('reel', function (type) {
+      if (type !== 'press') return;
+      if (!ScreenManager.isPlaying()) return;
+      if (typeof HoseState === 'undefined' || !HoseState.isActive()) return;
+      if (typeof HoseReel === 'undefined') return;
+      if (HoseReel.isActive()) return; // already reeling
+      HoseReel.start();
+    });
+
     // ── Phase 4: Start game loop (always running) ──
     _lastFrameTime = performance.now();
     GameLoop.init({
@@ -952,6 +970,15 @@ var Game = (function () {
       onDeathRescue: function (info) {
         console.log('[Game] Combat death rescue from ' + info.floorId + ' (depth ' + info.depth + ')');
 
+        // ── Day 0 hard game-over: before the Heroes' Wake encounter
+        // the Gleaner has no rescue network — death is final. ──
+        if (typeof Player !== 'undefined' && !Player.getFlag('heroWakeArrival')) {
+          console.log('[Game] Pre-encounter death → game over');
+          _collapseAllPeeks();
+          ScreenManager.toGameOver();
+          return;
+        }
+
         // Track cumulative fail stats
         if (typeof Player !== 'undefined') {
           Player.setFlag('deathCount', (Player.getFlag('deathCount') || 0) + 1);
@@ -987,8 +1014,8 @@ var Game = (function () {
           }
         }
 
-        // Close any open peek/crate UI before rescue transition
-        if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
+        // Close any open peek/restock UI before rescue transition
+        _collapseAllPeeks();
 
         // Transition to home floor after a brief delay
         setTimeout(function () {
@@ -1010,6 +1037,15 @@ var Game = (function () {
     if (HazardSystem.setOnDeathRescue) {
       HazardSystem.setOnDeathRescue(function (info) {
         console.log('[Game] Death rescue from ' + info.floorId + ' (depth ' + info.depth + ')');
+
+        // ── Day 0 hard game-over: before the Heroes' Wake encounter
+        // the Gleaner has no rescue network — death is final. ──
+        if (typeof Player !== 'undefined' && !Player.getFlag('heroWakeArrival')) {
+          console.log('[Game] Pre-encounter death → game over');
+          _collapseAllPeeks();
+          ScreenManager.toGameOver();
+          return;
+        }
 
         // Track cumulative fail stats
         if (typeof Player !== 'undefined') {
@@ -1047,8 +1083,8 @@ var Game = (function () {
           }
         }
 
-        // Close any open peek/crate UI before rescue transition
-        if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
+        // Close any open peek/restock UI before rescue transition
+        _collapseAllPeeks();
 
         // Transition to home floor after a brief delay (let combat log sink in)
         setTimeout(function () {
@@ -1071,6 +1107,7 @@ var Game = (function () {
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
     if (typeof BedPeek !== 'undefined') BedPeek.init();
     if (typeof HosePeek !== 'undefined') HosePeek.init();
+    if (typeof SpraySystem !== 'undefined') SpraySystem.init();
     if (typeof MailboxPeek !== 'undefined') {
       MailboxPeek.init();
 
@@ -2170,20 +2207,76 @@ var Game = (function () {
       });
 
       // The Watchman — Floor 2.2 (competent tutorial NPC at dungeon staging)
-      // Explains adventurers smashed the door, directs player to clean up,
-      // offers branches for cleaning tutorial (book, hose, crate restock).
+      // Dynamic root: pre-hose greeting directs player to the truck;
+      // post-hose greeting pivots to functionality tips.
+      // Cleaning tutorial branches (crates, scrub, books) shared by both paths.
       // Lore threads (Resonance, missing numbers) preserved as secondary branch.
       NpcSystem.registerTree('watchpost_watchman', {
-        root: 'greeting',
+        root: function () {
+          return (typeof Player !== 'undefined' && Player.getFlag && Player.getFlag('hoseDiscovered'))
+            ? 'greeting_hose'
+            : 'greeting';
+        },
         nodes: {
+          // ── Pre-discovery greeting (default) ──────────────────────
           greeting: {
-            text: 'Ah — you must be the new Gleaner. Welcome to the Post. Come in, come in. Mind the dust; the adventurers kicked up a storm on their way through.',
+            text: 'Ah — you must be the new Gleaner. Welcome to the Post. Before you head down: the department cleanup rig is parked outside on Lantern Row. Big flatbed, Guild markings. Grab the hose off the side — you\'ll need it for the heavy stuff.',
             choices: [
+              { label: 'Where exactly is the rig?', next: 'hose_location' },
               { label: 'What happened here?', next: 'whathappened' },
               { label: 'Dispatcher sent me to clean up', next: 'dispatched' },
               { label: 'Just passing through', next: 'passing' }
             ]
           },
+          hose_location: {
+            text: 'Head back out the door behind you, down to street level. The truck should be right there on the road — two-tile flatbed with a hose reel mounted on the side. Face it and grab the hose. It\'ll trail behind you when you come back in.',
+            choices: [
+              { label: 'What does it do?', next: 'hose_preview' },
+              { label: 'Got it. I\'ll grab it.', next: 'sendoff' },
+              { label: 'What else should I know?', next: 'assignment' }
+            ]
+          },
+          hose_preview: {
+            text: 'The hose is for deep cleaning — grime baked into the stone, scorch marks, the kind of filth a rag won\'t touch. It runs on your energy though, and the longer the line trails behind you the heavier it drags. Grab it, haul it in, do the heavy work first, then roll it up when you\'re done.',
+            choices: [
+              { label: 'Anything else down there?', next: 'assignment' },
+              { label: 'Heading out to grab it now', next: 'sendoff' }
+            ]
+          },
+
+          // ── Post-discovery greeting (player has the hose) ─────────
+          greeting_hose: {
+            text: 'Good — you\'ve got the rig\'s hose. Smart. Most rookies skip it and regret it two floors down. Let me tell you how to get the most out of it before you head in.',
+            choices: [
+              { label: 'How does the hose work?', next: 'hose_basics' },
+              { label: 'I know how it works', next: 'assignment' },
+              { label: 'What happened here?', next: 'whathappened' }
+            ]
+          },
+          hose_basics: {
+            text: 'It trails behind you as you walk — every tile you cross lays more line. The longer the line, the more energy it costs to drag. Face a grimy wall or floor and spray to clean it in one pass. Much faster than a rag, but it\'ll tire you out quicker too.',
+            choices: [
+              { label: 'What are kinks?', next: 'hose_kinks' },
+              { label: 'How do I roll it up?', next: 'hose_reel' },
+              { label: 'Good enough. What else?', next: 'assignment' }
+            ]
+          },
+          hose_kinks: {
+            text: 'If your path crosses itself — doubling back through a tile you already walked — the line kinks. Each kink drops your water pressure and costs extra energy per step. Plan your route through the dungeon so you\'re not retracing. Think of it like mopping: work in one direction.',
+            choices: [
+              { label: 'How do I roll it up?', next: 'hose_reel' },
+              { label: 'Back to the assignment', next: 'assignment' }
+            ]
+          },
+          hose_reel: {
+            text: 'When you\'re done spraying — or when your energy runs low — the hose reels itself back in and you retrace your path to the truck automatically. Free exit. If your energy hits zero before you reel up, it forces the reel. Either way you end up back at the truck.',
+            choices: [
+              { label: 'What about kinks?', next: 'hose_kinks' },
+              { label: 'Got it. What else?', next: 'assignment' }
+            ]
+          },
+
+          // ── Shared nodes (both greeting paths converge here) ──────
           whathappened: {
             text: 'What always happens. A party of adventurers kicked the door in last night — didn\'t even try the handle, of course — charged downstairs, and left a trail of carnage behind them. Standard Tuesday.',
             choices: [
@@ -2260,6 +2353,10 @@ var Game = (function () {
             text: 'Three things you can do down there: restock the supply crates before the next wave of adventurers ransacks them, scrub walls and floors — the basics — or study up on advanced techniques. Your choice where to start.',
             choices: [
               { label: 'How do I restock crates?', next: 'crates' },
+              // Pre-discovery: point player to the hose they haven't grabbed
+              { label: 'Where\'s the hose?', next: 'hose_location', showIf: { flag: 'hoseDiscovered', value: false } },
+              // Post-discovery: offer tips on the hose they already have
+              { label: 'Hose tips?', next: 'hose_basics', showIf: { flag: 'hoseDiscovered' } },
               { label: 'How do I scrub?', next: 'scrub' },
               { label: 'Study up?', next: 'books' },
               { label: 'All three. Got it.', next: 'sendoff' }
@@ -2274,20 +2371,13 @@ var Game = (function () {
             ]
           },
           scrub: {
-            text: 'Cobwebs, grime, scorch marks — interact with a dirty tile to clean it. For the heavier stuff, there\'s a pressure hose on the department cleanup rig parked outside on the street level. Grab it before you go down. The hose clears a whole wall section in one pass.',
+            text: 'Cobwebs, grime, scorch marks — interact with a dirty tile to clean it. For the heavier stuff, the pressure hose on the cleanup rig handles it in one pass. Much faster than elbow grease.',
             choices: [
-              { label: 'Where\'s the cleanup rig?', next: 'hose' },
+              { label: 'Where\'s the cleanup rig?', next: 'hose_location', showIf: { flag: 'hoseDiscovered', value: false } },
+              { label: 'Hose tips?', next: 'hose_basics', showIf: { flag: 'hoseDiscovered' } },
               { label: 'What about restocking?', next: 'crates' },
               { label: 'And the books?', next: 'books' },
               { label: 'Got it. Heading down.', next: 'sendoff' }
-            ]
-          },
-          hose: {
-            text: 'Should be parked on Lantern Row — big flatbed truck, Guild markings, can\'t miss it. The hose is mounted on the side. Grab it and it goes in your bag. Uses charges, so use it on the stubborn spots and save elbow grease for the light stuff.',
-            choices: [
-              { label: 'What about restocking?', next: 'crates' },
-              { label: 'And the books?', next: 'books' },
-              { label: 'Heading down now.', next: 'sendoff' }
             ]
           },
           books: {
@@ -2924,6 +3014,11 @@ var Game = (function () {
           HoseState.onFloorEnter(FloorManager.getFloor());
         }
 
+        // PW-4: Resume hose reel after floor transition completes
+        if (typeof HoseReel !== 'undefined') {
+          HoseReel.onFloorTransitionComplete();
+        }
+
         // Re-evaluate WaterCursorFX gating for the new floor depth.
         // (Hose may have just detached via subtree validation above.)
         _evaluateCursorFxGating();
@@ -2954,8 +3049,8 @@ var Game = (function () {
 
         // Per-floor arrival hooks (ambient barks, NPC spawns, gate logic).
         // Must run BEFORE quest marker update so the Dispatcher NPC is
-        // spawned and _dispatcherEntity is live when _updateQuestTarget
-        // reads it on Floor 1.
+        // spawned and DispatcherChoreography.getEntity() is live when
+        // QuestWaypoint.update() reads it on Floor 1.
         _onFloorArrive(FloorManager.getFloor());
 
         // Refresh quest waypoint for the new floor. Without this, the
@@ -3010,7 +3105,8 @@ var Game = (function () {
                FloorTransition.isTransitioning() ||
                DialogBox.moveLocked() ||
                (typeof StatusBar !== 'undefined' && StatusBar.isDialogueActive && StatusBar.isDialogueActive()) ||
-               (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen());
+               (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) ||
+               (typeof HoseReel !== 'undefined' && HoseReel.isActive());
       },
       onInteract: _interact,
       onDescend:  function () { FloorTransition.tryStairs('down'); },
@@ -3150,12 +3246,8 @@ var Game = (function () {
 
   // ── Phase 2 panel refresh helper ────────────────────────────────────
 
-  function _refreshPanels() {
-    if (typeof DebriefFeed !== 'undefined') DebriefFeed.refresh();
-    if (typeof StatusBar !== 'undefined') StatusBar.refresh();
-    if (typeof QuickBar !== 'undefined') QuickBar.refresh();
-    if (typeof NchWidget !== 'undefined') NchWidget.refresh();
-  }
+  // Delegated to GameActions.refreshPanels()
+  function _refreshPanels() { GameActions.refreshPanels(); }
 
   // ── Intro auto-walk sequence ──────────────────────────────────────
   //
@@ -3221,9 +3313,8 @@ var Game = (function () {
     }
 
     // Cancel any running ambient bark timer from the previous floor
-    if (_ambientBarkTimer !== null) {
-      clearInterval(_ambientBarkTimer);
-      _ambientBarkTimer = null;
+    if (typeof DispatcherChoreography !== 'undefined') {
+      DispatcherChoreography.clearAmbientBarkTimer();
     }
 
     // C6: Reshuffle deck on dungeon entry — fresh deck for each run.
@@ -3343,12 +3434,37 @@ var Game = (function () {
             // BREAKABLE tiles on blockout floors need crate containers too.
             // Generated floors get these from BreakableSpawner, but blockouts
             // place BREAKABLE tiles directly in the grid array.
-            if (cTile === TILES.BREAKABLE && !CrateSystem.hasContainer(cx, cy, floorId)) {
-              CrateSystem.createCrate(cx, cy, floorId, cBiome);
+            // SC-C: D1 breakables are smash-only — no container system.
+            // SC-D: D2 breakables are storage crates (withdraw, daily refill).
+            // D3+: deposit crates (current behavior).
+            var _brkDepth = floorId ? String(floorId).split('.').length : 1;
+            if (cTile === TILES.BREAKABLE && _brkDepth >= 2 &&
+                !CrateSystem.hasContainer(cx, cy, floorId)) {
+              if (_brkDepth === 2 && CrateSystem.createStorageCrate) {
+                CrateSystem.createStorageCrate(cx, cy, floorId, cBiome);
+              } else {
+                CrateSystem.createCrate(cx, cy, floorId, cBiome);
+              }
             }
           }
         }
       }
+    }
+
+    // SC-B+: Rehydrate eligible chests on floor load.
+    // D1/D2 non-home chests that were looted 7+ days ago get fresh loot.
+    if (typeof CrateSystem !== 'undefined' && CrateSystem.rehydrateFloor) {
+      var rehydCount = CrateSystem.rehydrateFloor(floorId);
+      if (rehydCount > 0 && typeof Toast !== 'undefined') {
+        Toast.show('\u2728 ' + rehydCount + ' chest' +
+                   (rehydCount > 1 ? 's' : '') + ' restocked with fresh loot', 'info');
+      }
+    }
+
+    // SC-G: Register vendor positions from floor blockout shops[] array.
+    // VendorRegistry centralises faction lookup, NPC data, and sprite generation.
+    if (typeof VendorRegistry !== 'undefined' && floorData.shops) {
+      VendorRegistry.registerFloor(floorId, floorData.shops);
     }
 
     // C8: Work order posting and evaluation on floor transitions.
@@ -3419,1312 +3535,33 @@ var Game = (function () {
       _onArriveHeroWake();
     }
   }
-
-  /**
-   * First-entry cinematic for Floor 2.2.1 (Deepwatch Cellars B1).
-   *
-   * The player enters the foyer and, through the 8-wide doorway at the
-   * north end of the foyer, sees the Hero (Seeker) standing in the
-   * junction (11,11) shouting at an unseen enemy. The camera locks with
-   * letterbox bars (CinematicCamera boss_entrance preset), the hero
-   * delivers two dialogue lines, then begins a scripted walk clockwise
-   * around the ring corridor — disappearing from view as they turn the
-   * first corner into the east passage.
-   *
-   * When the hero's scripted path completes (handled in _tick), the
-   * combatTrigger from floorData.heroScript spawns a Wounded Vault
-   * Warden in the North Hall — the mid-corridor blocker. The player
-   * catches up to the hero's trail only to find the hero is gone and a
-   * severely weakened elite is all that stands between them and
-   * nothing.
-   *
-   * One-shot: guarded by Player.flags.heroWakeArrival.
-   */
-  function _onArriveHeroWake() {
-    var fd = FloorManager.getFloorData();
-    if (!fd) return;
-
-    // ── Spawn override (every entry from the parent floor) ──────────
-    // DoorContracts.applyContract on the authored 24×24 Q-shape picks
-    // (12, 21) facing EAST — one tile east of the STAIRS_UP tile, with
-    // _bestFacingDir rotating the player away from the door on the X
-    // axis since the spawn ends up on the same row as the stair. That
-    // lands the player staring at the east foyer wall with the hero
-    // at (11, 11) completely off-screen to their left.
-    //
-    // The blockout declares the correct spawn as (11, 20) facing NORTH
-    // — one tile directly north of the stair, centered in the 8-wide
-    // foyer, with an unobstructed sightline through the row-13 doorway
-    // to the hero in the junction. Apply that here whenever the player
-    // arrived from Watchman's Post (2.2). Skip on 2.2.2 → 2.2.1 returns
-    // (those come up via STAIRS_DN into the North Hall, a different
-    // part of the map with its own correct facing).
-    if (_previousFloorId === '2.2' || _previousFloorId === null) {
-      if (typeof Player !== 'undefined' && Player.setPos && Player.setDir) {
-        Player.setPos(11, 20);
-        Player.setDir(3); // NORTH per direction convention
-        if (Player.resetLookOffset) Player.resetLookOffset();
-      }
-      if (typeof MC !== 'undefined' && MC.init) {
-        MC.init({
-          x: 11,
-          y: 20,
-          dir: 3,
-          collisionCheck: FloorManager.getCollisionCheck
-            ? FloorManager.getCollisionCheck()
-            : null,
-          onMoveStart: null,
-          onMoveFinish: null,
-          onBump: null,
-          onTurnFinish: null
-        });
-      }
-    }
-
-    // One-shot guard. If the player has already triggered this scene,
-    // skip everything (including the wounded warden spawn — they already
-    // killed or bypassed it on the previous visit).
-    if (Player.hasFlag && Player.hasFlag('heroWakeArrival')) {
-      _heroWakeState.phase = 'done';
-      return;
-    }
-    if (!fd || !fd.heroScript) {
-      console.warn('[Game] _onArriveHeroWake: no heroScript on floor data');
-      return;
-    }
-
-    var script = fd.heroScript;
-    if (!script.spawn || !script.path || script.path.length === 0) {
-      console.warn('[Game] _onArriveHeroWake: heroScript missing spawn/path');
-      return;
-    }
-
-    // Mark as played BEFORE spawning anything — a mid-scene reload will
-    // not re-trigger the cinematic (the hero will simply be gone and the
-    // warden will need to be re-placed manually on reload; acceptable
-    // for jam scope).
-    if (Player.setFlag) Player.setFlag('heroWakeArrival', true);
-
-    _heroWakeState.phase = 'playing';
-    _heroWakeState.combatTrigger = script.combatTrigger || null;
-    _heroWakeState.triggerSpawned = false;
-    _heroWakeState.timeoutIds = [];
-
-    // Spawn the scripted hero entity at the junction. HeroSystem tracks
-    // _scriptedHero internally; we render it and tick it from _render
-    // and _tick respectively.
-    if (typeof HeroSystem !== 'undefined' && HeroSystem.createScriptedHero) {
-      HeroSystem.createScriptedHero(script.spawn.x, script.spawn.y, script.path);
-    }
-
-    // Fire the CinematicCamera boss-entrance preset. This:
-    //   • Slams letterbox bars in over ~150ms (barSpeed 1200)
-    //   • Zooms FOV to 0.85 (tight)
-    //   • Adds shake (intensity 6, decay 4)
-    //   • Locks input for the duration (lockInput: true)
-    //   • Auto-closes after 2500ms, returning input to the player
-    // The hero continues its scripted walk after the bars retract —
-    // the player is then free to chase. The focusTarget hint lines up
-    // the framing with the hero's spawn tile.
-    if (typeof CinematicCamera !== 'undefined') {
-      CinematicCamera.start('boss_entrance', {
-        focusTarget: { x: script.spawn.x, y: script.spawn.y }
-      });
-    }
-
-    // Dialogue beats — the hero shouts at the unseen wounded warden.
-    // Fired via setTimeout so they layer over the letterbox reveal
-    // rather than all at once. Each line auto-dismisses after its
-    // display window; the scripted hero starts walking after the
-    // second line completes (handled purely by tickScriptedHero's
-    // movement timer — we do not gate movement on dialogue).
-    var t1 = setTimeout(function () {
-      if (typeof DialogBox !== 'undefined' && DialogBox.show) {
-        DialogBox.show("Come out! I know you're back there!", {
-          speaker: '???',
-          transient: true,
-          priority: 2
-        });
-      }
-      if (typeof AudioSystem !== 'undefined') {
-        AudioSystem.play('enemy-alert', { volume: 0.4 });
-      }
-    }, 900);
-
-    var t2 = setTimeout(function () {
-      if (typeof DialogBox !== 'undefined' && DialogBox.show) {
-        DialogBox.show("Hiding won't save you, worm. The agency paid in full.", {
-          speaker: '???',
-          transient: true,
-          priority: 2
-        });
-      }
-    }, 3100);
-
-    // Atmospheric entry toast — lands immediately, just under the bars.
-    var t0 = setTimeout(function () {
-      if (typeof Toast !== 'undefined') {
-        Toast.show('The foyer reeks of ozone and old blood.', 'dim');
-      }
-    }, 400);
-
-    _heroWakeState.timeoutIds.push(t0, t1, t2);
-  }
-
-  /**
-   * Spawn the Wounded Vault Warden in the North Hall after the hero
-   * despawns. Called from _tick when HeroSystem.tickScriptedHero
-   * returns the hero entity (path complete).
-   *
-   * The warden is authored in floor-blockout-2-2-1.js as:
-   *   { x: 11, y: 2, enemyType: 'vault_warden',
-   *     maxHp: 15, currentHp: 2, str: 5 }
-   * i.e. a tier-elite enemy at 2/15 HP — the hero has already broken
-   * them. Any weapon hit from the player finishes them. The point is
-   * the pacing beat, not the fight.
-   */
-  function _spawnWoundedWarden(trigger) {
-    if (!trigger || _heroWakeState.triggerSpawned) return;
-    if (typeof EnemyAI === 'undefined' || !EnemyAI.createEnemy) return;
-
-    var enemies = FloorManager.getEnemies();
-    if (!enemies) return;
-
-    // Don't spawn on top of another living entity (defensive — the
-    // authored blockout already keeps North Hall empty of rats).
-    for (var i = 0; i < enemies.length; i++) {
-      var e = enemies[i];
-      if (e.hp > 0 && e.x === trigger.x && e.y === trigger.y) return;
-    }
-
-    var warden = EnemyAI.createEnemy({
-      type:  trigger.enemyType || 'vault_warden',
-      name:  trigger.name || 'Wounded Vault Warden',
-      emoji: trigger.emoji || '🛡️',
-      x: trigger.x,
-      y: trigger.y,
-      hp: trigger.currentHp || 2,    // Severely weakened
-      str: trigger.str || 5,
-      dex: trigger.dex || 1,
-      suit: trigger.suit || 'club',
-      isElite: true,
-      facing: 'south',               // Facing the approaching player
-      awarenessRange: 6
-    });
-    // createEnemy sets maxHp = hp. Override so the HP bar reads "2/15"
-    // and the player sees just how close to death this thing is.
-    if (trigger.maxHp) warden.maxHp = trigger.maxHp;
-    // Pre-alert — the warden hears the player coming and turns to face
-    // them. Awareness in the ALERTED band starts the chase behaviour.
-    warden.awareness = 80;
-
-    enemies.push(warden);
-
-    // Assign a bark pool so the warden gets proximity barks.
-    if (EnemyAI.assignBarkPools) {
-      EnemyAI.assignBarkPools([warden], FloorManager.getFloor());
-    }
-
-    // Audible cue — a distant slam / roar telling the player the
-    // corridor ahead is now occupied.
-    if (typeof AudioSystem !== 'undefined') {
-      AudioSystem.play('door_slam', { volume: 0.55 });
-    }
-
-    if (typeof Toast !== 'undefined') {
-      Toast.show('Something heavy just stood up in the dark.', 'danger');
-    }
-
-    _heroWakeState.triggerSpawned = true;
-    _heroWakeState.phase = 'done';
-  }
-
-  /**
-   * Player has arrived on Floor 1 (The Promenade).
-   *
-   * On Day 1 (gate not yet unlocked):
-   *   1. Start ambient morning bark timer — townspeople comment on the player
-   *      not being at work yet.
-   *   2. Spawn the Dispatcher gate NPC at the dungeon entrance tile (5, 2)
-   *      so the player encounters him when they try to enter.
-   *
-   * After gate is unlocked, ambient barks switch to the general pool.
-   */
-  function _onArrivePromenade() {
-    if (typeof BarkLibrary === 'undefined') return;
-
-    var barkKey = _gateUnlocked ? 'ambient.promenade' : 'ambient.promenade.morning';
-
-    // Fire one bark immediately on arrival (world feels alive)
-    setTimeout(function () {
-      BarkLibrary.fire(barkKey);
-    }, 2500);
-
-    // Then fire ambient barks on a loose 18–28 s interval
-    _ambientBarkTimer = setInterval(function () {
-      if (!ScreenManager.isPlaying()) return;
-      BarkLibrary.fire(barkKey);
-    }, _AMBIENT_BARK_MIN_MS + Math.random() * _AMBIENT_BARK_RANGE_MS);
-
-    // On first arrival before gate is unlocked, spawn the Dispatcher
-    if (!_gateUnlocked) {
-      _spawnDispatcherGate();
-    }
-
-    // ── Dispatcher confrontation: escalating barks based on fail streak ──
-    if (_gateUnlocked && typeof Player !== 'undefined') {
-      var fails = Player.getFlag('consecutiveFails') || 0;
-      if (fails >= 4) {
-        // Terminal — game over via dispatcher firing
-        setTimeout(function () {
-          BarkLibrary.fire('npc.dispatcher.warn.fired');
-          setTimeout(function () {
-            _changeState(S.GAME_OVER);
-          }, 3000);
-        }, 1500);
-      } else if (fails >= 3) {
-        setTimeout(function () {
-          BarkLibrary.fire('npc.dispatcher.warn.severe');
-        }, 1500);
-      } else if (fails >= 2) {
-        setTimeout(function () {
-          BarkLibrary.fire('npc.dispatcher.warn.mild');
-        }, 1500);
-      }
-    }
-  }
-
-  /**
-   * Spawn the Dispatcher NPC at the dungeon entrance tile (5, 2).
-   * The NPC blocks movement onto that tile and shows gate dialog
-   * when bumped or interacted with.
-   *
-   * TODO (Phase B): Convert to a NpcSystem DISPATCHER definition so this
-   * entity follows the standard spawn/despawn/interact pattern. Currently
-   * hand-rolled here because it has gate-state logic (gateUnlocked flag)
-   * that runs before NpcSystem is fully wired for conditional spawns.
-   */
-  /**
-   * Spawn the Dispatcher gate NPC in a hidden holding position.
-   *
-   * The dispatcher does NOT block the gate passage initially. Instead,
-   * it waits until the player crosses a proximity threshold (~7 tiles
-   * from the gate door), then spawns behind the player, barks, and
-   * rush-approaches for the grab sequence.
-   *
-   * Choreography (§11d / DOC-51):
-   *   1. Player crosses proximity threshold → _dispatcherPhase = 'spawned'
-   *   2. Dispatcher appears behind player (opposite facing direction, 6 tiles back)
-   *   3. Bark: "HEY [player class]!" → _dispatcherPhase = 'barking'
-   *   4. After delay → rush toward player at 10x speed → _dispatcherPhase = 'rushing'
-   *   5. Within grab range → CinematicCamera.start('dispatcher_grab') + forced 180° turn
-   *   6. → _dispatcherPhase = 'grabbing' → dialogue tree opens
-   */
-  function _spawnDispatcherGate() {
-    // Restore session flag from persisted player state (save/load)
-    if (!_dispatcherDialogShown && typeof Player !== 'undefined' && Player.state) {
-      var pf = Player.state().flags;
-      if (pf && pf.dispatcher_met) _dispatcherDialogShown = true;
-    }
-
-    var enemies = FloorManager.getEnemies();
-    // Guard: don't double-spawn
-    for (var i = 0; i < enemies.length; i++) {
-      if (enemies[i].id === _dispatcherSpawnId) return;
-    }
-
-    var stack = (typeof NpcComposer !== 'undefined')
-      ? NpcComposer.getVendorPreset('dispatcher')
-      : null;
-
-    // Find the actual gate position (DOOR leading to Floor 2)
-    var gatePos = _findGateDoorPos();
-    // Stand 1 tile west of the gate (toward the player's approach direction)
-    var spawnX = gatePos ? gatePos.x - 1 : 47;
-    var spawnY = gatePos ? gatePos.y : 17;
-
-    var entity = {
-      id:          _dispatcherSpawnId,
-      x:           spawnX,
-      y:           spawnY,
-      name:        'Dispatcher',
-      emoji:       stack ? stack.head : '🐉',
-      stack:       stack,
-      type:        'dispatcher',
-      hp:          999,
-      maxHp:       999,
-      str:         0,
-      facing:      'west',    // Faces the player's approach (from the road)
-      awareness:   0,
-      friendly:    true,
-      nonLethal:   true,
-      blocksMovement: true,   // Blocks the gate from the start
-      _hidden:     false,     // Visible on minimap and in raycaster
-      tags:        ['gate_npc', 'dispatcher']
-    };
-
-    enemies.push(entity);
-    _dispatcherEntity = entity;
-
-    // If the encounter already played (player left Floor 1 and returned
-    // before getting keys), skip the choreography — go straight to 'done'.
-    // The dispatcher stays visible as a gatekeeper bump-NPC but doesn't
-    // re-run the barking → dialogue cinematic a second time.
-    if (_dispatcherDialogShown) {
-      _dispatcherPhase = 'done';
-      console.log('[Game] Dispatcher re-spawned as gatekeeper (encounter already completed)');
-    } else {
-      _dispatcherPhase = 'idle';
-      console.log('[Game] Dispatcher gate NPC spawned at gate (' + spawnX + ',' + spawnY + ') — awaiting proximity');
-    }
-  }
-
-  /**
-   * Find the gate door position on Floor 1 that leads to Floor 2.
-   * Uses doorTargets to find the DOOR keyed to target '2', which is the
-   * correct gate regardless of grid layout. Falls back to scanning for
-   * STAIRS_DN / BOSS_DOOR / DOOR if doorTargets is missing.
-   * @returns {{x:number, y:number}|null}
-   */
-  function _findGateDoorPos() {
-    var floorData = FloorManager.getFloorData();
-    if (!floorData || !floorData.grid) return null;
-
-    // Primary: check doorTargets for the door leading to Floor "2"
-    if (floorData.doorTargets) {
-      var keys = Object.keys(floorData.doorTargets);
-      for (var i = 0; i < keys.length; i++) {
-        if (floorData.doorTargets[keys[i]] === '2') {
-          var parts = keys[i].split(',');
-          return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
-        }
-      }
-    }
-
-    // Fallback: scan for STAIRS_DN or BOSS_DOOR
-    for (var gy = 0; gy < floorData.gridH; gy++) {
-      for (var gx = 0; gx < floorData.gridW; gx++) {
-        var tile = floorData.grid[gy][gx];
-        if (tile === TILES.STAIRS_DN || tile === TILES.BOSS_DOOR) {
-          return { x: gx, y: gy };
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Find a walkable tile behind the player (opposite their facing direction).
-   * Searches outward from ideal distance, falls back to nearest walkable.
-   * Blockout-agnostic — clamps to grid bounds and checks walkability.
-   * @param {number} idealDist - Desired distance behind player
-   * @returns {{x:number, y:number}}
-   */
-  function _findSpawnBehind(idealDist) {
-    var floorData = FloorManager.getFloorData();
-    var pp = Player.getPos();
-    var dir = Player.getDir();
-
-    // Opposite of player's facing direction
-    // DX/DY: 0=East(+x), 1=South(+y), 2=West(-x), 3=North(-y)
-    var oppositeDir = (dir + 2) % 4;
-    var bdx = MC.DX[oppositeDir];
-    var bdy = MC.DY[oppositeDir];
-
-    // Try ideal distance first, then shrink until walkable
-    for (var dist = idealDist; dist >= 2; dist--) {
-      var tx = pp.x + bdx * dist;
-      var ty = pp.y + bdy * dist;
-
-      // Clamp to grid
-      if (floorData && floorData.grid) {
-        tx = Math.max(1, Math.min(floorData.gridW - 2, tx));
-        ty = Math.max(1, Math.min(floorData.gridH - 2, ty));
-      }
-
-      // Check walkable
-      if (floorData && floorData.grid && floorData.grid[ty] &&
-          TILES.isWalkable(floorData.grid[ty][tx])) {
-        return { x: tx, y: ty };
-      }
-    }
-
-    // Last resort: spawn adjacent to player (any walkable neighbor)
-    var dirs = [0, 1, 2, 3];
-    for (var d = 0; d < dirs.length; d++) {
-      var nx = pp.x + MC.DX[dirs[d]] * 2;
-      var ny = pp.y + MC.DY[dirs[d]] * 2;
-      if (floorData && floorData.grid && floorData.grid[ny] &&
-          TILES.isWalkable(floorData.grid[ny][nx])) {
-        return { x: nx, y: ny };
-      }
-    }
-
-    // Absolute fallback
-    return { x: pp.x, y: pp.y + 2 };
-  }
-
-  /**
-   * Tick the dispatcher choreography state machine.
-   * Called every frame from the gameplay update when on Floor 1 and gate is locked.
-   *
-   * Blockout-agnostic: finds gate dynamically, spawns relative to player,
-   * rush-walks using grid pathfinding with wall checks.
-   *
-   * @param {number} dt - Frame delta in milliseconds
-   */
-  function _tickDispatcherChoreography(dt) {
-    if (_gateUnlocked || !_dispatcherEntity) return;
-    if (FloorManager.getFloor() !== '1') return;
-
-    var pp = Player.getPos();
-    var floorData = FloorManager.getFloorData();
-
-    switch (_dispatcherPhase) {
-
-      case 'idle': {
-        // Dispatcher is visible at the gate. Check proximity to the dispatcher.
-        var ddx = pp.x - _dispatcherEntity.x;
-        var ddy = pp.y - _dispatcherEntity.y;
-        var dispDist = Math.sqrt(ddx * ddx + ddy * ddy);
-
-        if (dispDist <= DISPATCHER_TRIGGER_RANGE) {
-          // ── Player approached the dispatcher — trigger encounter ──
-          _dispatcherPhase = 'grabbing';
-
-          // Freeze player movement so buffered inputs can't walk away
-          MC.cancelAll();
-
-          // ── Opening bark: "HEY [player class]!" ──
-          var className = '';
-          if (typeof Player !== 'undefined' && Player.state) {
-            className = Player.state().avatarName || Player.state().className || 'Gleaner';
-          }
-          if (!className) className = 'Gleaner';
-          var barkText = 'HEY! ' + className.toUpperCase() + '!';
-
-          if (typeof BarkLibrary !== 'undefined' && BarkLibrary.fire) {
-            BarkLibrary.fire('npc.dispatcher.hail', { fallback: barkText });
-          } else if (typeof Toast !== 'undefined') {
-            Toast.show(barkText, 'warning');
-          }
-
-          // Voice chirp (loud, authoritative)
-          if (typeof AudioSystem !== 'undefined') {
-            AudioSystem.play('ui-blop', { volume: 0.6, playbackRate: 0.75 });
-          }
-
-          // Calculate angle from player to dispatcher (for forced turn)
-          var angleToDisp = Math.atan2(
-            _dispatcherEntity.y - pp.y,
-            _dispatcherEntity.x - pp.x
-          );
-
-          // Force player to face the dispatcher
-          var targetDir = (typeof Player !== 'undefined' && Player.radianToDir)
-            ? Player.radianToDir(angleToDisp)
-            : MC.DIR_EAST;
-          MC.startTurn(targetDir);
-          Player.setDir(targetDir);
-
-          // Lock MouseLook to dead-center during cinematic
-          if (typeof MouseLook !== 'undefined' && MouseLook.lockOn) {
-            MouseLook.lockOn(0, 0);
-          }
-          if (typeof Player !== 'undefined' && Player.resetLookOffset) {
-            Player.resetLookOffset();
-          }
-
-          // NPC faces player
-          if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
-            NpcSystem.engageTalk(_dispatcherEntity);
-          }
-
-          // ── CinematicCamera: letterbox + input lock ──
-          if (typeof CinematicCamera !== 'undefined') {
-            CinematicCamera.start('dispatcher_grab', {
-              focusAngle: angleToDisp,
-              onMidpoint: function () {
-                _showDispatcherGateDialog();
-              }
-            });
-          } else {
-            // Fallback: no camera, just show dialogue
-            _showDispatcherGateDialog();
-          }
-
-          console.log('[Game] Dispatcher encounter triggered — dist=' + dispDist.toFixed(1) +
-                      ' | forced face dir=' + targetDir);
-        }
-        break;
-      }
-
-      case 'grabbing':
-        // Waiting for dialogue to finish (managed by _showDispatcherGateDialog onClose)
-        break;
-
-      case 'done':
-        // Sequence complete — dispatcher removed by _onPickupWorkKeys or stays as gatekeeper
-        break;
-    }
-  }
-
-  /**
-   * Dispatcher gate dialogue — full Morrowind-style branching tree.
-   *
-   * First encounter (grab sequence):
-   *   Grab bark → "Oh you don't like when I patronize..." → 3 choices
-   *   [Who are you?] → reveals Department/clock → 2 more choices
-   *   [What keys?] → explains key location
-   *   [Where did FACTION hit?] → reveals dungeon target
-   *   [Who am I supposed to be?] → callsign + class ribbing
-   *
-   * Subsequent bumps: shorter redirect with "have keys" skip option.
-   *
-   * Text wrapping: DialogBox._wrapText() handles long lines dynamically.
-   * At 13px monospace in a ~428px box, lines wrap at ~33 chars. Long
-   * dialogue is fine — it just flows to multiple lines.
-   */
-  // Restored from Player.state().flags.dispatcher_met on floor arrival
-  var _dispatcherDialogShown = false;
-
-  /**
-   * Dispatcher gate dialogue — Morrowind-style branching tree rendered
-   * inline in the StatusBar tooltip footer (not the DialogBox canvas overlay).
-   *
-   * First encounter (grab sequence):
-   *   "Oh you don't like when I patronize..." → 3 choices
-   *   [Who are you?] → reveals Department/clock → 2 more choices
-   *   [What keys?] → explains key location
-   *   [Where did FACTION hit?] → reveals dungeon target
-   *   [Who am I supposed to be?] → callsign + class ribbing
-   *   All branches → "Your keys are at the BnB..." → end
-   *
-   * Subsequent bumps: shorter redirect with leave / unlock options.
-   *
-   * Uses StatusBar.pushDialogue() per TOOLTIP_BARK_ROADMAP Phase 1.
-   * The first-person viewport stays visible throughout the conversation.
-   */
-  function _showDispatcherGateDialog() {
-    if (typeof StatusBar === 'undefined' || !StatusBar.pushDialogue) return;
-
-    var firstTime = !_dispatcherDialogShown;
-    _dispatcherDialogShown = true;
-
-    // Persist flag so the encounter doesn't re-trigger on re-entry
-    if (typeof Player !== 'undefined' && Player.state) {
-      Player.state().flags.dispatcher_met = true;
-    }
-
-    // Player identity tokens for dialogue
-    var ps = (typeof Player !== 'undefined' && Player.state) ? Player.state() : {};
-    var playerClass = ps.avatarName || ps.className || 'Gleaner';
-    var callsign = ps.callsign || 'Operative';
-    // Resolve faction name from the next scheduled hero group.
-    // DungeonSchedule tracks which hero type (Seeker/Scholar/Crusader)
-    // is incoming; we pluralise heroType and prepend the suit glyph.
-    // Falls back to 'the Heroes' if schedule is unavailable.
-    var factionName = 'the Heroes';
-    if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup) {
-      var _dsNext = DungeonSchedule.getNextGroup();
-      if (_dsNext && _dsNext.heroType) {
-        factionName = (_dsNext.suit ? _dsNext.suit + ' ' : '') + _dsNext.heroType + 's';
-      }
-    }
-
-    // Callback to close cinematic after dialogue ends
-    var _closeCinematic = function () {
-      console.log('[Game] _closeCinematic — releasing controls');
-      try {
-        if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) {
-          CinematicCamera.close();
-        }
-      } catch (e) {
-        console.error('[Game] CinematicCamera.close() error:', e);
-      }
-      // Release MouseLook lock so free-look resumes
-      if (typeof MouseLook !== 'undefined' && MouseLook.releaseLock) {
-        MouseLook.releaseLock();
-      }
-      // Ensure movement queue is clean and player can move again
-      MC.cancelAll();
-      _dispatcherPhase = 'done';
-      _updateQuestTarget();  // Phase 0 → Phase 1: now points to home/keys
-    };
-
-    // NPC descriptor for StatusBar speaker rendering
-    var dispatcherNpc = {
-      id:    _dispatcherSpawnId,
-      name:  'Dispatcher',
-      emoji: '\uD83D\uDC09',
-      x:     _dispatcherEntity ? _dispatcherEntity.x : 0,
-      y:     _dispatcherEntity ? _dispatcherEntity.y : 0
-    };
-
-    // ── Build dialogue tree ──
-    var tree;
-
-    if (firstTime) {
-      // ── GRAB DIALOGUE — first encounter ──
-      tree = {
-        root: 'intro',
-        nodes: {
-          intro: {
-            text: 'You ' + callsign + '? New transfer? Great. I\'m your dispatcher. We had another incident on the lower floors and I need you onsite yesterday.',
-            choices: [
-              { label: 'What happened?',            next: 'what_happened' },
-              { label: 'Nice to meet you too.',     next: 'snide' },
-              { label: 'Just tell me what to do.',  next: 'key_redirect' }
-            ]
-          },
-          what_happened: {
-            text: '' + factionName + ' tore through here last night. Standard cleanup job. Walls need scrubbing, traps need resetting, the usual.',
-            choices: [
-              { label: 'Sounds rough.',             next: 'rough' },
-              { label: 'Where do I start?',         next: 'key_redirect' }
-            ]
-          },
-          snide: {
-            text: 'Save the charm for your landlord. I\'ve had four transfers this quarter and none of them lasted a week. Prove me wrong.',
-            choices: [
-              { label: 'Plan to.',                  next: 'key_redirect' },
-              { label: 'What happened to them?',    next: 'transfers' }
-            ]
-          },
-          transfers: {
-            text: 'Quit. Reassigned. One got too curious. Point is, the Department shuffles people and I\'m tired of the paperwork. Do the job, keep your head down.',
-            choices: [
-              { label: 'Noted. What\'s the job?',   next: 'key_redirect' }
-            ]
-          },
-          rough: {
-            text: 'It\'s the job. You signed up for this. Or the Department signed you up. Same thing.',
-            choices: [
-              { label: 'Where do I start?',         next: 'key_redirect' }
-            ]
-          },
-          key_redirect: {
-            text: 'First thing. Your work keys are back at the BnB. Go home, grab them, then come unlock this floor so the hazmat crew can get through.',
-            choices: [
-              { label: 'On my way.',
-                next: null,
-                effect: {
-                  callback: function () {
-                    if (typeof Toast !== 'undefined') {
-                      Toast.show('\uD83D\uDDDD\uFE0F Go home and get your work keys', 'info');
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        }
-      };
-    } else {
-      // ── RETURN BUMPS — shorter redirect ──
-      tree = {
-        root: 'return_greeting',
-        nodes: {
-          return_greeting: {
-            text: 'Still here, ' + callsign + '? Your keys are at home. Get moving.',
-            choices: [
-              { label: 'On my way', next: null },
-              { label: 'Actually, I have them now', next: 'have_keys' }
-            ]
-          },
-          have_keys: {
-            text: 'About time. Gate\'s open. Watch yourself down there.',
-            choices: [
-              { label: 'Thanks.',
-                next: null,
-                effect: {
-                  callback: function () {
-                    _onPickupWorkKeys();
-                  }
-                }
-              }
-            ]
-          }
-        }
-      };
-    }
-
-    // Push tree to StatusBar tooltip footer (pinned: forced encounter, no walk-away)
-    StatusBar.pushDialogue(dispatcherNpc, tree, function () {
-      // onEnd: fires when any null-next choice is picked (conversation over)
-      _closeCinematic();
-    }, { pinned: true });
-  }
-
-  /**
-   * Player has arrived on Floor 1.6 (Gleaner's Home).
-   *
-   * Fires the home-arrival bark and checks whether the work keys item
-   * is present in the home chest. If so, marks it for pickup — the
-   * player will interact with the DOOR tile at the chest position to
-   * collect the keys, which sets _gateUnlocked = true.
-   */
-  function _onArriveHome() {
-    if (typeof BarkLibrary !== 'undefined') {
-      setTimeout(function () {
-        BarkLibrary.fire('home.morning.wakeup');
-      }, 1000);
-    }
-
-    if (!_gateUnlocked) {
-      console.log('[Game] Floor 1.6 — work keys available for pickup');
-      // The chest at (5, 3) on the home floor contains the work keys.
-      // When the player interacts with it, _onPickupWorkKeys() is called
-      // via the chest-interact path in _interact().
-    }
-  }
-
-  /**
-   * Called when the player picks up the work keys from the home chest.
-   * Unlocks the gate, removes the Dispatcher NPC, and fires the unlock bark.
-   */
+  // ── Hero Wake cinematic — delegated to HeroWake ────────────────
+
+  function _onArriveHeroWake() { HeroWake.onArrive(_previousFloorId); }
+  function _spawnWoundedWarden(trigger) { HeroWake.spawnWoundedWarden(trigger); }
+  // ── Dispatcher choreography — delegated to DispatcherChoreography ──
+
+  function _onArrivePromenade() { DispatcherChoreography.onArrivePromenade(); }
+  function _tickDispatcherChoreography(dt) { DispatcherChoreography.tick(dt); }
+  function _findGateDoorPos() { return DispatcherChoreography.findGateDoorPos(); }
+  // ── Home events — delegated to HomeEvents ──────────────────────
+
+  function _onArriveHome() { HomeEvents.onArriveHome(); }
+  function _checkWorkKeysChest(fx, fy) { return HomeEvents.checkWorkKeysChest(fx, fy); }
   function _onPickupWorkKeys() {
-    if (_gateUnlocked) return;
-    _gateUnlocked = true;
-
-    if (typeof BarkLibrary !== 'undefined') {
-      BarkLibrary.fire('home.keys.pickup');
-    }
-
-    // Remove the Dispatcher NPC from Floor 1 enemy list (it may not be
-    // loaded right now — the cache will be clean when Floor 1 is visited)
-    if (FloorManager.getFloor() === '1') {
-      var enemies = FloorManager.getEnemies();
-      for (var i = enemies.length - 1; i >= 0; i--) {
-        if (enemies[i].id === _dispatcherSpawnId) {
-          enemies.splice(i, 1);
-          break;
-        }
-      }
-    }
-
-    // Invalidate Floor 1 cache so gate NPC is not re-spawned on revisit
-    FloorManager.invalidateCache('1');
-
-    console.log('[Game] Work keys collected — dungeon gate unlocked');
-
-    // Update quest waypoint now that gate is open
-    _updateQuestTarget();
+    HomeEvents.onPickupWorkKeys();
+    _gateUnlocked = HomeEvents.isGateUnlocked();
+    GameActions.setGateUnlocked(_gateUnlocked);
   }
+  function _executeOvernightHeroRun(dayNum) { HomeEvents.executeOvernightHeroRun(dayNum); }
+  function _doHomeDoorRest() { HomeEvents.doHomeDoorRest(); }
 
   // ═══════════════════════════════════════════════════════════════
-  //  OVERNIGHT HERO RUN — executes during sleep on Hero Day eve
+  //  HUD DAY/CYCLE COUNTER — delegated to WeekStrip module
   // ═══════════════════════════════════════════════════════════════
 
-  /**
-   * Execute the overnight hero run when the player sleeps into a Hero Day.
-   * Uses HeroRun to calculate results, then delivers a report to the mailbox.
-   *
-   * @param {number} dayNum - The day number that is now a Hero Day
-   */
-  function _executeOvernightHeroRun(dayNum) {
-    if (typeof HeroRun === 'undefined') return;
-    if (typeof MailboxPeek === 'undefined') return;
-
-    // Day 0 guard: heroes already ran before the game started.
-    // Pre-existing carnage is baked into initial floor generation.
-    if (dayNum === 0) {
-      console.log('[Game] Day 0 — skipping hero run (pre-existing carnage).');
-      return;
-    }
-
-    // Determine which hero runs today
-    var heroType = HeroRun.getHeroForDay(dayNum);
-
-    // Gather floor readiness data for all known dungeon floors
-    var dungeonFloors = [];
-    var knownDungeons = ['1.3.1', '2.2.1', '2.2.2'];
-    for (var i = 0; i < knownDungeons.length; i++) {
-      var fid = knownDungeons[i];
-      var readiness = 0;
-      var crateCount = 4;     // Default estimates
-      var enemyCount = 3;
-      var trapCount = 2;
-      var puzzleCount = 1;
-
-      // Try to get actual readiness from ReadinessCalc
-      if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getReadiness) {
-        var r = ReadinessCalc.getReadiness(fid);
-        if (r && typeof r.total === 'number') readiness = Math.round(r.total * 100);
-      }
-
-      // Try to get actual counts from cached floor data
-      if (typeof FloorManager !== 'undefined' && FloorManager.getCachedFloorData) {
-        var cached = FloorManager.getCachedFloorData(fid);
-        if (cached && cached.grid) {
-          crateCount = _countTilesOfType(cached.grid, cached.gridW, cached.gridH, TILES.BREAKABLE) || 4;
-          trapCount = _countTilesOfType(cached.grid, cached.gridW, cached.gridH, TILES.TRAP) || 2;
-        }
-        if (cached && cached.enemies) {
-          enemyCount = cached.enemies.length || 3;
-        }
-      }
-
-      // Floor name lookup
-      var floorName = fid;
-      if (typeof i18n !== 'undefined' && i18n.t) {
-        floorName = i18n.t('floor.' + fid, fid);
-      }
-
-      dungeonFloors.push({
-        floorId: fid,
-        name: floorName,
-        readiness: readiness,
-        crateCount: crateCount,
-        enemyCount: enemyCount,
-        trapCount: trapCount,
-        puzzleCount: puzzleCount
-      });
-    }
-
-    // Only run if there are floors with non-zero readiness
-    var hasReadyFloor = false;
-    for (var j = 0; j < dungeonFloors.length; j++) {
-      if (dungeonFloors[j].readiness > 0) { hasReadyFloor = true; break; }
-    }
-
-    if (!hasReadyFloor && dayNum > 0) {
-      // No floors prepared — hero is disappointed
-      MailboxPeek.addReport({
-        day: dayNum,
-        heroType: heroType,
-        heroEmoji: HeroRun.getHeroEmoji(heroType),
-        floors: [],
-        totalPayout: 0,
-        chainBonus: false,
-        cardDrop: null,
-        isDeathReport: false,
-        rescueText: null
-      });
-      console.log('[Game] Hero Day ' + dayNum + ' — no floors ready. Hero disappointed.');
-      return;
-    }
-
-    // Execute the hero run
-    var report = HeroRun.executeRun(heroType, dungeonFloors);
-    report.day = dayNum;
-
-    // Deliver report to mailbox
-    MailboxPeek.addReport(report);
-
-    // Invalidate dungeon floor caches so re-entry shows carnage
-    for (var k = 0; k < knownDungeons.length; k++) {
-      if (typeof FloorManager !== 'undefined' && FloorManager.invalidateCache) {
-        FloorManager.invalidateCache(knownDungeons[k]);
-      }
-    }
-
-    console.log('[Game] Hero Day ' + dayNum + ' — ' + heroType + ' ran. Payout: ' + report.totalPayout + ' coins. Report delivered to mailbox.');
-  }
-
-  /**
-   * Count tiles of a specific type in a grid.
-   */
-  function _countTilesOfType(grid, w, h, tileType) {
-    var count = 0;
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        if (grid[y] && grid[y][x] === tileType) count++;
-      }
-    }
-    return count;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  HOME DOOR REST (porch shortcut when TIRED)
-  // ═══════════════════════════════════════════════════════════════
-
-  /**
-   * Rest at the front door of home. Skips entering the house —
-   * player sleeps on the porch at depth-1 (exterior), so the clock
-   * is NOT paused and advanceTime works normally.
-   *
-   * Grants WELL_RESTED if in bed before midnight (sleepHour >= 6).
-   */
-  function _doHomeDoorRest() {
-    var sleepHour = (typeof DayCycle !== 'undefined') ? DayCycle.getHour() : 0;
-
-    if (typeof TransitionFX !== 'undefined') {
-      TransitionFX.begin({
-        type: 'descend',
-        duration: 1200,
-        label: 'Resting for the night...',
-        onMidpoint: function () {
-          // Advance time to morning
-          if (typeof DayCycle !== 'undefined') {
-            DayCycle.advanceTime(DayCycle.ADVANCE.REST);
-          }
-
-          // Clear TIRED
-          if (typeof StatusEffect !== 'undefined') {
-            StatusEffect.remove('TIRED', 'manual');
-          }
-
-          // Grant WELL_RESTED if in bed before midnight
-          // sleepHour >= 6 means the player went to bed during the day/evening
-          // (not in the 00:00–05:59 post-midnight zone = stayed up too late)
-          if (sleepHour >= 6 && typeof StatusEffect !== 'undefined') {
-            StatusEffect.apply('WELL_RESTED');
-          }
-
-          // Heal + heal particles
-          if (typeof Player !== 'undefined') {
-            Player.fullRestore();
-            // Successful voluntary sleep resets consecutive fail streak
-            Player.setFlag('consecutiveFails', 0);
-          }
-          if (typeof ParticleFX !== 'undefined') {
-            ParticleFX.healPulse(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.5 : 220);
-          }
-
-          // Transition into home (1.6) — wake up inside
-          FloorManager.setFloor('1.6');
-          FloorManager.generateCurrentFloor();
-        },
-        onComplete: function () {
-          _updateDayCounter();
-
-          if (sleepHour >= 6 && typeof Toast !== 'undefined') {
-            Toast.show('\u2600 Well rested! Ready for the day.', 'buff');
-          } else if (typeof Toast !== 'undefined') {
-            Toast.show('\u2615 Late night... but at least you made it home.', 'info');
-          }
-
-          // Trigger overnight hero run if it's a Hero Day
-          // §9: DungeonSchedule handles per-group runs via DayCycle.onDayChange.
-          // Legacy path only when DungeonSchedule is absent.
-          if (typeof DayCycle !== 'undefined' && DayCycle.isHeroDay() &&
-              typeof DungeonSchedule === 'undefined') {
-            _executeOvernightHeroRun(DayCycle.getDay());
-          }
-
-          // Mailbox notification
-          if (typeof MailboxPeek !== 'undefined' && MailboxPeek.hasUnread()) {
-            setTimeout(function () {
-              if (typeof Toast !== 'undefined') {
-                Toast.show('\uD83D\uDCEC You have mail!', 'info');
-              }
-            }, 1500);
-          }
-        }
-      });
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  HUD DAY/CYCLE COUNTER
-  // ═══════════════════════════════════════════════════════════════
-
-  var _dayCounterEl = null;
-
-  // ── Week-strip widget config ───────────────────────────────────
-  // Day abbreviations — Monday-first to match DayCycle (Day 0 = Monday)
-  var _WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  // Suit symbols for hero-day indicators (each dungeon gets a color+suit)
-  // Legacy: used when DungeonSchedule is absent
-  var _DUNGEON_SUITS = [
-    { sym: '\u2660', color: '#8888ff' },  // ♠ spades — blue dungeon
-    { sym: '\u2666', color: '#ff6666' },  // ♦ diamonds — red dungeon
-    { sym: '\u2663', color: '#66cc66' }   // ♣ clubs — green dungeon
-  ];
-
-  // §9: Group-to-suit mapping for DungeonSchedule-driven display.
-  // Each group gets a unique suit symbol + color for the week strip.
-  var _GROUP_SUITS = {
-    soft_cellar: { sym: '\u2660', color: '#8888ff', name: 'Soft Cellar'  },  // ♠ spades
-    heros_wake:  { sym: '\u2666', color: '#ff6666', name: "Hero's Wake"  },  // ♦ diamonds
-    heart:       { sym: '\u2665', color: '#ff5588', name: 'Heart'        }   // ♥ hearts
-  };
-
-  /**
-   * Create the day counter DOM element — week-strip with day nodes.
-   */
-  function _initDayCounter() {
-    _dayCounterEl = document.getElementById('hud-day-counter');
-    if (!_dayCounterEl) {
-      _dayCounterEl = document.createElement('div');
-      _dayCounterEl.id = 'hud-day-counter';
-      _dayCounterEl.style.cssText =
-        'position:absolute;top:10px;right:308px;' +
-        'font:bold 13px var(--font-data, monospace);color:#d4c8a0;' +
-        'text-shadow:0 1px 3px rgba(0,0,0,0.8);' +
-        'z-index:15;pointer-events:auto;' +
-        'background:rgba(10,8,5,0.7);padding:4px 8px;' +
-        'border:1px solid rgba(180,160,120,0.3);border-radius:4px;' +
-        'display:flex;align-items:center;gap:2px;';
-      var viewport = document.getElementById('viewport');
-      if (viewport) viewport.appendChild(_dayCounterEl);
-    }
-
-    // Inject keyframes + suit-stack hover styles (once)
-    if (!document.getElementById('day-strip-style')) {
-      var style = document.createElement('style');
-      style.id = 'day-strip-style';
-      style.textContent =
-        '@keyframes day-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }\n' +
-        // Suit stack: overlapping cascade (NCH joker pattern)
-        '.ds-node { position:relative; display:inline-flex; align-items:center;' +
-        '  justify-content:center; width:20px; height:22px; border-radius:3px;' +
-        '  text-align:center; line-height:22px; vertical-align:top; }\n' +
-        // Individual suit chip inside a stacked node
-        '.ds-suit { position:absolute; transition: left 0.2s ease, top 0.15s ease;' +
-        '  font-size:inherit; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }\n' +
-        // Stack positions: diagonal cascade (like NCH joker offset)
-        '.ds-suit.s-0 { left:0; top:0; }\n' +
-        '.ds-suit.s-1 { left:5px; top:-1px; }\n' +
-        '.ds-suit.s-2 { left:10px; top:0; }\n' +
-        // Hover: fan out (more horizontal spread)
-        '.ds-node:hover .ds-suit.s-0 { left:-2px; }\n' +
-        '.ds-node:hover .ds-suit.s-1 { left:6px; }\n' +
-        '.ds-node:hover .ds-suit.s-2 { left:14px; }\n' +
-        // Stacked node gets wider to accommodate fanned suits
-        '.ds-node.ds-stacked { width:22px; }\n' +
-        '.ds-node.ds-stacked:hover { width:30px; }\n' +
-        // Death-shifted suits: pulsing red border glow
-        '.ds-suit.ds-shifted { animation:ds-shift-pulse 1.5s ease-in-out infinite; }\n' +
-        '@keyframes ds-shift-pulse { 0%,100%{filter:drop-shadow(0 1px 1px rgba(0,0,0,0.6))}' +
-        '  50%{filter:drop-shadow(0 0 4px rgba(255,80,60,0.7))} }\n' +
-        // Resolved (past hero day): checkmark or X
-        '.ds-suit.ds-resolved-pass::after { content:"\\2713"; position:absolute;' +
-        '  bottom:-6px; right:-4px; font-size:7px; color:#66cc66; }\n' +
-        '.ds-suit.ds-resolved-fail::after { content:"\\2717"; position:absolute;' +
-        '  bottom:-6px; right:-4px; font-size:7px; color:#ff5555; }\n';
-      document.head.appendChild(style);
-    }
-
-    _updateDayCounter();
-  }
-
-  /**
-   * Build a map: dayNum → [{ sym, color, groupId, resolved, onSchedule, result }]
-   * from DungeonSchedule contracts. Returns {} if DungeonSchedule absent.
-   */
-  function _buildHeroDayMap() {
-    if (typeof DungeonSchedule === 'undefined' || !DungeonSchedule.getSchedule) return null;
-    var schedule = DungeonSchedule.getSchedule();
-    var map = {};
-    for (var i = 0; i < schedule.length; i++) {
-      var c = schedule[i];
-      var suit = _GROUP_SUITS[c.groupId] || { sym: '\u2694', color: '#aaa', name: c.label };
-      var dayKey = c.actualDay;
-      if (!map[dayKey]) map[dayKey] = [];
-      map[dayKey].push({
-        sym:        suit.sym,
-        color:      suit.color,
-        groupId:    c.groupId,
-        label:      suit.name || c.label,
-        resolved:   c.resolved,
-        onSchedule: c.onSchedule,
-        result:     c.result,
-        shifted:    c.actualDay !== c.scheduledDay,
-        scheduledDay: c.scheduledDay
-      });
-    }
-    return map;
-  }
-
-  /**
-   * Update the week-strip widget — [M T ♠ T ♦ S S] style display.
-   * Monday-first (Day 0 = Monday, matching DayCycle).
-   *
-   * §9 DungeonSchedule-aware: consults actual group schedule (including
-   * death-shifted days) instead of legacy HERO_DAY_INTERVAL cycling.
-   * When multiple groups converge on the same day (due to death-shift),
-   * their suits stack with NCH joker-style cascade + hover fan-out.
-   *
-   * Visual states per node:
-   *   Past:    dim text, no background — already lived through
-   *   Today:   bold, bright, bobbing, lit background — "you are here"
-   *   Future:  medium text, no background — days ahead
-   *   Hero:    suit symbol(s) in suit color (stacked if convergent)
-   *   Shifted: pulsing red glow on death-shifted suits
-   *   Resolved: tiny ✓/✗ below resolved suits
-   */
-  function _updateDayCounter() {
-    if (!_dayCounterEl) return;
-    if (typeof DayCycle === 'undefined') return;
-
-    var day = DayCycle.getDay();
-    var weekDayIndex = day % 7;
-    var timeStr = DayCycle.getTimeString ? DayCycle.getTimeString() : '06:00';
-    var phase = DayCycle.getPhase ? DayCycle.getPhase() : 'morning';
-
-    // Build hero day map from DungeonSchedule (or null if absent)
-    var heroDayMap = _buildHeroDayMap();
-
-    // Legacy fallback: use DayCycle HERO_DAY_INTERVAL when no DungeonSchedule
-    var heroInterval = DayCycle.HERO_DAY_INTERVAL || 3;
-
-    var html = '';
-
-    // Build 8+ day strip — show days 0 through max(7, highest hero day)
-    // For the 8-day jam arc we need at least days 0–8 visible.
-    var stripLen = 7;
-    if (heroDayMap) {
-      // Extend strip to cover all scheduled hero days
-      for (var key in heroDayMap) {
-        if (heroDayMap.hasOwnProperty(key)) {
-          var d = parseInt(key, 10);
-          if (d >= stripLen) stripLen = d + 1;
-        }
-      }
-    }
-    // Cap at 9 to keep strip compact (days 0–8 for jam)
-    if (stripLen > 9) stripLen = 9;
-
-    for (var i = 0; i < stripLen; i++) {
-      var dayNum = i; // absolute day number (0-indexed jam arc)
-      var isToday = (dayNum === day);
-      var isPast = (dayNum < day);
-
-      // Check for hero groups on this day
-      var suitEntries = heroDayMap ? (heroDayMap[dayNum] || []) : [];
-
-      // Legacy fallback: single suit from DayCycle cycling
-      if (!heroDayMap && dayNum >= 0 && dayNum % heroInterval === 0) {
-        var legacyIdx = Math.floor(dayNum / heroInterval) % _DUNGEON_SUITS.length;
-        suitEntries = [{
-          sym: _DUNGEON_SUITS[legacyIdx].sym,
-          color: _DUNGEON_SUITS[legacyIdx].color,
-          label: 'Hero Day',
-          resolved: false, onSchedule: true, shifted: false, result: null
-        }];
-      }
-
-      var isHeroSlot = suitEntries.length > 0;
-      var isStacked = suitEntries.length > 1;
-
-      // Day label — abbreviated day-of-week name
-      var dayOfWeekIdx = dayNum % 7;
-      var label = _WEEK_DAYS[dayOfWeekIdx];
-
-      // ── Style by temporal state ──
-      var nodeColor, bg, fontSize, fontWeight, opacity, nodeAnim;
-
-      if (isToday) {
-        nodeColor = isHeroSlot ? '#f0c040' : '#ffe8a0';
-        fontWeight = '900';
-        fontSize = isHeroSlot ? '14px' : '13px';
-        bg = 'rgba(255,255,255,0.15)';
-        opacity = '1';
-        nodeAnim = 'animation:day-bob 1.2s ease-in-out infinite;';
-      } else if (isPast) {
-        nodeColor = '#5a5040';
-        fontWeight = '400';
-        fontSize = '10px';
-        bg = 'transparent';
-        opacity = '0.5';
-        nodeAnim = '';
-      } else {
-        nodeColor = '#8a8068';
-        fontWeight = '500';
-        fontSize = '11px';
-        bg = 'transparent';
-        opacity = '0.75';
-        nodeAnim = '';
-      }
-
-      // ── Build node HTML ──
-      if (isHeroSlot) {
-        // Hero day node — suit symbols (possibly stacked)
-        var stackClass = isStacked ? ' ds-stacked' : '';
-        var titleParts = [];
-        for (var si = 0; si < suitEntries.length; si++) {
-          var se = suitEntries[si];
-          titleParts.push(se.sym + ' ' + se.label +
-            (se.shifted ? ' (SHIFTED from Day ' + (se.scheduledDay + 1) + ')' : '') +
-            (se.resolved ? (se.result && se.result.coreScore >= 0.6 ? ' \u2713' : ' \u2717') : ''));
-        }
-        var titleStr = _WEEK_DAYS[dayOfWeekIdx] + ' \u2014 Day ' + (dayNum + 1) +
-                       ' (HERO DAY)\n' + titleParts.join('\n') +
-                       (isToday ? '\n[TODAY]' : '');
-
-        html += '<span class="ds-node' + stackClass + '" style="' +
-                'background:' + bg + ';' +
-                'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
-                'opacity:' + opacity + ';' +
-                nodeAnim + '" title="' + titleStr + '">';
-
-        // Render each suit as an overlapping chip
-        for (var sj = 0; sj < suitEntries.length; sj++) {
-          var entry = suitEntries[sj];
-          var suitColor;
-
-          if (isToday) {
-            suitColor = '#f0c040';  // gold for today's active suits
-          } else if (isPast) {
-            suitColor = entry.color;
-          } else {
-            suitColor = entry.color;
-          }
-
-          var suitOpacity = isPast ? '0.45' : (isToday ? '1' : '0.85');
-          var extraClass = '';
-          if (entry.shifted && !entry.resolved) extraClass += ' ds-shifted';
-          if (entry.resolved && entry.result) {
-            extraClass += entry.result.coreScore >= 0.6
-              ? ' ds-resolved-pass' : ' ds-resolved-fail';
-          }
-
-          html += '<span class="ds-suit s-' + sj + extraClass + '" style="' +
-                  'color:' + suitColor + ';opacity:' + suitOpacity + ';">' +
-                  entry.sym + '</span>';
-        }
-
-        html += '</span>';
-
-      } else {
-        // Regular day node (no hero groups)
-        html += '<span class="ds-node" style="' +
-                'color:' + nodeColor + ';background:' + bg + ';' +
-                'font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
-                'opacity:' + opacity + ';' +
-                nodeAnim + '" title="' +
-                _WEEK_DAYS[dayOfWeekIdx] + ' \u2014 Day ' + (dayNum + 1) +
-                (isToday ? ' [TODAY]' : '') + '">' +
-                label + '</span>';
-      }
-    }
-
-    // Phase-tinted separator dot
-    var dotColor = (phase === 'night' || phase === 'dusk') ? '#6688aa' : '#a09880';
-
-    // Time display
-    html += '<span style="margin-left:4px;color:' + dotColor + ';font-size:10px">\u00B7</span>' +
-            '<span style="margin-left:4px;font-size:12px;color:#a09880;' +
-            'letter-spacing:0.05em;font-weight:600">' +
-            timeStr + '</span>';
-
-    // Combo indicator (when streak > 0)
-    if (heroDayMap && typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getCombo) {
-      var combo = DungeonSchedule.getCombo();
-      if (combo.streak > 0) {
-        var stars = '';
-        for (var ci = 0; ci < combo.streak && ci < 3; ci++) stars += '\u2605';
-        html += '<span style="margin-left:4px;font-size:10px;color:#f0c040;' +
-                'filter:drop-shadow(0 0 2px rgba(240,192,64,0.5))" title="' +
-                'Combo streak: ' + combo.streak + ' (' + combo.multiplier.toFixed(1) + '\u00D7)">' +
-                stars + '</span>';
-      }
-    }
-
-    _dayCounterEl.innerHTML = html;
-  }
-
-  /**
-   * Check whether the tile at (fx, fy) on the current floor is the
-   * work-keys chest on Floor 1.6. Called from _interact().
-   */
-  function _checkWorkKeysChest(fx, fy) {
-    return !_gateUnlocked
-      && FloorManager.getFloor() === '1.6'
-      && fx === 19 && fy === 3;
-  }
+  function _initDayCounter() { if (typeof WeekStrip !== 'undefined') WeekStrip.init(); }
+  function _updateDayCounter() { if (typeof WeekStrip !== 'undefined') WeekStrip.update(); }
 
   function _generateAndWire() {
     var spawn = FloorManager.generateCurrentFloor();
@@ -4814,339 +3651,10 @@ var Game = (function () {
     // Tiers 1 and 3 handled by HUD's notch tone only — no toast needed.
   }
 
-  // ── Quest waypoint targeting ────────────────────────────────────────
-  // Sets the minimap quest diamond based on current floor and game state.
-  //
-  // Phase 0: meet the dispatcher (approach → promenade)
-  // Phase 1: get work keys (promenade → home → chest)
-  // Phase 2: head to first dungeon (original hardcoded route)
-  // Phase 3: dungeon work cycle — pin at assignment until readiness met,
-  //          then advance to next group per DungeonSchedule
-  //
-  // Phase 3 is data-driven: reads DungeonSchedule.getNextGroup() to find
-  // the target dungeon, derives lobby/exterior IDs from the floor hierarchy,
-  // and resolves door positions from cached floorData.doorTargets.
+  // ── Quest waypoint — delegated to QuestWaypoint ────────────────
 
-  /**
-   * Find a door on parentFloorId that leads to targetFloorId.
-   * Returns { x, y } or null. Uses the floor cache for non-current floors,
-   * falls back to the live floorData when parentFloorId IS the current floor
-   * (the cache isn't written until floor transition, so current floor is cold).
-   */
-  function _findDoorTo(parentFloorId, targetFloorId) {
-    var src = null;
-    if (FloorManager.getFloor() === parentFloorId) {
-      src = FloorManager.getFloorData();
-    } else if (FloorManager.getFloorCache) {
-      src = FloorManager.getFloorCache(parentFloorId);
-    }
-    if (!src || !src.doorTargets) return null;
-    for (var key in src.doorTargets) {
-      if (src.doorTargets[key] === targetFloorId) {
-        var parts = key.split(',');
-        return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Exterior chain-hop: from currentExterior, find the next door in the
-   * linear exterior chain ['1','2','3'] that moves us toward targetExterior.
-   * Floor 1's east gate leads to '2', Floor 2's east gate leads to '3' — so
-   * when the player is on Floor 1 and the next hero group lives on Floor 3,
-   * we still want the marker on the east gate rather than null.
-   */
-  var _EXTERIOR_CHAIN = ['0', '1', '2', '3'];
-  function _findProgressionDoorForward(currentExterior, targetExterior) {
-    var ci = _EXTERIOR_CHAIN.indexOf(String(currentExterior));
-    var ti = _EXTERIOR_CHAIN.indexOf(String(targetExterior));
-    if (ci < 0 || ti < 0 || ci === ti) return null;
-    var step = ci < ti ? 1 : -1;
-    // Try each intermediate exterior in order (direct first, then chain).
-    for (var i = ti; i !== ci; i -= step) {
-      var hopTarget = _EXTERIOR_CHAIN[i];
-      var pos = _findDoorTo(currentExterior, hopTarget);
-      if (pos) return pos;
-    }
-    return null;
-  }
-
-  /**
-   * Floor depth helper: '1' → 1, '1.3' → 2, '1.3.1' → 3.
-   */
-  function _floorDepth(id) {
-    return String(id).split('.').length;
-  }
-
-  /**
-   * Evaluate whether WaterCursorFX should be emitting trail droplets
-   * during gameplay and toggle it accordingly.
-   *
-   * Rule (per design): FX is only active in gameplay when the player is
-   * in a deep-dungeon floor (depth ≥ 3) AND is actively carrying a hose.
-   * Shallower floors and hose-less exploration get no cursor trail —
-   * keeps the effect tied to the cleaning fantasy and avoids the FPS
-   * drag of constant particle emission during normal traversal.
-   *
-   * Menu/peek overlays (MenuBox, HosePeek, TorchPeek) still call
-   * setActive(true) independently when they open; this gate only
-   * governs the gameplay baseline.
-   */
-  function _evaluateCursorFxGating() {
-    if (typeof WaterCursorFX === 'undefined') return;
-    if (typeof ScreenManager === 'undefined') return;
-    if (ScreenManager.getState() !== ScreenManager.STATES.GAMEPLAY) return;
-
-    var floorId = (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId)
-      ? FloorManager.getCurrentFloorId() : '1';
-    var inDungeon = (typeof FloorManager !== 'undefined' && FloorManager.isDungeonFloor)
-      ? FloorManager.isDungeonFloor(floorId)
-      : (_floorDepth(floorId) >= 3);
-    var hoseOn = (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive());
-
-    var shouldBeActive = inDungeon && hoseOn;
-    WaterCursorFX.setActive(shouldBeActive);
-  }
-
-  /**
-   * Find the doorExit on the current live floor (interior → parent exterior).
-   * Used as a "push player back outside" fallback when the marker would
-   * otherwise drop to null in a shop/inn/home during the work cycle.
-   */
-  function _findCurrentDoorExit() {
-    var fd = FloorManager.getFloorData();
-    if (!fd) return null;
-    if (fd.doors && fd.doors.doorExit) return { x: fd.doors.doorExit.x, y: fd.doors.doorExit.y };
-    // Fallback: scan doorTargets for the shortest target ID (i.e. the parent).
-    if (fd.doorTargets) {
-      var bestKey = null, bestLen = 999;
-      for (var k in fd.doorTargets) {
-        var t = String(fd.doorTargets[k]);
-        if (t.length < bestLen) { bestLen = t.length; bestKey = k; }
-      }
-      if (bestKey) {
-        var p = bestKey.split(',');
-        return { x: parseInt(p[0], 10), y: parseInt(p[1], 10) };
-      }
-    }
-    return null;
-  }
-
-  /**
-   * DumpTruckSpawner anchor: if the truck is parked on the current floor,
-   * its first tile makes a great fallback marker (it's where work happens).
-   */
-  function _findTruckAnchorOnFloor(floorId) {
-    if (typeof DumpTruckSpawner === 'undefined' || !DumpTruckSpawner.getDeployment) return null;
-    var dep = DumpTruckSpawner.getDeployment();
-    if (!dep || dep.floorId !== floorId || !dep.tiles || dep.tiles.length === 0) return null;
-    return { x: dep.tiles[0][0], y: dep.tiles[0][1] };
-  }
-
-  // Sticky fallback: if every branch below would drop the marker mid-arc,
-  // reuse the most recent target on this floor rather than flicker to null.
-  var _lastQuestTarget = null;  // { floorId, x, y }
-
-  function _commitQuestTarget(floorId, target) {
-    if (target) {
-      _lastQuestTarget = { floorId: floorId, x: target.x, y: target.y };
-      Minimap.setQuestTarget({ x: target.x, y: target.y });
-    } else {
-      Minimap.setQuestTarget(null);
-    }
-  }
-
-  function _updateQuestTarget() {
-    if (typeof Minimap === 'undefined' || !Minimap.setQuestTarget) return;
-    var floorId = FloorManager.getFloor();
-
-    // ── Phase 0–1: pre-gate ────────────────────────────────────────
-    // Sticky fallback helper: prefer the last known good target on THIS
-    // floor over a flicker-to-null if nothing below resolves.
-    function stickyOrNull() {
-      if (_lastQuestTarget && _lastQuestTarget.floorId === floorId) {
-        return { x: _lastQuestTarget.x, y: _lastQuestTarget.y };
-      }
-      return null;
-    }
-
-    if (!_gateUnlocked) {
-      if (_dispatcherPhase !== 'done') {
-        // Phase 0: meet the dispatcher at the gate (on Floor 1)
-        if (floorId === '0') {
-          // Tutorial courtyard — point at the exit door leading to Floor 1
-          // so the player walks toward the Promenade where the Dispatcher waits.
-          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
-        } else if (floorId === '1') {
-          if (_dispatcherEntity && !_dispatcherEntity._hidden) {
-            _commitQuestTarget(floorId, { x: _dispatcherEntity.x, y: _dispatcherEntity.y });
-          } else {
-            var gateQ = _findGateDoorPos();
-            _commitQuestTarget(floorId, gateQ ? { x: gateQ.x - 1, y: gateQ.y } : stickyOrNull());
-          }
-        } else {
-          // Player ducked into a shop/inn/home before the dispatcher fired.
-          // Push them back outside instead of dropping the marker.
-          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
-        }
-      } else {
-        // Phase 1: get work keys — dispatcher sent us home
-        if (floorId === '1') {
-          _commitQuestTarget(floorId, { x: 22, y: 27 });  // Gleaner's Home door (SC pod)
-        } else if (floorId === '1.6') {
-          _commitQuestTarget(floorId, { x: 19, y: 3 });   // Work keys chest
-        } else {
-          _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
-        }
-      }
-      return;
-    }
-
-    // ── Phase 2–3: dungeon work cycle ──────────────────────────────
-    // Get the next unresolved dungeon group from the schedule.
-    var nextGroup = (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup)
-      ? DungeonSchedule.getNextGroup() : null;
-
-    // ── Tutorial override ────────────────────────────────────────
-    // Per docs/Tutorial_world_roadmap.md §2.1, the first-pass chain is:
-    //   Floor 0 → 1 → gate → 1.6 → back to gate → 2 → 2.1 → 2.2 → 2.2.1
-    // The CLUB group ("Hero's Wake", 2.2.1/2.2.2) is the mandatory first
-    // dungeon because 2.2.1 hosts the Hero reveal cinematic (guarded by
-    // Player.flags.heroWakeArrival). As of the day-0 rebase the schedule
-    // legitimately puts CLUB first (scheduledDay 0 < spade 3 < diamond 6),
-    // so getNextGroup() naturally returns club on day 0 and this override
-    // is a no-op for a fresh game. Kept as a safety net for the case
-    // where the player dies on a side-dungeon before heroWakeArrival
-    // fires and club's actualDay gets death-shifted past another group.
-    var _heroRevealed = (typeof Player !== 'undefined' && Player.hasFlag)
-      ? Player.hasFlag('heroWakeArrival') : false;
-    if (!_heroRevealed && typeof DungeonSchedule !== 'undefined' &&
-        DungeonSchedule.getSchedule) {
-      var _schedList = DungeonSchedule.getSchedule();
-      var _clubContract = null;
-      for (var _sci = 0; _sci < _schedList.length; _sci++) {
-        if (_schedList[_sci].groupId === 'club' && !_schedList[_sci].resolved) {
-          _clubContract = _schedList[_sci];
-          break;
-        }
-      }
-      if (_clubContract) {
-        var _curDay = (DungeonSchedule.getCurrentDay)
-          ? DungeonSchedule.getCurrentDay() : 0;
-        nextGroup = {
-          groupId:    _clubContract.groupId,
-          label:      _clubContract.label,
-          suit:       _clubContract.suit,
-          floorIds:   _clubContract.floorIds,
-          target:     _clubContract.target,
-          actualDay:  _clubContract.actualDay,
-          daysAway:   Math.max(0, _clubContract.actualDay - _curDay),
-          heroType:   _clubContract.heroType,
-          onSchedule: _clubContract.onSchedule
-        };
-      }
-    }
-
-    if (!nextGroup || !nextGroup.floorIds || nextGroup.floorIds.length === 0) {
-      // Arc complete or schedule not initialized — legitimately no marker.
-      _lastQuestTarget = null;
-      Minimap.setQuestTarget(null);
-      return;
-    }
-
-    // Derive floor hierarchy from the first dungeon floor in the group.
-    // '1.3.1' → lobby '1.3', exterior '1'
-    var dungeonId  = nextGroup.floorIds[0];              // e.g. '1.3.1'
-    var segs       = dungeonId.split('.');
-    var lobbyId    = segs.slice(0, 2).join('.');         // e.g. '1.3'
-    var exteriorId = segs[0];                            // e.g. '1'
-    var target     = (nextGroup.target || 0.6);
-
-    // Is the player currently inside this dungeon group's floors?
-    var inThisDungeon = false;
-    var dungeonIdx = -1;
-    for (var gi = 0; gi < nextGroup.floorIds.length; gi++) {
-      if (floorId === nextGroup.floorIds[gi]) { inThisDungeon = true; dungeonIdx = gi; break; }
-    }
-
-    if (inThisDungeon) {
-      // Player is IN a group dungeon floor. Push them at the deeper door
-      // (stairsDn) until readiness is met, then pivot to stairsUp. If
-      // there is no deeper floor (last group floor below target), point
-      // at stairsUp as a "go back to lobby and come back stronger" nudge.
-      var coreScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
-        ? ReadinessCalc.getCoreScore(floorId) : 0;
-      var dData = FloorManager.getFloorData();
-      var stairsUpPos = (dData && dData.doors && dData.doors.stairsUp)
-        ? { x: dData.doors.stairsUp.x, y: dData.doors.stairsUp.y } : null;
-      var stairsDnPos = (dData && dData.doors && dData.doors.stairsDn)
-        ? { x: dData.doors.stairsDn.x, y: dData.doors.stairsDn.y } : null;
-
-      if (coreScore >= target) {
-        // Readiness met — leave via stairs up. Fallback to stairsDn (deeper
-        // floor still pending) or the truck/sticky so the marker survives.
-        _commitQuestTarget(floorId,
-          stairsUpPos || stairsDnPos || _findTruckAnchorOnFloor(floorId) || stickyOrNull());
-      } else {
-        // Still sweeping — push player at deeper door if it exists (the
-        // "dungeonN.N.N deeper door" step in the chain), otherwise keep
-        // marker visible on stairs up so they can retreat to lobby.
-        _commitQuestTarget(floorId,
-          stairsDnPos || stairsUpPos || _findTruckAnchorOnFloor(floorId) || stickyOrNull());
-      }
-      return;
-    }
-
-    if (floorId === lobbyId) {
-      // In the dungeon lobby — check if ALL group floors are readiness-complete.
-      var allFloorsDone = true;
-      if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore) {
-        for (var fi = 0; fi < nextGroup.floorIds.length; fi++) {
-          if (ReadinessCalc.getCoreScore(nextGroup.floorIds[fi]) < target) {
-            allFloorsDone = false;
-            break;
-          }
-        }
-      }
-
-      var lobbyData = FloorManager.getFloorData();
-      var lobbyExit = (lobbyData && lobbyData.doors && lobbyData.doors.doorExit)
-        ? { x: lobbyData.doors.doorExit.x, y: lobbyData.doors.doorExit.y } : null;
-      var lobbyDn = (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn)
-        ? { x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y } : null;
-
-      if (allFloorsDone) {
-        _commitQuestTarget(floorId, lobbyExit || lobbyDn || stickyOrNull());
-      } else {
-        _commitQuestTarget(floorId, lobbyDn || lobbyExit || stickyOrNull());
-      }
-      return;
-    }
-
-    if (floorId === exteriorId) {
-      // On the correct exterior — point at the door to the dungeon lobby.
-      var doorPos = _findDoorTo(exteriorId, lobbyId)
-                 || _findTruckAnchorOnFloor(floorId)
-                 || stickyOrNull();
-      _commitQuestTarget(floorId, doorPos);
-      return;
-    }
-
-    // Player is on a different exterior — chain-hop toward the target.
-    if (_floorDepth(floorId) === 1 && floorId !== exteriorId) {
-      var gateDoor = _findDoorTo(floorId, exteriorId)
-                  || _findProgressionDoorForward(floorId, exteriorId)
-                  || _findTruckAnchorOnFloor(floorId)
-                  || stickyOrNull();
-      _commitQuestTarget(floorId, gateDoor);
-      return;
-    }
-
-    // In a shop, inn, home, or other unrelated interior during the work
-    // cycle — push the player back to the exterior so they can re-route.
-    _commitQuestTarget(floorId, _findCurrentDoorExit() || stickyOrNull());
-  }
+  function _updateQuestTarget() { if (typeof QuestWaypoint !== 'undefined') QuestWaypoint.update(); }
+  function _evaluateCursorFxGating() { if (typeof QuestWaypoint !== 'undefined') QuestWaypoint.evaluateCursorFxGating(); }
 
   // ── Movement callbacks ─────────────────────────────────────────────
 
@@ -5155,6 +3663,18 @@ var Game = (function () {
   function _onMoveStart(fromX, fromY, toX, toY, dir) {
     Player.setDir(dir);
     DoorContracts.tickProtect();
+
+    // During hose reel: suppress footsteps, play hose drag instead.
+    // Reeling is 2× speed — rapid footstep SFX at that cadence sounds
+    // unnatural. The drag sound sells the "pulling hose" physicality.
+    if (typeof HoseReel !== 'undefined' && HoseReel.isActive()) {
+      // TODO:SFX hose-drag — short rubbing/scraping loop, 80-150ms,
+      // pitched down from baseline. Alternating L/R variants optional.
+      // Range: 0.15-0.25 volume, panned center.
+      AudioSystem.play('hose-drag', { volume: 0.2 });
+      return;
+    }
+
     // Alternate left/right footstep for natural cadence
     var foot = _footstepFoot === 0 ? 'step-left' : 'step-right';
     _footstepFoot = 1 - _footstepFoot;
@@ -5210,6 +3730,20 @@ var Game = (function () {
 
     // Advance minimap click-to-move path
     if (typeof MinimapNav !== 'undefined') MinimapNav.onMoveFinish();
+
+    // Advance hose reel retrace (PW-4)
+    if (typeof HoseReel !== 'undefined') HoseReel.onMoveFinish();
+
+    // ── Energy exhaustion → forced reel (PW-4) ──
+    // After recording the step (above), check if the player has run out
+    // of energy while dragging the hose. If so, force an auto-reel.
+    if (typeof HoseState !== 'undefined' && HoseState.isActive() &&
+        typeof HoseReel !== 'undefined' && !HoseReel.isActive()) {
+      var _playerEnergy = (typeof Player !== 'undefined') ? Player.state().energy : 99;
+      if (_playerEnergy <= 0) {
+        HoseReel.start({ forced: true });
+      }
+    }
 
     var floorData = FloorManager.getFloorData();
     var tile = floorData.grid[y][x];
@@ -5271,91 +3805,33 @@ var Game = (function () {
     _refreshPanels();
   }
 
-  /**
-   * Apply the effect of a walk-over collectible pickup.
-   * @param {Object} pickup - { type, amount?, itemId? }
-   */
-  function _applyPickup(pickup) {
-    if (pickup.type === 'gold') {
-      var goldAmt = pickup.amount || 1;
-      // Authority path — CardTransfer.lootGold fires gold:changed event
-      CardAuthority.addGold(goldAmt);
-      Toast.show('💰 +' + goldAmt, 'currency');
-      AudioSystem.playRandom('coin', { volume: 0.5 });
-      // Coin VFX — match shop sell pattern (coinRain ≥ 15, coinBurst < 15)
-      if (typeof ParticleFX !== 'undefined' && _canvas) {
-        var gcx = _canvas.width / 2;
-        var gcy = _canvas.height * 0.5;
-        if (goldAmt >= 15) {
-          ParticleFX.coinRain(gcx, gcy, goldAmt);
-        } else if (goldAmt >= 3) {
-          ParticleFX.coinBurst(gcx, gcy, Math.max(3, Math.floor(goldAmt / 2)));
-        }
-        // 1-2 gold: no VFX (too small, would feel noisy on every walk-over)
-      }
-    } else if (pickup.type === 'battery') {
-      Player.addBattery(pickup.amount || 1);
-      Toast.show('◈ +' + (pickup.amount || 1), 'battery');
-      AudioSystem.playRandom('coin', { volume: 0.5 });
-      HUD.updateBattery(Player.state());
-    } else if (pickup.type === 'food') {
-      // Food items give HP restore or HOT via effects[]
-      // For jam scope: flat +2 HP unless itemId maps to a HOT effect
-      var HOT_ITEMS = { 'ITM-001': { hot: 1, ticks: 3 }, 'ITM-002': { hot: 1, ticks: 3 },
-                       'ITM-003': { hot: 2, ticks: 4 }, 'ITM-004': { hp: 3 },
-                       'ITM-005': { hp: 4 }, 'ITM-006': { hp: 3, energy: 2 } };
-      var effect = (pickup.itemId && HOT_ITEMS[pickup.itemId]) || { hp: 2 };
-      if (effect.hot) {
-        Player.applyHOT(effect.hot, effect.ticks);
-        Toast.show(i18n.t('toast.food_hot', 'Eating... +' + effect.hot + '♥ ×' + effect.ticks), 'hp');
-      } else {
-        if (effect.hp)     Player.heal(effect.hp);
-        if (effect.energy) Player.restoreEnergy(effect.energy);
-        Toast.show(i18n.t('toast.food_instant', 'Ate something. ♥ +' + (effect.hp || 0)), 'hp');
-      }
-      AudioSystem.play('pickup', { volume: 0.5 });
-    } else if (pickup.type === 'supply') {
-      // Supply consumables (Silk Spider, Trap Kit) — add to bag
-      var supplyItem = { id: pickup.itemId, type: 'consumable', subtype: 'supply' };
-      // Try to look up full item data from ItemDB if available
-      if (typeof ItemDB !== 'undefined' && ItemDB.get) {
-        var full = ItemDB.get(pickup.itemId);
-        if (full) supplyItem = JSON.parse(JSON.stringify(full));
-      }
-      var added = CardAuthority.addToBag(supplyItem);
-      if (added) {
-        var sName = supplyItem.name || pickup.itemId;
-        var sEmoji = supplyItem.emoji || '📦';
-        Toast.show(sEmoji + ' ' + sName, 'item');
-        AudioSystem.play('pickup', { volume: 0.5 });
-      } else {
-        Toast.show(i18n.t('toast.bag_full', 'Bag full!'), 'warning');
-      }
-    }
-    HUD.updatePlayer(Player.state());
-    SessionStats.inc('itemsCollected');
-  }
+  // Delegated to GameActions.applyPickup()
+  function _applyPickup(pickup) { GameActions.applyPickup(pickup); }
 
   function _onBump(dir) {
     AudioSystem.play('ui-blop');
     // Cancel minimap auto-path on collision
     if (typeof MinimapNav !== 'undefined') MinimapNav.onBump();
+    // Cancel hose reel on collision (shouldn't happen, but safe fallback)
+    if (typeof HoseReel !== 'undefined') HoseReel.onBump();
 
     // Check whether the bumped tile is the Dispatcher gate NPC.
     // The grab choreography handles the first encounter via proximity.
     // Bumps only trigger dialogue for repeat encounters (phase = 'done').
-    if (!_gateUnlocked && _dispatcherEntity && _dispatcherPhase === 'done') {
+    var _dispEnt = (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getEntity() : null;
+    var _dispPhase = (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getPhase() : 'done';
+    if (!_gateUnlocked && _dispEnt && _dispPhase === 'done') {
       var pos = MC.getGridPos();
       var bumpX = pos.x + MC.DX[dir];
       var bumpY = pos.y + MC.DY[dir];
-      if (_dispatcherEntity.x === bumpX && _dispatcherEntity.y === bumpY) {
+      if (_dispEnt.x === bumpX && _dispEnt.y === bumpY) {
         // Turn both NPC and player to face each other
         if (typeof NpcSystem !== 'undefined' && NpcSystem.engageTalk) {
-          NpcSystem.engageTalk(_dispatcherEntity);
+          NpcSystem.engageTalk(_dispEnt);
         }
         // Turn player to face dispatcher + lock MouseLook
-        var ddx = _dispatcherEntity.x - pos.x;
-        var ddy = _dispatcherEntity.y - pos.y;
+        var ddx = _dispEnt.x - pos.x;
+        var ddy = _dispEnt.y - pos.y;
         var bumpDir = (Math.abs(ddx) >= Math.abs(ddy))
           ? (ddx > 0 ? MC.DIR_EAST : MC.DIR_WEST)
           : (ddy > 0 ? MC.DIR_SOUTH : MC.DIR_NORTH);
@@ -5368,7 +3844,7 @@ var Game = (function () {
           Player.resetLookOffset();
         }
 
-        _showDispatcherGateDialog();
+        if (typeof DispatcherChoreography !== 'undefined') DispatcherChoreography.showDispatcherGateDialog();
       }
     }
   }
@@ -5486,8 +3962,11 @@ var Game = (function () {
       }
     }
 
-    // Friendly (resurrected) enemy interaction — bark or re-fight
-    if (typeof CombatBridge !== 'undefined') {
+    // Friendly (resurrected) enemy interaction — bark or re-fight.
+    // Skip when hose is active: the janitor is working, not chatting.
+    // Cleaning priority passes through to the scrub block below.
+    var _hoseSkipBark = (typeof HoseState !== 'undefined' && HoseState.isActive());
+    if (!_hoseSkipBark && typeof CombatBridge !== 'undefined') {
       var enemies = FloorManager.getEnemies();
       for (var _fi = 0; _fi < enemies.length; _fi++) {
         var _fe = enemies[_fi];
@@ -5519,7 +3998,89 @@ var Game = (function () {
       }
     }
 
-    // Blood cleaning — scrub tiles near corpses
+    // ── Hose spray priority ─────────────────────────────────────────
+    // When the hose is active and the faced tile has grime, the spray
+    // system takes over entirely (hold OK → continuous cleaning).
+    // This gates ABOVE loot so the player can wash a grimy corpse tile
+    // without opening the corpse menu. Once the grime is cleaned off,
+    // isDirty returns false and the loot chain fires normally on next OK.
+    //
+    // EXCEPTION: Torch tiles are exempt. A tap opens TorchPeek/RestockBridge
+    // for careful extinguish (water-bottle path preserves fuel). SpraySystem
+    // has a peek-gate that defers while the menu is open, so:
+    //   Tap OK on torch  → menu opens → careful extinguish (fuel preserved)
+    //   Hold OK on torch  → no menu → SpraySystem fires → destructive extinguish
+    //   Hold OK on grimy non-torch → SpraySystem fires → continuous cleaning
+    //   No hose, or tile is clean  → normal loot/scrub chain below
+
+    var tile = floorData.grid[fy][fx];
+    var _hoseActiveForClean = (typeof HoseState !== 'undefined' && HoseState.isActive());
+    var _facedIsTorch = (typeof TILES !== 'undefined' && TILES.isTorch && TILES.isTorch(tile));
+
+    if (_hoseActiveForClean && !_facedIsTorch && typeof CleaningSystem !== 'undefined') {
+      var _sprayFloorId = FloorManager.getCurrentFloorId();
+      if (CleaningSystem.isDirty(fx, fy, _sprayFloorId)) {
+        // Tile has grime — SpraySystem will handle it on held input.
+        // Show a one-time hint the first time the player sprays.
+        if (typeof Toast !== 'undefined' && !Player.getFlag('hoseSprayHint')) {
+          var _facedIsWall = (typeof TILES !== 'undefined' && TILES.isOpaque(tile));
+          var _hintKey = _facedIsWall
+            ? 'toast.wall_spray_hint'
+            : 'toast.floor_spray_hint';
+          var _hintText = _facedIsWall
+            ? 'Hold OK to spray the wall'
+            : 'Hold OK to spray the floor';
+          Toast.show(i18n.t(_hintKey, _hintText), 'info');
+          Player.setFlag('hoseSprayHint', true);
+        }
+        return;
+      }
+    }
+
+    // ── Loot priority: corpse, detritus, chest ─────────────────────
+    // Fires only when tile is NOT grimy (spray cleaned it) or hose is
+    // not attached. Reward pickup still resolves before manual scrub.
+
+    if (tile === TILES.CORPSE) {
+      var corpseFloorId = FloorManager.getCurrentFloorId();
+      if (typeof RestockBridge !== 'undefined' &&
+          RestockBridge.detectMode(fx, fy, corpseFloorId) === 'corpse') {
+        if (!RestockBridge.isActive()) {
+          if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
+          RestockBridge.open(fx, fy, corpseFloorId, 'corpse');
+        }
+      } else {
+        _openCorpseMenu(fx, fy, corpseFloorId);
+      }
+      return;
+    }
+
+    if (tile === TILES.DETRITUS) {
+      _collectDetritus(fx, fy);
+      return;
+    }
+
+    if (tile === TILES.CHEST) {
+      var chestFloorId = FloorManager.getCurrentFloorId();
+      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
+          CrateSystem.hasContainer(fx, fy, chestFloorId)) {
+        var chestContainer = CrateSystem.getContainer(fx, fy, chestFloorId);
+        if (chestContainer && chestContainer.depleted) {
+          if (typeof Toast !== 'undefined') {
+            Toast.show('📦 ' + i18n.t('toast.chest_empty', 'Chest is empty'), 'dim');
+          }
+          return;
+        }
+        if (PeekSlots.tryOpen(fx, fy, chestFloorId)) return;
+      }
+      return;
+    }
+
+    // ── Manual scrub (non-hose path) ─────────────────────────────────
+    // Click-per-scrub for players without the hose.
+    //   Floor, no hose → 6-8 OK presses
+    //   Wall, no hose  → high click count (walls are hard to rag-clean)
+
     if (typeof CleaningSystem !== 'undefined') {
       var cleanFloorId = FloorManager.getCurrentFloorId();
       if (CleaningSystem.isDirty(fx, fy, cleanFloorId)) {
@@ -5535,8 +4096,10 @@ var Game = (function () {
         }
         if (CleaningSystem.scrub(fx, fy, cleanFloorId, _cleanTool)) {
           AudioSystem.play('sweep', { volume: 0.5 });
-          var remaining = CleaningSystem.getBlood(fx, fy, cleanFloorId);
-          if (remaining <= 0) {
+          // "Tile cleaned" only fires when BOTH blood and grime are gone.
+          // isDirty() checks both layers, so use it as the unified gate.
+          var _stillDirty = CleaningSystem.isDirty(fx, fy, cleanFloorId);
+          if (!_stillDirty) {
             Toast.show('🧹 ' + i18n.t('toast.tile_clean', 'Tile cleaned!'), 'loot');
             if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 Clean!', fx, fy, 'loot');
             SessionStats.inc('tilesCleaned');
@@ -5545,7 +4108,17 @@ var Game = (function () {
               HUD.triggerReadinessSweep(ReadinessCalc.getScore(cleanFloorId));
             }
           } else {
-            if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 ' + remaining + '/' + CleaningSystem.MAX_BLOOD, fx, fy, 'info');
+            // Progress feedback: show grime cleanliness % if GrimeGrid exists,
+            // otherwise fall back to legacy blood counter.
+            var _grimeClean = '';
+            if (typeof GrimeGrid !== 'undefined' && GrimeGrid.has(cleanFloorId, fx, fy)) {
+              var pct = Math.round(GrimeGrid.getTileCleanliness(cleanFloorId, fx, fy) * 100);
+              _grimeClean = pct + '%';
+            } else {
+              var remaining = CleaningSystem.getBlood(fx, fy, cleanFloorId);
+              _grimeClean = remaining + '/' + CleaningSystem.MAX_BLOOD;
+            }
+            if (typeof WorldPopup !== 'undefined') WorldPopup.spawn('🧹 ' + _grimeClean, fx, fy, 'info');
           }
         }
         return;
@@ -5587,29 +4160,9 @@ var Game = (function () {
       }
     }
 
-    var tile = floorData.grid[fy][fx];
-    if (tile === TILES.CHEST) {
-      // IO-8: Chest uses PeekSlots/CrateUI withdraw mode (same as crate pattern).
-      // No legacy fallback — CombatBridge.openChest is never called for CHEST tiles.
-      var chestFloorId = FloorManager.getCurrentFloorId();
-      if (typeof PeekSlots !== 'undefined' && typeof CrateSystem !== 'undefined' &&
-          CrateSystem.hasContainer(fx, fy, chestFloorId)) {
-        var chestContainer = CrateSystem.getContainer(fx, fy, chestFloorId);
-        // Show "already empty" feedback before trying to open — tryOpen() returns
-        // true for depleted containers (they're not sealed), so the empty state must
-        // be surfaced here rather than in the tryOpen false-branch.
-        if (chestContainer && chestContainer.depleted) {
-          if (typeof Toast !== 'undefined') {
-            Toast.show('📦 ' + i18n.t('toast.chest_empty', 'Chest is empty'), 'dim');
-          }
-          return;
-        }
-        if (PeekSlots.tryOpen(fx, fy, chestFloorId)) return;
-        // tryOpen returned false — PeekSlots is busy or state not IDLE.
-        // Don't show a toast here; the player can see CrateUI is already open.
-      }
-      return;  // Always return — no fallback to legacy openChest
-    } else if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
+    // ── Tile-type interactions (structural, ambient) ───────────────
+    // CORPSE, DETRITUS, CHEST already handled above cleaning priority.
+    if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
       // Home bed → BedPeek handles sleep/day-advance (Floor 1.6, position 2,2)
       if (typeof BedPeek !== 'undefined' && FloorManager.getFloor() === '1.6' && fx === 2 && fy === 2) {
         // BedPeek overlay is already showing via update(). The F-key interact
@@ -5642,26 +4195,12 @@ var Game = (function () {
       var qi = Math.floor(Math.random() * tableQuips.length);
       Toast.show('🔍 ' + tableQuips[qi], 'info');
     } else if (tile === TILES.SHOP) {
-      // Resolve which faction owns this shop tile
-      var shopFaction = 'tide';  // fallback
-      var shopList = floorData.shops || [];
-      for (var si = 0; si < shopList.length; si++) {
-        if (shopList[si].x === fx && shopList[si].y === fy) {
-          shopFaction = shopList[si].faction || shopList[si].factionId || 'tide';
-          break;
-        }
-      }
+      // SC-G: Resolve faction via VendorRegistry (replaces linear shopList scan)
+      var shopFaction = (typeof VendorRegistry !== 'undefined')
+        ? VendorRegistry.getFaction(fx, fy, FloorManager.getCurrentFloorId())
+        : null;
+      if (!shopFaction) shopFaction = 'tide';  // fallback
       _openVendorDialog(shopFaction);
-    } else if (tile === TILES.CORPSE) {
-      // Open the corpse-restock menu (or fallback to harvest for loot-only corpses).
-      // _openCorpseMenu handles both container and no-container cases, and ensures
-      // CorpsePeek + CrateUI are dismissed before the pause menu opens.
-      var corpseFloorId = FloorManager.getCurrentFloorId();
-      _openCorpseMenu(fx, fy, corpseFloorId);
-      return;
-    } else if (tile === TILES.DETRITUS) {
-      // Face + OK: pick up detritus item directly into bag
-      _collectDetritus(fx, fy);
     } else if (tile === TILES.BREAKABLE) {
       // If a CrateSystem container exists (crate slots):
       //   1. Quick-fill from bag (DEPTH3 §6.3b) — auto-match & fill slots
@@ -5670,7 +4209,21 @@ var Game = (function () {
       var crateFloorId = FloorManager.getCurrentFloorId();
       if (typeof CrateSystem !== 'undefined' &&
           CrateSystem.hasContainer(fx, fy, crateFloorId)) {
-        // Quick-fill pass: auto-slot matching bag items
+        var _intContainer = CrateSystem.getContainer(fx, fy, crateFloorId);
+
+        // SC-D: Storage crates are withdraw-only — open PeekSlots directly
+        // (which routes to CrateUI since the container is TYPE.CHEST + loot phase).
+        if (_intContainer && _intContainer.storage) {
+          if (typeof PeekSlots !== 'undefined' &&
+              PeekSlots.tryOpen(fx, fy, crateFloorId)) {
+            if (typeof CratePeek !== 'undefined' && CratePeek.isActive()) {
+              CratePeek.handleKey('Escape');
+            }
+          }
+          return;
+        }
+
+        // D3+ deposit crates: quick-fill pass, then manual slot UI
         if (_quickFillCrate(fx, fy, crateFloorId)) {
           // Crate sealed — collapse the peek overlay that triggered this
           if (typeof CratePeek !== 'undefined' && CratePeek.isActive()) {
@@ -5691,9 +4244,19 @@ var Game = (function () {
       // Fallback: smash the breakable prop
       _smashBreakable(fx, fy);
     }
-    // ── TORCH: Open torch-peek slot interaction ──
+    // ── TORCH: Open torch restock surface or legacy TorchPeek ──
     else if (TILES.isTorch(tile)) {
-      if (typeof TorchPeek !== 'undefined') {
+      // RS-2: Route through RestockBridge if available (unified surface)
+      var _torchFloorId = FloorManager.getCurrentFloorId();
+      if (typeof RestockBridge !== 'undefined' && RestockBridge.detectMode(fx, fy, _torchFloorId) === 'torch') {
+        if (RestockBridge.isActive()) {
+          // Already open — forward to handleKey
+        } else {
+          if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
+          RestockBridge.open(fx, fy, _torchFloorId, 'torch');
+        }
+      } else if (typeof TorchPeek !== 'undefined') {
+        // Legacy fallback
         if (TorchPeek.isInteracting()) {
           // Already interacting — pass through to handleKey
         } else if (TorchPeek.isActive()) {
@@ -5752,232 +4315,43 @@ var Game = (function () {
    *   - If crate still has empties → returns false (caller opens PeekSlots)
    *   - If crate is now full → auto-seals, awards coins, returns true
    *
-   * @param {number} fx - Crate grid X
-   * @param {number} fy - Crate grid Y
-   * @param {string} floorId
-   * @returns {boolean} true if crate was fully filled and sealed
+   * Delegated to QuickFill module.
    */
   function _quickFillCrate(fx, fy, floorId) {
-    var crate = CrateSystem.getContainer(fx, fy, floorId);
-    if (!crate || crate.sealed) return false;
-
-    var filled = 0;
-
-    for (var s = 0; s < crate.slots.length; s++) {
-      var slot = crate.slots[s];
-      if (slot.filled) continue;
-
-      // Scan bag for a matching item (live bag — shrinks as we remove)
-      var bag = CardAuthority.getBag();
-      var bestIdx = -1;
-      for (var b = 0; b < bag.length; b++) {
-        if (CrateSystem.doesItemMatch(bag[b], slot.frameTag)) {
-          bestIdx = b;
-          break; // First match wins — keeps bag order predictable
-        }
-      }
-
-      if (bestIdx === -1) continue; // No match in bag for this slot
-
-      // Pull the item out of the bag and fill the slot
-      var item = CardAuthority.removeFromBag(bestIdx);
-      if (!item) continue;
-
-      CrateSystem.fillSlot(fx, fy, floorId, s, item);
-      filled++;
-    }
-
-    if (filled === 0) return false;
-
-    // Feedback
-    AudioSystem.play('pickup', { volume: 0.4 });
-    Toast.show('📦 ' + i18n.t('toast.quick_fill', 'Auto-stocked') + ' ' + filled + ' ' + i18n.t('toast.slots', 'slot' + (filled > 1 ? 's' : '')), 'info');
-
-    // If all slots now filled → auto-seal
-    if (CrateSystem.canSeal(fx, fy, floorId)) {
-      var result = CrateSystem.seal(fx, fy, floorId);
-      if (result) {
-        AudioSystem.play('ui-confirm', { volume: 0.6 });
-        Toast.show('✅ ' + i18n.t('toast.crate_sealed', 'Crate sealed!') + ' +' + result.totalCoins + 'g', 'loot');
-        SessionStats.inc('cratesSealed');
-      }
-      return true; // Fully filled — no need to open PeekSlots
-    }
-
-    return false; // Still has empties — caller should open PeekSlots
+    return QuickFill.fill(fx, fy, floorId);
   }
+  // ── Breakable smash + detritus — delegated to PickupActions ─────
 
-  // ── Breakable prop smash ──────────────────────────────────────────
-
-  function _smashBreakable(fx, fy) {
-    if (typeof BreakableSpawner === 'undefined') return;
-
-    var floorData = FloorManager.getFloorData();
-    var bDef = BreakableSpawner.getAt(fx, fy);
-    if (!bDef) return;
-
-    AudioSystem.play('smash', { volume: 0.7 });
-
-    var destroyed = BreakableSpawner.hitBreakable(fx, fy, floorData.grid);
-
-    // Depth-3+ supply crates are bolted down (DEPTH3 §3)
-    if (destroyed && destroyed.blocked) {
-      AudioSystem.play('ui-blop', { volume: 0.5 });
-      Toast.show('\uD83D\uDD29 ' + i18n.t('toast.crate_bolted', 'This crate is bolted down. Fill it, don\'t smash it.'), 'info');
-      return;
-    }
-
-    if (destroyed) {
-      Toast.show(destroyed.emoji + ' ' + destroyed.name + ' ' + i18n.t('toast.smashed', 'smashed!'), 'loot');
-      AudioSystem.playRandom('coin', { volume: 0.4 });  // Loot spill feedback
-      SessionStats.inc('breakablesBroken');
-
-      // ── DEPTH3 §6.3a: Auto-loot spilled drops directly ──
-      // Instead of leaving walk-over items on the floor, immediately collect
-      // everything _spillDrops just placed at the destroy site + adjacents.
-      // Anything that fails pickup stays on the floor (existing fallback).
-      if (typeof WorldItems !== 'undefined') {
-        var dirs = [{ dx:0,dy:0 }, { dx:0,dy:-1 }, { dx:1,dy:0 }, { dx:0,dy:1 }, { dx:-1,dy:0 }];
-        var autoCount = 0;
-        for (var di = 0; di < dirs.length; di++) {
-          var ax = fx + dirs[di].dx;
-          var ay = fy + dirs[di].dy;
-          var loot = WorldItems.pickupAt(ax, ay, floorData.grid);
-          while (loot) {
-            _applyPickup(loot);
-            autoCount++;
-            loot = WorldItems.pickupAt(ax, ay, floorData.grid);
-          }
-        }
-      }
-    }
-    // If not destroyed, the prompt stays visible until HP reaches 0
-  }
-
-  // ── Detritus pickup (face+OK or walk-over) ───────────────────────
-
-  /**
-   * Collect detritus at (gx, gy).
-   * - Removes the sprite from DetritusSprites cache
-   * - Clears tile to EMPTY
-   * - Face+OK: full item drop (auto-loot into bag via WorldItems)
-   * - Walk-over: simplified pickup (battery/HP/energy based on type)
-   * - Shows a toast either way
-   *
-   * Both paths converge here — the walk-over path just gets a simpler
-   * pickup effect (no bag item, just a stat bump).
-   */
-  function _collectDetritus(gx, gy) {
-    if (typeof DetritusSprites === 'undefined') return;
-
-    var floorData = FloorManager.getFloorData();
-    if (!floorData || !floorData.grid) return;
-
-    var det = DetritusSprites.getAt(gx, gy);
-    if (!det) return;
-
-    // Remove from sprite cache + clear grid tile
-    var removed = DetritusSprites.remove(gx, gy, floorData.grid);
-    if (!removed) return;
-
-    AudioSystem.play('pickup', { volume: 0.5 });
-
-    // ── Determine if face+OK (interact) or walk-over ──
-    var pos = MC.getGridPos();
-    var isFacing = (pos.x !== gx || pos.y !== gy); // If player is NOT on the tile, they're facing it
-
-    if (isFacing) {
-      // Face + OK: full item pickup — drop the item into bag
-      // Uses WorldItems to spawn a walk-over collectible at player feet
-      // that's immediately picked up. This reuses the existing loot pipe.
-      Toast.show(removed.detritusEmoji + ' ' + i18n.t('toast.detritus_pickup', 'Picked up') + ' ' + removed.detritusName, 'loot');
-
-      // Spawn item drop at the tile location, then immediately collect
-      if (typeof WorldItems !== 'undefined' && removed.dropItemId) {
-        WorldItems.spawnAt(gx, gy, {
-          type: removed.walkOverType,
-          amount: removed.walkOverAmount,
-          itemId: removed.dropItemId
-        }, floorData.grid);
-        // Auto-collect: pick it up since player just interacted deliberately
-        var autoPickup = WorldItems.pickupAt(gx, gy, floorData.grid);
-        if (autoPickup) _applyPickup(autoPickup);
-      }
-    } else {
-      // Walk-over: simplified stat pickup (no bag item, just the effect)
-      if (removed.walkOverType === 'food') {
-        Player.heal(removed.walkOverAmount || 1);
-        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u2665', 'hp');
-      } else if (removed.walkOverType === 'battery') {
-        Player.addBattery(removed.walkOverAmount || 1);
-        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u25C8', 'battery');
-      } else if (removed.walkOverType === 'energy') {
-        if (typeof Player.restoreEnergy === 'function') Player.restoreEnergy(removed.walkOverAmount || 1);
-        Toast.show(removed.detritusEmoji + ' +' + (removed.walkOverAmount || 1) + '\u26A1', 'energy');
-      }
-    }
-
-    SessionStats.inc('detritusCollected');
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
+  function _smashBreakable(fx, fy) { PickupActions.smashBreakable(fx, fy); }
+  function _collectDetritus(gx, gy) { PickupActions.collectDetritus(gx, gy); }
 
   // ── Vendor dialog (NPC greeting → shop open) ──────────────────────
 
-  /**
-   * Per-faction vendor NPC data.
-   * Each faction has a name, emoji portrait, and greeting lines.
-   * First-visit greetings are longer; return visits rotate shorter lines.
-   * Follows EyesOnly VendorConfig pattern — data-driven, i18n-ready.
-   */
-  var VENDOR_NPC = {
-    tide: {
-      name:    'Kai',
-      emoji:   '\uD83D\uDC09',  // 🐉
-      first:   'Welcome, Gleaner. The Tide Council watches\nthe currents of trade. Browse our wares.',
-      lines: [
-        'The tides bring fortune today.',
-        'Back again? I have new stock.',
-        'The Council appreciates your patronage.',
-        'Trade well, Gleaner.'
-      ]
-    },
-    foundry: {
-      name:    'Renko',
-      emoji:   '\u2699\uFE0F',  // ⚙️
-      first:   'Hah! Fresh hands for the Foundry.\nEverything here is forged to last.',
-      lines: [
-        'Need something reforged?',
-        'The anvil never sleeps.',
-        'Foundry steel. Accept no substitute.',
-        'Business is business.'
-      ]
-    },
-    admiralty: {
-      name:    'Vasca',
-      emoji:   '\uD83C\uDF0A',  // 🌊
-      first:   'The Admiralty extends its hand.\nWe deal in... refined goods.',
-      lines: [
-        'The sea remembers its debts.',
-        'Rare finds, fair prices.',
-        'Only the best for Admiralty clients.',
-        'Anchors and aces, Gleaner.'
-      ]
-    }
-  };
-
-  /** Track visit counts per faction for greeting rotation. */
-  var _vendorVisits = { tide: 0, foundry: 0, admiralty: 0 };
+  // SC-G: NPC data and visit tracking moved to VendorRegistry.
+  // VENDOR_NPC and _vendorVisits are no longer defined here.
+  // game.js retains the thin UI delegation layer (_openVendorDialog)
+  // because it references internal closures (_collapseAllPeeks,
+  // _pendingMenuContext, ScreenManager.toPause).
 
   /**
    * Show vendor interaction flow. Delegates to VendorDialog if available
-   * (full greeting tree: Browse Wares / Buy Supplies / Sell All Junk / Leave).
+   * (full greeting tree: Browse Wares / Buy Supplies / Leave).
    * Falls back to the legacy DialogBox → pause menu path.
+   *
+   * SC-G: Visit tracking and NPC data now sourced from VendorRegistry.
    *
    * @param {string} factionId - 'tide' | 'foundry' | 'admiralty'
    */
   function _openVendorDialog(factionId) {
-    _vendorVisits[factionId] = (_vendorVisits[factionId] || 0) + 1;
+    // Dismiss MerchantPeek (and any other open peek) before the dialogue
+    // tree opens — prevents the peek's "Browse Wares" button from competing
+    // with VendorDialog's StatusBar choices.
+    _collapseAllPeeks();
+
+    // SC-G: Record visit in VendorRegistry (was local _vendorVisits)
+    if (typeof VendorRegistry !== 'undefined') {
+      VendorRegistry.recordVisit(factionId);
+    }
 
     AudioSystem.playRandom('coin', { volume: 0.3 });
 
@@ -6004,14 +4378,20 @@ var Game = (function () {
     }
 
     // ── Fallback: legacy DialogBox greeting → direct shop open ──
-    var npc = VENDOR_NPC[factionId] || VENDOR_NPC.tide;
-    var visits = _vendorVisits[factionId] || 0;
-    var greeting;
+    // SC-G: NPC data from VendorRegistry instead of local VENDOR_NPC
+    var npc = (typeof VendorRegistry !== 'undefined')
+      ? VendorRegistry.getNpcData(factionId)
+      : { name: 'Vendor', emoji: '\uD83E\uDDD9', first: 'Welcome.', lines: ['Welcome back.'] };
+    var greeting = (typeof VendorRegistry !== 'undefined')
+      ? VendorRegistry.getGreeting(factionId)
+      : npc.first;
+    // i18n wrap
+    var visits = (typeof VendorRegistry !== 'undefined') ? VendorRegistry.getVisitCount(factionId) : 1;
     if (visits <= 1) {
-      greeting = i18n.t('vendor.' + factionId + '.first', npc.first);
+      greeting = i18n.t('vendor.' + factionId + '.first', greeting);
     } else {
       var idx = (visits - 2) % npc.lines.length;
-      greeting = i18n.t('vendor.' + factionId + '.' + idx, npc.lines[idx]);
+      greeting = i18n.t('vendor.' + factionId + '.' + idx, greeting);
     }
 
     DialogBox.show({
@@ -6031,717 +4411,52 @@ var Game = (function () {
     });
   }
 
-  // ── Corpse harvest (opens MenuBox with side-by-side UI) ────────
+  // ── Corpse harvest/restock — delegated to CorpseActions ────────
 
-  function _harvestCorpse(fx, fy) {
-    if (typeof Salvage === 'undefined') return;
+  function _harvestCorpse(fx, fy) { CorpseActions.harvestCorpse(fx, fy); }
+  function _openCorpseMenu(optX, optY, optFloorId) { CorpseActions.openCorpseMenu(optX, optY, optFloorId); }
+  function _corpseDepositBagItem(bagIdx) { CorpseActions.depositBagItem(bagIdx); }
+  function _corpseDepositHandCard(handIdx) { CorpseActions.depositHandCard(handIdx); }
+  function _corpseSeal() { CorpseActions.seal(); }
+  function _takeHarvestItem(slot) { CorpseActions.takeHarvestItem(slot); }
 
-    var floorId = FloorManager.getCurrentFloorId();
-    var biome = FloorManager.getBiome();
+  // ── Shop buy/sell — delegated to ShopActions ─────────────────────
 
-    // ── Reanimation check: sealed corpse container stands back up ──
-    // CorpseRegistry.reanimate() validates CrateSystem seal + suit card match internally.
-    // Gate on container.sealed here so we skip the reanimate path for unsealed corpses
-    // without calling into CorpseRegistry unnecessarily.
-    var _corpseContainer = (typeof CrateSystem !== 'undefined')
-      ? CrateSystem.getContainer(fx, fy, floorId) : null;
-    var _corpseSealed = _corpseContainer && _corpseContainer.sealed;
+  function _shopBuy(slot) { ShopActions.buy(slot); }
+  function _shopBuySupply(supplyIndex) { ShopActions.buySupply(supplyIndex); }
+  function _shopSellFromHand(slot) { ShopActions.sellFromHand(slot); }
+  function _shopSellPart(bagIndex) { ShopActions.sellPart(bagIndex); }
 
-    if (typeof CorpseRegistry !== 'undefined' && _corpseSealed) {
-      var reanimData = CorpseRegistry.reanimate(fx, fy, floorId);
-      if (reanimData) {
-        // Clear corpse tile
-        var rfd = FloorManager.getFloorData();
-        if (rfd && rfd.grid[fy]) rfd.grid[fy][fx] = TILES.EMPTY;
+  // ── Equip / Unequip / Stash — delegated to EquipActions ─────────
 
-        // Try to find the original enemy object still in _enemies (placed
-        // there by CombatBridge victory handler with hp=0, spriteState='dead').
-        // If found, resurrect it in-place. If not (e.g. pre-placed corpse
-        // that was never a combat enemy), fall back to spawning a new NPC.
-        var existingEnemy = (typeof CombatBridge !== 'undefined')
-          ? CombatBridge.findDeadEnemyAt(fx, fy) : null;
+  function _equipFromBag(bagIndex) { EquipActions.equipFromBag(bagIndex); }
+  function _unequipSlot(slot) { EquipActions.unequipSlot(slot); }
+  function _bagToStash(bagIndex) { EquipActions.bagToStash(bagIndex); }
+  function _stashToBag(stashIndex) { EquipActions.stashToBag(stashIndex); }
 
-        // Fire stand-up animation
-        if (typeof DeathAnim !== 'undefined') {
-          var canvas = document.getElementById('view-canvas');
-          var cw = canvas ? canvas.width : 640;
-          var ch = canvas ? canvas.height : 400;
-          DeathAnim.startReanimate(reanimData.type, cw / 2, ch * 0.45, 0.6, function () {
-            if (existingEnemy) {
-              // Resurrect the original enemy object in-place
-              CombatBridge.resurrectAsFriendly(existingEnemy);
-            } else {
-              // Fallback: spawn new friendly NPC (pre-placed world corpse)
-              var npc = {
-                x: fx, y: fy,
-                id: 'reanim_' + reanimData.type + '_' + fx + '_' + fy,
-                name: reanimData.name,
-                emoji: reanimData.emoji,
-                type: reanimData.type,
-                hp: reanimData.hp,
-                maxHp: reanimData.hp,
-                str: reanimData.str,
-                facing: 'south',
-                awareness: 0,
-                friendly: true,
-                nonLethal: true,
-                tags: reanimData.tags || []
-              };
-              FloorManager.getEnemies().push(npc);
-            }
-            Toast.show(i18n.t('toast.reanimate', 'The fallen rises...'), 'loot');
-          });
-        }
-        return;
-      }
-    }
-
-    // Check if anything remains
-    if (!Salvage.hasHarvests(fx, fy, floorId)) {
-      Toast.show(i18n.t('toast.harvest_empty', 'Nothing left to harvest.'), 'info');
-      // Convert depleted corpse to empty tile
-      var fd = FloorManager.getFloorData();
-      fd.grid[fy][fx] = TILES.EMPTY;
-      return;
-    }
-
-    // Pre-roll all loot for display in the harvest MenuBox
-    Salvage.prepareLoot(fx, fy, floorId, biome);
-
-    // Open the harvest MenuBox (side-by-side corpse loot + player bag)
-    _collapseAllPeeks();
-    _pendingMenuContext = 'harvest';
-    _pendingMenuFace = 0;
-    ScreenManager.toPause();
-  }
-
-  // ── Corpse restock menu ─────────────────────────────────────────────
-
-  /**
-   * Open the corpse-restock pause menu.
-   *
-   * Can be called two ways:
-   *   _openCorpseMenu()           — reads tile from CorpsePeek.getTarget()
-   *   _openCorpseMenu(fx, fy, floorId) — called directly from _interact()
-   *
-   * Falls back to _harvestCorpse when the tile has no CrateSystem container
-   * (i.e. it's a loot-only corpse with no restock slots).
-   */
-  function _openCorpseMenu(optX, optY, optFloorId) {
-    var tx, ty, tFloor;
-
-    if (optX !== undefined && optX >= 0) {
-      // Called from _interact() with known coordinates
-      tx     = optX;
-      ty     = optY;
-      tFloor = optFloorId || FloorManager.getCurrentFloorId();
-    } else {
-      // Called from CorpsePeek button — read the facing tile
-      var target = (typeof CorpsePeek !== 'undefined' && CorpsePeek.getTarget)
-        ? CorpsePeek.getTarget() : null;
-      if (!target || target.x < 0) return;
-      tx     = target.x;
-      ty     = target.y;
-      tFloor = target.floorId || FloorManager.getCurrentFloorId();
-    }
-
-    _corpsePendingX     = tx;
-    _corpsePendingY     = ty;
-    _corpsePendingFloor = tFloor;
-
-    // No container → fall back to harvest (loot-only corpse)
-    if (typeof CrateSystem === 'undefined' ||
-        !CrateSystem.hasContainer(tx, ty, tFloor)) {
-      _harvestCorpse(tx, ty);
-      return;
-    }
-
-    // Dismiss the peek overlay and any CrateUI that may already be open
-    if (typeof CorpsePeek !== 'undefined' && CorpsePeek.forceHide) CorpsePeek.forceHide();
-    _collapseAllPeeks();
-
-    _pendingMenuContext = 'corpse';
-    _pendingMenuFace   = 0;
-    ScreenManager.toPause();
-  }
-
-  /**
-   * Deposit a bag item into the first matching empty resource slot on the
-   * currently-open corpse container. Slot range: hit.slot = 1100 + bagIdx.
-   */
-  function _corpseDepositBagItem(bagIdx) {
-    if (typeof CrateSystem === 'undefined') return;
-    var container = CrateSystem.getContainer(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
-    if (!container || container.sealed) return;
-
-    var bag = CardAuthority.getBag();
-    var item = bag[bagIdx];
-    if (!item) return;
-
-    // Find first unfilled resource slot that accepts this item
-    var slots = container.slots;
-    var targetSlotIdx = -1;
-    for (var i = 0; i < slots.length; i++) {
-      if (slots[i].filled) continue;
-      if (slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD) continue; // hand-card only
-      // Wildcard accepts anything; typed slots need a category match
-      var frameTag = slots[i].frameTag;
-      var matches = (frameTag === CrateSystem.FRAME.WILDCARD) ||
-                    (item.crateFillTag && item.crateFillTag === frameTag) ||
-                    (item.category === 'food' && frameTag === CrateSystem.FRAME.HP_FOOD) ||
-                    (item.category === 'energy' && frameTag === CrateSystem.FRAME.ENERGY) ||
-                    (item.category === 'battery' && frameTag === CrateSystem.FRAME.BATTERY) ||
-                    (item.category === 'scroll' && frameTag === CrateSystem.FRAME.SCROLL) ||
-                    (item.category === 'gem' && frameTag === CrateSystem.FRAME.GEM) ||
-                    (item.subtype  === 'food' && frameTag === CrateSystem.FRAME.HP_FOOD) ||
-                    (item.subtype  === 'tonic' && frameTag === CrateSystem.FRAME.ENERGY) ||
-                    (item.category === 'salvage' && frameTag === CrateSystem.FRAME.WILDCARD);
-      if (matches) { targetSlotIdx = i; break; }
-    }
-    // No typed match: accept into any empty wildcard slot
-    if (targetSlotIdx < 0) {
-      for (var wi = 0; wi < slots.length; wi++) {
-        if (!slots[wi].filled && slots[wi].frameTag !== CrateSystem.FRAME.SUIT_CARD) {
-          targetSlotIdx = wi; break;
-        }
-      }
-    }
-    if (targetSlotIdx < 0) {
-      Toast.show(i18n.t('toast.no_slot', 'No matching slot'), 'warning');
-      return;
-    }
-
-    var result = CrateSystem.fillSlot(_corpsePendingX, _corpsePendingY, _corpsePendingFloor, targetSlotIdx, item);
-    if (result) {
-      CardAuthority.removeFromBag(bagIdx);
-      var bonus = result.matched ? ' \u2713' : '';
-      Toast.show(item.emoji + ' ' + item.name + ' \u2192 corpse slot' + bonus, 'info');
-      AudioSystem.play('ui-confirm', { volume: 0.4 });
-      HUD.updatePlayer(Player.state());
-      _refreshPanels();
-    }
-  }
-
-  /**
-   * Deposit a hand card into the SUIT_CARD slot of the current corpse container.
-   * Slot range: hit.slot = 1200 + handIdx.
-   */
-  function _corpseDepositHandCard(handIdx) {
-    if (typeof CrateSystem === 'undefined') return;
-    var container = CrateSystem.getContainer(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
-    if (!container || container.sealed) return;
-
-    var hand = CardAuthority.getHand();
-    var card = hand[handIdx];
-    if (!card) return;
-
-    // Find the SUIT_CARD slot (must match suit)
-    var slots = container.slots;
-    var targetSlotIdx = -1;
-    for (var i = 0; i < slots.length; i++) {
-      if (!slots[i].filled && slots[i].frameTag === CrateSystem.FRAME.SUIT_CARD) {
-        targetSlotIdx = i; break;
-      }
-    }
-    if (targetSlotIdx < 0) {
-      Toast.show(i18n.t('toast.suit_slot_full', 'Suit slot already filled'), 'info');
-      return;
-    }
-    if (slots[targetSlotIdx].suit && slots[targetSlotIdx].suit !== card.suit) {
-      Toast.show('\u2660 Need ' + slots[targetSlotIdx].suit + ' card', 'warning');
-      return;
-    }
-
-    var result = CrateSystem.fillSlot(_corpsePendingX, _corpsePendingY, _corpsePendingFloor, targetSlotIdx, card);
-    if (result) {
-      CardAuthority.removeFromHand(handIdx);
-      var suitEmoji = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
-      Toast.show((card.emoji || suitEmoji[card.suit] || '\uD83C\uDCCF') + ' ' + card.name + ' \u2192 suit slot', 'loot');
-      AudioSystem.play('card-deal', { volume: 0.5 });
-      HUD.updatePlayer(Player.state());
-      _refreshPanels();
-    }
-  }
-
-  /**
-   * Seal the current corpse container (all slots must be filled first).
-   * Grants coins, triggers reanimate flag, closes the menu.
-   */
-  function _corpseSeal() {
-    if (typeof CrateSystem === 'undefined') return;
-    if (!CrateSystem.canSeal(_corpsePendingX, _corpsePendingY, _corpsePendingFloor)) {
-      Toast.show(i18n.t('toast.fill_slots', 'Fill all slots first!'), 'warning');
-      AudioSystem.play('ui-fail');
-      return;
-    }
-
-    var result = CrateSystem.seal(_corpsePendingX, _corpsePendingY, _corpsePendingFloor);
-    if (!result) return;
-
-    var msg = '\u2728 Sealed! +' + result.totalCoins + 'g';
-    if (result.canReanimate) msg += '  \u2620\uFE0F Ready to reanimate!';
-    Toast.show(msg, 'loot');
-
-    CardAuthority.addGold(result.totalCoins);
-
-    if (typeof ParticleFX !== 'undefined' && _canvas) {
-      var cx = _canvas.width / 2;
-      var cy = _canvas.height * 0.4;
-      if (result.totalCoins >= 5) ParticleFX.coinRain(cx, cy, result.totalCoins);
-      else if (result.totalCoins > 0) ParticleFX.coinBurst(cx, cy, Math.max(3, result.totalCoins));
-    }
-
-    HUD.updatePlayer(Player.state());
-
-    // Close the menu once sealed
-    if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
-  }
-
-  /**
-   * Take a staged loot item by slot index (1-5 keys → 0-4).
-   * Called during harvest MenuBox from number key handlers.
-   */
-  function _takeHarvestItem(slot) {
-    if (typeof Salvage === 'undefined') return;
-
-    var loot = Salvage.getStagedLoot();
-    if (slot < 0 || slot >= loot.length) return;
-
-    var item = Salvage.takeLoot(slot);
-    if (!item) return;
-
-    // Try to add to player bag
-    if (CardAuthority.addToBag(item)) {
-      Toast.show(
-        i18n.t('toast.harvest', 'Harvested:') + ' ' + item.emoji + ' ' + item.name,
-        'loot'
-      );
-      AudioSystem.play('pickup-success');
-      // Salvage spark on harvest
-      if (typeof ParticleFX !== 'undefined') {
-        var cx = _canvas ? _canvas.width / 2 : 320;
-        var cy = _canvas ? _canvas.height * 0.5 : 220;
-        ParticleFX.salvageSpark(cx, cy);
-      }
-      HUD.updatePlayer(Player.state());
-      SessionStats.inc('partsHarvested');
-      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('+' + item.emoji + ' ' + item.name, 'loot');
-      _refreshPanels();
-    } else {
-      Toast.show(i18n.t('toast.bag_full', 'Bag is full!'), 'warning');
-      // Put item back — can't take it
-      loot.splice(slot, 0, item);
-    }
-
-    // If no loot left, mark corpse as looted dry (emoji → bone).
-    // The corpse tile stays — only the display changes via CorpseRegistry.
-    if (Salvage.getStagedLoot().length === 0) {
-      var corpse = Salvage.getStagedCorpse();
-      if (corpse) {
-        var floorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1.3.1';
-        // Mark dry in registry — transitions display emoji to bone
-        if (typeof CorpseRegistry !== 'undefined') {
-          CorpseRegistry.setLootState(corpse.x, corpse.y, floorId, 'dry');
-        }
-        // Keep TILES.CORPSE on grid (corpse is still there, just empty)
-        // Only clear tile if NO registry (legacy fallback)
-        if (typeof CorpseRegistry === 'undefined') {
-          var fd = FloorManager.getFloorData();
-          if (fd && fd.grid[corpse.y] && fd.grid[corpse.y][corpse.x] === TILES.CORPSE) {
-            fd.grid[corpse.y][corpse.x] = TILES.EMPTY;
-          }
-        }
-      }
-      Salvage.closeLoot();
-      // Auto-close the harvest MenuBox
-      MenuBox.close();
-    }
-  }
-
-  // ── Shop buy/sell ─────────────────────────────────────────────────
-
-  /**
-   * Player presses [1-5] on shop Face 1 (buy pane) to purchase a card.
-   * Slot index matches the number key (0-indexed).
-   */
-  function _shopBuy(slot) {
-    if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
-
-    var result = Shop.buy(slot);
-    if (result.ok) {
-      Toast.show(
-        i18n.t('shop.bought', 'Bought') + ' ' + result.card.emoji + ' ' + result.card.name +
-        ' (−' + result.cost + 'g)',
-        'loot'
-      );
-      AudioSystem.playRandom('coin');
-      // Coin burst at viewport center (coins fly UP from purchase)
-      if (typeof ParticleFX !== 'undefined') {
-        var cx = _canvas ? _canvas.width / 2 : 320;
-        var cy = _canvas ? _canvas.height * 0.55 : 240;
-        ParticleFX.coinBurst(cx, cy, Math.min(12, Math.max(4, Math.floor(result.cost / 5))));
-      }
-      HUD.updatePlayer(Player.state());
-      SessionStats.inc('cardsBought');
-      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Bought ' + result.card.emoji + ' -' + result.cost + 'g', 'loot');
-      _refreshPanels();
-    } else if (result.reason === 'no_gold') {
-      Toast.show(
-        i18n.t('shop.need_gold', 'Need') + ' ' + result.needed + 'g ' + i18n.t('shop.more', 'more'),
-        'warning'
-      );
-      AudioSystem.play('ui-fail');
-    } else if (result.reason === 'sold_out') {
-      Toast.show(i18n.t('shop.sold_out', 'Sold out'), 'dim');
-    }
-  }
-
-  /**
-   * Player clicks a supply row in the shop face supply section.
-   * supplyIndex is the position in the faction's getSupplyStock() array.
-   * Purchases are unlimited — no sold-out state.
-   */
-  function _shopBuySupply(supplyIndex) {
-    if (typeof Shop === 'undefined') return;
-    // Ensure shop session is open for the current faction/floor before buying
-    if (!Shop.isOpen()) {
-      var _sf = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '1';
-      var _faction = Shop.getCurrentFaction ? Shop.getCurrentFaction() : 'tide';
-      Shop.open(_faction, parseInt(_sf, 10) || 1);
-    }
-
-    var result = Shop.buySupply(supplyIndex);
-    if (result.ok) {
-      var item = result.item;
-      Toast.show(
-        item.emoji + ' ' + i18n.t('toast.bought', 'Bought') + ' ' + item.name + '  −' + result.cost + 'g',
-        'currency'
-      );
-      AudioSystem.playRandom('coin', { volume: 0.4 });
-      if (typeof ParticleFX !== 'undefined') {
-        var cx2 = _canvas ? _canvas.width / 2 : 320;
-        var cy2 = _canvas ? _canvas.height * 0.55 : 240;
-        if (result.cost >= 5) ParticleFX.coinBurst(cx2, cy2, Math.min(8, Math.floor(result.cost / 3)));
-      }
-      HUD.updatePlayer(Player.state());
-      if (typeof StatusBar !== 'undefined' && StatusBar.updateBag) StatusBar.updateBag();
-      _refreshPanels();
-    } else if (result.reason === 'no_gold') {
-      var stock = Shop.getSupplyStock ? Shop.getSupplyStock() : [];
-      var needed = stock[supplyIndex] ? stock[supplyIndex].shopPrice - CardAuthority.getGold() : 0;
-      Toast.show(i18n.t('shop.need_gold', 'Need') + ' ' + needed + 'g ' + i18n.t('shop.more', 'more'), 'warning');
-      AudioSystem.play('ui-fail');
-    } else if (result.reason === 'bag_full') {
-      Toast.show(i18n.t('toast.bag_full', 'Bag is full!'), 'warning');
-    }
-  }
-
-  /**
-   * Player presses [1-5] on shop Face 2 (sell pane) to sell a hand card.
-   * Slot index matches card_N key binding (0-indexed over the hand).
-   */
-  function _shopSellFromHand(slot) {
-    if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
-
-    var hand = CardAuthority.getHand();
-    var card = hand[slot];
-    if (!card) return;
-
-    var result = Shop.sell(card.id);
-    if (result.ok) {
-      // Also remove from displayed hand
-      CardAuthority.removeFromHand(slot);
-
-      Toast.show(
-        i18n.t('shop.sold', 'Sold') + ' ' + card.emoji + ' ' + card.name +
-        ' (+' + result.amount + 'g)',
-        'loot'
-      );
-      AudioSystem.playRandom('coin');
-      // Coin rain for sell proceeds
-      if (typeof ParticleFX !== 'undefined') {
-        var cx = _canvas ? _canvas.width / 2 : 320;
-        var cy = _canvas ? _canvas.height * 0.45 : 200;
-        if (result.amount >= 15) {
-          ParticleFX.coinRain(cx, cy, result.amount);
-        } else {
-          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
-        }
-      }
-      HUD.updatePlayer(Player.state());
-      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + card.emoji + ' +' + result.amount + 'g', 'loot');
-
-      // Rep tier changed — show toast + level-up particles
-      if (result.repResult && result.repResult.tierChanged) {
-        var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
-        Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
-        if (typeof ParticleFX !== 'undefined') {
-          ParticleFX.levelUp(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.3 : 150);
-        }
-      }
-      _refreshPanels();
-    } else {
-      Toast.show(i18n.t('shop.sell_fail', 'Cannot sell'), 'warning');
-    }
-  }
-
-  /**
-   * Player sells a salvage part from their bag at the current faction shop.
-   * Called by MenuBox shop Face 3 (sell-parts pane) keybind.
-   * @param {number} bagIndex - Index into Player.state().bag
-   */
-  function _shopSellPart(bagIndex) {
-    if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
-
-    var bag = Player.state().bag;
-    var item = bag[bagIndex];
-    if (!item || item.type !== 'salvage') return;
-
-    var result = Shop.sellPart(item.id);
-    if (result.ok) {
-      Toast.show(
-        i18n.t('shop.sold', 'Sold') + ' ' + item.emoji + ' ' + item.name +
-        ' (+' + result.amount + 'g)',
-        'loot'
-      );
-      AudioSystem.playRandom('coin');
-      // Salvage sell — coin burst + salvage spark
-      if (typeof ParticleFX !== 'undefined') {
-        var cx = _canvas ? _canvas.width / 2 : 320;
-        var cy = _canvas ? _canvas.height * 0.5 : 220;
-        ParticleFX.salvageSpark(cx, cy);
-        if (result.amount >= 15) {
-          ParticleFX.coinRain(cx, cy - 20, result.amount);
-        } else {
-          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
-        }
-      }
-      HUD.updatePlayer(Player.state());
-      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + item.emoji + ' +' + result.amount + 'g', 'loot');
-
-      // Rep tier changed — show toast + level-up particles
-      if (result.repResult && result.repResult.tierChanged) {
-        var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
-        Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
-        if (typeof ParticleFX !== 'undefined') {
-          ParticleFX.levelUp(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.3 : 150);
-        }
-      }
-      _refreshPanels();
-    } else {
-      Toast.show(i18n.t('shop.sell_fail', 'Cannot sell'), 'warning');
-    }
-  }
-
-  // ── Equip / Unequip / Stash ───────────────────────────────────────
-
-  /**
-   * Equip an item from bag into the appropriate quick-slot.
-   * Slot auto-detection: consumable→1, key→2, equipment/other→0 (weapon).
-   * @param {number} bagIndex
-   */
-  function _equipFromBag(bagIndex) {
-    var bag = Player.state().bag;
-    var item = bag[bagIndex];
-    if (!item) return;
-
-    // Reject cards — cards have suit, _bagStored, _cardRef, or cardId
-    if (item._bagStored || item.suit !== undefined ||
-        item._cardRef || item.cardId !== undefined) {
-      if (typeof Toast !== 'undefined') Toast.show('\uD83C\uDCCF Cards can\u2019t be equipped', 'warning');
-      return;
-    }
-
-    // Auto-detect target slot from item type
-    var slot = 0;  // default: weapon
-    if (item.type === 'consumable' || item.subtype === 'food' || item.subtype === 'vice') slot = 1;
-    if (item.type === 'key') slot = 2;
-
-    var removed = CardAuthority.removeFromBag(bagIndex);
-    if (!removed) return;
-    var prev = CardAuthority.equip(slot, removed);
-    if (prev) {
-      CardAuthority.addToBag(prev);
-      Toast.show(item.emoji + ' ' + i18n.t('inv.equipped', 'equipped') +
-                 ' ← ' + prev.emoji, 'info');
-    } else {
-      Toast.show(item.emoji + ' ' + i18n.t('inv.equipped', 'equipped'), 'info');
-    }
-    AudioSystem.play('pickup-success');
-    // Equip sparkle at viewport center
-    if (typeof ParticleFX !== 'undefined') {
-      ParticleFX.equipFlash(_canvas ? _canvas.width / 2 : 320, _canvas ? _canvas.height * 0.35 : 170);
-    }
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
-
-  /**
-   * Unequip an item from a quick-slot back to bag.
-   * @param {number} slot - 0=weapon, 1=consumable, 2=key
-   */
-  function _unequipSlot(slot) {
-    var item = CardAuthority.getEquipSlot(slot);
-    if (!item) return;
-
-    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) {
-      Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
-      return;
-    }
-    CardAuthority.unequip(slot);
-    CardAuthority.addToBag(item);
-    Toast.show(item.emoji + ' ' + i18n.t('inv.unequipped', 'unequipped'), 'dim');
-    AudioSystem.playRandom('coin');
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
-
-  /**
-   * Move a bag item to stash (bonfire context only).
-   * @param {number} bagIndex
-   */
-  function _bagToStash(bagIndex) {
-    var bag = CardAuthority.getBag();
-    var item = bag[bagIndex];
-    if (!item) return;
-
-    if (CardAuthority.getStashSize() >= CardAuthority.MAX_STASH) {
-      Toast.show(i18n.t('inv.stash_full', 'Stash is full!'), 'warning');
-      return;
-    }
-    CardAuthority.removeFromBag(bagIndex);
-    CardAuthority.addToStash(item);
-
-    Toast.show(item.emoji + ' → ' + i18n.t('inv.stash', 'Stash'), 'info');
-    AudioSystem.play('pickup-success');
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
-
-  /**
-   * Move a stash item to bag (bonfire context only).
-   * @param {number} stashIndex
-   */
-  function _stashToBag(stashIndex) {
-    var stash = CardAuthority.getStash();
-    var item = stash[stashIndex];
-    if (!item) return;
-
-    if (CardAuthority.getBagSize() >= CardAuthority.getMaxBag()) {
-      Toast.show(i18n.t('inv.bag_full', 'Bag is full!'), 'warning');
-      return;
-    }
-    CardAuthority.removeFromStash(stashIndex);
-    CardAuthority.addToBag(item);
-
-    Toast.show(item.emoji + ' → ' + i18n.t('inv.bag', 'Bag'), 'info');
-    AudioSystem.play('pickup-success');
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
-
-  // ── Bonfire warp (teleport to another floor) ─────────────────────
+  // ── Bonfire warp — delegated to FloorTransition ───────────────────
 
   function _warpToFloor(targetFloorId) {
-    // Close the pause/bonfire menu first
     ScreenManager.toGame();
-
-    // PW-2: Bonfire fast-travel drops the hose. The line can't follow a
-    // teleport, and the player didn't roll it up — spec §2.3.
     if (typeof HoseState !== 'undefined' && HoseState.isActive && HoseState.isActive()) {
       HoseState.onBonfireWarp();
     }
-
-    // Determine direction — ascending if target is shallower
     var srcDepth = FloorManager.getFloor().split('.').length;
     var tgtDepth = targetFloorId.split('.').length;
     var dir = (tgtDepth <= srcDepth) ? 'retreat' : 'advance';
-
     Toast.show('\u2728 ' + i18n.t('bonfire.warping', 'Warping...'), 'info');
     FloorTransition.go(targetFloorId, dir);
   }
 
-  // ── Incinerator (burn focused item/card for small coin refund) ────
+  // ── Incinerator — delegated to Incinerator module ─────────────────
 
-  function _incinerateFromFocus() {
-    // Determine which wheel has focus in the inventory face
-    var focus = (typeof MenuFaces !== 'undefined') ? MenuFaces.getInvFocus() : 'bag';
-    var offset = (typeof MenuFaces !== 'undefined') ? MenuFaces.getBagOffset() : 0;
+  function _incinerateFromFocus() { Incinerator.burnFromFocus(); }
 
-    if (focus === 'bag') {
-      var bag = CardAuthority.getBag();
-      // Incinerate the first visible bag item (at current scroll offset)
-      var item = bag[offset];
-      if (!item) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
-      CardAuthority.removeFromBag(offset);
-      var refund = item.value ? Math.max(1, Math.floor(item.value * 0.1)) : 1;
-      CardAuthority.addGold(refund);
-      Toast.show('\uD83D\uDD25 ' + (item.emoji || '') + ' ' + (item.name || 'Item') + ' \u2192 ' + refund + 'g', 'warning');
-    } else {
-      // Deck focus — incinerate from backup deck
-      var deckOff = (typeof MenuFaces !== 'undefined') ? MenuFaces.getDeckOffset() : 0;
-      var collection = (typeof CardAuthority !== 'undefined') ? CardAuthority.getBackup() : [];
-      var card = collection[deckOff];
-      if (!card) { Toast.show(i18n.t('inv.nothing_burn', 'Nothing to burn'), 'warning'); return; }
-      if (typeof CardAuthority !== 'undefined') CardAuthority.removeFromBackupById(card.id);
-      var cardRefund = card.rarity === 'rare' ? 5 : (card.rarity === 'uncommon' ? 3 : 1);
-      CardAuthority.addGold(cardRefund);
-      Toast.show('\uD83D\uDD25 ' + (card.emoji || '\uD83C\uDCA0') + ' ' + (card.name || 'Card') + ' \u2192 ' + cardRefund + 'g', 'warning');
-    }
+  // ── Deck management — delegated to DeckActions module ─────────────
 
-    AudioSystem.play('incinerator');
-    HUD.updatePlayer(Player.state());
-    _refreshPanels();
-  }
+  function _handToBackup(handIndex) { DeckActions.handToBackup(handIndex); }
+  function _backupToHand(deckIndex) { DeckActions.backupToHand(deckIndex); }
 
-  // ── Deck management actions (B5.4) ────────────────────────────────
-
-  function _handToBackup(handIndex) {
-    var card = CardAuthority.removeFromHand(handIndex);
-    if (!card) return;
-    CardAuthority.addToBackup(card);
-
-    var emoji = card.emoji || '\uD83C\uDCA0';
-    Toast.show(emoji + ' \u2192 Backup Deck', 'info');
-    if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
-    _refreshPanels();
-  }
-
-  function _backupToHand(deckIndex) {
-    var backup = CardAuthority.getBackup();
-    var card = backup[deckIndex];
-    if (!card) return;
-
-    var hand = CardAuthority.getHand();
-    if (hand.length < CardAuthority.MAX_HAND) {
-      // Hand has room — move card there
-      CardAuthority.removeFromBackupById(card.id);
-      CardAuthority.addToHand(card);
-      var emoji = card.emoji || '\uD83C\uDCA0';
-      Toast.show(emoji + ' \u2192 Hand', 'info');
-      if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
-      _refreshPanels();
-      return;
-    }
-
-    // Hand full — cascade to bag (EyesOnly pattern: hand → bag)
-    var bagSize = (typeof CardAuthority.getBagSize === 'function')
-      ? CardAuthority.getBagSize()
-      : CardAuthority.getBag().length;
-    if (bagSize < CardAuthority.getMaxBag()) {
-      CardAuthority.removeFromBackupById(card.id);
-      card._bagStored = true;
-      CardAuthority.addToBag(card);
-      var emoji2 = card.emoji || '\uD83C\uDCA0';
-      Toast.show(emoji2 + ' \u2192 Bag', 'info');
-      if (typeof AudioSystem !== 'undefined') AudioSystem.play('card-whoosh');
-      _refreshPanels();
-      return;
-    }
-
-    // Both full
-    Toast.show(i18n.t('inv.no_space', 'No space! Hand & bag full.'), 'warning');
-  }
 
   // ── Tick (game logic at 10fps — enemies, aggro) ────────────────────
 
@@ -6767,14 +4482,15 @@ var Game = (function () {
     // cinematic" the instant nearby enemies trip ENGAGED.
     var _cinLocking = (typeof CinematicCamera !== 'undefined' &&
                        CinematicCamera.isInputLocked && CinematicCamera.isInputLocked());
-    var _heroWakeLock = (_heroWakeState && _heroWakeState.phase === 'playing');
+    var _hwState = (typeof HeroWake !== 'undefined') ? HeroWake.getState() : null;
+    var _heroWakeLock = (_hwState && _hwState.phase === 'playing');
     if (_cinLocking || _heroWakeLock) {
       // Still tick the scripted hero so the authored path advances, but
       // skip enemy AI, aggro checks, and bark ticks entirely.
       if (_heroWakeLock && typeof HeroSystem !== 'undefined' && HeroSystem.tickScriptedHero) {
         var _despawnedLocked = HeroSystem.tickScriptedHero({ x: p.x, y: p.y }, deltaMs);
-        if (_despawnedLocked && _heroWakeState.combatTrigger && !_heroWakeState.triggerSpawned) {
-          _spawnWoundedWarden(_heroWakeState.combatTrigger);
+        if (_despawnedLocked && _hwState.combatTrigger && !_hwState.triggerSpawned) {
+          _spawnWoundedWarden(_hwState.combatTrigger);
         }
       }
       return;
@@ -6803,6 +4519,16 @@ var Game = (function () {
       );
     }
 
+    // Friendly wander tick — reanimated entities patrol crate→torch→crate.
+    // Runs patrol-only movement (no awareness, no chase).
+    if (EnemyAI.tickFriendlyPatrol) {
+      for (var _fri = 0; _fri < enemies.length; _fri++) {
+        if (enemies[_fri].friendly && enemies[_fri].path) {
+          EnemyAI.tickFriendlyPatrol(enemies[_fri], floorData.grid, floorData.gridW, floorData.gridH, deltaMs);
+        }
+      }
+    }
+
     // Enemy creature bark tick — atmospheric sounds on depth-3+ floors
     if (EnemyAI.tickEnemyBarks) {
       EnemyAI.tickEnemyBarks(enemies, p, deltaMs, floorData.biome);
@@ -6815,15 +4541,16 @@ var Game = (function () {
     //   null      — hero is still walking
     //   object    — hero just reached end of path, this is the entity
     // On despawn, we spawn the wounded Vault Warden combat trigger.
-    if (_heroWakeState.phase === 'playing' && typeof HeroSystem !== 'undefined' && HeroSystem.tickScriptedHero) {
+    if (_hwState && _hwState.phase === 'playing' && typeof HeroSystem !== 'undefined' && HeroSystem.tickScriptedHero) {
       var despawned = HeroSystem.tickScriptedHero({ x: p.x, y: p.y }, deltaMs);
-      if (despawned && _heroWakeState.combatTrigger && !_heroWakeState.triggerSpawned) {
-        _spawnWoundedWarden(_heroWakeState.combatTrigger);
+      if (despawned && _hwState.combatTrigger && !_hwState.triggerSpawned) {
+        _spawnWoundedWarden(_hwState.combatTrigger);
       }
     }
 
     // Dispatcher grab choreography (Floor 1 gate sequence)
-    if (!_gateUnlocked && _dispatcherEntity && _dispatcherPhase !== 'done') {
+    var _dPhase = (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getPhase() : 'done';
+    if (!_gateUnlocked && _dPhase !== 'done') {
       _tickDispatcherChoreography(deltaMs);
     }
 
@@ -7067,6 +4794,10 @@ var Game = (function () {
 
       // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
       if (typeof PeekSlots !== 'undefined') PeekSlots.update(frameDt);
+
+      // RS-1: unified restock surface per-frame update (seal button, sub-modules)
+      if (typeof RestockBridge !== 'undefined') RestockBridge.update(frameDt);
+
       DialogBox.update(frameDt);
       DialogBox.render(ctx, _canvas.width, _canvas.height);
       Toast.update(frameDt);
@@ -7117,6 +4848,12 @@ var Game = (function () {
 
     // Tick movement animation
     MC.tick(frameDt);
+
+    // PW-3: Continuous spray cleaning while hose is active + interact held.
+    // Must run after MC.tick (facing direction is current) and InputPoll
+    // (isDown reflects this frame's input). SpraySystem self-gates on
+    // HoseState.isActive(), InputManager.isDown('interact'), combat, etc.
+    if (typeof SpraySystem !== 'undefined') SpraySystem.update(frameDt);
 
     // Smooth mouse free-look (acceleration + exponential lerp)
     // Skip MouseLook tick when cinematic camera has locked input — prevents
@@ -7302,38 +5039,14 @@ var Game = (function () {
     }
 
     // ── Vendor NPC sprites (behind counter, facing player) ──────────
-    if (typeof NpcComposer !== 'undefined' && floorData.shops) {
-      for (var vi = 0; vi < floorData.shops.length; vi++) {
-        var shopEntry = floorData.shops[vi];
-        var vendorStack = NpcComposer.getVendorPreset(shopEntry.factionId);
-        if (vendorStack) {
-          // Determine facing toward nearest walkable neighbor
-          var vendorFacing = shopEntry.facing || 'south';
-          _sprites.push({
-            x: shopEntry.x, y: shopEntry.y,
-            id: 'vendor_' + shopEntry.factionId,
-            emoji: vendorStack.head || vendorStack.torso || '🧙',
-            stack: {
-              head:   vendorStack.head   || '',
-              torso:  vendorStack.torso  || '',
-              legs:   vendorStack.legs   || '',
-              hat:    vendorStack.hat    ? { emoji: vendorStack.hat, scale: vendorStack.hatScale || 0.5, behind: !!vendorStack.hatBehind } : null,
-              backWeapon:  vendorStack.backWeapon  ? { emoji: vendorStack.backWeapon,  scale: vendorStack.backWeaponScale || 0.4,  offsetX: vendorStack.backWeaponOffsetX || 0.3 }  : null,
-              frontWeapon: vendorStack.frontWeapon ? { emoji: vendorStack.frontWeapon, scale: vendorStack.frontWeaponScale || 0.65, offsetX: vendorStack.frontWeaponOffsetX || -0.25 } : null,
-              headMods:  vendorStack.headMods  || null,
-              torsoMods: vendorStack.torsoMods || null,
-              tintHue: vendorStack.tintHue
-            },
-            color: null,
-            scale: 0.7,
-            facing: vendorFacing,
-            awareness: 0,
-            counterOcclude: true,
-            glow: null, glowRadius: 0, tint: null,
-            particleEmoji: null, overlayText: null,
-            bobY: 0, scaleAdd: 0
-          });
-        }
+    // SC-G: Delegated to VendorRegistry.buildSprites() — all sprite
+    // construction logic lives in the registry module now.
+    if (typeof VendorRegistry !== 'undefined') {
+      var vendorSprites = VendorRegistry.buildSprites(
+        FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : floorData.floorId
+      );
+      for (var vi = 0; vi < vendorSprites.length; vi++) {
+        _sprites.push(vendorSprites[vi]);
       }
     }
 
@@ -7536,23 +5249,8 @@ var Game = (function () {
    *
    * Does NOT touch the ESC intercept chain — that stays one-at-a-time.
    */
-  function _collapseAllPeeks() {
-    if (typeof PeekSlots !== 'undefined' && PeekSlots.isFilling()) {
-      PeekSlots.close();
-    }
-    if (typeof TorchPeek !== 'undefined' && TorchPeek.isInteracting()) {
-      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
-      TorchPeek.handleKey('Escape');
-    }
-    if (typeof BookshelfPeek !== 'undefined' && BookshelfPeek.isActive()) {
-      if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isActive()) CinematicCamera.close();
-      BookshelfPeek.handleKey('Escape');
-    }
-    if (typeof CratePeek   !== 'undefined' && CratePeek.isActive())   CratePeek.handleKey('Escape');
-    if (typeof CorpsePeek  !== 'undefined' && CorpsePeek.isActive())  CorpsePeek.handleKey('Escape');
-    if (typeof MerchantPeek !== 'undefined' && MerchantPeek.isActive()) MerchantPeek.handleKey('Escape');
-    if (typeof PuzzlePeek  !== 'undefined' && PuzzlePeek.isActive())  PuzzlePeek.handleKey('Escape');
-  }
+  // Delegated to GameActions.collapseAllPeeks()
+  function _collapseAllPeeks() { GameActions.collapseAllPeeks(); }
 
   function requestPause(context, face, invFocus) {
     if (!ScreenManager.isPlaying()) return;
@@ -7576,12 +5274,28 @@ var Game = (function () {
     interact: function () { _interact(); },
 
     /** Open the corpse-restock menu for the corpse CorpsePeek is showing.
-     *  Called from CorpsePeek._onActionClick() when "Restock" is pressed. */
-    openCorpseMenu: function () { _openCorpseMenu(); },
+     *  Called from CorpsePeek._onActionClick() when "Restock" is pressed.
+     *  RS-3: Routes through RestockBridge for unsealed containers. */
+    openCorpseMenu: function () {
+      // Try RS-3 path via CorpsePeek target coords
+      if (typeof RestockBridge !== 'undefined' && typeof CorpsePeek !== 'undefined' && CorpsePeek.getTarget) {
+        var t = CorpsePeek.getTarget();
+        if (t && t.x >= 0 && RestockBridge.detectMode(t.x, t.y, t.floorId) === 'corpse') {
+          if (!RestockBridge.isActive()) {
+            if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
+            RestockBridge.open(t.x, t.y, t.floorId, 'corpse');
+          }
+          return;
+        }
+      }
+      // Legacy fallback
+      _openCorpseMenu();
+    },
 
     /** Return current corpse-menu target (for MenuFaces to read slot data). */
     getCorpseTarget: function () {
-      return { x: _corpsePendingX, y: _corpsePendingY, floorId: _corpsePendingFloor };
+      if (typeof CorpseActions !== 'undefined') return CorpseActions.getPendingPos();
+      return { x: -1, y: -1, floorId: '' };
     }
   };
 })();

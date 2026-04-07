@@ -273,9 +273,11 @@ var CratePeek = (function () {
     _timer   = 0;
 
     // Determine crate type now so labels and button are correct from first frame
-    var isSupply = typeof CrateSystem !== 'undefined' &&
-      typeof FloorManager !== 'undefined' &&
-      CrateSystem.hasContainer(fx, fy, FloorManager.getCurrentFloorId());
+    var _cpFloorId = typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : '';
+    var _cpContainer = (typeof CrateSystem !== 'undefined')
+      ? CrateSystem.getContainer(fx, fy, _cpFloorId) : null;
+    var isSupply = !!_cpContainer && !_cpContainer.storage;
+    var isStorage = !!_cpContainer && !!_cpContainer.storage;
 
     // Style the box instance (pointer-events off)
     var inst = document.getElementById(_boxId);
@@ -288,27 +290,28 @@ var CratePeek = (function () {
     }
 
     // Inner label — appears with the box, readable immediately
+    var _cpInner = isStorage ? '\uD83D\uDCE6 STORAGE' : (isSupply ? '\u2691 SUPPLY' : '? LOOT ?');
     if (_innerLabel) {
-      _innerLabel.textContent = isSupply ? '\u2691 SUPPLY' : '? LOOT ?';
+      _innerLabel.textContent = _cpInner;
       _innerLabel.style.opacity = '0';
     }
 
     // Sub-label — appears after lid opens
+    var _cpSub  = isStorage ? 'storage crate' : (isSupply ? 'supply crate' : 'breakable crate');
+    var _cpHint = isStorage ? '\u2192 open for supplies'
+                : (isSupply ? '\u2192 restock slots' : '\u2192 smash to loot');
     if (_subLabel) {
       _subLabel.textContent = '';
-      _subLabel.appendChild(document.createTextNode(
-        isSupply ? 'supply crate' : 'breakable crate'
-      ));
+      _subLabel.appendChild(document.createTextNode(_cpSub));
       _subLabel.appendChild(document.createElement('br'));
-      _subLabel.appendChild(document.createTextNode(
-        isSupply ? '\u2192 restock slots' : '\u2192 smash to loot'
-      ));
+      _subLabel.appendChild(document.createTextNode(_cpHint));
       _subLabel.style.color = 'rgba(200,170,100,0)';
     }
 
     // Action button hidden until lid opens; label reflects crate type
+    var _cpBtn = isStorage ? 'Open' : (isSupply ? 'Fill Crate' : 'Smash');
     if (_actionBtn) {
-      _actionBtn.textContent = isSupply ? 'Fill Crate' : 'Smash';
+      _actionBtn.textContent = _cpBtn;
       _actionBtn.style.opacity = '0';
       _actionBtn.style.pointerEvents = 'none';
     }

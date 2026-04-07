@@ -58,6 +58,8 @@ Legend
 
 All times are milliseconds from `_onArriveHeroWake()` start. This is a state machine driven by a single `CinemaController` (new module, see §5.1).
 
+> **Extraction note:** `_onArriveHeroWake()` was extracted from `game.js` to `engine/hero-wake.js` as `HeroWake.onArrive()`.
+
 | T (ms) | Actor | Action | Systems touched |
 |---|---|---|---|
 | 0 | System | `MovementController.freeze(true)` — drain `impulse_queue`, ignore further input. | MC |

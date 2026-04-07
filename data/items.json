@@ -1237,5 +1237,343 @@
     "shopUnlimited": true,
     "description": "Replacement mechanism for spent dungeon traps. Face a consumed trap and interact to re-arm.",
     "_designNote": "Phase 2.2 trap consumable. Replaces ITM-092 Trap Spring as the primary rearm resource. Cheaper than spider (3g) since traps hurt the player too."
+  },
+
+  {
+    "_comment": "=== PRESSURE WASHING NOZZLES (PW-5) ITM-120 to ITM-135 ===",
+    "_designPhilosophy": "4 nozzle types × 4 rarities = 16 items. Each type has a unique shape primitive (ring, point, line, helix). Rarity scales parameters: common = shape only, uncommon = +scroll modulation, rare = +gyro signal 1, epic = +gyro signal 2 + signature perk. Equipped in any active slot. Scroll wheel (shared mouse+remote) and gyro (remote only) modify the beam shape in flight. Parameters in effects arrays are data-driven — SpraySystem reads them directly so each rarity tier has its own tuning.",
+    "_inputModel": "scroll = beam revolution/shape phase (shared). gyroYaw = shape orientation/deformation (remote only). gyroThrust = focus/concentration (remote only). gyroRoll = orientation rotation (remote only, cyclone only). All gyro signals gated behind HARNESS HOOK test harness."
+  },
+
+  { "_comment": "── CONE NOZZLE (ring footprint) ── scroll: ring diameter. yaw: flatten to ellipse. thrust: narrow ellipse. The area-denial nozzle." },
+
+  {
+    "id": "ITM-120",
+    "name": "Tin Cone Tip",
+    "emoji": "💫",
+    "type": "equipment",
+    "subtype": "nozzle_cone",
+    "rarity": "common",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "ring", "wallEff": 0.9, "floorEff": 1.1, "radius": 2, "radiusMin": 2, "radiusMax": 3, "intensity": 0.7, "scrollResponse": 0.0, "yawFlatten": 0.0, "thrustNarrow": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "cone"],
+    "lootProfile": "shop",
+    "shopPrice": 12,
+    "description": "Cheap ring spray. Fixed diameter, covers moderate area. Tin corrodes fast.",
+    "_designNote": "Common cone. Fixed ring, no scroll/gyro response. The donut brush — cleans a ring outline, leaving a center island the player must overlap. Sold at Tide/Foundry."
+  },
+  {
+    "id": "ITM-121",
+    "name": "Brass Ring Nozzle",
+    "emoji": "💫",
+    "type": "equipment",
+    "subtype": "nozzle_cone",
+    "rarity": "uncommon",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "ring", "wallEff": 0.95, "floorEff": 1.2, "radius": 3, "radiusMin": 1, "radiusMax": 4, "intensity": 0.85, "scrollResponse": 1.0, "yawFlatten": 0.0, "thrustNarrow": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "cone"],
+    "lootProfile": "shop",
+    "shopPrice": 25,
+    "description": "Adjustable ring spray. Scroll to tighten or widen the cone. Brass holds up.",
+    "_designNote": "Uncommon cone. Scroll unlocked — player controls ring diameter. Still no gyro. The 'garden hose' nozzle."
+  },
+  {
+    "id": "ITM-122",
+    "name": "Precision Cone Assembly",
+    "emoji": "💫",
+    "type": "equipment",
+    "subtype": "nozzle_cone",
+    "rarity": "rare",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "ring", "wallEff": 1.0, "floorEff": 1.3, "radius": 3, "radiusMin": 1, "radiusMax": 5, "intensity": 1.0, "scrollResponse": 1.0, "yawFlatten": 1.0, "thrustNarrow": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "cone", "precision"],
+    "lootProfile": "dungeon",
+    "shopPrice": 65,
+    "description": "Machined cone with gyro-responsive ellipse. Tilt to flatten the ring into a scrubbing oval.",
+    "_designNote": "Rare cone. Scroll + yaw flatten. Gyro yaw squashes the ring into an ellipse — tilt wrist to elongate. Dungeon loot or Admiralty shop."
+  },
+  {
+    "id": "ITM-123",
+    "name": "Vortex Ring Master",
+    "emoji": "💫",
+    "type": "equipment",
+    "subtype": "nozzle_cone",
+    "rarity": "epic",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "ring", "wallEff": 1.1, "floorEff": 1.4, "radius": 4, "radiusMin": 1, "radiusMax": 6, "intensity": 1.15, "scrollResponse": 1.0, "yawFlatten": 1.0, "thrustNarrow": 1.0 },
+      { "type": "ring_residue", "value": true }
+    ],
+    "synergyTags": ["cleaning", "hose", "cone", "precision", "elite"],
+    "lootProfile": "dungeon",
+    "description": "Military-grade vortex ring. Full gyro control. Leaves a clean residue trail inside the ring.",
+    "_designNote": "Epic cone. All inputs live. Thrust collapses the ellipse to a line. Signature perk: ring_residue — subcells inside the ring get a faint passive clean (10% strength) even without direct contact. Deep dungeon loot only."
+  },
+
+  { "_comment": "── BEAM NOZZLE (point/scatter footprint) ── scroll: scatter radius (laser → cloud). yaw: dot → dash. thrust: focus hot center. The precision nozzle." },
+
+  {
+    "id": "ITM-124",
+    "name": "Needle Tip",
+    "emoji": "💎",
+    "type": "equipment",
+    "subtype": "nozzle_beam",
+    "rarity": "common",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "point", "wallEff": 1.3, "floorEff": 0.7, "radius": 0, "scatterMin": 0, "scatterMax": 2, "intensity": 1.2, "scrollResponse": 0.0, "yawStretch": 0.0, "thrustFocus": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "beam"],
+    "lootProfile": "shop",
+    "shopPrice": 12,
+    "description": "Pinpoint spray. High wall damage, poor floor coverage. Aim carefully.",
+    "_designNote": "Common beam. Fixed tight dot, no scroll/gyro. High intensity compensates for tiny footprint. The 'laser pointer' — skill-indexed even at common tier because you need pointer-aim accuracy."
+  },
+  {
+    "id": "ITM-125",
+    "name": "Focused Jet",
+    "emoji": "💎",
+    "type": "equipment",
+    "subtype": "nozzle_beam",
+    "rarity": "uncommon",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "point", "wallEff": 1.35, "floorEff": 0.8, "radius": 0, "scatterMin": 0, "scatterMax": 3, "intensity": 1.3, "scrollResponse": 1.0, "yawStretch": 0.0, "thrustFocus": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "beam"],
+    "lootProfile": "shop",
+    "shopPrice": 25,
+    "description": "Scroll to defocus: tight laser or wide scatter cloud. Versatile precision.",
+    "_designNote": "Uncommon beam. Scroll unlocked — toggle between sniper dot and stochastic shotgun. The noise at max scatter means random subcells in a radius get hit, creating organic clean patterns."
+  },
+  {
+    "id": "ITM-126",
+    "name": "Lance Nozzle",
+    "emoji": "💎",
+    "type": "equipment",
+    "subtype": "nozzle_beam",
+    "rarity": "rare",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "point", "wallEff": 1.4, "floorEff": 0.85, "radius": 0, "scatterMin": 0, "scatterMax": 4, "intensity": 1.4, "scrollResponse": 1.0, "yawStretch": 1.0, "thrustFocus": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "beam", "precision"],
+    "lootProfile": "dungeon",
+    "shopPrice": 65,
+    "description": "Gyro-responsive lance. Yaw stretches the dot into a cutting dash.",
+    "_designNote": "Rare beam. Scroll + yaw stretch. Gyro yaw elongates the point into a line — sweep wrist to paint a seam. The dash orientation follows wrist direction. Dungeon loot or Admiralty."
+  },
+  {
+    "id": "ITM-127",
+    "name": "Dragon's Eye",
+    "emoji": "💎",
+    "type": "equipment",
+    "subtype": "nozzle_beam",
+    "rarity": "epic",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "point", "wallEff": 1.5, "floorEff": 0.9, "radius": 0, "scatterMin": 0, "scatterMax": 5, "intensity": 1.5, "scrollResponse": 1.0, "yawStretch": 1.0, "thrustFocus": 1.0 },
+      { "type": "piercing_clean", "value": true }
+    ],
+    "synergyTags": ["cleaning", "hose", "beam", "precision", "elite"],
+    "lootProfile": "dungeon",
+    "description": "Searing focused jet. Full gyro control. Pierces surface grime to reveal hidden layers beneath.",
+    "_designNote": "Epic beam. All inputs live. Thrust focuses the dash into a super-concentrated center line (_·_). Signature perk: piercing_clean — beam punches through top grime layer to clean hidden grime underneath in a single pass. Deep dungeon loot only."
+  },
+
+  { "_comment": "── FAN NOZZLE (oriented line footprint) ── scroll: rotates — \\ | / —. thrust: narrows opening angle. yaw: inflates ends into trapezoid. The corridor nozzle." },
+
+  {
+    "id": "ITM-128",
+    "name": "Flat Tip",
+    "emoji": "🌊",
+    "type": "equipment",
+    "subtype": "nozzle_fan",
+    "rarity": "common",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "hline", "wallEff": 0.9, "floorEff": 1.2, "radius": 2, "fanWidth": 3, "scrollAngle": 0.0, "scrollResponse": 0.0, "thrustNarrow": 0.0, "yawTrapezoid": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "fan"],
+    "lootProfile": "shop",
+    "shopPrice": 12,
+    "description": "Fixed horizontal spray. Decent floor coverage, weak on walls.",
+    "_designNote": "Common fan. Locked horizontal orientation, no scroll/gyro. The entry-level corridor sweeper. 3 subcells wide."
+  },
+  {
+    "id": "ITM-129",
+    "name": "Foundry Fan Nozzle",
+    "emoji": "🌊",
+    "type": "equipment",
+    "subtype": "nozzle_fan",
+    "rarity": "uncommon",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "hline", "wallEff": 1.0, "floorEff": 1.4, "radius": 2, "fanWidth": 5, "scrollAngle": 1.0, "scrollResponse": 1.0, "thrustNarrow": 0.0, "yawTrapezoid": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "fan", "foundry"],
+    "lootProfile": "shop",
+    "shopPrice": 25,
+    "description": "Scroll to rotate: — \\ | / —. The Foundry standard for corridor and wall work.",
+    "_designNote": "Uncommon fan. Scroll rotates the fan through 180°. Player picks the angle to match surface geometry. Replaces the old ITM-117. Foundry shop staple."
+  },
+  {
+    "id": "ITM-130",
+    "name": "Tempest Blade",
+    "emoji": "🌊",
+    "type": "equipment",
+    "subtype": "nozzle_fan",
+    "rarity": "rare",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "hline", "wallEff": 1.1, "floorEff": 1.5, "radius": 3, "fanWidth": 6, "scrollAngle": 1.0, "scrollResponse": 1.0, "thrustNarrow": 1.0, "yawTrapezoid": 0.0 }
+    ],
+    "synergyTags": ["cleaning", "hose", "fan", "precision"],
+    "lootProfile": "dungeon",
+    "shopPrice": 65,
+    "description": "Rotatable fan with thrust-responsive narrowing. Push forward to squeeze the blade thin.",
+    "_designNote": "Rare fan. Scroll rotation + thrust narrowing. Thrust tightens the fan from wide broom to narrow squeegee. Dungeon loot or Admiralty."
+  },
+  {
+    "id": "ITM-131",
+    "name": "Horizon Edge",
+    "emoji": "🌊",
+    "type": "equipment",
+    "subtype": "nozzle_fan",
+    "rarity": "epic",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "hline", "wallEff": 1.2, "floorEff": 1.6, "radius": 4, "fanWidth": 8, "scrollAngle": 1.0, "scrollResponse": 1.0, "thrustNarrow": 1.0, "yawTrapezoid": 1.0 },
+      { "type": "double_pass", "value": true }
+    ],
+    "synergyTags": ["cleaning", "hose", "fan", "precision", "elite"],
+    "lootProfile": "dungeon",
+    "description": "Full-spectrum fan. All gyro axes active. Yaw inflates a low-impact trapezoid. Twin parallel blades.",
+    "_designNote": "Epic fan. All inputs live. Yaw inflates the fan ends into a trapezoid — wide but weak outer wash. Signature perk: double_pass — renders two parallel fan lines separated by 2 subcells, doubling coverage per sweep. Deep dungeon loot only."
+  },
+
+  { "_comment": "── CYCLONE NOZZLE (time-varying helix footprint) ── auto-revolves S → $ → | → $ → S. scroll: chase the phase (minigame). yaw: orient the shape. thrust: not used (rhythm is the axis). The flow-state nozzle." },
+
+  {
+    "id": "ITM-132",
+    "name": "Worn Spinner",
+    "emoji": "🌀",
+    "type": "equipment",
+    "subtype": "nozzle_cyclone",
+    "rarity": "common",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "spiral", "wallEff": 0.8, "floorEff": 1.0, "radius": 1, "freq": 3.0, "amp": 1, "syncBonus": 1.2, "scrollResponse": 0.0, "yawOrient": 0.0, "revealHidden": false }
+    ],
+    "synergyTags": ["cleaning", "hose", "cyclone"],
+    "lootProfile": "shop",
+    "shopPrice": 12,
+    "description": "Wobbly auto-spin. Covers more than you'd aim. The bearings are shot.",
+    "_designNote": "Common cyclone. Auto-revolves at 3.0 Hz, small amplitude. No scroll/gyro. The training wheel — player observes the S→| cycle passively, learning the rhythm before they get scroll control."
+  },
+  {
+    "id": "ITM-133",
+    "name": "Turbine Head",
+    "emoji": "🌀",
+    "type": "equipment",
+    "subtype": "nozzle_cyclone",
+    "rarity": "uncommon",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "spiral", "wallEff": 0.85, "floorEff": 1.1, "radius": 2, "freq": 3.7, "amp": 2, "syncBonus": 1.4, "scrollResponse": 1.0, "yawOrient": 0.0, "revealHidden": false }
+    ],
+    "synergyTags": ["cleaning", "hose", "cyclone"],
+    "lootProfile": "shop",
+    "shopPrice": 25,
+    "description": "Scroll to chase the revolution. Match the phase for a power spike. Two clock hands, one target.",
+    "_designNote": "Uncommon cyclone. Scroll chase minigame active — the two-clock-hand UI appears. Player scrolls to match the auto-revolution phase. syncBonus 1.4× when aligned. The rhythm game begins here."
+  },
+  {
+    "id": "ITM-134",
+    "name": "Storm Cyclone",
+    "emoji": "🌀",
+    "type": "equipment",
+    "subtype": "nozzle_cyclone",
+    "rarity": "rare",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "spiral", "wallEff": 0.85, "floorEff": 1.15, "radius": 2, "freq": 3.7, "amp": 2, "syncBonus": 1.6, "scrollResponse": 1.0, "yawOrient": 1.0, "revealHidden": true }
+    ],
+    "synergyTags": ["cleaning", "hose", "cyclone", "exploration"],
+    "lootProfile": "dungeon",
+    "shopPrice": 65,
+    "description": "Gyro-responsive spiral. Wrist roll orients the pattern. Reveals hidden grime.",
+    "_designNote": "Rare cyclone. Scroll chase + gyro roll orientation. Replaces old ITM-118. The gyro adds orientation control — rotate the S/| pattern to any angle on the wall. Reveals hidden grime. Dungeon loot or Admiralty."
+  },
+  {
+    "id": "ITM-135",
+    "name": "Maelstrom Core",
+    "emoji": "🌀",
+    "type": "equipment",
+    "subtype": "nozzle_cyclone",
+    "rarity": "epic",
+    "stackable": false,
+    "maxStack": 1,
+    "equipSlot": "active",
+    "element": null,
+    "effects": [
+      { "type": "spray_modifier", "shape": "spiral", "wallEff": 0.9, "floorEff": 1.25, "radius": 3, "freq": 4.2, "amp": 3, "syncBonus": 2.0, "scrollResponse": 1.0, "yawOrient": 1.0, "revealHidden": true },
+      { "type": "phase_lock_clean", "value": true }
+    ],
+    "synergyTags": ["cleaning", "hose", "cyclone", "exploration", "elite"],
+    "lootProfile": "dungeon",
+    "description": "Violent maelstrom. 2× power at sync. Cleans phase-locked grime that nothing else touches.",
+    "_designNote": "Epic cyclone. All inputs live. Higher freq (4.2 Hz) and wider amp makes the chase harder but syncBonus 2.0× rewards mastery. Signature perk: phase_lock_clean — can clean phase-locked grime tiles (post-jam grime type that requires specific beam phase to dissolve). Deep dungeon loot only."
   }
 ]

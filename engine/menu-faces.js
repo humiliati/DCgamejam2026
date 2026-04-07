@@ -75,59 +75,66 @@ var MenuFaces = (function () {
    * Draw a hover tooltip for a card or item near the cursor position.
    * Shows: emoji, name, rarity, suit, power, description.
    */
-  function _drawHoverTooltip(ctx, detail, panelX, panelW) {
+  function _drawHoverTooltip(ctx, detail, panelX, panelW, S) {
     if (!detail || !detail.item) return;
+    S = S || 1;
     var it = detail.item;
     var isCard = !!(it.suit || it.power || it.value);
 
-    var TW = 160, TH = isCard ? 80 : 60;
-    var tx = Math.min(detail.x + 10, panelX + panelW - TW - 4);
-    var ty = detail.y - TH - 6;
-    if (ty < 0) ty = detail.y + 30;
+    var TW = Math.round(160 * S), TH = Math.round((isCard ? 80 : 60) * S);
+    var tx = Math.min(detail.x + Math.round(10 * S), panelX + panelW - TW - 4);
+    var ty = detail.y - TH - Math.round(6 * S);
+    if (ty < 0) ty = detail.y + Math.round(30 * S);
+
+    var F_TIP = Math.max(10, Math.round(12 * S)) + 'px monospace';
+    var F_TIP_B = 'bold ' + F_TIP;
+    var F_TIP_SM = Math.max(10, Math.round(13 * S)) + 'px monospace';
+    var pad = Math.round(6 * S);
+    var lineH = Math.round(14 * S);
 
     // Background
     ctx.fillStyle = 'rgba(15,12,25,0.92)';
-    _roundRectFill(ctx, tx, ty, TW, TH, 6);
+    _roundRectFill(ctx, tx, ty, TW, TH, Math.round(6 * S));
     ctx.strokeStyle = 'rgba(255,215,0,0.5)';
     ctx.lineWidth = 1;
-    _roundRectStroke(ctx, tx, ty, TW, TH, 6);
+    _roundRectStroke(ctx, tx, ty, TW, TH, Math.round(6 * S));
 
-    var cy = ty + 16;
+    var cy = ty + Math.round(16 * S);
     // Name + emoji
-    ctx.font = 'bold 12px monospace';
+    ctx.font = F_TIP_B;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
-    ctx.fillText((it.emoji || '') + ' ' + (it.name || '???'), tx + 6, cy);
-    cy += 14;
+    ctx.fillText((it.emoji || '') + ' ' + (it.name || '???'), tx + pad, cy);
+    cy += lineH;
 
     // Rarity
     if (it.rarity) {
-      ctx.font = '13px monospace';
+      ctx.font = F_TIP_SM;
       ctx.fillStyle = INV_RARITY_COL[it.rarity] || COL.dim;
-      ctx.fillText(it.rarity.toUpperCase(), tx + 6, cy);
-      cy += 12;
+      ctx.fillText(it.rarity.toUpperCase(), tx + pad, cy);
+      cy += Math.round(12 * S);
     }
 
     if (isCard) {
       // Suit + power
       var suit = it.suit || '';
-      ctx.font = '13px monospace';
+      ctx.font = F_TIP_SM;
       ctx.fillStyle = INV_SUIT_COLOR[suit] || COL.dim;
-      ctx.fillText((INV_SUIT_EMOJI[suit] || '') + ' ' + suit, tx + 6, cy);
+      ctx.fillText((INV_SUIT_EMOJI[suit] || '') + ' ' + suit, tx + pad, cy);
       ctx.fillStyle = COL.text;
       ctx.textAlign = 'right';
-      ctx.fillText('PWR ' + (it.power || it.value || '?'), tx + TW - 6, cy);
+      ctx.fillText('PWR ' + (it.power || it.value || '?'), tx + TW - pad, cy);
       ctx.textAlign = 'left';
-      cy += 12;
+      cy += Math.round(12 * S);
     }
 
     // Description (truncated)
     if (it.description) {
-      ctx.font = '12px monospace';
+      ctx.font = F_TIP;
       ctx.fillStyle = COL.dim;
       var desc = it.description;
       if (desc.length > 24) desc = desc.substring(0, 23) + '\u2026';
-      ctx.fillText(desc, tx + 6, cy);
+      ctx.fillText(desc, tx + pad, cy);
     }
   }
 
@@ -188,17 +195,20 @@ var MenuFaces = (function () {
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, w, h);
 
+    // Scale font sizes with slot dimensions
+    var emojiPx = Math.max(10, Math.round(w * 0.35));
+    var labelPx = Math.max(8, Math.round(w * 0.22));
     if (emoji) {
-      ctx.font = '16px sans-serif';
+      ctx.font = emojiPx + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
-      ctx.fillText(emoji, x + w / 2, y + 22);
+      ctx.fillText(emoji, x + w / 2, y + Math.round(h * 0.55));
     }
     if (label) {
-      ctx.font = '12px monospace';
+      ctx.font = labelPx + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = COL.dim;
-      ctx.fillText(label, x + w / 2, y + h - 4);
+      ctx.fillText(label, x + w / 2, y + h - Math.max(2, Math.round(h * 0.08)));
     }
   }
 
@@ -749,17 +759,19 @@ var MenuFaces = (function () {
     _roundRectStroke(ctx, tx, ty, ts, ts, TILE_RAD);
     ctx.setLineDash([]);
 
-    // Slot number (centered, dim)
-    ctx.font = '11px monospace';
+    // Slot number (centered, dim) — scale with tile size
+    var numPx = Math.max(8, Math.round(ts * 0.15));
+    var lblPx = Math.max(7, Math.round(ts * 0.14));
+    ctx.font = numPx + 'px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.fillText(slotIdx < 10 ? '0' + (slotIdx + 1) : '' + (slotIdx + 1),
                  tx + ts / 2, ty + ts / 2 - 2);
 
     // "EMPTY" label
-    ctx.font = '10px monospace';
+    ctx.font = lblPx + 'px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillText(opts.label || 'EMPTY', tx + ts / 2, ty + ts / 2 + 10);
+    ctx.fillText(opts.label || 'EMPTY', tx + ts / 2, ty + ts / 2 + Math.round(ts * 0.14));
 
     // Fade hint on last slot (suggests expandability)
     if (opts.fadeHint) {
@@ -797,41 +809,43 @@ var MenuFaces = (function () {
     }
 
     // Large emoji icon (centered, upper area)
-    ctx.font = '20px serif';
+    ctx.font = Math.max(10, Math.round(ts * 0.28)) + 'px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
-    ctx.fillText(item.emoji || '?', tx + ts / 2, ty + 18);
+    ctx.fillText(item.emoji || '?', tx + ts / 2, ty + Math.round(ts * 0.25));
     ctx.textBaseline = 'alphabetic';
 
     // Item name (truncated, below icon)
-    ctx.font = '11px monospace';
+    ctx.font = Math.max(8, Math.round(ts * 0.15)) + 'px monospace';
     ctx.fillStyle = isHover ? '#fff' : COL.text;
     var name = item.name || '';
     if (name.length > 8) name = name.substring(0, 7) + '…';
-    ctx.fillText(name, tx + ts / 2, ty + 36);
+    ctx.fillText(name, tx + ts / 2, ty + Math.round(ts * 0.50));
 
     // Value/price tag (bottom of tile)
     if (opts.priceText) {
-      ctx.font = 'bold 8px monospace';
+      ctx.font = 'bold ' + Math.max(7, Math.round(ts * 0.11)) + 'px monospace';
       ctx.fillStyle = opts.priceColor || COL.currency;
-      ctx.fillText(opts.priceText, tx + ts / 2, ty + ts - 4);
+      ctx.fillText(opts.priceText, tx + ts / 2, ty + ts - Math.round(ts * 0.06));
     }
 
     // Rarity dot (top-right corner)
     if (opts.rarityColor) {
+      var dotR = Math.max(2, Math.round(ts * 0.042));
+      var dotOff = Math.round(ts * 0.083);
       ctx.fillStyle = opts.rarityColor;
       ctx.beginPath();
-      ctx.arc(tx + ts - 6, ty + 6, 3, 0, Math.PI * 2);
+      ctx.arc(tx + ts - dotOff, ty + dotOff, dotR, 0, Math.PI * 2);
       ctx.fill();
     }
 
     // Slot key hint (top-left, dim)
     if (slotIdx < 5) {
-      ctx.font = '10px monospace';
+      ctx.font = Math.max(8, Math.round(ts * 0.14)) + 'px monospace';
       ctx.fillStyle = 'rgba(230,220,200,0.60)';
       ctx.textAlign = 'left';
-      ctx.fillText('' + (slotIdx + 1), tx + 3, ty + 9);
+      ctx.fillText('' + (slotIdx + 1), tx + Math.round(ts * 0.042), ty + Math.round(ts * 0.125));
       ctx.textAlign = 'center';
     }
 
@@ -845,8 +859,8 @@ var MenuFaces = (function () {
       _roundRectStroke(ctx, tx, ty, ts, ts, TILE_RAD);
       ctx.setLineDash([]);
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '11px monospace';
-      ctx.fillText('SOLD', tx + ts / 2, ty + ts / 2 + 3);
+      ctx.font = Math.max(8, Math.round(ts * 0.15)) + 'px monospace';
+      ctx.fillText('SOLD', tx + ts / 2, ty + ts / 2 + Math.round(ts * 0.042));
     }
 
     // "Can't afford" dim overlay
@@ -1883,7 +1897,8 @@ var MenuFaces = (function () {
    * Click backup card → move to hand. Click hand card → return to backup.
    */
   function _renderDeckSection(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'DECK'), '🂠');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('menu.face1', 'DECK'), '🂠', S);
 
     var hand = CardAuthority.getHand();
     var maxHand = (typeof Player !== 'undefined') ? CardAuthority.MAX_HAND : 5;
@@ -1904,15 +1919,17 @@ var MenuFaces = (function () {
     };
 
     // ── Hand preview (5 slots across top) ──────────────────────
+    var F_DECK = Math.max(10, Math.round(12 * S)) + 'px monospace';
+    var F_DECK_SM = Math.max(9, Math.round(11 * S)) + 'px monospace';
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
+    ctx.font = F_DECK;
     ctx.textAlign = 'center';
-    ctx.fillText('HAND  ' + hand.length + '/' + maxHand, x + w / 2, ty + 10);
-    ty += 16;
+    ctx.fillText('HAND  ' + hand.length + '/' + maxHand, x + w / 2, ty + Math.round(10 * S));
+    ty += Math.round(16 * S);
 
-    var cardW = 52;
-    var cardH = 72;
-    var cardGap = 6;
+    var cardW = Math.round(52 * S);
+    var cardH = Math.round(72 * S);
+    var cardGap = Math.round(6 * S);
     var handTotalW = 5 * cardW + 4 * cardGap;
     var handX = x + (w - handTotalW) / 2;
 
@@ -1938,25 +1955,25 @@ var MenuFaces = (function () {
       }
     }
 
-    ty += cardH + 10;
+    ty += cardH + Math.round(10 * S);
 
     // ── Backup deck grid (scrollable, 4 cols) ──────────────────
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
+    ctx.font = F_DECK;
     ctx.textAlign = 'center';
     var backupDeck = CardAuthority.getBackup();
-    ctx.fillText('BACKUP DECK  (' + backupDeck.length + ')', x + w / 2, ty + 8);
-    ty += 14;
+    ctx.fillText('BACKUP DECK  (' + backupDeck.length + ')', x + w / 2, ty + Math.round(8 * S));
+    ty += Math.round(14 * S);
 
     if (backupDeck.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '12px monospace';
-      ctx.fillText('Empty - pick up cards to build your deck', x + w / 2, ty + 20);
+      ctx.font = F_DECK;
+      ctx.fillText('Empty - pick up cards to build your deck', x + w / 2, ty + Math.round(20 * S));
     } else {
       var bCols = 4;
-      var bSlotW = 36;
-      var bSlotH = 50;
-      var bGap = 4;
+      var bSlotW = Math.round(36 * S);
+      var bSlotH = Math.round(50 * S);
+      var bGap = Math.round(4 * S);
       var bGridW = bCols * bSlotW + (bCols - 1) * bGap;
       var bGridX = x + (w - bGridW) / 2;
       var bRows = Math.ceil(backupDeck.length / bCols);
@@ -1985,18 +2002,18 @@ var MenuFaces = (function () {
       // Overflow indicator
       if (bRows > maxVisible) {
         ctx.fillStyle = COL.dim;
-        ctx.font = '11px monospace';
+        ctx.font = F_DECK_SM;
         ctx.textAlign = 'center';
-        ctx.fillText('▼ ' + (backupDeck.length - maxVisible * bCols) + ' more cards', x + w / 2, ty + 6);
-        ty += 14;
+        ctx.fillText('▼ ' + (backupDeck.length - maxVisible * bCols) + ' more cards', x + w / 2, ty + Math.round(6 * S));
+        ty += Math.round(14 * S);
       }
     }
 
     // ── Bottom hint ─────────────────────────────────────────────
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '11px monospace';
+    ctx.font = F_DECK_SM;
     ctx.textAlign = 'center';
-    ctx.fillText('[Click] Shuttle cards  [Drag→🐉] Dispose  [Q/E] Rotate', x + w / 2, y + h - 8);
+    ctx.fillText('[Click] Shuttle cards  [Drag\u2192\uD83D\uDC09] Dispose  [Q/E] Rotate', x + w / 2, y + h - Math.round(8 * S));
     ctx.textAlign = 'left';
   }
 
@@ -2091,20 +2108,20 @@ var MenuFaces = (function () {
             ctx.lineWidth = 1;
             _roundRectStroke(ctx, sx, sy, slotSize, slotSize, 4);
 
-            ctx.font = '14px serif';
+            ctx.font = Math.max(10, Math.round(slotSize * 0.27)) + 'px serif';
             ctx.textAlign = 'center';
             ctx.fillStyle = '#fff';
-            ctx.fillText(stashItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + 2);
+            ctx.fillText(stashItem.emoji || '?', sx + slotSize / 2, sy + slotSize / 2 + Math.round(slotSize * 0.04));
 
             // §9e: Death-safe shield icon (top-right corner)
             ctx.font = Math.max(6, Math.round(slotSize * 0.22)) + 'px serif';
-            ctx.fillText('💀', sx + slotSize - 5, sy + 7);
+            ctx.fillText('💀', sx + slotSize - Math.round(slotSize * 0.10), sy + Math.round(slotSize * 0.13));
 
-            ctx.font = '6px monospace';
+            ctx.font = Math.max(5, Math.round(slotSize * 0.12)) + 'px monospace';
             ctx.fillStyle = COL.text;
             var nm = stashItem.name || '';
             if (nm.length > 7) nm = nm.substring(0, 6) + '\u2026';
-            ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - 3);
+            ctx.fillText(nm, sx + slotSize / 2, sy + slotSize - Math.round(slotSize * 0.06));
 
             _hitZones.push({ x: sx, y: sy, w: slotSize, h: slotSize, slot: 400 + idx, action: 'unstash' });
           } else {
@@ -2119,15 +2136,15 @@ var MenuFaces = (function () {
 
       // Capacity
       ctx.fillStyle = COL.dim;
-      ctx.font = '12px monospace';
+      ctx.font = Math.max(9, Math.round(12 * S)) + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(stash.length + ' / ' + maxStash + ' ' + i18n.t('shop.stash_capacity', 'slots'),
-                   x + w / 2, gridY + rows * (slotSize + 4) + 12);
+                   x + w / 2, gridY + rows * (slotSize + 4) + Math.round(12 * S));
 
       // Hint
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '11px monospace';
-      ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + 24);
+      ctx.font = Math.max(9, Math.round(11 * S)) + 'px monospace';
+      ctx.fillText('[Click] Move to bag', x + w / 2, gridY + rows * (slotSize + 4) + Math.round(24 * S));
     }
   }
 
@@ -2140,14 +2157,14 @@ var MenuFaces = (function () {
 
     // Currency display
     ctx.fillStyle = COL.currency;
-    ctx.font = '13px monospace';
+    ctx.font = Math.max(10, Math.round(13 * S)) + 'px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText('💰 ' + currency, x + w - 8, ty + 12);
+    ctx.fillText('💰 ' + currency, x + w - Math.round(8 * S), ty + Math.round(12 * S));
     ctx.textAlign = 'center';
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
-    ctx.fillText(i18n.t('shop.buy_hint', 'Click to buy'), x + w / 2, ty + 12);
-    ty += 22;
+    ctx.font = Math.max(9, Math.round(12 * S)) + 'px monospace';
+    ctx.fillText(i18n.t('shop.buy_hint', 'Click to buy'), x + w / 2, ty + Math.round(12 * S));
+    ty += Math.round(22 * S);
 
     // Live inventory from Shop module
     var inv = (typeof Shop !== 'undefined') ? Shop.getInventory() : [];
@@ -2266,13 +2283,13 @@ var MenuFaces = (function () {
 
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '12px monospace';
-      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, sy + 6);
+      ctx.font = Math.max(9, Math.round(12 * S)) + 'px monospace';
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, sy + Math.round(6 * S));
     } else {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '12px monospace';
-      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, supplyStartY + 6);
+      ctx.font = Math.max(9, Math.round(12 * S)) + 'px monospace';
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, supplyStartY + Math.round(6 * S));
     }
     ctx.textAlign = 'left';
   }
@@ -2831,7 +2848,7 @@ var MenuFaces = (function () {
         }
         if (_hovItem) {
           _hoverDetail = { item: _hovItem, x: _hovHZ.x + _hovHZ.w, y: _hovHZ.y };
-          _drawHoverTooltip(ctx, _hoverDetail, x, w);
+          _drawHoverTooltip(ctx, _hoverDetail, x, w, S);
         }
       }
     }
@@ -2888,14 +2905,15 @@ var MenuFaces = (function () {
    * Interior floors (N.N) only — exterior/dungeon bonfires skip stash.
    */
   function _renderBag(ctx, x, y, w, h) {
+    var S = Math.min(w, h) / 400;
     var bag = CardAuthority.getBag();
     var stash = CardAuthority.getStash();
     var hasVault = _hasVaultAccess();
 
     // ── Title ──
-    var titleText = hasVault ? 'BAG ↔ VAULT' : 'BAG';
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('bonfire.vault_title', titleText), '🎒');
-    ty += 4;
+    var titleText = hasVault ? 'BAG \u2194 VAULT' : 'BAG';
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('bonfire.vault_title', titleText), '\uD83C\uDF92', S);
+    ty += Math.round(4 * S);
 
     var cols, slotSize, gap;
 
@@ -2914,11 +2932,14 @@ var MenuFaces = (function () {
       var panelLX = x + 12;
       var panelRX = x + 12 + halfW + gap;
 
+      var F_BAG_LABEL = 'bold ' + Math.max(9, Math.round(11 * S)) + 'px monospace';
+      var F_BAG_HINT = Math.max(9, Math.round(11 * S)) + 'px monospace';
+
       // ── Left panel: BAG ──
       ctx.fillStyle = COL.accent;
-      ctx.font = 'bold 9px monospace';
+      ctx.font = F_BAG_LABEL;
       ctx.textAlign = 'center';
-      ctx.fillText('BAG (' + bag.length + '/' + CardAuthority.getMaxBag() + ')', panelLX + halfW / 2, ty + 10);
+      ctx.fillText('BAG (' + bag.length + '/' + CardAuthority.getMaxBag() + ')', panelLX + halfW / 2, ty + Math.round(10 * S));
 
       var bagY = ty + 16;
       var bagRows = Math.ceil(CardAuthority.getMaxBag() / cols);
@@ -2928,9 +2949,9 @@ var MenuFaces = (function () {
 
       // ── Right panel: VAULT / STASH ──
       ctx.fillStyle = '#FFD700';
-      ctx.font = 'bold 9px monospace';
+      ctx.font = F_BAG_LABEL;
       ctx.textAlign = 'center';
-      ctx.fillText('VAULT (' + stash.length + '/' + CardAuthority.MAX_STASH + ')', panelRX + halfW / 2, ty + 10);
+      ctx.fillText('VAULT (' + stash.length + '/' + CardAuthority.MAX_STASH + ')', panelRX + halfW / 2, ty + Math.round(10 * S));
 
       var stashY = ty + 16;
       var stashRows = Math.ceil(CardAuthority.MAX_STASH / stashCols);
@@ -2948,9 +2969,9 @@ var MenuFaces = (function () {
 
       // ── Keyboard hint ──
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '11px monospace';
+      ctx.font = F_BAG_HINT;
       ctx.textAlign = 'center';
-      ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
+      ctx.fillText('[Click] Transfer   [Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - Math.round(8 * S));
 
     } else {
       // ── Single panel: BAG only (exterior/dungeon bonfires) ────────
@@ -2960,19 +2981,19 @@ var MenuFaces = (function () {
       var gridX2 = x + (w - gridW2) / 2;
 
       ctx.fillStyle = COL.dim;
-      ctx.font = '12px monospace';
+      ctx.font = Math.max(10, Math.round(12 * S)) + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(bag.length + ' / ' + CardAuthority.getMaxBag() + ' slots', x + w / 2, ty + 10);
-      ty += 16;
+      ctx.fillText(bag.length + ' / ' + CardAuthority.getMaxBag() + ' slots', x + w / 2, ty + Math.round(10 * S));
+      ty += Math.round(16 * S);
 
       var totalSlots2 = CardAuthority.getMaxBag();
       var rows2 = Math.ceil(totalSlots2 / cols);
       _renderSlotGrid(ctx, bag, totalSlots2, cols, slotSize, gridX2, ty, rows2, 300, null);
 
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.font = '11px monospace';
+      ctx.font = Math.max(9, Math.round(11 * S)) + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
+      ctx.fillText('[Q/E] Switch pane   [BACK] Leave', x + w / 2, y + h - Math.round(8 * S));
     }
     ctx.textAlign = 'left';
   }
@@ -3060,26 +3081,31 @@ var MenuFaces = (function () {
   }
 
   function _renderShopSell(ctx, x, y, w, h) {
-    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.sell_title', 'SELL'), '💰');
+    var S = Math.min(w, h) / 400;
+    var ty = _drawTitle(ctx, x, y, w, i18n.t('shop.sell_title', 'SELL'), '\uD83D\uDCB0', S);
     var factionId = (typeof Shop !== 'undefined') ? Shop.getCurrentFaction() : null;
+
+    var F_SELL = Math.max(10, Math.round(13 * S)) + 'px monospace';
+    var F_SELL_SM = Math.max(10, Math.round(12 * S)) + 'px monospace';
+    var F_SELL_XS = Math.max(9, Math.round(11 * S)) + 'px monospace';
 
     // Currency display
     ctx.fillStyle = COL.currency;
-    ctx.font = '13px monospace';
+    ctx.font = F_SELL;
     ctx.textAlign = 'right';
-    ctx.fillText('💰 ' + Player.state().currency, x + w - 8, ty + 12);
+    ctx.fillText('\uD83D\uDCB0 ' + Player.state().currency, x + w - Math.round(8 * S), ty + Math.round(12 * S));
     ctx.textAlign = 'center';
     ctx.fillStyle = COL.dim;
-    ctx.font = '12px monospace';
-    ctx.fillText(i18n.t('shop.sell_hint', 'Click to sell'), x + w / 2, ty + 12);
-    ty += 20;
+    ctx.font = F_SELL_SM;
+    ctx.fillText(i18n.t('shop.sell_hint', 'Click to sell'), x + w / 2, ty + Math.round(12 * S));
+    ty += Math.round(20 * S);
 
     // ── Card sell row (hand cards) ──────────────────────────────
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
+    ctx.font = F_SELL_XS;
     ctx.textAlign = 'left';
-    ctx.fillText('CARDS', x + 8, ty + 8);
-    ty += 12;
+    ctx.fillText('CARDS', x + Math.round(8 * S), ty + Math.round(8 * S));
+    ty += Math.round(12 * S);
 
     var _SELL_FALLBACK = { common: 12, uncommon: 24, rare: 40, epic: 72, legendary: 120 };
     var RARITY_COL = {
@@ -3132,21 +3158,21 @@ var MenuFaces = (function () {
     ty += 6;
 
     ctx.fillStyle = COL.dim;
-    ctx.font = '11px monospace';
+    ctx.font = F_SELL_XS;
     ctx.textAlign = 'left';
-    ctx.fillText('SALVAGE PARTS', x + 8, ty + 8);
+    ctx.fillText('SALVAGE PARTS', x + Math.round(8 * S), ty + Math.round(8 * S));
     if (factionId) {
       ctx.textAlign = 'right';
       var fEmoji = (typeof Shop !== 'undefined') ? Shop.getFactionEmoji(factionId) : '';
-      ctx.fillText(fEmoji + ' ' + (factionId || ''), x + w - 8, ty + 8);
+      ctx.fillText(fEmoji + ' ' + (factionId || ''), x + w - Math.round(8 * S), ty + Math.round(8 * S));
     }
-    ty += 14;
+    ty += Math.round(14 * S);
 
     if (salvageParts.length === 0) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '12px monospace';
-      ctx.fillText(i18n.t('shop.no_parts', 'No salvage parts in bag'), x + w / 2, ty + 10);
+      ctx.font = F_SELL_SM;
+      ctx.fillText(i18n.t('shop.no_parts', 'No salvage parts in bag'), x + w / 2, ty + Math.round(10 * S));
     } else {
       var partPositions = _gridLayout(x, ty, w, salvageParts.length);
 
@@ -3172,8 +3198,8 @@ var MenuFaces = (function () {
     // Bottom hint
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '11px monospace';
-    ctx.fillText('[W/S] Select   [Scroll] Adjust   [←/→] Switch pane   [BACK] Leave', x + w / 2, y + h - 8);
+    ctx.font = F_SELL_XS;
+    ctx.fillText('[W/S] Select   [Scroll] Adjust   [\u2190/\u2192] Switch pane   [BACK] Leave', x + w / 2, y + h - Math.round(8 * S));
     ctx.textAlign = 'left';
   }
 

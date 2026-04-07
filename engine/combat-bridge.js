@@ -166,6 +166,10 @@ var CombatBridge = (function () {
       DialogBox.interrupt();
     }
 
+    // Dismiss all peek overlays (RestockSurface, CratePeek, TorchPeek, etc.)
+    // so the z-19 surface doesn't cover combat UI and Escape isn't hijacked.
+    if (typeof GameActions !== 'undefined') GameActions.collapseAllPeeks();
+
     // Snapshot player position for non-lethal repositioning
     var p = Player.getPos();
     _entryPos = { x: p.x, y: p.y };
@@ -488,15 +492,93 @@ var CombatBridge = (function () {
    * @param {string} floorId - Current floor ID
    */
   function _placeCorpse(enemy, x, y, floorId) {
-    // Place CORPSE tile on the grid (so CorpsePeek activates on approach)
     var fd = FloorManager.getFloorData();
-    if (fd && fd.grid[y] && fd.grid[y][x] !== undefined) {
-      fd.grid[y][x] = TILES.CORPSE;
+    if (!fd || !fd.grid) return;
+
+    var cx = x;
+    var cy = y;
+
+    // ── Anti-stacking: if the target tile already has a corpse, push
+    //    the new one to the nearest adjacent walkable EMPTY tile. ──────
+    if (fd.grid[cy] && fd.grid[cy][cx] === TILES.CORPSE) {
+      var _pushed = _findAdjacentEmpty(fd.grid, fd.gridW, fd.gridH, cx, cy);
+      if (_pushed) {
+        cx = _pushed.x;
+        cy = _pushed.y;
+        enemy.x = cx;
+        enemy.y = cy;
+      }
+      // If no empty neighbor, degenerate case: stack on same tile.
+      // Stacking is ugly but better than losing the corpse entirely.
+    }
+
+    // Place CORPSE tile on the grid (so CorpsePeek activates on approach)
+    if (fd.grid[cy] && fd.grid[cy][cx] !== undefined) {
+      fd.grid[cy][cx] = TILES.CORPSE;
+    }
+
+    // Displaced corpses create fresh grime + blood on the new tile
+    if (cx !== x || cy !== y) {
+      _applyDisplacedCorpseGrime(cx, cy, floorId, fd);
     }
 
     // Register with CorpseRegistry (auto-creates CrateSystem corpse slots)
     if (typeof CorpseRegistry !== 'undefined') {
-      CorpseRegistry.register(x, y, floorId, enemy);
+      CorpseRegistry.register(cx, cy, floorId, enemy);
+    }
+  }
+
+  /**
+   * Find the nearest adjacent walkable EMPTY tile to (ox, oy).
+   * Checks the 4 cardinal neighbors first, then 4 diagonals.
+   * Returns {x, y} or null if nothing found.
+   * @private
+   */
+  function _findAdjacentEmpty(grid, W, H, ox, oy) {
+    // Cardinals first (preferred — directly adjacent)
+    var dirs = [[0,-1],[1,0],[0,1],[-1,0], [-1,-1],[1,-1],[1,1],[-1,1]];
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = ox + dirs[d][0];
+      var ny = oy + dirs[d][1];
+      if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+      var t = grid[ny][nx];
+      if (t === TILES.EMPTY) return { x: nx, y: ny };
+    }
+    return null;
+  }
+
+  /**
+   * Displaced corpse creates fresh blood + grime on the new tile and
+   * drops floor readiness by the new tile's grime value + 1%.
+   * @private
+   */
+  function _applyDisplacedCorpseGrime(cx, cy, floorId, fd) {
+    // Blood layer
+    if (typeof CleaningSystem !== 'undefined') {
+      CleaningSystem.addBlood(cx, cy, floorId, fd.grid, fd.gridW, fd.gridH, 2);
+    }
+
+    // Sub-tile grime (floor 4×4)
+    if (typeof GrimeGrid !== 'undefined' && !GrimeGrid.has(floorId, cx, cy)) {
+      GrimeGrid.allocateFloor(floorId, cx, cy, 180);
+    }
+
+    // Adjacent wall grime (cardinal neighbors only)
+    if (typeof GrimeGrid !== 'undefined') {
+      var wallDirs = [[0,-1],[1,0],[0,1],[-1,0]];
+      for (var wi = 0; wi < wallDirs.length; wi++) {
+        var wx = cx + wallDirs[wi][0];
+        var wy = cy + wallDirs[wi][1];
+        if (wx < 0 || wx >= fd.gridW || wy < 0 || wy >= fd.gridH) continue;
+        if (!TILES.isOpaque(fd.grid[wy][wx])) continue;
+        if (GrimeGrid.has(floorId, wx, wy)) continue;
+        GrimeGrid.allocateWall(floorId, wx, wy, 140);
+      }
+    }
+
+    // Readiness penalty: drop by grime value + 1% to signal the mess
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.applyPenalty) {
+      ReadinessCalc.applyPenalty(floorId, 0.01);
     }
   }
 

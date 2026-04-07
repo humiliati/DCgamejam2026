@@ -62,6 +62,11 @@ var FloorTransition = (function () {
     MC.cancelAll();
     if (typeof MinimapNav !== 'undefined') MinimapNav.cancel();
 
+    // Dismiss any open peek/restock overlay (defense-in-depth; RS-4
+    // auto-close fires on position change, but death-rescue calls go()
+    // without a movement step)
+    if (typeof GameActions !== 'undefined') GameActions.collapseAllPeeks();
+
     var sourceFloorId = FloorManager.getFloor();
     var audioDir = direction === 'advance' ? 'down' : 'up';
 

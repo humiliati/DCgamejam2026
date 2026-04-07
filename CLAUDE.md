@@ -93,7 +93,7 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 
 ## Module architecture
 
-50 modules in `engine/`, organized in 6 load layers:
+63 modules in `engine/`, organized in 7 load layers:
 
 | Layer | Purpose | Modules |
 |---|---|---|
@@ -101,8 +101,11 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 | 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
 | 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
 | 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
+| 3.5 | Extracted game helpers | `GameActions`, `WeekStrip`, `EquipActions`, `QuickFill`, `DeckActions`, `Incinerator`, `PickupActions`, `ShopActions`, `HomeEvents`, `HeroWake`, `CorpseActions`, `DispatcherChoreography`, `QuestWaypoint` |
 | 4 | Orchestrator | `Game` |
 | 5 | Data | `data/strings/en.js` |
+
+Layer 3.5 modules were extracted from `game.js` in three phases (see `docs/GAME_JS_EXTRACTION_ROADMAP.md`). They are IIFEs that depend on Layer 0–3 globals via `typeof` guards. `GameActions` loads first (shared helpers: `refreshPanels`, `collapseAllPeeks`, `applyPickup`, gate state, canvas ref). Game (Layer 4) wires callbacks at init for any cross-module communication that would otherwise create circular deps.
 
 `Game` (Layer 4) is a thin orchestrator. It owns init/tick/render and wires callbacks between modules. It contains no game logic.
 

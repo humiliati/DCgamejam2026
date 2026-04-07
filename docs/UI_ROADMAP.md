@@ -292,6 +292,8 @@ pool for the current faction.
 returns a string from the pool. Called by `_shopBuy` / `_shopSellBulk`
 after the transaction resolves.
 
+> **Extraction note:** `_shopBuy()` was extracted from `game.js` to `engine/shop-actions.js` as `ShopActions.buy()`.
+
 Estimated: ~50 string entries, ~20 lines shop.js, ~10 lines game.js.
 
 #### 7c: Per-Floor Shop State & Restock Ticker

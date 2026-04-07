@@ -91,12 +91,13 @@ var DumpTruckSpawner = (function () {
   ];
 
   // ── Internal state ─────────────────────────────────────────────
-  var _currentSiteKey = null;   // 'spade' | 'club' | 'diamond' | 'home'
-  var _placedFloorId  = null;   // floorId where tiles are currently set
-  var _placedTiles    = [];     // [[x,y], ...] currently holding DUMP_TRUCK
+  var _currentSiteKey  = null;   // 'spade' | 'club' | 'diamond' | 'home'
+  var _placedFloorId   = null;   // floorId where tiles are currently set
+  var _placedTiles     = [];     // [[x,y], ...] currently holding DUMP_TRUCK
   var _coworkerSpawned = false;
-  var _initialized    = false;
+  var _initialized     = false;
   var _barksRegistered = false;
+  var _staticCleared   = false;  // Has the blockout DUMP_TRUCK at (30,26) been cleared?
 
   // ── Helpers ────────────────────────────────────────────────────
 
@@ -336,6 +337,13 @@ var DumpTruckSpawner = (function () {
   function _deploy() {
     if (!_initialized) return;
 
+    // Always attempt to scrub the blockout DUMP_TRUCK from floor 1's
+    // static grid.  At init() the floor data usually isn't cached yet
+    // (game starts on floor 0), so this retries on every _deploy until
+    // it succeeds — guaranteeing the static tile is gone before the
+    // player ever sees floor 1.
+    _clearStaticTruck();
+
     var activeGroupId = null;
 
     // ── 1) Exact match: any unresolved contract whose actualDay is today ──
@@ -384,13 +392,19 @@ var DumpTruckSpawner = (function () {
     // Clear old tiles
     _clearTruckTiles();
 
-    // Place new tiles
-    _placeTruckTiles(site);
+    // Place new tiles — only record the deployment if placement
+    // actually succeeded.  If the target floor's grid data isn't
+    // cached yet (player hasn't visited it), _placeTruckTiles returns
+    // false and we leave _currentSiteKey unset so the next refresh()
+    // or onDayChange() retries.
+    var placed = _placeTruckTiles(site);
 
-    // Move coworker
+    // Move coworker regardless (NPC defs persist across floor loads)
     _spawnCoworker(site, !activeGroupId);
 
-    _currentSiteKey = targetKey;
+    if (placed) {
+      _currentSiteKey = targetKey;
+    }
   }
 
   // ── Also clear the static truck from Floor 1 (30,26) ──────────
@@ -398,10 +412,13 @@ var DumpTruckSpawner = (function () {
   // We remove it at init so only the spawner controls placement.
 
   function _clearStaticTruck() {
+    if (_staticCleared) return;
     var fd = _getFloorData('1');
-    if (fd && fd.grid && fd.grid[26] && fd.grid[26][30] === _truckTile()) {
+    if (!fd || !fd.grid) return;   // floor 1 not cached yet — retry later
+    if (fd.grid[26] && fd.grid[26][30] === _truckTile()) {
       fd.grid[26][30] = _emptyTile();
     }
+    _staticCleared = true;         // don't re-check on every _deploy
   }
 
   // ── Public API ─────────────────────────────────────────────────

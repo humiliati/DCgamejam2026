@@ -291,16 +291,22 @@ var DebriefFeed = (function () {
   function render() {
     if (!_visible || !_contentEl || !_headerEl) return;
 
+    // Dynamic scale factor based on panel width (reference: 273px design width)
+    var elW = _el ? _el.offsetWidth : 273;
+    var _S = Math.max(0.72, elW / 273);
+    if (_el) _el.style.fontSize = Math.max(12, Math.round(15 * _S)) + 'px';
+
     // Smartwatch header: callsign only (time lives in weekly day counter)
     _headerEl.textContent = _escape(_mokCallsign);
 
-    // Single unified page — avatar + gauges + stats
-    _renderUnified();
+    // Single unified page — avatar + gauges + stats + compact feed tail
+    _renderUnified(_S);
   }
 
   // ── Unified smartwatch display ──────────────────────────────────
 
-  function _renderUnified() {
+  function _renderUnified(S) {
+    S = S || 1;
     var p = (typeof Player !== 'undefined') ? Player.state() : {};
     var hp    = p.hp || 0;
     var maxHp = p.maxHp || 10;
@@ -337,15 +343,15 @@ var DebriefFeed = (function () {
     html += '</div>';
 
     // Full-width bars
-    html += _fullBar('HP', hpShown, maxHp, '#FF6B9D', 'hp');
-    html += _fullBar('EN', enShown, maxEn, '#00D4FF', 'en');
-    html += _pipRow('BAT', batShown, maxBat, '#00FFA6', 'bat');
+    html += _fullBar('HP', hpShown, maxHp, '#FF6B9D', 'hp', S);
+    html += _fullBar('EN', enShown, maxEn, '#00D4FF', 'en', S);
+    html += _pipRow('BAT', batShown, maxBat, '#00FFA6', 'bat', S);
 
     // Currency + stats row (compact)
     html += '<div class="df-stat-row" style="margin-top:2px">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';
 
     if (p.str !== undefined) {
-      html += '<div class="df-stat-row" style="font-size:14px">';
+      html += '<div class="df-stat-row">';
       html += 'STR ' + (p.str || 0) + ' \u2502 ';
       html += 'DEX ' + (p.dex || 0) + ' \u2502 ';
       html += 'STL ' + (p.stealth || 0);
@@ -356,11 +362,26 @@ var DebriefFeed = (function () {
     if (typeof StatusEffect !== 'undefined' && StatusEffect.getAll) {
       var effs = StatusEffect.getAll();
       if (effs && effs.length > 0) {
-        html += '<div class="df-stat-row" style="font-size:14px;color:var(--phosphor-dim)">';
+        html += '<div class="df-stat-row" style="color:var(--phosphor-dim)">';
         for (var i = 0; i < effs.length; i++) {
           html += (effs[i].emoji || '\u25CF') + ' ';
         }
         html += '</div>';
+      }
+    }
+
+    // Compact feed tail — last 2 events (avatar + 2-line event feed)
+    if (_feedLog.length > 0) {
+      var tailCount = Math.min(2, _feedLog.length);
+      var startIdx  = _feedLog.length - tailCount;
+      html += '<hr class="df-divider">';
+      for (var fi = startIdx; fi < _feedLog.length; fi++) {
+        var entry = _feedLog[fi];
+        var cls = 'df-feed-line';
+        if (entry.type === 'loot') cls += ' df-loot';
+        else if (entry.type === 'damage') cls += ' df-dmg';
+        else if (entry.type === 'heal') cls += ' df-heal';
+        html += '<div class="' + cls + '" style="font-size:0.8em">' + _escape(entry.text) + '</div>';
       }
     }
 
@@ -388,23 +409,26 @@ var DebriefFeed = (function () {
       '</div>';
   }
 
-  function _fullBar(label, cur, max, color, key) {
+  function _fullBar(label, cur, max, color, key, S) {
+    S = S || 1;
     max = (max > 0) ? max : 1;
     var shown = Math.round(cur);
     var pct = Math.max(0, Math.min(100, (cur / max) * 100));
     var rowId  = key ? ' id="df-row-'  + key + '"' : '';
     var numId  = key ? ' id="df-num-'  + key + '"' : '';
     var fillId = key ? ' id="df-fill-' + key + '"' : '';
+    var barH = Math.max(4, Math.round(6 * S));
     return '<div class="df-gauge-row"' + rowId + '>' +
       '<span class="df-label">' + label + '</span>' +
-      '<span style="color:' + color + ';font-size:15px"' + numId + '>' + shown + '/' + max + '</span>' +
+      '<span style="color:' + color + ';font-size:1em"' + numId + '>' + shown + '/' + max + '</span>' +
       '</div>' +
-      '<div style="background:rgba(255,255,255,0.08);height:6px;border-radius:3px;margin:2px 0 5px">' +
+      '<div style="background:rgba(255,255,255,0.08);height:' + barH + 'px;border-radius:3px;margin:2px 0 5px">' +
       '<div' + fillId + ' style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px;transition:width 0.3s"></div>' +
       '</div>';
   }
 
-  function _pipRow(label, cur, max, color, key) {
+  function _pipRow(label, cur, max, color, key, S) {
+    S = S || 1;
     max = (max > 0) ? max : 1;
     cur = Math.round(cur);
     var pips = '';
@@ -415,7 +439,7 @@ var DebriefFeed = (function () {
     var pipsId = key ? ' id="df-pips-' + key + '"' : '';
     return '<div class="df-gauge-row"' + rowId + '>' +
       '<span class="df-label">' + label + '</span>' +
-      '<span' + pipsId + ' style="color:' + color + ';letter-spacing:2px;font-size:16px">' + pips + '</span>' +
+      '<span' + pipsId + ' style="color:' + color + ';letter-spacing:2px;font-size:1.05em">' + pips + '</span>' +
       '</div>';
   }
 
@@ -453,9 +477,9 @@ var DebriefFeed = (function () {
     if (_feedLog.length > MAX_FEED_LINES) {
       _feedLog.shift();
     }
-    // Re-render if currently in feed mode
-    if (_mode === 2 && _visible) {
-      _renderFeed();
+    // Re-render — feed tail is embedded in unified view
+    if (_visible) {
+      render();
     }
   }
 

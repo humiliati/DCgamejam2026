@@ -21,7 +21,7 @@ var GrimeGrid = (function () {
 
   // ── Resolution constants ─────────────────────────────────────
   var FLOOR_RES = 4;    // 4×4 subcells per floor tile
-  var WALL_RES  = 16;   // 16×16 subcells per wall tile
+  var WALL_RES  = 64;   // 64×64 subcells per wall tile (squeegee fidelity)
 
   // ── Storage ──────────────────────────────────────────────────
   // Keyed by "floorId:x,y" → { data: Uint8Array(res*res), res: number }
@@ -146,6 +146,39 @@ var GrimeGrid = (function () {
     }
   }
 
+  /**
+   * Hard-edge brush kernel — full strength inside radius, zero outside.
+   * Produces sharp clean/dirty boundaries (squeegee / eraser feel).
+   * Use for hose spray; the soft-falloff cleanKernel is for manual scrub.
+   *
+   * @param {string} floorId
+   * @param {number} x — tile X
+   * @param {number} y — tile Y
+   * @param {number} subX — center subcell column
+   * @param {number} subY — center subcell row
+   * @param {number} strength — uniform strength across entire brush
+   * @param {number} radius — brush radius in subcells
+   */
+  function cleanKernelHard(floorId, x, y, subX, subY, strength, radius) {
+    var g = _grids[_key(floorId, x, y)];
+    if (!g) return;
+    radius = radius || 1;
+    var res = g.res;
+    var r2 = radius * radius;
+    for (var dy = -radius; dy <= radius; dy++) {
+      var sy = subY + dy;
+      if (sy < 0 || sy >= res) continue;
+      for (var dx = -radius; dx <= radius; dx++) {
+        var sx = subX + dx;
+        if (sx < 0 || sx >= res) continue;
+        // Euclidean circle mask — sharp edge
+        if (dx * dx + dy * dy > r2) continue;
+        var idx = sy * res + sx;
+        g.data[idx] = Math.max(0, g.data[idx] - (strength | 0));
+      }
+    }
+  }
+
   // ── Readiness query ──────────────────────────────────────────
 
   /**
@@ -258,8 +291,9 @@ var GrimeGrid = (function () {
     has:          has,
 
     // Cleaning
-    clean:        clean,
-    cleanKernel:  cleanKernel,
+    clean:            clean,
+    cleanKernel:      cleanKernel,
+    cleanKernelHard:  cleanKernelHard,
 
     // Readiness
     getTileCleanliness:  getTileCleanliness,

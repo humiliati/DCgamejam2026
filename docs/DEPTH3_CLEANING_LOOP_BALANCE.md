@@ -321,6 +321,8 @@ If bag is full: items drop as floor pickups (existing behavior). Toast: "Bag ful
 
 This eliminates 1 menu interaction per break.
 
+> **Extraction note:** `_smashBreakable()` was extracted from `game.js` to `engine/pickup-actions.js` as `PickupActions.smashBreakable()`.
+
 #### 6.3b Quick-Fill on Crate Interact
 
 When the player interacts with a supply crate, instead of opening CratePeek's full slot UI, a **quick-fill** pass runs first:
@@ -359,6 +361,8 @@ function quickFill(crateX, crateY, floorId) {
 **Worst case (no matching items):** CratePeek opens normally. Player sees what's needed and goes hunting.
 
 This transforms crate filling from a 4-step menu interaction into a 1-button spatial action.
+
+> **Extraction note:** `_quickFillCrate()` was extracted from `game.js` to `engine/quick-fill.js` as `QuickFill.fill()`.
 
 #### 6.3c Scrub-on-Walk (Passive Cleaning)
 
@@ -429,6 +433,8 @@ The player's clockwise sweep alternates: combat → break → fill → walk/clea
 | HeroScript consumption from blockout | Feature | HeroSystem (not yet built) | 🗓️ Roadmap |
 | 100% readiness notification + quest update | System | hud.js (tier callback), game.js (_onReadinessTierCross) | ✅ Done |
 | Quest waypoint: lobby all-done → exit door | Fix | game.js (_updateQuestTarget lobby branch) | ✅ Done |
+
+> **Extraction note:** `_updateQuestTarget()` was extracted from `game.js` to `engine/quest-waypoint.js` as `QuestWaypoint.update()`.
 | Warp confirm dialog context-aware for reset | UX | game.js (warp confirm) | ✅ Done |
 
 ---

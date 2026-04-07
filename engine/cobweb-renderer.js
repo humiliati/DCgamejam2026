@@ -145,7 +145,7 @@ var CobwebRenderer = (function () {
 
     ctx.save();
 
-    if (cob.type === 'standalone') {
+    if (cob.type === 'standalone' || cob.type === 'aesthetic') {
       // ── Barrier web: oriented plane spanning the corridor ──
       // Wall height at this distance (floor-to-ceiling)
       var wallH = Math.floor(halfH * 1.1 / dist);

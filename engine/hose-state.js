@@ -143,6 +143,8 @@ var HoseState = (function () {
     // descendant step.
     _enteredSubtree = _isDescendantBuilding(currentFloorId, buildingId);
 
+    // TODO:SFX hose-attach — metallic click + pressurised hiss onset,
+    // 200-400ms, volume 0.3-0.5. Sells "coupling locked, water on."
     _emit('attach', buildingId, exteriorFloorId);
     return true;
   }
@@ -160,6 +162,9 @@ var HoseState = (function () {
     if (!_active) return;
     _active = false;
     _lastCancelReason = reason || 'unknown';
+    // TODO:SFX hose-detach — depressurisation whoosh + rubber thud,
+    // 300-500ms, volume 0.3-0.4. Variant for reason='combat_damage':
+    // hose-snap — sharp rubber whip crack, 150-250ms, volume 0.5-0.6.
     _emit('detach', _lastCancelReason);
     // Keep _path intact until next attach() call so reel/overlay can finish
     // their retract animations. attach() clears on next pickup.
@@ -206,6 +211,9 @@ var HoseState = (function () {
     if (_visitedKeys[key]) {
       _kinkCount++;
       kinked = true;
+      // TODO:SFX hose-kink — rubber creak + water gurgle, 200-350ms,
+      // volume 0.25-0.35. Pitch down with kinkCount (more kinks = deeper
+      // groan). Signals "you're tangling the line."
       _emit('kink', _kinkCount, { x: x, y: y, floorId: floorId });
     } else {
       _visitedKeys[key] = true;

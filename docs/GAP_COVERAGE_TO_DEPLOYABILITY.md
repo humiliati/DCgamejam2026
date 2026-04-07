@@ -238,6 +238,8 @@ All paths that mutate player inventory and their refresh wiring:
 | `Player.addToBag()` | game.js harvest handler | ✅ | _refreshPanels() |
 | `Player.removeFromBag()` | Shop.sellPart | ✅ | game.js _shopSellPart → _refreshPanels |
 | `Player.equip()` | game.js _equipFromBag | ✅ | _refreshPanels() (T0.5 complete) |
+
+> **Extraction note:** `_shopBuy()` and `_shopSellFromHand()` were extracted from `game.js` to `engine/shop-actions.js` as `ShopActions.buy()` and `ShopActions.sellFromHand()`. `_equipFromBag()` was extracted to `engine/equip-actions.js` as `EquipActions.equipFromBag()`.
 | `Player.unequip()` | game.js _unequipSlot | ✅ | _refreshPanels() (T0.5 complete) |
 | `Player.useItem()` | QuickBar._onSlotClick | ✅ | Direct NchWidget.refresh() |
 | `Shop.buy()` | game.js _shopBuy | ✅ | _refreshPanels() |

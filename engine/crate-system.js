@@ -227,8 +227,12 @@ var CrateSystem = (function () {
 
     var slots;
     if (opts.fixedSlots) {
-      // Special chests (work-keys, quest items) specify exact contents
+      // Special chests (work-keys, quest items) specify exact contents.
+      // Each slot can carry fixed: true (never rehydrates) or default false.
       slots = opts.fixedSlots;
+      for (var fi = 0; fi < slots.length; fi++) {
+        if (typeof slots[fi].fixed === 'undefined') slots[fi].fixed = false;
+      }
     } else if (opts.stash) {
       // Large stash chest — many empty slots for player storage
       var stashCount = opts.slotCount || 256;
@@ -265,6 +269,13 @@ var CrateSystem = (function () {
       }
     }
 
+    // SC-B: Two-phase chest lifecycle.
+    //   'loot'      — freshly spawned, slots filled, player withdraws.
+    //   'empty'     — all loot taken; D3+ chests become restockable.
+    //   'restocked' — D3+ only: refilled via RestockSurface, sealed.
+    //   'stash'     — permanent home storage, never transitions.
+    var phase = opts.stash ? 'stash' : 'loot';
+
     var container = {
       type: TYPE.CHEST,
       x: x,
@@ -274,10 +285,63 @@ var CrateSystem = (function () {
       slots: slots,
       sealed: false,          // Not used for chests (depleted instead)
       depleted: false,        // True when all slots emptied
+      phase: phase,           // SC-B lifecycle phase
+      lootedDay: null,        // SC-B+: day chest was fully looted (for rehydration)
       sealReward: null,
       coinTotal: 0,
       stash: !!opts.stash,    // True for home stash chests
       demandRefill: depth >= 3  // Dungeon chests demand slot refilling
+    };
+
+    _containers[_key(x, y, floorId)] = container;
+    return container;
+  }
+
+  // ── SC-D: D2 Storage Crate (chest-like withdraw container) ─────────
+
+  var STORAGE_REFILL_COOLDOWN = 1;  // days — refill each morning
+
+  /**
+   * Create a D2 storage crate — biome-specific, withdraw-only, daily refill.
+   * Internally a TYPE.CHEST so all existing withdraw / phase / rehydration
+   * logic applies. The `storage` flag distinguishes it from real chests.
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {string} floorId
+   * @param {string} biome
+   * @returns {Object} Container entity
+   */
+  function createStorageCrate(x, y, floorId, biome) {
+    biome = biome || 'cellar';
+
+    var slotCount = SeededRNG.randInt(4, 8);
+    var frames = CRATE_FRAME_WEIGHTS[biome] || CRATE_FRAME_WEIGHTS.cellar;
+    var slots = _generateSlots(slotCount, frames);
+
+    // All slots start filled — player withdraws
+    for (var i = 0; i < slots.length; i++) {
+      slots[i].filled = true;
+      slots[i].item = _hydrateChestLoot(slots[i].frameTag, biome, floorId);
+      slots[i].matched = true;
+    }
+
+    var container = {
+      type: TYPE.CHEST,         // Reuse CHEST type for withdraw routing
+      x: x,
+      y: y,
+      floorId: floorId,
+      biome: biome,
+      slots: slots,
+      sealed: false,
+      depleted: false,
+      phase: 'loot',
+      lootedDay: null,
+      sealReward: null,
+      coinTotal: 0,
+      stash: false,
+      storage: true,            // SC-D marker: breakable-tile storage, daily refill
+      demandRefill: false       // No deposit mode — withdraw-only
     };
 
     _containers[_key(x, y, floorId)] = container;
@@ -295,7 +359,8 @@ var CrateSystem = (function () {
         suit: null,           // Only set for SUIT_CARD slots
         filled: false,
         item: null,
-        matched: false
+        matched: false,
+        fixed: false          // SC-B+: non-fixed slots rehydrate after cooldown
       });
     }
     return slots;
@@ -413,6 +478,11 @@ var CrateSystem = (function () {
       }
       if (allEmpty) {
         c.depleted = true;
+        // SC-B: transition loot → empty when last item withdrawn.
+        if (c.phase === 'loot') c.phase = 'empty';
+        // SC-B+: stamp the day for rehydration cooldown.
+        var _curDay = (typeof DayCycle !== 'undefined') ? DayCycle.getDay() : 0;
+        c.lootedDay = _curDay;
       }
     }
 
@@ -737,6 +807,114 @@ var CrateSystem = (function () {
     };
   }
 
+  // ── SC-B+: Chest rehydration ────────────────────────────────────────
+
+  var REHYDRATE_COOLDOWN = 7;  // days until a looted chest refills
+
+  /**
+   * True if floorId belongs to the player's home building (floor 1 tree).
+   * Home chests are permanent storage — they never rehydrate.
+   */
+  function _isHomeFloor(floorId) {
+    if (!floorId) return false;
+    return String(floorId).split('.')[0] === '1';
+  }
+
+  /**
+   * Attempt to rehydrate a single chest or storage crate.
+   * Eligible: depleted, non-stash, non-home, depth 1-2, past cooldown.
+   *   Chests: 7-day cooldown (REHYDRATE_COOLDOWN).
+   *   Storage crates: 1-day cooldown (STORAGE_REFILL_COOLDOWN).
+   * Non-fixed slots get fresh random loot. Fixed slots stay empty forever.
+   * Returns true if the container was rehydrated.
+   */
+  function tryRehydrate(x, y, floorId) {
+    var c = _containers[_key(x, y, floorId)];
+    if (!c || c.type !== TYPE.CHEST) return false;
+    if (!c.depleted || c.stash) return false;
+
+    var depth = floorId ? String(floorId).split('.').length : 1;
+    if (depth >= 3) return false;           // D3+ uses restock, not rehydration
+    if (_isHomeFloor(floorId)) return false; // Home chests are permanent
+
+    if (c.lootedDay === null || c.lootedDay === undefined) return false;
+    var currentDay = (typeof DayCycle !== 'undefined') ? DayCycle.getDay() : 0;
+    // SC-D: Storage crates refill daily, regular chests refill weekly
+    var cooldown = c.storage ? STORAGE_REFILL_COOLDOWN : REHYDRATE_COOLDOWN;
+    if (currentDay < c.lootedDay + cooldown) return false;
+
+    // Storage crates use crate frame weights; chests use chest frame weights
+    var frames = c.storage
+      ? (CRATE_FRAME_WEIGHTS[c.biome] || CRATE_FRAME_WEIGHTS.cellar)
+      : (CHEST_FRAME_WEIGHTS[c.biome] || CHEST_FRAME_WEIGHTS.cellar);
+    var rehydrated = 0;
+    for (var i = 0; i < c.slots.length; i++) {
+      var slot = c.slots[i];
+      if (slot.fixed) continue;  // Quest items / hand-authored — never come back
+
+      // Re-roll frame tag so loot variety changes each cycle
+      var newTag = frames[Math.floor(SeededRNG.random() * frames.length)];
+      slot.frameTag = newTag;
+      slot.filled = true;
+      slot.item = _hydrateChestLoot(newTag, c.biome, floorId);
+      slot.matched = true;
+      rehydrated++;
+    }
+
+    if (rehydrated > 0) {
+      c.depleted = false;
+      c.phase = 'loot';
+      c.lootedDay = null;  // Reset stamp for next cycle
+    }
+
+    return rehydrated > 0;
+  }
+
+  /**
+   * Scan all containers on a floor and rehydrate any eligible chests.
+   * Called on floor load (game.js IO-8 path) so the player sees fresh
+   * loot when returning to a previously-looted surface/interior floor.
+   */
+  function rehydrateFloor(floorId) {
+    var count = 0;
+    for (var key in _containers) {
+      if (!_containers.hasOwnProperty(key)) continue;
+      var c = _containers[key];
+      if (c.floorId !== floorId) continue;
+      if (c.type !== TYPE.CHEST) continue;
+      if (tryRehydrate(c.x, c.y, floorId)) count++;
+    }
+    return count;
+  }
+
+  // ── SC-B: Phase accessors ───────────────────────────────────────────
+
+  /**
+   * Get the lifecycle phase of a chest container.
+   * Returns 'loot', 'empty', 'restocked', 'stash', or null (non-chest / missing).
+   */
+  function getPhase(x, y, floorId) {
+    var c = _containers[_key(x, y, floorId)];
+    if (!c || c.type !== TYPE.CHEST) return null;
+    return c.phase || 'loot';   // Backwards compat: old containers lack .phase
+  }
+
+  /**
+   * Advance a chest's lifecycle phase. Only valid transitions are enforced:
+   *   loot → empty  (automatic via withdrawSlot)
+   *   empty → restocked  (when RestockSurface completes)
+   * Stash chests never transition.
+   */
+  function setPhase(x, y, floorId, newPhase) {
+    var c = _containers[_key(x, y, floorId)];
+    if (!c || c.type !== TYPE.CHEST || c.stash) return false;
+    var valid = (c.phase === 'loot' && newPhase === 'empty') ||
+                (c.phase === 'empty' && newPhase === 'restocked');
+    if (!valid) return false;
+    c.phase = newPhase;
+    return true;
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
@@ -747,7 +925,9 @@ var CrateSystem = (function () {
     TYPE:           TYPE,
     createCrate:    createCrate,
     createCorpse:   createCorpse,
-    createChest:    createChest,
+    createChest:        createChest,
+    createStorageCrate: createStorageCrate,
+    STORAGE_REFILL_COOLDOWN: STORAGE_REFILL_COOLDOWN,
     fillSlot:       fillSlot,
     withdrawSlot:   withdrawSlot,
     isDepleted:     isDepleted,
@@ -761,6 +941,11 @@ var CrateSystem = (function () {
     getReadinessByType: getReadinessByType,
     getSlotDisplay: getSlotDisplay,
     doesItemMatch:  _doesItemMatch,
+    getPhase:       getPhase,
+    setPhase:       setPhase,
+    tryRehydrate:   tryRehydrate,
+    rehydrateFloor: rehydrateFloor,
+    REHYDRATE_COOLDOWN: REHYDRATE_COOLDOWN,
     clearFloor:     clearFloor,
     clearAll:       clearAll
   };

@@ -189,6 +189,8 @@ The Gleaner lives in a **dedicated bunk at Floor 1.6** — a multi-room dwelling
 **Home features:**
 - **Bed pair** (BED tiles, 2,3 / 3,3) — BedPeek: sleep to advance day, grant WELL_RESTED buff, clear until_rest effects. BarkLibrary pool: `home.morning.wakeup`.
 - **Work Keys** (CHEST tile, 19,3, Day 1 only) — Interact to collect. Triggers `_onPickupWorkKeys()` + gate unlock + Hero-sighting foreshadow bark. Tile reverts to EMPTY after pickup.
+
+> **Extraction note:** `_onPickupWorkKeys()` was extracted from `game.js` to `engine/home-events.js` as `HomeEvents.onPickupWorkKeys()`.
 - **Stash chest** — Persistent storage hosted at the same CHEST. Items survive death (existing `stash` in Player state).
 - **Mailbox history** (TERMINAL tile, 19,6) — Read prior overnight results via MailboxPeek's history face. *(The daily exterior mailbox that receives new reports is the separate `TILES.MAILBOX(33,8)` tile on the Promenade, adjacent to the home's front door.)*
 - **Hearth** (HEARTH tile, 11,7) — Decorative, establishes cozy atmosphere.

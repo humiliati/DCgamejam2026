@@ -1,0 +1,3557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Peek Box Geometry Workbench v2</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #111;
+    color: #ddd;
+    display: flex;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ═══ SIDEBAR ═══ */
+  #sidebar {
+    width: 400px; min-width: 400px;
+    max-height: 100vh;
+    background: #1a1a1a;
+    border-right: 1px solid #333;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 12px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  #sidebar::-webkit-scrollbar { width: 8px; }
+  #sidebar::-webkit-scrollbar-track { background: #111; }
+  #sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+  #sidebar::-webkit-scrollbar-thumb:hover { background: #666; }
+  h1 { font-size: 15px; color: #fff; }
+  .section-head {
+    font-size: 10px; color: #888; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-top: 8px; border-bottom: 1px solid #333;
+    padding-bottom: 3px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-head button {
+    padding: 2px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+    background: #1e3a1e; color: #88cc88; border: 1px solid #3a663a;
+    border-radius: 4px; cursor: pointer; transition: background 0.12s;
+  }
+  .section-head button:hover { background: #2a4e2a; color: #aaeaaa; border-color: #558855; }
+
+  /* ── Slider+input rows ── */
+  .cr {
+    display: flex; align-items: center; gap: 5px; height: 22px;
+  }
+  .cr label { width: 84px; flex-shrink: 0; color: #bbb; font-size: 10.5px; letter-spacing: 0.1px; cursor: default; }
+  .cr label.resettable { cursor: pointer; border-bottom: 1px dotted #666; }
+  .cr label.resettable:hover { color: #6af; border-bottom-color: #6af; }
+  .cr label.resettable.is-dirty { color: #fc6; border-bottom-color: #fc6; }
+  .cr label.resettable.is-dirty:hover { color: #fa4; }
+  .cr input:disabled, .cr input[readonly] { opacity: 0.3; pointer-events: none; }
+
+  /* ── Snap grid ── */
+  .snap-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; }
+  .snap-row label { width: 90px; flex-shrink: 0; color: #aaa; font-size: 11px; }
+  .snap-toggle {
+    padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+    border-radius: 4px; cursor: pointer;
+    background: #1e1e38; color: #8888bb; border: 1px solid #3a3a5a; transition: all 0.12s;
+  }
+  .snap-toggle.active { background: #1e3a1e; color: #88ee88; border-color: #3a7a3a; box-shadow: 0 0 5px rgba(80,200,80,0.3); }
+  .snap-grid {
+    display: inline-grid; grid-template-columns: repeat(3, 18px); gap: 2px;
+    margin-left: 3px;
+  }
+  .snap-grid button {
+    width: 18px; height: 16px; font-size: 9px; padding: 0;
+    background: #1a1a30; color: #7788aa; border: 1px solid #303055;
+    border-radius: 3px; cursor: pointer; line-height: 1;
+    transition: background 0.1s, color 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .snap-grid button:hover { background: #2a3a50; color: #88ddff; border-color: #4477aa; }
+  .snap-grid.disabled button { opacity: 0.3; pointer-events: none; }
+  .nudge-hint {
+    font-size: 9px; color: #444; margin: 0 0 2px 88px; letter-spacing: 0.2px;
+  }
+
+  /* ── Horizon line ── */
+  .horizon-line {
+    position: absolute; left: 0; right: 0;
+    height: 1px;
+    background: rgba(255,0,180,0.35);
+    pointer-events: none; z-index: 100;
+    box-shadow: 0 0 4px rgba(255,0,180,0.25);
+  }
+  .horizon-line::after {
+    content: 'horizon'; position: absolute; right: 4px; top: -10px;
+    font-size: 8px; color: rgba(255,0,180,0.5); font-family: monospace;
+  }
+  .horizon-line.hidden { display: none; }
+  /* ── Range sliders (custom track + thumb) ── */
+  .cr input[type="range"] {
+    flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+    background: #2a2a3a; border-radius: 2px; outline: none; cursor: ew-resize;
+  }
+  .cr input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, #4466dd, #66aaff);
+  }
+  .cr input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #88bbff; border: 2px solid #446bcc;
+    box-shadow: 0 0 4px rgba(100,160,255,0.5);
+    cursor: ew-resize; margin-top: -4px; transition: background 0.1s;
+  }
+  .cr input[type="range"]::-webkit-slider-thumb:hover {
+    background: #aaccff; box-shadow: 0 0 8px rgba(120,180,255,0.7);
+  }
+  .cr input[type="range"]:disabled { opacity: 0.3; pointer-events: none; }
+
+  /* ── Number inputs (styled spinners) ── */
+  .cr .num {
+    width: 50px; text-align: right;
+    font-family: 'Consolas', monospace; font-size: 10px;
+    background: #1a1a28; color: #88bbff; border: 1px solid #3a3a5a;
+    border-radius: 4px; padding: 1px 2px 1px 4px; transition: border-color 0.12s;
+  }
+  .cr .num:focus { outline: none; border-color: #6688dd; box-shadow: 0 0 0 2px rgba(80,120,220,0.25); }
+  .cr .num::-webkit-inner-spin-button {
+    -webkit-appearance: inner-spin-button; opacity: 0.6;
+    background: #252540; filter: invert(0.7) hue-rotate(180deg) brightness(1.6);
+    width: 14px; cursor: pointer;
+  }
+  .cr .num:hover::-webkit-inner-spin-button { opacity: 1; }
+
+  /* ── Color inputs ── */
+  .cr input[type="color"] {
+    width: 26px; height: 18px; border-radius: 3px;
+    border: 1px solid #555; cursor: pointer; padding: 1px; background: #1a1a28;
+  }
+  .cr input[type="color"]:hover { border-color: #888aaa; }
+
+  /* ── Select dropdowns (custom chevron) ── */
+  .cr select {
+    flex: 1; background: #1a1a28; color: #ccc;
+    border: 1px solid #3a3a5a; border-radius: 4px;
+    padding: 2px 20px 2px 4px; font-size: 10.5px; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236688bb'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 6px center;
+    transition: border-color 0.12s;
+  }
+  .cr select:focus { outline: none; border-color: #5566cc; box-shadow: 0 0 0 2px rgba(80,100,200,0.2); }
+
+  /* ── Preset / template bar ── */
+  .tpl-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .tpl-bar button {
+    padding: 3px 9px; font-size: 10px; font-weight: 500; letter-spacing: 0.3px;
+    background: #252538; color: #b0b0cc; border: 1px solid #383860;
+    border-radius: 4px; cursor: pointer; transition: background 0.12s, color 0.12s; line-height: 1.4;
+  }
+  .tpl-bar button:hover { background: #2e2e52; color: #d0d0ff; border-color: #5555aa; }
+  .tpl-bar button.active { background: #4444cc; color: #fff; border-color: #6666ee; box-shadow: 0 0 6px rgba(100,100,255,0.4); }
+
+  /* ── Pane list ── */
+  #pane-list {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .pane-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px; background: #222; border: 1px solid #333;
+    border-radius: 3px; cursor: pointer; font-size: 10.5px;
+    transition: background 0.1s;
+  }
+  .pane-item:hover { border-color: #666; }
+  .pane-item.selected { border-color: #ff0; background: #2a2a1a; }
+  .pane-item .pi-color {
+    width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0;
+  }
+  .pane-item .pi-name { flex: 1; font-size: 10.5px; }
+  .pane-item .pi-type { color: #666; font-size: 9.5px; }
+  .pane-item .pi-del {
+    color: #664444; font-size: 13px; cursor: pointer; padding: 0 4px;
+    line-height: 1; transition: color 0.1s;
+  }
+  .pane-item .pi-del:hover { color: #ff6666; }
+  .pane-item.structural .pi-del { color: #443333; }
+  .pane-item.structural .pi-del:hover { color: #cc6644; }
+
+  /* ── Pane properties panel ── */
+  #pane-props {
+    background: #1e1e22; border: 1px solid #333;
+    border-radius: 4px; padding: 8px;
+    display: none;
+  }
+  #pane-props.visible { display: block; }
+  .pp-title {
+    font-size: 12px; font-weight: 600; color: #ff0;
+    margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .pp-title input {
+    font-size: 11px; background: #1a1a28; color: #ddeeff; border: 1px solid #334;
+    border-radius: 4px; padding: 2px 6px; width: 120px;
+  }
+  .pp-title input:focus { outline: none; border-color: #5566cc; }
+
+  /* ── Custom checkboxes ── */
+  #sidebar input[type="checkbox"] {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; border: 1.5px solid #4a4a6a;
+    border-radius: 3px; background: #1a1a2a; cursor: pointer;
+    position: relative; vertical-align: middle; margin-right: 1px;
+    flex-shrink: 0; transition: background 0.12s, border-color 0.12s;
+  }
+  #sidebar input[type="checkbox"]:hover { border-color: #7788cc; background: #22224a; }
+  #sidebar input[type="checkbox"]:checked { background: #3355cc; border-color: #5577ee; }
+  #sidebar input[type="checkbox"]:checked::after {
+    content: ''; display: block; position: absolute;
+    top: 1px; left: 3px; width: 5px; height: 8px;
+    border: 1.5px solid #aaccff; border-top: none; border-left: none;
+    transform: rotate(42deg);
+  }
+  #sidebar .cr label[style*="width:auto"], #sidebar .cr label[style*="width: auto"] {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; color: #bbb; cursor: pointer;
+    width: auto !important; user-select: none;
+  }
+  #sidebar .cr label[style*="width:auto"]:hover, #sidebar .cr label[style*="width: auto"]:hover { color: #ddd; }
+
+  /* ── Export ── */
+  #export-area { margin-top: 12px; padding-top: 8px; border-top: 1px solid #333; flex-shrink: 0; }
+  #export-btn {
+    width: 100%; padding: 7px 6px;
+    background: linear-gradient(to bottom, #2e5a2e, #224422); color: #aaffcc;
+    border: 1px solid #447744; border-radius: 5px; cursor: pointer;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    transition: all 0.15s; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+  #export-btn:hover { background: linear-gradient(to bottom, #3a703a, #2a5a2a); color: #ccffdd; border-color: #55aa55; }
+  #export-output {
+    margin-top: 6px; font-family: Consolas, monospace; font-size: 10px;
+    background: #0a0a0a; color: #8f8; border: 1px solid #333;
+    border-radius: 4px; padding: 6px; max-height: 160px;
+    overflow-y: auto; white-space: pre-wrap; display: none;
+  }
+
+  /* ═══ PREVIEW ═══ */
+  #preview-area {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(40,40,60,0.4) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      repeating-linear-gradient(90deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      #111;
+  }
+
+  /* ═══ 3D BOX ═══ */
+  .box3d-wrap {
+    perspective: var(--perspective, 800px);
+    position: relative;
+  }
+  .box3d-scene {
+    position: relative;
+    transform-style: preserve-3d;
+    transform: rotateX(var(--rot-x)) rotateY(var(--rot-y));
+  }
+  .box3d-spin {
+    transform-style: preserve-3d;
+    position: absolute;
+    width: 100%; height: 100%;
+  }
+
+  /* Volumetric glow under box */
+  .box3d-spin::after {
+    content: ""; position: absolute;
+    width: 140%; height: 140%; top: -20%; left: -20%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, var(--glow-color, rgba(128,128,255,0.5)) 0%, transparent 70%);
+    filter: blur(18px);
+    transform: rotateX(90deg) translateZ(calc(var(--glow-floor-z, -65px)));
+    opacity: 0.7;
+  }
+  .no-glow .box3d-spin::after { display: none; }
+
+  /* Glow orb */
+  .box3d-glow {
+    position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+    transform-style: preserve-3d; opacity: 0.6; pointer-events: none;
+  }
+  .glow-plane {
+    position: absolute; width: 108%; height: 108%; top: -4%; left: -4%;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--glow-color, rgba(128,128,255,0.5)) 0%, transparent 70%);
+  }
+  .glow-plane.gp0 { transform: rotateY(0deg); }
+  .glow-plane.gp1 { transform: rotateY(60deg); }
+  .glow-plane.gp2 { transform: rotateY(120deg); }
+  .no-glow .box3d-glow { display: none; }
+
+  /* Panes (faces) */
+  .pane3d {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.12);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: outline 0.15s;
+    transform-style: preserve-3d;
+  }
+  .pane3d:hover { outline: 2px solid rgba(255,255,0,0.4); outline-offset: -2px; }
+  .pane3d.selected { outline: 2px solid #ff0; outline-offset: -2px; z-index: 10; }
+
+  /* Pane labels */
+  .pane-label {
+    background: rgba(0,0,0,0.7); padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-family: monospace; color: rgba(255,255,255,0.6);
+    pointer-events: none; white-space: nowrap; z-index: 1;
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  }
+  .pane-dim {
+    position: absolute; bottom: 2px; right: 2px;
+    background: rgba(0,0,0,0.6); padding: 0px 4px; border-radius: 2px;
+    font-size: 9px; font-family: monospace; color: rgba(255,255,255,0.35);
+    pointer-events: none;
+  }
+  .no-labels .pane-label, .no-labels .pane-dim { display: none; }
+
+  /* Wireframe */
+  .wireframe .pane3d {
+    background: transparent !important;
+    border: 1px solid rgba(100,200,255,0.5) !important;
+    box-shadow: none !important;
+  }
+  .wireframe .box3d-spin::after, .wireframe .box3d-glow { display: none; }
+
+  /* Lid wrapper (for hinge transforms) */
+  .lid-wrapper {
+    position: absolute;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  /* State bar */
+  #state-bar {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 5px; z-index: 100;
+  }
+  #state-bar button {
+    padding: 4px 14px; font-size: 11px; font-weight: 500; letter-spacing: 0.3px;
+    background: #1e1e2e; color: #9999bb; border: 1px solid #3a3a5a;
+    border-radius: 4px; cursor: pointer; transition: all 0.12s; min-width: 64px;
+  }
+  #state-bar button:hover { background: #2a2a44; color: #ccccee; border-color: #5555aa; }
+  #state-bar button.active {
+    background: linear-gradient(to bottom, #4455dd, #3344cc); color: #fff;
+    border-color: #6677ff; box-shadow: 0 0 8px rgba(80,100,255,0.4), 0 1px 3px rgba(0,0,0,0.5);
+  }
+
+  /* Phase animation toggles (in Display sidebar) */
+  .pa-toggle {
+    padding: 2px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+    background: #1a1a28; color: #777; border: 1px solid #2a2a3a;
+    border-radius: 3px; cursor: pointer; transition: all 0.12s;
+  }
+  .pa-toggle:hover { background: #222238; color: #aaa; border-color: #444466; }
+  .pa-toggle.active {
+    background: #2a1e3a; color: #cc88ff; border-color: #7744aa;
+    box-shadow: 0 0 6px rgba(160,80,255,0.3);
+  }
+
+  /* Pyramid sidebar section */
+  .pyr-ctrl { display: none; }
+  .pyr-ctrl.active { display: block; }
+
+  /* Face info bar */
+  #face-info {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); border: 1px solid #444; border-radius: 6px;
+    padding: 8px 14px; font-family: monospace; font-size: 11px; color: #8cf;
+    white-space: pre; pointer-events: none; opacity: 0; transition: opacity 0.15s;
+    z-index: 200;
+  }
+  #face-info.visible { opacity: 1; }
+
+  @keyframes box3d-rotate {
+    0% { transform: rotate3d(0,1,0,0deg); }
+    100% { transform: rotate3d(0,1,0,360deg); }
+  }
+  @keyframes box3d-tilt-orbit {
+    0%   { transform: rotateX(-15deg) rotateY(0deg); }
+    100% { transform: rotateX(-15deg) rotateY(360deg); }
+  }
+
+  /* ═══ RESOURCE HUD ═══ */
+  #perf-hud {
+    position: absolute; bottom: 10px; left: 10px; z-index: 300;
+    background: rgba(0,0,0,0.88); border: 1px solid #333; border-radius: 5px;
+    padding: 6px 10px; font-family: 'Consolas', monospace; font-size: 10px;
+    color: #8a8; line-height: 1.55; pointer-events: none; user-select: none;
+    min-width: 190px;
+  }
+  #perf-hud .hud-title {
+    font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 1.2px;
+    margin-bottom: 2px; border-bottom: 1px solid #2a2a2a; padding-bottom: 2px;
+  }
+  #perf-hud .hud-row { display: flex; justify-content: space-between; gap: 8px; }
+  #perf-hud .hud-label { color: #666; }
+  #perf-hud .hud-val { color: #8cf; text-align: right; }
+  #perf-hud .hud-val.warn { color: #fc6; }
+  #perf-hud .hud-val.danger { color: #f66; }
+  #perf-hud .hud-bar {
+    height: 3px; margin: 3px 0 1px; background: #1a1a2a; border-radius: 2px; overflow: hidden;
+  }
+  #perf-hud .hud-bar-fill {
+    height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s;
+  }
+  #perf-hud .hud-sep {
+    height: 1px; background: #2a2a2a; margin: 3px 0;
+  }
+  #perf-hud .hud-cost { font-size: 9px; color: #666; margin-top: 2px; }
+  #perf-hud .hud-cost .tier { font-weight: 600; }
+  #perf-hud .hud-cost .tier.t-free { color: #4c8; }
+  #perf-hud .hud-cost .tier.t-light { color: #8cf; }
+  #perf-hud .hud-cost .tier.t-med { color: #fc6; }
+  #perf-hud .hud-cost .tier.t-heavy { color: #f86; }
+  #perf-hud .hud-cost .tier.t-danger { color: #f44; }
+
+  /* ═══ BOX-LEVEL PHASE ANIMATIONS (applied to .box3d-spin wrapper) ═══ */
+  @keyframes wb-box-squish {
+    0%   { transform: scaleY(1) scaleX(1); }
+    50%  { transform: scaleY(0.78) scaleX(1.14); }
+    100% { transform: scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-box-bounce {
+    0%   { transform: translateY(0); }
+    25%  { transform: translateY(-20px); }
+    45%  { transform: translateY(0) scaleY(0.82) scaleX(1.12); }
+    60%  { transform: translateY(-8px) scaleY(1.06); }
+    75%  { transform: translateY(0) scaleY(0.96) scaleX(1.03); }
+    100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-box-poke {
+    0%   { transform: translateY(0) scaleY(1); }
+    18%  { transform: translateY(10px) scaleY(0.78) scaleX(1.12); }
+    40%  { transform: translateY(-6px) scaleY(1.1) scaleX(0.95); }
+    60%  { transform: translateY(3px) scaleY(0.96) scaleX(1.03); }
+    80%  { transform: translateY(-1px) scaleY(1.02); }
+    100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  }
+
+  /* ═══ EMBEDDED ORB (CSS geodesic sphere) ═══ */
+  .wb-orb {
+    position: absolute;
+    transform-style: preserve-3d;
+    animation: wb-orb-spin var(--orb-speed, 8s) linear infinite;
+    pointer-events: none;
+    transition: transform 0.6s cubic-bezier(0.33,1,0.68,1);
+    /* NEVER set opacity on .wb-orb — it has preserve-3d. Opacity flattens 3D context. */
+  }
+  .wb-orb-ring,
+  .wb-orb-slice {
+    position: absolute; top: 0; left: 0;
+    transform-style: preserve-3d;
+  }
+  .wb-orb-slice {
+    border-radius: 50%;
+    background: var(--bg);
+  }
+  @keyframes wb-orb-spin {
+    0%   { transform: rotateX(0deg) rotateY(0deg); }
+    100% { transform: rotateX(360deg) rotateY(360deg); }
+  }
+  @keyframes wb-orb-ember {
+    0%   { opacity: 0.3; filter: brightness(0.3); }
+    50%  { opacity: 1;   filter: brightness(1.2); }
+    100% { opacity: 0.3; filter: brightness(0.3); }
+  }
+  @keyframes wb-orb-smoke {
+    0%   { opacity: 0.15; filter: brightness(0.6); }
+    50%  { opacity: 0.4;  filter: brightness(1.0); }
+    100% { opacity: 0.15; filter: brightness(0.6); }
+  }
+
+  /* ═══ ORB PHASE ANIMATIONS (squish / bounce / poke) ═══ */
+  @keyframes wb-orb-squish {
+    0%   { transform: translateZ(var(--orb-z,0)) scaleY(1) scaleX(1); }
+    50%  { transform: translateZ(var(--orb-z,0)) scaleY(0.72) scaleX(1.18); }
+    100% { transform: translateZ(var(--orb-z,0)) scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-orb-bounce {
+    0%   { transform: translateZ(var(--orb-z,0)) translateY(0); }
+    30%  { transform: translateZ(var(--orb-z,0)) translateY(-18px); }
+    50%  { transform: translateZ(var(--orb-z,0)) translateY(0) scaleY(0.85) scaleX(1.1); }
+    65%  { transform: translateZ(var(--orb-z,0)) translateY(-6px) scaleY(1.05); }
+    80%  { transform: translateZ(var(--orb-z,0)) translateY(0) scaleY(0.95) scaleX(1.04); }
+    100% { transform: translateZ(var(--orb-z,0)) translateY(0) scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-orb-poke {
+    0%   { transform: translateZ(var(--orb-z,0)) rotateX(0deg) scaleY(1); }
+    18%  { transform: translateZ(var(--orb-z,0)) rotateX(5deg) translateY(8px) scaleY(0.78) scaleX(1.12); }
+    40%  { transform: translateZ(var(--orb-z,0)) rotateX(-2deg) translateY(-5px) scaleY(1.1) scaleX(0.95); }
+    60%  { transform: translateZ(var(--orb-z,0)) rotateX(1deg) translateY(2px) scaleY(0.96) scaleX(1.03); }
+    80%  { transform: translateZ(var(--orb-z,0)) rotateX(0deg) translateY(-1px) scaleY(1.02); }
+    100% { transform: translateZ(var(--orb-z,0)) translateY(0) scaleY(1) scaleX(1); }
+  }
+
+  /* ═══ PYRAMID (3D tetrahedron — adapted from EyesOnly/mok-pyramid) ═══ */
+  .wb-pyramid {
+    position: absolute;
+    transform-style: preserve-3d;
+    pointer-events: none;
+  }
+  .wb-pyramid-wrapper {
+    position: relative;
+    width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    transform: rotateX(-20deg);
+    animation: wb-pyramid-spin var(--pyr-speed, 6s) linear infinite;
+  }
+  .wb-pyramid-side {
+    width: 100%; height: 100%;
+    position: absolute; top: 0; left: 0;
+    transform-origin: center top;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    transition: background 0.5s ease, box-shadow 0.5s ease;
+  }
+  /* Face transforms set inline by renderPyramid — driven by per-phase 'spread' */
+  .wb-pyramid-shadow {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; margin: auto;
+    width: 85%; height: 85%;
+    transform: rotateX(90deg) translateZ(-40px);
+    filter: blur(8px);
+    border-radius: 50%;
+    transition: background 0.5s ease, box-shadow 0.5s ease;
+  }
+  @keyframes wb-pyramid-spin {
+    100% { transform: rotateX(-20deg) rotateY(360deg); }
+  }
+  /* Pyramid phase animations */
+  @keyframes wb-pyr-squish {
+    0%   { transform: rotateX(-20deg) scaleY(1) scaleX(1); }
+    50%  { transform: rotateX(-15deg) scaleY(0.7) scaleX(1.2); }
+    100% { transform: rotateX(-20deg) scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-pyr-bounce {
+    0%   { transform: rotateX(-20deg) translateY(0); }
+    30%  { transform: rotateX(-20deg) translateY(-14px); }
+    50%  { transform: rotateX(-20deg) translateY(0) scaleY(0.8) scaleX(1.15); }
+    65%  { transform: rotateX(-20deg) translateY(-5px) scaleY(1.05); }
+    80%  { transform: rotateX(-20deg) translateY(0) scaleY(0.95) scaleX(1.04); }
+    100% { transform: rotateX(-20deg) translateY(0) scaleY(1) scaleX(1); }
+  }
+  @keyframes wb-pyr-poke {
+    0%   { transform: rotateX(-20deg) translateY(0) scaleY(1); }
+    18%  { transform: rotateX(-15deg) translateY(8px) scaleY(0.78) scaleX(1.12); }
+    40%  { transform: rotateX(-22deg) translateY(-5px) scaleY(1.1) scaleX(0.95); }
+    60%  { transform: rotateX(-19deg) translateY(2px) scaleY(0.96) scaleX(1.03); }
+    80%  { transform: rotateX(-20deg) translateY(-1px) scaleY(1.02); }
+    100% { transform: rotateX(-20deg) translateY(0) scaleY(1) scaleX(1); }
+  }
+
+  /* Orb controls section in sidebar */
+  .orb-ctrl { display: none; }
+  .orb-ctrl.active { display: block; }
+
+  /* Glow planes (editable) */
+  .glow3d {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    transform-style: preserve-3d; cursor: pointer;
+  }
+  .glow3d.selected { outline: 2px dashed rgba(255,0,255,0.6); outline-offset: -2px; pointer-events: auto; }
+  .glow3d:hover { outline: 1px dashed rgba(255,0,255,0.3); outline-offset: -1px; pointer-events: auto; }
+
+  /* Glow list items */
+  .glow-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px; background: #1a1a22; border: 1px solid #2a2a3a;
+    border-radius: 3px; cursor: pointer; font-size: 10.5px;
+    transition: background 0.1s; margin-top: 2px;
+  }
+  .glow-item:hover { border-color: #556; }
+  .glow-item.selected { border-color: #f0f; background: #2a1a2a; }
+  .glow-item .gi-color {
+    width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0;
+  }
+  .glow-item .gi-name { flex: 1; font-size: 10.5px; color: #aac; }
+  .glow-item .gi-del {
+    color: #443366; font-size: 13px; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.1s;
+  }
+  .glow-item .gi-del:hover { color: #cc66ff; }
+
+  /* Pane / glow spin animation */
+  @keyframes pane-spin-x {
+    from { transform: var(--base-transform) rotateX(0deg); }
+    to   { transform: var(--base-transform) rotateX(360deg); }
+  }
+  @keyframes pane-spin-y {
+    from { transform: var(--base-transform) rotateY(0deg); }
+    to   { transform: var(--base-transform) rotateY(360deg); }
+  }
+
+  /* Orb-only / pyr-primary mode: dim/disable box-specific controls */
+  .orb-only-mode .box-section, .pyr-primary-mode .box-section { opacity: 0.25; pointer-events: none; }
+  .orb-only-mode .box-section .section-head, .pyr-primary-mode .box-section .section-head { opacity: 0.5; }
+  .orb-only-mode #pane-list, .pyr-primary-mode #pane-list { opacity: 0.25; pointer-events: none; }
+  .orb-only-mode #pane-props, .pyr-primary-mode #pane-props { display: none !important; }
+  .orb-only-mode #add-pane-btn, .pyr-primary-mode #add-pane-btn { opacity: 0.25; pointer-events: none; }
+
+  /* Glow system stays accessible in pyr-primary mode (glows aren't box-specific) */
+  .pyr-primary-mode #add-glow-btn { opacity: 1; pointer-events: auto; }
+  .pyr-primary-mode #glow-list { opacity: 1; pointer-events: auto; }
+  .pyr-primary-mode #glow-props { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Peek Box Workbench <span style="color:#666;font-size:11px;">v2</span></h1>
+
+  <div class="section-head">Templates</div>
+  <div class="tpl-bar" id="templates"></div>
+
+  <div id="box-shell-section" class="box-section">
+  <div class="section-head">Box Shell</div>
+  <div class="cr">
+    <label>Width</label>
+    <input type="range" data-p="bw" min="40" max="600" value="200">
+    <input type="number" class="num" data-p="bw" value="200">
+  </div>
+  <div class="cr">
+    <label>Height</label>
+    <input type="range" data-p="bh" min="40" max="700" value="200">
+    <input type="number" class="num" data-p="bh" value="200">
+  </div>
+  <div class="cr">
+    <label>Half-Depth (box-d)</label>
+    <input type="range" data-p="bd" min="5" max="300" value="100">
+    <input type="number" class="num" data-p="bd" value="100">
+  </div>
+  </div>
+
+  <div class="section-head">Camera</div>
+  <div class="cr">
+    <label>perspective</label>
+    <input type="range" data-p="persp" min="200" max="2000" value="800">
+    <input type="number" class="num" data-p="persp" value="800">
+  </div>
+  <div class="cr">
+    <label>rotateX</label>
+    <input type="range" data-p="rx" min="-80" max="80" value="-25">
+    <input type="number" class="num" data-p="rx" value="-25">
+  </div>
+  <div class="cr">
+    <label>rotateY</label>
+    <input type="range" data-p="ry" min="-80" max="80" value="20">
+    <input type="number" class="num" data-p="ry" value="20">
+  </div>
+
+  <div id="colors-section" class="box-section">
+  <div class="section-head">Colors</div>
+  <div class="cr">
+    <label>Dark</label><input type="color" data-p="cDark" value="#0b0b66">
+    <label style="width:auto">Light</label><input type="color" data-p="cLight" value="#6060e8">
+  </div>
+  <div class="cr">
+    <label>Floor</label><input type="color" data-p="cFloor" value="#0a0a4f">
+    <label style="width:auto">Ceil</label><input type="color" data-p="cCeil" value="#2e2e2e">
+  </div>
+  <div class="cr">
+    <label>Glow</label><input type="color" data-p="cGlow" value="#8888ff">
+  </div>
+  </div>
+
+  <div id="panes-section" class="box-section">
+  <div class="section-head">
+    Panes
+    <span style="display:flex;gap:3px">
+      <button id="add-pane-btn">+ Add Pane</button>
+      <button id="add-glow-btn">+ Add Glow</button>
+    </span>
+  </div>
+  <div id="pane-list"></div>
+  <div id="glow-list"></div>
+
+  <!-- Selected glow properties -->
+  <div id="glow-props" style="display:none">
+    <div class="pp-title">
+      <span>Glow:</span>
+      <input type="text" id="gp-name">
+    </div>
+    <div class="cr">
+      <label>Color</label>
+      <input type="color" data-gp="color" value="#8888ff">
+      <label style="width:auto">Opacity</label>
+      <input type="range" data-gp="alpha" min="0" max="100" value="60" style="width:60px">
+      <input type="number" class="num" data-gp="alpha" value="60" style="width:40px">
+    </div>
+    <div class="cr">
+      <label>Size %</label>
+      <input type="range" data-gp="size" min="20" max="400" value="140">
+      <input type="number" class="num" data-gp="size" value="140">
+    </div>
+    <div class="cr">
+      <label>Blur</label>
+      <input type="range" data-gp="blur" min="0" max="60" value="18">
+      <input type="number" class="num" data-gp="blur" value="18">
+    </div>
+    <div class="cr">
+      <label>Offset X</label>
+      <input type="range" data-gp="ox" min="-300" max="300" value="0">
+      <input type="number" class="num" data-gp="ox" value="0">
+    </div>
+    <div class="cr">
+      <label>Offset Y</label>
+      <input type="range" data-gp="oy" min="-300" max="300" value="0">
+      <input type="number" class="num" data-gp="oy" value="0">
+    </div>
+    <div class="cr">
+      <label>Offset Z</label>
+      <input type="range" data-gp="oz" min="-300" max="300" value="0">
+      <input type="number" class="num" data-gp="oz" value="0">
+    </div>
+    <div class="cr">
+      <label>Rotate X</label>
+      <input type="range" data-gp="rotX" min="-180" max="180" value="0">
+      <input type="number" class="num" data-gp="rotX" value="0">
+    </div>
+    <div class="cr">
+      <label>Rotate Y</label>
+      <input type="range" data-gp="rotY" min="-180" max="180" value="0">
+      <input type="number" class="num" data-gp="rotY" value="0">
+    </div>
+    <div class="cr">
+      <label>Spin X (deg/s)</label>
+      <input type="range" data-gp="spinX" min="0" max="360" value="0">
+      <input type="number" class="num" data-gp="spinX" value="0">
+    </div>
+    <div class="cr">
+      <label>Spin Y (deg/s)</label>
+      <input type="range" data-gp="spinY" min="0" max="360" value="0">
+      <input type="number" class="num" data-gp="spinY" value="0">
+    </div>
+    <div class="cr">
+      <label>Shape</label>
+      <select data-gp="shape">
+        <option value="ellipse">Ellipse</option>
+        <option value="circle">Circle</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Selected pane properties -->
+  <div id="pane-props">
+    <div class="pp-title">
+      <span>Pane:</span>
+      <input type="text" id="pp-name">
+    </div>
+    <div class="cr">
+      <label>Width</label>
+      <input type="range" data-pp="pw" min="10" max="600" value="200">
+      <input type="number" class="num" data-pp="pw" value="200">
+    </div>
+    <div class="cr">
+      <label>Height</label>
+      <input type="range" data-pp="ph" min="10" max="700" value="200">
+      <input type="number" class="num" data-pp="ph" value="200">
+    </div>
+    <div class="cr">
+      <label>Offset X</label>
+      <input type="range" data-pp="ox" min="-300" max="300" value="0">
+      <input type="number" class="num" data-pp="ox" value="0">
+    </div>
+    <div class="cr">
+      <label>Offset Y</label>
+      <input type="range" data-pp="oy" min="-350" max="350" value="0">
+      <input type="number" class="num" data-pp="oy" value="0">
+    </div>
+    <div class="snap-row">
+      <label>Snap</label>
+      <button id="snap-toggle" class="snap-toggle" title="Toggle corner snapping">OFF</button>
+      <div id="snap-grid" class="snap-grid disabled">
+        <button data-snap="tl" title="Top-left">&#x2196;</button>
+        <button data-snap="tc" title="Top-center">&#x2191;</button>
+        <button data-snap="tr" title="Top-right">&#x2197;</button>
+        <button data-snap="ml" title="Mid-left">&#x2190;</button>
+        <button data-snap="c"  title="Center">&#x25CB;</button>
+        <button data-snap="mr" title="Mid-right">&#x2192;</button>
+        <button data-snap="bl" title="Bottom-left">&#x2199;</button>
+        <button data-snap="bc" title="Bottom-center">&#x2193;</button>
+        <button data-snap="br" title="Bottom-right">&#x2198;</button>
+      </div>
+    </div>
+    <div class="nudge-hint">Arrow keys: nudge 1px &middot; Shift+arrow: 10px</div>
+    <div class="cr">
+      <label>Role</label>
+      <select data-pp="role">
+        <option value="structure">Structure (fixed)</option>
+        <option value="lid">Lid (opens)</option>
+        <option value="decor">Decor (cosmetic)</option>
+      </select>
+    </div>
+    <div class="cr" id="pp-hinge-row">
+      <label>Hinge edge</label>
+      <select data-pp="hinge">
+        <option value="bottom">Bottom</option>
+        <option value="top">Top</option>
+        <option value="left">Left</option>
+        <option value="right">Right</option>
+        <option value="slide-right">Slide Right</option>
+        <option value="slide-left">Slide Left</option>
+        <option value="slide-up">Slide Up</option>
+        <option value="slide-down">Slide Down</option>
+      </select>
+    </div>
+    <div class="cr" id="pp-angle-row">
+      <label>Open angle</label>
+      <input type="range" data-pp="angle" min="0" max="180" value="135">
+      <input type="number" class="num" data-pp="angle" value="135">
+    </div>
+    <div class="cr" id="pp-hover-row">
+      <label>Hover angle</label>
+      <input type="range" data-pp="hoverAngle" min="0" max="90" value="25">
+      <input type="number" class="num" data-pp="hoverAngle" value="25">
+    </div>
+    <div class="cr">
+      <label>Face</label>
+      <select data-pp="face">
+        <option value="back">Back (−Z)</option>
+        <option value="left">Left (−X)</option>
+        <option value="right">Right (+X)</option>
+        <option value="top">Top (+Y)</option>
+        <option value="bottom">Bottom (−Y)</option>
+        <option value="front">Front (+Z)</option>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Color</label>
+      <input type="color" data-pp="color" value="#6060e8">
+      <label style="width:auto">Opacity</label>
+      <input type="range" data-pp="alpha" min="0" max="100" value="100" style="width:60px">
+      <input type="number" class="num" data-pp="alpha" value="100" style="width:40px">
+    </div>
+    <div class="cr">
+      <label>Radius %</label>
+      <input type="range" data-pp="borderRadius" min="0" max="50" value="0">
+      <input type="number" class="num" data-pp="borderRadius" value="0">
+    </div>
+    <div class="cr">
+      <label>Spin X (deg/s)</label>
+      <input type="range" data-pp="spinX" min="0" max="360" value="0">
+      <input type="number" class="num" data-pp="spinX" value="0">
+    </div>
+    <div class="cr">
+      <label>Spin Y (deg/s)</label>
+      <input type="range" data-pp="spinY" min="0" max="360" value="0">
+      <input type="number" class="num" data-pp="spinY" value="0">
+    </div>
+    <div class="cr">
+      <label>Texture</label>
+      <select data-pp="texture">
+        <optgroup label="── Generic ──">
+          <option value="gradient">Gradient (dark→light)</option>
+          <option value="solid">Solid color</option>
+          <option value="hidden">Hidden (display:none)</option>
+        </optgroup>
+        <optgroup label="── Biome Defaults ──">
+          <option value="wood-plank">Wood planks (Cedar, Driftwood)</option>
+          <option value="brick">Brick rows (Promenade)</option>
+          <option value="stone">Stone blocks (Dungeon)</option>
+          <option value="iron-plate">Iron plate (Foundry, Sealab)</option>
+          <option value="concrete">Concrete (Lantern Row)</option>
+          <option value="grid-lines">Grid / tile (Interior)</option>
+          <option value="dark-wood">Dark wood (Inn, Tavern)</option>
+          <option value="cathedral-stone">Cathedral stone (Guild hall)</option>
+        </optgroup>
+        <optgroup label="── Narrative / Quest ──">
+          <option value="boss-red">Boss door (crimson iron)</option>
+          <option value="boss-blue">Boss door (arcane blue)</option>
+          <option value="boss-gold">Boss door (gilded)</option>
+          <option value="faction-detective">Faction: Detective Agency</option>
+          <option value="faction-order">Faction: Religious Order</option>
+          <option value="faction-handler">Faction: Handler</option>
+          <option value="locked-chains">Locked (chains + padlock)</option>
+          <option value="runed-glow">Runed (glowing glyphs)</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Biome tag</label>
+      <select data-pp="biomeTag">
+        <option value="">— none —</option>
+        <option value="biome-default">Biome Default (inherit from floor)</option>
+        <option value="cedar">Cedar Street</option>
+        <option value="mainst">Main Street / Promenade</option>
+        <option value="harbor">Harbor / Driftwood</option>
+        <option value="historic">Historic District</option>
+        <option value="lantern">Lantern Row</option>
+        <option value="foundry">Foundry</option>
+        <option value="sealab">Sealab</option>
+        <option value="frontier">Frontier Gate</option>
+        <option value="dungeon">Generic Dungeon</option>
+      </select>
+    </div>
+
+    <div class="section-head" style="margin-top:6px">Pane Text</div>
+    <div class="cr">
+      <label>Label text</label>
+      <input type="text" class="num" style="width:auto;flex:1;color:#fff" data-pp="labelText" placeholder="e.g. ▼ Descend">
+    </div>
+    <div class="cr">
+      <label>Text direction</label>
+      <select data-pp="labelDir">
+        <option value="ltr">Left → Right</option>
+        <option value="rtl">Right → Left</option>
+        <option value="ttb">Top → Bottom (vertical)</option>
+        <option value="btt">Bottom → Top (vertical)</option>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Text size</label>
+      <input type="range" data-pp="labelSize" min="8" max="48" value="14">
+      <input type="number" class="num" data-pp="labelSize" value="14">
+    </div>
+
+    <div class="section-head" style="margin-top:6px">Wiring Notes</div>
+    <div style="margin-bottom:4px">
+      <textarea id="pp-wiring" rows="3" placeholder="JS wiring instructions for export, e.g.&#10;BoxAnim.create('double-door', container)&#10;leftDoor uses --door-advance-glow on enter"
+        style="width:100%;background:#222;color:#ccc;border:1px solid #444;border-radius:3px;padding:4px 6px;font-size:11px;font-family:Consolas,monospace;resize:vertical;"></textarea>
+    </div>
+  </div>
+  </div><!-- /panes-section -->
+
+  <div class="section-head">Display</div>
+  <div class="cr" style="flex-direction:column;gap:6px;height:auto">
+    <div>
+      <span style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px">View Only <span style="color:#444">(tool helpers)</span></span>
+      <div style="display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px">
+        <label style="width:auto"><input type="checkbox" id="chk-labels" checked> Labels</label>
+        <label style="width:auto"><input type="checkbox" id="chk-wire"> Wireframe</label>
+        <label style="width:auto"><input type="checkbox" id="chk-horizon" checked> Horizon</label>
+      </div>
+    </div>
+    <div style="border-top:1px solid #2a2a3a;padding-top:4px">
+      <span style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:0.5px">Phase Anims <span style="color:#555">(per-phase, exports)</span></span>
+      <div id="phase-anim-sidebar" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+        <button class="pa-toggle" data-anim="squish" title="Toggle squish on this phase">Squish</button>
+        <button class="pa-toggle" data-anim="bounce" title="Toggle bounce on this phase">Bounce</button>
+        <button class="pa-toggle" data-anim="poke" title="Toggle poke on this phase">Poke</button>
+        <button class="pa-toggle" data-anim="spin" title="Toggle spin on this phase">Spin</button>
+        <button class="pa-toggle" data-anim="tilt" title="Toggle tilt orbit on this phase">Tilt</button>
+        <button class="pa-toggle" data-anim="glow" title="Toggle glow plane on this phase">Glow</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="compose-bar" style="display:none">
+    <div class="section-head">Compose</div>
+    <div class="tpl-bar" id="compose-actions"></div>
+  </div>
+
+  <div id="orb-section" class="orb-ctrl">
+    <div class="section-head">Orb (CSS Sphere)
+      <span style="display:flex;gap:3px">
+        <button id="orb-save-btn" title="Save orb config to clipboard">💾 Save</button>
+        <button id="orb-load-btn" title="Drop saved orb into current template">📥 Drop In</button>
+      </span>
+    </div>
+    <div class="cr">
+      <label>Orb size</label>
+      <input type="range" id="orb-size" min="20" max="400" value="120">
+      <input type="number" class="num" id="orb-size-num" value="120">
+    </div>
+    <div class="cr">
+      <label>Speed (s)</label>
+      <input type="range" id="orb-speed" min="1" max="20" value="8">
+      <input type="number" class="num" id="orb-speed-num" value="8">
+    </div>
+    <div class="cr">
+      <label>Rings</label>
+      <input type="range" id="orb-rings" min="1" max="18" value="9">
+      <input type="number" class="num" id="orb-rings-num" min="1" max="18" value="9">
+    </div>
+    <div class="cr">
+      <label>Slices</label>
+      <input type="range" id="orb-slices" min="1" max="18" value="9">
+      <input type="number" class="num" id="orb-slices-num" min="1" max="18" value="9">
+    </div>
+    <div class="cr">
+      <label>Palette</label>
+      <select id="orb-palette">
+        <option value="fire">🔥 Fire</option>
+        <option value="ember">🟠 Ember</option>
+        <option value="ice">🧊 Ice</option>
+        <option value="poison">☠️ Poison</option>
+        <option value="arcane">🔮 Arcane</option>
+        <option value="holy">✨ Holy</option>
+        <option value="smoke">💨 Smoke</option>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Orb state</label>
+      <select id="orb-state">
+        <option value="lit">🔥 Lit (spin)</option>
+        <option value="ember">🟠 Ember (pulse)</option>
+        <option value="unlit">💨 Unlit (smoke)</option>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Anchor X (side)</label>
+      <input type="range" id="orb-x" min="-300" max="300" value="0">
+      <input type="number" class="num" id="orb-x-num" value="0">
+    </div>
+    <div class="cr">
+      <label>Anchor Y (up/dn)</label>
+      <input type="range" id="orb-y" min="-300" max="300" value="0">
+      <input type="number" class="num" id="orb-y-num" value="0">
+    </div>
+    <div class="cr">
+      <label>Anchor Z (in/out)</label>
+      <input type="range" id="orb-z" min="-200" max="400" value="60">
+      <input type="number" class="num" id="orb-z-num" value="60">
+    </div>
+  </div>
+
+  <div id="pyr-section" class="pyr-ctrl">
+    <div class="section-head">Pyramid (3D Tetrahedron)</div>
+    <div class="cr">
+      <label>Width</label>
+      <input type="range" id="pyr-size" min="20" max="300" value="80">
+      <input type="number" class="num" id="pyr-size-num" value="80">
+    </div>
+    <div class="cr">
+      <label>Height</label>
+      <input type="range" id="pyr-height" min="0" max="400" value="0">
+      <input type="number" class="num" id="pyr-height-num" value="0">
+    </div>
+    <div class="cr">
+      <label>Spread °</label>
+      <input type="range" id="pyr-spread" min="0" max="90" value="30">
+      <input type="number" class="num" id="pyr-spread-num" min="0" max="90" value="30">
+    </div>
+    <div class="cr">
+      <label style="width:auto"><input type="checkbox" id="pyr-spin-chk" checked> Spin</label>
+      <label style="width:auto"><input type="checkbox" id="pyr-invert-chk"> Invert</label>
+      <label>Speed (s)</label>
+      <input type="range" id="pyr-speed" min="1" max="20" value="6">
+      <input type="number" class="num" id="pyr-speed-num" value="6">
+    </div>
+    <div class="cr">
+      <label>Color 1</label>
+      <input type="color" id="pyr-color1" value="#1cff9b" style="width:60px;height:22px">
+    </div>
+    <div class="cr">
+      <label>Color 2</label>
+      <input type="color" id="pyr-color2" value="#ffe600" style="width:60px;height:22px">
+    </div>
+    <div class="cr">
+      <label>Color 3</label>
+      <input type="color" id="pyr-color3" value="#4a8aff" style="width:60px;height:22px">
+    </div>
+    <div class="cr">
+      <label>Glow color</label>
+      <input type="color" id="pyr-glow-color" value="#1cff9b" style="width:60px;height:22px">
+    </div>
+    <div class="cr">
+      <label>Shape</label>
+      <select id="pyr-shape">
+        <option value="triangle">▲ Triangle</option>
+        <option value="diamond">◆ Diamond</option>
+        <option value="pentagon">⬠ Pentagon</option>
+        <option value="arrow">↑ Arrow</option>
+      </select>
+    </div>
+    <div class="cr">
+      <label>Anchor X</label>
+      <input type="range" id="pyr-x" min="-300" max="300" value="0">
+      <input type="number" class="num" id="pyr-x-num" value="0">
+    </div>
+    <div class="cr">
+      <label>Anchor Y</label>
+      <input type="range" id="pyr-y" min="-300" max="300" value="0">
+      <input type="number" class="num" id="pyr-y-num" value="0">
+    </div>
+    <div class="cr">
+      <label>Anchor Z</label>
+      <input type="range" id="pyr-z" min="-200" max="400" value="0">
+      <input type="number" class="num" id="pyr-z-num" value="0">
+    </div>
+  </div>
+
+  <div id="export-area">
+    <button id="export-btn">Export CSS</button>
+    <div id="export-output"></div>
+  </div>
+</div>
+
+<div id="preview-area">
+  <div class="horizon-line" id="horizon-line"></div>
+  <div id="state-bar">
+    <button data-state="closed" class="active">Phase 1 · Idle</button>
+    <button data-state="hover">Phase 2 · Hover</button>
+    <button data-state="opened">Phase 3 · Activated</button>
+  </div>
+  <!-- Phase anim toggles moved to Display sidebar section -->
+
+  <div class="box3d-wrap" id="box">
+    <div class="box3d-scene" id="scene">
+      <div class="box3d-spin" id="spin">
+        <div class="box3d-glow">
+          <div class="glow-plane gp0"></div>
+          <div class="glow-plane gp1"></div>
+          <div class="glow-plane gp2"></div>
+        </div>
+        <!-- Panes are rendered here dynamically -->
+      </div>
+    </div>
+  </div>
+  <div id="face-info"></div>
+
+  <div id="perf-hud">
+    <div class="hud-title">Resource Monitor</div>
+    <div class="hud-row"><span class="hud-label">FPS</span><span class="hud-val" id="hud-fps">--</span></div>
+    <div class="hud-bar"><div class="hud-bar-fill" id="hud-fps-bar" style="width:100%;background:#4c8"></div></div>
+    <div class="hud-sep"></div>
+    <div class="hud-row"><span class="hud-label">Scene DOM</span><span class="hud-val" id="hud-dom">--</span></div>
+    <div class="hud-row"><span class="hud-label">  Panes</span><span class="hud-val" id="hud-panes">--</span></div>
+    <div class="hud-row"><span class="hud-label">  Orb els</span><span class="hud-val" id="hud-orb">--</span></div>
+    <div class="hud-row"><span class="hud-label">  Glows</span><span class="hud-val" id="hud-glows">--</span></div>
+    <div class="hud-row"><span class="hud-label">  Labels</span><span class="hud-val" id="hud-labels">--</span></div>
+    <div class="hud-bar"><div class="hud-bar-fill" id="hud-dom-bar" style="width:0%;background:#4c8"></div></div>
+    <div class="hud-sep"></div>
+    <div class="hud-row"><span class="hud-label">Animations</span><span class="hud-val" id="hud-anims">--</span></div>
+    <div class="hud-row"><span class="hud-label">3D layers</span><span class="hud-val" id="hud-layers">--</span></div>
+    <div class="hud-sep"></div>
+    <div class="hud-cost">Deploy cost: <span class="tier" id="hud-tier">--</span></div>
+    <div class="hud-cost" id="hud-notes" style="color:#555"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ════════════════════════════════════════════════════
+  //  DATA MODEL
+  // ════════════════════════════════════════════════════
+
+  var _nextId = 1;
+
+  // Box shell
+  var shell = { bw: 200, bh: 200, bd: 100, persp: 800, rx: -25, ry: 20 };
+  var colors = { cDark: '#0b0b66', cLight: '#6060e8', cFloor: '#0a0a4f', cCeil: '#2e2e2e', cGlow: '#8888ff' };
+
+  // Panes array — each pane is a face or sub-panel
+  // Structural panes (back/left/right/top/bottom) are auto-sized from shell.
+  // Custom panes have explicit w/h and offsets.
+  var panes = [];
+
+  // Glows array — each glow is a radial-gradient plane that can be positioned/rotated
+  var glows = [];
+  var _nextGlowId = 1;
+  var selectedGlowId = null;
+
+  function makeGlow(opts) {
+    return {
+      id:      opts.id || (_nextGlowId++),
+      name:    opts.name || 'Glow',
+      color:   opts.color || colors.cGlow,
+      size:    opts.size || 140,         // % of box dimensions
+      alpha:   opts.alpha != null ? opts.alpha : 60,
+      ox:      opts.ox || 0,             // offset X from center
+      oy:      opts.oy || 0,             // offset Y from center
+      oz:      opts.oz || 0,             // offset Z (depth)
+      rotX:    opts.rotX || 0,           // rotation X in degrees
+      rotY:    opts.rotY || 0,           // rotation Y in degrees
+      spinX:   opts.spinX || 0,          // continuous spin speed X (deg/s, 0=off)
+      spinY:   opts.spinY || 0,          // continuous spin speed Y
+      blur:    opts.blur != null ? opts.blur : 18,
+      shape:   opts.shape || 'ellipse'   // 'ellipse' or 'circle'
+    };
+  }
+
+  function defaultGlows() {
+    return [
+      makeGlow({ name: 'Floor glow', rotX: 90, oy: 0, oz: 0 }),
+      makeGlow({ name: 'Cross glow 1', rotY: 0 }),
+      makeGlow({ name: 'Cross glow 2', rotY: 60 }),
+      makeGlow({ name: 'Cross glow 3', rotY: 120 })
+    ];
+  }
+
+  var selectedPaneId = null;
+  var currentState = 'closed';
+  // _displaySpin/_displayTilt removed — spin/tilt now live in phaseAnims per-phase
+
+  // ════════════════════════════════════════════════════
+  //  ORB CONFIG (embedded CSS sphere)
+  // ════════════════════════════════════════════════════
+
+  var orbConfig = null; // null = no orb. Set by templates.
+  var pyramidConfig = null; // null = no pyramid. Set by Pyramid template.
+  // pyramidConfig is FLAT (shared across phases) for: shape, invert, spinning
+  // pyramidConfig.p1/p2/p3 hold per-phase overrides for: size, speed, color1/2/3, glow, x, y, z
+
+  var ORB_PALETTES = {
+    fire:   ['#ff220088','#ff440088','#ff660088','#ff880088','#ffaa0088','#ff660088','#ff440088','#cc330088','#ff880088'],
+    ember:  ['#ff550088','#0a0a0a88','#ff660088','#0a0a0a88','#ff440088','#0a0a0a88','#ff770088','#0a0a0a88','#ff550088'],
+    ice:    ['#0088ff88','#00bbff88','#00eeff88','#44ccff88','#0066cc88','#22aadd88','#0099ee88','#44ddff88','#0077dd88'],
+    poison: ['#00cc0088','#44ff0088','#22aa2288','#00ff4488','#33cc3388','#00ee0088','#66ff2288','#11bb1188','#44dd4488'],
+    arcane: ['#8800ff88','#aa44ff88','#cc00ff88','#6622cc88','#9933ff88','#bb22ee88','#7711dd88','#dd55ff88','#9944ee88'],
+    holy:   ['#ffdd4488','#ffeeaa88','#ffcc2288','#ffffcc88','#ffbb0088','#ffeedd88','#ffdd6688','#fff5cc88','#ffcc4488'],
+    smoke:  ['#88888866','#aaaaaa55','#66666666','#99999955','#bbbbbb44','#77777766','#cccccc44','#55555566','#99999955']
+  };
+
+  var orbOnly = false;     // When true, box controls are dimmed — orb is the primary object
+  var pyrPrimary = false;  // When true, box controls are dimmed — pyramid is the primary object
+  var _savedOrb = null;    // Clipboard for save/drop-in composability
+
+  // Per-phase animation toggles (template-level, apply to the whole box wrapper)
+  // Each phase has boolean toggles for: squish, bounce, poke (body anims)
+  // and spin, tilt, glow (display anims that also export)
+  var phaseAnims = {
+    p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+    p2: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+    p3: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false }
+  };
+
+  function defaultPhaseAnims() {
+    return {
+      p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+      p2: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+      p3: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false }
+    };
+  }
+
+  function activePhaseAnims() {
+    if (currentState === 'opened') return phaseAnims.p3;
+    if (currentState === 'hover') return phaseAnims.p2;
+    return phaseAnims.p1;
+  }
+
+  // ── Per-phase pyramid config ──
+  var PYR_PHASE_KEYS = ['size','height','spread','speed','color1','color2','color3','glow','x','y','z'];
+
+  function makePyrPhase(opts) {
+    return {
+      size:   opts.size   != null ? opts.size   : 80,
+      height: opts.height != null ? opts.height : 0,   // 0 = match size (equilateral)
+      spread: opts.spread != null ? opts.spread : 30,  // face hinge angle at apex (deg)
+      speed:  opts.speed  != null ? opts.speed  : 6,
+      color1: opts.color1 || '#1cff9b',
+      color2: opts.color2 || '#ffe600',
+      color3: opts.color3 || '#4a8aff',
+      glow:   opts.glow   || 'rgba(28,255,155,0.5)',
+      x:      opts.x      != null ? opts.x      : 0,
+      y:      opts.y      != null ? opts.y      : 0,
+      z:      opts.z      != null ? opts.z      : 0
+    };
+  }
+
+  function activePyrPhase() {
+    if (!pyramidConfig) return null;
+    if (currentState === 'opened') return pyramidConfig.p3;
+    if (currentState === 'hover') return pyramidConfig.p2;
+    return pyramidConfig.p1;
+  }
+
+  // Pyramid clip-path shapes
+  var PYR_SHAPES = {
+    triangle: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+    diamond:  'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+    pentagon: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+    arrow:    'polygon(50% 0%, 80% 40%, 60% 40%, 60% 100%, 40% 100%, 40% 40%, 20% 40%)'
+  };
+
+  // phaseMode controls phase button labels ('box' or 'orb')
+  var phaseMode = 'box';
+
+  // ── Per-phase orb config ──
+  // orbConfig.p1/p2/p3 each fully describe the orb at that phase.
+  // Sliders always edit the ACTIVE phase. Render reads from the active phase.
+  var ORB_PHASE_KEYS = ['size','speed','rings','slices','palette','state','x','y','z'];
+
+  function makeOrbPhase(opts) {
+    return {
+      size:    opts.size    != null ? opts.size    : 120,
+      speed:   opts.speed   != null ? opts.speed   : 8,
+      rings:   opts.rings   != null ? opts.rings   : 9,
+      slices:  opts.slices  != null ? opts.slices  : 9,
+      palette: opts.palette || 'fire',
+      state:   opts.state   || 'lit',
+      x:       opts.x       != null ? opts.x       : 0,
+      y:       opts.y       != null ? opts.y       : 0,
+      z:       opts.z       != null ? opts.z       : 60
+    };
+  }
+
+  function defaultOrbConfig() {
+    // Box-origin default: resource-savvy idle → medium hover → full activated
+    return {
+      p1: makeOrbPhase({ size: 30,  speed: 12, rings: 1, slices: 1, palette: 'fire', state: 'lit', z: 0 }),
+      p2: makeOrbPhase({ size: 60,  speed: 8,  rings: 5, slices: 4, palette: 'fire', state: 'lit', z: 20 }),
+      p3: makeOrbPhase({ size: 120, speed: 8,  rings: 9, slices: 9, palette: 'fire', state: 'lit', z: 60 })
+    };
+  }
+
+  // Returns the phase config object for the currently active state
+  function activeOrbPhase() {
+    if (!orbConfig) return null;
+    if (currentState === 'opened') return orbConfig.p3;
+    if (currentState === 'hover') return orbConfig.p2;
+    return orbConfig.p1;
+  }
+
+  function makePane(opts) {
+    return {
+      id:       opts.id || (_nextId++),
+      name:     opts.name || 'Pane',
+      face:     opts.face || 'front',        // which face of the box it sits on
+      role:     opts.role || 'structure',     // structure | lid | decor
+      structural: opts.structural || false,   // auto-sized from shell (can't delete)
+      pw:       opts.pw || 200,               // pane width (custom panes; structural ignores)
+      ph:       opts.ph || 200,               // pane height
+      ox:       opts.ox || 0,                 // offset along face X axis
+      oy:       opts.oy || 0,                 // offset along face Y axis
+      hinge:    opts.hinge || 'bottom',       // lid hinge edge
+      angle:    opts.angle || 135,            // lid open angle
+      hoverAngle: opts.hoverAngle != null ? opts.hoverAngle : 25,  // hover preview angle
+      color:    opts.color || colors.cLight,
+      alpha:    opts.alpha != null ? opts.alpha : 100,
+      borderRadius: opts.borderRadius != null ? opts.borderRadius : 0,
+      spinX:    opts.spinX || 0,             // continuous spin X in deg/s (0=off)
+      spinY:    opts.spinY || 0,             // continuous spin Y in deg/s
+      texture:  opts.texture || 'gradient',
+      biomeTag: opts.biomeTag || '',           // biome context for export
+      labelText: opts.labelText || '',         // text rendered on the pane face
+      labelDir: opts.labelDir || 'ltr',        // text direction: ltr|rtl|ttb|btt
+      labelSize: opts.labelSize || 14,         // text font size in px
+      wiring:   opts.wiring || ''              // free-form JS wiring notes for export
+    };
+  }
+
+  // Default structural panes
+  function defaultPanes() {
+    return [
+      makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, role: 'structure', texture: 'gradient' }),
+      makePane({ id: _nextId++, name: 'Left',   face: 'left',   structural: true, role: 'structure', texture: 'gradient' }),
+      makePane({ id: _nextId++, name: 'Right',  face: 'right',  structural: true, role: 'structure', texture: 'gradient' }),
+      makePane({ id: _nextId++, name: 'Top',    face: 'top',    structural: true, role: 'structure', texture: 'gradient', color: colors.cCeil }),
+      makePane({ id: _nextId++, name: 'Bottom', face: 'bottom', structural: true, role: 'structure', texture: 'gradient', color: colors.cFloor }),
+      makePane({ id: _nextId++, name: 'Lid',    face: 'front',  structural: false, role: 'lid', hinge: 'bottom', angle: 135, texture: 'gradient' })
+    ];
+  }
+
+  panes = defaultPanes();
+
+  // ════════════════════════════════════════════════════
+  //  TEMPLATES
+  // ════════════════════════════════════════════════════
+
+  var TEMPLATES = {
+    'Splash Cube': function() {
+      shell = { bw: 200, bh: 200, bd: 100, persp: 800, rx: -25, ry: 20 };
+      colors = { cDark: '#2e0d3f', cLight: '#b811c6', cFloor: '#0a0414', cCeil: '#1a0a24', cGlow: '#c850c6' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'bottom'; panes[5].angle = 135;
+    },
+    'Chest': function() {
+      shell = { bw: 200, bh: 140, bd: 50, persp: 800, rx: -22, ry: -18 };
+      colors = { cDark: '#3d2b08', cLight: '#a87830', cFloor: '#1a1206', cCeil: '#5a4020', cGlow: '#ffc850' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'bottom'; panes[5].angle = 135;
+      // Chest bounces and squishes on open
+      phaseAnims = {
+        p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+        p2: { squish: false, bounce: false, poke: true,  spin: false, tilt: false, glow: true },
+        p3: { squish: true,  bounce: true,  poke: false, spin: false, tilt: false, glow: true }
+      };
+    },
+    'Single Door': function() {
+      shell = { bw: 390, bh: 570, bd: 46, persp: 800, rx: -8, ry: 10 };
+      colors = { cDark: '#0a0a08', cLight: '#3a4030', cFloor: '#1a1812', cCeil: '#2a3020', cGlow: '#dcc8a0' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[0].texture = 'hidden'; // back hidden for door
+      panes[5].hinge = 'left'; panes[5].angle = 80;
+      panes[5].name = 'Door Panel';
+      panes[5].texture = 'wood-plank';
+    },
+    'Double Doors': function() {
+      shell = { bw: 600, bh: 570, bd: 46, persp: 800, rx: 5, ry: -7 };
+      colors = { cDark: '#0a0a08', cLight: '#3a4030', cFloor: '#1a1812', cCeil: '#2a3020', cGlow: '#dcc8a0' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Left Jam',  face: 'left',   structural: true, texture: 'stone',
+                   ox: 250, biomeTag: 'biome-default' }),
+        makePane({ id: _nextId++, name: 'Right Jam', face: 'right',  structural: true, texture: 'stone',
+                   ox: 256, biomeTag: 'biome-default' }),
+        makePane({ id: _nextId++, name: 'Lintel', face: 'top',    structural: true, texture: 'stone', color: '#2a3020',
+                   oy: 241, biomeTag: 'biome-default' }),
+        makePane({ id: _nextId++, name: 'Sill',   face: 'bottom', structural: true, texture: 'grid-lines', color: '#1a1812',
+                   oy: 240 }),
+        makePane({ id: _nextId++, name: 'Left Door',  face: 'front', role: 'lid', hinge: 'left', angle: 101, hoverAngle: 23,
+                   pw: 300, ph: 570, ox: 0, oy: 0, texture: 'wood-plank', color: '#6e4828',
+                   biomeTag: 'biome-default',
+                   labelText: 'to [floor N]', labelDir: 'rtl', labelSize: 30,
+                   wiring: 'Left leaf — opens on interact.\nUse --door-advance-glow CSS var for biome tint.' }),
+        makePane({ id: _nextId++, name: 'Right Door', face: 'front', role: 'lid', hinge: 'right', angle: 104, hoverAngle: 33,
+                   pw: 300, ph: 570, ox: 300, oy: 0, texture: 'wood-plank', color: '#5e4026',
+                   biomeTag: 'biome-default',
+                   labelText: 'to [Floor N]', labelDir: 'ltr', labelSize: 30,
+                   wiring: 'Right leaf — opens opposite direction.\nMirror hinge of left leaf.' })
+      ];
+    },
+    'Crate': function() {
+      shell = { bw: 420, bh: 260, bd: 90, persp: 800, rx: -42, ry: 18 };
+      colors = { cDark: '#5a3a0a', cLight: '#c49a40', cFloor: '#3a2808', cCeil: '#8a6020', cGlow: '#c8a03c' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'slide-right'; panes[5].angle = 0;
+      panes[5].name = 'Crate Lid'; panes[5].texture = 'wood-plank';
+    },
+    'Torch': function() {
+      shell = { bw: 200, bh: 140, bd: 50, persp: 800, rx: -22, ry: -18 };
+      colors = { cDark: '#3a2008', cLight: '#c88030', cFloor: '#1a1206', cCeil: '#5a4020', cGlow: '#dca032' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'bottom'; panes[5].angle = 135;
+    },
+    'Corpse': function() {
+      shell = { bw: 200, bh: 140, bd: 50, persp: 800, rx: -22, ry: -18 };
+      colors = { cDark: '#1a1020', cLight: '#4a3860', cFloor: '#0a0810', cCeil: '#2a2040', cGlow: '#8c64b4' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'bottom'; panes[5].angle = 135;
+    },
+    'Locked Door': function() {
+      shell = { bw: 260, bh: 380, bd: 90, persp: 800, rx: -8, ry: 10 };
+      colors = { cDark: '#1a0808', cLight: '#8a2020', cFloor: '#0a0404', cCeil: '#3a1010', cGlow: '#dc3c28' };
+      _nextId = 1;
+      panes = defaultPanes();
+      panes[5].hinge = 'left'; panes[5].angle = 0; // locked: doesn't open
+      panes[5].name = 'Locked Panel';
+    },
+    'Torch (box)': function() {
+      // Box approximation of torch — 6 circular faces + handle + lid.
+      // For the TRUE sphere orb, see orb-component.html (81-element geodesic).
+      shell = { bw: 120, bh: 120, bd: 60, persp: 600, rx: -12, ry: 15 };
+      colors = { cDark: '#1a0800', cLight: '#ff6600', cFloor: '#0a0400', cCeil: '#cc4400', cGlow: '#ff8833' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back Orb',  face: 'back',   structural: true, borderRadius: 50, color: '#ff4400', alpha: 70 }),
+        makePane({ id: _nextId++, name: 'Left Orb',  face: 'left',   structural: true, borderRadius: 50, color: '#ff6600', alpha: 60 }),
+        makePane({ id: _nextId++, name: 'Right Orb', face: 'right',  structural: true, borderRadius: 50, color: '#ff5500', alpha: 60 }),
+        makePane({ id: _nextId++, name: 'Top Orb',   face: 'top',    structural: true, borderRadius: 50, color: '#ffaa00', alpha: 50 }),
+        makePane({ id: _nextId++, name: 'Bot Orb',   face: 'bottom', structural: true, borderRadius: 50, color: '#cc3300', alpha: 65 }),
+        makePane({ id: _nextId++, name: 'Front Orb', face: 'front',  structural: false, role: 'decor',
+                   pw: 120, ph: 120, ox: 0, oy: 0, borderRadius: 50, color: '#ff8800', alpha: 75, texture: 'solid' }),
+        makePane({ id: _nextId++, name: 'Handle',    face: 'front',  structural: false, role: 'decor',
+                   pw: 20, ph: 160, ox: 0, oy: 140, borderRadius: 0, color: '#3a2010', texture: 'dark-wood',
+                   wiring: 'Handle visible in all states. Texture: dark-wood or biome-default.' }),
+        makePane({ id: _nextId++, name: 'Unlit Cap', face: 'front',  structural: false, role: 'decor',
+                   pw: 40, ph: 40, ox: 0, oy: 0, borderRadius: 0, color: '#0a0a0a', texture: 'solid', alpha: 0,
+                   wiring: 'UNLIT: alpha→100, hide orb panes. Black cube replaces flame.' }),
+        makePane({ id: _nextId++, name: 'Ember Lid', face: 'front',  role: 'lid', hinge: 'bottom', angle: 90, hoverAngle: 15,
+                   pw: 80, ph: 80, ox: 0, oy: 0, borderRadius: 50, color: '#ff4400', alpha: 80,
+                   labelText: '\uD83D\uDD25', labelDir: 'ltr', labelSize: 28,
+                   wiring: 'NOTE: This box template is a low-fidelity stand-in.\n' +
+                           'For the real torch flame, use the CSS sphere from orb-component.html.\n' +
+                           'The orb uses 9 rings x 9 slices (81 circles) for a true geodesic sphere.\n\n' +
+                           'THREE STATES:\n' +
+                           'LIT: orb visible, glow active, AudioSystem.play("torch_crackle", {loop:true})\n' +
+                           'HOVER/EMBER: orb shrinks, speed 3s, ember-pulse animation (black↔orange 0.8s)\n' +
+                           'UNLIT: orb hidden, show Unlit Cap, AudioSystem.play("torch_sizzle")\n\n' +
+                           'State: HazardSystem.torchState(tileX, tileY)\n' +
+                           'Palettes: fire, ember, ice, poison, arcane, holy (see orb-component.html)' })
+      ];
+    },
+    'Boss Door + Orb': function() {
+      shell = { bw: 600, bh: 570, bd: 46, persp: 800, rx: 5, ry: -7 };
+      colors = { cDark: '#1a0404', cLight: '#8a1818', cFloor: '#0a0404', cCeil: '#3a1010', cGlow: '#ff6622' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Left Jam',  face: 'left',   structural: true, texture: 'stone',
+                   ox: 250, color: '#3a1010', biomeTag: 'dungeon' }),
+        makePane({ id: _nextId++, name: 'Right Jam', face: 'right',  structural: true, texture: 'stone',
+                   ox: 256, color: '#3a1010', biomeTag: 'dungeon' }),
+        makePane({ id: _nextId++, name: 'Lintel', face: 'top',    structural: true, texture: 'boss-red', color: '#5a1818',
+                   oy: 241, biomeTag: 'dungeon' }),
+        makePane({ id: _nextId++, name: 'Sill',   face: 'bottom', structural: true, texture: 'grid-lines', color: '#0a0404',
+                   oy: 240 }),
+        makePane({ id: _nextId++, name: 'Left Door',  face: 'front', role: 'lid', hinge: 'left', angle: 110, hoverAngle: 18,
+                   pw: 300, ph: 570, ox: 0, oy: 0, texture: 'boss-red', color: '#8a1818',
+                   biomeTag: 'dungeon',
+                   labelText: '🐉 BOSS', labelDir: 'rtl', labelSize: 36,
+                   wiring: 'Left leaf — opens on boss-door interact.\nOrb propels outward as doors swing open.\nGlow intensifies with --boss-glow CSS var.' }),
+        makePane({ id: _nextId++, name: 'Right Door', face: 'front', role: 'lid', hinge: 'right', angle: 115, hoverAngle: 22,
+                   pw: 300, ph: 570, ox: 300, oy: 0, texture: 'boss-red', color: '#7a1414',
+                   biomeTag: 'dungeon',
+                   labelText: '🐉 LAIR', labelDir: 'ltr', labelSize: 36,
+                   wiring: 'Right leaf — mirrors left. Wider angle reveals orb fully.' })
+      ];
+      orbConfig = {
+        p1: makeOrbPhase({ size: 40,  speed: 12, rings: 1, slices: 1, palette: 'ember', state: 'lit', x: 0, y: -20, z: 0 }),
+        p2: makeOrbPhase({ size: 90,  speed: 6,  rings: 5, slices: 4, palette: 'fire',  state: 'lit', x: 0, y: -20, z: 20 }),
+        p3: makeOrbPhase({ size: 180, speed: 6,  rings: 9, slices: 7, palette: 'fire',  state: 'lit', x: 0, y: -20, z: 60 })
+      };
+      phaseAnims = {
+        p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+        p2: { squish: false, bounce: false, poke: true,  spin: false, tilt: false, glow: true },
+        p3: { squish: false, bounce: true,  poke: false, spin: false, tilt: false, glow: true }
+      };
+    },
+    'Torch + Orb': function() {
+      shell = { bw: 100, bh: 200, bd: 50, persp: 600, rx: -5, ry: 12 };
+      colors = { cDark: '#1a0800', cLight: '#4a2810', cFloor: '#0a0400', cCeil: '#2a1808', cGlow: '#ff8833' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'stone', color: '#2a1a0a' }),
+        makePane({ id: _nextId++, name: 'Left',   face: 'left',   structural: true, texture: 'stone', color: '#2a1a0a' }),
+        makePane({ id: _nextId++, name: 'Right',  face: 'right',  structural: true, texture: 'stone', color: '#2a1a0a' }),
+        makePane({ id: _nextId++, name: 'Top',    face: 'top',    structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Bottom', face: 'bottom', structural: true, texture: 'grid-lines', color: '#0a0400' }),
+        makePane({ id: _nextId++, name: 'Handle', face: 'front',  role: 'decor',
+                   pw: 20, ph: 160, ox: 0, oy: 40, borderRadius: 0, color: '#3a2010', texture: 'dark-wood',
+                   wiring: 'Torch handle — always visible. Texture: dark-wood.' }),
+        makePane({ id: _nextId++, name: 'Sconce', face: 'front',  role: 'decor',
+                   pw: 50, ph: 30, ox: 0, oy: -30, borderRadius: 0, color: '#2a1808', texture: 'iron-plate',
+                   wiring: 'Metal sconce bracket. Sits below flame orb.' })
+      ];
+      orbConfig = {
+        p1: makeOrbPhase({ size: 50,  speed: 20, rings: 7, slices: 5, palette: 'smoke', state: 'unlit', x: 0, y: -60, z: 60 }),
+        p2: makeOrbPhase({ size: 65,  speed: 10, rings: 7, slices: 5, palette: 'ember', state: 'ember', x: 0, y: -60, z: 60 }),
+        p3: makeOrbPhase({ size: 80,  speed: 10, rings: 7, slices: 5, palette: 'fire',  state: 'lit',   x: 0, y: -60, z: 60 })
+      };
+      phaseMode = 'orb';
+    },
+    'Orb': function() {
+      // Pure orb — box shell is a transparent ghost, orb is the star.
+      shell = { bw: 200, bh: 200, bd: 100, persp: 800, rx: -10, ry: 15 };
+      colors = { cDark: '#0a0400', cLight: '#1a0800', cFloor: '#050200', cCeil: '#0a0400', cGlow: '#ff6622' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Left',   face: 'left',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Right',  face: 'right',  structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Top',    face: 'top',    structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Bottom', face: 'bottom', structural: true, texture: 'hidden' }),
+      ];
+      orbConfig = {
+        p1: makeOrbPhase({ size: 120, speed: 20, rings: 9, slices: 9, palette: 'smoke', state: 'unlit', x: 0, y: 0, z: 0 }),
+        p2: makeOrbPhase({ size: 160, speed: 10, rings: 9, slices: 9, palette: 'ember', state: 'ember', x: 0, y: 0, z: 0 }),
+        p3: makeOrbPhase({ size: 200, speed: 8,  rings: 9, slices: 9, palette: 'fire',  state: 'lit',   x: 0, y: 0, z: 0 })
+      };
+      orbOnly = true;
+      phaseMode = 'orb';
+    },
+    'Pyramid': function() {
+      // 3D tetrahedron — adapted from EyesOnly debrief-feed MOK avatar.
+      // Uses wb-pyramid renderer instead of orb. 4 faces with conic-gradient + shadow.
+      shell = { bw: 120, bh: 120, bd: 60, persp: 340, rx: 0, ry: 0 };
+      colors = { cDark: '#0a0a12', cLight: '#1a1a2a', cFloor: '#050510', cCeil: '#0a0a18',
+                 cGlow: '#1cff9b',
+                 pyrColor1: '#1cff9b', pyrColor2: '#ffe600', pyrColor3: '#4a8aff' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Left',   face: 'left',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Right',  face: 'right',  structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Top',    face: 'top',    structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Bottom', face: 'bottom', structural: true, texture: 'hidden' })
+      ];
+      pyramidConfig = {
+        spinning: true, shape: 'triangle',
+        p1: makePyrPhase({ size: 60,  speed: 8, color1: '#1cff9b', color2: '#ffe600', color3: '#4a8aff', glow: 'rgba(28,255,155,0.3)', x: 0, y: 0, z: 0 }),
+        p2: makePyrPhase({ size: 80,  speed: 6, color1: '#1cff9b', color2: '#ffe600', color3: '#4a8aff', glow: 'rgba(28,255,155,0.5)', x: 0, y: 0, z: 0 }),
+        p3: makePyrPhase({ size: 100, speed: 4, color1: '#00ffcc', color2: '#ffee00', color3: '#6699ff', glow: 'rgba(0,255,204,0.7)',   x: 0, y: 0, z: 0 })
+      };
+      // Pyramid template: set phase anims for the wrapper
+      phaseAnims = {
+        p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: true },
+        p2: { squish: true,  bounce: false, poke: false, spin: true,  tilt: false, glow: true },
+        p3: { squish: false, bounce: true,  poke: false, spin: true,  tilt: true,  glow: true }
+      };
+      orbConfig = null;
+      phaseMode = 'box';
+      pyrPrimary = true; // Pyramid is the star — dim box controls
+    },
+    'Torch Peek': function() {
+      // Inverted pyramid cradle with fire orb in the cup.
+      // 4 box panes form a sconce bracket; upside-down pyramid sits inside;
+      // fire orb nests in the pyramid's open base (now the top).
+      shell = { bw: 100, bh: 180, bd: 50, persp: 600, rx: -8, ry: 12 };
+      colors = { cDark: '#1a0800', cLight: '#4a2810', cFloor: '#0a0400', cCeil: '#2a1808', cGlow: '#ff8833' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back Wall', face: 'back', structural: true, texture: 'stone', color: '#2a1a0a',
+                   wiring: 'Wall surface behind the torch mount.' }),
+        makePane({ id: _nextId++, name: 'Left Bracket', face: 'left', structural: true, texture: 'iron-plate', color: '#3a3030',
+                   wiring: 'Left arm of the wall sconce bracket.' }),
+        makePane({ id: _nextId++, name: 'Right Bracket', face: 'right', structural: true, texture: 'iron-plate', color: '#3a3030',
+                   wiring: 'Right arm of the wall sconce bracket.' }),
+        makePane({ id: _nextId++, name: 'Top', face: 'top', structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Base Plate', face: 'bottom', structural: true, texture: 'iron-plate', color: '#2a2020',
+                   wiring: 'Bottom plate of the bracket — torch rests here.' }),
+        makePane({ id: _nextId++, name: 'Handle', face: 'front', role: 'decor',
+                   pw: 16, ph: 100, ox: 0, oy: 50, borderRadius: 0, color: '#3a2010', texture: 'dark-wood',
+                   wiring: 'Torch handle — extends below the cradle. Always visible.' })
+      ];
+      // Inverted pyramid forms the torch cup — point faces down, open base up
+      pyramidConfig = {
+        spinning: true, shape: 'triangle', invert: true,
+        p1: makePyrPhase({ size: 50,  speed: 10, color1: '#5a2808', color2: '#6a3010', color3: '#4a2006', glow: 'rgba(255,136,51,0.2)', x: 0, y: -20, z: 30 }),
+        p2: makePyrPhase({ size: 60,  speed: 8,  color1: '#6a3010', color2: '#8a4818', color3: '#5a2808', glow: 'rgba(255,136,51,0.4)', x: 0, y: -20, z: 30 }),
+        p3: makePyrPhase({ size: 70,  speed: 6,  color1: '#8a4818', color2: '#aa6028', color3: '#6a3010', glow: 'rgba(255,136,51,0.6)', x: 0, y: -20, z: 30 })
+      };
+      // Fire orb sits in the cup of the inverted pyramid
+      orbConfig = {
+        p1: makeOrbPhase({ size: 40,  speed: 20, rings: 5, slices: 4, palette: 'smoke', state: 'unlit', x: 0, y: -55, z: 50 }),
+        p2: makeOrbPhase({ size: 55,  speed: 10, rings: 7, slices: 5, palette: 'ember', state: 'ember', x: 0, y: -55, z: 50 }),
+        p3: makeOrbPhase({ size: 70,  speed: 8,  rings: 7, slices: 5, palette: 'fire',  state: 'lit',   x: 0, y: -55, z: 50 })
+      };
+      phaseMode = 'orb';
+      phaseAnims = {
+        p1: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: false },
+        p2: { squish: false, bounce: false, poke: false, spin: false, tilt: false, glow: true },
+        p3: { squish: false, bounce: false, poke: true,  spin: false, tilt: false, glow: true }
+      };
+    }
+  };
+
+  // ════════════════════════════════════════════════════
+  //  DOM REFS
+  // ════════════════════════════════════════════════════
+
+  var boxEl = document.getElementById('box');
+  var sceneEl = document.getElementById('scene');
+  var spinEl = document.getElementById('spin');
+  var faceInfoEl = document.getElementById('face-info');
+  var paneListEl = document.getElementById('pane-list');
+  var panePropsEl = document.getElementById('pane-props');
+
+  // ════════════════════════════════════════════════════
+  //  SLIDER ↔ NUMBER FIELD SYNC
+  // ════════════════════════════════════════════════════
+
+  // Shell controls
+  document.querySelectorAll('#sidebar .cr input[data-p]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      var key = el.dataset.p;
+      var val = +el.value;
+      // Sync sibling (range↔number)
+      var siblings = document.querySelectorAll('[data-p="' + key + '"]');
+      siblings.forEach(function(s) { if (s !== el) s.value = val; });
+      // Update model
+      if (key in shell) shell[key] = val;
+      if (key in colors) colors[key] = el.value;
+      updateShellDirtyLabels();
+      render();
+    });
+  });
+
+  // Pane prop controls
+  document.querySelectorAll('#pane-props .cr input[data-pp], #pane-props .cr select[data-pp]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      if (!selectedPaneId) return;
+      var p = getPaneById(selectedPaneId);
+      if (!p) return;
+      var key = el.dataset.pp;
+      var val = el.type === 'range' || el.type === 'number' ? +el.value : el.value;
+      // Sync sibling
+      var siblings = document.querySelectorAll('[data-pp="' + key + '"]');
+      siblings.forEach(function(s) { if (s !== el) s.value = val; });
+      p[key] = val;
+      updatePropVisibility(p);
+      render();
+      updateDirtyLabels(p);
+    });
+  });
+  // Pane name
+  document.getElementById('pp-name').addEventListener('input', function() {
+    var p = getPaneById(selectedPaneId);
+    if (p) { p.name = this.value; renderPaneList(); }
+  });
+  // Wiring notes textarea
+  document.getElementById('pp-wiring').addEventListener('input', function() {
+    var p = getPaneById(selectedPaneId);
+    if (p) p.wiring = this.value;
+  });
+
+  // Color inputs (shell)
+  document.querySelectorAll('#sidebar .cr input[type="color"][data-p]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      colors[el.dataset.p] = el.value;
+      render();
+    });
+  });
+
+  // ── Click-to-revert: click a slider label to reset to template default ──
+  document.querySelectorAll('#pane-props .cr label').forEach(function(labelEl) {
+    labelEl.addEventListener('click', function() {
+      if (!labelEl.classList.contains('resettable')) return;
+      if (!selectedPaneId) return;
+      var p = getPaneById(selectedPaneId);
+      if (!p) return;
+      var paneIdx = panes.indexOf(p);
+      // Find which data-pp key this label's row controls
+      var row = labelEl.closest('.cr');
+      if (!row) return;
+      var input = row.querySelector('[data-pp]');
+      if (!input) return;
+      var key = input.dataset.pp;
+      var def = getPaneDefault(paneIdx, key);
+      if (def === null) return;
+      p[key] = def;
+      setPPVal(key, p.structural && key === 'pw' ? getStructW(p) : p.structural && key === 'ph' ? getStructH(p) : def);
+      updateDirtyLabels(p);
+      render();
+    });
+  });
+
+  // ── Click-to-revert: shell slider labels ──
+  document.querySelectorAll('#sidebar .cr label').forEach(function(labelEl) {
+    var row = labelEl.closest('.cr');
+    if (!row) return;
+    var input = row.querySelector('[data-p]');
+    if (!input) return;
+    var key = input.dataset.p;
+    if (!(key in shell)) return;
+    labelEl.addEventListener('click', function() {
+      if (!labelEl.classList.contains('resettable')) return;
+      var def = getShellDefault(key);
+      if (def === null) return;
+      shell[key] = def;
+      var siblings = document.querySelectorAll('[data-p="' + key + '"]');
+      siblings.forEach(function(s) { s.value = def; });
+      updateShellDirtyLabels();
+      render();
+    });
+  });
+
+  function updateShellDirtyLabels() {
+    if (!_tplDefaults._shell) return;
+    document.querySelectorAll('#sidebar .cr input[data-p]').forEach(function(el) {
+      var key = el.dataset.p;
+      if (!(key in shell) || !_tplDefaults._shell.hasOwnProperty(key)) return;
+      var row = el.closest('.cr');
+      if (!row) return;
+      var lbl = row.querySelector('label');
+      if (!lbl) return;
+      lbl.classList.add('resettable');
+      lbl.classList.toggle('is-dirty', shell[key] !== _tplDefaults._shell[key]);
+    });
+  }
+
+  // ════════════════════════════════════════════════════
+  //  SNAP GRID + ARROW NUDGE
+  // ════════════════════════════════════════════════════
+
+  var _snapEnabled = false;
+  var snapToggleBtn = document.getElementById('snap-toggle');
+  var snapGridEl = document.getElementById('snap-grid');
+
+  snapToggleBtn.addEventListener('click', function() {
+    _snapEnabled = !_snapEnabled;
+    snapToggleBtn.textContent = _snapEnabled ? 'ON' : 'OFF';
+    snapToggleBtn.classList.toggle('active', _snapEnabled);
+    snapGridEl.classList.toggle('disabled', !_snapEnabled);
+  });
+
+  // Compute the face dimensions for a given pane
+  function getFaceDims(p) {
+    var f = p.face;
+    var fw, fh;
+    if (f === 'front' || f === 'back') { fw = shell.bw; fh = shell.bh; }
+    else if (f === 'left' || f === 'right') { fw = shell.bd * 2; fh = shell.bh; }
+    else { fw = shell.bw; fh = shell.bd * 2; } // top, bottom
+    return { w: fw, h: fh };
+  }
+
+  // Compute snap offset so pane edge aligns to face edge at the given anchor
+  function snapOffset(anchor, p) {
+    var fd = getFaceDims(p);
+    var pw = p.structural ? getStructW(p) : p.pw;
+    var ph = p.structural ? getStructH(p) : p.ph;
+    var halfGapX = (fd.w - pw) / 2;
+    var halfGapY = (fd.h - ph) / 2;
+    var ox = 0, oy = 0;
+    // Horizontal
+    if (anchor.indexOf('l') >= 0) ox = -halfGapX;
+    else if (anchor.indexOf('r') >= 0) ox = halfGapX;
+    // Vertical
+    if (anchor.indexOf('t') >= 0) oy = -halfGapY;
+    else if (anchor.indexOf('b') >= 0) oy = halfGapY;
+    return { ox: Math.round(ox), oy: Math.round(oy) };
+  }
+
+  snapGridEl.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-snap]');
+    if (!btn || !_snapEnabled || !selectedPaneId) return;
+    var p = getPaneById(selectedPaneId);
+    if (!p) return;
+    var anchor = btn.dataset.snap;
+    var s = snapOffset(anchor, p);
+    p.ox = s.ox;
+    p.oy = s.oy;
+    setPPVal('ox', p.ox);
+    setPPVal('oy', p.oy);
+    updateDirtyLabels(p);
+    render();
+  });
+
+  // Arrow-key nudge for selected pane
+  document.addEventListener('keydown', function(e) {
+    if (!selectedPaneId) return;
+    // Don't hijack when typing in an input
+    var tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    var dx = 0, dy = 0;
+    var step = e.shiftKey ? 10 : 1;
+    switch (e.key) {
+      case 'ArrowLeft':  dx = -step; break;
+      case 'ArrowRight': dx = step;  break;
+      case 'ArrowUp':    dy = -step; break;
+      case 'ArrowDown':  dy = step;  break;
+      default: return;
+    }
+    e.preventDefault();
+    var p = getPaneById(selectedPaneId);
+    if (!p) return;
+    p.ox += dx;
+    p.oy += dy;
+    setPPVal('ox', p.ox);
+    setPPVal('oy', p.oy);
+    updateDirtyLabels(p);
+    render();
+  });
+
+  // ════════════════════════════════════════════════════
+  //  STATE BAR
+  // ════════════════════════════════════════════════════
+
+  var PHASE_LABELS = {
+    box: { closed: 'Phase 1 \u00b7 Idle', hover: 'Phase 2 \u00b7 Hover', opened: 'Phase 3 \u00b7 Activated' },
+    orb: { closed: 'Phase 1 \u00b7 Smoke', hover: 'Phase 2 \u00b7 Ember', opened: 'Phase 3 \u00b7 Flame' }
+  };
+
+  function updatePhaseLabels() {
+    var labels = PHASE_LABELS[phaseMode] || PHASE_LABELS.box;
+    document.querySelectorAll('#state-bar button').forEach(function(btn) {
+      var state = btn.dataset.state;
+      if (labels[state]) btn.textContent = labels[state];
+    });
+  }
+
+  document.querySelectorAll('#state-bar button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentState = btn.dataset.state;
+      document.querySelectorAll('#state-bar button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      syncOrbUI();
+      updateOrbDirtyLabels();
+      syncPhaseAnimToggles();
+      syncPyrUI();
+      updatePyrDirtyLabels();
+      render();
+    });
+  });
+
+  // ════════════════════════════════════════════════════
+  //  PHASE ANIMATION TOGGLES
+  // ════════════════════════════════════════════════════
+
+  function syncPhaseAnimToggles() {
+    var pa = activePhaseAnims();
+    document.querySelectorAll('.pa-toggle').forEach(function(btn) {
+      btn.classList.toggle('active', !!pa[btn.dataset.anim]);
+    });
+  }
+
+  document.querySelectorAll('.pa-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var pa = activePhaseAnims();
+      var key = btn.dataset.anim;
+      pa[key] = !pa[key];
+      btn.classList.toggle('active', pa[key]);
+      render();
+    });
+  });
+
+  // ════════════════════════════════════════════════════
+  //  DISPLAY TOGGLES
+  // ════════════════════════════════════════════════════
+
+  document.getElementById('chk-labels').addEventListener('change', function() {
+    boxEl.classList.toggle('no-labels', !this.checked);
+  });
+  document.getElementById('chk-wire').addEventListener('change', function() {
+    boxEl.classList.toggle('wireframe', this.checked);
+  });
+  document.getElementById('chk-horizon').addEventListener('change', function() {
+    document.getElementById('horizon-line').classList.toggle('hidden', !this.checked);
+  });
+  // Spin/Tilt/Glow checkboxes removed — now per-phase toggles in phaseAnims
+
+  // ════════════════════════════════════════════════════
+  //  TEMPLATE BUTTONS
+  // ════════════════════════════════════════════════════
+
+  // ── Template default snapshots (for click-to-revert) ──
+  var _tplDefaults = {};  // { paneIndex: { key: value, ... }, _shell: {...}, _colors: {...} }
+  var _activeTplName = null;
+
+  var _tplOrbDefaults = null; // snapshot of orbConfig at template load
+  var _tplPyrDefaults = null; // snapshot of pyramidConfig at template load
+  var _tplPhaseAnimDefaults = null; // snapshot of phaseAnims at template load
+
+  function snapshotDefaults() {
+    _tplDefaults = {
+      _shell: JSON.parse(JSON.stringify(shell)),
+      _colors: JSON.parse(JSON.stringify(colors))
+    };
+    panes.forEach(function(p, i) {
+      _tplDefaults[i] = {};
+      ['pw','ph','ox','oy','angle','hoverAngle','alpha','borderRadius','spinX','spinY','labelSize'].forEach(function(k) {
+        _tplDefaults[i][k] = p[k];
+      });
+    });
+    _tplOrbDefaults = orbConfig ? JSON.parse(JSON.stringify(orbConfig)) : null;
+    _tplPyrDefaults = pyramidConfig ? JSON.parse(JSON.stringify(pyramidConfig)) : null;
+    _tplPhaseAnimDefaults = JSON.parse(JSON.stringify(phaseAnims));
+  }
+
+  function getPaneDefault(paneIdx, key) {
+    if (!_tplDefaults[paneIdx]) return null;
+    return _tplDefaults[paneIdx].hasOwnProperty(key) ? _tplDefaults[paneIdx][key] : null;
+  }
+  function getShellDefault(key) {
+    return _tplDefaults._shell ? _tplDefaults._shell[key] : null;
+  }
+
+  var tplBar = document.getElementById('templates');
+  Object.keys(TEMPLATES).forEach(function(name) {
+    var btn = document.createElement('button');
+    btn.textContent = name;
+    btn.addEventListener('click', function() {
+      orbConfig = null; // Reset before template runs (template sets it if needed)
+      pyramidConfig = null; // Reset pyramid too
+      phaseAnims = defaultPhaseAnims(); // Reset phase anims
+      orbOnly = false;
+      pyrPrimary = false;
+      phaseMode = 'box'; // Default; Orb template overrides to 'orb'
+      glows = defaultGlows(); // Reset glows to default
+      _nextGlowId = glows.length + 1;
+      TEMPLATES[name]();
+      _activeTplName = name;
+      snapshotDefaults();
+      selectedPaneId = null;
+      selectedGlowId = null;
+      syncShellToUI();
+      syncColorsToUI();
+      updateShellDirtyLabels();
+      renderPaneList();
+      renderGlowList();
+      panePropsEl.classList.remove('visible');
+      glowPropsEl.style.display = 'none';
+      // Show/hide orb controls + orb-only mode
+      showOrbSection(!!orbConfig);
+      if (orbConfig) { syncOrbUI(); updateOrbDirtyLabels(); }
+      setOrbOnlyMode(orbOnly);
+      setPyrPrimaryMode(pyrPrimary);
+      // Show/hide pyramid controls
+      showPyrSection(!!pyramidConfig);
+      if (pyramidConfig) { syncPyrUI(); updatePyrDirtyLabels(); }
+      // Sync phase anim toggles
+      syncPhaseAnimToggles();
+      updatePhaseLabels();
+      updateComposeBar();
+      render();
+      tplBar.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+    tplBar.appendChild(btn);
+  });
+
+  // ════════════════════════════════════════════════════
+  //  ADD PANE
+  // ════════════════════════════════════════════════════
+
+  document.getElementById('add-pane-btn').addEventListener('click', function() {
+    var p = makePane({
+      name: 'Panel ' + _nextId,
+      face: 'front',
+      role: 'lid',
+      pw: Math.round(shell.bw * 0.5),
+      ph: shell.bh,
+      ox: 0, oy: 0,
+      hinge: 'left', angle: 90,
+      color: colors.cLight,
+      texture: 'gradient'
+    });
+    panes.push(p);
+    selectedPaneId = p.id;
+    renderPaneList();
+    selectPane(p.id);
+    render();
+  });
+
+  // ════════════════════════════════════════════════════
+  //  PANE LIST
+  // ════════════════════════════════════════════════════
+
+  function renderPaneList() {
+    paneListEl.innerHTML = '';
+    panes.forEach(function(p) {
+      var div = document.createElement('div');
+      div.className = 'pane-item' + (p.structural ? ' structural' : '') + (p.id === selectedPaneId ? ' selected' : '');
+      div.innerHTML =
+        '<div class="pi-color" style="background:' + p.color + '"></div>' +
+        '<span class="pi-name">' + esc(p.name) + '</span>' +
+        '<span class="pi-type">' + p.role + (p.role === 'lid' ? ' (' + p.hinge + ')' : '') + '</span>' +
+        '<span class="pi-del">&times;</span>';
+      div.addEventListener('click', function(e) {
+        if (e.target.classList.contains('pi-del')) {
+          panes = panes.filter(function(x) { return x.id !== p.id; });
+          if (selectedPaneId === p.id) { selectedPaneId = null; panePropsEl.classList.remove('visible'); }
+          renderPaneList();
+          render();
+          return;
+        }
+        selectPane(p.id);
+      });
+      paneListEl.appendChild(div);
+    });
+  }
+
+  function selectPane(id) {
+    selectedPaneId = id;
+    selectedGlowId = null;
+    document.getElementById('glow-props').style.display = 'none';
+    var p = getPaneById(id);
+    if (!p) { panePropsEl.classList.remove('visible'); return; }
+    panePropsEl.classList.add('visible');
+
+    // Populate props
+    document.getElementById('pp-name').value = p.name;
+    setPPVal('pw', p.structural ? getStructW(p) : p.pw);
+    setPPVal('ph', p.structural ? getStructH(p) : p.ph);
+    setPPVal('ox', p.ox);
+    setPPVal('oy', p.oy);
+    setPPVal('angle', p.angle);
+    setPPVal('hoverAngle', p.hoverAngle);
+    setPPVal('alpha', p.alpha);
+    setPPVal('borderRadius', p.borderRadius);
+    setPPVal('spinX', p.spinX || 0);
+    setPPVal('spinY', p.spinY || 0);
+    setPPVal('labelSize', p.labelSize);
+    setSelVal('role', p.role);
+    setSelVal('hinge', p.hinge);
+    setSelVal('face', p.face);
+    setSelVal('texture', p.texture);
+    setSelVal('biomeTag', p.biomeTag);
+    setSelVal('labelDir', p.labelDir);
+    document.querySelector('[data-pp="color"]').value = p.color;
+    document.querySelector('[data-pp="labelText"]').value = p.labelText || '';
+    document.getElementById('pp-wiring').value = p.wiring || '';
+
+    updatePropVisibility(p);
+    renderPaneList();
+    render();
+  }
+
+  function updatePropVisibility(p) {
+    var isLid = p.role === 'lid';
+    document.getElementById('pp-hinge-row').style.display = isLid ? '' : 'none';
+    document.getElementById('pp-angle-row').style.display = isLid ? '' : 'none';
+    document.getElementById('pp-hover-row').style.display = isLid ? '' : 'none';
+
+    // Disable pw/ph for structural panes (dimensions come from shell)
+    var pwDisable = p.structural;
+    var phDisable = p.structural;
+    document.querySelectorAll('[data-pp="pw"]').forEach(function(el) { el.disabled = pwDisable; });
+    document.querySelectorAll('[data-pp="ph"]').forEach(function(el) { el.disabled = phDisable; });
+
+    // Mark slider labels dirty/resettable based on template defaults
+    updateDirtyLabels(p);
+  }
+
+  function updateDirtyLabels(p) {
+    var paneIdx = panes.indexOf(p);
+    var sliderKeys = ['pw','ph','ox','oy','angle','hoverAngle','alpha','borderRadius','spinX','spinY','labelSize'];
+    sliderKeys.forEach(function(key) {
+      var els = document.querySelectorAll('#pane-props [data-pp="' + key + '"]');
+      var labelEl = null;
+      els.forEach(function(el) {
+        var row = el.closest('.cr');
+        if (row) labelEl = row.querySelector('label');
+      });
+      if (!labelEl) return;
+      var def = getPaneDefault(paneIdx, key);
+      if (def !== null) {
+        labelEl.classList.add('resettable');
+        var currentVal = (key === 'pw' && p.structural) ? getStructW(p) :
+                         (key === 'ph' && p.structural) ? getStructH(p) : p[key];
+        labelEl.classList.toggle('is-dirty', currentVal !== def);
+      } else {
+        labelEl.classList.remove('resettable', 'is-dirty');
+      }
+    });
+  }
+
+  function setPPVal(key, val) {
+    document.querySelectorAll('[data-pp="' + key + '"]').forEach(function(el) { el.value = val; });
+  }
+  function setSelVal(key, val) {
+    var el = document.querySelector('select[data-pp="' + key + '"]');
+    if (el) el.value = val;
+  }
+
+  // ════════════════════════════════════════════════════
+  //  STRUCTURAL PANE SIZING
+  // ════════════════════════════════════════════════════
+
+  function getStructW(p) {
+    var f = p.face;
+    if (f === 'back' || f === 'front' || f === 'top' || f === 'bottom') return shell.bw;
+    return shell.bd * 2; // left, right
+  }
+  function getStructH(p) {
+    var f = p.face;
+    if (f === 'back' || f === 'front' || f === 'left' || f === 'right') return shell.bh;
+    return shell.bd * 2; // top, bottom
+  }
+
+  // ════════════════════════════════════════════════════
+  //  3D RENDER
+  // ════════════════════════════════════════════════════
+
+  function render() {
+    var W = shell.bw, H = shell.bh, D = shell.bd;
+
+    // Box wrapper size
+    boxEl.style.width = W + 'px';
+    boxEl.style.height = H + 'px';
+    boxEl.style.setProperty('--perspective', shell.persp + 'px');
+    boxEl.style.setProperty('--rot-x', shell.rx + 'deg');
+    boxEl.style.setProperty('--rot-y', shell.ry + 'deg');
+    var gr = parseInt(colors.cGlow.slice(1,3),16);
+    var gg = parseInt(colors.cGlow.slice(3,5),16);
+    var gb = parseInt(colors.cGlow.slice(5,7),16);
+    boxEl.style.setProperty('--glow-color', 'rgba(' + gr + ',' + gg + ',' + gb + ',0.55)');
+    boxEl.style.setProperty('--glow-floor-z', (-D - 5) + 'px');
+
+    // Horizon line — where the camera's eye level hits the preview
+    // With perspective P and rotateX(rx), the horizon shifts by P * tan(rx) from center
+    var horizonEl = document.getElementById('horizon-line');
+    var previewRect = document.getElementById('preview-area');
+    var rxRad = shell.rx * Math.PI / 180;
+    var horizonShift = shell.persp * Math.tan(rxRad);
+    // Preview center is 50%; shift down for negative rx (looking down), up for positive
+    horizonEl.style.top = 'calc(50% + ' + Math.round(-horizonShift) + 'px)';
+
+    sceneEl.style.width = W + 'px';
+    sceneEl.style.height = H + 'px';
+    spinEl.style.width = W + 'px';
+    spinEl.style.height = H + 'px';
+
+    // Composite all spinEl animations from phase anims
+    var allSpinAnims = [];
+    var pa = activePhaseAnims();
+    // Spin/Tilt — per-phase display anims (also export)
+    if (pa.tilt) allSpinAnims.push('box3d-tilt-orbit 4s infinite linear');
+    else if (pa.spin) allSpinAnims.push('box3d-rotate 3.5s infinite linear');
+    // Body anims
+    if (pa.squish) allSpinAnims.push('wb-box-squish 1.2s ease-in-out infinite');
+    if (pa.bounce) allSpinAnims.push('wb-box-bounce 0.8s ease-in-out infinite');
+    if (pa.poke) allSpinAnims.push('wb-box-poke 0.6s cubic-bezier(0.34,1.56,0.64,1) infinite');
+    spinEl.style.animation = allSpinAnims.length ? allSpinAnims.join(', ') : '';
+    // Glow — per-phase toggle
+    boxEl.classList.toggle('no-glow', !pa.glow);
+
+    // Remove old rendered elements (panes, lids, orb, editable glows)
+    spinEl.querySelectorAll('.pane3d, .lid-wrapper, .wb-orb, .wb-pyramid, .glow3d').forEach(function(el) { el.remove(); });
+
+    // Hide hardcoded glow planes if we have custom glows
+    var hardcodedGlow = spinEl.querySelector('.box3d-glow');
+    if (hardcodedGlow) hardcodedGlow.style.display = glows.length > 0 ? 'none' : '';
+
+    // Render editable glows
+    glows.forEach(function(g) {
+      var gw = Math.round(W * g.size / 100);
+      var gh = Math.round(H * g.size / 100);
+      var glowEl = document.createElement('div');
+      glowEl.className = 'glow3d' + (g.id === selectedGlowId ? ' selected' : '');
+      glowEl.style.width = gw + 'px';
+      glowEl.style.height = gh + 'px';
+      glowEl.style.left = ((W - gw) / 2 + g.ox) + 'px';
+      glowEl.style.top = ((H - gh) / 2 + g.oy) + 'px';
+      var gr2 = parseInt(g.color.slice(1,3),16);
+      var gg2 = parseInt(g.color.slice(3,5),16);
+      var gb2 = parseInt(g.color.slice(5,7),16);
+      glowEl.style.background = 'radial-gradient(' + g.shape + ', rgba(' + gr2 + ',' + gg2 + ',' + gb2 + ',' + (g.alpha/100) + ') 0%, transparent 70%)';
+      glowEl.style.filter = 'blur(' + g.blur + 'px)';
+      var tfm = 'translateZ(' + g.oz + 'px) rotateX(' + g.rotX + 'deg) rotateY(' + g.rotY + 'deg)';
+      glowEl.style.transform = tfm;
+      // Continuous spin
+      if (g.spinX || g.spinY) {
+        var spinDur = 360 / Math.max(g.spinX || 0.001, g.spinY || 0.001);
+        glowEl.style.animation = 'glow-spin-' + g.id + ' ' + spinDur.toFixed(1) + 's linear infinite';
+        // Inject a unique keyframe
+        var styleTag = document.createElement('style');
+        styleTag.textContent = '@keyframes glow-spin-' + g.id + ' { from { transform: ' + tfm + '; } to { transform: translateZ(' + g.oz + 'px) rotateX(' + (g.rotX + (g.spinX ? 360 : 0)) + 'deg) rotateY(' + (g.rotY + (g.spinY ? 360 : 0)) + 'deg); } }';
+        glowEl.appendChild(styleTag);
+      }
+      glowEl.style.pointerEvents = 'auto';
+      glowEl.addEventListener('click', function(e) { e.stopPropagation(); selectGlow(g.id); });
+      spinEl.appendChild(glowEl);
+    });
+
+    var isOpen = currentState === 'opened';
+    var isHover = currentState === 'hover';
+
+    panes.forEach(function(p) {
+      var pw = p.structural ? getStructW(p) : p.pw;
+      var ph = p.structural ? getStructH(p) : p.ph;
+
+      // Compute base transform for the face position
+      var transform = getFaceTransform(p.face, W, H, D, p.ox, p.oy);
+      var bg = getTextureBg(p);
+
+      if (p.role === 'lid') {
+        // Lids get a wrapper for the hinge transform
+        var wrapper = document.createElement('div');
+        wrapper.className = 'lid-wrapper';
+        wrapper.style.width = pw + 'px';
+        wrapper.style.height = ph + 'px';
+
+        // Position wrapper at the face, then apply hinge
+        var lidBase = getLidBaseTransform(p.face, W, H, D, p.ox, p.oy, pw, ph);
+        var hingeOrigin = getHingeOrigin(p.hinge, pw, ph);
+        var hingeTransform = getHingeOpen(p.hinge, p.angle, isOpen, isHover, p.hoverAngle);
+
+        wrapper.style.transform = lidBase + ' ' + hingeTransform;
+        wrapper.style.transformOrigin = hingeOrigin;
+
+        var paneEl = document.createElement('div');
+        paneEl.className = 'pane3d' + (p.id === selectedPaneId ? ' selected' : '');
+        paneEl.style.width = pw + 'px';
+        paneEl.style.height = ph + 'px';
+        paneEl.style.background = bg;
+        paneEl.style.opacity = p.alpha / 100;
+        if (p.borderRadius) paneEl.style.borderRadius = p.borderRadius + '%';
+        paneEl.dataset.paneId = p.id;
+
+        addLabels(paneEl, p, pw, ph);
+        addPaneListeners(paneEl, p);
+        applyPaneSpin(paneEl, p);
+
+        wrapper.appendChild(paneEl);
+        spinEl.appendChild(wrapper);
+      } else {
+        // Structural or decor: direct placement
+        var paneEl = document.createElement('div');
+        paneEl.className = 'pane3d' + (p.id === selectedPaneId ? ' selected' : '');
+        paneEl.style.width = pw + 'px';
+        paneEl.style.height = ph + 'px';
+        paneEl.style.transform = transform;
+        paneEl.style.background = bg;
+        paneEl.style.opacity = p.alpha / 100;
+        if (p.borderRadius) paneEl.style.borderRadius = p.borderRadius + '%';
+        if (p.texture === 'hidden') paneEl.style.display = 'none';
+        paneEl.dataset.paneId = p.id;
+
+        addLabels(paneEl, p, pw, ph);
+        addPaneListeners(paneEl, p);
+        applyPaneSpin(paneEl, p);
+
+        spinEl.appendChild(paneEl);
+      }
+    });
+
+    // ── Render embedded orb if configured ──
+    if (orbConfig) {
+      renderOrb(W, H, D);
+    }
+    // ── Render embedded pyramid if configured ──
+    if (pyramidConfig) {
+      renderPyramid(W, H, D);
+    }
+  }
+
+  function applyPaneSpin(el, p) {
+    if (!p.spinX && !p.spinY) return;
+    var speed = 360 / Math.max(p.spinX || 0.001, p.spinY || 0.001);
+    var kfName = 'pspin-' + p.id;
+    var fromTfm = el.style.transform || '';
+    var toTfm = fromTfm + ' rotateX(' + (p.spinX ? 360 : 0) + 'deg) rotateY(' + (p.spinY ? 360 : 0) + 'deg)';
+    var style = document.createElement('style');
+    style.textContent = '@keyframes ' + kfName + ' { from { transform: ' + fromTfm + '; } to { transform: ' + toTfm + '; } }';
+    el.appendChild(style);
+    el.style.animation = kfName + ' ' + speed.toFixed(1) + 's linear infinite';
+    el.style.transformStyle = 'preserve-3d';
+  }
+
+  function renderOrb(W, H, D) {
+    // All phase-specific values now live in activeOrbPhase().
+    // renderOrb just reads them directly — no phaseMode branching needed.
+    var ph = activeOrbPhase();
+    if (!ph) return;
+
+    var drawRings  = ph.rings;
+    var drawSlices = ph.slices;
+    var orbSize    = ph.size;
+    var orbZ       = ph.z;
+    var orbSpeed   = ph.speed;
+    // CRITICAL: Do NOT set opacity on orbEl — it has transform-style: preserve-3d.
+    // Setting opacity != 1 on a preserve-3d element FLATTENS its 3D rendering context,
+    // causing all children (rings/slices) to project into a 2D plane = flat disk.
+    // Instead, we push opacity down to each individual slice.
+    var sliceOpacity = 1;
+    var activeState = ph.state;
+    var pal = ORB_PALETTES[ph.palette] || ORB_PALETTES.fire;
+
+    // Opacity hint: unlit/ember phases slightly transparent (applied per-slice, NOT on orbEl)
+    if (activeState === 'unlit') sliceOpacity = 0.7;
+    else if (activeState === 'ember') sliceOpacity = 0.9;
+
+    var orbX = ph.x || 0;
+
+    var orbEl = document.createElement('div');
+    orbEl.className = 'wb-orb';
+    orbEl.style.width = orbSize + 'px';
+    orbEl.style.height = orbSize + 'px';
+    orbEl.style.left = ((W - orbSize) / 2 + orbX) + 'px';
+    orbEl.style.top = ((H - orbSize) / 2 + (ph.y || 0)) + 'px';
+    orbEl.style.setProperty('--orb-speed', orbSpeed + 's');
+    // NO orbEl.style.opacity — preserve-3d must not be flattened!
+    orbEl.style.transform = 'translateZ(' + orbZ + 'px)';
+
+    // State: override animation for ember/unlit
+    if (activeState === 'unlit') {
+      orbEl.style.animationDuration = '20s';
+    } else if (activeState === 'ember') {
+      orbEl.style.setProperty('--orb-speed', '3s');
+    }
+
+    // ── DEBUG: log phase config vs what we're about to render ──
+    var phKey = currentState === 'opened' ? 'p3' : currentState === 'hover' ? 'p2' : 'p1';
+    console.log('[renderOrb] phase=' + phKey + ' rings=' + drawRings + ' slices=' + drawSlices + ' size=' + orbSize + ' state=' + activeState + ' palette=' + ph.palette);
+
+    var ringStep = 180 / drawRings;
+    var sliceStep = 360 / drawSlices;
+
+    for (var r = 0; r < drawRings; r++) {
+      var ringEl = document.createElement('div');
+      ringEl.className = 'wb-orb-ring';
+      ringEl.style.width = orbSize + 'px';
+      ringEl.style.height = orbSize + 'px';
+      ringEl.style.transform = 'rotate(' + (r * ringStep) + 'deg)';
+
+      var bg = pal[r % pal.length];
+
+      for (var s = 0; s < drawSlices; s++) {
+        var sliceEl = document.createElement('div');
+        sliceEl.className = 'wb-orb-slice';
+        sliceEl.style.width = orbSize + 'px';
+        sliceEl.style.height = orbSize + 'px';
+        sliceEl.style.setProperty('--bg', bg);
+        sliceEl.style.background = bg;
+        sliceEl.style.transform = 'rotateY(' + (s * sliceStep) + 'deg)';
+        if (sliceOpacity < 1) sliceEl.style.opacity = sliceOpacity;
+
+        // State-specific per-slice animations
+        if (activeState === 'ember') {
+          sliceEl.style.animation = 'wb-orb-ember 0.8s ease-in-out infinite';
+          sliceEl.style.animationDelay = (r * 0.08 + s * 0.04) + 's';
+        } else if (activeState === 'unlit') {
+          sliceEl.style.animation = 'wb-orb-smoke 3s ease-in-out infinite';
+          sliceEl.style.animationDelay = (r * 0.15 + s * 0.1) + 's';
+        }
+
+        ringEl.appendChild(sliceEl);
+      }
+      orbEl.appendChild(ringEl);
+    }
+
+    spinEl.appendChild(orbEl);
+  }
+
+  function renderPyramid(W, H, D) {
+    if (!pyramidConfig) return;
+    var pc = pyramidConfig;
+    var pp = activePyrPhase();
+    if (!pp) return;
+
+    // Per-phase values
+    var szW = pp.size;
+    var szH = pp.height > 0 ? pp.height : pp.size;  // 0 = match width (equilateral)
+    var c1 = pp.color1, c2 = pp.color2, c3 = pp.color3;
+    var glow = pp.glow;
+    var speed = pp.speed;
+    var px = pp.x || 0, py = pp.y || 0, pz = pp.z || 0;
+
+    // Shared values
+    var clipPath = PYR_SHAPES[pc.shape || 'triangle'] || PYR_SHAPES.triangle;
+
+    var pyrEl = document.createElement('div');
+    pyrEl.className = 'wb-pyramid';
+    pyrEl.style.width = szW + 'px';
+    pyrEl.style.height = szH + 'px';
+    pyrEl.style.left = ((W - szW) / 2 + px) + 'px';
+    pyrEl.style.top = ((H - szH) / 2 + py) + 'px';
+    pyrEl.style.transform = 'translateZ(' + pz + 'px)';
+    pyrEl.style.perspective = '340px';
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'wb-pyramid-wrapper';
+    if (pc.spinning === false) {
+      wrapper.style.animation = 'none';
+      wrapper.style.transform = 'rotateX(-20deg)';
+    } else {
+      wrapper.style.setProperty('--pyr-speed', speed + 's');
+    }
+
+    // Inversion: wrap the faces in an inner container that flips them
+    // This keeps the spin animation's transform clean
+    var facesParent = wrapper;
+    if (pc.invert) {
+      var invertWrap = document.createElement('div');
+      invertWrap.style.cssText = 'width:100%;height:100%;transform-style:preserve-3d;transform:rotateZ(180deg);position:absolute;top:0;left:0;';
+      wrapper.appendChild(invertWrap);
+      facesParent = invertWrap;
+    }
+
+    // 4 faces — spread angle controls hinge at apex (transform-origin: center top)
+    var sp = pp.spread != null ? pp.spread : 30;
+    var gradients = [
+      'conic-gradient(' + c1 + ',' + c1 + ',' + c2 + ',' + c2 + ')',
+      'conic-gradient(' + c2 + ',' + c2 + ',' + c3 + ',' + c3 + ')',
+      'conic-gradient(' + c3 + ',' + c3 + ',' + c1 + ',' + c1 + ')',
+      'conic-gradient(' + c1 + ',' + c1 + ',' + c2 + ',' + c2 + ')'
+    ];
+    // Face transforms pivot at the tip (center top).
+    // Faces 1,2 are left/right (rotateZ ± spread then rotateY 90° to stand sideways).
+    // Faces 3,4 are front/back (rotateX ± spread to tilt forward/back).
+    var faceTransforms = [
+      'rotateZ(-' + sp + 'deg) rotateY(90deg)',
+      'rotateZ(' + sp + 'deg) rotateY(90deg)',
+      'rotateX(' + sp + 'deg)',
+      'rotateX(-' + sp + 'deg)'
+    ];
+    for (var i = 0; i < 4; i++) {
+      var side = document.createElement('span');
+      side.className = 'wb-pyramid-side';
+      side.style.transform = faceTransforms[i];
+      side.style.background = gradients[i];
+      side.style.boxShadow = '0 0 10px ' + glow;
+      side.style.clipPath = clipPath;
+      facesParent.appendChild(side);
+    }
+
+    // Shadow
+    var shadow = document.createElement('span');
+    shadow.className = 'wb-pyramid-shadow';
+    shadow.style.background = 'linear-gradient(' + glow + ', rgba(0,0,0,0.2))';
+    shadow.style.boxShadow = '0 0 20px ' + glow;
+    facesParent.appendChild(shadow);
+
+    pyrEl.appendChild(wrapper);
+    spinEl.appendChild(pyrEl);
+  }
+
+  function getFaceTransform(face, W, H, D, ox, oy) {
+    ox = ox || 0; oy = oy || 0;
+    switch (face) {
+      case 'back':   return 'translateZ(' + (-D) + 'px) translate(' + ox + 'px,' + oy + 'px)';
+      case 'front':  return 'translateZ(' + D + 'px) translate(' + ox + 'px,' + oy + 'px)';
+      case 'left':   return 'translate(' + (ox - W/2) + 'px,' + oy + 'px) rotateY(90deg)';
+      case 'right':  return 'translate(' + (ox + W/2) + 'px,' + oy + 'px) rotateY(90deg)';
+      case 'top':    return 'translate(' + ox + 'px,' + oy + 'px) rotateX(90deg) translateZ(' + (H/2) + 'px)';
+      case 'bottom': return 'translate(' + ox + 'px,' + oy + 'px) rotateX(90deg) translateZ(' + (-H/2) + 'px)';
+    }
+    return '';
+  }
+
+  function getLidBaseTransform(face, W, H, D, ox, oy, pw, ph) {
+    ox = ox || 0; oy = oy || 0;
+    // Lid panes sit on the front face by default, offset from center
+    switch (face) {
+      case 'front':  return 'translateZ(' + D + 'px) translate(' + ox + 'px,' + oy + 'px)';
+      case 'back':   return 'translateZ(' + (-D) + 'px) translate(' + ox + 'px,' + oy + 'px)';
+      case 'left':   return 'translate(' + (ox - W/2) + 'px,' + oy + 'px) rotateY(90deg)';
+      case 'right':  return 'translate(' + (ox + W/2) + 'px,' + oy + 'px) rotateY(90deg)';
+      case 'top':    return 'translate(' + ox + 'px,' + oy + 'px) rotateX(90deg) translateZ(' + (H/2) + 'px)';
+      case 'bottom': return 'translate(' + ox + 'px,' + oy + 'px) rotateX(90deg) translateZ(' + (-H/2) + 'px)';
+    }
+    return '';
+  }
+
+  function getHingeOrigin(hinge, pw, ph) {
+    switch (hinge) {
+      case 'bottom':     return 'center ' + ph + 'px';
+      case 'top':        return 'center 0px';
+      case 'left':       return '0px center';
+      case 'right':      return pw + 'px center';
+      default:           return 'center center';
+    }
+  }
+
+  function getHingeOpen(hinge, angle, isOpen, isHover, hoverAngle) {
+    var ha = hoverAngle != null ? hoverAngle : 25;
+    var a = 0;
+    if (isOpen) a = angle;
+    else if (isHover) a = ha;
+    // For slides, hover uses hoverAngle as a percentage (0-100)
+    var slidePct = isOpen ? 100 : isHover ? Math.min(ha, 30) : 0;
+
+    switch (hinge) {
+      case 'bottom':      return 'rotateX(' + (-a) + 'deg)';
+      case 'top':         return 'rotateX(' + a + 'deg)';
+      case 'left':        return 'rotateY(' + (-a) + 'deg)';
+      case 'right':       return 'rotateY(' + a + 'deg)';
+      case 'slide-right': return 'translateX(' + slidePct + '%)';
+      case 'slide-left':  return 'translateX(' + (-slidePct) + '%)';
+      case 'slide-up':    return 'translateY(' + (-slidePct) + '%)';
+      case 'slide-down':  return 'translateY(' + slidePct + '%)';
+    }
+    return '';
+  }
+
+  function getTextureBg(p) {
+    var c1 = colors.cDark, c2 = colors.cLight, pc = p.color;
+    switch (p.texture) {
+      // Generic
+      case 'gradient': return 'linear-gradient(to top, ' + c1 + ', ' + c2 + ')';
+      case 'solid':    return pc;
+      case 'hidden':   return 'transparent';
+
+      // Biome defaults
+      case 'wood-plank':
+        return 'repeating-linear-gradient(0deg, ' + pc + ' 0px, ' + pc + ' 8px, ' + darken(pc) + ' 8px, ' + darken(pc) + ' 9px)';
+      case 'dark-wood':
+        return 'repeating-linear-gradient(0deg, #3a2810 0px, #3a2810 7px, #2a1c08 7px, #2a1c08 8px, #4a3418 8px, #4a3418 15px, #2a1c08 15px, #2a1c08 16px)';
+      case 'brick':
+        return 'repeating-linear-gradient(0deg, ' + pc + ' 0px, ' + pc + ' 14px, ' + darken(pc) + ' 14px, ' + darken(pc) + ' 15px, ' + lighten(pc) + ' 15px, ' + lighten(pc) + ' 29px, ' + darken(pc) + ' 29px, ' + darken(pc) + ' 30px)';
+      case 'stone':
+        return 'linear-gradient(to top, ' + darken(pc) + ', ' + pc + ' 40%, ' + darken(pc) + ' 70%, ' + darken(pc) + ')';
+      case 'cathedral-stone':
+        return 'linear-gradient(to top, #1a1028, #3a2850 30%, #2a1c40 60%, #1a1028), repeating-linear-gradient(90deg, transparent 0px, transparent 30px, rgba(255,255,255,0.04) 30px, rgba(255,255,255,0.04) 31px)';
+      case 'iron-plate':
+        return 'linear-gradient(135deg, ' + darken(pc) + ', ' + pc + ' 50%, ' + darken(pc) + ')';
+      case 'concrete':
+        return 'linear-gradient(180deg, #4a4a48, #3a3a38 40%, #4a4a48 80%), repeating-linear-gradient(90deg, transparent 0px, transparent 31px, rgba(0,0,0,0.15) 31px, rgba(0,0,0,0.15) 32px)';
+      case 'grid-lines':
+        return 'repeating-linear-gradient(0deg, transparent 0px, transparent 11px, rgba(0,0,0,0.35) 11px, rgba(0,0,0,0.35) 12px), repeating-linear-gradient(90deg, transparent 0px, transparent 11px, rgba(0,0,0,0.35) 11px, rgba(0,0,0,0.35) 12px), ' + pc;
+
+      // Narrative / quest
+      case 'boss-red':
+        return 'linear-gradient(to top, #1a0404, #8a1818 30%, #c02020 50%, #8a1818 70%, #1a0404), repeating-linear-gradient(90deg, transparent 0px, transparent 20px, rgba(255,180,60,0.08) 20px, rgba(255,180,60,0.08) 21px)';
+      case 'boss-blue':
+        return 'linear-gradient(to top, #04041a, #182888 30%, #2040c0 50%, #182888 70%, #04041a), repeating-linear-gradient(0deg, transparent 0px, transparent 16px, rgba(100,200,255,0.1) 16px, rgba(100,200,255,0.1) 17px)';
+      case 'boss-gold':
+        return 'linear-gradient(to top, #1a1204, #8a6818 30%, #c09820 50%, #8a6818 70%, #1a1204), repeating-linear-gradient(45deg, transparent 0px, transparent 12px, rgba(255,240,180,0.1) 12px, rgba(255,240,180,0.1) 13px)';
+      case 'faction-detective':
+        return 'linear-gradient(180deg, #1a1a20, #2a2a3a 30%, #3a3a50 50%, #2a2a3a 70%, #1a1a20)';
+      case 'faction-order':
+        return 'linear-gradient(180deg, #1a0a1a, #3a1a3a 30%, #5a2a5a 50%, #3a1a3a 70%, #1a0a1a)';
+      case 'faction-handler':
+        return 'linear-gradient(180deg, #0a1a0a, #1a3a1a 30%, #2a5a2a 50%, #1a3a1a 70%, #0a1a0a)';
+      case 'locked-chains':
+        return 'linear-gradient(to top, #1a1a1a, #3a3a3a), repeating-linear-gradient(45deg, transparent 0px, transparent 8px, rgba(255,255,255,0.06) 8px, rgba(255,255,255,0.06) 9px), repeating-linear-gradient(-45deg, transparent 0px, transparent 8px, rgba(255,255,255,0.06) 8px, rgba(255,255,255,0.06) 9px)';
+      case 'runed-glow':
+        return 'radial-gradient(circle at 30% 40%, rgba(100,200,255,0.25) 0%, transparent 30%), radial-gradient(circle at 70% 60%, rgba(100,200,255,0.2) 0%, transparent 25%), linear-gradient(to top, #0a0a1a, #1a1a3a)';
+    }
+    return pc;
+  }
+
+  function addLabels(el, p, pw, ph) {
+    var lbl = document.createElement('span');
+    lbl.className = 'pane-label';
+    lbl.textContent = p.name;
+    el.appendChild(lbl);
+    var dim = document.createElement('span');
+    dim.className = 'pane-dim';
+    dim.textContent = pw + ' x ' + ph + (p.biomeTag ? ' [' + p.biomeTag + ']' : '');
+    el.appendChild(dim);
+
+    // Custom label text on the pane face
+    if (p.labelText) {
+      var txt = document.createElement('div');
+      txt.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
+        'font-size:' + (p.labelSize || 14) + 'px;color:rgba(255,255,255,0.85);' +
+        'font-family:Consolas,monospace;text-align:center;pointer-events:none;' +
+        'text-shadow:0 1px 4px rgba(0,0,0,0.8);white-space:nowrap;z-index:2;';
+      // Direction
+      switch (p.labelDir) {
+        case 'ttb': txt.style.writingMode = 'vertical-rl'; txt.style.textOrientation = 'mixed'; break;
+        case 'btt': txt.style.writingMode = 'vertical-rl'; txt.style.textOrientation = 'mixed'; txt.style.transform = 'translate(-50%,-50%) rotate(180deg)'; break;
+        case 'rtl': txt.style.direction = 'rtl'; break;
+      }
+      txt.textContent = p.labelText;
+      el.appendChild(txt);
+    }
+  }
+
+  function addPaneListeners(el, p) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      selectPane(p.id);
+    });
+    el.addEventListener('mouseenter', function() {
+      var pw = p.structural ? getStructW(p) : p.pw;
+      var ph = p.structural ? getStructH(p) : p.ph;
+      faceInfoEl.textContent = p.name + ' (' + p.face + ')\n' +
+        'Size: ' + pw + ' x ' + ph + '  |  Role: ' + p.role +
+        (p.role === 'lid' ? '  |  Hinge: ' + p.hinge + '  |  Angle: ' + p.angle + '\u00b0' : '') +
+        '\nOffset: (' + p.ox + ', ' + p.oy + ')  |  Texture: ' + p.texture;
+      faceInfoEl.classList.add('visible');
+    });
+    el.addEventListener('mouseleave', function() {
+      faceInfoEl.classList.remove('visible');
+    });
+  }
+
+  // ════════════════════════════════════════════════════
+  //  SYNC UI FROM MODEL
+  // ════════════════════════════════════════════════════
+
+  function syncShellToUI() {
+    Object.keys(shell).forEach(function(k) {
+      document.querySelectorAll('[data-p="' + k + '"]').forEach(function(el) { el.value = shell[k]; });
+    });
+  }
+  function syncColorsToUI() {
+    Object.keys(colors).forEach(function(k) {
+      document.querySelectorAll('[data-p="' + k + '"]').forEach(function(el) { el.value = colors[k]; });
+    });
+  }
+
+  // ════════════════════════════════════════════════════
+  //  EXPORT
+  // ════════════════════════════════════════════════════
+
+  document.getElementById('export-btn').addEventListener('click', function() {
+    var name = prompt('Variant name (e.g. "double-door", "sconce"):', 'custom');
+    if (!name) return;
+    var pf = name.toLowerCase().replace(/\s+/g, '-');
+    var W = shell.bw, H = shell.bh, D = shell.bd;
+    var lids = panes.filter(function(p) { return p.role === 'lid'; });
+    var structs = panes.filter(function(p) { return p.structural; });
+
+    var css = '/* === Variant: ' + name + ' (' + W + 'x' + H + ', depth ' + (D*2) + ') === */\n';
+    css += '/* Generated by Peek Workbench v2 — ' + panes.length + ' panes, ' + lids.length + ' lid(s) */\n\n';
+
+    css += '.box3d-wrap.' + pf + '-variant {\n';
+    css += '  --' + pf + '-w: ' + W + 'px;\n';
+    css += '  --' + pf + '-h: ' + H + 'px;\n';
+    css += '  --box-d: ' + D + 'px;\n';
+    css += '  --box-half: ' + (-D) + 'px;\n';
+    css += '  --bevel-w: 2px;\n';
+    css += '  --box-dark: ' + colors.cDark + ';\n';
+    css += '  --box-dark2: ' + darken(colors.cDark) + ';\n';
+    css += '  --box-light: ' + colors.cLight + ';\n';
+    css += '  --box-floor: ' + colors.cFloor + ';\n';
+    css += '  --box-ceil: ' + colors.cCeil + ';\n';
+    css += '  --box-glow: rgba(' + hexRgb(colors.cGlow) + ',0.6);\n';
+    css += '  --perspective: ' + shell.persp + 'px;\n';
+    css += '  width: ' + W + 'px;\n';
+    css += '  height: ' + H + 'px;\n';
+    css += '}\n';
+    css += '.box3d-wrap.' + pf + '-variant .box3d-scene {\n';
+    css += '  width: ' + W + 'px; height: ' + H + 'px;\n';
+    css += '  transform: rotateX(' + shell.rx + 'deg) rotateY(' + shell.ry + 'deg);\n';
+    css += '}\n';
+    css += '.box3d-wrap.' + pf + '-variant .box3d-spin {\n';
+    css += '  width: ' + W + 'px; height: ' + H + 'px;\n';
+    css += '}\n\n';
+
+    // Structural faces
+    structs.forEach(function(p) {
+      var pw = getStructW(p), ph = getStructH(p);
+      var tfm = getFaceTransform(p.face, W, H, D, p.ox, p.oy);
+      css += '/* ' + p.name + ' (' + p.face + '): ' + pw + ' x ' + ph + ' */\n';
+      css += '.box3d-wrap.' + pf + '-variant .bf-' + p.face + ' {\n';
+      css += '  width: ' + pw + 'px; height: ' + ph + 'px;\n';
+      css += '  transform: ' + tfm + ';\n';
+      if (p.borderRadius) css += '  border-radius: ' + p.borderRadius + '%;\n';
+      if (p.texture === 'hidden') css += '  display: none;\n';
+      css += '}\n';
+    });
+
+    // Lids
+    lids.forEach(function(p, i) {
+      var pw = p.pw, ph = p.ph;
+      var lidBase = getLidBaseTransform(p.face, W, H, D, p.ox, p.oy, pw, ph);
+      var origin = getHingeOrigin(p.hinge, pw, ph);
+      var openTfm = getHingeOpen(p.hinge, p.angle, true, false, p.hoverAngle);
+      var hoverTfm = getHingeOpen(p.hinge, p.angle, false, true, p.hoverAngle);
+      var lidSel = lids.length > 1 ? '--' + i : '';
+
+      css += '\n/* Lid: ' + p.name + ' (' + pw + 'x' + ph + ', hinge: ' + p.hinge + ', open: ' + p.angle + '\u00b0, hover: ' + p.hoverAngle + '\u00b0)';
+      if (p.biomeTag) css += ' [biome: ' + p.biomeTag + ']';
+      if (p.labelText) css += ' [label: "' + p.labelText + '" dir:' + p.labelDir + ' ' + p.labelSize + 'px]';
+      css += ' */\n';
+      css += '.box3d-wrap.' + pf + '-variant .box3d-lid' + lidSel + ' {\n';
+      css += '  width: ' + pw + 'px; height: ' + ph + 'px;\n';
+      if (p.borderRadius) css += '  border-radius: ' + p.borderRadius + '%;\n';
+      css += '  transform-origin: ' + origin + ';\n';
+      css += '  transform: ' + lidBase + ';\n';
+      css += '}\n';
+      css += '.box3d-wrap.' + pf + '-variant:hover .box3d-lid' + lidSel + ' {\n';
+      css += '  transform: ' + lidBase + ' ' + hoverTfm + ';\n';
+      css += '}\n';
+      css += '.box3d-wrap.' + pf + '-variant.opened .box3d-lid' + lidSel + ' {\n';
+      css += '  transform: ' + lidBase + ' ' + openTfm + ';\n';
+      css += '}\n';
+    });
+
+    // Orb config export (per-phase)
+    if (orbConfig) {
+      css += '\n/* === ORB (CSS Geodesic Sphere) — Per-Phase Config === */\n';
+      css += '/* phaseMode: ' + phaseMode + ' */\n';
+      ['p1','p2','p3'].forEach(function(pk, idx) {
+        var ph = orbConfig[pk];
+        if (!ph) return;
+        var label = idx === 0 ? 'Phase 1 (idle/closed)' : idx === 1 ? 'Phase 2 (hover)' : 'Phase 3 (activated/open)';
+        css += '/* ' + label + ': ' + ph.palette + ' ' + ph.state + ' | ' + ph.size + 'px | ' + ph.rings + '×' + ph.slices + ' | speed ' + ph.speed + 's | xyz(' + ph.x + ',' + ph.y + ',' + ph.z + ') */\n';
+      });
+      var p3 = orbConfig.p3;
+      css += '.' + pf + '-orb {\n';
+      css += '  --orb-size: ' + p3.size + 'px;\n';
+      css += '  --orb-speed: ' + p3.speed + 's;\n';
+      css += '  --orb-rings: ' + p3.rings + ';\n';
+      css += '  --orb-slices: ' + p3.slices + ';\n';
+      css += '  --orb-z: ' + p3.z + 'px;\n';
+      css += '  --orb-y: ' + p3.y + 'px;\n';
+      css += '  width: var(--orb-size); height: var(--orb-size);\n';
+      css += '  transform-style: preserve-3d;\n';
+      css += '  animation: orb-spin var(--orb-speed) linear infinite;\n';
+      css += '  position: absolute;\n';
+      css += '  left: calc(50% - var(--orb-size) / 2);\n';
+      css += '  top: calc(50% - var(--orb-size) / 2 + var(--orb-y));\n';
+      css += '  transform: translateZ(var(--orb-z));\n';
+      css += '}\n';
+      var p1 = orbConfig.p1;
+      css += '/* Phase 1 (closed): */\n';
+      css += '.box3d-wrap.' + pf + '-variant .' + pf + '-orb {\n';
+      css += '  --orb-size: ' + p1.size + 'px; --orb-speed: ' + p1.speed + 's;\n';
+      css += '  transform: translateZ(' + p1.z + 'px);\n';
+      css += '}\n';
+      var p2 = orbConfig.p2;
+      css += '/* Phase 2 (hover): */\n';
+      css += '.box3d-wrap.' + pf + '-variant:hover .' + pf + '-orb {\n';
+      css += '  --orb-size: ' + p2.size + 'px; --orb-speed: ' + p2.speed + 's;\n';
+      css += '  transform: translateZ(' + p2.z + 'px);\n';
+      css += '}\n';
+      css += '/* Phase 3 (open): */\n';
+      css += '.box3d-wrap.' + pf + '-variant.opened .' + pf + '-orb {\n';
+      css += '  --orb-size: ' + p3.size + 'px; --orb-speed: ' + p3.speed + 's;\n';
+      css += '  transform: translateZ(' + p3.z + 'px);\n';
+      css += '}\n';
+      css += '/* Palette colors (p3): ' + (ORB_PALETTES[p3.palette] || []).join(', ') + ' */\n';
+      css += '/* Build ' + p3.rings + ' .orb-ring divs, each rotated ' + Math.round(180 / p3.rings) + 'deg apart */\n';
+      css += '/* Each ring has ' + p3.slices + ' .orb-slice divs, each rotateY(' + Math.round(360 / p3.slices) + 'deg) apart */\n';
+      css += '/* Max total elements: ' + (p3.rings * p3.slices) + ' */\n\n';
+    }
+
+    // Pyramid config export (per-phase)
+    if (pyramidConfig) {
+      css += '\n/* === PYRAMID (CSS 3D Tetrahedron) — Per-Phase Config === */\n';
+      css += '/* shape: ' + (pyramidConfig.shape || 'triangle') + ' | spinning: ' + (pyramidConfig.spinning !== false) + ' | invert: ' + (!!pyramidConfig.invert) + ' */\n';
+      ['p1','p2','p3'].forEach(function(pk, idx) {
+        var pp = pyramidConfig[pk];
+        if (!pp) return;
+        var label = idx === 0 ? 'Phase 1 (idle)' : idx === 1 ? 'Phase 2 (hover)' : 'Phase 3 (activated)';
+        css += '/* ' + label + ': ' + pp.size + 'px | speed ' + pp.speed + 's | colors(' + pp.color1 + ',' + pp.color2 + ',' + pp.color3 + ') | xyz(' + pp.x + ',' + pp.y + ',' + pp.z + ') */\n';
+      });
+      css += '\n';
+    }
+
+    // Phase animation toggles export
+    var PA_KEYS = ['squish','bounce','poke','spin','tilt','glow'];
+    var hasAnyPhaseAnims = ['p1','p2','p3'].some(function(pk) {
+      var pa = phaseAnims[pk];
+      return pa && PA_KEYS.some(function(k) { return pa[k]; });
+    });
+    if (hasAnyPhaseAnims) {
+      css += '\n/* === PHASE ANIMATIONS (applied to wrapper) === */\n';
+      ['p1','p2','p3'].forEach(function(pk, idx) {
+        var pa = phaseAnims[pk];
+        if (!pa) return;
+        var active = PA_KEYS.filter(function(k) { return pa[k]; });
+        if (active.length) {
+          var label = idx === 0 ? 'Phase 1' : idx === 1 ? 'Phase 2' : 'Phase 3';
+          css += '/* ' + label + ': ' + active.join(', ') + ' */\n';
+        }
+      });
+      css += '\n';
+    }
+
+    // Wiring notes section
+    var wiringNotes = [];
+    panes.forEach(function(p) {
+      if (p.wiring) wiringNotes.push('  ' + p.name + ': ' + p.wiring.replace(/\n/g, '\n    '));
+      if (p.labelText) wiringNotes.push('  ' + p.name + ' label: "' + p.labelText + '" (' + p.labelDir + ', ' + p.labelSize + 'px)');
+      if (p.biomeTag) wiringNotes.push('  ' + p.name + ' biome: ' + p.biomeTag);
+    });
+    if (wiringNotes.length) {
+      css += '\n/*\n * === WIRING NOTES (for JS implementation) ===\n';
+      css += wiringNotes.join('\n') + '\n */\n';
+    }
+
+    // Pane text / label summary
+    var labelPanes = panes.filter(function(p) { return p.labelText; });
+    if (labelPanes.length) {
+      css += '\n/*\n * === PANE TEXT / LABEL ASSIGNMENTS ===\n';
+      labelPanes.forEach(function(p) {
+        css += ' *   ' + p.name + ' (' + p.face + '): "' + p.labelText + '"';
+        css += '  direction: ' + p.labelDir + '  size: ' + p.labelSize + 'px';
+        css += '  texture: ' + p.texture;
+        if (p.biomeTag) css += '  biome: ' + p.biomeTag;
+        css += '\n';
+      });
+      css += ' *\n * Wire these labels in the peek module\'s _show() method via:\n';
+      css += ' *   el.querySelector(\'.box3d-lid .box3d-face\').textContent = labelText;\n';
+      css += ' *   el.querySelector(\'.box3d-lid .box3d-face\').style.writingMode = ...;\n';
+      css += ' */\n';
+    }
+
+    var out = document.getElementById('export-output');
+    out.textContent = css;
+    out.style.display = 'block';
+    navigator.clipboard.writeText(css).then(function() {
+      document.getElementById('export-btn').textContent = 'Copied!';
+      setTimeout(function() { document.getElementById('export-btn').textContent = 'Export CSS'; }, 1500);
+    });
+  });
+
+  // ════════════════════════════════════════════════════
+  //  HELPERS
+  // ════════════════════════════════════════════════════
+
+  function getPaneById(id) {
+    for (var i = 0; i < panes.length; i++) { if (panes[i].id === id) return panes[i]; }
+    return null;
+  }
+  function hexRgb(hex) {
+    return parseInt(hex.slice(1,3),16) + ',' + parseInt(hex.slice(3,5),16) + ',' + parseInt(hex.slice(5,7),16);
+  }
+  function darken(hex) {
+    if (hex.charAt(0) !== '#') return hex;
+    var r = Math.max(0, parseInt(hex.slice(1,3),16) - 30);
+    var g = Math.max(0, parseInt(hex.slice(3,5),16) - 30);
+    var b = Math.max(0, parseInt(hex.slice(5,7),16) - 30);
+    return '#' + r.toString(16).padStart(2,'0') + g.toString(16).padStart(2,'0') + b.toString(16).padStart(2,'0');
+  }
+  function lighten(hex) {
+    if (hex.charAt(0) !== '#') return hex;
+    var r = Math.min(255, parseInt(hex.slice(1,3),16) + 30);
+    var g = Math.min(255, parseInt(hex.slice(3,5),16) + 30);
+    var b = Math.min(255, parseInt(hex.slice(5,7),16) + 30);
+    return '#' + r.toString(16).padStart(2,'0') + g.toString(16).padStart(2,'0') + b.toString(16).padStart(2,'0');
+  }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ════════════════════════════════════════════════════
+  //  GLOW MANAGEMENT
+  // ════════════════════════════════════════════════════
+
+  var glowListEl = document.getElementById('glow-list');
+  var glowPropsEl = document.getElementById('glow-props');
+
+  function getGlowById(id) {
+    for (var i = 0; i < glows.length; i++) { if (glows[i].id === id) return glows[i]; }
+    return null;
+  }
+
+  function renderGlowList() {
+    glowListEl.innerHTML = '';
+    glows.forEach(function(g) {
+      var div = document.createElement('div');
+      div.className = 'glow-item' + (g.id === selectedGlowId ? ' selected' : '');
+      div.innerHTML =
+        '<div class="gi-color" style="background:' + g.color + ';opacity:' + (g.alpha/100) + '"></div>' +
+        '<span class="gi-name">' + esc(g.name) + '</span>' +
+        '<span class="gi-del">&times;</span>';
+      div.addEventListener('click', function(e) {
+        if (e.target.classList.contains('gi-del')) {
+          glows = glows.filter(function(x) { return x.id !== g.id; });
+          if (selectedGlowId === g.id) { selectedGlowId = null; glowPropsEl.style.display = 'none'; }
+          renderGlowList();
+          render();
+          return;
+        }
+        selectGlow(g.id);
+      });
+      glowListEl.appendChild(div);
+    });
+  }
+
+  function selectGlow(id) {
+    selectedGlowId = id;
+    selectedPaneId = null;
+    panePropsEl.classList.remove('visible');
+    var g = getGlowById(id);
+    if (!g) { glowPropsEl.style.display = 'none'; return; }
+    glowPropsEl.style.display = 'block';
+    document.getElementById('gp-name').value = g.name;
+    document.querySelector('[data-gp="color"]').value = g.color;
+    setGPVal('alpha', g.alpha);
+    setGPVal('size', g.size);
+    setGPVal('blur', g.blur);
+    setGPVal('ox', g.ox);
+    setGPVal('oy', g.oy);
+    setGPVal('oz', g.oz);
+    setGPVal('rotX', g.rotX);
+    setGPVal('rotY', g.rotY);
+    setGPVal('spinX', g.spinX);
+    setGPVal('spinY', g.spinY);
+    var shapeSel = document.querySelector('select[data-gp="shape"]');
+    if (shapeSel) shapeSel.value = g.shape;
+    renderGlowList();
+    renderPaneList();
+    render();
+  }
+
+  function setGPVal(key, val) {
+    document.querySelectorAll('[data-gp="' + key + '"]').forEach(function(el) { el.value = val; });
+  }
+
+  // Glow prop control wiring
+  document.querySelectorAll('#glow-props .cr input[data-gp], #glow-props .cr select[data-gp]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      if (!selectedGlowId) return;
+      var g = getGlowById(selectedGlowId);
+      if (!g) return;
+      var key = el.dataset.gp;
+      var val = el.type === 'range' || el.type === 'number' ? +el.value : el.value;
+      var siblings = document.querySelectorAll('[data-gp="' + key + '"]');
+      siblings.forEach(function(s) { if (s !== el) s.value = val; });
+      g[key] = val;
+      if (key === 'color') renderGlowList(); // update swatch
+      render();
+    });
+  });
+  document.getElementById('gp-name').addEventListener('input', function() {
+    var g = getGlowById(selectedGlowId);
+    if (g) { g.name = this.value; renderGlowList(); }
+  });
+
+  // Add glow button
+  document.getElementById('add-glow-btn').addEventListener('click', function() {
+    var g = makeGlow({
+      name: 'Glow ' + _nextGlowId,
+      color: colors.cGlow,
+      rotY: Math.round(Math.random() * 120)
+    });
+    glows.push(g);
+    selectedGlowId = g.id;
+    renderGlowList();
+    selectGlow(g.id);
+    render();
+  });
+
+  // ════════════════════════════════════════════════════
+  //  ORB CONTROLS
+  // ════════════════════════════════════════════════════
+
+  function syncOrbUI() {
+    if (!orbConfig) return;
+    var ph = activeOrbPhase();
+    if (!ph) return;
+    document.getElementById('orb-size').value = ph.size;
+    document.getElementById('orb-size-num').value = ph.size;
+    document.getElementById('orb-speed').value = ph.speed;
+    document.getElementById('orb-speed-num').value = ph.speed;
+    document.getElementById('orb-rings').value = ph.rings;
+    document.getElementById('orb-rings-num').value = ph.rings;
+    document.getElementById('orb-slices').value = ph.slices;
+    document.getElementById('orb-slices-num').value = ph.slices;
+    document.getElementById('orb-palette').value = ph.palette;
+    document.getElementById('orb-state').value = ph.state;
+    document.getElementById('orb-x').value = ph.x;
+    document.getElementById('orb-x-num').value = ph.x;
+    document.getElementById('orb-y').value = ph.y;
+    document.getElementById('orb-y-num').value = ph.y;
+    document.getElementById('orb-z').value = ph.z;
+    document.getElementById('orb-z-num').value = ph.z;
+  }
+
+  function showOrbSection(show) {
+    document.getElementById('orb-section').classList.toggle('active', show);
+  }
+
+  function showPyrSection(show) {
+    document.getElementById('pyr-section').classList.toggle('active', show);
+  }
+
+  function syncPyrUI() {
+    if (!pyramidConfig) return;
+    var pp = activePyrPhase();
+    if (!pp) return;
+    document.getElementById('pyr-spin-chk').checked = pyramidConfig.spinning !== false;
+    document.getElementById('pyr-invert-chk').checked = !!pyramidConfig.invert;
+    document.getElementById('pyr-size').value = pp.size;
+    document.getElementById('pyr-size-num').value = pp.size;
+    document.getElementById('pyr-height').value = pp.height || 0;
+    document.getElementById('pyr-height-num').value = pp.height || 0;
+    document.getElementById('pyr-spread').value = pp.spread != null ? pp.spread : 30;
+    document.getElementById('pyr-spread-num').value = pp.spread != null ? pp.spread : 30;
+    document.getElementById('pyr-speed').value = pp.speed;
+    document.getElementById('pyr-speed-num').value = pp.speed;
+    document.getElementById('pyr-color1').value = pp.color1;
+    document.getElementById('pyr-color2').value = pp.color2;
+    document.getElementById('pyr-color3').value = pp.color3;
+    // Extract hex from rgba glow for the color picker
+    var glowHex = '#1cff9b';
+    var glowMatch = pp.glow.match(/rgba?\((\d+),(\d+),(\d+)/);
+    if (glowMatch) {
+      glowHex = '#' + ('0' + (+glowMatch[1]).toString(16)).slice(-2) + ('0' + (+glowMatch[2]).toString(16)).slice(-2) + ('0' + (+glowMatch[3]).toString(16)).slice(-2);
+    }
+    document.getElementById('pyr-glow-color').value = glowHex;
+    document.getElementById('pyr-shape').value = pyramidConfig.shape || 'triangle';
+    document.getElementById('pyr-x').value = pp.x || 0;
+    document.getElementById('pyr-x-num').value = pp.x || 0;
+    document.getElementById('pyr-y').value = pp.y || 0;
+    document.getElementById('pyr-y-num').value = pp.y || 0;
+    document.getElementById('pyr-z').value = pp.z || 0;
+    document.getElementById('pyr-z-num').value = pp.z || 0;
+  }
+
+  // ── Pyramid dirty labels (click-to-revert) ──
+  var PYR_SLIDER_KEYS = ['size','height','spread','speed','x','y','z'];
+
+  function updatePyrDirtyLabels() {
+    if (!_tplPyrDefaults || !pyramidConfig) return;
+    var pp = activePyrPhase();
+    var phaseKey = currentState === 'opened' ? 'p3' : currentState === 'hover' ? 'p2' : 'p1';
+    var defPhase = _tplPyrDefaults[phaseKey];
+    if (!pp || !defPhase) return;
+    PYR_SLIDER_KEYS.forEach(function(key) {
+      var el = document.getElementById('pyr-' + key);
+      if (!el) return;
+      var row = el.closest('.cr');
+      if (!row) return;
+      var lbl = row.querySelector('label');
+      if (!lbl) return;
+      lbl.classList.add('resettable');
+      var cur = pp[key] != null ? pp[key] : 0;
+      var def = defPhase[key] != null ? defPhase[key] : 0;
+      lbl.classList.toggle('is-dirty', cur !== def);
+    });
+  }
+
+  // Click-to-revert for pyramid slider labels
+  document.querySelectorAll('#pyr-section .cr label').forEach(function(labelEl) {
+    var row = labelEl.closest('.cr');
+    if (!row) return;
+    // Find the range input with id starting with 'pyr-'
+    var rangeInput = row.querySelector('input[type="range"][id^="pyr-"]');
+    if (!rangeInput) return;
+    var key = rangeInput.id.replace('pyr-', '');
+    if (PYR_SLIDER_KEYS.indexOf(key) === -1) return;
+    labelEl.addEventListener('click', function() {
+      if (!labelEl.classList.contains('resettable') || !labelEl.classList.contains('is-dirty')) return;
+      if (!_tplPyrDefaults || !pyramidConfig) return;
+      var phaseKey = currentState === 'opened' ? 'p3' : currentState === 'hover' ? 'p2' : 'p1';
+      var defPhase = _tplPyrDefaults[phaseKey];
+      if (!defPhase || !defPhase.hasOwnProperty(key)) return;
+      var pp = activePyrPhase();
+      if (!pp) return;
+      pp[key] = defPhase[key];
+      syncPyrUI();
+      updatePyrDirtyLabels();
+      render();
+    });
+  });
+
+  // Pyramid shared toggles (spin, invert — not per-phase)
+  document.getElementById('pyr-spin-chk').addEventListener('change', function() {
+    if (!pyramidConfig) return;
+    pyramidConfig.spinning = this.checked;
+    render();
+  });
+  document.getElementById('pyr-invert-chk').addEventListener('change', function() {
+    if (!pyramidConfig) return;
+    pyramidConfig.invert = this.checked;
+    render();
+  });
+
+  // Pyramid slider handlers — per-phase properties
+  ['size','height','spread','speed','x','y','z'].forEach(function(key) {
+    var range = document.getElementById('pyr-' + key);
+    var num = document.getElementById('pyr-' + key + '-num');
+    if (!range || !num) return;
+    function onInput(val) {
+      var pp = activePyrPhase();
+      if (!pp) return;
+      pp[key] = +val;
+      range.value = val;
+      num.value = val;
+      updatePyrDirtyLabels();
+      render();
+    }
+    range.addEventListener('input', function() { onInput(this.value); });
+    num.addEventListener('input', function() { onInput(this.value); });
+  });
+
+  // Pyramid color handlers — per-phase properties
+  ['color1','color2','color3'].forEach(function(key) {
+    document.getElementById('pyr-' + key).addEventListener('input', function() {
+      var pp = activePyrPhase();
+      if (!pp) return;
+      pp[key] = this.value;
+      render();
+    });
+  });
+
+  document.getElementById('pyr-glow-color').addEventListener('input', function() {
+    var pp = activePyrPhase();
+    if (!pp) return;
+    var hex = this.value;
+    var r = parseInt(hex.slice(1,3),16);
+    var g = parseInt(hex.slice(3,5),16);
+    var b = parseInt(hex.slice(5,7),16);
+    pp.glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
+    render();
+  });
+
+  // Pyramid shape — shared across all phases
+  document.getElementById('pyr-shape').addEventListener('change', function() {
+    if (!pyramidConfig) return;
+    pyramidConfig.shape = this.value;
+    render();
+  });
+
+  // Paired range+number sync for orb controls + dirty labels
+  var ORB_SLIDER_KEYS = ['size','speed','rings','slices','x','y','z'];
+  ORB_SLIDER_KEYS.forEach(function(key) {
+    var range = document.getElementById('orb-' + key);
+    var num = document.getElementById('orb-' + key + '-num');
+    if (!range || !num) return;
+    function onInput(val) {
+      var ph = activeOrbPhase();
+      if (!ph) return;
+      ph[key] = +val;
+      range.value = val;
+      num.value = val;
+      updateOrbDirtyLabels();
+      render();
+    }
+    range.addEventListener('input', function() { onInput(this.value); });
+    num.addEventListener('input', function() { onInput(this.value); });
+  });
+
+  // Orb dirty-label tracking + click-to-revert
+  function updateOrbDirtyLabels() {
+    if (!_tplOrbDefaults) return;
+    var ph = activeOrbPhase();
+    var phKey = currentState === 'opened' ? 'p3' : currentState === 'hover' ? 'p2' : 'p1';
+    var defaults = _tplOrbDefaults[phKey];
+    if (!ph || !defaults) return;
+    ORB_SLIDER_KEYS.forEach(function(key) {
+      var range = document.getElementById('orb-' + key);
+      if (!range) return;
+      var row = range.closest('.cr');
+      if (!row) return;
+      var lbl = row.querySelector('label');
+      if (!lbl) return;
+      lbl.classList.add('resettable');
+      lbl.classList.toggle('is-dirty', ph[key] !== defaults[key]);
+    });
+  }
+
+  // Wire click-to-revert on orb slider labels
+  document.querySelectorAll('#orb-section .cr label').forEach(function(labelEl) {
+    labelEl.addEventListener('click', function() {
+      if (!labelEl.classList.contains('resettable')) return;
+      if (!orbConfig || !_tplOrbDefaults) return;
+      var ph = activeOrbPhase();
+      var phKey = currentState === 'opened' ? 'p3' : currentState === 'hover' ? 'p2' : 'p1';
+      var defaults = _tplOrbDefaults[phKey];
+      if (!ph || !defaults) return;
+      var row = labelEl.closest('.cr');
+      if (!row) return;
+      var range = row.querySelector('input[type="range"]');
+      if (!range) return;
+      var id = range.id;
+      var key = id.replace('orb-', '');
+      if (!defaults.hasOwnProperty(key)) return;
+      ph[key] = defaults[key];
+      syncOrbUI();
+      updateOrbDirtyLabels();
+      render();
+    });
+  });
+
+  document.getElementById('orb-palette').addEventListener('change', function() {
+    var ph = activeOrbPhase();
+    if (!ph) return;
+    ph.palette = this.value;
+    render();
+  });
+  document.getElementById('orb-state').addEventListener('change', function() {
+    var ph = activeOrbPhase();
+    if (!ph) return;
+    ph.state = this.value;
+    // Auto-switch palette
+    if (this.value === 'unlit') { ph.palette = 'smoke'; document.getElementById('orb-palette').value = 'smoke'; }
+    else if (this.value === 'ember') { ph.palette = 'ember'; document.getElementById('orb-palette').value = 'ember'; }
+    else if (this.value === 'lit' && (ph.palette === 'smoke' || ph.palette === 'ember')) {
+      ph.palette = 'fire'; document.getElementById('orb-palette').value = 'fire';
+    }
+    render();
+  });
+  // ════════════════════════════════════════════════════
+  //  ORB-ONLY MODE + COMPOSABILITY
+  // ════════════════════════════════════════════════════
+
+  function setOrbOnlyMode(on) {
+    document.getElementById('sidebar').classList.toggle('orb-only-mode', on);
+  }
+  function setPyrPrimaryMode(on) {
+    document.getElementById('sidebar').classList.toggle('pyr-primary-mode', on);
+  }
+
+  function updateComposeBar() {
+    var bar = document.getElementById('compose-bar');
+    var actions = document.getElementById('compose-actions');
+    actions.innerHTML = '';
+    var showBar = false;
+
+    // ── Orb-only mode: offer box templates to wrap around the orb ──
+    if (orbOnly) {
+      showBar = true;
+      var boxNames = Object.keys(TEMPLATES).filter(function(n) { return n !== 'Orb'; });
+      boxNames.forEach(function(name) {
+        var btn = document.createElement('button');
+        btn.textContent = '\uD83D\uDCE6 + ' + name;
+        btn.title = 'Compose: drop "' + name + '" box around this orb (orb phases preserved)';
+        btn.addEventListener('click', function() {
+          // Save orb, load box template, inject orb back, keep orb phaseMode
+          var savedOrb = JSON.parse(JSON.stringify(orbConfig));
+          orbOnly = false;
+          orbConfig = null;
+          phaseMode = 'orb'; // Origin was orb — orb phases persist
+          TEMPLATES[name]();
+          if (!orbConfig) orbConfig = savedOrb;
+          _activeTplName = name + ' + Orb';
+          snapshotDefaults();
+          selectedPaneId = null;
+          syncShellToUI(); syncColorsToUI();
+          updateShellDirtyLabels();
+          renderPaneList(); renderGlowList();
+          panePropsEl.classList.remove('visible');
+          showOrbSection(true);
+          syncOrbUI(); updateOrbDirtyLabels();
+          setOrbOnlyMode(false);
+          updatePhaseLabels();
+          updateComposeBar();
+          render();
+          tplBar.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+        });
+        actions.appendChild(btn);
+      });
+    }
+
+    // ── Box template without orb: offer to add one ──
+    if (!orbOnly && !orbConfig) {
+      showBar = true;
+      // Fresh default orb
+      var addOrbBtn = document.createElement('button');
+      addOrbBtn.textContent = '\uD83D\uDD2E + Add Orb';
+      addOrbBtn.title = 'Add a new default orb to this template (box phases — resource-savvy idle)';
+      addOrbBtn.addEventListener('click', function() {
+        orbConfig = defaultOrbConfig();
+        phaseMode = 'box'; // Origin is box — resource-savvy phases
+        showOrbSection(true);
+        syncOrbUI();
+        snapshotDefaults();
+        updateOrbDirtyLabels();
+        updatePhaseLabels();
+        updateComposeBar();
+        render();
+      });
+      actions.appendChild(addOrbBtn);
+
+      // If saved orb exists, also offer that
+      if (_savedOrb) {
+        var dropBtn = document.createElement('button');
+        dropBtn.textContent = '\uD83D\uDD2E Drop saved (' + (_savedOrb.p3 ? _savedOrb.p3.palette : 'orb') + ')';
+        dropBtn.title = 'Inject saved orb into this template (box phases)';
+        dropBtn.addEventListener('click', function() {
+          orbConfig = JSON.parse(JSON.stringify(_savedOrb));
+          phaseMode = 'box';
+          showOrbSection(true);
+          syncOrbUI();
+          snapshotDefaults();
+          updateOrbDirtyLabels();
+          updatePhaseLabels();
+          updateComposeBar();
+          render();
+        });
+        actions.appendChild(dropBtn);
+      }
+    }
+
+    // ── Box template without pyramid: offer to add one ──
+    if (!orbOnly && !pyramidConfig) {
+      showBar = true;
+      var addPyrBtn = document.createElement('button');
+      addPyrBtn.textContent = '\uD83D\uDD3A + Add Triangle';
+      addPyrBtn.title = 'Add a default pyramid to this template (per-phase colors/size)';
+      addPyrBtn.addEventListener('click', function() {
+        pyramidConfig = {
+          spinning: true, shape: 'triangle',
+          p1: makePyrPhase({ size: 40,  speed: 10, color1: '#1cff9b', color2: '#ffe600', color3: '#4a8aff', glow: 'rgba(28,255,155,0.3)', x: 0, y: -20, z: 30 }),
+          p2: makePyrPhase({ size: 60,  speed: 6,  color1: '#1cff9b', color2: '#ffe600', color3: '#4a8aff', glow: 'rgba(28,255,155,0.5)', x: 0, y: -20, z: 30 }),
+          p3: makePyrPhase({ size: 80,  speed: 4,  color1: '#00ffcc', color2: '#ffee00', color3: '#6699ff', glow: 'rgba(0,255,204,0.7)',   x: 0, y: -20, z: 30 })
+        };
+        showPyrSection(true);
+        syncPyrUI();
+        snapshotDefaults();
+        updatePyrDirtyLabels();
+        updateComposeBar();
+        render();
+      });
+      actions.appendChild(addPyrBtn);
+    }
+
+    // ── Has pyramid: offer to remove it ──
+    if (pyramidConfig && !orbOnly) {
+      showBar = true;
+      var removePyrBtn = document.createElement('button');
+      removePyrBtn.textContent = '\u2715 Remove triangle';
+      removePyrBtn.title = 'Detach pyramid from this template';
+      removePyrBtn.addEventListener('click', function() {
+        pyramidConfig = null;
+        showPyrSection(false);
+        updateComposeBar();
+        render();
+      });
+      actions.appendChild(removePyrBtn);
+    }
+
+    // ── Box+orb composite: offer to remove orb ──
+    if (orbConfig && !orbOnly) {
+      showBar = true;
+      var removeBtn = document.createElement('button');
+      removeBtn.textContent = '\u2715 Remove orb';
+      removeBtn.title = 'Detach orb from this template';
+      removeBtn.addEventListener('click', function() {
+        orbConfig = null;
+        phaseMode = 'box';
+        showOrbSection(false);
+        updatePhaseLabels();
+        updateComposeBar();
+        render();
+      });
+      actions.appendChild(removeBtn);
+
+      // Show current phase mode indicator + toggle
+      var modeBtn = document.createElement('button');
+      modeBtn.textContent = phaseMode === 'orb' ? '\u26A1 Phases: Orb' : '\uD83D\uDCE6 Phases: Box';
+      modeBtn.title = 'Toggle: ' + (phaseMode === 'orb' ? 'switch to box-origin phases (resource-savvy idle)' : 'switch to orb-origin phases (smoke/ember/flame)');
+      modeBtn.addEventListener('click', function() {
+        phaseMode = phaseMode === 'orb' ? 'box' : 'orb';
+        updatePhaseLabels();
+        updateComposeBar();
+        render();
+      });
+      actions.appendChild(modeBtn);
+    }
+
+    bar.style.display = showBar ? '' : 'none';
+  }
+
+  // Save orb config to internal clipboard
+  document.getElementById('orb-save-btn').addEventListener('click', function() {
+    if (!orbConfig) return;
+    _savedOrb = JSON.parse(JSON.stringify(orbConfig));
+    this.textContent = '✅ Saved';
+    var self = this;
+    setTimeout(function() { self.textContent = '💾 Save'; }, 1200);
+    updateComposeBar();
+  });
+
+  // Drop saved orb into current template
+  document.getElementById('orb-load-btn').addEventListener('click', function() {
+    if (!_savedOrb) {
+      this.textContent = '\u2014 none saved \u2014';
+      var self = this;
+      setTimeout(function() { self.textContent = '\uD83D\uDCE5 Drop In'; }, 1200);
+      return;
+    }
+    orbConfig = JSON.parse(JSON.stringify(_savedOrb));
+    // Keep current phaseMode — if we're in a box template, stay box
+    showOrbSection(true);
+    syncOrbUI();
+    snapshotDefaults();
+    updateOrbDirtyLabels();
+    updatePhaseLabels();
+    updateComposeBar();
+    render();
+  });
+
+  // Click preview background to deselect
+  document.getElementById('preview-area').addEventListener('click', function(e) {
+    if (e.target.id === 'preview-area' || e.target.closest('.box3d-wrap') && !e.target.closest('.pane3d') && !e.target.closest('.glow3d')) {
+      selectedPaneId = null;
+      selectedGlowId = null;
+      panePropsEl.classList.remove('visible');
+      glowPropsEl.style.display = 'none';
+      renderPaneList();
+      renderGlowList();
+      render();
+    }
+  });
+
+  // ════════════════════════════════════════════════════
+  //  RESOURCE / PERFORMANCE HUD
+  // ════════════════════════════════════════════════════
+
+  // ── FPS tracking via rAF ──
+  var _fpsFrames = 0;
+  var _fpsLast = performance.now();
+  var _fpsDisplay = 60;
+  var _fpsHistory = [];      // rolling 30-sample window for smoothing
+  var _fpsHistoryMax = 30;
+
+  function fpsLoop(now) {
+    _fpsFrames++;
+    var elapsed = now - _fpsLast;
+    if (elapsed >= 500) {  // update twice per second
+      _fpsDisplay = Math.round((_fpsFrames / elapsed) * 1000);
+      _fpsHistory.push(_fpsDisplay);
+      if (_fpsHistory.length > _fpsHistoryMax) _fpsHistory.shift();
+      _fpsFrames = 0;
+      _fpsLast = now;
+      updatePerfHud();
+    }
+    requestAnimationFrame(fpsLoop);
+  }
+  requestAnimationFrame(fpsLoop);
+
+  // ── Deploy cost tiers ──
+  // These thresholds are tuned for the game's raycaster overlay context:
+  // the peek box renders ON TOP of the raycaster, minimap, HUD, etc.
+  var COST_TIERS = [
+    { max: 20,  label: 'FREE',       cls: 't-free',   note: 'No measurable impact. Ship it.' },
+    { max: 50,  label: 'LIGHT',      cls: 't-light',  note: 'Fine for most devices. ~0.5ms/frame.' },
+    { max: 120, label: 'MODERATE',   cls: 't-med',    note: 'Careful on low-end. ~1-2ms/frame composite.' },
+    { max: 250, label: 'HEAVY',      cls: 't-heavy',  note: 'Will drop frames on webOS / budget TV. Consider reducing rings×slices.' },
+    { max: Infinity, label: 'DANGER', cls: 't-danger', note: 'Too many elements. Will stutter in-game. Reduce orb complexity or remove animations.' }
+  ];
+
+  function updatePerfHud() {
+    // ── FPS ──
+    var fpsEl = document.getElementById('hud-fps');
+    var fpsBar = document.getElementById('hud-fps-bar');
+    var avgFps = _fpsHistory.length ? Math.round(_fpsHistory.reduce(function(a,b){return a+b;},0) / _fpsHistory.length) : _fpsDisplay;
+    fpsEl.textContent = _fpsDisplay + ' fps (avg ' + avgFps + ')';
+    var fpsPct = Math.min(100, Math.round((_fpsDisplay / 60) * 100));
+    fpsBar.style.width = fpsPct + '%';
+    fpsEl.className = 'hud-val' + (_fpsDisplay < 24 ? ' danger' : _fpsDisplay < 45 ? ' warn' : '');
+    fpsBar.style.background = _fpsDisplay < 24 ? '#f44' : _fpsDisplay < 45 ? '#fc6' : '#4c8';
+
+    // ── DOM element counts ──
+    var sceneEls = spinEl.querySelectorAll('*');
+    var totalDOM = sceneEls.length;
+    var paneCount = spinEl.querySelectorAll('.pane3d').length;
+    var lidCount = spinEl.querySelectorAll('.lid-wrapper').length;
+    var orbSliceCount = spinEl.querySelectorAll('.wb-orb-slice').length;
+    var orbRingCount = spinEl.querySelectorAll('.wb-orb-ring').length;
+    var labelCount = spinEl.querySelectorAll('.pane-label, .pane-dim').length;
+    var glowCount = spinEl.querySelectorAll('.glow-plane').length;
+
+    document.getElementById('hud-dom').textContent = totalDOM;
+    document.getElementById('hud-panes').textContent = paneCount + ' + ' + lidCount + ' lid';
+    var orbHudText = '—';
+    if (orbSliceCount) {
+      var ph = activeOrbPhase();
+      var cfgR = ph ? ph.rings : '?';
+      var cfgS = ph ? ph.slices : '?';
+      orbHudText = orbRingCount + 'r × ' + (orbSliceCount / Math.max(1, orbRingCount)).toFixed(0) + 's = ' + orbSliceCount;
+      if (ph && (orbRingCount !== cfgR || orbSliceCount !== cfgR * cfgS)) {
+        orbHudText += ' ⚠ cfg=' + cfgR + '×' + cfgS;
+      }
+    }
+    document.getElementById('hud-orb').textContent = orbHudText;
+    var glowCount2 = spinEl.querySelectorAll('.glow3d').length;
+    document.getElementById('hud-glows').textContent = glowCount2;
+    document.getElementById('hud-labels').textContent = labelCount;
+
+    // DOM budget bar — 250 is the danger threshold
+    var domPct = Math.min(100, Math.round((totalDOM / 250) * 100));
+    var domBar = document.getElementById('hud-dom-bar');
+    domBar.style.width = domPct + '%';
+    domBar.style.background = totalDOM > 250 ? '#f44' : totalDOM > 120 ? '#fc6' : totalDOM > 50 ? '#8cf' : '#4c8';
+    document.getElementById('hud-dom').className = 'hud-val' + (totalDOM > 250 ? ' danger' : totalDOM > 120 ? ' warn' : '');
+
+    // ── Animation count ──
+    var animCount = 0;
+    sceneEls.forEach(function(el) {
+      var anim = getComputedStyle(el).animationName;
+      if (anim && anim !== 'none') animCount++;
+    });
+    document.getElementById('hud-anims').textContent = animCount;
+    document.getElementById('hud-anims').className = 'hud-val' + (animCount > 100 ? ' danger' : animCount > 40 ? ' warn' : '');
+
+    // ── 3D composite layers (preserve-3d elements) ──
+    var layerCount = 0;
+    sceneEls.forEach(function(el) {
+      var ts = el.style.transformStyle || getComputedStyle(el).transformStyle;
+      if (ts === 'preserve-3d') layerCount++;
+      // Each transformed child also creates a layer
+      if (el.style.transform) layerCount++;
+    });
+    document.getElementById('hud-layers').textContent = layerCount;
+    document.getElementById('hud-layers').className = 'hud-val' + (layerCount > 200 ? ' danger' : layerCount > 80 ? ' warn' : '');
+
+    // ── Deploy cost tier ──
+    // Weighted score: DOM elements + animations×1.5 + layers×0.5
+    var costScore = totalDOM + Math.round(animCount * 1.5) + Math.round(layerCount * 0.5);
+    var tier = COST_TIERS[COST_TIERS.length - 1];
+    for (var i = 0; i < COST_TIERS.length; i++) {
+      if (costScore <= COST_TIERS[i].max) { tier = COST_TIERS[i]; break; }
+    }
+    var tierEl = document.getElementById('hud-tier');
+    tierEl.textContent = tier.label + ' (' + costScore + ' units)';
+    tierEl.className = 'tier ' + tier.cls;
+    document.getElementById('hud-notes').textContent = tier.note;
+  }
+
+  // ════════════════════════════════════════════════════
+  //  INIT
+  // ════════════════════════════════════════════════════
+
+  glows = defaultGlows();
+  syncShellToUI();
+  syncColorsToUI();
+  renderPaneList();
+  renderGlowList();
+  render();
+  updatePerfHud();
+
+})();
+</script>
+</body>
+</html>

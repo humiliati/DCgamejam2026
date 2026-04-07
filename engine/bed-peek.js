@@ -114,12 +114,19 @@ var BedPeek = (function () {
       heroText = 'Heroes arrive: In ' + daysUntil + ' days';
     }
 
-    _overlay.innerHTML =
-      '🛏️ REST FOR THE NIGHT<br><br>' +
-      daysText + '<br>' +
-      heroText + '<br><br>' +
-      '[F] Sleep → Advance to Dawn' +
-      heroWarning;
+    if (_isRestBlocked()) {
+      _overlay.innerHTML =
+        '\uD83D\uDECF REST FOR THE NIGHT<br><br>' +
+        '\u26D4 The truck is at Heroes\u2019 Wake.<br>' +
+        'Report for duty before resting.';
+    } else {
+      _overlay.innerHTML =
+        '\uD83D\uDECF REST FOR THE NIGHT<br><br>' +
+        daysText + '<br>' +
+        heroText + '<br><br>' +
+        '[F] Sleep \u2192 Advance to Dawn' +
+        heroWarning;
+    }
   }
 
   function _show() {
@@ -160,8 +167,30 @@ var BedPeek = (function () {
 
   // ── Sleep Interaction ───────────────────────────────────────
 
+  /**
+   * Day 0 rest gate — the player must complete the Heroes' Wake
+   * encounter (setting the heroWakeArrival flag) before they can
+   * sleep.  Without this, the player can skip the hose-discovery
+   * beat entirely by going straight to bed.
+   */
+  function _isRestBlocked() {
+    if (typeof DayCycle === 'undefined' || typeof Player === 'undefined') return false;
+    // Only block on day 0 (the tutorial hero day)
+    if (DayCycle.getDay() !== 0) return false;
+    // Block until the Heroes' Wake cinematic has played
+    return !Player.getFlag('heroWakeArrival');
+  }
+
   function _onInteract() {
     if (!_active) return;
+
+    // ── Day 0 rest gate ──────────────────────────────────────────
+    if (_isRestBlocked()) {
+      if (typeof Toast !== 'undefined') {
+        Toast.show('The truck is waiting at Heroes\u2019 Wake. No rest until the job\u2019s done.', 'warning');
+      }
+      return;
+    }
 
     // Lock input during transition
     if (typeof InputManager !== 'undefined' && InputManager.lock) {

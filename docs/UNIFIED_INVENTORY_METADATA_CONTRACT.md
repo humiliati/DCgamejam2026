@@ -327,6 +327,9 @@ Adapted from EyesOnly's 6-step pipeline (COLLECTIBLES_CANON.md):
    - TILES.COLLECTIBLE → WorldItems.pickupAt(x, y)
    - TILES.CORPSE      → Salvage.hasHarvests() → _harvestCorpse()
 3. Apply resource: Player.addCurrency() / heal() / addToBag()
+```
+
+> **Extraction note:** `_harvestCorpse()` was extracted from `game.js` to `engine/corpse-actions.js` as `CorpseActions.harvestCorpse()`.
 4. Remove from floor: grid[y][x] = TILES.EMPTY, WorldItems.removeAt(x, y)
 5. Animate: Toast.show(emoji + name, type)
    (future: OverheadAnimator.showGenericExpression with RESOURCE_COLOR)

@@ -468,8 +468,10 @@ var MenuBox = (function () {
     ctx.stroke();
 
     // ── Face content ──
-    var padX = 12;
-    var padY = 10;
+    // Scale padding with viewport so it doesn't eat into small screens
+    var vpScale = Math.min(w, h) / 400;
+    var padX = Math.round(Math.max(4, 10 * vpScale));
+    var padY = Math.round(Math.max(3, 8 * vpScale));
     var renderer = _faceRenderers[faceIdx];
     if (renderer && ch > 20) {
       try {

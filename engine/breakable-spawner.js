@@ -92,10 +92,17 @@ var BreakableSpawner = (function () {
       grid[ry][rx] = TILES.BREAKABLE;
       placed++;
 
-      // Create CrateSystem slot container for this breakable (Phase B)
-      if (typeof CrateSystem !== 'undefined') {
+      // Create CrateSystem slot container for this breakable (Phase B).
+      // SC-C: D1 breakables are smash-only props — no container system.
+      // SC-D: D2 breakables become storage crates (withdraw, daily refill).
+      var _spawnDepth = _floorId ? String(_floorId).split('.').length : 1;
+      if (_spawnDepth >= 2 && typeof CrateSystem !== 'undefined') {
         var floorId = _floorId || '';
-        CrateSystem.createCrate(rx, ry, floorId, _biome);
+        if (_spawnDepth === 2 && CrateSystem.createStorageCrate) {
+          CrateSystem.createStorageCrate(rx, ry, floorId, _biome);
+        } else {
+          CrateSystem.createCrate(rx, ry, floorId, _biome);
+        }
       }
     }
   }
@@ -115,14 +122,15 @@ var BreakableSpawner = (function () {
     var b = _getAt(x, y);
     if (!b) return null;
 
-    // ── Depth-3+ supply crates are indestructible (DEPTH3 §3) ────
-    // Detritus is handled by DetritusSprites, not here.
+    // ── D2+ crates with containers are indestructible ─────────────
+    // D3+: supply crates (DEPTH3 §3) — "bolted down, fill it".
+    // D2:  storage crates (SC-D) — "restocks each morning".
     // Only BREAKABLE tiles with CrateSystem containers are protected.
     var depth = _floorId ? _floorId.split('.').length : 1;
-    if (depth >= 3 && typeof CrateSystem !== 'undefined' &&
+    if (depth >= 2 && typeof CrateSystem !== 'undefined' &&
         CrateSystem.hasContainer && CrateSystem.hasContainer(x, y, _floorId)) {
-      // This crate is bolted down. Fill it, don't smash it.
-      return { blocked: true, reason: 'crate_bolted' };
+      var _reason = depth >= 3 ? 'crate_bolted' : 'crate_storage';
+      return { blocked: true, reason: _reason };
     }
 
     b.hp--;

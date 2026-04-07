@@ -164,12 +164,29 @@ var HosePeek = (function () {
     var ok = HoseState.attach(buildingId, exteriorId, currentFloorId, fx, fy);
     if (!ok) return false;
 
+    // ── First-grab discovery flag ─────────────────────────────────
+    // Gates NPC dialogue branches (Watchman shifts from "go find the
+    // hose" to "here's how to use it") and future tutorial hooks.
+    var firstGrab = false;
+    if (typeof Player !== 'undefined' && Player.getFlag && !Player.getFlag('hoseDiscovered')) {
+      Player.setFlag('hoseDiscovered', true);
+      firstGrab = true;
+    }
+
     // Success juice
     _splash();
     _sfx('ui-confirm', 0.55);
-    _toast('🧵 ' + (typeof i18n !== 'undefined'
-      ? i18n.t('hose.grabbed', 'Hose attached — head for ' + (contract.label || buildingId))
-      : 'Hose attached — head for ' + (contract.label || buildingId)), 'loot');
+
+    if (firstGrab) {
+      // Expanded first-grab toast: orient the player on what just happened
+      _toast('🧵 ' + (typeof i18n !== 'undefined'
+        ? i18n.t('hose.first_grab', 'Hose attached! Head into the dungeon — it trails behind you. Watch your energy.')
+        : 'Hose attached! Head into the dungeon — it trails behind you. Watch your energy.'), 'loot');
+    } else {
+      _toast('🧵 ' + (typeof i18n !== 'undefined'
+        ? i18n.t('hose.grabbed', 'Hose attached — head for ' + (contract.label || buildingId))
+        : 'Hose attached — head for ' + (contract.label || buildingId)), 'loot');
+    }
 
     if (typeof SessionStats !== 'undefined' && SessionStats.inc) {
       SessionStats.inc('hosesGrabbed');
