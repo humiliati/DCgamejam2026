@@ -1,8 +1,34 @@
 # Dungeon Gleaner — Visual Overhaul
 
 **Created**: 2026-03-29  
+**Updated**: 2026-04-07 (implementation audit, title sticky-note vision, patch triage)  
 **Scope**: Defines the visual pivot from combat-operative/CRT terminal aesthetic to clinical-hazmat/corporate-paperwork/powerwash style. Covers HUD, title screen, card fan, biome palettes, typography, MenuBox, and player archetypes. Maintains the ironic operative naming convention while making the player's actual job — janitor with playing cards — visually legible and fun.  
-**Audience**: All team members — engineers, artists, and the designer.
+**Audience**: All team members — engineers, artists, and the designer.  
+**Visual ref**: [flapsandseals.com/booking](https://flapsandseals.com/booking) — dossier desk, post-it note cards, clear tape frame edging, manila folder container. This is our target feel for the title screen and MenuBox surfaces.
+
+---
+
+## 0. Implementation Audit (2026-04-07)
+
+| System | Status | Palette | Evidence |
+|--------|--------|---------|----------|
+| **CSS variables** | ✅ Defined | Both | `index.html` declares `--paper`, `--ink`, `--hazmat-yellow` AND legacy `--phosphor` |
+| **StatusBar frame** | ✅ Paper | Paper CSS vars | DOM frame uses `--paper`, `--ink` |
+| **Title screen** | ⚠️ Hybrid | Warm dark + green glow | `PAPER_BG = rgba(30,28,24,0.92)`, green accent glow — not full cream, not CRT |
+| **HUD bars/labels** | ⚠️ Warm sepia | Inline dark+warm | HP/EN bars use warm accents (#f44, #fa4), dark backgrounds — halfway to paper |
+| **Menu faces** | ❌ Dark canvas | Warm sepia on dark | `COL.slot_bg = rgba(255,255,255,0.06)`, tooltip bg `rgba(15,12,25,0.92)` |
+| **Dialog box** | ❌ Dark canvas | Dark sepia | bg `rgba(8,6,14,0.88)`, warm text `#f0d070` |
+| **Toast** | ❌ CRT neon | Phosphor greens | `#8f8` text, `rgba(20,50,20,0.85)` bg, neon suit colours |
+| **Card fan** | ❌ Dark purple | CRT | `COL_BG = rgba(20,18,28,0.92)` |
+| **Debrief feed** | ❌ CRT terminal | Phosphor | Explicitly `--phosphor`, `--phosphor-dim`, `--phosphor-bright` |
+| **Minimap** | ❌ CRT | Inherited phosphor | Dark bg, green markers |
+| **Splash screen** | ❌ Vaporwave | Purple gradient | `#120b22` → `#2e0d3f` → `#b8116e` |
+| **Class emojis** | ❌ Old military | 🗡️🏹🕵️🛡️🔮🃏 | Not updated to janitor variants |
+| **Deploy text** | ❌ Old | "DEPLOYING..." | Not "CLOCKING IN..." |
+| **Biome palettes** | ❌ Unchanged | Original values | Not brightened per §6 |
+| **Bonfire/vendor menus** | ❌ Dark canvas | Same as menu faces | No paper treatment |
+
+**Summary**: The migration stalled after StatusBar + title screen warm tones. HUD moved partially. Everything below that — menus, bonfire, vendor, cards, toasts, dialogs, debrief, minimap — remains dark/CRT. The patch should push paper through the menu/bonfire/vendor contexts and update the title screen to the sticky note vision.
 
 ---
 
@@ -166,38 +192,56 @@ Tool durability is shown as a **ruled checkbox strip**: `Uses: ☑☑☑☐☐` 
 
 ---
 
-## 4. Title Screen Pivot — Corporate Onboarding
+## 4. Title Screen Pivot — Dossier Desk with Sticky Notes
 
-The title screen currently uses a dark CRT cube aesthetic. The overhaul reframes character creation as **corporate onboarding** — the Gleaner's Guild is hiring, and you're filling out paperwork.
+The title screen currently uses a dark warm canvas with green glow. The overhaul reframes it as a **dossier desk** — the Gleaner's Guild desk where the player's paperwork sits. Menu buttons are **sticky notes / post-it notes**, titles sit on **line-ruled paper elements**, and the whole thing is framed with **clear tape edging** like a pinboard or manila folder.
 
-### 4.1 Phase 1 — Main Menu (The Cover Letter)
+**Visual reference**: [flapsandseals.com/booking](https://flapsandseals.com/booking) — the `.postit` class scenario cards, `.dossier-desk` container, `.dossier-folder` manila envelope with tab, and `.dossier-paper` ruled background. Our title screen adapts this to canvas rendering.
+
+### 4.1 Phase 1 — Main Menu (The Desk)
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                                                      │
-│          DUNGEON GLEANER                             │
-│          ═══════════════                             │
-│          A Gleaner's Guild Production                │
-│                                                      │
-│  ┌────────────────────────────────┐                  │
-│  │  ☐  NEW OPERATIVE             │  ← selected      │
-│  │  ☐  RESUME SHIFT              │                   │
-│  │  ☐  SETTINGS                  │                   │
-│  └────────────────────────────────┘                  │
-│                                                      │
-│  ⚠ Gleaner's Guild — Licensed Dungeon Maintenance   │
-│                                                      │
+│  ┌─ clear tape ─────────────────── clear tape ──┐    │
+│  │                                               │    │
+│  │  ╔═══════════════════════════════╗  ruled     │    │
+│  │  ║   DUNGEON GLEANER            ║  paper     │    │
+│  │  ║   A Gleaner's Guild Production║  element   │    │
+│  │  ╚═══════════════════════════════╝            │    │
+│  │                                               │    │
+│  │  ┌─────────────┐  ┌─────────────┐            │    │
+│  │  │ ☐ NEW       │  │ ☐ RESUME    │  sticky    │    │
+│  │  │  OPERATIVE  │  │  SHIFT      │  notes     │    │
+│  │  └─────────────┘  └─────────────┘            │    │
+│  │  ┌─────────────┐                              │    │
+│  │  │ ☐ SETTINGS  │                              │    │
+│  │  └─────────────┘                              │    │
+│  │                                               │    │
+│  │  ⚠ Gleaner's Guild — Licensed Dungeon Maint. │    │
+│  └───────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────┘
 ```
 
-**Visual details:**
-- Background: `--paper` cream with faint `--ruled-line` horizontal lines (like a memo pad)
-- Title: `--ink` bold, large (36px), slight letter-spacing
-- Subtitle: `--pencil` grey, italic, 14px — like a hand-scrawled note
-- Menu items: Checkbox idiom (`☐` / `☑`), `--ink` text, `--clipboard-blue` highlight on selected
-- Footer: `--hazmat-yellow` ⚠ warning icon + `--ink-light` text
-- Border: `--bg-clipboard` brown strip on left edge (clipboard backing)
-- Metal clip: Small grey clip icon at top-left (decorative)
+**Visual details — Sticky note buttons:**
+- Each menu option is a **post-it note** (slightly rotated ±1-3°, drop shadow)
+- Sticky note palette: pastel yellow `#fff8b8` (default), pastel blue `#b8d8f8` (selected), pastel pink `#f8c8c8` (hover)
+- Subtle fold/curl at bottom-right corner (CSS `clip-path` or canvas triangle)
+- Text: `--ink` handwriting-style (italic monospace), centered on the note
+- Selected note: slight scale-up (1.05×), deeper shadow, blue tint
+- Checkbox (`☐`/`☑`) drawn in pencil grey, ticks in `--check-green`
+
+**Visual details — Ruled paper title element:**
+- Title "DUNGEON GLEANER" sits on a **torn-edge ruled paper rectangle**
+- Background: `--paper` cream with faint `--ruled-line` horizontal lines (24px spacing)
+- Held to the desk by **clear tape strips** at top-left and top-right corners
+- Tape: `rgba(255,255,255,0.12)` semi-transparent rectangle with subtle `border: 1px solid rgba(255,255,255,0.08)` — looks like Scotch tape over paper
+- Title text: `--ink` bold 36px, sits on a ruled line
+- Subtitle: `--pencil` italic 14px, one ruled line below
+
+**Visual details — Desk background:**
+- Dark wood-grain or `--bg-clipboard` brown surface
+- The skybox parallax (Lake Pend Oreille) is retained but dimmed behind the desk surface
+- Existing 3D box rotation can continue as a desk object or be replaced with flat desk view
 
 ### 4.2 Phase 2 — Callsign Selection (The Name Badge)
 
@@ -567,34 +611,44 @@ The splash screen (pre-title) should look like a **hazmat warning label** on a b
 
 ---
 
-## 11. Implementation Priority
+## 11. Implementation Priority (Revised 2026-04-07)
 
-### 11.1 Jam Scope (by April 5)
+### 11.1 Patch Scope (by April 25) — Menu + Title Polish
 
-| Priority | Change | Module(s) | Est. Hours | Impact |
-|----------|--------|-----------|-----------|--------|
-| P0 | CSS palette swap (§2 colour variables) | `index.html` `<style>` | 1h | Transforms entire feel instantly |
-| P0 | Title screen text + background recolour (§4) | `title-screen.js` | 1h | First impression |
-| P1 | HUD panel background + text colour (§3) | `hud.js` | 1.5h | Gameplay feel |
-| P1 | Card fan paper background + suit borders (§5) | `card-fan.js` | 1h | Card play feel |
-| P1 | Exterior biome palette nudges (§6) | `floor-manager.js` | 0.5h | Hex value changes only |
-| P2 | Splash screen hazmat reskin (§10) | `splash-screen.js`, `index.html` | 1h | Polish |
-| P2 | Typography size bump (§8) | `hud.js`, `title-screen.js`, `dialog-box.js` | 1h | Geriatric legibility |
-| P2 | Class emoji + description refresh (§9) | `title-screen.js` (AVATARS array) | 0.5h | Thematic alignment |
+| Priority | Change | Module(s) | Est. | Risk | Notes |
+|----------|--------|-----------|------|------|-------|
+| P0 | Title screen sticky note buttons (§4.1) | `title-screen.js` | 2h | Low | Canvas-rendered post-it notes, ruled paper title element, tape edging. Replaces current dark warm canvas buttons. |
+| P0 | Menu face COL palette → paper tones (§7) | `menu-faces.js` | 1.5h | Low | Update COL object: slot_bg, text, accent, dim, title, currency. Dark→cream canvas fills. Affects pause/bonfire/vendor/shop all at once. |
+| P0 | Deploy text "CLOCKING IN..." (§4.4) | `title-screen.js` | 5min | None | One i18n string change |
+| P0 | Post-class loadout overlay on loading screen | `title-screen.js` | 1.5h | Low | After class select, during "CLOCKING IN" progress bar — show starting deck, equipped items, class stats as a loadout summary overlay. Paper form aesthetic. |
+| P1 | Class emoji + description refresh (§9) | `title-screen.js` | 15min | None | String replacements in AVATARS array: 🗡→🧹, 🏹→🔫, 🕵→🥷, 🛡→🦺, 🔮→📋, 🃏→🎰 |
+| P1 | Dialog box COL palette → paper (§3) | `dialog-box.js` | 30min | Low | bg dark→cream, text warm→ink. Same pattern as menu faces. |
+| P1 | Toast palette → paper filing tabs (§3) | `toast.js` | 30min | Low | bg dark→paper-slip, coloured left border instead of full bg tint |
+| P2 | Biome palette nudges (§6) | `floor-manager.js` | 30min | None | Hex value tweaks only, no logic changes |
+| P2 | Card fan paper background (§5) | `card-fan.js` | 45min | Low | COL_BG dark→cream, suit border brightening |
 
-**Total jam estimate: ~7.5h** — all changes are CSS/colour constant swaps and string replacements. No new modules, no architecture changes.
+**Patch estimate: ~7.5h** — colour constant swaps, string replacements, and one new overlay (loadout). No architecture changes.
 
-### 11.2 Post-Jam Polish
+**Explicitly deferred from patch:**
+- Full HUD ruled-paper texture + clipboard border (§3 detailed) — requires DOM restructure
+- Debrief feed + minimap CRT→paper — intentional CRT aesthetic for these elements (keep as-is)
+- Splash screen hazmat reskin (§10) — DOM/CSS restructure, low gameplay impact
+- MenuBox binder-tab visual (§7 detailed) — face renderer overhaul
+- Card art stencil sprites (§5.3) — requires artist assets
+- Handwriting jitter (§3.1) — post-launch polish
+
+### 11.2 Post-Patch Polish
 
 | Priority | Change | Notes |
 |----------|--------|-------|
-| P3 | Ruled-paper CSS background texture (§8.3) | Pure CSS, but needs baseline alignment tuning |
+| P3 | Ruled-paper CSS background texture (§8.3) | Pure CSS, needs baseline alignment tuning |
 | P3 | Clipboard border + metal clip decoration (§3) | Small canvas/CSS decoration |
-| P3 | MenuBox binder-tab visual overhaul (§7) | Requires face renderer CSS changes |
+| P3 | MenuBox binder-tab visual overhaul (§7) | Face renderer changes, tab colour coding |
 | P3 | Card art stencil-style sprites (§5.3) | Requires artist assets |
 | P4 | Handwriting jitter effect (§3.1) | Per-character baseline offset cached at init |
 | P4 | Rubber stamp animation on deploy screen (§4.4) | Canvas 2D rotation + opacity fade-in |
 | P4 | Hazard-stripe splash screen (§10) | CSS repeating-linear-gradient diagonal bars |
+| P4 | Splash screen → hazmat label (§10) | Low priority, current vaporwave is fine for now |
 
 ---
 
@@ -622,4 +676,7 @@ The splash screen (pre-title) should look like a **hazmat warning label** on a b
 | `→ GAME_FLOW_ROADMAP §5` | Title Screen — deployment flow structure preserved, visual treatment updated (§4) |
 | `→ GAME_FLOW_ROADMAP §6` | MenuBox Rendering — fold/rotate mechanics preserved, face visuals updated (§7) |
 | `→ SUIT_SYSTEM_ROADMAP` | Suit resource colours — retained and brightened for paper contrast (§2.1) |
-| `⊕ PHASE G` | Visual Overhaul — implement §11.1 jam-scope palette + typography changes |
+| `→ B5_INVENTORY_INTERACTION_DESIGN` | DragDrop zone glow CSS uses palette-aware context colours (§2.2 of this doc) |
+| `→ B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT` | SlotWheel shop sell view — needs paper palette for slot rendering |
+| `⊕ EXT REF` | [flapsandseals.com/booking](https://flapsandseals.com/booking) — dossier desk, post-it, tape edge visual source of truth |
+| `⊕ PATCH` | Visual Overhaul — implement §11.1 patch-scope items by 2026-04-25 |

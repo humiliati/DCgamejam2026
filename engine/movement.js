@@ -18,6 +18,7 @@ var MovementController = (function () {
   // Forward/back: snappy advance (competitor reference: ~320ms)
   // Turns: deliberate rotation for peaks & reveals (competitor reference: ~350ms)
   var WALK_TIME      = 320;   // ms per grid step (was 500 — faster advance)
+  var STRAFE_MULT    = 1.15;  // Strafe is 15% slower than forward (tactical feel)
   var ROT_TIME       = 350;   // ms per 90° turn (was 250 — slower, more dramatic)
   var BUMP_TIME      = 200;   // ms for wall-bump feedback
   var KEY_REPEAT_DELAY = 400; // ms before held key starts repeating
@@ -97,6 +98,7 @@ var MovementController = (function () {
     this.actionType = actionType;
     this.actionDir = actionDir; // for MOVE: direction index; for ROT: -1 or 1
     this.doubleTime = 0;
+    this.strafe = false;        // true for strafe moves (15% slower)
     // For bump animation
     this.bumpX = 0;
     this.bumpY = 0;
@@ -203,12 +205,13 @@ var MovementController = (function () {
   // ── Public movement API ──
 
   /** Queue a move in absolute direction (0-3) */
-  function startMove(dir) {
+  function startMove(dir, isStrafe) {
     var tail = _queueTail();
     var dx = DX[dir];
     var dy = DY[dir];
 
     var impulse = new MoveState(dx, dy, tail.rot, ACTION_MOVE, dir);
+    if (isStrafe) impulse.strafe = true;
     _impulseQueue.push(impulse);
 
     // Double-time: if queue gets deep with same action, speed up
@@ -227,14 +230,15 @@ var MovementController = (function () {
   function startRelativeMove(rel) {
     var baseDir = effRot();
     var moveDir;
+    var isStrafe = false;
     switch (rel) {
       case 'forward':      moveDir = baseDir; break;
       case 'back':         moveDir = (baseDir + 2) % 4; break;
-      case 'strafe_left':  moveDir = (baseDir + 3) % 4; break; // CCW in screen coords
-      case 'strafe_right': moveDir = (baseDir + 1) % 4; break; // CW in screen coords
+      case 'strafe_left':  moveDir = (baseDir + 3) % 4; isStrafe = true; break;
+      case 'strafe_right': moveDir = (baseDir + 1) % 4; isStrafe = true; break;
       default: return;
     }
-    startMove(moveDir);
+    startMove(moveDir, isStrafe);
   }
 
   /** Queue a turn to target direction */
@@ -332,7 +336,8 @@ var MovementController = (function () {
       var walkMult = (typeof Player !== 'undefined' && Player.getWalkTimeMultiplier)
         ? Player.getWalkTimeMultiplier() : 1;
       var spdMult = _speedOverride * walkMult;
-      var totTime = next.actionType === ACTION_MOVE ? (WALK_TIME * spdMult) :
+      var strafeMult = (next.strafe) ? STRAFE_MULT : 1;
+      var totTime = next.actionType === ACTION_MOVE ? (WALK_TIME * spdMult * strafeMult) :
                     next.actionType === ACTION_ROT ? (ROT_TIME * _speedOverride) : BUMP_TIME;
 
       // Double-time acceleration
@@ -489,6 +494,7 @@ var MovementController = (function () {
   return {
     // Timing constants (readable for tuning)
     WALK_TIME: WALK_TIME,
+    STRAFE_MULT: STRAFE_MULT,
     ROT_TIME: ROT_TIME,
     BUMP_TIME: BUMP_TIME,
     KEY_REPEAT_DELAY: KEY_REPEAT_DELAY,

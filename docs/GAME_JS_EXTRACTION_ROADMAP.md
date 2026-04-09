@@ -218,5 +218,28 @@ _interact and _render slim down from extracted call targets).
 
 ---
 
+---
+
+## Post-jam P3 extraction assessment (2026-04-07)
+
+game.js is currently 5,306 lines. Remaining large blocks:
+
+| Block | Lines | Closure deps | Risk | Priority |
+|---|---|---|---|---|
+| NPC dialogue trees (1422–3035) | 1,614 | 0 — pure data objects | LOW | **P1 — extract** |
+| _interact (3860–4460) | 601 | 8+ state vars, peek chain | HIGH | Skip |
+| Render + sprites (4632–5230) | 599 | _canvas, sprite registry | MED | Defer |
+| Input bindings (304–775) | 472 | ESC chain, peek intercepts | HIGH | Skip |
+
+**Recommendation:** Extract NPC dialogue trees → `engine/npc-dialogue-trees.js`.
+This is 1,614 lines of pure dialogue tree data with zero closure deps, zero
+logic, zero game state mutation. The function `_registerNpcDialogueTrees()`
+calls `NpcSystem.registerDialogue(id, tree)` for each NPC. The tree objects
+reference global modules (Player, CardAuthority, Shop) via typeof guards
+that are already in place. Drop-in extraction — move the function, call it
+from game.js init.
+
+**Projected result:** game.js drops to ~3,692 lines (30% reduction).
+
 *Created: 2026-04-06 — SC-G session*
 *Cross-ref: SPATIAL_CONTRACTS.md, UNIFIED_RESTOCK_SURFACE_ROADMAP.md*

@@ -2,7 +2,7 @@
 
 A first-person dungeon crawler built for [DC Jam 2026](https://itch.io/jam/dcjam2026) (March 27 -- April 5, 2026). Post-jam development targets LG webOS TV deployment via Magic Remote.
 
-Someone has to restock the dungeons.
+This isn’t a dungeon crawler where you fight enemies. It’s a dungeon where movement is economy, and you weaponize flow. "Someone has to restock the chests."
 
 You are **Operative Gleaner** -- a licensed dungeon maintenance contractor dispatched to a small coastal boardwalk town. While the heroes kick down doors, slaughter everything that moves, and loot every crate in sight, somebody has to come in after and put it all back together. That somebody is you.
 

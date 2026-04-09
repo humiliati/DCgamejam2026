@@ -111,7 +111,12 @@ var SpatialContract = (function () {
         5: -0.12,     // STAIRS_DN — sunken into ground, "descending"
         6:  0.06,     // STAIRS_UP — slight rise, "ascending"
         14: 0.15,     // BOSS_DOOR — prominently elevated (intentional)
-        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+        29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
+        60: 0.05,     // ROOF_EAVE_L — barely raised, eave overhang
+        61: 0.15,     // ROOF_SLOPE_L — ascending slope
+        62: 0.30,     // ROOF_PEAK — ridge, highest point
+        63: 0.15,     // ROOF_SLOPE_R — descending slope (mirror)
+        64: 0.05      // ROOF_EAVE_R — barely raised (mirror)
       }), opts.tileHeightOffsets),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
@@ -135,7 +140,12 @@ var SpatialContract = (function () {
         30: 'torch_bracket_lit',   // TORCH_LIT — stone wall + burning torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — stone wall + charred bracket
         35: 'fence_wood',      // FENCE — wooden rail (0.4× half-wall)
-        38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck (0.5× short wall, hose billboard above)
+        38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck (0.5× short wall, hose billboard above)
+        60: 'roof_shingle',    // ROOF_EAVE_L — left eave strip
+        61: 'roof_shingle',    // ROOF_SLOPE_L — left ascending slope
+        62: 'roof_shingle',    // ROOF_PEAK — ridge beam
+        63: 'roof_shingle',    // ROOF_SLOPE_R — right descending slope
+        64: 'roof_shingle'     // ROOF_EAVE_R — right eave strip
       }), opts.textures),
 
       // ── Floor texture ──
@@ -144,13 +154,20 @@ var SpatialContract = (function () {
       // ── Per-tile-type floor texture overrides ──
       // Biome overrides merge INTO these defaults.
       tileFloorTextures: _mergeTileTable({
+        8:  'floor_trap',        // TRAP — pressure plate on stone
+        15: 'floor_fire',        // FIRE — charred stone with ember cracks
+        16: 'floor_spikes',      // SPIKES — iron grate over spike pit
+        17: 'floor_poison',      // POISON — stone with toxic green pools
+        19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
         21: 'floor_grass',       // TREE — grass under trees
         22: 'floor_grass',       // SHRUB — grass under hedges
+        23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
         32: 'floor_cobble',      // ROAD — cobblestone avenues
         33: 'floor_dirt',        // PATH — dirt trails
         34: 'floor_grass',       // GRASS — meadow clearings
         35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
-        37: 'bonfire_ring'       // MAILBOX — reuse stone ring base texture
+        37: 'bonfire_ring',      // MAILBOX — reuse stone ring base texture
+        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -160,7 +177,12 @@ var SpatialContract = (function () {
         22: 0.5,    // SHRUB — half-height hedge
         35: 0.4,    // FENCE — railing, player sees over to skybox
         37: 0.5,    // MAILBOX — half-height post, emoji billboard sits above
-        38: 0.5     // DUMP_TRUCK — short truck body, hose billboard floats above
+        38: 0.5,    // DUMP_TRUCK — short truck body, hose billboard floats above
+        60: 0.20,   // ROOF_EAVE_L — thin strip, eave overhang
+        61: 0.25,   // ROOF_SLOPE_L — slightly taller ascending slope
+        62: 0.30,   // ROOF_PEAK — thickest strip, ridge beam
+        63: 0.25,   // ROOF_SLOPE_R — mirror of SLOPE_L
+        64: 0.20    // ROOF_EAVE_R — mirror of EAVE_L
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -243,7 +265,15 @@ var SpatialContract = (function () {
       floorTexture:     opts.floorTexture || 'floor_wood',
 
       // ── Per-tile-type floor texture overrides ──
-      tileFloorTextures: _mergeTileTable(null, opts.tileFloorTextures),
+      tileFloorTextures: _mergeTileTable({
+        8:  'floor_trap',        // TRAP — pressure plate on stone
+        15: 'floor_fire',        // FIRE — charred stone with ember cracks
+        16: 'floor_spikes',      // SPIKES — iron grate over spike pit
+        17: 'floor_poison',      // POISON — stone with toxic green pools
+        19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
+        23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
+        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
+      }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({
@@ -344,7 +374,15 @@ var SpatialContract = (function () {
       floorTexture:     opts.floorTexture || 'floor_stone',
 
       // ── Per-tile-type floor texture overrides ──
-      tileFloorTextures: _mergeTileTable(null, opts.tileFloorTextures),
+      tileFloorTextures: _mergeTileTable({
+        8:  'floor_trap',        // TRAP — pressure plate on stone
+        15: 'floor_fire',        // FIRE — charred stone with ember cracks
+        16: 'floor_spikes',      // SPIKES — iron grate over spike pit
+        17: 'floor_poison',      // POISON — stone with toxic green pools
+        19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
+        23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
+        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
+      }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({

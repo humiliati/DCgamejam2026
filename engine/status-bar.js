@@ -66,6 +66,10 @@ var StatusBar = (function () {
   var _combatEnergy = 0;
   var _onFleeCallback = null;  // Set by Game at init for FLEE button
 
+  // ── Hose state (shared anchor with pause/flee) ─────────────────
+  var _hoseActive    = false;
+  var _onReelCallback = null;  // Set by Game at init for REEL button
+
   // ── Init ────────────────────────────────────────────────────────
 
   function init() {
@@ -241,7 +245,8 @@ var StatusBar = (function () {
             // If already on Face 1, close. Otherwise navigate.
             var onFace1 = (typeof MenuBox !== 'undefined' && MenuBox.getCurrentFace() === 1);
             if (onFace1) {
-              MenuBox.close();
+              if (typeof MenuBox !== 'undefined') MenuBox.close();
+              ScreenManager.resumeGameplay();
             } else {
               if (typeof MenuBox !== 'undefined') MenuBox.snapToFace(1);
             }
@@ -256,10 +261,19 @@ var StatusBar = (function () {
       });
     }
 
-    // Pause/hamburger button → toggle pause menu at Face 0 (default minimap)
+    // Shared action button: FLEE (combat) / REEL (hose) / ☰ PAUSE (normal).
+    // Priority: combat > hose > normal.
     if (_btnPause) {
       _btnPause.addEventListener('click', function (e) {
         e.stopPropagation();
+        if (_inCombat) {
+          if (_onFleeCallback) _onFleeCallback();
+          return;
+        }
+        if (_hoseActive) {
+          if (_onReelCallback) _onReelCallback();
+          return;
+        }
         if (typeof ScreenManager !== 'undefined') {
           if (ScreenManager.isPaused()) {
             if (typeof MenuBox !== 'undefined') MenuBox.close();
@@ -274,6 +288,47 @@ var StatusBar = (function () {
         }
       });
     }
+  }
+
+  // ── Shared action button refresh ────────────────────────────────
+  // The #sb-pause button serves triple duty:
+  //   Combat  → 🏃 FLEE  (red pulse, fires _onFleeCallback)
+  //   Hose    → 🔄 REEL  (green, fires _onReelCallback)
+  //   Normal  → ☰        (pause menu)
+  // Priority: combat > hose > normal. Called by setCombat() and
+  // setHoseActive() whenever their state changes.
+
+  function _refreshActionButton() {
+    if (!_btnPause) return;
+
+    // Remove all mode classes first
+    _btnPause.classList.remove('sb-flee-active', 'sb-reel-active');
+
+    if (_inCombat) {
+      _btnPause.textContent = '\u{1F3C3} FLEE';
+      _btnPause.title       = 'Flee Combat (F)';
+      _btnPause.classList.add('sb-flee-active');
+    } else if (_hoseActive) {
+      _btnPause.textContent = '\u{1F504} REEL';
+      _btnPause.title       = 'Roll Up Hose (R)';
+      _btnPause.classList.add('sb-reel-active');
+      // TODO:SFX reel-button-hover — short zipline whir / cable tension
+      // "zing" on hover/focus of the REEL button. 80-150ms, volume 0.2.
+      // Conveys taut cable ready to release. Fire on pointerenter when
+      // sb-reel-active is set; suppress repeats within 300ms debounce.
+    } else {
+      _btnPause.textContent = '\u2630';
+      _btnPause.title       = 'Pause Menu (Esc)';
+    }
+  }
+
+  /**
+   * Set hose-active state. When active (and not in combat), the pause
+   * button shows REEL instead of ☰.
+   */
+  function setHoseActive(active) {
+    _hoseActive = !!active;
+    _refreshActionButton();
   }
 
   // ── Show / Hide ─────────────────────────────────────────────────
@@ -441,8 +496,6 @@ var StatusBar = (function () {
     if (_inCombat) {
       // Swap compass to FLEE indicator during combat
       if (_btnMap) _btnMap.textContent = '!';
-      // Hide pause button during combat (combat flow manages itself)
-      if (_btnPause) _btnPause.style.display = 'none';
       // Update floor area with combat info
       if (_floorEl) {
         _floorEl.innerHTML = 'Round <span>' + _combatRound + '</span>';
@@ -456,9 +509,11 @@ var StatusBar = (function () {
     } else {
       // Restore compass label
       if (_btnMap) _btnMap.textContent = 'N';
-      if (_btnPause) _btnPause.style.display = '';
       _updateMapBtn();
     }
+
+    // Shared anchor: refresh pause/flee/reel button state
+    _refreshActionButton();
   }
 
   // ── Tooltip footer ─────────────────────────────────────────────
@@ -1138,6 +1193,8 @@ var StatusBar = (function () {
     checkWalkAway:     checkWalkAway,
     collapseIfIdle:    collapseIfIdle,
     forceCollapse:     forceCollapse,
-    setOnFlee: function (fn) { _onFleeCallback = fn; }
+    setOnFlee: function (fn) { _onFleeCallback = fn; },
+    setOnReel: function (fn) { _onReelCallback = fn; },
+    setHoseActive: setHoseActive
   };
 })();

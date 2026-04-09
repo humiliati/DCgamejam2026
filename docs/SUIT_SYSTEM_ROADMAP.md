@@ -1,7 +1,7 @@
 # Suit System Roadmap — Dungeon Gleaner
 
-> **Created:** 2026-03-27 | **Updated:** 2026-03-27
-> **Status:** 8 of 12 passes complete. Card DB 90 cards. Audio live. Remaining 4 below.
+> **Created:** 2026-03-27 | **Updated:** 2026-04-07
+> **Status:** 8 of 12 passes complete. Card DB expanded to 120 cards. Audio + spatial SFX live. Remaining 4 below.
 
 ---
 
@@ -46,22 +46,22 @@ Rule-breaker suit: strong vs status effects, weak vs burst damage.
 | Sealab | 6-8 | ♣ (Wild/Marine) | Energy, relics | ♣ native + ♠ (advantage vs ♣) |
 | Cross-biome | any | ♥ (rare drops) | Varies | ♥ rule-breakers |
 
-### Card Distribution (90 cards)
+### Card Distribution (120 cards — updated 2026-04-07)
 
 ```
-♠ Spade:   27 cards (30%) — starter basics, earth/steel, free cost
-♣ Club:    28 cards (31%) — wild/force, energy cost trend
-♦ Diamond: 20 cards (22%) — crystal/precision, battery cost trend
-♥ Heart:   15 cards (17%) — life/blood, HP cost, sacrifice + defense
+♠ Spade:   34 cards (28%) — starter basics, earth/steel, free cost
+♣ Club:    36 cards (30%) — wild/force, energy cost trend
+♦ Diamond: 29 cards (24%) — crystal/precision, battery cost trend
+♥ Heart:   21 cards (18%) — life/blood, HP cost, sacrifice + defense
 ```
 
-### Defense Coverage (31 total)
+### Defense Coverage
 
 ```
-♠ Spade:   12 defense cards — baseline walls, control+defense hybrids
-♣ Club:     7 defense cards — energy barriers, brace+CC combos
-♦ Diamond:  6 defense cards — battery-cost forge armor, burn counter
-♥ Heart:    6 defense cards — HP-sacrifice shields, regen brace
+♠ Spade:   baseline walls, control+defense hybrids
+♣ Club:    energy barriers, brace+CC combos
+♦ Diamond: 7 defense cards — battery-cost forge armor, burn counter (ACT-133 Crucible Shell: 14 DEF @ battery:2)
+♥ Heart:   HP-sacrifice shields, regen brace (ACT-117 Final Stand: 15 DEF @ HP:5)
 ```
 
 ### Brace Cards (defense + damage)
@@ -151,16 +151,23 @@ Rule-breaker suit: strong vs status effects, weak vs burst damage.
 ### Pass 9 — Suit Balance Tuning
 **Est: 1-2h** | **Priority: Medium** | **Jam-polish**
 
-Playtest and tune the expanded 90-card DB:
-- Verify ♦ battery-cost cards feel good with battery scarcity (now 6 defense cards at battery cost)
-- Check that ♥ HP-cost sacrifice cards (Blood Barrier, Martyr's Embrace, Final Stand) don't feel like traps
-- Validate brace cards (Crimson Counter, Countershock, Forge Brace) feel responsive as the "bracing" answer to enemy telegraphs
-- Tune mono-suit bonus (+1 per card) — may need to be +2 for viability
-- Verify cellar→foundry→sealab suit progression teaches RPS naturally
-- Balance status diversity: poison/root/bleed now have enough cards for dedicated builds — verify DoT stacking isn't OP
-- Adjust cost overrides if battery economy is too tight
+Playtest and tune the expanded 120-card DB. Mono-suit bonus is now live in combat-engine.js (was dead code pre-patch, fixed 2026-04-07).
 
-Files: `data/cards.json` (cost/effect values), `synergy-engine.js` (multipliers)
+**Current tuning constants:**
+- `ADV_MULT = 1.5` / `DISADV_MULT = 0.75` (synergy-engine.js)
+- Mono-suit bonus: `+1 dmg per card beyond first` (3-stack mono = +2). Stacks with stack-size bonus (+1 per extra card), so a 3-card mono stack gets +4 total bonus.
+- Damage order: base + stackEffects → stack-size bonus → mono-suit bonus → thrust mult → suit RPS mult → ambush/alert mult
+
+**Playtest checklist:**
+- [ ] **♦ battery economy:** 15 of 29 diamonds cost battery. ACT-133 Crucible Shell (battery:2, 14 DEF) may be too rewarding — consider battery:1 or DEF→12 if battery feels scarce
+- [ ] **♥ HP sacrifice viability:** Final Stand (HP:5, 15 DEF) and Martyr's Embrace (HP:4, 10 DEF) are steep — do they feel like traps at low HP? Vital Surge (HP:1, 4 HP + draw) is the cheap entry point
+- [ ] **Brace responsiveness:** Crimson Counter, Countershock, Forge Brace, Forge Mastery — do they feel like the right answer to enemy telegraphs?
+- [ ] **Mono-suit bonus (+1):** May need to be +2 to compete with RPS advantage (50%). At +1, a 3-stack mono is +2 dmg vs RPS advantage of ×1.5 on base damage. The question: is mono-suit a viable alternative to suit-matching the enemy, or just a consolation prize?
+- [ ] **RPS teaching progression:** Cellar (♠ dominant, ♦ drops advantage) → Foundry (♦ dominant, ♣ drops) → Sealab (♣ dominant, ♠ drops). Does the player learn naturally?
+- [ ] **DoT stacking:** Poison 4 cards, root 5, bleed 6 — dedicated status builds are now possible. Verify DoT stacking isn't OP in longer fights
+- [ ] **Cost override candidates:** If battery is too tight, candidates for cost reduction: ACT-210 EMP Blast (battery:3→2), ACT-133 Crucible Shell (battery:2→1)
+
+Files: `data/cards.json` (cost/effect values), `synergy-engine.js` (multipliers), `combat-engine.js` (damage pipeline)
 
 ### Pass 10 — Hearts Rule-Breaker Mechanics (Post-Jam / T3)
 **Est: 3h** | **Priority: Low** | **Post-jam**
@@ -226,5 +233,5 @@ Files: `synergy-engine.js`, `combat-engine.js`
 
 ---
 
-**Document Version:** 3.0
-**Updated:** 2026-03-27 — Passes 6, 6.5, 7, 8 complete. 8 of 12 done.
+**Document Version:** 3.1
+**Updated:** 2026-04-07 — Card DB 90→120. Pass 9 checklist updated with current tuning constants. Mono-suit bonus confirmed live in combat pipeline.

@@ -1,7 +1,7 @@
 # Act 2 Narrative Outline — Open City, Faction War, Seaway
 
 **Created**: 2026-04-06
-**Depends on**: `STREET_CHRONICLES_NARRATIVE_OUTLINE.md` (faction dossiers, MacGuffin), `CORE_GAME_LOOP_AND_JUICE.md` (hero cycle, day/night, economy), `FLOOR3_BLOCKOUT.md` (Frontier Gate layout), `HERO_FOYER_ENCOUNTER.md` (Act 1 choreography style guide)
+**Depends on**: `STREET_CHRONICLES_NARRATIVE_OUTLINE.md` (faction dossiers, MacGuffin), `CORE_GAME_LOOP_AND_JUICE.md` (hero cycle, day/night, economy), `FLOOR3_BLOCKOUT.md` (Frontier Gate layout), `HERO_FOYER_ENCOUNTER.md` (Act 1 choreography style guide), `COZY_INTERIORS_DESIGN.md` (safe interior contract), `LIVING_INFRASTRUCTURE_BLOCKOUT.md` (housing/living infrastructure nodes), `NPC_FACTION_BOOK_AUDIT.md` (faction HQ populations and bark tone)
 **Scope**: Story beats, faction-choice mechanic, Dispatcher arc, seaway introduction, and floor routing for Act 2. Does NOT cover Act 3 betrayals or endgame branching.
 
 ---
@@ -155,6 +155,37 @@ The original dispatcher is found in the Seaway (Floor 0.1.1). Alive. Hiding. The
 
 If the player's chosen faction is BPRD, the dispatcher is hostile (terrified, assumes the player is sent to silence them). Any other faction: the dispatcher becomes an informant, providing a key item or intelligence needed for the Act 2 climax.
 
+### 5.4 Housing Reassignment Arc (BnB -> Field Quarters)
+
+Act 1's Floor 1.6 is reframed as **company-funded temporary lodging** ("HomeBnB"), not owned property. The player's Day 0 supervisor line ("you just got here, room's on us for onboarding week") becomes diegetic setup for the downgrade.
+
+**Narrative avenue:** once Act 2 faction conflict escalates, BPRD revokes broad housing stipends under "operational security." Field operatives are reassigned to lower-comfort quarters tied to trust, allegiance, and district risk.
+
+**Mechanical downgrade intent:** move the player from high-comfort sanctuary to a narrower base that preserves core safety but removes convenience systems, then let the player earn those systems back through mission and relationship play.
+
+| Phase | Housing State | Narrative Framing | Mechanical State |
+|---|---|---|---|
+| Act 1 baseline | `1.6` HomeBnB (temporary) | New hire onboarding lodging in the nice district | Full comfort set for tutorial pacing |
+| Act 2 early | Warning notice posted | "Stipend under review due to Frontier escalation" | No change yet, foreshadow only |
+| Act 2 lock | Forced relocation ("Move Night") | Security reclassification + faction pressure | HomeBnB convenience disabled; player moved |
+| Act 2 mid-late | Affinity quarters | Chosen faction/civil ties determine new room type | Reduced feature set (bed/save/stash + 1 utility) |
+| Act 3/endgame | `1.6` reclaimed | Legal reclaim, purchase, or faction grant | Full feature restoration + prestige upgrades |
+
+**Affinity routing (recommended):**
+
+- High faction affinity: faction apartment/bunkhouse near HQ (3.N interiors).
+- High civilian/community affinity: town apartment above shop/inn.
+- Low/fragmented affinity: municipal bunkhouse with sparse amenities.
+
+**Move Night sequence (single quest):**
+
+1. Receive reassignment order from replacement dispatcher.
+2. Pack 2-3 personal artifacts from `1.6` into a transfer crate.
+3. Escort crate through a contested exterior corridor.
+4. Arrive at assigned quarters; first-night bark/tutorial establishes downgraded systems.
+
+This keeps the emotional beat personal while preserving Act 2's "surface is no longer safe" tone shift.
+
 ---
 
 ## 6. Teaching Characters Through Action
@@ -206,6 +237,7 @@ The seaway is a depth-2/depth-3 complex beneath Floor 0 (The Approach). The entr
 - Floor 3 unlocks. Player explores Frontier Gate, meets faction contacts.
 - Faction missions available from all four buildings. Player runs 2-3 for whichever factions interest them.
 - Dispatcher begins faltering (background, observed).
+- Housing stipend warning appears in `1.6` (mail/notice): temporary lodging status is now explicit.
 - Maintenance loop continues on Floors 1-2. Hero cycle runs normally.
 - Combat encounters increase slightly on dungeon floors (faction operatives appear as neutral NPCs, not yet hostile).
 
@@ -216,6 +248,7 @@ The seaway is a depth-2/depth-3 complex beneath Floor 0 (The Approach). The entr
 - Hostile faction operatives begin appearing on exterior floors. Surface is no longer safe.
 - Shops close. Patrol routes become combat encounters.
 - Dispatcher disappears (Day 11). Replacement arrives (Day 12).
+- Replacement dispatcher issues housing reassignment order. "Move Night" quest fires.
 - Dungeon floors now have hostile faction presence competing for objectives.
 
 ### Phase 3: Seaway Discovery (Days 15-20)
@@ -226,6 +259,7 @@ The seaway is a depth-2/depth-3 complex beneath Floor 0 (The Approach). The entr
 - Original dispatcher found hiding in the tunnels.
 - Player retrieves a faction-critical item from the BPRD contraband locker.
 - Hostile faction has a team in the seaway. First major multi-enemy combat encounter.
+- Player settles into affinity-based quarters; upgrade hooks unlock (earn-back loop begins).
 
 ### Phase 4: Deep Vault Return and Climax (Days 21-25)
 
@@ -268,6 +302,12 @@ Narrative state tracked via `Player.setFlag()` / `Player.getFlag()`:
 | `faction_locked` | string | Exclusive contract accepted ("mss" / "pinkerton" / "jesuit" / "bprd") |
 | `faction_hostile` | string | Opposing faction ID |
 | `dispatcher_phase` | string | "normal" / "faltering" / "missing" / "replaced" |
+| `housing_status` | string | "homebnb_temp" / "reassigned" / "bunkhouse" / "faction_quarters" / "apartment" / "home16_reclaimed" |
+| `housing_provider` | string | "bprd" / "mss" / "pinkerton" / "jesuit" / "civilian" / "municipal" |
+| `housing_tier` | int | 0-4 amenity tier for current quarters |
+| `home16_locked` | bool | HomeBnB convenience disabled after reassignment |
+| `home16_reclaimed` | bool | Endgame reclaim complete |
+| `move_night_done` | bool | Relocation quest completed |
 | `dispatcher_found` | bool | Original dispatcher located in seaway |
 | `seaway_open` | bool | Floor 0.1 entrance activated |
 | `seaway_deep_cleared` | bool | Act 2 climax completed |
@@ -298,3 +338,17 @@ Narrative state tracked via `Player.setFlag()` / `Player.getFlag()`:
 3. **How many dungeon floors does Act 2 need?** The seaway adds 3 floors (0.1, 0.1.1, 0.1.2). The Deep Vaults expand (3.1.1 grows new wings). Floor 3 exterior is the new hub. Total new hand-authored content: 4-5 blockouts.
 
 4. **Hostile faction difficulty curve.** Early hostile encounters should be winnable with Act 1 decks. Late Act 2 hostile teams should require faction-specific cards earned from mission rewards. This creates a natural gear check without explicit level gates.
+
+---
+
+## 13. Cross-References
+
+| Document | Why It Matters For This Outline |
+|---|---|
+| `COZY_INTERIORS_DESIGN.md` | Defines depth-2 safety contract and interior feature taxonomy that housing downgrade must preserve at minimum tier. |
+| `LIVING_INFRASTRUCTURE_BLOCKOUT.md` | Provides apartment/barracks/soup-kitchen/cot templates and verb-node placement for affinity housing states. |
+| `VERB_FIELD_NPC_ROADMAP.md` | Supports affinity consequences via NPC verb changes (rest/social/duty) around player housing and faction HQ spaces. |
+| `NPC_FACTION_BOOK_AUDIT.md` | Grounds faction HQ populations, bark tone, and building-native document placement for relocated quarters. |
+| `STREET_CHRONICLES_NARRATIVE_OUTLINE.md` | Macro act pacing and faction lock structure that this housing reassignment now plugs into directly. |
+| `Tutorial_world_roadmap.md` | Establishes Act 1 starter shelter framing and current floor hierarchy (`1.6`, `2.1`, `2.2`, depth conventions). |
+| `SEAWAY_FLOOR_DESIGN.md` | Mid-Act 2 discovery cadence used as the point where relocation consequences and trust realignment deepen. |

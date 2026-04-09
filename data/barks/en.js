@@ -1073,3 +1073,109 @@ BarkLibrary.register('ambient.vivec_crowd', [
   { text: '🗣️ "..."',                                                                 weight: 0.5, style: 'bubble' }
 ], { cooldownMs: 28000 });
 
+// ═══════════════════════════════════════════════════════════════════
+// §ENCOUNTER — Verb-field NPC-to-NPC encounter barks
+// ═══════════════════════════════════════════════════════════════════
+// These fire when two verb-field NPCs meet at the same spatial node.
+// Pool key convention: encounter.<nodeType>.<encounterType>
+// Fallback pools: encounter.<encounterType> (no node type prefix)
+// See VERB_FIELD_NPC_ROADMAP.md §8.
+
+// ── Camaraderie (same verb, same faction) ─────────────────────────
+
+BarkLibrary.register('encounter.camaraderie', [
+  { text: '🗣️ "Another late night at the post, eh?"  —  "Someone has to keep the standards up."', weight: 3 },
+  { text: '🗣️ "You look tired."  —  "You look worse."  —  [both laugh quietly]', weight: 2 },
+  { text: '🗣️ "Did the new shipment come through?"  —  "Tomorrow, supposedly. We\'ll see."', weight: 2 },
+  { text: '🗣️ "Good to see a friendly face out here."  —  "Likewise. Stay sharp."', weight: 2 }
+], { cooldownMs: 60000 });
+
+BarkLibrary.register('encounter.bonfire.camaraderie', [
+  { text: '🗣️ "Fire\'s dying down."  —  "I\'ll get another log. You rest."', weight: 3 },
+  { text: '🗣️ "Remember when the heroes torched half the promenade?"  —  "How could I forget."', weight: 2 },
+  { text: '🗣️ "This is the best part of the shift."  —  "Agreed. Just the fire and the quiet."', weight: 2 }
+], { cooldownMs: 60000 });
+
+// ── Uneasy coexistence (same verb, different factions) ────────────
+
+BarkLibrary.register('encounter.uneasy', [
+  { text: '🗣️ "Evening."  —  "...Evening."', weight: 3 },
+  { text: '🗣️ "Funny how we both ended up here."  —  "Hilarious."', weight: 2 },
+  { text: '🗣️ "Warm night."  —  "Is it."  —  [uncomfortable silence]', weight: 2 },
+  { text: '🗣️ "Your people have been busy lately."  —  "Yours too. Funny, that."', weight: 2 }
+], { cooldownMs: 60000 });
+
+BarkLibrary.register('encounter.bonfire.uneasy', [
+  { text: '🗣️ "Room for one more?"  —  "It\'s a public fire."  —  "Didn\'t say it wasn\'t."', weight: 3 },
+  { text: '🗣️ "You warming up or cooling down?"  —  "Depends who\'s asking."', weight: 2 }
+], { cooldownMs: 60000 });
+
+// ── Tension (different verbs, different factions) ─────────────────
+
+BarkLibrary.register('encounter.tension', [
+  { text: '🗣️ "Tide Council says the deep caves are protected."  —  "Foundry says they\'re unexploited. Same caves."', weight: 3 },
+  { text: '🗣️ "Your faction\'s been awfully quiet this week."  —  "When we\'re loud, you complain. When we\'re quiet, you worry. Pick one."', weight: 2 },
+  { text: '🗣️ "Heard your people lost a shipment."  —  "Heard yours caused it."', weight: 2 },
+  { text: '🗣️ "Stay on your side of the promenade."  —  "Last I checked, there are no sides."', weight: 2 }
+], { cooldownMs: 60000 });
+
+// ── Passing (different verbs, same faction) ───────────────────────
+
+BarkLibrary.register('encounter.passing', [
+  { text: '🗣️ "Heading to the bazaar? Pick me up some salt if they have it."  —  "I\'ll see what\'s left."', weight: 3 },
+  { text: '🗣️ "Back to the post?"  —  "Someone has to be. You enjoy your errands."', weight: 2 },
+  { text: '🗣️ "Anything good at the noticeboard?"  —  "Same old. New cleaning quotas."', weight: 2 },
+  { text: '🗣️ "Don\'t stay out too long — shift change is soon."  —  "Already? Time flies."', weight: 2 }
+], { cooldownMs: 60000 });
+
+// ── Gossip (non-faction citizens) ─────────────────────────────────
+
+BarkLibrary.register('encounter.gossip', [
+  { text: '🗣️ "Did you see the state of floor 2 this morning? Heroes tore through again."', weight: 3 },
+  { text: '🗣️ "Marina says the harbour master\'s been acting strange."  —  "Everyone\'s strange since the heroes set up camp."', weight: 2 },
+  { text: '🗣️ "The inn\'s got a new stew. Seaweed base."  —  "Can\'t decide if that\'s brave or sad."', weight: 2 },
+  { text: '🗣️ "Scale fragments are up to 40 coin. Used to be 12."  —  "Something\'s changed down there."', weight: 2 },
+  { text: '🗣️ "My grandmother says the caves used to sing at night. Before the heroes came."', weight: 1, oneShot: true },
+  { text: '🗣️ "Storm coming in from the east. Good night to stay inside."  —  "If only we could."', weight: 2 }
+], { cooldownMs: 45000 });
+
+BarkLibrary.register('encounter.well.gossip', [
+  { text: '🗣️ "Water tastes different today."  —  "It always tastes different. Don\'t think about it."', weight: 3 },
+  { text: '🗣️ "You hear about the cleaner? New one."  —  "Another one? They go through them fast."', weight: 2 },
+  { text: '🗣️ "Nice day for it."  —  "For what?"  —  "Just... for it. Whatever \'it\' is."', weight: 2 }
+], { cooldownMs: 45000 });
+
+// ── Transition barks (solo NPC verb-switching) ────────────────────
+
+BarkLibrary.register('bark.transition.duty_to_social', [
+  { text: '🗣️ "Think I\'ll take a break."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "That\'s enough for now."', weight: 2, style: 'bubble' },
+  { text: '🗣️ *stretches*', weight: 1, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('bark.transition.social_to_duty', [
+  { text: '🗣️ "Back to it, I suppose."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "Duty calls."', weight: 2, style: 'bubble' },
+  { text: '🗣️ *sighs and stands*', weight: 1, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('bark.transition.social_to_errands', [
+  { text: '🗣️ "I should check if they\'ve got any rope in."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "Need to pick up a few things."', weight: 2, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('bark.transition.errands_to_social', [
+  { text: '🗣️ "Nothing worth buying today."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "Prices are worse than yesterday."', weight: 2, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('bark.transition.errands_to_duty', [
+  { text: '🗣️ "Right. Better get back."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "Can\'t hide in the shops forever."', weight: 2, style: 'bubble' }
+], { cooldownMs: 30000 });
+
+BarkLibrary.register('bark.transition.duty_to_errands', [
+  { text: '🗣️ "Need supplies. Won\'t be long."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "Running low on ink. Back shortly."', weight: 2, style: 'bubble' }
+], { cooldownMs: 30000 });
+

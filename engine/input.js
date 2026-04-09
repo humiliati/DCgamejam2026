@@ -55,14 +55,32 @@ var InputManager = (function () {
     'Tab':        'tab_focus'
   };
 
+  // ── webOS Magic Remote key codes ──────────────────────────
+  // These keys have no standard e.code — only numeric e.keyCode.
+  // Lookup table: keyCode → action (checked when e.code miss).
+  var WEBOS_KEYCODE_MAP = {
+    461: 'pause',          // Back button
+    403: 'card_0',         // Red
+    404: 'card_1',         // Green
+    405: 'card_2',         // Yellow
+    406: 'card_3',         // Blue
+    412: 'reel',           // Rewind (repurpose for hose reel)
+    415: 'interact'        // Play (alias for interact)
+  };
+
+  function _resolveAction(e) {
+    return _keyMap[e.code] || WEBOS_KEYCODE_MAP[e.keyCode] || null;
+  }
+
   function init(customKeyMap) {
     _keyMap = customKeyMap || DEFAULT_KEYMAP;
 
     window.addEventListener('keydown', function (e) {
       if (e.repeat) return;
-      _keysDown[e.code] = true;
+      var key = e.code || ('kc_' + e.keyCode);
+      _keysDown[key] = true;
 
-      var action = _keyMap[e.code];
+      var action = _resolveAction(e);
       if (action) {
         e.preventDefault();
         _downEdge[action] = true;
@@ -71,8 +89,9 @@ var InputManager = (function () {
     });
 
     window.addEventListener('keyup', function (e) {
-      delete _keysDown[e.code];
-      var action = _keyMap[e.code];
+      var key = e.code || ('kc_' + e.keyCode);
+      delete _keysDown[key];
+      var action = _resolveAction(e);
       if (action) {
         _upEdge[action] = true;
         _fire(action, 'release');
@@ -150,6 +169,10 @@ var InputManager = (function () {
   function isDown(action) {
     for (var code in _keyMap) {
       if (_keyMap[code] === action && _keysDown[code]) return true;
+    }
+    // Also check webOS keyCode keys (stored as 'kc_NNN')
+    for (var kc in WEBOS_KEYCODE_MAP) {
+      if (WEBOS_KEYCODE_MAP[kc] === action && _keysDown['kc_' + kc]) return true;
     }
     return false;
   }
@@ -327,8 +350,10 @@ var InputManager = (function () {
     _gpPrevAxes = {};
   });
 
-  // ── Magic Remote stub ──────────────────────────────────
-  // Post-jam: add pointer position, scroll wheel, gyro events.
+  // ── Magic Remote ────────────────────────────────────────
+  // D-pad and OK use standard Arrow/Enter e.code — handled by DEFAULT_KEYMAP.
+  // Color buttons + Back use numeric keyCode — handled by WEBOS_KEYCODE_MAP.
+  // Pointer position and scroll wheel handled below.
 
   /** Pointer position (Magic Remote / mouse). Updated by backend. */
   var _pointer = { x: 0, y: 0, active: false };
@@ -385,6 +410,7 @@ var InputManager = (function () {
     initPointer: _initMousePointer,
     pollGamepad: pollGamepad,
     isGamepadConnected: function () { return _gpConnected; },
-    getGamepadRightStick: getGamepadRightStick
+    getGamepadRightStick: getGamepadRightStick,
+    WEBOS_KEYCODE_MAP: WEBOS_KEYCODE_MAP
   };
 })();

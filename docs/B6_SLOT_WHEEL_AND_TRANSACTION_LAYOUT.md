@@ -1,9 +1,59 @@
 # B6 — Slot Wheel & Transaction Layout Design
 
-**Created**: 2026-03-29
+**Created**: 2026-03-29 | **Updated**: 2026-04-07
 **Cross-Roadmap**: Phase B, Task B6 (slot wheel scroll containers + unified transaction tableaux)
 **Depends on**: B5 (inventory interaction + DragDrop), CrateUI, PeekSlots, NchWidget, MenuFaces, QuickBar
 **Design refs**: EyesOnly games.html scroll inventory, EyesOnly reserve-slots.js cycle pattern, EyesOnly backup-action-container.js card-in-vault joker rendering
+
+---
+
+## Coverage Audit (2026-04-07)
+
+This document's vision was **partially implemented differently** via UNIFIED_RESTOCK_SURFACE_ROADMAP.md (RS-1 through RS-5, all complete 2026-04-06). The restock interaction problem is solved. The shop/vendor and card-in-bag features are **not yet covered**. See gap analysis below.
+
+### ✅ Implemented (via URSR, differently from B6's SlotWheel approach)
+
+| B6 Feature | Where It Landed | Notes |
+|---|---|---|
+| Restock Tableau — container slots + player inventory side-by-side | `restock-surface.js` + `restock-wheel.js` + `supply-rows.js` | DOM/canvas hybrid, not B6's canvas-only SlotWheel. Richer — compatibility glow, hint line, seal VFX. |
+| Torch Restock — 3 slots with state visuals | URSR RS-2 (restock-wheel.js torch adapter) | Flame/fuel_dry/fuel_hydrated/empty states, water/fuel DragDrop zones. |
+| Corpse Restock — bag + hand row for suit-matching | URSR RS-3 (supply-rows.js hand row) | Hand row conditional on corpse mode. |
+| Persistent Revolving — surface stays open across face-turns | URSR RS-4 (restock-bridge.js face-turn detection) | 150ms debounce, 300ms auto-close, slide transition. |
+| Number key quick-fill (1-5) | URSR RS-4 (restock-wheel.js quickFill) | Labeled in hint footer. |
+| Magic Remote pointer accuracy | URSR RS-5 (48px+ tap targets) | Footer buttons, supply row scroll arrows. |
+| BoxAnim decorative backgrounds | URSR RS-5 (restock-surface.js) | Per-mode variant, 25% opacity, 0.55× scale. |
+| Stash system (bonfire) | `menu-faces.js` bonfire Face 1 (4×5 grid, 20 slots) | Done as grid, not dual-wheel. `CardAuthority.getStash()` backed. |
+| TAB focus toggle (bag ↔ deck) | `game.js` + `menu-faces.js toggleInvFocus()` | Active on pause/bonfire inventory Face 2. |
+
+### ⚠️ Partially Implemented
+
+| B6 Feature | Status | Gap |
+|---|---|---|
+| SlotWheel module | `engine/slot-wheel.js` exists (18K), loaded in index.html | **Unused** — no caller invokes `SlotWheel.create()`. Superseded by restock-wheel.js + supply-rows.js for restock context. |
+| Card-in-Bag detection (Joker Vault) | `slot-wheel.js` has `_isCardInBag()` with `_bagStored` check | **Read-only** — no mutator function (`addToBag`) exists. Cards cannot actually be placed in bag yet. |
+
+### ❌ Not Implemented — Real Gaps
+
+| B6 Feature | Priority | Notes |
+|---|---|---|
+| **Shop Sell Tableau** — bag + deck wheels with scrolling + TAB toggle + sell-from-focused-wheel | **High (patch)** | Current shop sell (menu-faces.js Face 2) shows static grids: hand cards + salvage parts only. No deck access on sell view. No scrollable wheels. Player cannot browse/sell backup deck cards. |
+| **Vendor unified view** — vendor stock + all player inventories visible simultaneously | **High (patch)** | Buy (Face 1) and Sell (Face 2) are separate faces. Player never sees their inventory next to vendor stock. |
+| Card-in-Bag mutators | Medium (post-patch) | `Player.addToBag(card)`, `Player.removeFromBag(id)` — the write side of joker vault. |
+| Card-in-Bag transfer rules | Medium (post-patch) | Bag→Hand, Hand→Bag, Bag→CorpseSuitSlot, Bag→ShopSell, Deck→Bag paths. |
+| SHIFT+1-5 hand shortcut during restock | Low (post-patch) | B6 Phase 6 polish. |
+| D-pad navigation for Magic Remote | Low (post-patch) | B6 Phase 6 polish. |
+| Auto-scroll during drag (edge zone) | Low (post-patch) | B6 Phase 6 polish. |
+| Scroll animation (smooth offset lerp) | Low (post-patch) | B6 Phase 6 polish. |
+| Deck category tabs (suit grouping) | Low (post-patch) | B6 Open Question #3. |
+
+### Key Design Question — Shop Sell Surface
+
+The highest-priority gap is the shop sell view. B6 envisioned a **dual-wheel sell view** (bag wheel + deck wheel, TAB toggle, keys 1-5 sell from focused wheel). The URSR solved the restock side cleanly but didn't touch the shop. Two paths forward:
+
+1. **Wire SlotWheel into menu-faces.js shop Face 2** — SlotWheel already exists and was designed for this. Instantiate a bag wheel and deck wheel on the sell face, wire TAB toggle (already exists in game.js), replace static grids.
+2. **Extend RestockSurface with a 'shop' mode** — RestockSurface's left/right layout could serve as vendor stock (left) + player inventory (right). More unified but bigger refactor.
+
+Path 1 is cleaner — the slot-wheel module was built for this and is ready. The restock surface is purpose-built for container filling and shouldn't absorb shop logic.
 
 ---
 
@@ -394,47 +444,49 @@ This is post-jam polish. For the jam build, pointer + keyboard are sufficient.
 
 ---
 
-## Implementation Phases
+## Implementation Phases — Status (2026-04-07)
 
-### Phase 1 — SlotWheel Module (Jam Priority)
+### Phase 1 — SlotWheel Module ✅ COMPLETE (unused)
 
-1. Create `engine/slot-wheel.js` (Layer 2)
-2. Factory pattern: `SlotWheel.create(opts)` returns WheelInstance
-3. Canvas rendering: 5 slots + chevrons + count badge + focus ring
-4. Scroll logic: offset clamping, chevron visibility
-5. Hit testing: slot click, chevron click
-6. Joker card detection and purple glow rendering
+Module exists at `engine/slot-wheel.js` (18K), loaded in index.html. Factory pattern, canvas rendering, scroll logic, hit testing, joker card detection — all built. But no caller invokes it. Superseded for restock context by URSR modules; still the right fit for **Phase 3 (shop)**.
 
-### Phase 2 — Restock Tableau Integration
+### Phase 2 — Restock Tableau Integration ✅ SUPERSEDED by URSR
 
-1. Modify PeekSlots to create a bag wheel on `tryOpen()`
-2. Expand NCH widget into card strip during FILLING state
-3. Reroute keys 1-5 through bag wheel's `getVisibleItem()` instead of `CrateUI._fillFromBag()`
-4. Register bag wheel slots as DragDrop sources (not just targets)
-5. Wire Q/E to scroll the bag wheel during FILLING
+Implemented differently via `restock-surface.js`, `restock-wheel.js`, `supply-rows.js`, `restock-bridge.js` (RS-1 through RS-5, complete 2026-04-06). DOM/canvas hybrid with compatibility glow, seal VFX, persistent revolving. The URSR approach is richer than B6's original design. PeekSlots routes deposit-mode through RestockBridge.
 
-### Phase 3 — Shop Tableau Integration
+### Phase 3 — Shop Tableau Integration ✅ WIRED (2026-04-07)
 
-1. Modify MenuFaces face 2 (sell view) to use bag wheel + deck wheel
-2. Implement TAB focus toggle between bag and deck wheels
-3. Wire keys 1-5 to sell from focused wheel
-4. Shop face 1 (buy) keeps its current 5-card vendor display
+Shop sell Face 2 now uses dual SlotWheel instances for bag and deck alongside the static hand grid.
 
-### Phase 4 — Stash Tableau Integration
+**Completed:**
+- `menu-faces.js` — `_renderShopSell()` rewritten: bag wheel (top) → deck wheel (middle) → hand cards (bottom, static 1-5 grid with sell prices). Focus marker (◆) highlights active wheel. `_ensureShopWheels()` lazy-creates wheels with `onSlotAction` callbacks that fire `ShopActions.sellFromBag()` / `ShopActions.sellFromBackup()`.
+- `shop-actions.js` — Added `shopSellFromBackup(cardId)` and `shopSellFromBag(bagIndex)`: Toast, coin particles, rep tier check, covers card-in-bag / salvage / generic items.
+- `game.js` — TAB toggles shop sell focus (bag ↔ deck) in shop context. Q/E scrolls focused wheel. Click dispatch routes through SlotWheel `handleClick()` before _hitZones fallback. Shop close destroys wheels.
+- `MenuFaces` API — Exposed: `toggleShopSellFocus`, `scrollShopSellWheel`, `handleShopSellClick`, `destroyShopWheels`.
 
-1. Modify MenuFaces bonfire face to use stash wheel + bag wheel
-2. TAB focus toggle
-3. Keys 1-5 = transfer from focused wheel to the other
+**Interaction model:**
+- TAB: toggle focus between bag and deck wheels
+- Q/E: scroll focused wheel left/right
+- Click: click any wheel item to sell (auto-focuses that wheel)
+- 1-5: sell from hand (static bottom grid, unchanged)
+- Wheels use joker emoji (🃏) for card-in-bag items per card-in-bag rendering spec
 
-### Phase 5 — Card-in-Bag Storage
+### Phase 4 — Stash Tableau Integration ✅ DONE (as grid)
 
-1. Add `_bagStored` flag to cards placed in bag
-2. Update SlotWheel rendering to detect cards and show joker emoji
-3. Update PeekSlots DragDrop accepts to handle joker-stored cards for suit slots
-4. Update shop sell pricing to use card value for bag-stored cards
+Bonfire Face 1 has a 4×5 stash grid (20 slots) backed by `CardAuthority.getStash()`. Death-safe shield emoji, drag instruction hints. Not implemented as dual-wheel — the 4×5 grid shows all 20 stash slots at once without scrolling, which is arguably better than a 5-slot wheel for a 20-item max. TAB focus toggle exists for the bag/deck view on Face 2. Depth-3+ correctly disables stash access with explanation.
 
-### Phase 6 — Polish (Post-Jam)
+### Phase 5 — Card-in-Bag Storage ✅ FUNCTIONAL
 
+`slot-wheel.js` has `_isCardInBag()` detection (checks `_bagStored` flag or card type signature). Mutators confirmed working:
+- ✅ `CardAuthority.addToBag()` / `removeFromBag()` / `removeFromBagById()` — card-authority.js lines 514-544
+- ✅ `EquipActions.bagToStash()` / `stashToBag()` — click-based transfer via _hitZones
+- ✅ Shop sell pricing for bag-stored cards — `ShopActions.sellFromBag()` handles card-in-bag (removes from bag, uses `Shop.getCardSellPrice()`)
+- ✅ Joker emoji rendering — cards in bag/stash display as 🃏 + title, full info in hand/deck
+- ⚠️ DragDrop zones not registered in bonfire `_renderBag()` — click transfer works, drag-drop doesn't. Pre-existing, not a regression.
+
+### Phase 6 — Polish (Post-Jam) ❌ NOT DONE
+
+All items deferred to post-patch:
 1. SHIFT+1-5 hand shortcut during restock
 2. Auto-scroll during drag (edge zone detection)
 3. D-pad navigation for Magic Remote
@@ -476,7 +528,19 @@ Extending the B5 transfer matrix with SlotWheel awareness:
 
 ## Open Questions
 
-1. **Deck wheel card emoji**: Should deck cards show their actual suit emoji (♠A) or a uniform back-of-card emoji? Actual suit is more informative for sell decisions.
-2. **Bag capacity expansion**: If cards stored in bag count toward the 12-item max, bag space becomes precious. Should card-in-bag have a separate sub-capacity? Or rely on the player managing space deliberately (janitor theme)?
-3. **Category tabs for large decks**: Post-jam, decks could group by suit with tab headers (♠ ♦ ♣ ♥). Each tab is its own 5-slot sub-wheel. Overkill for jam?
-4. **Wheel position during combat**: Should bag wheel appear during combat for consumable use? Currently combat only shows CardFan. Probably post-jam scope.
+1. **Deck wheel card emoji**: Should deck cards show their actual suit emoji (♠A) or a uniform back-of-card emoji? **Resolved: actual suit** — more informative for sell decisions. SlotWheel already renders card data.
+2. **Bag capacity expansion**: If cards stored in bag count toward the 12-item max, bag space becomes precious. Should card-in-bag have a separate sub-capacity? Or rely on the player managing space deliberately (janitor theme)? **Deferred** — card-in-bag (Phase 5) is post-patch.
+3. **Category tabs for large decks**: Post-jam, decks could group by suit with tab headers (♠ ♦ ♣ ♥). Each tab is its own 5-slot sub-wheel. **Deferred** — Phase 6 polish, post-patch. Deck is now 120 cards so this becomes more relevant.
+4. **Wheel position during combat**: Should bag wheel appear during combat for consumable use? Currently combat only shows CardFan. **Deferred** — post-patch scope.
+
+---
+
+## Cross-References (2026-04-07)
+
+| Reference | Document | Relationship |
+|---|---|---|
+| UNIFIED_RESTOCK_SURFACE_ROADMAP | docs/ | Supersedes B6 Phases 2 + parts of 4. All 5 RS phases complete. |
+| SUIT_SYSTEM_ROADMAP Pass 9 | docs/ | Card balance tuning — affects sell pricing viability for Phase 3 shop |
+| AUDIO_ENGINE.md | docs/ | Transaction SFX (coin, purchase chime) listed in unwired inventory |
+| SPATIAL_CONTRACTS.md (SC-G) | docs/ | VendorRegistry (D1/D2 depth contract) — vendor placement for shop tableau |
+| INVENTORY_CARD_MENU_REWORK (DOC-46) | docs/ | CardAuthority bag/hand/deck/stash APIs — data sources for all wheels |

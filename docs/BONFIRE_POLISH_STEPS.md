@@ -1,7 +1,7 @@
 # Bonfire & Hearth — Interaction Audit & Polish Roadmap
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-03
-**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. **§15 bonfire interaction decoupling complete (Apr 3).** §10, §12 are expansion passes.
+**Created**: 2026-03-28 | **Updated**: 2026-04-08
+**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. **§15 bonfire interaction decoupling complete (Apr 3).** **§11 rewritten Apr 8: two-tier rest system (Full Rest vs Nap), bonfire demoted to nap tier, curfew-nap failstate designed, ownership gate for BED/HEARTH.** §10, §12 are expansion passes. §11p–11w are post-jam nap-tier implementation tasks.
 *** REBRANDED PLAYER FACING BONFIRE TO DRAGONFIRE ***
 ---
 
@@ -17,7 +17,7 @@ The bonfire/hearth is the game's **waypoint + stash + rest station** — the Dar
 |------|----------|-------|--------|
 | BONFIRE (18) | `TILES.BONFIRE` | Exterior floors (depth 1) | 0.3× stone ring wall + step-fill cavity (offset -0.25) + `decor_hearth_fire` in lip band + warm glow + ⛺ tent billboard |
 | HEARTH (29) | `TILES.HEARTH` | Home + Interior interiors | 1.6× riverrock column + step-fill cavity (offset -0.18) + `decor_hearth_fire` in lip band + cavity glow. See LIGHT_AND_TORCH_ROADMAP §2.5a-b. |
-| BED (28) | `TILES.BED` | Home only (Floor 1.6, pos 2,2) | BedPeek overlay — sleep/day-advance, NOT bonfire context |
+| BED (27) | `TILES.BED` | Home + any housing floor | Context-gated: owned → BedPeek (full rest, day-advance), non-owned → nap action peek (2h, 50% HP, clear TIRED). See §11. |
 
 ### Interaction flow (game.js → MenuBox → HazardSystem) — Updated Apr 3
 
@@ -85,7 +85,7 @@ The bonfire/hearth is the game's **waypoint + stash + rest station** — the Dar
 
 - `Player.fullRestore()` on interact — HP and energy to max
 - Home bed (BedPeek) grants WELL_RESTED if slept before 23:00, clears TIRED
-- **Gap**: Non-home bonfires do NOT grant WELL_RESTED and do NOT clear TIRED — only fullRestore
+- **Gap (resolved in §11 rewrite, Apr 8)**: Non-home bonfires do NOT grant WELL_RESTED — this is now by design (nap tier). They DO clear TIRED and provide full HP/energy restore. See §11 two-tier rest contract.
 
 ---
 
@@ -203,43 +203,84 @@ Currently each floor tracks its own last-rested bonfire independently. The warp 
 - Minimap bonfire icons for visited/unvisited rest points
 - Bonfire discovery toast ("🔥 Waypoint discovered: Lantern Gardens bonfire")
 
-## §11 Bonfire Interaction Differentiation
+## §11 Rest Tile Differentiation — Two-Tier System
 
-**Updated**: Apr 2, 2026 — reflects §7 fixes + BONFIRE_BRAINSTORMING audit
+**Updated**: Apr 8, 2026 — **Major reclassification.** Bonfire demoted from full-rest to nap tier. All rest tiles now fall into two tiers: Full Rest (owned, irreversible day advance) and Nap (public/unassigned, partial recovery, 1-5h time cost). See `PEEK_SYSTEM_ROADMAP.md` §13.7.2 for peek classification details.
 
-Both BONFIRE and HEARTH currently trigger identical `interact.rest` behavior. Differentiate by depth to match the contextual contracts model from BONFIRE_BRAINSTORMING.md.
+### Design principle
 
-### Current state (post-§7, all bonfires identical)
+WELL_RESTED is the reward for going home. Only owned rest tiles (the player's assigned bed and hearth) grant it. Public rest tiles (bonfires, cots, benches, non-owned beds) are coffee breaks: they remove TIRED and provide partial recovery, but the player must go home for the full buff. This creates a pull-home pressure that complements the curfew system and gives the housing reassignment arc (ACT2_NARRATIVE_OUTLINE §5.4) real mechanical weight.
 
-| Interaction | Exterior Campfire (depth 1) | Dungeon Hearth (depth 3+) | Home Bed (BedPeek) |
-|------------|----------------------------|---------------------------|---------------------|
-| HP restore | ✅ Full | ✅ Full | ✅ Full |
-| Energy restore | ✅ Full | ✅ Full | ✅ Full |
-| TIRED clear | ✅ (§7c) | ✅ (§7c) | ✅ |
-| WELL_RESTED | ✅ before midnight (§7b) | ✅ before midnight (§7b) — **overpowered** | ✅ before midnight (§7b) |
-| Time advance | ✅ rest-until-dawn (§7d) | ✅ rest-until-dawn (§7d) — **overpowered** | ✅ 8h via BedPeek |
-| Stash access | ✅ | ✅ — **overpowered** | ❌ (home has furniture) |
-| Warp | → Home | → Entrance | — |
-| Waypoint set | ✅ | ✅ | — |
-| Incinerator | ✅ | ✅ | ❌ |
+### Current state (post-§7, needs code update to match)
 
-**Problem**: Dungeon hearths are as powerful as exterior campfires. No dungeon pressure — contradicts CORE_GAME_LOOP §5.7 ("bonfire is a coffee break, not a good night's rest") and the brainstorm's DEEP_DUNGEON contract.
+Bonfires currently grant full restore + WELL_RESTED + rest-until-dawn, making them equivalent to the home bed. This is overpowered and must be downgraded.
 
-### Target differentiation (jam-scope — depth branching)
+### Target: Two-Tier Rest Contract
 
-| Behavior | Exterior (depth 1) | Dungeon (depth 3+) | Home (BedPeek) |
-|----------|---------------------|---------------------|-----------------|
-| HP/Energy restore | ✅ Full | ✅ Full | ✅ Full |
-| Time advance | Rest-until-dawn | 2h brief rest (no day skip) | 8h via BedPeek |
-| WELL_RESTED | Yes (before midnight) | **No** | Yes (before midnight) |
-| TIRED clear | Yes | Yes | Yes |
-| Stash access | ✅ | **❌ No** | ❌ (furniture) |
-| Warp | → Home | → Entrance **gated on readiness** | — |
-| Incinerator | ✅ | ✅ | ❌ |
-| Unique verb | "Camp" | "Rest" | "Sleep" |
-| Safety feel | Full (no enemies) | Partial (tension anchor) | Full |
+**Tier 1 — Full Rest (owned tiles only):**
 
-### Jam-scope tasks (depth branching — no new architecture)
+| Behavior | Owned BED | Owned HEARTH |
+|----------|-----------|--------------|
+| HP/Energy restore | ✅ Full | ✅ Full |
+| Time advance | 8h (advance to dawn) | 8h (advance to dawn) |
+| WELL_RESTED | ✅ Yes (before midnight) | ✅ Yes (before midnight) |
+| TIRED clear | ✅ Yes | ✅ Yes |
+| Stash access | ❌ (home has furniture) | ❌ (home has furniture) |
+| Incinerator | ❌ | ✅ Yes |
+| Unique verb | "Sleep" | "Rest" |
+| Peek type | Full peek (BedPeek) | Full peek (multi-button: Rest / Incinerate) |
+| Ownership gate | `housing_floor === currentFloor` | `housing_floor === currentFloor` |
+
+**Tier 2 — Nap (public/unassigned tiles):**
+
+| Behavior | BONFIRE | Non-owned BED | COT | BENCH | Non-owned HEARTH |
+|----------|---------|---------------|-----|-------|-----------------|
+| HP restore | ✅ Full | 50% | 30% | ❌ None | ✅ Full |
+| Energy restore | ✅ Full | 50% | 30% | ❌ None | ✅ Full |
+| Time cost | 3h | 2h | 2h | 1h | 3h |
+| WELL_RESTED | ❌ Never | ❌ Never | ❌ Never | ❌ Never | ❌ Never |
+| TIRED clear | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Stash access | ✅ (ext only) | ❌ | ❌ | ❌ | ❌ |
+| Warp | → Home (ext), → Entrance (dun, gated) | ❌ | ❌ | ❌ | ❌ |
+| Waypoint set | ✅ (bonfire only) | ❌ | ❌ | ❌ | ❌ |
+| Incinerator | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Unique verb | "Nap" | "Nap" | "Nap" | "Sit & Rest" | "Rest" |
+| Peek type | One-button action | One-button action | One-button action | One-button action | One-button action |
+
+**Nap time cost ranking:** Bench (1h) < Cot/non-owned Bed (2h) < Bonfire/non-owned Hearth (3h). Lower cost = less recovery. The player trades quality for time.
+
+### §11.1 Curfew-Nap Failstate
+
+If a nap's time cost would push the clock past curfew (02:00), one of two outcomes fires depending on whether the nap location is sheltered:
+
+**Sheltered nap (depth 2, or BONFIRE with tent, or HEARTH):** Player wakes at the nap tile with GROGGY debuff (`walkTimeMult 1.25`, 1-day duration). The nap consumed all remaining night hours. Player overslept but is safe. This is the gentle version — interior safety contract still holds.
+
+**Unsheltered nap (exterior BENCH, exterior COT, open-area rest tile):** Curfew enforcement triggers. Heroes find the player passed out and return them to their assigned housing. Stardew Valley collapse: fade to black, wake at home, lose 10% gold, gain GROGGY debuff. This is the punitive version — public spaces are not safe overnight.
+
+**Gate logic:**
+```javascript
+function napCurfewCheck(tile, floorId, napHours) {
+  var hoursUntilCurfew = DayCycle.hoursUntilCurfew();
+  if (napHours <= hoursUntilCurfew) return 'safe';
+  var depth = FloorManager.getDepth(floorId);
+  var isSheltered = (depth === 2) ||
+                    (tile === TILES.BONFIRE) ||
+                    (tile === TILES.HEARTH);
+  return isSheltered ? 'groggy' : 'rescue';
+}
+```
+
+**UI:** Nap button shows warning text when curfew overlap detected: "Nap (⚠️ past curfew — wake groggy)" or "Nap (⚠️ heroes will find you)".
+
+### §11.2 Dungeon Rest (depth 3+ unchanged)
+
+Dungeon hearths retain their existing depth-branching behavior from §11a-11e (2h brief rest, no WELL_RESTED, no stash, warp gated on readiness). They are always nap-tier because the player never owns a dungeon hearth.
+
+### §11.3 Bonfire-Specific Features (retained)
+
+Bonfires keep their unique features even as nap-tier tiles: respawn point registration, warp (home or entrance), stash access (exterior only), incinerator. These differentiate bonfires from other nap tiles. A bonfire nap is the most feature-rich nap — it just doesn't grant WELL_RESTED or advance a full day.
+
+### Jam-scope tasks (depth branching — complete, needs nap-tier update)
 
 | # | Task | Est. | Depends on | Status |
 |---|------|------|------------|--------|
@@ -248,6 +289,19 @@ Both BONFIRE and HEARTH currently trigger identical `interact.rest` behavior. Di
 | 11c | Warp button depth branch: depth 3+ → gate "Warp to Entrance" on `readiness >= 0.6` | 25m | readiness-calc.js | ✅ |
 | 11d | InteractPrompt verb: depth 1 → "🐉 Camp", depth 3+ → "🐉 Rest" + Dragonfire rebrand | 10m | — | ✅ |
 | 11e | Debug harness Scenario 7: depth-branching (4 sub-tests, all pass) | 20m | 11a | ✅ |
+
+### Post-jam tasks (nap-tier reclassification)
+
+| # | Task | Est. | Depends on | Status |
+|---|------|------|------------|--------|
+| 11p | Demote exterior bonfire from full-rest to nap: 3h time cost, NO WELL_RESTED, full HP/energy | 30m | §11a | — |
+| 11q | Add `isOwnedRestTile()` gate: check `Player.getFlag('housing_floor')` against current floor | 20m | ACT2 flags | — |
+| 11r | BedPeek ownership branch: owned → full peek (existing), non-owned → nap action peek (2h, 50% HP) | 45m | 11q | — |
+| 11s | InteractPrompt verb update: bonfire "Nap" (was "Camp"), non-owned bed "Nap", bench "Sit & Rest" | 15m | 11p, 11q | — |
+| 11t | COT/BENCH rest interaction: wire nap action peek for tiles 41 and 48 | 1h | 11q | — |
+| 11u | Curfew-nap failstate: `napCurfewCheck()` with sheltered/unsheltered branching | 45m | DayCycle | — |
+| 11v | Nap button warning text for curfew overlap (groggy vs rescue) | 20m | 11u | — |
+| 11w | Debug harness Scenario 8: nap-tier tests (time cost, no WELL_RESTED, curfew edge cases) | 30m | 11p-11v | — |
 
 ### Post-jam roadmap (from BONFIRE_BRAINSTORMING contracts system)
 

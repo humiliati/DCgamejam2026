@@ -19,27 +19,27 @@
 | Inventory | I | StatusBar [BAG] | — |
 | Cards 1-5 | 1-5 | CardFan tap/drag | — |
 | Map toggle | M | StatusBar [MAP] | — |
-| Pause | Esc | — | **No click equiv** |
+| Pause | Esc | StatusBar ☰ button | — |
 | Descend | . | InteractPrompt (context) | — |
 | Ascend | , | InteractPrompt (context) | — |
-| Flee | F | StatusBar [FLEE] label exists | **Bug: handler still calls map toggle** |
+| Flee | F | StatusBar 🏃 FLEE (combat only) | — |
 | Tab focus | Tab | — | Accessibility only, low priority |
 
 ### Gaps to close (jam)
 
-1. **Flee button bug** — status-bar.js click handler for the
-   MAP/FLEE button doesn't switch behavior during combat. Fix: check
-   `_inCombat` in the click handler and fire the flee callback instead
-   of `Minimap.toggle()`.
+1. ~~**Flee button bug**~~ ✅ — `_btnMap` click handler checks
+   `_inCombat` and fires `_onFleeCallback()` (status-bar.js:167-169).
+   Additionally, the ☰ pause button now transforms into a visible
+   🏃 FLEE button during combat with red pulse animation
+   (`.sb-flee-active` class). Click fires flee callback directly.
 
-2. **Strafe** — The D-pad cross layout uses 5 buttons (fwd/back/
-   left/right/OK). Strafing is secondary movement. Two options:
-   - Add Q/E shoulder buttons flanking the D-pad (clutters UI)
-   - Hold D-pad OK + left/right to strafe (combo input, discoverable)
-   - **Post-jam**: map to gamepad bumpers (L1/R1)
+2. **Strafe** — D-pad uses 5 buttons. Gamepad covers strafe via
+   right stick (analog) — no L1/R1 needed since bumpers are cards.
+   Touch/click strafe remains unavailable (low priority).
 
-3. **Pause click** — Add a ☰ hamburger button to the HUD (top-left
-   or near StatusBar) that fires `ScreenManager.toPause()`.
+3. ~~**Pause click**~~ ✅ — `#sb-pause` (☰ hamburger) in status
+   bar row. Click handler toggles pause via `Game.requestPause()`.
+   Hidden during combat (replaced by FLEE).
 
 ---
 
@@ -60,37 +60,37 @@ Features:
 
 ## Gamepad / controller plan
 
-### Phase 1 — webOS Magic Remote (post-jam priority)
+### Phase 1 — webOS Magic Remote ✅
 
 The LG webOS Magic Remote is a Wii-style pointer with 5-way D-pad,
 OK, Back, and color buttons. It maps to standard DOM events:
 
-| Remote button | DOM event | Game action |
-|---------------|-----------|-------------|
-| D-pad up | keydown ArrowUp | Forward |
-| D-pad down | keydown ArrowDown | Back |
-| D-pad left | keydown ArrowLeft | Turn left |
-| D-pad right | keydown ArrowRight | Turn right |
-| OK (center) | keydown Enter | Interact |
-| Back | keydown Backspace (or 461) | Pause / menu back |
-| Red button | keydown 403 | Card 1 |
-| Green button | keydown 404 | Card 2 |
-| Yellow button | keydown 405 | Card 3 |
-| Blue button | keydown 406 | Card 4 |
-| Pointer move | pointermove | Cursor (minimap click, card drag) |
+| Remote button | DOM event | Game action | Status |
+|---------------|-----------|-------------|--------|
+| D-pad up | keydown ArrowUp | Forward | ✅ DEFAULT_KEYMAP |
+| D-pad down | keydown ArrowDown | Back | ✅ DEFAULT_KEYMAP |
+| D-pad left | keydown ArrowLeft | Turn left | ✅ DEFAULT_KEYMAP |
+| D-pad right | keydown ArrowRight | Turn right | ✅ DEFAULT_KEYMAP |
+| OK (center) | keydown Enter | Interact | ✅ DEFAULT_KEYMAP |
+| Back | keyCode 461 | Pause / menu back | ✅ WEBOS_KEYCODE_MAP |
+| Red button | keyCode 403 | Card 0 | ✅ WEBOS_KEYCODE_MAP |
+| Green button | keyCode 404 | Card 1 | ✅ WEBOS_KEYCODE_MAP |
+| Yellow button | keyCode 405 | Card 2 | ✅ WEBOS_KEYCODE_MAP |
+| Blue button | keyCode 406 | Card 3 | ✅ WEBOS_KEYCODE_MAP |
+| Rewind | keyCode 412 | Hose reel | ✅ WEBOS_KEYCODE_MAP |
+| Play | keyCode 415 | Interact | ✅ WEBOS_KEYCODE_MAP |
+| Pointer move | pointermove | Cursor | ✅ _initMousePointer |
+| Scroll wheel | wheel | scroll_up/down | ✅ wheel listener |
 
-Implementation: Add webOS key codes to InputManager's keymap as
-aliases for existing actions. The existing arrow-key bindings
-already cover the D-pad. Color buttons need new keymap entries.
+Implementation: `WEBOS_KEYCODE_MAP` in input.js maps numeric keyCode
+values for non-standard keys. `_resolveAction(e)` checks `e.code`
+first (standard keys), then falls back to `e.keyCode` (webOS keys).
+D-pad and OK use standard e.code and work via DEFAULT_KEYMAP.
 
-Estimated effort: ~30 lines in input.js keymap + key code constants.
+### Phase 2 — Standard Gamepad API ✅
 
-### Phase 2 — Standard Gamepad API
-
-For desktop/Steam Deck/mobile Bluetooth controllers. Uses the
-browser Gamepad API (`navigator.getGamepads()`).
-
-New module: `engine/gamepad.js` (Layer 1, zero dependencies)
+Implemented inline in input.js (no separate gamepad.js needed).
+Uses `navigator.getGamepads()` with per-frame polling.
 
 ```
 Gamepad mapping (standard layout):
@@ -179,9 +179,9 @@ remains untouched.
 
 | File | Status | Change |
 |------|--------|--------|
-| engine/input.js | Needs update | Add webOS key codes, gamepad aliases |
-| engine/dpad.js | Done | 5-button cross, pointer events |
-| engine/gamepad.js | Not started | Gamepad API polling module |
-| engine/status-bar.js | Bug | Fix flee button click handler |
-| engine/title-screen.js | Done | Settings overlay with toggles |
-| index.html | Done | D-pad DOM + CSS |
+| engine/input.js | ✅ Done | DEFAULT_KEYMAP + WEBOS_KEYCODE_MAP + Gamepad polling |
+| engine/dpad.js | ✅ Done | 5-button cross, pointer events |
+| engine/gamepad.js | N/A | Gamepad is inline in input.js (pollGamepad) |
+| engine/status-bar.js | ✅ Done | Flee button: ☰→🏃FLEE on combat, click handler routes |
+| engine/title-screen.js | ✅ Done | Settings overlay with toggles |
+| index.html | ✅ Done | D-pad DOM + CSS + .sb-flee-active + mobile tooltip cap |

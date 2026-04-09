@@ -634,9 +634,9 @@ or a tiny Canvas demo loop that shows helix ↔ fan ↔ split in action
 
 This is very jam-friendly and will read immediately on a TV.
 
-More context are building to utilize the LG smart remote thats like a wii remote wand to read gyroscope etc. We have a rope tether mechanic from gone rogue to adapt for our dungeon gleaner game to paint a hose behind the player that also acts as a player auto-pathing back along the hose route to exit dungeon "reel it up" button to auto path out of dungeon along the hose. To enable the hose at thr dungeon entrance player grabs thr hose then it is attached to player as they traverse deeper floors. Carrying the hose has a strategic cost, a player can choose not to grab it but dont have the ability to clean tiles or path out but instead they arent filling their inventory with nozles, Carrying a hose costs energy so when we're out of energy the player paths out regardless of dungeon completion. We have a torch extinguishing and refilling  mechanic that could be served by players with bottled water (inventory weight) or they can use the hose (energy weight).
+More context are building to utilize the LG smart remote thats like a wii remote wand to read gyroscope etc. We have a rope tether mechanic from gone rogue to adapt for our dungeon gleaner game to paint a hose behind the player that also acts as a player auto-pathing back along the hose route to exit dungeon "reel it up" button to auto path out of dungeon along the hose. To enable the hose at thr dungeon entrance player grabs thr hose then it is attached to player as they traverse deeper floors. Carrying the hose has a strategic cost, a player can choose not to grab it but dont have the ability to clean tiles or path out but instead they arent filling their inventory with nozles, Carrying a hose costs fatigue so when we're exhausted the player paths out regardless of dungeon completion. We have a torch extinguishing and refilling  mechanic that could be served by players with bottled water (inventory weight) or they can use the hose (fatigue weight).
 
-This is already a strong system—what you’re missing is a unifying rule that ties hose, beam shape, energy, and navigation into one readable loop.
+This is already a strong system—what you’re missing is a unifying rule that ties hose, beam shape, fatigue, and navigation into one readable loop.
 
 Right now you have three mechanics:
 
@@ -655,7 +655,7 @@ Everything—cleaning, navigation, even torch management—comes from how that f
 Treat the hose as:
 
 Path memory (breadcrumb for auto-return)
-Energy drain (length + active use)
+Fatigue drain (length + active use)
 Field carrier (enables beam mechanics)
 Implementation shortcut
 
@@ -671,7 +671,7 @@ hose.tension
 hose.flowRate
 hose.length
 
-Energy drain:
+Fatigue drain:
 
 drain = base + (hose.length * k) + (spraying ? extra : 0)
 2. Beam shaping = tension state (this ties everything together)
@@ -731,7 +731,7 @@ a clean run = efficient forward pass + satisfying rewind polish
 Right now:
 
 bottled water = inventory weight
-hose = energy weight
+hose = fatigue weight
 
 Unify via pressure vs reserve:
 
@@ -754,7 +754,7 @@ Example:
 {
   flatWindow: wider,
   helixPenalty: lower,
-  energyCost: medium
+  fatigueCost: medium
 }
 "nozzle.cyclone"
 {
@@ -785,7 +785,7 @@ only cleanable in:
 helix (tight corners)
 fan (broad walls)
 split (multi-switch doors)
-C. Energy traps
+C. Fatigue traps
 long corridors = expensive hose
 force decision:
 bring hose → safe exit
@@ -858,7 +858,7 @@ You can treat it like a mobile base:
 
 hose rack
 nozzle locker
-water tank (energy metaphor)
+water tank (fatigue metaphor)
 dispatcher comms
 
 The key decision:
@@ -1041,7 +1041,7 @@ beam shaping matters
 Dungeon 2.3.3
 full system expression:
 routing
-energy
+fatigue
 phase control
 rewind optimization
 11. The real strength of your idea
@@ -1115,7 +1115,7 @@ Layout
 Key mechanics
 Long Hall
 moderate grime
-first sense of energy drain / inefficiency
+first sense of fatigue drain / inefficiency
 Loop Chamber (important)
 circular / square loop
 enemies patrol
@@ -1293,6 +1293,6 @@ path discipline under resource constraint
 Which ties directly into:
 
 your hose
-your energy
+your fatigue
 your beam shaping
 your rewind mechanic

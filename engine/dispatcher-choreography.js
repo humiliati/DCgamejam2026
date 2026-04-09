@@ -266,14 +266,14 @@ var DispatcherChoreography = (function() {
             ]
           },
           key_redirect: {
-            text: 'First thing. Your work keys are back at the BnB. Go home, grab them, then come unlock this floor so the hazmat crew can get through.',
+            text: 'Truck\'s already through to Lantern Row. Hazmat crew is on standby. Head east past the gate and link up with them — they\'ll show you the hose setup.',
             choices: [
-              { label: 'On my way.',
+              { label: 'On it.',
                 next: null,
                 effect: {
                   callback: function () {
                     if (typeof Toast !== 'undefined') {
-                      Toast.show('\uD83D\uDDDD\uFE0F Go home and get your work keys', 'info');
+                      Toast.show('\uD83D\uDC09 Head east to the cleaning truck on Lantern Row', 'info');
                     }
                   }
                 }
@@ -287,23 +287,9 @@ var DispatcherChoreography = (function() {
         root: 'return_greeting',
         nodes: {
           return_greeting: {
-            text: 'Still here, ' + callsign + '? Your keys are at home. Get moving.',
+            text: 'Back again, ' + callsign + '? Crew\'s still out on Lantern Row. Get moving — that mess isn\'t cleaning itself.',
             choices: [
-              { label: 'On my way', next: null },
-              { label: 'Actually, I have them now', next: 'have_keys' }
-            ]
-          },
-          have_keys: {
-            text: 'About time. Gate\'s open. Watch yourself down there.',
-            choices: [
-              { label: 'Thanks.',
-                next: null,
-                effect: {
-                  callback: function () {
-                    if (_onPickupWorkKeysCb) _onPickupWorkKeysCb();
-                  }
-                }
-              }
+              { label: 'Heading out now.', next: null }
             ]
           }
         }

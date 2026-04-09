@@ -1079,39 +1079,31 @@
     .dpad-btn {
       position: absolute;
       width: 44px; height: 44px;
-      background: none; border: none;
-      border: none;
-      border-radius: 3px;
+      border: 1px solid rgba(200,200,200,0.12);
+      border-radius: 6px;
       cursor: pointer;
       pointer-events: auto;
       user-select: none;
       -webkit-user-select: none;
-      transition: background 0.1s, transform 0.08s;
-      /* Arrow rendered via ::after pseudo-element */
+      transition: background 0.1s, transform 0.08s, border-color 0.1s, box-shadow 0.1s;
       display: flex; align-items: center; justify-content: center;
-      border-radius: 6px;
       background: rgba(200,200,200,0.08);
-    }
-    .dpad-btn::after {
-      content: '';
-      display: block;
-      width: 0; height: 0;
-      border: 8px solid transparent;
+      font-size: 18px;
+      line-height: 1;
+      color: rgba(220,220,220,0.85);
     }
     .dpad-btn:hover {
       background: rgba(200,200,200,0.18);
+      border-color: rgba(220,220,220,0.3);
     }
-    .dpad-btn:active {
-      background: rgba(200,200,200,0.28);
-      transform: scale(0.92);
+    .dpad-btn:active, .dpad-btn.dpad-pressed {
+      background: rgba(180,220,255,0.30);
+      border-color: rgba(140,200,255,0.5);
+      box-shadow: 0 0 8px rgba(140,200,255,0.25), inset 0 0 6px rgba(140,200,255,0.1);
+      transform: scale(0.90);
     }
-    /* Arrow directions via border tricks */
-    #dpad-fwd::after    { border-bottom: 12px solid rgba(220,220,220,0.85); border-left-width: 10px; border-right-width: 10px; margin-top: -6px; }
-    #dpad-back::after   { border-top: 12px solid rgba(220,220,220,0.85); border-left-width: 10px; border-right-width: 10px; margin-bottom: -6px; }
-    #dpad-turn-l::after { border-right: 12px solid rgba(220,220,220,0.85); border-top-width: 10px; border-bottom-width: 10px; margin-left: -6px; }
-    #dpad-turn-r::after { border-left: 12px solid rgba(220,220,220,0.85); border-top-width: 10px; border-bottom-width: 10px; margin-right: -6px; }
-    #dpad-str-l::after  { border-right: 10px solid rgba(220,220,220,0.55); border-top-width: 8px; border-bottom-width: 8px; margin-left: -4px; }
-    #dpad-str-r::after  { border-left: 10px solid rgba(220,220,220,0.55); border-top-width: 8px; border-bottom-width: 8px; margin-right: -4px; }
+    /* Bottom row (strafe) — dimmer, straight arrows */
+    .dpad-btn.dpad-strafe { color: rgba(220,220,220,0.55); font-size: 16px; }
     /* Grid positions: 3 cols × 2 rows, 48px stride */
     #dpad-turn-l  { top: 0; left: 0; }
     #dpad-fwd     { top: 0; left: 48px; }
@@ -1626,6 +1618,15 @@
       height: auto;
       max-height: 50vh;
     }
+    /* On short viewports (mobile portrait), cap the expanded tooltip so
+       it doesn't eat the gameplay area. 30vh ≈ 3 history rows on a
+       ~700px phone, enough context without occluding the viewport. */
+    @media (max-height: 600px) {
+      #status-bar.sb-expanded { max-height: 30vh; }
+    }
+    @media (max-height: 420px) {
+      #status-bar.sb-expanded { max-height: 25vh; }
+    }
     /* Scrollbar — sized for reliable cursor interaction. A 4px track is
        effectively unclickable; 12px gives the player a real target for
        dragging the thumb or clicking the track to page through history. */
@@ -1829,6 +1830,24 @@
       background: rgba(72,136,192,0.2);
     }
     .sb-btn.sb-active { border-color: var(--clipboard-blue); background: rgba(72,136,192,0.12); }
+    .sb-btn.sb-flee-active {
+      border-color: var(--stamp-red); color: var(--stamp-red);
+      background: rgba(192,64,64,0.12);
+      animation: sb-flee-pulse 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes sb-flee-pulse {
+      0%   { box-shadow: 0 0 0 rgba(192,64,64,0); }
+      100% { box-shadow: 0 0 10px rgba(192,64,64,0.35); }
+    }
+    .sb-btn.sb-reel-active {
+      border-color: #4a9; color: #3a8a5a;
+      background: rgba(60,160,100,0.12);
+      animation: sb-reel-pulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes sb-reel-pulse {
+      0%   { box-shadow: 0 0 0 rgba(60,160,100,0); }
+      100% { box-shadow: 0 0 8px rgba(60,160,100,0.3); }
+    }
     .sb-btn.sb-bag-warn {
       border-color: var(--hazmat-yellow);
       color: #8a6a10;
@@ -2069,6 +2088,20 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════
+       MOBILE PORTRAIT — shorter status bar, smaller tooltip text
+       ═══════════════════════════════════════════════════════════════ */
+    @media (orientation: portrait) and (max-height: 800px) {
+      :root { --status-bar-h: 100px; }
+      .sb-tooltip-latest { font-size: 15px; min-height: 22px; }
+      .sb-tooltip-prev-row { font-size: 13px; }
+    }
+    @media (orientation: portrait) and (max-height: 600px) {
+      :root { --status-bar-h: 80px; }
+      .sb-tooltip-latest { font-size: 14px; min-height: 20px; }
+      .sb-tooltip-prev-row { font-size: 12px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
        MOBILE LANDSCAPE — D-pad right-thumb, viewport constrained
        ═══════════════════════════════════════════════════════════════ */
     @media (orientation: landscape) and (max-width: 1024px) {
@@ -2231,12 +2264,12 @@
 
       <!-- D-pad movement controls — CSS monochrome arrows -->
       <div id="dpad-frame" style="display:none">
-        <div class="dpad-btn" id="dpad-turn-l" title="Turn Left — Q / ← / L-Bumper"></div>
-        <div class="dpad-btn" id="dpad-fwd"    title="Forward — W / ↑ / L-Stick Up"></div>
-        <div class="dpad-btn" id="dpad-turn-r" title="Turn Right — E / → / R-Bumper"></div>
-        <div class="dpad-btn" id="dpad-str-l"  title="Strafe Left — A / L-Stick Left"></div>
-        <div class="dpad-btn" id="dpad-back"   title="Back — S / ↓ / L-Stick Down"></div>
-        <div class="dpad-btn" id="dpad-str-r"  title="Strafe Right — D / L-Stick Right"></div>
+        <div class="dpad-btn" id="dpad-turn-l" title="Turn Left — Q / ← / L-Bumper">&#x21B6;</div>
+        <div class="dpad-btn" id="dpad-fwd"    title="Forward — W / ↑ / L-Stick Up">&#x25B2;</div>
+        <div class="dpad-btn" id="dpad-turn-r" title="Turn Right — E / → / R-Bumper">&#x21B7;</div>
+        <div class="dpad-btn dpad-strafe" id="dpad-str-l"  title="Strafe Left — A / L-Stick Left">&#x25C1;</div>
+        <div class="dpad-btn" id="dpad-back"   title="Back — S / ↓ / L-Stick Down">&#x25BC;</div>
+        <div class="dpad-btn dpad-strafe" id="dpad-str-r"  title="Strafe Right — D / L-Stick Right">&#x25B7;</div>
       </div>
 
       <!-- Status Bar (bottom strip with tooltip footer, hidden until gameplay) -->
@@ -2331,6 +2364,7 @@
   <script src="engine/enemy-intent.js"></script>
   <script src="engine/kaomoji-capsule.js"></script>
   <script src="engine/death-anim.js"></script>
+  <script src="engine/verb-nodes.js"></script>
   <script src="engine/bark-library.js"></script>
   <script src="engine/cleaning-system.js"></script>
   <script src="engine/grime-grid.js"></script>
@@ -2394,6 +2428,7 @@
 
   <!-- Layer 3: Game modules (depend on Player + core systems) -->
   <script src="engine/player.js"></script>
+  <script src="engine/gamestate-facade.js"></script>
   <script src="engine/mouse-look.js"></script>
   <script src="engine/floor-manager.js"></script>
   <!-- Floor blockout files (register hand-authored floors via FloorManager.registerFloorBuilder) -->
@@ -2474,6 +2509,7 @@
   <script src="engine/corpse-actions.js"></script>
   <script src="engine/dispatcher-choreography.js"></script>
   <script src="engine/quest-waypoint.js"></script>
+  <script src="engine/npc-dialogue-trees.js"></script>
 
   <script src="engine/game.js"></script>
 

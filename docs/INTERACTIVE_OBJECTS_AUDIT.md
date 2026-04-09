@@ -61,7 +61,7 @@ Player can still turn and walk away during cooldown — only the interact is gat
 | BONFIRE | 18 | ✓ | ✗ | **0.3** ⚠️ | 0.3 | 0.3 | **bonfire_ring** ⚠️ | Short stone ring + fire sprite + tent billboard | ⚠️ Fixed |
 | TREE | 21 | ✗ | ✓ | 2.5 | — | — | tree_trunk | Solid trunk, perimeter backdrop | ✅ |
 | SHRUB | 22 | ✗ | ✓ | 0.5 | — | — | shrub | Half-height, player sees over | ✅ |
-| BOOKSHELF | 25 | ✗ | ✓ | — | 2.0 | — | wood_dark | Floor-to-ceiling shelves, TorchPeek overlay | ✅ |
+| BOOKSHELF | 25 | ✗ | ✓ | — | 2.0 | — | wood_dark | Floor-to-ceiling shelves, BookshelfPeek overlay | ✅ |
 | BAR_COUNTER | 26 | ✗ | ✓ | — | 0.8 (inn) | — | wood_dark | Counter height, tap interaction | ✅ |
 | BED | 27 | ✗ | ✓ | — | 0.6 | — | bed_quilt | Low bed, BedPeek overlay for home | ✅ |
 | TABLE | 28 | ✗ | ✓ | — | 0.7 | — | table_wood | Half-height, cozy inspection toast | ✅ |
@@ -76,7 +76,7 @@ Player can still turn and walk away during cooldown — only the interact is gat
 
 ## Remaining Issues
 
-### TORCH_LIT / TORCH_UNLIT (30, 31) — No height fix needed, but visual issue
+### TORCH_LIT / TORCH_UNLIT (30, 31) — Height OK, interaction reclassified (Apr 8)
 
 Torches are wall-mounted — they ARE wall segments with a torch bracket texture. Their
 height should match the surrounding WALL tiles in each context:
@@ -88,8 +88,15 @@ height should match the surrounding WALL tiles in each context:
 - **Interior**: Base wallHeight 2.0 → torches at 2.0 → matches walls. ✅
 - **Dungeon**: Base wallHeight 1.0 → torches at 1.0 → matches walls. ✅
 
-**Action**: No fix needed now. When torch tiles are added to exterior floors, add
+**Action**: No height fix needed now. When torch tiles are added to exterior floors, add
 `30: 3.5, 31: 3.5` to exterior biome tileWallHeights.
+
+**Peek reclassification (Apr 8):** TORCH_LIT is now a **context-gated peek** — if the player
+has a water container or pressure hose, facing the torch shows a one-button "Extinguish" action
+peek with phase animations (lit→ember→smoke). If the player has no water/hose, it's a passive
+micro face-to (warm glow orb only). TORCH_UNLIT is always a **full peek** with the 3-slot
+fuel restock menu via TorchPeek. See `PEEK_SYSTEM_ROADMAP.md` §13.7.1 for full spec including
+phase animation contract. See `LIGHT_AND_TORCH_ROADMAP.md` §3b for the TorchPeek slot model.
 
 ### BREAKABLE (11) — Fixed (height + CratePeek z-stacking)
 
@@ -164,15 +171,18 @@ box. `Game.interact` exposed as public API on the Game module for this purpose.
 | F-interact (facing) | CHEST | Press OK while adjacent | PeekSlots → CrateUI withdraw mode |
 | Step-on auto | COLLECTIBLE | Walk onto tile | WorldItems pickup, tile cleared |
 | Step-on auto | Hazards (FIRE, TRAP, SPIKES, POISON) | Walk onto tile | Damage/death |
-| F-interact (facing) | BONFIRE, HEARTH, BED | Press OK while adjacent | Opens bonfire menu (rest executes from menu button, NOT on interact). 🔥 icon. 800ms cooldown. |
+| F-interact (facing) | BONFIRE, HEARTH, BED | Press OK while adjacent | **Context-gated rest** (Apr 8): owned BED/HEARTH → full peek (BedPeek, day advance). Non-owned BED, BONFIRE, COT, BENCH → nap action peek (1-5h, no WELL_RESTED). Bonfire retains MenuBox with stash/warp/incinerator. 🔥 icon. 800ms cooldown. See `BONFIRE_POLISH_STEPS.md` §11, `PEEK_SYSTEM_ROADMAP.md` §13.7.2. |
 | F-interact (facing) | TABLE | Press OK while adjacent | Cozy quip toast |
 | F-interact (facing) | SHOP | Press OK while adjacent | Shop menu |
-| F-interact (facing) | BOOKSHELF | Press OK while adjacent | TorchPeek overlay |
+| F-interact (facing) | TORCH_LIT | Press OK while adjacent | **Context-gated** (Apr 8): if player has water/hose → one-button "Extinguish" action peek (phase: lit→ember→smoke, mutates to TORCH_UNLIT). If no water/hose → passive micro face-to (warm glow orb). See `PEEK_SYSTEM_ROADMAP.md` §13.7.1. |
+| F-interact (facing) | TORCH_UNLIT | Press OK while adjacent | **Full peek**: TorchPeek 3-slot fuel restock menu. Number keys 1-3 to fill slots. Phase: ember→smoke→bare handle. See `PEEK_SYSTEM_ROADMAP.md` §13.7.1. |
+| F-interact (facing) | BOOKSHELF | Press OK while adjacent | BookshelfPeek overlay (was incorrectly labeled TorchPeek in original audit) |
 | F-interact (facing) | BAR_COUNTER | Press OK while adjacent | Tap boost |
 | F-interact (facing) | MAILBOX | Press OK while adjacent | MailboxPeek overlay |
-| F-interact (facing) | TERMINAL | Press OK while adjacent | TorchPeek overlay |
-| Peek auto-show | BED (home) | Face from adjacent + debounce | BedPeek overlay with sleep gating |
-| Peek auto-show | BOOKSHELF | Face from adjacent | TorchPeek overlay |
+| F-interact (facing) | TERMINAL | Press OK while adjacent | BookshelfPeek overlay (CRT terminal mode) |
+| F-interact (facing) | COT, BENCH | Press OK while adjacent | **Nap action peek** (Apr 8): one-button "Nap"/"Sit & Rest". COT 2h, BENCH 1h. Clear TIRED only. See `PEEK_SYSTEM_ROADMAP.md` §13.7.2 Tier 2. |
+| Peek auto-show | BED (owned) | Face from adjacent + debounce | **Context-gated** (Apr 8): owned → BedPeek overlay (full rest, day advance). Non-owned → nap action peek. See `PEEK_SYSTEM_ROADMAP.md` §13.7.2. |
+| Peek auto-show | BOOKSHELF | Face from adjacent | BookshelfPeek overlay |
 | NPC interact | AMBIENT | Press OK | Bark cycle |
 | NPC interact | INTERACTIVE | Press OK | StatusBar inline dialogue |
 | NPC interact | VENDOR | Press OK | Shop menu |

@@ -1161,7 +1161,14 @@ var CombatBridge = (function () {
         }
 
         if (typeof CombatFX === 'undefined') return;
-        if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
+        if (_result.enemyDmg > 0) {
+          CombatFX.flashFrame('hp');
+          // Screen shake on enemy hit — amplitude scales with damage
+          if (typeof Player !== 'undefined' && Player.triggerShake) {
+            var shakeAmp = Math.min(0.06, 0.015 + _result.enemyDmg * 0.005);
+            Player.triggerShake(shakeAmp, 300);
+          }
+        }
         if (_result.playerDmg > 0) CombatFX.flashFrame('energy');
 
         // ── Suit-keyed hit sounds (Pass 7) ──
@@ -1272,7 +1279,14 @@ var CombatBridge = (function () {
         }
 
         if (typeof CombatFX === 'undefined') return;
-        if (_result.enemyDmg > 0) CombatFX.flashFrame('hp');
+        if (_result.enemyDmg > 0) {
+          CombatFX.flashFrame('hp');
+          // Screen shake on enemy hit (legacy single-card path)
+          if (typeof Player !== 'undefined' && Player.triggerShake) {
+            var shakeAmp = Math.min(0.06, 0.015 + _result.enemyDmg * 0.005);
+            Player.triggerShake(shakeAmp, 300);
+          }
+        }
         if (_card.effects) {
           for (var ei = 0; ei < _card.effects.length; ei++) {
             if (_card.effects[ei].type === 'hp' && _card.effects[ei].value > 0) {

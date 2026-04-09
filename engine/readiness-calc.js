@@ -291,6 +291,42 @@ var ReadinessCalc = (function () {
     _snapshots = {};
   }
 
+  // ── Debug logging ─────────────────────────────────────────────
+
+  /**
+   * Log a formatted readiness breakdown to console.
+   * Call from browser console: ReadinessCalc.logBreakdown('2.2.1')
+   * Or omit floorId to dump the current floor.
+   *
+   * @param {string} [floorId] — defaults to FloorManager.getFloor()
+   */
+  function logBreakdown(floorId) {
+    if (!floorId && typeof FloorManager !== 'undefined' && FloorManager.getFloor) {
+      floorId = FloorManager.getFloor();
+    }
+    if (!floorId) { console.warn('[ReadinessCalc] No floorId'); return; }
+
+    var bd = getBreakdown(floorId);
+    var w  = _getWeights(floorId);
+
+    console.group('%c[ReadinessCalc] Floor ' + floorId +
+                  ' — ' + Math.round(bd.total * 100) + '%', 'font-weight:bold');
+    console.log('%cCORE  %c' + Math.round(bd.core * 100) + '%',
+                'color:#4a9', 'color:#4a9; font-weight:bold');
+    console.log('  Crate   ' + (bd.crate  * 100).toFixed(0) + '%  (w=' + w.crate + ')');
+    console.log('  Clean   ' + (bd.clean  * 100).toFixed(0) + '%  (w=' + w.clean + ')');
+    console.log('  Torch   ' + (bd.torch  * 100).toFixed(0) + '%  (w=' + w.torch + ')');
+    console.log('  Trap    ' + (bd.trap   * 100).toFixed(0) + '%  (w=' + w.trap  + ')');
+    console.log('%cEXTRA %c' + Math.round(bd.extra * 100) + '%',
+                'color:#a94', 'color:#a94; font-weight:bold');
+    console.log('  Corpse    ' + (bd.corpse    * 100).toFixed(0) + '%');
+    console.log('  Cobweb    ' + (bd.cobweb    * 100).toFixed(0) + '%');
+    console.log('  Overclean ' + (bd.overclean * 100).toFixed(0) + '%');
+    console.groupEnd();
+
+    return bd;
+  }
+
   return Object.freeze({
     getScore:       getScore,
     getCoreScore:   getCoreScore,
@@ -301,6 +337,7 @@ var ReadinessCalc = (function () {
     snapshotFloor:  snapshotFloor,
     getSnapshot:    getSnapshot,
     clearSnapshots:    clearSnapshots,
+    logBreakdown:      logBreakdown,
     setWeightOverride: setWeightOverride,
     getWeights:        _getWeights,
     CORE_WEIGHTS: Object.freeze({

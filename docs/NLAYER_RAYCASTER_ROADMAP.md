@@ -5,10 +5,15 @@
 compositing raycaster that renders floor between wall layers, enabling
 half-height "see-over" tiles (shrubs, fences, low walls) that show
 textured ground and distant buildings above them. This makes exterior
-maps 3× bigger while visually guiding players to shops and exits
+maps 3 bigger while visually guiding players to shops and exits
 without dead space.
 
 **Jam deadline**: April 5, 2026 (8 days)
+
+**Status (Apr 9 2026)**: Core system ~90% complete. Phases 1, 3 shipped.
+Phases 2, 4 deferred (unnecessary). Phase 5 partial (early-out + step limit
+done; profiling + adaptive layers remaining). Phase 6 layout done, needs
+visual verification. Phase 7 post-jam.
 
 ---
 
@@ -25,30 +30,35 @@ Pass 4  Sprites                             (z-buffered billboards)
 Pass 5  Particles                           (screen-space overlay)
 ```
 
-### Wall column pass internals (per column)
+### Wall column pass internals (per column) — SUPERSEDED
+
+The original single-hit `_bgWall` system described below has been replaced
+by the N-layer hit collector (Phase 1). Preserved for historical context:
 
 ```
-1. DDA traversal → first solid hit (WALL, PILLAR, TREE, DOOR, BREAKABLE)
-2. Background continuation (NEW — just added):
-   - If contract has tileWallHeights, continue DDA up to 12 steps
-   - Record first taller solid tile as _bgWall
-3. Compute foreground: perpDist, wallHeightMult, lineHeight, drawStart/drawEnd
-4. Render background gap: if _bgWall exists, draw bg wall texture in
-   [bgDrStart .. drawStart-1] gap above foreground
-5. Render foreground wall: texture or flat-color, fog, brightness, side shade
+OLD (replaced):
+1. DDA traversal → first solid hit
+2. Background continuation: continue DDA, record first taller solid tile as _bgWall
+3. Compute foreground geometry
+4. Render background gap: draw bg wall texture in [bgDrStart .. drawStart-1]
+5. Render foreground wall
+
+NEW (shipped):
+1. DDA traversal → collect up to 6 solid hits in _layerBuf (front-to-back)
+2. Compute geometry for all layers
+3. Render back-to-front (painter's algorithm) via _renderBackLayer()
+4. Render foreground wall (layer 0) with full texture/fog/decor pipeline
+5. Floor pre-pass handles all floor between layers automatically
 ```
 
-### The problem with the current bg-fill
+### The problem with the old bg-fill (SOLVED)
 
-The gap above a short foreground wall gets filled with the **background
-wall's texture**. But physically, the player should see **floor tiles**
-between the shrub and the distant building — not the building's wall
-starting immediately above the shrub. At distance it's subpixel and
-invisible. Up close to a shrub, the building wall appears to grow
-directly out of the shrub top with no ground between them.
-
-For "competing with Unity canned assets" quality, we need the floor
-to show through in that gap zone.
+The gap above a short foreground wall was filled with the **background
+wall's texture**. The player should see **floor tiles** between the
+shrub and the distant building. This was solved by removing the explicit
+gap-fill and switching to back-to-front N-layer rendering. The floor
+pre-pass paints correct floor everywhere; walls only overdraw where
+visible.
 
 ### Floor casting architecture
 
@@ -60,7 +70,7 @@ floor wherever walls are visible.
 This means: the floor is already there, behind the wall columns. If we
 simply **don't overdraw** the floor in the gap between two wall layers,
 the pre-pass floor texture shows through naturally. The key insight is
-that the floor pre-pass handles all floor rendering — we don't need
+that the floor pre-pass handles all floor rendering  we don't need
 per-column floor casting. We just need to be careful about what we
 overdraw and what we leave alone.
 
@@ -75,22 +85,22 @@ collect them front-to-back, then render **back-to-front** (painter's
 algorithm within the column).
 
 ```
-Layer 0 (closest): SHRUB at 0.5× — covers bottom ~15% of column
-Layer 1 (middle):  TREE at 2.5×  — covers bottom ~60% of column
-Layer 2 (far):     WALL at 3.5×  — covers bottom ~80% of column
+Layer 0 (closest): SHRUB at 0.5  covers bottom ~15% of column
+Layer 1 (middle):  TREE at 2.5   covers bottom ~60% of column
+Layer 2 (far):     WALL at 3.5   covers bottom ~80% of column
 ```
 
 Back-to-front rendering:
-1. Layer 2 (WALL) renders its full strip → overwrites floor pre-pass
-2. Layer 1 (TREE) renders its full strip → overwrites lower portion of WALL
-3. Layer 0 (SHRUB) renders its full strip → overwrites lower portion of TREE
+1. Layer 2 (WALL) renders its full strip  overwrites floor pre-pass
+2. Layer 1 (TREE) renders its full strip  overwrites lower portion of WALL
+3. Layer 0 (SHRUB) renders its full strip  overwrites lower portion of TREE
 
 Result: SHRUB at bottom, TREE visible above it, WALL visible above
 that, sky above the WALL. Floor is visible in any column-region that
 no layer covers (i.e., between layer tops where the pre-pass floor
 shows through).
 
-**Wait — does floor actually show through?**
+**Wait  does floor actually show through?**
 
 No. Because each layer renders a solid strip from its drawStart to
 drawEnd, and back layers render first, the back layer's strip covers
@@ -103,14 +113,14 @@ This is **physically correct** for most cases: looking through shrubs
 at a building, you'd see building wall in the gap, not floor. The floor
 between you and the building is only visible in the **horizontal band
 between the shrub top and the horizon line** where no wall layer
-exists — and that's already handled by the floor pre-pass (the wall
+exists  and that's already handled by the floor pre-pass (the wall
 column loop simply doesn't overdraw that region).
 
 **Revised analysis**: The floor pre-pass fills the entire bottom half.
 Walls overdraw from `drawStart` to `drawEnd`. Any screen pixel between
 `drawStart` of the tallest layer and the horizon that isn't covered by
 any wall layer **already shows the floor pre-pass**. The floor IS
-visible — we just need to make sure we don't accidentally overdraw it
+visible  we just need to make sure we don't accidentally overdraw it
 with sky or background wall texture in the gap.
 
 ### The actual gap problem
@@ -122,9 +132,9 @@ rendering:
 
 ```
 Screen column breakdown (bottom to top):
-  drawEnd → screen bottom:  floor pre-pass (already correct)
-  drawStart → drawEnd:      foreground wall (SHRUB texture)
-  horizon → drawStart:      this is the critical zone
+  drawEnd  screen bottom:  floor pre-pass (already correct)
+  drawStart  drawEnd:      foreground wall (SHRUB texture)
+  horizon  drawStart:      this is the critical zone
     - Where a back wall exists: back wall texture (correct)
     - Where NO back wall exists but we're below horizon:
       floor pre-pass should show (already correct IF we don't overdraw)
@@ -157,41 +167,44 @@ Don't fill "gaps" at all. The floor pre-pass handles the rest.**
 
 ## 3. Implementation Phases
 
-### Phase 1: Refactor bg-fill → N-layer hit collector
+### Phase 1: Refactor bg-fill → N-layer hit collector — IMPLEMENTED
 
 **File**: `raycaster.js`
 **Estimated time**: 45 min
 
-Replace the current `_bgWall` single-hit system with an array that
-collects all solid hits along the ray, front-to-back.
+~~Replace the current `_bgWall` single-hit system with an array that
+collects all solid hits along the ray, front-to-back.~~
+
+**Shipped implementation** (lines 40–53, 250–322, 418–433):
 
 ```javascript
-// Replace current bg-wall detection with:
-var _hits = [];  // { mx, my, sd, tile, wh, perpDist }
-
-// After first DDA hit, if contract has tileWallHeights:
-//   Continue DDA, collecting ALL solid hits up to MAX_LAYERS (4)
-//   Each hit records: grid coords, side, tile type, wall height
-//   Stop when MAX_LAYERS reached or renderDist exceeded
-
-var MAX_LAYERS = 4;  // shrub → pillar → tree → building
-var _BG_MAX_STEPS = 16;
+var _MAX_LAYERS = 6;       // increased from proposed 4
+var _MAX_BG_STEPS = 24;    // increased from proposed 16 for deeper views
+var _layerBuf = [          // pre-allocated (zero GC)
+  { mx: 0, my: 0, sd: 0, tile: 0 },  // ×6 slots
+];
 ```
 
 After the DDA loop, compute perpDist and wall geometry for ALL hits.
 Store as an array of layer descriptors.
 
-**Back-to-front render**: iterate `_hits` in reverse (farthest first).
-Each layer renders its full textured strip from `drawStart` to
-`drawEnd`. Closer layers overdraw farther layers naturally.
+Back-to-front render iterates `_layerBuf` in reverse (farthest first).
+Each layer renders its full textured strip via `_renderBackLayer()`.
+Closer layers overdraw farther layers naturally.
 
-The z-buffer gets the **closest** hit's perpDist (for sprite occlusion).
+Z-buffer gets the closest hit's perpDist (for sprite occlusion).
+Explicit gap-fill code removed entirely — back-to-front painter's
+algorithm + floor pre-pass = correct compositing with zero gap logic.
 
-Key change: **remove the explicit gap-fill code entirely**. Back-to-front
-painter's algorithm + floor pre-pass = correct compositing with zero
-gap logic.
+Additional shipped features beyond the original spec:
+- **Back-face injection** for short walls (lines 263–303): automatically
+  injects an inner face for short tiles. SHRUB and FENCE explicitly
+  excluded from back-face injection.
+- **Height-based occlusion culling**: tracks `_maxH` (tallest visible
+  wall) and skips equal-or-shorter hits as fully occluded (lines 310–320).
+- **Early termination** at 3.0+ height walls (line 318).
 
-### Phase 2: Per-column floor casting between wall layers
+### Phase 2: Per-column floor casting between wall layers — DEFERRED (unnecessary)
 
 **File**: `raycaster.js`
 **Estimated time**: 1.5 hr
@@ -202,21 +215,21 @@ calculation (`rowDist = halfH * baseWallH / rowFromCenter`). This means
 the floor texture is correct for the default wall height. But with
 tileWallHeights, the floor-to-wall boundary shifts:
 
-- A 3.5× wall's drawEnd is at the same screen Y as the floor pre-pass
+- A 3.5 wall's drawEnd is at the same screen Y as the floor pre-pass
   (because both use the same baseWallH for the floor plane).
-  Wait — drawEnd uses `flatBottom = halfH + baseLineH/2` where
+  Wait  drawEnd uses `flatBottom = halfH + baseLineH/2` where
   baseLineH = `h * baseWallH / perpDist`. And the floor pre-pass
   computes `rowDist = halfH * baseWallH / rowFromCenter`. These are
   the same equation inverted. So **the floor pre-pass and wall drawEnd
   are already aligned**. Any gap between two walls naturally shows the
   correct floor texture.
 
-**Verification**: If SHRUB (0.5×) is at distance 3 and WALL (3.5×) is
+**Verification**: If SHRUB (0.5) is at distance 3 and WALL (3.5) is
 at distance 8:
-- SHRUB drawEnd: `halfH + floor(h * 1.0 / 3) / 2` ← floor plane
-- WALL drawEnd: `halfH + floor(h * 1.0 / 8) / 2` ← floor plane
+- SHRUB drawEnd: `halfH + floor(h * 1.0 / 3) / 2`  floor plane
+- WALL drawEnd: `halfH + floor(h * 1.0 / 8) / 2`  floor plane
 - Floor pre-pass at the screen row between these two drawEnds:
-  `rowDist = halfH * 1.0 / (screenY - halfH)` — this computes the
+  `rowDist = halfH * 1.0 / (screenY - halfH)`  this computes the
   world distance for that scanline, samples the floor texture at the
   corresponding world position. This IS the floor between the shrub
   and the wall.
@@ -236,58 +249,49 @@ floor pre-pass scanline (due to integer rounding), there could be a
 1-pixel seam. Fix: extend each wall strip 1px down (`drawEnd + 1`)
 to overlap the floor pre-pass boundary.
 
-### Phase 3: SHRUB tile type + texture + contract wiring
+### Phase 3: SHRUB tile type + texture + contract wiring — IMPLEMENTED
 
 **Files**: `tiles.js`, `texture-atlas.js`, `spatial-contract.js`,
           `floor-manager.js`
 **Estimated time**: 1 hr
 
-3a. **tiles.js** — Add SHRUB constant:
-```javascript
-SHRUB: 22   // Half-height vegetation — blocks movement, see-over
-```
-- `isWalkable`: false (blocks movement → guides player)
-- `isOpaque`: true (blocks minimap LOS)
-- NOT a door type
+All sub-steps shipped:
 
-3b. **texture-atlas.js** — Add `_genShrub()` procedural texture:
-- Bottom 60%: dense tangled branches (brown/dark green)
-- Top 40%: leafy canopy with irregular top edge (varied greens)
-- Reads similar to tree_trunk but shorter, bushier, more horizontal
-  branching pattern
-- Also add `shrub_flower` variant (same base + pink/white dot scatter)
-  for visual variety in guided paths
+3a. ✓ **tiles.js** — `SHRUB: 22`, `isWalkable` → false, `isOpaque` → true.
 
-3c. **spatial-contract.js** — No changes needed (tileWallHeights and
-textures are passed through from biome overrides, not hardcoded)
+3b. ✓ **texture-atlas.js** — `_genShrub()` at lines 1883–1944. 64×64 procedural
+texture with irregular ragged top edge, twig/stem detail, leaf clusters with
+noise-based highlight/shadow, top fade gradient. `shrub_flower` variant not
+yet added (stretch goal for visual variety).
 
-3d. **floor-manager.js** — Add to exterior/promenade biome overrides:
-```javascript
-textures: { ..., 22: 'shrub' },
-tileWallHeights: { ..., 22: 0.5 }  // Half-height: player sees over
-```
+3c. ✓ **spatial-contract.js** — `22: 'floor_grass'` in texture overrides (line 153),
+`22: 0.5` in tileWallHeights (line 167).
 
-3e. **raycaster.js DDA** — Add SHRUB to hit detection:
-```javascript
-if (tile === TILES.WALL || tile === TILES.PILLAR ||
-    tile === TILES.BREAKABLE || tile === TILES.TREE ||
-    tile === TILES.SHRUB) {
-  // solid hit
-}
-```
+3d. ✓ **floor-manager.js** — Exterior biome overrides include SHRUB wiring.
+Floor 0 "The Approach" uses SHRUB tiles extensively in a 50×36 hand-authored
+grid with hedgerow wayfinding (lines 1276–1330).
 
-### Phase 4: Ceiling gap handling for see-over tiles
+3e. ✓ **raycaster.js** — DDA uses `TILES.isOpaque(tile)` check (lines 233, 306),
+which includes SHRUB automatically. No special-case needed.
+
+### Phase 4: Ceiling gap handling for see-over tiles — DEFERRED (unnecessary)
 
 **File**: `raycaster.js`
 **Estimated time**: 30 min
 
+Back-to-front painter's algorithm handles this correctly. The sky
+pre-pass is only visible where no wall layer's strip covers a pixel.
+No implementation needed.
+
+Original analysis (preserved for reference):
+
 When the player looks over a shrub at a distant building:
 - Below horizon: floor pre-pass (correct)
 - Shrub region: shrub texture (correct)
-- Between shrub top and building: sky/parallax pre-pass (correct — IF
+- Between shrub top and building: sky/parallax pre-pass (correct  IF
   no back-to-front layer overwrites it)
 
-In the back-to-front scheme, the farthest layer (building at 3.5×)
+In the back-to-front scheme, the farthest layer (building at 3.5)
 renders first, filling its strip from `drawStart` to `drawEnd`. This
 strip extends above the horizon into the sky region. The Skybox/ceiling
 pre-pass already painted the sky there. The building wall correctly
@@ -298,7 +302,7 @@ between the shrub top and the building bottom that isn't covered by
 either layer shows... the sky pre-pass. But it SHOULD show the building
 wall there.
 
-Wait — the building's strip extends from `bgDrStart` (far above shrub)
+Wait  the building's strip extends from `bgDrStart` (far above shrub)
 down to `bgDrEnd` (floor level). The shrub's strip extends from
 `fgDrStart` to `fgDrEnd`. The shrub overdraw only covers
 `[fgDrStart, fgDrEnd]`. The building's `[bgDrStart, fgDrStart-1]` region
@@ -311,48 +315,52 @@ no wall layer's strip covers a pixel.
 
 **TODO**: Verify empirically. Mark this phase as "verify only."
 
-### Phase 5: Performance guard — skip layers when off-screen
+### Phase 5: Performance guard — skip layers when off-screen — PARTIAL
 
 **File**: `raycaster.js`
 **Estimated time**: 30 min
 
 Optimizations for the N-layer system on webOS hardware:
 
-5a. **Early-out on tileWallHeights**: Only enter the multi-hit DDA
-continuation if the contract has `tileWallHeights` (already implemented).
-Floors without height variation have zero overhead.
+5a. ✓ **Early-out on tileWallHeights**: Multi-hit DDA only enters
+continuation if `_contract` exists. Floors without contracts/tileWallHeights
+skip the entire layer-collection loop. **DONE.**
 
-5b. **Skip off-screen layers**: Before rendering a back layer, check if
-its entire strip `[drawStart, drawEnd]` is fully occluded by the front
-layer. If `bgDrStart >= fgDrStart`, the back layer is completely hidden
-and can be skipped.
+5b. ✗ **Skip off-screen layers**: Check if a back layer's strip is fully
+occluded by the front layer before rendering. **NOT YET IMPLEMENTED.**
+Height-based culling during DDA collection (skipping equal-or-shorter hits)
+partially addresses this, but per-column screen-space occlusion check is
+not done.
 
-5c. **Limit continuation distance**: Cap the bg DDA continuation to
-`_BG_MAX_STEPS = 16`. Any wall beyond 16 steps from the foreground hit
-is too distant and fogged to matter visually.
+5c. ✓ **Limit continuation distance**: `_MAX_BG_STEPS = 24` (increased from
+the proposed 16 for deeper views). Also bounded by `renderDist`. **DONE.**
 
-5d. **Profile on webOS**: Time the column loop with `performance.now()`
-across 100 frames. Target: <8ms for 320-column render at 30fps.
-Budget per column: 25μs. Each extra layer adds ~3μs (perpDist calc +
-texture drawImage). At 4 layers max, worst case is 12μs extra = 37μs/col.
-320 columns × 37μs = 11.8ms. Tight but feasible at 30fps.
+5d. ✗ **Profile on webOS**: No systematic frame-time profiling of the column
+loop. Only sporadic `Date.now()` calls for fire/particle timing.
+**NOT YET IMPLEMENTED.**
 
-5e. **Adaptive layer count**: If frame time exceeds 12ms, reduce
-MAX_LAYERS from 4 → 2 for the next frame (and log to console). This
-lets large maps degrade gracefully on weak webOS hardware.
+5e. ✗ **Adaptive layer count**: `_MAX_LAYERS` is hardcoded to 6. No logic
+to reduce based on frame time. **NOT YET IMPLEMENTED.** Would be relatively
+easy to add — compare `performance.now()` delta before/after column loop,
+reduce `_MAX_LAYERS` for next frame if over budget.
 
-### Phase 6: Floor 0 integration test — shrub-guided courtyard
+### Phase 6: Floor 0 integration test — shrub-guided courtyard — LAYOUT COMPLETE
 
 **File**: `floor-manager.js`
 **Estimated time**: 1 hr
 
-Redesign Floor 0 grid to use SHRUB tiles as wayfinding guides:
+~~Redesign Floor 0 grid to use SHRUB tiles as wayfinding guides:~~
+
+Floor 0 "The Approach" is fully hand-authored at 50×36 with SHRUB
+hedgerows for wayfinding (lines 1276–1330 in floor-manager.js).
+Rooms, doors, and lighting are configured. **Visual verification
+in-browser is the remaining work** — confirm:
 
 ```
-Current 20×16 grid → expand to 40×32 (or keep 20×16 for first test)
+Current 2016 grid  expand to 4032 (or keep 2016 for first test)
 ```
 
-Test layout for the existing 20×16 grid:
+Test layout for the existing 2016 grid:
 - Replace some EMPTY courtyard tiles with SHRUB to create a guided path
   from spawn to the building entrance
 - Place SHRUB hedgerows along the path edges
@@ -392,23 +400,23 @@ Here shrubs (22) form hedgerows along the path edges. From spawn at
 
 **Not for jam** unless time permits. Design notes for future:
 
-- Expand Floor 0 from 20×16 → 40×32 or 60×48
+- Expand Floor 0 from 2016  4032 or 6048
 - Shrub hedgerows create garden maze paths to shops/exits
 - Open sight-lines over shrubs to distant buildings (wayfinding)
 - TREE perimeter expands to fill the larger boundary
-- DDA renderDist may need increase from 16 → 24 for larger maps
+- DDA renderDist may need increase from 16  24 for larger maps
 - Floor casting pre-pass cost scales with screen pixels (constant)
   but DDA cost scales with map size (linear per ray)
 
 ---
 
-## 4. Critical Insight: Floor Pre-Pass Is Already Correct
+## 4. Critical Insight: Floor Pre-Pass Is Already Correct — VERIFIED
 
-The biggest realization from analyzing the code:
+The biggest realization from analyzing the code (confirmed by shipped implementation):
 
 **The floor pre-pass (`_renderFloor`) already paints correct floor
 texture in every pixel below the horizon.** It doesn't know about walls
-— it just computes floor world position per pixel and samples the
+ it just computes floor world position per pixel and samples the
 texture. The wall column loop **overdraws** floor pixels where walls
 exist.
 
@@ -432,6 +440,10 @@ entire solution is:
 
 Total estimated time: ~3.5 hours (down from ~5.5 with floor casting).
 
+**Status (Apr 9 2026):** This prediction was correct. Phases 1, 3, 5a, 5c
+are shipped. Phases 2, 4 confirmed unnecessary. Remaining: 5b/5d/5e
+(optimization polish) and Phase 6 visual verification.
+
 ---
 
 ## 5. Risk Assessment
@@ -446,76 +458,81 @@ Total estimated time: ~3.5 hours (down from ~5.5 with floor casting).
 
 ---
 
-## 6. Dependency Order
+## 6. Dependency Order (Updated Apr 9 2026)
 
 ```
-Phase 1 (N-layer collector + back-to-front render)
-  ↓
-Phase 3 (SHRUB tile + texture)  ←  can start in parallel after Phase 1 DDA change
-  ↓
-Phase 5 (Performance guards)
-  ↓
-Phase 6 (Integration test on Floor 0)
-  ↓
-Phase 4 (Verify ceiling gaps — likely no-op)
-```
+ Phase 1 (N-layer collector + back-to-front render)  DONE
+  
+ Phase 3 (SHRUB tile + texture + Floor 0 layout)     DONE
+  
+ Phase 5a,c (Early-out + step limit)                  DONE
+  
+ Phase 6 (Integration test on Floor 0)                LAYOUT DONE — needs visual verify
+  
+ Phase 4 (Verify ceiling gaps)                         DEFERRED — no-op confirmed
+  
+ Phase 2 (Per-column floor casting)                    DEFERRED — unnecessary
 
-Phase 2 (per-column floor casting) is **deferred** — only needed if
-empirical testing reveals floor pre-pass inadequacy.
+REMAINING:
+  Phase 5b (Skip off-screen layers)                   Not yet — optimization polish
+  Phase 5d (WebOS profiling)                           Not yet — needs device testing
+  Phase 5e (Adaptive MAX_LAYERS)                       Not yet — easy add if needed
+  Phase 7 (Expanded exterior maps)                     Post-jam
+```
 
 ---
 
 ## 7. Cross-References to Other Roadmaps
 
-### Phase 1 (N-layer DDA) ↔ TEXTURE_ROADMAP Layer 2 (Wall Decor)
+### Phase 1 (N-layer DDA) ↔ TEXTURE_ROADMAP Layer 2 (Wall Decor) — BOTH SHIPPED
 
-Both modify the raycaster wall column rendering loop. N-layer refactors
-the DDA to collect multiple hits and render back-to-front. Layer 2 adds
-wall decor sprite overlays per rendered wall strip. **N-layer must land
-first** — Layer 2's face-hit sprite rendering needs to operate within
-the back-to-front loop, drawing decor on each layer independently.
+Both shipped. N-layer DDA collects multiple hits and renders back-to-front.
+Layer 2 wall décor (13 sprite textures, 3 placement categories) operates
+within the raycaster's wall column rendering. Wall décor renders on the
+foreground layer via `_renderWallDecor()` (lines 1079–1190 in raycaster.js).
 
-If Layer 2 ships on the current single-hit DDA, it will need refactoring
-when N-layer lands. Recommended: implement Phase 1 before Layer 2.
-
-### Phase 1 (N-layer DDA) ↔ LIGHT_AND_TORCH_ROADMAP Phase 2b (Torch Wall Rendering)
+### Phase 1 (N-layer DDA)  LIGHT_AND_TORCH_ROADMAP Phase 2b (Torch Wall Rendering)
 
 LIGHT_AND_TORCH Phase 2b adds torch sprite overlays in the raycaster
 wall column loop (check tile type, draw fire emoji + glow). This is
 a specific case of TEXTURE Layer 2 wall decor. Same sequencing applies:
 N-layer DDA refactor first, then torch overlays operate per-layer.
 
-### Phase 3 (SHRUB tile) ↔ TEXTURE_ROADMAP
+### Phase 3 (SHRUB tile) ↔ TEXTURE_ROADMAP — SHIPPED
 
-Phase 3b explicitly depends on TextureAtlas for `_genShrub()` procedural
-texture generation. The shrub texture follows the same pattern as existing
-procedural generators (64×64, noise-based). Two variants needed:
+`_genShrub()` is in texture-atlas.js (lines 1883–1944). Contract wiring
+done: `22: 'floor_grass'` texture, `22: 0.5` wall height. One stretch
+variant (`shrub_flower`) not yet added.
 
-- `shrub` — dense tangled branches (brown/dark green base, leafy canopy top)
-- `shrub_flower` — same base + pink/white dot scatter for visual variety
-
-Phase 3d adds `textures: { 22: 'shrub' }` and `tileWallHeights: { 22: 0.5 }`
-to exterior biome overrides in SpatialContract — standard texture wiring.
-
-### Phase 5 (Performance guards) ↔ LIGHT_AND_TORCH_ROADMAP
+### Phase 5 (Performance guards)  LIGHT_AND_TORCH_ROADMAP
 
 N-layer rendering adds per-column cost. Dynamic light sources (LIGHT_AND_TORCH
 Phase 1) add per-tile cost in Lighting.calculate(). Both affect frame budget
 on webOS. Phase 5e's adaptive MAX_LAYERS should be tested with dynamic lights
-active (worst case: 4 wall layers × 8 light sources × 320 columns).
+active (worst case: 4 wall layers  8 light sources  320 columns).
 
-### Phase 6 (Floor 0 test) ↔ SKYBOX_ROADMAP
+### Phase 6 (Floor 0 test)  SKYBOX_ROADMAP
 
-Floor 0 is exterior (depth 1) — skybox renders as the background. N-layer
+Floor 0 is exterior (depth 1)  skybox renders as the background. N-layer
 see-over tiles (shrubs) will show sky above distant buildings. Skybox
 rendering is a separate pre-pass and doesn't interact with N-layer
-compositing, but the visual result should be verified: sky → building
-wall → floor → shrub layering looks correct with the active sky preset.
+compositing, but the visual result should be verified: sky  building
+wall  floor  shrub layering looks correct with the active sky preset.
 
-### Phase 7 (Expanded exteriors) ↔ SKYBOX_ROADMAP Phase 5 (Floor 3)
+### Phase 7 (Expanded exteriors)  SKYBOX_ROADMAP Phase 5 (Floor 3)
 
 Larger exterior maps with shrub-guided paths are the same technique
 needed for Floor 3 (Frontier Gate). Floor 3's open ocean views require
 both the N-layer raycaster (see-over fences/low walls toward the harbor)
 and the `frontier` sky preset. These can share the same implementation
 and testing pass.
+
+### Tile Matrix Dependency (Updated)
+
+Canonical tile texture and geometry status is now tracked in
+`TEXTURE_ROADMAP.md` under `Tile Asset Matrix (Canonical 0-59)`.
+
+For N-layer work:
+- Treat that matrix as the source of truth before adding or reusing tile IDs.
+- Prioritize rows marked `Geom=Short` or `Geom=Full/Fixture` with `Action=Implement/Create`.
+- Do not start N-layer-facing work for planned IDs `49-59` until tile constants, texture keys, and biome wiring exist.

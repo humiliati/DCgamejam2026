@@ -57,11 +57,15 @@ var Shop = (function () {
   /** Price multipliers by rep tier (0 = stranger, 3 = trusted ally). */
   var REP_DISCOUNT = [1.0, 0.90, 0.80, 0.70];
 
-  /** Display data for each faction. */
+  /** Display data + buy preferences for each faction.
+   *  `buys` lists the item types a faction will purchase on the sell pane.
+   *  Items whose type is NOT in the list are hidden (with a distinct message).
+   *  'salvage' = breakable/combat drops, 'supply' = shop-bought restocking
+   *  items, 'consumable' = starting/crafted consumables, 'equipment' = gear. */
   var FACTION_META = {
-    tide:      { label: 'Tide Council',  emoji: '🐉' },
-    foundry:   { label: 'The Foundry',   emoji: '⚙️' },
-    admiralty: { label: 'The Admiralty', emoji: '🌊' }
+    tide:      { label: 'Tide Council',  emoji: '🐉',  buys: ['salvage', 'supply', 'consumable'] },
+    foundry:   { label: 'The Foundry',   emoji: '⚙️',  buys: ['salvage', 'supply', 'equipment'] },
+    admiralty: { label: 'The Admiralty', emoji: '🌊',  buys: ['salvage', 'supply', 'consumable', 'equipment'] }
   };
 
   // ── Supply stock (DEPTH3 §5) ───────────────────────────────────────
@@ -597,6 +601,38 @@ var Shop = (function () {
     return (FACTION_META[id] && FACTION_META[id].emoji) || '🏪';
   }
 
+  /**
+   * Does the current (or given) faction buy items of this type?
+   * @param {string} itemType - 'salvage', 'supply', 'consumable', 'equipment'
+   * @param {string} [fid] - faction id; defaults to current faction
+   * @returns {boolean}
+   */
+  function factionBuysType(itemType, fid) {
+    var id = fid || _factionId;
+    var meta = FACTION_META[id];
+    if (!meta || !meta.buys) return true;  // unknown faction = accept all
+    return meta.buys.indexOf(itemType) !== -1;
+  }
+
+  /**
+   * Get the sell-back price for a bag item at the current faction.
+   * Salvage items use Salvage.getSellPrice (faction-adjusted).
+   * Supply/consumable/equipment items sell back at 40% of shopPrice.
+   * @param {Object} item
+   * @returns {number}
+   */
+  function getBagItemSellPrice(item) {
+    if (!item) return 0;
+    // Salvage parts use the faction-adjusted price system
+    if (item.type === 'salvage') {
+      return (typeof Salvage !== 'undefined' && _factionId)
+        ? Salvage.getSellPrice(item, _factionId) : (item.baseValue || 1);
+    }
+    // Everything else: 40% of shopPrice (matches card SELL_FRACTION)
+    if (item.shopPrice) return Math.max(1, Math.round(item.shopPrice * SELL_FRACTION));
+    return item.baseValue || 1;
+  }
+
   // ── Public API ────────────────────────────────────────────────────
   return {
     open:              open,
@@ -611,6 +647,8 @@ var Shop = (function () {
     getAllRepTiers:     getAllRepTiers,
     getFactionLabel:   getFactionLabel,
     getFactionEmoji:   getFactionEmoji,
+    factionBuysType:   factionBuysType,
+    getBagItemSellPrice: getBagItemSellPrice,
     isOpen:            isOpen,
     getCardSellPrice:  _calcSellPrice,
     buySupply:         buySupply,

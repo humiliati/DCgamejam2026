@@ -62,7 +62,8 @@ var CrateUI = (function () {
   var _containerY = -1;
   var _floorId    = '';
   var _alpha      = 0;       // Fade in/out
-  var _selectedSlot = -1;    // Highlighted slot index
+  var _selectedSlot   = -1;  // Last-acted slot index (flash highlight)
+  var _selectedFlash  = 0;   // Flash timer (ms) for last-acted slot
   var _sealFlash  = 0;       // Seal celebration timer (ms)
 
   // ── Bag strip state ────────────────────────────────────────────
@@ -164,6 +165,7 @@ var CrateUI = (function () {
     if (_sealFlashWhite > 0) _sealFlashWhite = Math.max(0, _sealFlashWhite - dt);
     if (_sealFlashGold > 0)  _sealFlashGold  = Math.max(0, _sealFlashGold - dt);
     if (_rejectFlash > 0)    _rejectFlash    = Math.max(0, _rejectFlash - dt);
+    if (_selectedFlash > 0)  _selectedFlash  = Math.max(0, _selectedFlash - dt);
     if (_sealTextTimer > 0) {
       _sealTextTimer = Math.max(0, _sealTextTimer - dt);
       // Bounce curve: scale up 0→1.2 in first 200ms, settle 1.2→1.0 in next 300ms
@@ -608,6 +610,57 @@ var CrateUI = (function () {
       ctx.fillText(_th('ui.hint_deposit', 'Tap bag item → tap slot  ·  drag & drop'), vpW / 2, hintY);
     }
 
+    // ── Hover Tooltip (above hovered slot) ─────────────────────
+    if (hoverIdx >= 0 && hoverIdx < n && !c.sealed) {
+      var hSlot    = slots[hoverIdx];
+      var hDisplay = CrateSystem.getSlotDisplay(hSlot);
+      var tipLines = [];
+
+      if (hSlot.filled && hSlot.item) {
+        tipLines.push(hSlot.item.name || hSlot.item.emoji || '?');
+        tipLines.push(hDisplay.matched ? '\u2713 Match' : '\u2717 Mismatch');
+      } else {
+        tipLines.push('Needs: ' + hDisplay.label);
+      }
+
+      var tipFont  = Math.max(9, Math.round(11 * (SLOT_SIZE / 56))) + 'px monospace';
+      ctx.font = tipFont;
+      var tipPad   = 6;
+      var lineH    = Math.round(SLOT_SIZE / 56 * 13);
+      var tipW     = 0;
+      for (var ti = 0; ti < tipLines.length; ti++) {
+        var tw = ctx.measureText(tipLines[ti]).width;
+        if (tw > tipW) tipW = tw;
+      }
+      tipW += tipPad * 2;
+      var tipH = tipLines.length * lineH + tipPad * 2;
+      var tipRect = _slotRects[hoverIdx];
+      var tipX = tipRect.x + SLOT_SIZE / 2 - tipW / 2;
+      var tipY = tipRect.y - tipH - 6;
+
+      // Clamp to viewport
+      if (tipX < 4) tipX = 4;
+      if (tipX + tipW > vpW - 4) tipX = vpW - 4 - tipW;
+      if (tipY < 4) tipY = tipRect.y + SLOT_SIZE + 6; // flip below if no room above
+
+      _roundRect(ctx, tipX, tipY, tipW, tipH, 4);
+      ctx.fillStyle = 'rgba(20,18,12,0.92)';
+      ctx.fill();
+      ctx.strokeStyle = hDisplay.color;
+      ctx.lineWidth = 1;
+      _roundRect(ctx, tipX, tipY, tipW, tipH, 4);
+      ctx.stroke();
+
+      ctx.font = tipFont;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (var tl = 0; tl < tipLines.length; tl++) {
+        ctx.fillStyle = tl === 0 ? 'rgba(230,220,190,0.95)'
+                       : (hSlot.filled && hDisplay.matched ? '#8d8' : '#d88');
+        ctx.fillText(tipLines[tl], tipX + tipW / 2, tipY + tipPad + tl * lineH);
+      }
+    }
+
     // ── Seal VFX Overlays ────────────────────────────────────────
     // These render OVER everything (full viewport flashes + text)
     if (_sealFlashWhite > 0) {
@@ -834,6 +887,17 @@ var CrateUI = (function () {
                    : hovered ? 2.5 : (slot.filled && display.matched ? 2.5 : 1.5);
     _roundRect(ctx, x, y, SLOT_SIZE, SLOT_SIZE, SLOT_RAD);
     ctx.stroke();
+
+    // Selection flash glow — brief gold pulse when slot receives an item
+    if (_selectedSlot === index && _selectedFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = (_selectedFlash / 400) * 0.6;
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      _roundRect(ctx, x - 2, y - 2, SLOT_SIZE + 4, SLOT_SIZE + 4, SLOT_RAD + 1);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Suit card watermark (large faded suit symbol)
     if (display.suitEmoji && !slot.filled) {
@@ -1164,6 +1228,8 @@ var CrateUI = (function () {
     if (card) {
       var result = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
       if (result) {
+        _selectedSlot  = slotIdx;
+        _selectedFlash = 400;
         var SUIT_EMOJI = { spade: '\u2660', club: '\u2663', diamond: '\u2666', heart: '\u2665' };
         if (typeof Toast !== 'undefined') {
           Toast.show(
@@ -1206,6 +1272,9 @@ var CrateUI = (function () {
     if (item) {
       var result = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
       if (result) {
+        // Flash the slot that just received the item
+        _selectedSlot  = slotIdx;
+        _selectedFlash = 400;
         if (typeof Toast !== 'undefined') {
           var matchTxt = result.matched ? ' \u2713' : '';
           Toast.show(
@@ -1387,6 +1456,8 @@ var CrateUI = (function () {
             : hand.splice(h, 1)[0];
           if (card) {
             var suitResult = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, card);
+            _selectedSlot  = slotIdx;
+            _selectedFlash = 400;
             if (typeof SessionStats !== 'undefined') SessionStats.inc('slotsFilled');
             if (suitResult && suitResult.coins > 0 && typeof Toast !== 'undefined') {
               Toast.show('+' + suitResult.coins + 'g \u2714 suit match!', 'loot');
@@ -1416,6 +1487,8 @@ var CrateUI = (function () {
       : bag.splice(0, 1)[0];
     if (item) {
       var fillResult = CrateSystem.fillSlot(_containerX, _containerY, _floorId, slotIdx, item);
+      _selectedSlot  = slotIdx;
+      _selectedFlash = 400;
       if (typeof SessionStats !== 'undefined') SessionStats.inc('slotsFilled');
       if (fillResult && fillResult.coins > 0 && typeof Toast !== 'undefined') {
         var fillMsg = '+' + fillResult.coins + 'g';
@@ -1435,6 +1508,10 @@ var CrateUI = (function () {
 
     var item = CrateSystem.withdrawSlot(_containerX, _containerY, _floorId, slotIdx);
     if (!item) return;
+
+    // Flash the slot that was just emptied
+    _selectedSlot  = slotIdx;
+    _selectedFlash = 400;
 
     // Add item to player's bag via authority or direct
     var hasAuthority = (typeof CardAuthority !== 'undefined');

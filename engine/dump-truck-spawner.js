@@ -296,13 +296,14 @@ var DumpTruckSpawner = (function () {
 
     var def = {
       id:           COWORKER_ID,
-      type:         'AMBIENT',
+      type:         'INTERACTIVE',
       x:            pos.x,
       y:            pos.y,
       facing:       'west',
       emoji:        '\uD83D\uDC09',  // 🐉 dragon emoji head
       name:         COWORKER_NAME,
-      talkable:     false,
+      talkable:     true,
+      dialoguePool: pool,  // cycles bark pool on [OK] Talk
       barkPool:     pool,
       barkRadius:   5,
       barkInterval: 20000,
@@ -415,10 +416,11 @@ var DumpTruckSpawner = (function () {
     if (_staticCleared) return;
     var fd = _getFloorData('1');
     if (!fd || !fd.grid) return;   // floor 1 not cached yet — retry later
+    // Grid is now accessible — clear the static tile and mark done
     if (fd.grid[26] && fd.grid[26][30] === _truckTile()) {
       fd.grid[26][30] = _emptyTile();
     }
-    _staticCleared = true;         // don't re-check on every _deploy
+    _staticCleared = true;         // only set AFTER grid was reachable
   }
 
   // ── Public API ─────────────────────────────────────────────────

@@ -249,7 +249,7 @@ The 3-tap limit prevents exploitation while still rewarding the player for visit
 |------|----------|---------|
 | BAR_COUNTER × 2 | Bar area | Boardwalk Brew / Deep Ale / Coral Tonic (inn menu) |
 | BOOKSHELF × 3 | Reading nook | `lore_dragon_history_1`, `lore_dragon_history_2`, `lore_hero_arrival` |
-| BONFIRE × 1 | Fireplace | Checkpoint (rest & heal — standard bonfire behaviour) |
+| BONFIRE × 1 | Fireplace | Nap-tier rest checkpoint (3h nap, clear TIRED, NO WELL_RESTED). See `BONFIRE_POLISH_STEPS.md` §11. |
 | NPC × 3 | Innkeeper + 2 guests | Innkeeper (interactive), guests (ambient barks: `interior.inn`) |
 
 **The Inn is the lore hub.** Its bookshelves carry the Dragon Conspiracy backstory. Players who linger here learn about the Compact, the hero party's arrival, and the dragons' true nature — all before they ever encounter a dragon NPC in the dungeon.
@@ -561,6 +561,7 @@ If no explicit assignment exists, BookshelfPeek selects a biome-appropriate book
 | §5 Bar Counter | → DOC-7 §6 Juice Inventory | Juice spec for drink effects |
 | §6 Building Inventory | → DOC-2 §3 Floor Registry | Floor grid positions |
 | §6 Building Inventory | → DOC-2 §5 Floor Designs | Building layouts |
+| §6 Building Inventory | → ACT2_NARRATIVE_OUTLINE §5.4 Housing Reassignment | Temporary HomeBnB → field quarters downgrade uses interior feature tiers |
 | §6 Building Inventory | → DOC-9 §9 Interior NPCs | NPC roster per building |
 | §7 Minigame Stubs | → Post-jam backlog | Not scheduled for jam |
 | §8 Book Schema | → `data/books.json` | Data format spec |

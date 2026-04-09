@@ -445,7 +445,20 @@ var RestockWheel = (function () {
         _consumeSourceItem(payload);
         if (typeof SessionStats !== 'undefined') { SessionStats.inc('torchesExtinguished'); SessionStats.inc('slotsFilled'); }
         if (typeof Toast !== 'undefined') Toast.show('\uD83D\uDCA7 Torch extinguished (careful)', 'info');
-        if (typeof AudioSystem !== 'undefined') AudioSystem.play('water-hiss');
+        if (typeof AudioSystem !== 'undefined') {
+          AudioSystem.play('water-hiss');
+          // Steam hiss fadeout — contract-aware duration/volume
+          if (AudioSystem.playFadeOut) {
+            var _rwContract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
+              ? FloorManager.getFloorContract() : null;
+            var _rwDepth = _rwContract ? _rwContract.depth : 'exterior';
+            var _rwFade = _rwDepth === 'nested_dungeon' ? 3500
+                        : _rwDepth === 'interior' ? 4500 : 5500;
+            var _rwVol  = _rwDepth === 'nested_dungeon' ? 0.50
+                        : _rwDepth === 'interior' ? 0.40 : 0.30;
+            AudioSystem.playFadeOut('torch_extinguish', { volume: _rwVol }, _rwFade);
+          }
+        }
         // Update lighting
         if (typeof Lighting !== 'undefined' && Lighting.removeSource) {
           Lighting.removeSource(_containerX, _containerY, floorId);

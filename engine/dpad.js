@@ -18,6 +18,9 @@ var DPad = (function () {
   var _frame = null;
   var _onInteract = null;
 
+  // ── Action → button element map (for keyboard highlight) ──
+  var _actionMap = {};  // action string → DOM element
+
   function init() {
     _frame = document.getElementById('dpad-frame');
     if (!_frame) return;
@@ -32,6 +35,33 @@ var DPad = (function () {
     _bind('dpad-str-l',  function () { _strafeLeft(); });
     _bind('dpad-back',   function () { _moveBack(); });
     _bind('dpad-str-r',  function () { _strafeRight(); });
+
+    // ── Keyboard highlight: light up buttons when keys are pressed ──
+    _actionMap = {
+      turn_left:    document.getElementById('dpad-turn-l'),
+      step_forward: document.getElementById('dpad-fwd'),
+      turn_right:   document.getElementById('dpad-turn-r'),
+      strafe_left:  document.getElementById('dpad-str-l'),
+      step_back:    document.getElementById('dpad-back'),
+      strafe_right: document.getElementById('dpad-str-r')
+    };
+
+    if (typeof InputManager !== 'undefined') {
+      var actions = Object.keys(_actionMap);
+      for (var i = 0; i < actions.length; i++) {
+        (function (action) {
+          var el = _actionMap[action];
+          if (!el) return;
+          InputManager.on(action, function (type) {
+            if (type === 'press') {
+              el.classList.add('dpad-pressed');
+            } else {
+              el.classList.remove('dpad-pressed');
+            }
+          });
+        })(actions[i]);
+      }
+    }
   }
 
   /**
@@ -47,6 +77,7 @@ var DPad = (function () {
 
     el.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      el.classList.add('dpad-pressed');
       action();
       // Play click SFX on first press
       if (typeof AudioSystem !== 'undefined') {
@@ -58,6 +89,7 @@ var DPad = (function () {
     });
 
     var cancel = function () {
+      el.classList.remove('dpad-pressed');
       if (holdId)   { clearTimeout(holdId);   holdId = null; }
       if (repeatId) { clearInterval(repeatId); repeatId = null; }
     };

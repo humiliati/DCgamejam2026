@@ -102,13 +102,17 @@
 
 ---
 
-## DN-09: Tooltip clickable hyperlinks for NPC dialogue 🔧
+## DN-09: Tooltip clickable hyperlinks for NPC dialogue ✅
 
-**Reported**: Need clickable hyperlinks in NPC dialogue. Dispatcher interaction should only be dismissible via dialogue choice hyperlinks: [Ok] [I have reason to believe the floor is unlocked] [Who are you, who am I?]
+**Reported**: Need clickable hyperlinks in NPC dialogue. Dispatcher interaction should only be dismissible via dialogue choice hyperlinks.
 
-**Status**: Requires DialogBox to support clickable choice rendering. Currently DialogBox renders text but choice buttons may not be wired. Needs investigation into DialogBox.startConversation() choice callback chain.
+**Fix (verified P2.4)**: Two complete dialogue systems in place:
+1. `StatusBar.pushDialogue()` — inline DOM choices in tooltip history panel, click-delegated via `.sb-dialogue-choice` elements. Used by Dispatcher, vendors, ambient NPCs. Supports `showIf` flag gating, `effect.callback`, tree navigation, and walk-away detection.
+2. `DialogBox.startConversation()` — canvas-rendered modal with pointer hover hit-testing. Used for signs, lore, item descriptions.
 
-**File**: `engine/dialog-box.js`, `engine/npc-system.js`
+Dispatcher gate dialogue fully wired: `DispatcherChoreography.showDispatcherGateDialog()` → `StatusBar.pushDialogue(npc, tree, onEnd, {pinned: true})` → player clicks choice → `_onDialogueChoice(idx)` → effects fire → tree navigates or ends.
+
+**Files**: `engine/status-bar.js`, `engine/dialog-box.js`, `engine/dispatcher-choreography.js`
 
 ---
 

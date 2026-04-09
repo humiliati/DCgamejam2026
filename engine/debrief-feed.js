@@ -28,7 +28,7 @@ var DebriefFeed = (function () {
   var BAR_EMPTY   = '\u2591';   // ░
 
   // Resource symbols (from EyesOnly RESOURCE_SYMBOLS)
-  var RES_GLYPHS = { hp: '\u2665', energy: '\u25B3', battery: '\u25C8' };
+  var RES_GLYPHS = { hp: '\u2665', energy: '\u25B3', battery: '\u25C8', fatigue: '\u022A' };
 
   // ── State ───────────────────────────────────────────────────────
   var _mode     = 0;     // Current display mode (0=MOK, 1=Resources, 2=Feed)
@@ -60,7 +60,7 @@ var DebriefFeed = (function () {
   // triggered mid-tween do not stomp the animation).
   var ROLL_MS = 420;                           // matches --df-drain-flash keyframe
   var _rollState = {};                         // key → { from, to, t0, duration }
-  var _prevPool  = { hp: null, en: null, bat: null };
+  var _prevPool  = { hp: null, en: null, bat: null, fat: null };
   var _rafId     = 0;
 
   function _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
@@ -315,6 +315,9 @@ var DebriefFeed = (function () {
     var bat   = (typeof p.battery === 'number') ? p.battery : 3;
     var maxBat = p.maxBattery || 5;
     var currency = p.currency || 0;
+    // Fatigue: read from Player (inverse resource — higher = worse)
+    var fat    = (typeof Player !== 'undefined' && Player.getFatigue) ? Player.getFatigue() : 0;
+    var maxFat = (typeof Player !== 'undefined' && Player.getMaxFatigue) ? Player.getMaxFatigue() : 100;
 
     // Detect drops vs last render → kick off reverse-fanfare tweens.
     // Only trigger on DECREASES; increases snap (matches pump pattern:
@@ -322,6 +325,8 @@ var DebriefFeed = (function () {
     if (_prevPool.hp  !== null && hp  < _prevPool.hp)  _startRoll('hp',  _prevPool.hp,  hp);
     if (_prevPool.en  !== null && en  < _prevPool.en)  _startRoll('en',  _prevPool.en,  en);
     if (_prevPool.bat !== null && bat < _prevPool.bat) _startRoll('bat', _prevPool.bat, bat);
+    // Fatigue goes UP on exertion, so "increase" is the "bad" direction
+    if (_prevPool.fat !== null && fat > _prevPool.fat) _startRoll('fat', _prevPool.fat, fat);
 
     // Choose what value to paint: if a tween is active for this key,
     // compute its current lagged value so a mid-tween re-render doesn't
@@ -329,10 +334,12 @@ var DebriefFeed = (function () {
     var hpShown  = _laggedValue('hp',  hp);
     var enShown  = _laggedValue('en',  en);
     var batShown = _laggedValue('bat', bat);
+    var fatShown = _laggedValue('fat', fat);
 
     _prevPool.hp  = hp;
     _prevPool.en  = en;
     _prevPool.bat = bat;
+    _prevPool.fat = fat;
 
     var html = '';
 
@@ -346,6 +353,10 @@ var DebriefFeed = (function () {
     html += _fullBar('HP', hpShown, maxHp, '#FF6B9D', 'hp', S);
     html += _fullBar('EN', enShown, maxEn, '#00D4FF', 'en', S);
     html += _pipRow('BAT', batShown, maxBat, '#00FFA6', 'bat', S);
+    // Fatigue bar (inverse: fills UP as exertion increases, brown earthy)
+    if (fat > 0) {
+      html += _fullBar(RES_GLYPHS.fatigue + ' FTG', fatShown, maxFat, '#A0522D', 'fat', S);
+    }
 
     // Currency + stats row (compact)
     html += '<div class="df-stat-row" style="margin-top:2px">\uD83D\uDCB0 <span>' + currency + 'g</span></div>';

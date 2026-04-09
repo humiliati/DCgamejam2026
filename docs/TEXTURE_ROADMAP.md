@@ -18,11 +18,130 @@ tile centers. No pixel-level rendering.
 
 Section 2 of the Biome Plan describes this as "not Cruisin' USA." The goal of
 this roadmap is to close the gap between flat-colored walls and atmospheric,
-readable street scenes — without leaving Canvas 2D or adding build tooling.
+readable street scenes  without leaving Canvas 2D or adding build tooling.
 
 ---
 
-## Layer 1 — Wall Textures (Priority: JAM)
+## Tile Asset Matrix (Canonical 0-59)
+
+This section is now the canonical texture/geometry coverage matrix for tile IDs
+`0-59` across runtime and planned design docs.
+
+Source-of-truth inputs:
+- Runtime tiles and collision flags: `engine/tiles.js`
+- Runtime texture wiring: `engine/spatial-contract.js`, `engine/floor-manager.js`
+- Runtime generated textures: `engine/texture-atlas.js`
+- Planned tiles `49-59`: `docs/LIVING_INFRASTRUCTURE_BLOCKOUT.md` (Sections 12.2, 14.5, 17.4)
+
+Legend:
+- `Tex Now`: `Special`, `Generic`, `Fallback`, `Missing`, `Planned`
+- `Geom`: `Floor`, `Full`, `Short`, `Billboard`
+- `Action`: `Keep`, `Polish`, `Create`, `Wire`, `Implement`
+
+### Coverage Snapshot (Updated Apr 9 2026)
+
+| Bucket | Count |
+|---|---|
+| Total IDs in matrix | 60 |
+| Runtime tile constants in `tiles.js` | 49 (`0-48`) |
+| Planned-only tile IDs | 11 (`49-59`) |
+| Runtime tiles with wired texture behavior (special or generic) | 44 |
+| Runtime tiles still fallback/sprite-driven | 5 (`EMPTY`, `SHOP`, `SPAWN`, `COLLECTIBLE`, `WATER`†) |
+| Missing texture keys already referenced by contracts | 0 |
+| Planned texture keys not implemented | 11 (`49-59`) |
+
+† WATER has dedicated flat-color rendering in the raycaster (contract.waterColor), not a texture.
+
+### A) Core Tiles (0-39)
+
+| ID | Tile | Tex Now | Geom | Action |
+|---|---|---|---|---|
+| 0 | EMPTY | Fallback | Floor | Keep |
+| 1 | WALL | Special | Full | Polish |
+| 2 | DOOR | Special | Full | Polish |
+| 3 | DOOR_BACK | Special | Full | Polish |
+| 4 | DOOR_EXIT | Special | Full | Polish |
+| 5 | STAIRS_DN | Special | Full | Keep |
+| 6 | STAIRS_UP | Special | Full | Keep |
+| 7 | CHEST | Generic (`stash_chest`) | Short | Keep |
+| 8 | TRAP | Special (`floor_trap`) | Floor | Keep |
+| 9 | WATER | Special (flat-color `waterColor`) | Floor | Keep |
+| 10 | PILLAR | Generic (`stone_rough`/`pillar_stone`) | Full | Keep |
+| 11 | BREAKABLE | Generic (`crate_wood`) | Short | Keep |
+| 12 | SHOP | Fallback | Floor | Keep |
+| 13 | SPAWN | Fallback | Floor | Keep |
+| 14 | BOSS_DOOR | Special | Full | Keep |
+| 15 | FIRE | Special (`floor_fire`) | Floor | Keep |
+| 16 | SPIKES | Special (`floor_spikes`) | Floor | Keep |
+| 17 | POISON | Special (`floor_poison`) | Floor | Keep |
+| 18 | BONFIRE | Special (`bonfire_ring` + decor) | Short | Keep |
+| 19 | CORPSE | Special (`floor_corpse`) | Floor | Keep |
+| 20 | COLLECTIBLE | Fallback (sprite-driven) | Floor | Keep |
+| 21 | TREE | Special (`tree_trunk`) | Full | Keep |
+| 22 | SHRUB | Special (`shrub`) | Short | Keep |
+| 23 | PUZZLE | Special (`floor_puzzle`) | Floor | Keep |
+| 24 | LOCKED_DOOR | Special (`door_locked`) | Full | Keep |
+| 25 | BOOKSHELF | Generic (`bookshelf`) | Full | Keep |
+| 26 | BAR_COUNTER | Generic (`wood_dark`) | Short | Keep |
+| 27 | BED | Generic (`bed_quilt`) | Short | Keep |
+| 28 | TABLE | Generic (`table_wood`) | Short | Keep |
+| 29 | HEARTH | Special (`hearth_riverrock` + cavity stack) | Full | Keep |
+| 30 | TORCH_LIT | Special (`torch_bracket_lit`) | Full | Keep |
+| 31 | TORCH_UNLIT | Special (`torch_bracket_unlit`) | Full | Keep |
+| 32 | ROAD | Special floor (`floor_cobble`) | Floor | Keep |
+| 33 | PATH | Special floor (`floor_dirt` / `floor_boardwalk`) | Floor | Keep |
+| 34 | GRASS | Special floor (`floor_grass`) | Floor | Keep |
+| 35 | FENCE | Special (`fence_wood` / `wall_pier`) | Short | Keep |
+| 36 | TERMINAL | Special (`terminal_screen` + decor) | Short | Keep |
+| 37 | MAILBOX | Generic base + billboard emoji | Short + Billboard | Polish |
+| 38 | DUMP_TRUCK | Special body + wheel/hose billboards | Short + Billboard | Keep |
+| 39 | DETRITUS | Special (`floor_detritus`) | Floor | Keep |
+
+### B) Living Infrastructure Runtime Tiles (40-48)
+
+| ID | Tile | Tex Now | Geom | Action |
+|---|---|---|---|---|
+| 40 | WELL | Special (`well_stone`) | Short | Keep |
+| 41 | BENCH | Special (`bench_wood`) | Short | Keep |
+| 42 | NOTICE_BOARD | Special (`notice_board_wood`) | Full | Keep |
+| 43 | ANVIL | Special (`anvil_iron`) | Short | Keep |
+| 44 | BARREL | Special (`barrel_wood`) | Short | Keep |
+| 45 | CHARGING_CRADLE | Special (`charging_cradle`) | Short | Keep |
+| 46 | SWITCHBOARD | Special (`switchboard_panel`) | Full | Keep |
+| 47 | SOUP_KITCHEN | Special (`soup_cauldron`) | Short | Keep |
+| 48 | COT | Special (`cot_canvas`) | Short | Keep |
+
+### C) Planned Dungeon Creature Verb Tiles (49-54)
+
+| ID | Tile | Tex Now | Geom | Action |
+|---|---|---|---|---|
+| 49 | ROOST | Planned (`roost_ceiling`) | Billboard/Overhead | Implement |
+| 50 | NEST | Planned (`nest_debris`) | Short | Implement |
+| 51 | DEN | Planned (`den_hollow`) | Short | Implement |
+| 52 | FUNGAL_PATCH | Planned (`fungal_glow`) | Floor | Implement |
+| 53 | ENERGY_CONDUIT | Planned (`conduit_spark`) | Full/Fixture | Implement |
+| 54 | TERRITORIAL_MARK | Planned (`scorch_mark`) | Floor | Implement |
+
+### D) Planned Economy Tiles (55-59)
+
+| ID | Tile | Tex Now | Geom | Action |
+|---|---|---|---|---|
+| 55 | STRETCHER_DOCK | Planned (`stretcher_frame`) | Short | Implement |
+| 56 | TRIAGE_BED | Planned (`triage_bed`) | Short | Implement |
+| 57 | MORGUE_TABLE | Planned (`morgue_slab`) | Short | Implement |
+| 58 | INCINERATOR | Planned (`incinerator_grate`) | Full | Implement |
+| 59 | REFRIG_LOCKER | Planned (`refrig_panel`) | Full | Implement |
+
+### Implementation Order For Missing Coverage
+
+1. ~~Fill missing runtime living-infrastructure textures (`40-48`) and keep placeholders only where explicitly accepted (`41`, `44`).~~ **DONE** — All 9 textures created (`well_stone`, `bench_wood`, `notice_board_wood`, `anvil_iron`, `barrel_wood`, `charging_cradle`, `switchboard_panel`, `soup_cauldron`, `cot_canvas`).
+2. ~~Wire missing runtime tiles into every needed biome contract in `floor-manager.js` (especially `45`, `46`).~~ **DONE** — All biome overrides updated; `charging_cradle` wired in sealab, `switchboard_panel` in sealab+foundry.
+3. Add planned dungeon/economy constants `49-59` to `tiles.js` with `isWalkable`/`isOpaque` parity from DOC-84.
+4. Implement texture generators for `49-59` in `texture-atlas.js`, then bind them in `spatial-contract` and biome overrides.
+5. After these land, rerun this matrix and update the snapshot counts.
+
+---
+## Layer 1  Wall Textures (Priority: JAM)
 
 ### What It Does
 
@@ -30,7 +149,7 @@ Replace the single `fillRect` per wall column with a 1px-wide slice sampled
 from a texture image. Each tile type gets a texture assignment per biome
 (brick for exterior WALL, aged wood for DOOR, iron plate for BOSS_DOOR).
 The raycaster already computes the perpendicular hit distance and wall
-column bounds — it just throws away the UV coordinate. We add it back.
+column bounds  it just throws away the UV coordinate. We add it back.
 
 ### UV Math
 
@@ -61,16 +180,16 @@ engine/texture-atlas.js  (Layer 1, after SpatialContract)
 IIFE module. Responsibilities:
 - Load texture images (PNG) into offscreen canvases at init
 - Cache ImageData for pixel-level access (needed for ImageData path)
-- Provide `getColumn(textureId, texX, texH)` → returns a 1px-wide
+- Provide `getColumn(textureId, texX, texH)`  returns a 1px-wide
   ImageData column scaled to the requested height
 - Procedural texture generation for jam placeholders (brick, stone, wood,
-  iron patterns generated at runtime — no external PNGs needed yet)
+  iron patterns generated at runtime  no external PNGs needed yet)
 
 Public API:
 ```javascript
 TextureAtlas.init()                    // generate/load all textures
-TextureAtlas.get(textureId)            // → { width, height, canvas, imageData }
-TextureAtlas.hasTexture(textureId)     // → boolean
+TextureAtlas.get(textureId)            //  { width, height, canvas, imageData }
+TextureAtlas.hasTexture(textureId)     //  boolean
 ```
 
 ### SpatialContract Changes
@@ -89,11 +208,11 @@ textures: opts.textures || _buildTextures({
 
 New runtime query:
 ```javascript
-SpatialContract.getTexture(contract, tileType)  // → textureId or null
+SpatialContract.getTexture(contract, tileType)  //  textureId or null
 ```
 
 When `getTexture` returns null, the raycaster falls back to flat color
-(backward compatible — untextured tiles render exactly as before).
+(backward compatible  untextured tiles render exactly as before).
 
 ### Raycaster Changes
 
@@ -108,11 +227,11 @@ In the wall-drawing section (after perpDist and lineHeight are computed):
 ### Performance Notes
 
 - `ctx.drawImage` with 1px-wide source clip is the fastest Canvas 2D
-  texture sampling method — avoids per-pixel JS loops
+  texture sampling method  avoids per-pixel JS loops
 - Target viewport: 480px wide with `image-rendering: pixelated` CSS
   scaling to display resolution. This gives the chunky pixel-art look
   and keeps the ray count manageable
-- At 480 rays/frame, 60fps, this is 28,800 drawImage calls/sec —
+- At 480 rays/frame, 60fps, this is 28,800 drawImage calls/sec 
   well within Canvas 2D budget on modern browsers and webOS TV
 - If performance becomes an issue post-jam: switch to ImageData buffer
   writes (write all pixels to a single ImageData, putImageData once) or
@@ -124,20 +243,20 @@ For the jam, textures are generated at runtime in `TextureAtlas.init()`:
 
 | Texture ID        | Pattern                          | Size   |
 |-------------------|----------------------------------|--------|
-| `brick_light`     | Brick rows with mortar lines     | 64×64  |
-| `brick_dark`      | Same pattern, darker palette     | 64×64  |
-| `stone_rough`     | Irregular stone blocks           | 64×64  |
-| `wood_plank`      | Vertical plank grain             | 64×64  |
-| `door_wood`       | Wood with horizontal bands       | 64×64  |
-| `door_iron`       | Riveted iron plate               | 64×64  |
-| `concrete`        | Smooth concrete with seams       | 64×64  |
-| `pillar_stone`    | Rounded stone column             | 64×64  |
+| `brick_light`     | Brick rows with mortar lines     | 6464  |
+| `brick_dark`      | Same pattern, darker palette     | 6464  |
+| `stone_rough`     | Irregular stone blocks           | 6464  |
+| `wood_plank`      | Vertical plank grain             | 6464  |
+| `door_wood`       | Wood with horizontal bands       | 6464  |
+| `door_iron`       | Riveted iron plate               | 6464  |
+| `concrete`        | Smooth concrete with seams       | 6464  |
+| `pillar_stone`    | Rounded stone column             | 6464  |
 
 Each biome maps tile types to these texture IDs. Cedar Street uses
 `concrete` walls + `door_wood` doors. Main Street uses `brick_light`
 walls + `door_wood` doors. Waterfront uses `brick_dark` + `door_iron`.
 
-Post-jam: replace procedural textures with hand-pixeled 64×64 PNGs for
+Post-jam: replace procedural textures with hand-pixeled 6464 PNGs for
 each biome. The atlas system loads them identically.
 
 ### Estimated Size
@@ -148,14 +267,14 @@ with TextureAtlas init).
 
 ---
 
-## Layer 2 — Wall-Mounted Sprites (Priority: JAM STRETCH)
+## Layer 2  Wall-Mounted Sprites (Priority: JAM STRETCH)  IMPLEMENTED
 
 ### What It Does
 
 Attach small sprite images to specific faces of wall tiles. Torches on
 tavern walls, lantern brackets on street walls, grates on dungeon walls,
 signage on shop doors. These are not floor-standing billboards (which the
-sprite system already handles) — they're pinned to a wall face at a
+sprite system already handles)  they're pinned to a wall face at a
 specific position.
 
 ### Data Model
@@ -191,8 +310,8 @@ During wall column rendering, after the wall texture/color is drawn:
 
 ### Sprite Atlas
 
-Wall decor sprites use the same `TextureAtlas` system — they're just
-smaller textures (16×16 or 32×32) with transparency. The atlas stores
+Wall decor sprites use the same `TextureAtlas` system  they're just
+smaller textures (1616 or 3232) with transparency. The atlas stores
 them alongside wall textures with an alpha channel.
 
 For the jam, procedural sprites: torch (orange/yellow glow column with
@@ -211,15 +330,39 @@ entrances and corridors.
 ~150 lines: wall decor data structure + raycaster face detection and
 sprite column rendering + auto-placement rules in grid-gen.
 
+### Shipped Coverage (Apr 9 2026)
+
+Wall décor is fully implemented: data model (`wallDecor[y][x] = { n, s, e, w }`),
+raycaster face-hit detection (`_hitFace`), per-column sprite rendering with
+distance scaling, and cavity glow support. `FloorManager._buildWallDecorFromGrid`
+auto-places décor from three sources:
+
+**Infrastructure tile face décor** (deterministic, every instance):
+WELL → `rope_bucket`, NOTICE_BOARD → `pinned_note`, SOUP_KITCHEN → `ladle`,
+ANVIL → `spark` (with cavityGlow), CHARGING_CRADLE → `conduit_glow` (with cavityGlow),
+SWITCHBOARD → `toggle_light` (with cavityGlow).
+
+**Hazard-adjacent wall staining** (40% coverage, seeded RNG):
+Walls adjacent to FIRE → `scorch`, POISON → `acid_drip`,
+TRAP/SPIKES → `warning_scratch`.
+
+**Biome variety décor** (low-density ambient, seeded RNG):
+Exterior → `wanted_poster` (4%), Cellar/Catacomb → `cobweb` (6%, dual-face corners),
+Foundry → `chain` (5%), Sealab/Dungeon → `crack` (4-5%).
+
+13 decor sprite textures (32×32 with alpha): `rope_bucket`, `pinned_note`,
+`ladle`, `spark`, `conduit_glow`, `toggle_light`, `scorch`, `acid_drip`,
+`warning_scratch`, `wanted_poster`, `cobweb`, `crack`, `chain`.
+
 ---
 
-## Layer 3 — Sprite Light Emitters (Priority: POST-JAM)
+## Layer 3  Sprite Light Emitters (Priority: POST-JAM)
 
 ### What It Does
 
 Wall-mounted sprites tagged as emitters (torches, lanterns, neon signs)
 cast colored light onto nearby wall and floor tiles. This is the
-atmosphere maker — warm torch pools in taverns, cold fluorescent glow
+atmosphere maker  warm torch pools in taverns, cold fluorescent glow
 in the datacenter, flickering fire in dungeon corridors.
 
 ### Light Source Registry
@@ -261,7 +404,7 @@ After the main raycast loop, for each visible emitter:
 4. Scale radius by distance (closer = larger glow)
 
 This gives the Octopath bloom-lite effect. 5-10 visible emitters per
-frame is typical — negligible performance cost.
+frame is typical  negligible performance cost.
 
 ### Flicker Functions
 
@@ -284,7 +427,7 @@ pass in Raycaster (~40) + emitter registration in FloorManager (~20).
 
 ---
 
-## Layer 1.5 — Floor Textures (Priority: JAM) ✅ IMPLEMENTED
+## Layer 1.5  Floor Textures (Priority: JAM)  IMPLEMENTED
 
 ### What It Does
 
@@ -321,8 +464,8 @@ ty = floor(floorY * texH) % texH
 ### Performance
 
 Uses an ImageData buffer (allocated once, reused across frames) for
-the entire floor region. At 480×135 pixels, this is ~64,800 texel
-lookups per frame — well within Canvas 2D budget. The buffer is written
+the entire floor region. At 480135 pixels, this is ~64,800 texel
+lookups per frame  well within Canvas 2D budget. The buffer is written
 with bitwise-OR for fast integer conversion, then putImageData once.
 
 Distance-based fog and brightness darkening are applied per-scanline
@@ -370,13 +513,13 @@ texture ID. When null, the raycaster falls back to the gradient.
 ### Per-Tile Wall Height (`tileWallHeights`)
 
 New spatial contract property added for tiles that render taller/shorter than
-the contract default. Currently used for exterior TREE tiles (2× height) so
+the contract default. Currently used for exterior TREE tiles (2 height) so
 the courtyard perimeter looks like a dense tree line surrounding a brick
 building at normal height.
 
 ---
 
-## Future — Campfire / Bonfire Sprite with Glow
+## Future  Campfire / Bonfire Sprite with Glow
 
 The bonfire tile (TILES.BONFIRE) currently renders as a flat emoji sprite.
 The target is a campfire billboard sprite with per-frame glow emission,
@@ -394,7 +537,7 @@ Blocked on: Layer 3 (Sprite Light Emitters) implementation.
 
 ---
 
-## Wall Texture Stretch Fix ✅ IMPLEMENTED
+## Wall Texture Stretch Fix  IMPLEMENTED
 
 ### The Bug
 
@@ -405,9 +548,9 @@ stretch effect at close range.
 ### Root Cause
 
 `lineHeight` was capped at `h * 3` to prevent "distorted peripheral
-strips." This limited wall height but not width — as the player
+strips." This limited wall height but not width  as the player
 approached a wall, more columns showed the wall texture (correct) but
-the height stopped increasing at h×3 (wrong).
+the height stopped increasing at h3 (wrong).
 
 ### The Fix
 
@@ -426,7 +569,7 @@ clipping handles arbitrarily large lineHeight values correctly.
 
 ---
 
-## Biome-Specific Texture Alignment ✅ IMPLEMENTED
+## Biome-Specific Texture Alignment  IMPLEMENTED
 
 ### The Problem
 
@@ -451,13 +594,13 @@ sealab) that thematically match these wall textures.
 
 ---
 
-## Door Peek (BoxAnim Proximity Reveal) ✅ IMPLEMENTED
+## Door Peek (BoxAnim Proximity Reveal)  IMPLEMENTED
 
 ### What It Does
 
 When the player faces a door or stair tile, a small 3D box (BoxAnim
 door variant, left-hinged lid) appears in the viewport and swings open
-to reveal a direction indicator: "▼ Descend" / "▲ Ascend" / "► Enter".
+to reveal a direction indicator: " Descend" / " Ascend" / " Enter".
 
 The glow color inside the box matches the direction: green for descend,
 amber for ascend, red for boss doors. This gives the player a physical
@@ -479,48 +622,49 @@ container div above the interact prompt. show/hide lifecycle is debounced
 
 ```
 JAM DEADLINE (April 5)
-│
-├─ Layer 1: Wall Textures ✅ DONE
-│   ├─ TextureAtlas module (19 procedural textures)
-│   ├─ SpatialContract texture table
-│   ├─ Raycaster UV sampling + drawImage
-│   ├─ Directional stair textures (stairs_down, stairs_up)
-│   ├─ Locked door texture (door_locked)
-│   └─ Biome-specific texture overrides
-│
-├─ Layer 1.5: Floor Textures ✅ DONE
-│   ├─ Floor casting in Raycaster (ImageData buffer)
-│   ├─ 4 floor textures (cobble, wood, stone, dirt)
-│   ├─ SpatialContract floorTexture field
-│   └─ Wall stretch fix (UV clipping, no lineHeight cap)
-│
-├─ Layer 1.6: Animated Textures ✅ DONE
-│   ├─ TextureAtlas.tick(dt) per-frame compositing
-│   ├─ Porthole wall texture (deep ocean + sea creatures)
-│   ├─ Porthole ceiling texture (surface caustics from below)
-│   └─ Sealab biome wiring (PILLAR tiles → porthole_wall)
-│
-├─ Layer 2: Wall Decor (if time permits)
-│   ├─ Wall decor data model
-│   ├─ Raycaster face-hit sprite rendering
-│   └─ Auto-placement in grid-gen (torches at room entries)
-│
+
+ Layer 1: Wall Textures  DONE
+    TextureAtlas module (19 procedural textures)
+    SpatialContract texture table
+    Raycaster UV sampling + drawImage
+    Directional stair textures (stairs_down, stairs_up)
+    Locked door texture (door_locked)
+    Biome-specific texture overrides
+
+ Layer 1.5: Floor Textures  DONE
+    Floor casting in Raycaster (ImageData buffer)
+    4 floor textures (cobble, wood, stone, dirt)
+    SpatialContract floorTexture field
+    Wall stretch fix (UV clipping, no lineHeight cap)
+
+ Layer 1.6: Animated Textures  DONE
+    TextureAtlas.tick(dt) per-frame compositing
+    Porthole wall texture (deep ocean + sea creatures)
+    Porthole ceiling texture (surface caustics from below)
+    Sealab biome wiring (PILLAR tiles  porthole_wall)
+
+ Layer 2: Wall Decor  DONE
+    Wall decor data model (wallDecor[y][x] = { n, s, e, w })
+    Raycaster face-hit sprite rendering + cavity glow
+    13 decor sprites (infrastructure, hazard staining, biome variety)
+    Auto-placement in FloorManager._buildWallDecorFromGrid
+
 POST-JAM
-│
-├─ Layer 3: Emitter Lights
-│   ├─ Point light system in Lighting
-│   ├─ Glow overlay in Raycaster
-│   └─ Flicker functions
-│
-├─ Hand-pixeled texture PNGs (replace procedural)
-├─ Per-biome decor sprite sheets
-├─ Floor designer portal: texture + decor painting
-└─ WebGL migration (if Canvas 2D perf ceiling is hit)
+
+ Layer 3: Emitter Lights
+    Point light system in Lighting
+    Glow overlay in Raycaster
+    Flicker functions
+
+ Hand-pixeled texture PNGs (replace procedural)
+ Per-biome decor sprite sheets
+ Floor designer portal: texture + decor painting
+ WebGL migration (if Canvas 2D perf ceiling is hit)
 ```
 
 ---
 
-## Animated Texture System ✅ IMPLEMENTED
+## Animated Texture System  IMPLEMENTED
 
 ### What It Does
 
@@ -536,11 +680,11 @@ internal `_portholes` array during generation.
 
 Each animated texture stores:
 
-- `frameData` — the original static frame pixels (metal ring, rivets,
+- `frameData`  the original static frame pixels (metal ring, rivets,
   outer wall), captured once at generation time
-- `mask` — a boolean array (`Uint8Array`) marking which pixels are the
+- `mask`  a boolean array (`Uint8Array`) marking which pixels are the
   animated region (the glass window area)
-- `lookUp` — whether the view is horizontal (wall porthole) or upward
+- `lookUp`  whether the view is horizontal (wall porthole) or upward
   (ceiling porthole), affecting which ocean scene is composited
 
 Each frame, `tick(dt)` iterates all registered animated textures. For
@@ -548,11 +692,11 @@ each masked pixel, it computes an ocean color from time-based noise
 (caustic ripples, creature silhouettes, depth gradient) and writes it
 directly into the texture's `data` array. A single `putImageData` call
 per texture updates the canvas. The raycaster draws the texture normally
-— no special animated-texture code path needed.
+ no special animated-texture code path needed.
 
 ### Cost
 
-2 animated textures × 64×64 pixels × ~4096 masked pixels ≈ 8192
+2 animated textures  6464 pixels  ~4096 masked pixels  8192
 pixel writes per frame. Negligible at 60fps.
 
 ### Game Loop Wiring
@@ -564,45 +708,106 @@ TextureAtlas.tick(frameDt);
 
 ---
 
-## Texture Inventory (Current — 26 textures)
+## Texture Inventory (Current  59 textures)
 
-| Texture ID        | Type     | Pattern                          | Size   | Animated |
-|-------------------|----------|----------------------------------|--------|----------|
-| `brick_light`     | Wall     | Brick rows with mortar lines     | 64×64  | No       |
-| `brick_dark`      | Wall     | Same pattern, darker palette     | 64×64  | No       |
-| `brick_red`       | Wall     | Red-toned brick                  | 64×64  | No       |
-| `stone_rough`     | Wall     | Irregular stone blocks           | 64×64  | No       |
-| `stone_cathedral` | Wall     | Purple-toned stone               | 64×64  | No       |
-| `wood_plank`      | Wall     | Vertical plank grain             | 64×64  | No       |
-| `wood_dark`       | Wall     | Dark wood planks                 | 64×64  | No       |
-| `door_wood`       | Door     | Wood with horizontal bands       | 64×64  | No       |
-| `door_iron`       | Door     | Riveted iron plate               | 64×64  | No       |
-| `door_locked`     | Door     | Wood + chain X + padlock         | 64×64  | No       |
-| `concrete`        | Wall     | Smooth concrete with seams       | 64×64  | No       |
-| `concrete_dark`   | Wall     | Dark concrete                    | 64×64  | No       |
-| `metal_plate`     | Wall     | Brushed metal with bolt holes    | 64×64  | No       |
-| `pillar_stone`    | Wall     | Rounded stone column             | 64×64  | No       |
-| `stairs_down`     | Stair    | Dark stone + 3 down chevrons (▼) | 64×64  | No       |
-| `stairs_up`       | Stair    | Light stone + 3 up chevrons (▲)  | 64×64  | No       |
-| `porthole_wall`   | Porthole | Riveted metal ring, ocean window | 64×64  | Yes      |
-| `porthole_ceil`   | Porthole | Same ring, upward ocean view     | 64×64  | Yes      |
-| `floor_cobble`    | Floor    | Irregular cobblestone grid       | 64×64  | No       |
-| `floor_wood`      | Floor    | Horizontal plank grain           | 64×64  | No       |
-| `floor_stone`     | Floor    | Large irregular stone flags      | 64×64  | No       |
-| `floor_dirt`      | Floor    | Organic noise, dark patches      | 64×64  | No       |
-| `crate_wood`      | Prop     | 3px border, X cross-braces, slat lines, nail heads | 64×64  | No       |
+### Wall Textures (14)
 
-Plus 3 reveal textures in DoorAnimator (descend, ascend, boss).
+| Texture ID        | Pattern                          | Size   | Animated |
+|-------------------|----------------------------------|--------|----------|
+| `brick_light`     | Brick rows with mortar lines     | 64×64  | No       |
+| `brick_dark`      | Same pattern, darker palette     | 64×64  | No       |
+| `brick_red`       | Red-toned brick                  | 64×64  | No       |
+| `stone_rough`     | Irregular stone blocks           | 64×64  | No       |
+| `stone_cathedral` | Purple-toned stone               | 64×64  | No       |
+| `wood_plank`      | Vertical plank grain             | 64×64  | No       |
+| `wood_dark`       | Dark wood planks                 | 64×64  | No       |
+| `concrete`        | Smooth concrete with seams       | 64×64  | No       |
+| `concrete_dark`   | Dark concrete                    | 64×64  | No       |
+| `metal_plate`     | Brushed metal with bolt holes    | 64×64  | No       |
+| `pillar_stone`    | Rounded stone column             | 64×64  | No       |
+| `porthole_wall`   | Riveted metal ring, ocean window | 64×64  | Yes      |
+| `porthole_ceil`   | Same ring, upward ocean view     | 64×64  | Yes      |
+
+### Door/Stair Textures (5)
+
+| Texture ID        | Pattern                          | Size   | Animated |
+|-------------------|----------------------------------|--------|----------|
+| `door_wood`       | Wood with horizontal bands       | 64×64  | No       |
+| `door_iron`       | Riveted iron plate               | 64×64  | No       |
+| `door_locked`     | Wood + chain X + padlock         | 64×64  | No       |
+| `stairs_down`     | Dark stone + 3 down chevrons (▼) | 64×64  | No       |
+| `stairs_up`       | Light stone + 3 up chevrons (▲)  | 64×64  | No       |
+
+### Floor Textures (11)
+
+| Texture ID          | Pattern                                        | Size   | Animated |
+|---------------------|------------------------------------------------|--------|----------|
+| `floor_cobble`      | Irregular cobblestone grid                     | 64×64  | No       |
+| `floor_wood`        | Horizontal plank grain                         | 64×64  | No       |
+| `floor_stone`       | Large irregular stone flags                    | 64×64  | No       |
+| `floor_dirt`        | Organic noise, dark patches                    | 64×64  | No       |
+| `floor_trap`        | Stone slab with recessed pressure plate + grooves | 64×64  | No    |
+| `floor_fire`        | Cracked stone with ember glow seeping through  | 64×64  | No       |
+| `floor_spikes`      | Stone grid with metal spike points in cells    | 64×64  | No       |
+| `floor_poison`      | Corroded stone with green-purple toxic pools   | 64×64  | No       |
+| `floor_corpse`      | Disturbed earth with bone fragments            | 64×64  | No       |
+| `floor_detritus`    | Scattered refuse on worn stone                 | 64×64  | No       |
+| `floor_puzzle`      | Geometric tile mosaic with arcane center glyph | 64×64  | No       |
+
+### Prop Textures (10)
+
+| Texture ID            | Pattern                                      | Size   | Animated |
+|-----------------------|----------------------------------------------|--------|----------|
+| `crate_wood`          | 3px border, X cross-braces, slat lines, nails | 64×64  | No      |
+| `well_stone`          | Circular stone well rim with dark water center | 64×64  | No      |
+| `bench_wood`          | Horizontal slat seat on post supports        | 64×64  | No       |
+| `notice_board_wood`   | Framed corkboard with pinned paper scraps    | 64×64  | No       |
+| `anvil_iron`          | Dark iron anvil silhouette on stone base      | 64×64  | No       |
+| `barrel_wood`         | Coopered barrel with metal bands and bung     | 64×64  | No       |
+| `charging_cradle`     | Metal cradle with glowing energy cell         | 64×64  | No       |
+| `switchboard_panel`   | Control panel with toggle rows + indicator LEDs | 64×64 | No      |
+| `soup_cauldron`       | Iron cauldron over stone hearth with steam    | 64×64  | No       |
+| `cot_canvas`          | Folding canvas cot on X-frame legs            | 64×64  | No       |
+
+### Decor Sprites (13)
+
+| Texture ID            | Pattern                                      | Size   |
+|-----------------------|----------------------------------------------|--------|
+| `rope_bucket`         | Frayed rope with wooden bucket               | 32×32  |
+| `pinned_note`         | Parchment rectangle with pin dot             | 32×32  |
+| `ladle`               | Long-handled serving ladle                   | 32×32  |
+| `spark`               | Bright orange spark burst (anvil)            | 32×32  |
+| `conduit_glow`        | Pulsing energy conduit segment               | 32×32  |
+| `toggle_light`        | Small indicator light (on/off)               | 32×32  |
+| `scorch`              | Black burn mark radiating from center        | 32×32  |
+| `acid_drip`           | Green drip streak with corrosion halo        | 32×32  |
+| `warning_scratch`     | Diagonal claw/scratch warning marks          | 32×32  |
+| `wanted_poster`       | Aged paper with figure silhouette + border   | 32×32  |
+| `cobweb`              | Corner-anchored spider web with radial threads | 32×32 |
+| `crack`               | Branching structural fracture lines          | 32×32  |
+| `chain`               | Hanging chain links with bracket mount       | 32×32  |
+
+### Other (6)
+
+3 reveal textures in DoorAnimator (descend, ascend, boss), plus
+`tree_trunk`, `shrub`, `bonfire_ring`, `stash_chest`, `fence_wood`,
+`floor_boardwalk`, `floor_grass`, `floor_brick_red`, `floor_grass_stone`,
+`floor_tile`, `bed_quilt`, `bookshelf`, `table_wood`, `terminal_screen`,
+`hearth_riverrock`, `torch_bracket_lit`, `torch_bracket_unlit`, `wall_pier`.
+
+Note: Total unique texture IDs in TextureAtlas exceeds 59 when counting
+all biome-specific variants and special-purpose textures. The 59 count
+reflects the primary categorized inventory above.
 
 ### Porthole Textures Detail
 
-**`porthole_wall`** — Metal frame with riveted ring surrounding a
+**`porthole_wall`**  Metal frame with riveted ring surrounding a
 circular glass window. Each frame, window pixels are composited with
 an animated deep-ocean scene: dark water gradient, caustic light
 ripples, whale shadow silhouettes drifting horizontally, jellyfish
 with bioluminescent glow. Used on PILLAR tiles in sealab biome.
 
-**`porthole_ceil`** — Same riveted frame but the interior shows an
+**`porthole_ceil`**  Same riveted frame but the interior shows an
 upward view at the ocean surface: bright caustic light pools from
 surface refraction, jellyfish silhouettes from below, lighter
 blue-green palette. Available for future ceiling casting in sealab.
@@ -633,7 +838,7 @@ DoorPeek loads in Layer 3 (after InteractPrompt, BoxAnim):
 
 ## Cross-References to Other Roadmaps
 
-### Layer 2 ↔ LIGHT_AND_TORCH_ROADMAP Phase 2
+### Layer 2  LIGHT_AND_TORCH_ROADMAP Phase 2
 
 **These are the same system.** The `wallDecor[y][x]` data model defined
 here in Layer 2 is the mounting mechanism for wall torches defined in
@@ -645,10 +850,10 @@ LIGHT_AND_TORCH Phase 2. Torch sprites are wall decor items with
 - Auto-placement rules in GridGen place torches at room entrances and corridors
 - LIGHT_AND_TORCH Phase 2b (torch wall rendering) becomes a consumer of Layer 2
 
-**Execution order:** Layer 2 wall decor model FIRST → then LIGHT_AND_TORCH
+**Execution order:** Layer 2 wall decor model FIRST  then LIGHT_AND_TORCH
 Phase 2 torch tiles as a specific use case of wall decor.
 
-### Layer 3 ↔ LIGHT_AND_TORCH_ROADMAP Phase 1
+### Layer 3  LIGHT_AND_TORCH_ROADMAP Phase 1
 
 **These are the same implementation.** Both define the identical light source
 format `{ x, y, color, radius, intensity, flicker }` extending Lighting.js.
@@ -658,22 +863,22 @@ light source registry. Merge into a single implementation:
 
 - `Lighting.addLightSource()` / `clearLightSources()` / `calculate()` extension
 - Glow overlay pass in Raycaster (Layer 3 here)
-- Flicker functions (torch 3Hz, neon dropout, steady) — shared by both docs
+- Flicker functions (torch 3Hz, neon dropout, steady)  shared by both docs
 - Wall decor items with `emitter: true` auto-register via this unified API
 
 **Execution order:** Implement once as LIGHT_AND_TORCH Phase 1 (since that
 doc has the more detailed spec), then Layer 3 here is satisfied automatically.
 
-### "Future — Campfire/Bonfire" ↔ LIGHT_AND_TORCH_ROADMAP Phase 2d
+### "Future  Campfire/Bonfire"  LIGHT_AND_TORCH_ROADMAP Phase 2d
 
 The bonfire glow section above says "Blocked on: Layer 3 implementation."
 LIGHT_AND_TORCH Phase 1 IS Layer 3. Once dynamic light sources ship,
 bonfire registration (Phase 2d: radius 5, intensity 0.9, slow pulse) unblocks
 this future section with zero additional work.
 
-### Layer 2 wall decor ↔ NLAYER_RAYCASTER_ROADMAP
+### Layer 2 wall decor  NLAYER_RAYCASTER_ROADMAP
 
-N-layer raycaster (Phase 1) modifies the wall column DDA loop — the same
+N-layer raycaster (Phase 1) modifies the wall column DDA loop  the same
 loop where Layer 2 adds face-hit sprite rendering. Implementation order matters:
 
 1. NLAYER Phase 1: refactor DDA to N-layer hit collector + back-to-front render
@@ -682,23 +887,23 @@ loop where Layer 2 adds face-hit sprite rendering. Implementation order matters:
 If Layer 2 ships before N-layer, it must be refactored when N-layer lands.
 Recommended: do NLAYER Phase 1 first if both are in the same sprint.
 
-### Shrub texture ↔ NLAYER_RAYCASTER_ROADMAP Phase 3b
+### Shrub texture  NLAYER_RAYCASTER_ROADMAP Phase 3b
 
 NLAYER Phase 3b explicitly depends on TextureAtlas for a `_genShrub()`
 procedural texture (SHRUB tile 22). This is a new texture addition to the
-atlas — same pattern as existing procedural generators. Add `shrub` and
+atlas  same pattern as existing procedural generators. Add `shrub` and
 `shrub_flower` to the texture inventory when NLAYER Phase 3 ships.
 
-### Frontier biome textures ↔ SKYBOX_ROADMAP Phase 5
+### Frontier biome textures  SKYBOX_ROADMAP Phase 5
 
 Floor 3 (Frontier Gate) needs biome-specific wall and floor textures for
 the frontier/maritime setting. SKYBOX Phase 5 provides the sky (`frontier`
 preset); TextureAtlas provides the ground. Both needed for Floor 3 to feel
 complete. Suggested frontier textures:
 
-- `wall_weathered` — salt-worn stone or timber
-- `floor_planks_wet` — dock planking with moisture
-- `door_heavy` — reinforced gate/portcullis style
+- `wall_weathered`  salt-worn stone or timber
+- `floor_planks_wet`  dock planking with moisture
+- `door_heavy`  reinforced gate/portcullis style
 
 These should be added to the texture inventory when Floor 3 blockout begins.
 
@@ -707,7 +912,7 @@ These should be added to the texture inventory when Floor 3 blockout begins.
 ## What This Does NOT Include
 
 - Ceiling textures (textured ceiling plane). Similar to floor casting
-  but less impactful — gradients + skybox handle ceiling identity well.
+  but less impactful  gradients + skybox handle ceiling identity well.
 - Skybox textures. Parallax bands + gradient already handle sky identity.
   Photorealistic sky is a WebGL concern.
 - Animated wall textures beyond portholes (waterfalls, fire walls).
@@ -715,3 +920,5 @@ These should be added to the texture inventory when Floor 3 blockout begins.
   to other animated surfaces post-jam.
 - 3D model rendering. This is a raycaster, not a polygon engine. The
   Octopath feel comes from texture + lighting + atmosphere, not geometry.
+
+

@@ -550,6 +550,19 @@ var TorchPeek = (function () {
   }
 
   function _onTorchExtinguished() {
+    // ── SFX: steam hiss with contract-aware fadeout ──
+    if (typeof AudioSystem !== 'undefined' && AudioSystem.playFadeOut) {
+      var _teContract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
+        ? FloorManager.getFloorContract() : null;
+      var _teDepth = _teContract ? _teContract.depth : 'exterior';
+      // Tighter spaces → shorter fade, higher volume (reverb fills the gap)
+      var _teFade = _teDepth === 'nested_dungeon' ? 3500
+                  : _teDepth === 'interior' ? 4500 : 5500;
+      var _teVol  = _teDepth === 'nested_dungeon' ? 0.50
+                  : _teDepth === 'interior' ? 0.40 : 0.30;
+      AudioSystem.playFadeOut('torch_extinguish', { volume: _teVol }, _teFade);
+    }
+
     // Update visual state: cavity glow removal + light source removal
     // happen on the next floor-manager refresh cycle. For immediate
     // feedback we show a toast.

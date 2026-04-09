@@ -488,6 +488,53 @@ var AudioSystem = (function () {
    * @param {number} plY  - Player world tile Y
    * @param {Object} [opts] - { volume, playbackRate, maxDist }
    */
+  /**
+   * Play a one-shot SFX that fades out over a given duration.
+   * Uses Web Audio linearRamp for sample-accurate fade — no timers.
+   *
+   * @param {string} name      - Manifest key (e.g. 'torch_extinguish')
+   * @param {Object} [opts]    - { volume, playbackRate } same as play()
+   * @param {number} [fadeMs]  - Fade-out duration in ms (default 5000)
+   */
+  function playFadeOut(name, opts, fadeMs) {
+    if (!_ready || !_ctx || _muted) return;
+    if (!_manifest || !_manifest[name]) return;
+    if (_manifest[name].category === 'music') return;
+
+    opts = opts || {};
+    fadeMs = fadeMs || 5000;
+    var clipVol = (typeof opts.volume === 'number') ? opts.volume : 1;
+    var rate    = opts.playbackRate || 1;
+
+    if (_ctx.state === 'suspended') {
+      try { _ctx.resume(); } catch (e) {}
+    }
+
+    function _startFade(buffer) {
+      if (!_ctx || !buffer) return;
+      var source = _ctx.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.value = rate;
+
+      var gain = _ctx.createGain();
+      gain.gain.setValueAtTime(clipVol, _ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0, _ctx.currentTime + fadeMs / 1000);
+      source.connect(gain);
+      gain.connect(_sfxGain);
+      source.start(0);
+
+      // Auto-stop after fade completes (free resources)
+      source.stop(_ctx.currentTime + fadeMs / 1000 + 0.05);
+    }
+
+    var buf = _buffers[name];
+    if (buf) {
+      _startFade(buf);
+    } else {
+      _loadBuffer(name).then(function (b) { _startFade(b); });
+    }
+  }
+
   function playSpatial(name, srcX, srcY, plX, plY, opts) {
     opts = opts || {};
     var dx = srcX - plX;
@@ -526,6 +573,8 @@ var AudioSystem = (function () {
     unduckMusic:     unduckMusic,
     // Spatial SFX
     playSpatial:     playSpatial,
+    // Fade-out SFX (torch extinguish, etc.)
+    playFadeOut:     playFadeOut,
     // Legacy aliases matching EyesOnly's AudioSystem API
     setSFXVolumeLegacy: setSFXVolumeLegacy
   };

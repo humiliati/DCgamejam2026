@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bookshelf — BoxForge Export Gap Check (Attempt 2)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #111;
+    color: #ddd;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 16px;
+  }
+  h1 { font-size: 14px; color: #888; letter-spacing: 1px; text-transform: uppercase; }
+  .info { font-size: 11px; color: #666; max-width: 600px; text-align: center; line-height: 1.5; }
+  .phase-btns { display: flex; gap: 6px; }
+  .phase-btns button {
+    padding: 4px 16px; font-size: 11px; font-weight: 600;
+    background: #1a1a28; color: #888; border: 1px solid #333;
+    border-radius: 4px; cursor: pointer;
+  }
+  .phase-btns button.active { background: #2a1e3a; color: #cc88ff; border-color: #7744aa; }
+
+  .preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 700px; height: 550px;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(40,40,60,0.4) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      repeating-linear-gradient(90deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  /* ═══════════════════════════════════════════
+     PASTED CSS EXPORT — Attempt 2 from BoxForge
+     ═══════════════════════════════════════════ */
+
+  /* Shared 3D box scaffold */
+  .box3d-wrap {
+    position: relative;
+    transform-style: preserve-3d;
+  }
+  .box3d-scene {
+    position: relative;
+    transform-style: preserve-3d;
+  }
+  .box3d-spin {
+    transform-style: preserve-3d;
+    position: absolute;
+    width: 100%; height: 100%;
+  }
+  .box3d-body {
+    transform-style: preserve-3d;
+    position: absolute;
+    width: 100%; height: 100%;
+  }
+  [class*="bf-"] {
+    position: absolute;
+    transform-style: preserve-3d;
+    border: 2px solid var(--box-dark2);
+  }
+  /* glows always visible — no phase hides them */
+
+  /* ── Variant: bookshelf ── */
+  .box3d-wrap.bookshelf-variant {
+    --bookshelf-w: 299px;
+    --bookshelf-h: 303px;
+    --box-d: 100px;
+    --box-half: -100px;
+    --bevel-w: 2px;
+    --box-dark: #ffaf0f;
+    --box-dark2: #e19100;
+    --box-light: #472b00;
+    --box-floor: #221d16;
+    --box-ceil: #5a4020;
+    --box-glow: rgba(26,0,224,0.6);
+    --perspective: 427px;
+    perspective: 427px;
+    width: 299px;
+    height: 303px;
+  }
+  .bookshelf-variant .box3d-scene {
+    width: 299px; height: 303px;
+    transform: rotateX(-28deg) rotateY(3deg);
+  }
+  .bookshelf-variant .box3d-spin {
+    width: 299px; height: 303px;
+  }
+  .bookshelf-variant .box3d-body {
+    width: 299px; height: 303px;
+  }
+
+  /* ── Structural Panes (5) ── */
+  /* Back */
+  .bookshelf-variant .bf-back {
+    width: 299px; height: 303px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translateZ(-100px) translate(0px,0px);
+  }
+  /* Left */
+  .bookshelf-variant .bf-left {
+    width: 200px; height: 303px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translate(-99.5px,0px) rotateY(90deg) translateZ(0px);
+  }
+  /* Right */
+  .bookshelf-variant .bf-right {
+    width: 200px; height: 303px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translate(198.5px,0px) rotateY(90deg) translateZ(0px);
+  }
+  /* Top */
+  .bookshelf-variant .bf-top {
+    width: 299px; height: 200px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translate(1px,226px) rotateX(90deg) translateZ(151.5px) translateY(-27px);
+  }
+  /* Bottom */
+  .bookshelf-variant .bf-bottom {
+    width: 299px; height: 200px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translate(0px,0px) rotateX(90deg) translateZ(-151.5px) translateY(0px);
+  }
+
+  /* ── Extra Panes (1) ── */
+  /* "Lid" (repurposed shelf — top face) */
+  .bookshelf-variant .bf-top-2 {
+    width: 289px; height: 256px;
+    background: linear-gradient(to top, var(--box-dark), var(--box-light));
+    transform: translate(6px,67px) rotateX(90deg) translateZ(151.5px) translateY(-22px);
+  }
+
+  /* ── Glow sources (5) ── */
+  [class*="bookshelf-glow-"] {
+    position: absolute;
+    pointer-events: none;
+  }
+  /* Glow 0: floor (green) */
+  .bookshelf-glow-0 {
+    width: 419px; height: 424px;
+    left: calc(50% - 209.5px + 0px);
+    top: calc(50% - 212px + 0px);
+    transform: translateZ(0px) rotateX(90deg) rotateY(0deg);
+    background: radial-gradient(ellipse, rgba(100,200,81,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  /* Glow 1: cross1 (pink) */
+  .bookshelf-glow-1 {
+    width: 419px; height: 424px;
+    left: calc(50% - 209.5px + 0px);
+    top: calc(50% - 212px + 0px);
+    transform: translateZ(0px) rotateX(0deg) rotateY(0deg);
+    background: radial-gradient(ellipse, rgba(200,81,168,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  /* Glow 2: cross2 (blue) */
+  .bookshelf-glow-2 {
+    width: 419px; height: 424px;
+    left: calc(50% - 209.5px + 0px);
+    top: calc(50% - 212px + 0px);
+    transform: translateZ(0px) rotateX(0deg) rotateY(60deg);
+    background: radial-gradient(ellipse, rgba(81,110,200,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  /* Glow 3: cross3 (red) */
+  .bookshelf-glow-3 {
+    width: 419px; height: 424px;
+    left: calc(50% - 209.5px + 0px);
+    top: calc(50% - 212px + 0px);
+    transform: translateZ(0px) rotateX(0deg) rotateY(120deg);
+    background: radial-gradient(ellipse, rgba(227,2,2,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  /* Glow 4: item glow (warm gold) */
+  .bookshelf-glow-4 {
+    width: 419px; height: 424px;
+    left: calc(50% - 209.5px + 0px);
+    top: calc(50% - 212px + 0px);
+    transform: translateZ(0px) rotateX(0deg) rotateY(68deg);
+    background: radial-gradient(ellipse, rgba(255,200,80,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+
+  /* ── Glow child (📚) ── per-phase via JS class toggle */
+  .glow-child-sprite {
+    position: absolute;
+    left: calc(50% + 0px);
+    top: calc(50% + 0px);
+    pointer-events: none;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all 0.4s cubic-bezier(0.33,1,0.68,1);
+    text-shadow: 0 0 12px rgba(255,200,80,0.5);
+  }
+  /* P1 idle */
+  .glow-child-sprite {
+    font-size: 43px;
+    opacity: 0.50;
+    transform: translate(-50%,-50%) translateY(-83px) translateZ(100px) rotateX(0deg) rotateY(68deg);
+  }
+  /* P2 hover */
+  .bookshelf-variant.hovered .glow-child-sprite {
+    font-size: 57px;
+    opacity: 0.63;
+    transform: translate(-50%,-50%) translateY(-25px) translateZ(64px) rotateX(0deg) rotateY(21deg);
+  }
+  /* P3 open */
+  .bookshelf-variant.opened .glow-child-sprite {
+    font-size: 101px;
+    opacity: 1.00;
+    transform: translate(-50%,-50%) translateY(-42px) translateZ(105px) rotateX(9deg) rotateY(-16deg);
+  }
+
+  /* ── Phase anim keyframes ── */
+  /* P1: poke 1% intensity */
+  @keyframes bs-poke-1 {
+    0%   { transform: translateY(0) scaleY(1); }
+    18%  { transform: translateY(0.10px) scaleY(0.9978) scaleX(1.0012); }
+    40%  { transform: translateY(-0.06px) scaleY(1.0010) scaleX(0.9995); }
+    60%  { transform: translateY(0.03px) scaleY(0.9996) scaleX(1.0003); }
+    80%  { transform: translateY(-0.01px) scaleY(1.0002); }
+    100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  }
+  /* P2: squish 18% intensity */
+  @keyframes bs-squish-18 {
+    0%   { transform: scaleY(1) scaleX(1); }
+    50%  { transform: scaleY(0.9604) scaleX(1.0252); }
+    100% { transform: scaleY(1) scaleX(1); }
+  }
+  /* P3: poke 11% intensity */
+  @keyframes bs-poke-11 {
+    0%   { transform: translateY(0) scaleY(1); }
+    18%  { transform: translateY(1.10px) scaleY(0.9758) scaleX(1.0132); }
+    40%  { transform: translateY(-0.66px) scaleY(1.0110) scaleX(0.9945); }
+    60%  { transform: translateY(0.33px) scaleY(0.9956) scaleX(1.0033); }
+    80%  { transform: translateY(-0.11px) scaleY(1.0022); }
+    100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  }
+
+  /* Phase application — JS toggles .phase-1 / .phase-2 / .phase-3 on body-anim */
+  .bookshelf-variant .box3d-body.phase-1 {
+    animation: bs-poke-1 0.6s cubic-bezier(0.34,1.56,0.64,1) infinite;
+  }
+  .bookshelf-variant .box3d-body.phase-2 {
+    animation: bs-squish-18 1.2s ease-in-out infinite;
+  }
+  .bookshelf-variant .box3d-body.phase-3 {
+    animation: bs-poke-11 0.6s cubic-bezier(0.34,1.56,0.64,1) infinite;
+  }
+</style>
+</head>
+<body>
+
+<h1>Bookshelf — Export Gap Check (Attempt 2)</h1>
+<div class="info">
+  Compare this static render (built from CSS export) against the live BoxForge editor.<br>
+  Click phase buttons or hover/click the box to toggle states.
+</div>
+
+<div class="phase-btns">
+  <button class="active" data-phase="1">P1 Idle</button>
+  <button data-phase="2">P2 Hover</button>
+  <button data-phase="3">P3 Open</button>
+</div>
+
+<div class="preview">
+  <div class="box3d-wrap bookshelf-variant" id="box">
+    <div class="box3d-scene">
+      <div class="box3d-spin">
+        <div class="box3d-body phase-1" id="body-anim">
+          <!-- Structural panes (5) -->
+          <div class="bf-back"></div>
+          <div class="bf-left"></div>
+          <div class="bf-right"></div>
+          <div class="bf-top"></div>
+          <div class="bf-bottom"></div>
+          <!-- Extra panes (1) -->
+          <div class="bf-top-2"></div>
+          <!-- Glow sources (5) -->
+          <div class="bookshelf-glow-0"></div>
+          <div class="bookshelf-glow-1"></div>
+          <div class="bookshelf-glow-2"></div>
+          <div class="bookshelf-glow-3"></div>
+          <div class="bookshelf-glow-4"></div>
+          <!-- Glow child (📚) — sibling, not inside blurred glow -->
+          <span class="glow-child-sprite">📚</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="info" style="margin-top:8px;color:#555">
+  <strong>Export values (Attempt 2 — from BoxForge):</strong><br>
+  Shell: 299×303, depth 200 (half 100), perspective 427, camera -28°/3°<br>
+  Colors: dark #ffaf0f, dark2 #e19100, light #472b00, floor #221d16, ceil #5a4020, glow rgba(26,0,224,0.6)<br>
+  Panes: 6 total (5 struct, 0 lid, 1 extra)<br>
+  &nbsp; Struct: back 299×303, left 200×303, right 200×303, top 299×200, bottom 299×200 — no front face<br>
+  &nbsp; Extra: bf-top-2 289×256 (repurposed "Lid", top face, bg #a87830)<br>
+  Glows: floor (#64c851), cross1 (#c851a8), cross2 (#516ec8), cross3 (#e30202), item (#ffc850 ellipse blur18 rY:68)<br>
+  Child: 📚 — P1: 43px oy:-83 oz:100 a:50% rY:68 | P2: 57px oy:-25 oz:64 a:63% rY:21 | P3: 101px oy:-42 oz:105 a:100% rX:9 rY:-16<br>
+  Phase anims: P1 poke:1%, P2 squish:18% + glow, P3 poke:11% + glow
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var boxEl = document.getElementById('box');
+  var bodyEl = document.getElementById('body-anim');
+  var btns = document.querySelectorAll('.phase-btns button');
+
+  function setPhase(phase) {
+    bodyEl.className = 'box3d-body phase-' + phase;
+    boxEl.classList.remove('hovered', 'opened');
+    if (phase === '2') boxEl.classList.add('hovered');
+    if (phase === '3') boxEl.classList.add('opened');
+    btns.forEach(function(b) {
+      b.classList.toggle('active', b.dataset.phase === phase);
+    });
+  }
+
+  btns.forEach(function(b) {
+    b.addEventListener('click', function() { setPhase(b.dataset.phase); });
+  });
+
+  // Hover toggles P2 unless already on P3
+  boxEl.addEventListener('mouseenter', function() {
+    var activeBtn = document.querySelector('.phase-btns button.active');
+    if (activeBtn && activeBtn.dataset.phase !== '3') setPhase('2');
+  });
+  boxEl.addEventListener('mouseleave', function() {
+    var activeBtn = document.querySelector('.phase-btns button.active');
+    if (activeBtn && activeBtn.dataset.phase === '2') setPhase('1');
+  });
+  boxEl.addEventListener('click', function() { setPhase('3'); });
+
+  // Init
+  setPhase('1');
+})();
+</script>
+</body>
+</html>

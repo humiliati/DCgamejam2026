@@ -413,65 +413,129 @@ var Skybox = (function () {
     ctx.fillRect(0, y, w, h);
   }
 
-  // ── Star field ──────────────────────────────────────────────────
+  // ── Star field (seeded PRNG, multi-layer with drift + glow) ────
 
-  // Star color palette: 70% white/blue-white, 15% yellow, 10% orange, 5% blue
-  var _STAR_COLORS = [
-    '255,255,255',   // white
-    '220,230,255',   // blue-white
-    '240,240,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '255,255,255',   // white
-    '220,230,255',   // blue-white
-    '255,255,255',   // white
-    '255,240,200',   // pale yellow
-    '255,240,200',   // pale yellow
-    '255,200,140',   // orange
-    '255,200,140',   // orange
-    '160,190,255',   // blue
-    '255,255,255',   // white
-    '255,255,255'    // white
+  // Seeded PRNG — linear congruential, same as EyesOnly starfield.
+  // Eliminates the grid banding that _hash1D(integer) produces.
+  function _makePRNG(seed) {
+    var s = seed | 0;
+    return function () {
+      s = (s * 1664525 + 1013904223) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+  }
+
+  // Pre-generated star arrays (built once, rendered every frame).
+  // Each layer entry: { stars: [{x,y,r,cr,cg,cb,brightness,twPhase,twRate}],
+  //                     depth, drift, opacity }
+  var _starLayers = null;
+
+  // Layer definitions (ported from EyesOnly 4-tier model, counts scaled
+  // down ~40% because DC skybox is only the top 75% of viewport, not full).
+  var _STAR_DEFS = [
+    { count: 350, rMin: 0.3, rMax: 0.5, depth: 0.02, drift: 0.00003, opacity: 0.40, twinkle: true  },  // deep dust
+    { count: 100, rMin: 0.4, rMax: 0.6, depth: 0.08, drift: 0.00012, opacity: 0.65, twinkle: true  },  // mid-field
+    { count: 35,  rMin: 0.5, rMax: 0.9, depth: 0.15, drift: 0.00025, opacity: 0.85, twinkle: true  },  // bright
+    { count: 12,  rMin: 0.7, rMax: 1.2, depth: 0.22, drift: 0.0005,  opacity: 0.95, twinkle: false }   // foreground
   ];
 
-  // Multi-layer star definitions: { count, minSize, maxSize, minBright, maxBright, depth, twinkleSpeed }
-  var _STAR_LAYERS = [
-    { count: 200, minSize: 1, maxSize: 1, minBright: 0.3, maxBright: 0.5, depth: 0.02, twinkleSpeed: 0.001, seed: 0 },     // deep field
-    { count: 80,  minSize: 1, maxSize: 2, minBright: 0.5, maxBright: 0.7, depth: 0.08, twinkleSpeed: 0.003, seed: 1000 },   // mid field
-    { count: 30,  minSize: 2, maxSize: 3, minBright: 0.7, maxBright: 1.0, depth: 0.15, twinkleSpeed: 0.006, seed: 2000 }    // near field
-  ];
+  function _generateStarField() {
+    var rng = _makePRNG(7919); // prime seed — deterministic across sessions
+    _starLayers = [];
+
+    for (var d = 0; d < _STAR_DEFS.length; d++) {
+      var def = _STAR_DEFS[d];
+      var driftAngle = 0.3 + d * 0.7; // each layer drifts at a different angle
+      var stars = [];
+      for (var i = 0; i < def.count; i++) {
+        // Color: 70% white, 15% warm, 10% blue-white, 5% orange
+        var temp = rng();
+        var cr, cg, cb;
+        if (temp < 0.05) {
+          cr = 255; cg = 200; cb = 140; // orange
+        } else if (temp < 0.15) {
+          cr = 160 + Math.floor(rng() * 60); cg = 190 + Math.floor(rng() * 40); cb = 255; // blue
+        } else if (temp < 0.30) {
+          cr = 255; cg = 240 + Math.floor(rng() * 15); cb = 200 + Math.floor(rng() * 20); // warm white
+        } else {
+          cr = 240 + Math.floor(rng() * 15); cg = 240 + Math.floor(rng() * 15); cb = 245 + Math.floor(rng() * 10); // clean white
+        }
+        stars.push({
+          x:  rng(),
+          y:  rng() * 0.75, // confine to top 75% of sky band
+          r:  def.rMin + rng() * (def.rMax - def.rMin),
+          cr: cr, cg: cg, cb: cb,
+          brightness: 0.4 + rng() * 0.6,
+          twPhase: rng() * Math.PI * 2,
+          twRate:  0.004 + rng() * 0.020
+        });
+      }
+      _starLayers.push({
+        stars:   stars,
+        depth:   def.depth,
+        driftX:  Math.cos(driftAngle) * def.drift,
+        driftY:  Math.sin(driftAngle) * def.drift,
+        opacity: def.opacity,
+        twinkle: def.twinkle
+      });
+    }
+  }
 
   function _renderStars(ctx, w, h, angle, phaseAlpha) {
     var pa = phaseAlpha !== undefined ? phaseAlpha : 1;
     if (pa < 0.01) return;
+    if (!_starLayers) _generateStarField();
 
-    for (var L = 0; L < _STAR_LAYERS.length; L++) {
-      var layer = _STAR_LAYERS[L];
-      var parallax = angle * w * layer.depth;
+    for (var L = 0; L < _starLayers.length; L++) {
+      var layer = _starLayers[L];
+      var parallax = angle * layer.depth;
+      var driftOffX = _time * layer.driftX;
+      var driftOffY = _time * layer.driftY;
+      var layerStars = layer.stars;
 
-      for (var i = 0; i < layer.count; i++) {
-        var idx = i + layer.seed;
-        var sx = (_hash1D(idx * 7 + 1) * w * 4 + parallax) % w;
-        if (sx < 0) sx += w;
-        var sy = _hash1D(idx * 13 + 3) * h * 0.75;
-        var brightness = layer.minBright + _hash1D(idx * 19 + 5) * (layer.maxBright - layer.minBright);
+      for (var i = 0; i < layerStars.length; i++) {
+        var star = layerStars[i];
 
-        // Twinkle
-        var twinkle = 0.5 + 0.5 * Math.sin(_time * layer.twinkleSpeed + idx * 2.1);
-        var alpha = brightness * twinkle * pa;
+        // Position: normalized [0,1] → pixel, with parallax + drift
+        var sx = (star.x + parallax + driftOffX) % 1;
+        if (sx < 0) sx += 1;
+        var sy = (star.y + driftOffY) % 1;
+        if (sy < 0) sy += 1;
+        var px = sx * w;
+        var py = sy * h;
 
-        if (alpha > 0.04) {
-          // Color from palette (deterministic per star)
-          var colorIdx = Math.floor(_hash1D(idx * 31) * _STAR_COLORS.length) % _STAR_COLORS.length;
-          ctx.fillStyle = 'rgba(' + _STAR_COLORS[colorIdx] + ',' + alpha.toFixed(2) + ')';
+        // Twinkle with scintillation spikes
+        var twinkle = 1;
+        if (layer.twinkle) {
+          twinkle = 0.5 + 0.5 * Math.sin(_time * star.twRate + star.twPhase);
+          // Occasional bright flare (scintillation spike)
+          var scint = Math.sin(_time * star.twRate * 3.7 + star.twPhase * 2.1);
+          if (scint > 0.97) twinkle = Math.min(1, twinkle + 0.4);
+        }
 
-          var size = layer.minSize + Math.floor(_hash1D(idx * 41) * (layer.maxSize - layer.minSize + 1));
-          ctx.fillRect(Math.floor(sx), Math.floor(sy), size, size);
+        var alpha = layer.opacity * star.brightness * twinkle * pa;
+        if (alpha < 0.04) continue;
+
+        var rr = star.r;
+        var colorStr = star.cr + ',' + star.cg + ',' + star.cb;
+
+        // Glow halo for brightest stars (foreground + bright layers)
+        if (rr > 0.8) {
+          ctx.beginPath();
+          ctx.arc(px, py, rr * 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(' + colorStr + ',' + (alpha * 0.04).toFixed(3) + ')';
+          ctx.fill();
+        }
+
+        // Star core: small = crisp pixel, large = circle
+        if (rr < 0.6) {
+          ctx.fillStyle = 'rgba(' + colorStr + ',' + alpha.toFixed(2) + ')';
+          ctx.fillRect(Math.round(px), Math.round(py), 1, 1);
+        } else {
+          ctx.beginPath();
+          ctx.arc(px, py, rr, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(' + colorStr + ',' + alpha.toFixed(2) + ')';
+          ctx.fill();
         }
       }
     }

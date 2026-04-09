@@ -245,6 +245,7 @@ Faction NPCs on their home floor should have distinct interaction behaviors:
 | §3 Barks | engine/bark-library.js, engine/npc-system.js, data/barks/en.js |
 | §4 Encounters | engine/npc-system.js (tick loop), docs/NPC_SYSTEM_ROADMAP.md (Phase B-C) |
 | §5 Faction HQs | docs/Tutorial_world_roadmap.md (floor registry), CLAUDE.md (floor hierarchy) |
+| §2-§5 Faction Presence | docs/ACT2_NARRATIVE_OUTLINE.md (§4 faction lock, §4.3 hostility consequences, §5.4 housing reassignment) |
 
 ---
 

@@ -44,7 +44,7 @@ not paid rent, the landlord evicts them at dawn. Eviction is the first
 hard game over trigger. The safehouse door is barred from the inside; the
 player has no sleeping location; the fade-to-title fires on the next tick.
 
-### 2. Reach Vivec before end of week 2
+### 2. Reach floor 4 before end of week 2
 
 The player arrives in the settlement as an outsider. The entire first act
 is a countdown to the Grand Arch crossing. Floor 3 (The Garrison) contains

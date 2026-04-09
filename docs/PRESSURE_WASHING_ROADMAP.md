@@ -8,9 +8,9 @@
 
 ## 1. Design Vision
 
-The player carries a pressure hose through dungeons. The hose is a physical line that trails behind, records the player's path, costs energy to drag, enables sub-tile grime cleaning on walls and floors, and provides a "roll up hose" auto-exit that retraces the hose path back to the truck. The hose is optional — players who skip it can still do basic tile-level scrubbing with rags/mops, but the hose unlocks the full cleaning system (sub-tile grime grids, beam shaping via nozzle items, efficient wall cleaning).
+The player carries a pressure hose through dungeons. The hose is a physical line that trails behind, records the player's path, costs fatigue to drag, enables sub-tile grime cleaning on walls and floors, and provides a "roll up hose" auto-exit that retraces the hose path back to the truck. The hose is optional — players who skip it can still do basic tile-level scrubbing with rags/mops, but the hose unlocks the full cleaning system (sub-tile grime grids, beam shaping via nozzle items, efficient wall cleaning).
 
-**Core fantasy**: You are a secretive hazmat operative winding a hose through a dungeon, methodically pressure-washing blood off walls while a hero's carnage is still warm. When you're done (or out of energy), you hit "roll up hose" and the line reels itself in as you retrace your route back to the truck.
+**Core fantasy**: You are a secretive hazmat operative winding a hose through a dungeon, methodically pressure-washing blood off walls while a hero's carnage is still warm. When you're done (or too exhausted), you hit "roll up hose" and the line reels itself in as you retrace your route back to the truck.
 
 ---
 
@@ -51,7 +51,7 @@ HoseState = {
   kinkCount: 0,                // number of self-crossings
   maxFloorDepth: 3,            // how many floors into building hose survives
   floorsTraversed: 0,          // floors entered since pickup
-  energyDrain: 0               // accumulated energy cost
+  fatigueDrain: 0              // accumulated fatigue cost
 }
 ```
 
@@ -65,21 +65,22 @@ HoseState = {
 - Dungeon crossing (example from 2.2.3 secret exit to 3.2.1 or 3.2 or 3 ) 
 - Bonfires waypoints cancel hose (example 2.2.3 to 2.2 via bonfire fast travel) 
  
-### 2.4 Energy Cost
+### 2.4 Fatigue Cost
 
-Carrying the hose drains energy per tile moved 
+Carrying the hose drains fatigue per tile moved via `Player.drainHoseFatigue(drain)`.
 (the following probably needs rebalancing pass based on actual dungeon dimensions when we're closer to deployment):
 
 ```
 drainPerTile = BASE_DRAIN + (path.length * LENGTH_PENALTY) + (kinkCount * KINK_PENALTY)
 ```
 
-- `BASE_DRAIN`: 1 energy per tile
-- `LENGTH_PENALTY`: 0.1 energy per tile of existing hose length (longer hose = heavier drag)
-- `KINK_PENALTY`: 0.5 energy per kink (crossed paths compound)
-- When energy hits 0 → forced "roll up hose" (auto-exit, cannot continue deeper)
+- `BASE_DRAIN`: 1.0 fatigue per tile
+- `LENGTH_PENALTY`: 0.1 fatigue per tile of existing hose length (longer hose = heavier drag)
+- `KINK_PENALTY`: 0.5 fatigue per kink (crossed paths compound)
+- When fatigue hits max (100) → forced "roll up hose" (auto-exit, cannot continue deeper)
+- Equipment modifiers (`hoseFatigueModifier`) and status effects (`StatusEffect.getHoseFatigueMult()`) scale the drain multiplicatively
 
-Energy is read from `Player.energy` (or StatusEffect system if energy is a status).
+Fatigue is read from `Player.getFatigue()` / `Player.getMaxFatigue()`. See FATIGUE_SYSTEM_ROADMAP.md.
 
 ---
 
@@ -390,7 +391,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 | Module | Layer | File | Depends On | Purpose |
 |--------|-------|------|------------|---------|
 | GrimeGrid | 1 | `engine/grime-grid.js` | TILES | Sub-tile grime data per tile |
-| HoseState | 1 | `engine/hose-state.js` | — | Hose attachment, path, kink tracking, energy drain |
+| HoseState | 1 | `engine/hose-state.js` | — | Hose attachment, path, kink tracking, fatigue drain |
 | HoseReel | 3 | `engine/hose-reel.js` | HoseState, MovementController, FloorTransition | Roll-up auto-exit (retraces hose path) |
 | HosePeek | 3 | `engine/hose-peek.js` | HoseState, InteractPrompt | Truck interaction → attach hose |
 | CleaningTruck | 3 | `engine/cleaning-truck.js` | HeroSystem, TILES, BonfireSprites pattern | Spawn/despawn truck + hose sprite on hero day |
@@ -432,7 +433,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 
 ### Phase PW-2: Hose State + Truck Spawn (2.5h)
 
-1. `hose-state.js` — attach/detach, path recording, kink detection, energy drain calc, building validation
+1. `hose-state.js` — attach/detach, path recording, kink detection, fatigue drain calc, building validation
 2. `cleaning-truck.js` — hero day spawn logic, TRUCK/TRUCK_HOSE tiles, bobbing 🧵 sprite inside truck panel using the **sprite-inside-wall technique** (see LIGHT_AND_TORCH_ROADMAP §2.5a): alpha-transparent cutout in `truck_panel` texture + cavity pre-fill + hose decor sprite with faint blue-white glow when pressurized
 3. `hose-peek.js` — interaction prompt, attach confirmation
 4. `tiles.js` + `interact-prompt.js` updates
@@ -459,7 +460,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 2. `hose-overlay.js` — minimap hose path line + kink dots
 3. MinimapNav distance gate — reject clicks within 5+itemN tiles
 4. Wire "roll up hose" to input (button or interact menu option)
-5. Energy exhaustion → forced reel trigger
+5. Fatigue exhaustion → forced reel trigger
 
 **Depends on**: PW-2 (hose path exists), PW-3 (spray working, game flow proven)
 **Unblocks**: PW-5 (full system operational for testing)
@@ -470,7 +471,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 2. Equip slot integration (CardAuthority equipped zone)
 3. Brush modifier lookup from equipped nozzle
 4. Readiness score integration (GrimeGrid fractional cleanliness → CleaningSystem)
-5. Regression test: existing rag/mop cleaning still works, hero day spawn/despawn, reel across floors, kink stacking, energy forced exit
+5. Regression test: existing rag/mop cleaning still works, hero day spawn/despawn, reel across floors, kink stacking, fatigue forced exit
 
 **Depends on**: PW-1 through PW-4, Sprint 0 (CardAuthority for nozzle items)
 

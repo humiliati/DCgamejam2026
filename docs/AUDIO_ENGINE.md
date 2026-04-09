@@ -54,6 +54,18 @@ Timed multi-sound sequence. Each entry: `{ key, delay, volume, playbackRate }`. 
 
 Streaming BGM via `<audio>` element (no full decode — low memory). Crossfades from current track (400ms linear ramp). Loops automatically.
 
+### `AudioSystem.playSpatial(name, srcX, srcY, plX, plY, opts)`
+
+Distance-attenuated SFX. Computes Euclidean distance from source to player, applies inverse-square falloff `(1 - d/maxDist)²`. Silently no-ops if source is beyond `maxDist`. Routes through `play()` — mono, no stereo panning (see §Spatial Audio below).
+
+Options: `{ volume: 0–1, maxDist: number (default 8), playbackRate: number }`
+
+### `AudioSystem.playFadeOut(name, opts, fadeMs)`
+
+One-shot SFX that fades to silence over `fadeMs` milliseconds (default 5000). Uses Web Audio `linearRampToValueAtTime` on a per-clip GainNode — sample-accurate, no setTimeout chains. Auto-stops the BufferSource after fade completes to free resources. Used for torch extinguish steam hiss.
+
+Options: `{ volume: 0–1, playbackRate: number }`, `fadeMs: number`
+
 ### `AudioSystem.preloadCategory(category)`
 
 Fire-and-forget batch preload. Call during floor transitions to warm the buffer cache for the upcoming biome's sounds.
@@ -120,6 +132,12 @@ Any multi-phase game event can use `playSequence()` the same way:
 | Floor transition | door/ascend/descend sequence | floor-transition.js | 0.4–0.5 |
 | Hazard zap | `zap` | hazard-system.js | — |
 | Hazard explosion | `explosion-big` | hazard-system.js | — |
+| Bonfire crackle (spatial) | `fire_crackle` | game.js | 0.35–0.55 (contract-aware) |
+| Torch extinguish (fadeout) | `torch_extinguish` | torch-peek.js, restock-wheel.js | 0.30–0.50 (3.5–5.5s fade) |
+| Enemy footstep (patrol) | `step` (pitch-shifted) | enemy-ai.js | 0.18–0.35 (spatial, contract-aware) |
+| Enemy footstep (chase) | `step` (pitch-shifted) | enemy-ai.js | 0.25–0.49 (1.4× patrol vol) |
+| NPC footstep (patrol) | `step` (pitch-shifted) | npc-system.js | 0.12–0.25 (spatial, contract-aware) |
+| Screen shake (combat hit) | — (visual only) | player.js + game.js | Amplitude scales w/ damage |
 
 ### Unwired — future phases
 
@@ -130,8 +148,7 @@ Any multi-phase game event can use `playSequence()` the same way:
 | Card shuffle (deck reset) | `card-shuffle` (random) | G1 | Floor transition deck reshuffle |
 | Card reject (invalid stack) | `card-reject` | G1 | Invalid stack attempt feedback |
 | Card fold (fold hand) | `card-fold` | G1 | Forfeit / discard action |
-| Enemy approaching footsteps | `step-left` (pitch-shifted) | D2 | Pathing enemies, distance-attenuated |
-| Hero patrol footsteps | new asset needed | D2 | Heavier footfalls, armor clink |
+| Hero patrol footsteps | new asset needed | D2 | Heavier footfalls, armor clink (enemy patrol steps now wired) |
 | Crate restock seal | `ui-confirm` or new | B3 | Hydration slot fill |
 | Cleaning tool swipe | new asset needed | C3 | Rag/mop/brush per-stroke |
 | Dungeon reset alarm | `alarm` | C4 | Hero cycle incoming |
@@ -141,26 +158,38 @@ Any multi-phase game event can use `playSequence()` the same way:
 
 ---
 
-## Spatial Audio — Future: Distance Attenuation
+## Spatial Audio — Current State
 
-The current system plays all SFX at uniform volume regardless of source position. For pathing enemies (Phase D), we need distance-based attenuation:
+### What's live
+
+`AudioSystem.playSpatial()` provides **volume-only distance attenuation** — inverse-square falloff, mono output, no stereo panning. All spatial SFX route through the standard `play()` path: one BufferSource → one per-clip GainNode → sfxGain bus. The radius and base volume are **contract-aware** — callers read `FloorManager.getFloorContract().depth` and tune parameters per depth tier:
+
+| Depth | Description | Radius trend | Volume trend |
+|-------|-------------|-------------|-------------|
+| `exterior` | Open sky, wide streets | Wider (5–7 tiles) | Lower (0.12–0.35) |
+| `interior` | Buildings, rooms | Medium (4–5 tiles) | Medium (0.18–0.45) |
+| `nested_dungeon` | Tight corridors | Shorter (3–4 tiles) | Higher (0.25–0.55) |
+
+This model is now wired for bonfire crackle, torch extinguish, enemy patrol/chase footsteps, and NPC patrol footsteps. Pitch randomization (±5–10%) keeps repeated steps organic.
+
+`AudioSystem.playFadeOut()` extends this with sample-accurate gain ramps for sounds that need to die away naturally (torch steam hiss: 3.5–5.5s fade, also contract-aware).
+
+### What's missing: stereo panning
+
+A bonfire to the player's left sounds identical to one on the right. On a TV soundbar this is fine — stereo panning on fixed-position speakers is borderline meaningless. On headphones it matters.
+
+### Roadmap: StereoPannerNode upgrade (post-patch)
+
+The cleanest path adds a `StereoPannerNode` per spatial source in `playSpatial()`, with pan derived from the angle between the player's facing direction and the source:
 
 ```javascript
-// Proposed pattern for spatial SFX:
-function playSpatial(name, sourceX, sourceY, playerX, playerY, opts) {
-  var dx = sourceX - playerX;
-  var dy = sourceY - playerY;
-  var dist = Math.sqrt(dx * dx + dy * dy);
-  var maxDist = opts.maxDist || 8;
-  if (dist > maxDist) return; // Too far to hear
-
-  var attenuation = 1 - (dist / maxDist);
-  var vol = (opts.volume || 0.5) * attenuation * attenuation; // Inverse-square falloff
-  AudioSystem.play(name, { volume: vol, playbackRate: opts.playbackRate || 1 });
-}
+// Future pattern — NOT yet implemented:
+var angle = Math.atan2(dx, dy) - playerFacingAngle;
+var pan = Math.sin(angle);  // Natural sine curve, not linear
+panNode.pan.value = Math.max(-1, Math.min(1, pan * 1.3));  // Slight TV-speaker exaggeration
 ```
 
-This would be added to AudioSystem as `playSpatial()` when Phase D enemy pathing lands. The approach: enemy footsteps use `step-left` variants with slight pitch randomization (`playbackRate: 0.9–1.1`), attenuated by grid distance. Player hears approaching footsteps grow louder — creates tension without sight lines.
+This requires passing player facing angle into `playSpatial()` (currently only receives position). Full design with direction ring UI, threat compass, muffled door BGM (OoT lowpass pattern), and biome music continuity is documented in **DOC-50 SPATIAL_AUDIO_BARK_ROADMAP.md** (Phases 0–7, est. 8–10h).
 
 ---
 

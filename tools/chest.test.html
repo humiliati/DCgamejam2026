@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chest — BoxForge Export Gap Check</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #111;
+    color: #ddd;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 16px;
+  }
+  h1 { font-size: 14px; color: #888; letter-spacing: 1px; text-transform: uppercase; }
+  .info { font-size: 11px; color: #666; max-width: 600px; text-align: center; line-height: 1.5; }
+  .phase-btns { display: flex; gap: 6px; }
+  .phase-btns button {
+    padding: 4px 16px; font-size: 11px; font-weight: 600;
+    background: #1a1a28; color: #888; border: 1px solid #333;
+    border-radius: 4px; cursor: pointer;
+  }
+  .phase-btns button.active { background: #2a1e3a; color: #cc88ff; border-color: #7744aa; }
+
+  .preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 800px; height: 550px;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(40,40,60,0.4) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      repeating-linear-gradient(90deg, transparent 0px, transparent 39px, rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px),
+      #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  /* ═══════════════════════════════════════════
+     PASTED CSS EXPORT — Chest Template from BoxForge
+     ═══════════════════════════════════════════ */
+
+  /* Shared 3D box scaffold */
+  .box3d-wrap {
+    position: relative;
+    transform-style: preserve-3d;
+  }
+  .box3d-scene {
+    position: relative;
+    transform-style: preserve-3d;
+  }
+  .box3d-spin {
+    transform-style: preserve-3d;
+    position: absolute;
+    width: 100%; height: 100%;
+  }
+  .box3d-body {
+    transform-style: preserve-3d;
+    position: absolute;
+    width: 100%; height: 100%;
+  }
+  [class*="bf-"], .box3d-lid {
+    position: absolute;
+    transform-style: preserve-3d;
+    border: 2px solid var(--box-dark2);
+  }
+
+  /* ── Variant: chest-template ── */
+  .box3d-wrap.chest-template-variant {
+    --chest-template-w: 510px;
+    --chest-template-h: 193px;
+    --box-d: 114px;
+    --box-half: -114px;
+    --bevel-w: 2px;
+    --box-dark: #3d2b08;
+    --box-dark2: #1f0d00;
+    --box-light: #a87830;
+    --box-floor: #1a1206;
+    --box-ceil: #5a4020;
+    --box-glow: rgba(255,200,80,0.6);
+    --perspective: 430px;
+    perspective: 430px;
+    width: 510px;
+    height: 193px;
+  }
+  .chest-template-variant .box3d-scene {
+    width: 510px; height: 193px;
+    transform: rotateX(-31deg) rotateY(0deg);
+  }
+  .chest-template-variant .box3d-spin {
+    width: 510px; height: 193px;
+  }
+  .chest-template-variant .box3d-body {
+    width: 510px; height: 193px;
+  }
+
+  /* ── Structural Panes (4) ── */
+  /* Back */
+  .chest-template-variant .bf-back {
+    width: 510px; height: 193px;
+    background: linear-gradient(to top, #3d2b08, #a87830);
+    transform: translateZ(-114px) translate(0px,0px);
+  }
+  /* Left */
+  .chest-template-variant .bf-left {
+    width: 228px; height: 193px;
+    left: 141px; top: 0px;
+    background: linear-gradient(to top, #3d2b08, #a87830);
+    transform: translate(-254.5px,0px) rotateY(90deg) translateZ(0px);
+  }
+  /* Right */
+  .chest-template-variant .bf-right {
+    width: 228px; height: 193px;
+    left: 141px; top: 0px;
+    background: linear-gradient(to top, #3d2b08, #a87830);
+    transform: translate(254.5px,0px) rotateY(90deg) translateZ(0px);
+  }
+  /* Bottom */
+  .chest-template-variant .bf-bottom {
+    width: 510px; height: 228px;
+    left: 0px; top: -17.5px;
+    background: linear-gradient(to top, #3d2b08, #a87830);
+    transform: translate(0px,0px) rotateX(90deg) translateZ(-96.5px) translateY(0px);
+  }
+
+  /* ── Lid (2-layer: wrapper for face positioning, inner for hinge) ── */
+  /* Wrapper: face positioning (default transform-origin = center = body center) */
+  .chest-template-variant .box3d-lid-wrap {
+    position: absolute; transform-style: preserve-3d;
+    width: 507px; height: 225px;
+    left: 1.5px; top: -16px;
+    transform: translate(0px,0px) rotateX(90deg) translateZ(96.5px) translateY(0px);
+  }
+  /* Inner pane: hinge animation (origin = hinge edge) */
+  .chest-template-variant .box3d-lid {
+    width: 507px; height: 225px;
+    background: linear-gradient(to top, #3d2b08, #a87830);
+    transform-origin: center 0px;
+    transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  .chest-template-variant.hovered .box3d-lid {
+    transform: rotateX(25deg);
+  }
+  .chest-template-variant.opened .box3d-lid {
+    transform: rotateX(135deg);
+  }
+
+  /* ── Extra Panes (1) ── */
+  /* Panel 7 (front face) */
+  .chest-template-variant .bf-front {
+    width: 509px; height: 190px;
+    left: 0.5px; top: 1.5px;
+    transform: translateZ(114px) translate(0px,0px);
+    background: linear-gradient(to top, #3d2b08, #a87830);
+  }
+
+  /* ── Glow sources (5) ── */
+  [class*="chest-template-glow-"] {
+    position: absolute;
+    pointer-events: none;
+  }
+  .chest-template-glow-0 {
+    width: 1846px; height: 699px;
+    left: calc(50% - 923px + 0px);
+    top: calc(50% - 349.5px + 121px);
+    transform: translateZ(0px) rotateX(90deg) rotateY(0deg);
+    background: radial-gradient(ellipse, rgba(200,80,198,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  .chest-template-glow-1 {
+    width: 714px; height: 270px;
+    left: calc(50% - 357px + 0px);
+    top: calc(50% - 135px + -118px);
+    transform: translateZ(0px) rotateX(86deg) rotateY(-1deg);
+    background: radial-gradient(ellipse, rgba(200,80,198,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  .chest-template-glow-2 {
+    width: 714px; height: 270px;
+    left: calc(50% - 357px + 0px);
+    top: calc(50% - 135px + 0px);
+    transform: translateZ(300px) rotateX(25deg) rotateY(60deg);
+    background: radial-gradient(ellipse, rgba(200,80,198,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  .chest-template-glow-3 {
+    width: 714px; height: 270px;
+    left: calc(50% - 357px + 0px);
+    top: calc(50% - 135px + 0px);
+    transform: translateZ(300px) rotateX(0deg) rotateY(120deg);
+    background: radial-gradient(ellipse, rgba(200,80,198,0.6) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+  .chest-template-glow-4 {
+    width: 714px; height: 270px;
+    left: calc(50% - 357px + 0px);
+    top: calc(50% - 135px + 0px);
+    transform: translateZ(27px) rotateX(-20deg) rotateY(73deg);
+    background: radial-gradient(ellipse, rgba(255,200,80,0.05) 0%, transparent 70%);
+    filter: blur(18px);
+  }
+
+  /* ── Glow child (🎒) ── per-phase via JS class toggle */
+  .glow-child-sprite {
+    position: absolute;
+    left: calc(50% + 0px);
+    top: calc(50% + 0px);
+    pointer-events: none;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all 0.4s cubic-bezier(0.33,1,0.68,1);
+    text-shadow: 0 0 12px rgba(255,200,80,0.5);
+  }
+  /* P1 idle */
+  .glow-child-sprite {
+    font-size: 0px;
+    opacity: 0;
+    transform: translate(-50%,-50%) translateY(-63px) translateZ(27px) rotateX(-20deg) rotateY(73deg);
+  }
+  /* P2 hover */
+  .chest-template-variant.hovered .glow-child-sprite {
+    font-size: 98px;
+    opacity: 1;
+    transform: translate(-50%,-50%) translateY(-37px) translateZ(27px) rotateX(-20deg) rotateY(6deg);
+  }
+  /* P3 open */
+  .chest-template-variant.opened .glow-child-sprite {
+    font-size: 120px;
+    opacity: 1;
+    transform: translate(-50%,-50%) translateY(-162px) translateZ(57px) rotateX(-20deg) rotateY(12deg);
+  }
+
+  /* ── Phase anim keyframes ── */
+  /* P1: squish 4% */
+  @keyframes ct-squish-4 {
+    0%   { transform: scaleY(1) scaleX(1); }
+    50%  { transform: scaleY(0.9912) scaleX(1.0056); }
+    100% { transform: scaleY(1) scaleX(1); }
+  }
+  /* P2: squish 8% */
+  @keyframes ct-squish-8 {
+    0%   { transform: scaleY(1) scaleX(1); }
+    50%  { transform: scaleY(0.9824) scaleX(1.0112); }
+    100% { transform: scaleY(1) scaleX(1); }
+  }
+  /* P3: poke 7% */
+  @keyframes ct-poke-7 {
+    0%   { transform: translateY(0) scaleY(1); }
+    18%  { transform: translateY(0.70px) scaleY(0.9846) scaleX(1.0084); }
+    40%  { transform: translateY(-0.42px) scaleY(1.0070) scaleX(0.9965); }
+    60%  { transform: translateY(0.21px) scaleY(0.9972) scaleX(1.0021); }
+    80%  { transform: translateY(-0.07px) scaleY(1.0014); }
+    100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  }
+
+  /* Phase application — JS toggles .phase-1 / .phase-2 / .phase-3 on body-anim */
+  .chest-template-variant .box3d-body.phase-1 {
+    animation: ct-squish-4 1.6s ease-in-out infinite;
+  }
+  .chest-template-variant .box3d-body.phase-2 {
+    animation: ct-squish-8 1.4s ease-in-out infinite;
+  }
+  .chest-template-variant .box3d-body.phase-3 {
+    animation: ct-poke-7 0.6s cubic-bezier(0.34,1.56,0.64,1) infinite;
+  }
+</style>
+</head>
+<body>
+
+<h1>Chest — Export Gap Check</h1>
+<div class="info">
+  Compare this static render (built from CSS export) against the live BoxForge editor.<br>
+  Click phase buttons or hover/click the box to toggle states.
+</div>
+
+<div class="phase-btns">
+  <button class="active" data-phase="1">P1 Idle</button>
+  <button data-phase="2">P2 Hover</button>
+  <button data-phase="3">P3 Open</button>
+</div>
+
+<div class="preview">
+  <div class="box3d-wrap chest-template-variant" id="box">
+    <div class="box3d-scene">
+      <div class="box3d-spin">
+        <div class="box3d-body phase-1" id="body-anim">
+          <!-- Structural panes (4) -->
+          <div class="bf-back"></div>
+          <div class="bf-left"></div>
+          <div class="bf-right"></div>
+          <div class="bf-bottom"></div>
+          <!-- Lid (1) — wrapper for face positioning, inner div for hinge -->
+          <div class="box3d-lid-wrap"><div class="box3d-lid"></div></div>
+          <!-- Extra panes (1) -->
+          <div class="bf-front"></div>
+          <!-- Glow sources (5) -->
+          <div class="chest-template-glow-0"></div>
+          <div class="chest-template-glow-1"></div>
+          <div class="chest-template-glow-2"></div>
+          <div class="chest-template-glow-3"></div>
+          <div class="chest-template-glow-4"></div>
+          <!-- Glow child (🎒) — sibling, not inside blurred glow -->
+          <span class="glow-child-sprite">🎒</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="info" style="margin-top:8px;color:#555">
+  <strong>Export values (from BoxForge v2 — centered pane model, lid corrected):</strong><br>
+  Shell: 510×193, depth 228 (half 114), perspective 430, camera -31°/0°<br>
+  Colors: dark #3d2b08, dark2 #1f0d00, light #a87830, floor #1a1206, ceil #5a4020, glow rgba(255,200,80,0.6)<br>
+  Panes: 6 total (4 struct, 1 lid, 1 extra)<br>
+  &nbsp; Struct: back 510×193, left 228×193, right 228×193, bottom 510×228<br>
+  &nbsp; Lid: 507×225 (top face, hinge:top, open:135°, hover:25°)<br>
+  &nbsp; Extra: bf-front 509×190<br>
+  Glows: 5 sources (floor, cross×3, item) + glow child 🎒<br>
+  Phase anims: P1 squish:4%, P2 squish:8% + glow, P3 poke:7% + glow
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var boxEl = document.getElementById('box');
+  var bodyEl = document.getElementById('body-anim');
+  var btns = document.querySelectorAll('.phase-btns button');
+
+  function setPhase(phase) {
+    bodyEl.className = 'box3d-body phase-' + phase;
+    boxEl.classList.remove('hovered', 'opened');
+    if (phase === '2') boxEl.classList.add('hovered');
+    if (phase === '3') boxEl.classList.add('opened');
+    btns.forEach(function(b) {
+      b.classList.toggle('active', b.dataset.phase === phase);
+    });
+  }
+
+  btns.forEach(function(b) {
+    b.addEventListener('click', function() { setPhase(b.dataset.phase); });
+  });
+
+  // Hover toggles P2 unless already on P3
+  boxEl.addEventListener('mouseenter', function() {
+    var activeBtn = document.querySelector('.phase-btns button.active');
+    if (activeBtn && activeBtn.dataset.phase !== '3') setPhase('2');
+  });
+  boxEl.addEventListener('mouseleave', function() {
+    var activeBtn = document.querySelector('.phase-btns button.active');
+    if (activeBtn && activeBtn.dataset.phase === '2') setPhase('1');
+  });
+  boxEl.addEventListener('click', function() { setPhase('3'); });
+
+  // Init
+  setPhase('1');
+})();
+</script>
+</body>
+</html>

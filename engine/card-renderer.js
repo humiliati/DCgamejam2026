@@ -48,14 +48,16 @@ var CardRenderer = (function () {
     'perfect': '#9c27b0'
   };
 
-  var SUIT_DATA = {
+  // Sprint 0: SUIT_DATA and RES_COLORS are now owned by CardAuthority.
+  // CardRenderer delegates to CardAuthority when available, keeping local
+  // copies only as a safety fallback (e.g. if script load order is off).
+  var _LOCAL_SUIT_DATA = {
     spade:   { sym: '\u2660', color: 'rgba(180,170,150,0.85)', res: 'free'    },
     club:    { sym: '\u2663', color: '#00D4FF',                 res: 'energy'  },
     diamond: { sym: '\u2666', color: '#00FFA6',                 res: 'battery' },
     heart:   { sym: '\u2665', color: '#FF6B9D',                 res: 'hp'      }
   };
-
-  var RES_COLORS = {
+  var _LOCAL_RES_COLORS = {
     energy:   { r: 0,   g: 212, b: 255 },
     battery:  { r: 0,   g: 255, b: 166 },
     hp:       { r: 255, g: 107, b: 157 },
@@ -68,6 +70,10 @@ var CardRenderer = (function () {
     cards:    { r: 128, g: 0,   b: 128 },
     free:     { r: 180, g: 170, b: 150 }
   };
+  var SUIT_DATA  = (typeof CardAuthority !== 'undefined' && CardAuthority.SUIT_DATA)
+    ? CardAuthority.SUIT_DATA : _LOCAL_SUIT_DATA;
+  var RES_COLORS = (typeof CardAuthority !== 'undefined' && CardAuthority.RES_COLORS)
+    ? CardAuthority.RES_COLORS : _LOCAL_RES_COLORS;
 
   // ── CSS injection flag ────────────────────────────────────────────
   var _stylesInjected = false;
@@ -366,6 +372,10 @@ var CardRenderer = (function () {
   }
 
   function _getResColor(card) {
+    // Delegate to CardAuthority when available (Sprint 0 canonical source)
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.getResColor) {
+      return CardAuthority.getResColor(card);
+    }
     var res = card.resource || card.costResource || null;
     if (res && RES_COLORS[res]) return RES_COLORS[res];
     var sd = card.suit ? SUIT_DATA[card.suit] : null;
@@ -784,7 +794,7 @@ var CardRenderer = (function () {
     // Style injection (call early if needed)
     ensureStyles: _injectStyles,
 
-    // Constants (for external use)
+    // Constants (delegates to CardAuthority when available)
     RES_COLORS:     RES_COLORS,
     SUIT_DATA:      SUIT_DATA,
     QUALITY_COLORS: QUALITY_COLORS,

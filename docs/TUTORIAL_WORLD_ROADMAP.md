@@ -749,6 +749,7 @@ The NPC types map cleanly to the playflow:
 | §4 Initial Playflow | NPC_SYSTEM_ROADMAP §4-§7 | Bark/NPC types used |
 | §5 Floor Designs | Biome Plan (docs/Biome Plan.html) | Spatial contracts per depth |
 | §6 Hero Reveal | STREET_CHRONICLES §Story Arcs | The Seeker is the Hero |
+| §9 Gleaner Pivot | ACT2_NARRATIVE_OUTLINE §2 + §5.4 | Act 1 handoff and HomeBnB temporary-lodging framing |
 | §7 Scavenge Loop | CORE_GAME_LOOP §3 Economy Model | Coin drip structure |
 | §8 Gate System | engine/tiles.js (LOCKED_DOOR still exists for future use) | Tile types |
 | §9 Gleaner Pivot | CORE_GAME_LOOP §1-§4 | Three pillars: Clean, Restock, Endure |

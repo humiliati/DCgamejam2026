@@ -1,14 +1,14 @@
 # Spatial Audio & Directional Bark Roadmap
 
-> **Status:** Post-jam. Depends on Track B (time/compass consolidation) being complete.
+> **Status:** Post-jam. Phase 4a (enemy/NPC footsteps) and Phase 5a (bonfire crackle) wired 2026-04-07. Stereo panning (Phases 0–1) and DirRing (Phase 2) still pending.
 > **Scope:** Unified directional system for audio panning and visual bark indicators.
-> **Estimated total:** 8–10h across 5 phases.
+> **Estimated total:** 8–10h across 8 phases (0–7). ~2h delivered via volume-only spatial wiring.
 
 ---
 
 ## The Gap
 
-AudioSystem is currently **mono** — all SFX play at center with no stereo panning. Bonfire crackle, enemy footsteps, NPC barks, and alert chimes all come from "nowhere." The game already computes distance-based volume (e.g., `fire_crackle` uses `1 - dist/4` falloff), but never feeds direction into the pan position.
+AudioSystem is currently **mono** — all SFX play at center with no stereo panning. As of 2026-04-07, distance-based volume attenuation is live via `playSpatial()` (bonfire crackle, enemy/NPC footsteps, torch extinguish fadeout — all contract-aware). But direction is never fed into the pan position. A bonfire to the player's left sounds identical to one on the right.
 
 NPC barks display as text in the StatusBar tooltip footer (bottom of screen). The KaomojiCapsule renders a rolling ellipsis above the NPC sprite in the 3D view. But when the NPC is behind or beside the player, there's no visual cue about bark direction — the text just appears at the bottom with no spatial correspondence.
 
@@ -214,19 +214,17 @@ Small rounded-rect bubble floating at the ring position:
 
 The most gameplay-critical spatial audio: hearing enemies before seeing them.
 
-### 4a. Enemy footstep loop
+### 4a. Enemy footstep — ✅ WIRED (2026-04-07)
 
-EnemyAI already ticks patrol movement. On each AI movement step (tile transition), play a position-aware footstep:
+Enemy and NPC footsteps are now live via `AudioSystem.playSpatial()` with contract-aware radius/volume. Wired at three movement commit points:
 
-```javascript
-// In EnemyAI._tickPatrol() when enemy moves to new tile:
-AudioSystem.play('enemy-step', {
-  position: { x: enemy.x, y: enemy.y },
-  volume: 0.3
-});
-```
+- **enemy-ai.js `_moveToPoint()`** — patrol pace, base vol 0.18–0.35 by depth
+- **enemy-ai.js `_tryMove()`** — chase pace, 1.4× patrol volume (heavier)
+- **npc-system.js `_tickPatrol()`** — NPC patrol, softer (0.12–0.25)
 
-Different enemy types could use different step sounds (heavy/light/metallic).
+All use the generic `step` manifest key with ±10% pitch randomization. Stationary rotations produce no footstep. Contract-aware radius: exterior 6–7 tiles, interior 4–5, nested dungeon 3–4.
+
+> **Future:** Different enemy types could use different step sounds (heavy/light/metallic) keyed off `enemy.type` or `enemy.subtype`. Hero patrol footsteps need a dedicated heavier asset (armor clink).
 
 ### 4b. Awareness escalation audio
 
@@ -240,9 +238,13 @@ AudioSystem.play('enemy-alert', {
 });
 ```
 
+> **Status:** Not yet wired. Requires Phase 1 `position` option in `play()`. Currently the alert chimes play center-pan at flat volume. This is acceptable for the patch — the footsteps already provide directional tension.
+
 ### 4c. Threat ring indicator
 
 When an enemy enters SUSPICIOUS or ALERTED while off-screen, show a threat pip on the direction ring. Color-coded: yellow (suspicious), red (alerted), magenta (engaged/combat).
+
+> **Status:** Not yet wired. Requires Phase 2 DirRing DOM infrastructure.
 
 ---
 
@@ -250,15 +252,11 @@ When an enemy enters SUSPICIOUS or ALERTED while off-screen, show a threat pip o
 
 Wire ambient environmental sounds into the spatial system.
 
-### 5a. Bonfire crackle
+### 5a. Bonfire crackle — ✅ WIRED (2026-04-07)
 
-Already has distance-vol in game.js. Add position for panning:
+Bonfire crackle now uses `AudioSystem.playSpatial('fire_crackle', ...)` in game.js with contract-aware radius (exterior 5, interior 4, dungeon 3) and base volume (0.35/0.45/0.55). Only BONFIRE and HEARTH tiles trigger crackling. Scans within maxDist radius, picks nearest source.
 
-```javascript
-AudioSystem.play('fire_crackle', {
-  position: { x: bonfireX, y: bonfireY }
-});
-```
+Remaining for this item: add `position`-based stereo panning once Phase 1 StereoPannerNode lands.
 
 ### 5b. Torch ambient
 

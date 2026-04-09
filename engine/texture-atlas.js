@@ -239,6 +239,23 @@ var TextureAtlas = (function () {
       stemR: 55, stemG: 40, stemB: 22         // Brown stem/twig glimpses
     });
 
+    // ── Roof textures (Architectural Shapes Phase 1) ──────────────
+    _genRoofShingle('roof_shingle', {
+      baseR: 140, baseG: 68, baseB: 42,       // Warm terracotta shingle
+      mortarR: 90, mortarG: 55, mortarB: 35,   // Dark mortar between rows
+      hiR: 170, hiG: 90, hiB: 55              // Sunlit highlight edge
+    });
+    _genRoofShingle('roof_slate', {
+      baseR: 80, baseG: 82, baseB: 88,        // Cool grey slate
+      mortarR: 50, mortarG: 52, mortarB: 55,   // Dark seam between tiles
+      hiR: 105, hiG: 108, hiB: 115            // Wet highlight
+    });
+    _genRoofShingle('roof_thatch', {
+      baseR: 155, baseG: 130, baseB: 65,      // Golden straw
+      mortarR: 110, mortarG: 90, mortarB: 40,  // Shadow between bundles
+      hiR: 185, hiG: 160, hiB: 90             // Sunlit straw tip
+    });
+
     // Breakable crate texture — wooden slat box with cross-braces
     _genCrateWood('crate_wood', {
       baseR: 110, baseG: 78, baseB: 42,      // Pale wood slats
@@ -356,6 +373,98 @@ var TextureAtlas = (function () {
       frameR: 45, frameG: 42, frameB: 40
     });
 
+    // ── Infrastructure tile decor sprites ────────────────────────────
+
+    // Rope + bucket silhouette — dangles from well rim face
+    _genRopeBucket('decor_rope_bucket', {
+      ropeR: 110, ropeG: 85, ropeB: 50,          // Hemp rope
+      bucketR: 70, bucketG: 55, bucketB: 35,     // Dark wood bucket
+      bandR: 80, bandG: 78, bandB: 75            // Iron bands on bucket
+    });
+
+    // Curled parchment note — pinned to notice board face
+    _genPinnedNote('decor_pinned_note', {
+      paperR: 195, paperG: 185, paperB: 160,     // Parchment
+      inkR: 45, inkG: 40, inkB: 35,              // Ink lines
+      pinR: 150, pinG: 35, pinB: 25              // Red pushpin
+    });
+
+    // Ladle handle — poking up from soup cauldron rim
+    _genLadle('decor_ladle', {
+      handleR: 75, handleG: 55, handleB: 30,     // Dark wood handle
+      bowlR: 60, bowlG: 58, bowlB: 55            // Iron bowl (below rim)
+    });
+
+    // Bright spark cluster — anvil strikes or electrical
+    _genSpark('decor_spark', {
+      coreR: 255, coreG: 240, coreB: 180,        // White-yellow core
+      outerR: 255, outerG: 160, outerB: 40       // Orange outer spark
+    });
+
+    // Blue energy pulse — charging cradle conduit glow
+    _genConduitGlow('decor_conduit_glow', {
+      coreR: 120, coreG: 200, coreB: 255,        // Bright blue-white
+      outerR: 40, outerG: 120, outerB: 200       // Deep blue fringe
+    });
+
+    // Indicator lamp — switchboard status light
+    _genToggleLight('decor_toggle_light_red', {
+      glassR: 180, glassG: 40, glassB: 25,       // Red glass
+      glowR: 220, glowG: 60, glowB: 30           // Red glow halo
+    });
+    _genToggleLight('decor_toggle_light_green', {
+      glassR: 40, glassG: 160, glassB: 50,       // Green glass
+      glowR: 60, glowG: 200, glowB: 70           // Green glow halo
+    });
+
+    // ── Hazard-adjacent wall decor ─────────────────────────────────
+
+    // Scorch mark — soot/burn stain on wall adjacent to FIRE tiles
+    _genScorch('decor_scorch', {
+      darkR: 20, darkG: 18, darkB: 15,           // Char black
+      midR: 50, midG: 35, midB: 20               // Brown soot edge
+    });
+
+    // Acid drip — green ooze dripping down wall (POISON adjacent)
+    _genAcidDrip('decor_acid_drip', {
+      poolR: 55, poolG: 130, poolB: 30,           // Toxic green
+      dripR: 70, dripG: 160, dripB: 45,           // Bright drip
+      hiR: 100, hiG: 200, hiB: 70                 // Specular highlight
+    });
+
+    // Warning scratches — claw/tool marks on wall (TRAP/SPIKES adjacent)
+    _genWarningScratches('decor_warning_scratch', {
+      scratchR: 120, scratchG: 115, scratchB: 108, // Exposed stone
+      deepR: 45, deepG: 40, deepB: 35             // Deep gouge shadow
+    });
+
+    // ── Biome variety wall decor ───────────────────────────────────
+
+    // Wanted poster — parchment with text and border (exterior walls)
+    _genWantedPoster('decor_wanted_poster', {
+      paperR: 190, paperG: 175, paperB: 145,      // Yellowed paper
+      borderR: 90, borderG: 70, borderB: 45,      // Dark frame/edge
+      textR: 40, textG: 35, textB: 30             // Ink text
+    });
+
+    // Cobweb — delicate web in corner (dungeon biomes)
+    _genCobweb('decor_cobweb', {
+      silkR: 180, silkG: 175, silkB: 170,         // Grey-white silk
+      anchorR: 140, anchorG: 135, anchorB: 128    // Thicker anchor strands
+    });
+
+    // Stress crack — jagged fracture in stone (cellar/dungeon)
+    _genCrack('decor_crack', {
+      crackR: 30, crackG: 28, crackB: 25,         // Deep shadow
+      edgeR: 80, edgeG: 75, edgeB: 70             // Exposed edge
+    });
+
+    // Hanging chain — iron chain loops (foundry/dungeon)
+    _genChain('decor_chain', {
+      linkR: 75, linkG: 72, linkB: 68,            // Dark iron links
+      hiR: 105, hiG: 100, hiB: 95                 // Worn highlight
+    });
+
     // ── A6 textures (torch tiles) ──────────────────────────────────
 
     // Lit torch wall — stone wall with iron bracket and flame
@@ -406,6 +515,129 @@ var TextureAtlas = (function () {
       mortarR: 40, mortarG: 35, mortarB: 28,    // Dark mortar joints
       sootR: 25,  sootG: 20,  sootB: 15,       // Soot staining at top
       glowR: 120, glowG: 50,  glowB: 10        // Inner fire glow at top
+    });
+
+    // ── Hazard floor textures ──────────────────────────────────────
+
+    // Trap — stone flags with a recessed iron pressure plate center
+    _genFloorTrap('floor_trap', {
+      stoneR: 55, stoneG: 52, stoneB: 50,        // Same palette as floor_stone
+      plateR: 68, plateG: 70, plateB: 74,         // Dull iron pressure plate
+      grooveR: 30, grooveG: 28, grooveB: 26       // Dark groove around plate edge
+    });
+
+    // Fire — charred stone with glowing ember cracks
+    _genFloorFire('floor_fire', {
+      stoneR: 40, stoneG: 32, stoneB: 28,         // Scorched dark stone
+      crackR: 180, crackG: 80, crackB: 20,        // Bright ember orange
+      ashR: 25,    ashG: 22,   ashB: 20            // Char/ash patches
+    });
+
+    // Spikes — stone with iron spike tips poking through a grate
+    _genFloorSpikes('floor_spikes', {
+      stoneR: 50, stoneG: 48, stoneB: 45,         // Dark stone base
+      spikeR: 95, spikeG: 100, spikeB: 105,       // Iron spike tips (bright)
+      gapR: 18,   gapG: 15,    gapB: 12            // Dark pit below grate
+    });
+
+    // Poison — stone with sickly green toxic pools in the cracks
+    _genFloorPoison('floor_poison', {
+      stoneR: 48, stoneG: 50, stoneB: 42,         // Greenish-tinted stone
+      poolR: 60,  poolG: 140, poolB: 35,          // Toxic green liquid
+      bubbleR: 90, bubbleG: 180, bubbleB: 55       // Bright bubble highlights
+    });
+
+    // ── Environmental floor textures ───────────────────────────────
+
+    // Corpse — bloodstained stone with bone fragments
+    _genFloorCorpse('floor_corpse', {
+      stoneR: 50, stoneG: 45, stoneB: 42,         // Dark stone base
+      bloodR: 80, bloodG: 20, bloodB: 15,          // Dark dried blood
+      boneR: 160, boneG: 150, boneB: 130           // Pale bone fragments
+    });
+
+    // Detritus — scattered adventurer debris on dungeon stone
+    _genFloorDetritus('floor_detritus', {
+      stoneR: 55, stoneG: 52, stoneB: 50,          // Standard dungeon stone
+      gearR: 85, gearG: 80, gearB: 70,             // Dull metal scraps
+      clothR: 75, clothG: 50, clothB: 35            // Torn leather/cloth
+    });
+
+    // Puzzle — stone with etched grid lines (sliding tile panel)
+    _genFloorPuzzle('floor_puzzle', {
+      stoneR: 65, stoneG: 63, stoneB: 60,          // Smooth worked stone
+      lineR: 90, lineG: 85, lineB: 75,             // Carved groove highlights
+      glyphR: 50, glyphG: 55, glyphB: 70            // Blue-tinted arcane runes
+    });
+
+    // ── Living infrastructure wall textures ────────────────────────
+
+    // Well — circular stone rim (0.5× short wall)
+    _genWellStone('well_stone', {
+      stoneR: 100, stoneG: 95, stoneB: 88,         // Light grey rim stones
+      mortarR: 50, mortarG: 45, mortarB: 38,        // Dark mortar joints
+      waterR: 12,  waterG: 20, waterB: 35           // Dark water at centre
+    });
+
+    // Bench — wooden slat seat on frame (0.35× short wall)
+    _genBench('bench_wood', {
+      slatR: 100, slatG: 72, slatB: 42,            // Warm wood slats
+      frameR: 65, frameG: 45, frameB: 25,           // Dark wood frame
+      gapR: 28,   gapG: 22,  gapB: 15              // Gaps between slats
+    });
+
+    // Notice board — wooden posts with pinned parchment (1.2× tall)
+    _genNoticeBoard('notice_board_wood', {
+      postR: 70, postG: 50, postB: 30,             // Dark wood uprights
+      boardR: 90, boardG: 65, boardB: 38,          // Board backing
+      paperR: 190, paperG: 180, paperB: 155,       // Parchment notes
+      pinR: 160, pinG: 40, pinB: 30                // Red pushpin dots
+    });
+
+    // Anvil — dark iron block on stone pedestal (0.5× short wall)
+    _genAnvil('anvil_iron', {
+      ironR: 55, ironG: 55, ironB: 60,             // Dark iron body
+      hiR: 85,   hiG: 88,  hiB: 95,               // Worn edge highlight
+      baseR: 70, baseG: 65, baseB: 58              // Stone pedestal
+    });
+
+    // Barrel — banded oak (0.6× short wall)
+    _genBarrel('barrel_wood', {
+      staveR: 95, staveG: 65, staveB: 35,          // Oak stave wood
+      bandR: 60,  bandG: 58, bandB: 55,            // Iron hoops
+      topR: 110,  topG: 78, topB: 45               // Lighter lid
+    });
+
+    // Soup cauldron — iron pot on brazier frame (0.7× short wall)
+    _genSoupCauldron('soup_cauldron', {
+      potR: 45, potG: 42, potB: 40,                // Cast iron pot
+      rimR: 75, rimG: 72, rimB: 68,                // Pot rim highlight
+      brazR: 55, brazG: 35, brazB: 20,             // Brazier legs
+      steamR: 140, steamG: 135, steamB: 125        // Steam wisps at top
+    });
+
+    // Cot — canvas bedroll on low frame (0.3× short wall)
+    _genCot('cot_canvas', {
+      canvasR: 120, canvasG: 115, canvasB: 95,     // Drab canvas bedroll
+      frameR: 60,   frameG: 42,  frameB: 25,       // Dark wood frame
+      foldR: 100,   foldG: 95,  foldB: 78          // Fold shadow lines
+    });
+
+    // ── Retrofuture infrastructure textures ────────────────────────
+
+    // Charging cradle — metal frame with glowing conduit cables (0.8×)
+    _genChargingCradle('charging_cradle', {
+      frameR: 65, frameG: 68, frameB: 72,          // Brushed steel frame
+      conduitR: 40, conduitG: 120, conduitB: 180,  // Blue energy conduit
+      glowR: 80, glowG: 160, glowB: 220            // Bright conduit glow
+    });
+
+    // Switchboard — brass toggle panel with indicator lights (1.0×)
+    _genSwitchboard('switchboard_panel', {
+      panelR: 55, panelG: 50, panelB: 42,          // Dark wood backing panel
+      brassR: 140, brassG: 120, brassB: 55,        // Brass toggle switches
+      lightR: 180, lightG: 50, lightB: 30,         // Red indicator light
+      lightGR: 50, lightGG: 160, lightGB: 60       // Green indicator light
     });
   }
 
@@ -2727,6 +2959,443 @@ var TextureAtlas = (function () {
     });
   }
 
+  // ── Infrastructure tile decor sprites ────────────────────────────
+
+  // Rope + bucket — hemp rope descending from top, wooden bucket at bottom.
+  function _genRopeBucket(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      // Rope: 2px wide vertical line, slight sway
+      var sway = Math.sin(y * 0.3) * 1.5;
+      var ropeX = cx + sway;
+      if (Math.abs(x - ropeX) < 1.5 && y < S * 0.55) {
+        var rn = (_hash(x + 13500, y + 13501) - 0.5) * 8;
+        // Rope twist pattern: alternating light/dark every 3px
+        var twist = (Math.floor(y / 3) % 2 === 0) ? 1.1 : 0.85;
+        return {
+          r: _clamp(p.ropeR * twist + rn), g: _clamp(p.ropeG * twist + rn * 0.8),
+          b: _clamp(p.ropeB * twist + rn * 0.6), a: 255
+        };
+      }
+      // Bucket: rounded rectangle at bottom
+      var bucketTop = S * 0.5;
+      var bucketW = S * 0.35;
+      if (y >= bucketTop && y < S - 2) {
+        var dx = Math.abs(x - cx);
+        // Bucket tapers slightly: wider at top, narrower at bottom
+        var taper = 1.0 - (y - bucketTop) / (S - 2 - bucketTop) * 0.15;
+        var halfW = bucketW * taper;
+        if (dx <= halfW) {
+          // Iron bands at top and bottom
+          var bandY = (y < bucketTop + 2 || y > S - 5);
+          if (bandY) {
+            return { r: _clamp(p.bandR), g: _clamp(p.bandG), b: _clamp(p.bandB), a: 255 };
+          }
+          // Wood staves with curvature
+          var curveDim = 1.0 - (dx / halfW) * 0.2;
+          var bn = (_hash(x + 13600, y + 13601) - 0.5) * 6;
+          return {
+            r: _clamp(p.bucketR * curveDim + bn), g: _clamp(p.bucketG * curveDim + bn * 0.8),
+            b: _clamp(p.bucketB * curveDim + bn * 0.6), a: 255
+          };
+        }
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Pinned note — single curled parchment with pushpin at top.
+  function _genPinnedNote(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var margin = 4;
+      // Note rectangle with curled bottom-right corner
+      if (x >= margin && x < S - margin && y >= margin && y < S - margin) {
+        // Curled corner: bottom-right triangle is transparent
+        var curlSize = 6;
+        var fromRight = S - margin - x;
+        var fromBot = S - margin - y;
+        if (fromRight < curlSize && fromBot < curlSize && fromRight + fromBot < curlSize) {
+          return { r: 0, g: 0, b: 0, a: 0 };
+        }
+        // Pushpin at top-center
+        if (x >= S / 2 - 2 && x <= S / 2 + 2 && y >= margin && y < margin + 4) {
+          return { r: p.pinR, g: p.pinG, b: p.pinB, a: 255 };
+        }
+        // Fake text lines
+        var textLine = (y - margin) % 5 < 2 && x > margin + 3 && x < S - margin - 3;
+        if (textLine && y > margin + 5) {
+          var tn = (_hash(x + 13700, y + 13701) - 0.5) * 6;
+          return { r: _clamp(p.inkR + tn), g: _clamp(p.inkG + tn), b: _clamp(p.inkB + tn), a: 220 };
+        }
+        // Paper surface
+        var pn = (_hash(x + 13800, y + 13801) - 0.5) * 5;
+        return {
+          r: _clamp(p.paperR + pn), g: _clamp(p.paperG + pn * 0.8),
+          b: _clamp(p.paperB + pn * 0.6), a: 245
+        };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Ladle — wooden handle angled upward from lower-left to upper-right.
+  function _genLadle(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      // Handle: diagonal line from bottom-left to upper-centre
+      var handleStart = { x: S * 0.2, y: S * 0.85 };
+      var handleEnd = { x: S * 0.6, y: S * 0.15 };
+      // Distance from line segment
+      var lx = handleEnd.x - handleStart.x;
+      var ly = handleEnd.y - handleStart.y;
+      var len = Math.sqrt(lx * lx + ly * ly);
+      var t = ((x - handleStart.x) * lx + (y - handleStart.y) * ly) / (len * len);
+      t = Math.max(0, Math.min(1, t));
+      var closestX = handleStart.x + t * lx;
+      var closestY = handleStart.y + t * ly;
+      var dist = Math.sqrt((x - closestX) * (x - closestX) + (y - closestY) * (y - closestY));
+      if (dist < 2) {
+        var hn = (_hash(x + 13900, y + 13901) - 0.5) * 6;
+        return { r: _clamp(p.handleR + hn), g: _clamp(p.handleG + hn * 0.8), b: _clamp(p.handleB + hn * 0.6), a: 255 };
+      }
+      // Bowl: small circle at bottom of handle
+      var bowlCx = S * 0.3, bowlCy = S * 0.75, bowlR = 4;
+      var bdx = x - bowlCx, bdy = y - bowlCy;
+      var bowlDist = Math.sqrt(bdx * bdx + bdy * bdy);
+      if (bowlDist < bowlR) {
+        var edge = bowlDist / bowlR;
+        var bn = (_hash(x + 14000, y + 14001) - 0.5) * 4;
+        return {
+          r: _clamp(p.bowlR * (0.8 + edge * 0.2) + bn),
+          g: _clamp(p.bowlG * (0.8 + edge * 0.2) + bn),
+          b: _clamp(p.bowlB * (0.8 + edge * 0.2) + bn),
+          a: 255
+        };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Spark cluster — small bright points radiating from centre.
+  function _genSpark(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2, cy = S / 2;
+      // 5-7 spark rays radiating from centre
+      var angle = Math.atan2(y - cy, x - cx);
+      var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      // Spark rays at specific angles
+      var rayIdx = Math.floor((angle + Math.PI) / (Math.PI * 2) * 7);
+      var rayAngle = rayIdx * (Math.PI * 2 / 7) - Math.PI;
+      var angleDiff = Math.abs(angle - rayAngle);
+      if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+      // Ray width narrows with distance
+      var rayWidth = 0.3 - dist / S * 0.2;
+      if (angleDiff < rayWidth && dist < S * 0.4 && dist > 1) {
+        var brightness = 1.0 - dist / (S * 0.4);
+        return {
+          r: _clamp(p.coreR * brightness + p.outerR * (1 - brightness)),
+          g: _clamp(p.coreG * brightness + p.outerG * (1 - brightness)),
+          b: _clamp(p.coreB * brightness + p.outerB * (1 - brightness)),
+          a: _clamp(255 * brightness)
+        };
+      }
+      // Central core glow
+      if (dist < 3) {
+        return { r: p.coreR, g: p.coreG, b: p.coreB, a: 255 };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Conduit glow — vertical energy pulse streak (blue).
+  function _genConduitGlow(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      var dx = Math.abs(x - cx);
+      // Vertical streak: bright centre, soft edges
+      var maxW = S * 0.2;
+      if (dx > maxW) return { r: 0, g: 0, b: 0, a: 0 };
+      var falloff = 1.0 - dx / maxW;
+      falloff = falloff * falloff; // quadratic
+      // Pulse segments: brighter bands every 6px
+      var pulse = (y % 6 < 3) ? 1.0 : 0.6;
+      var pn = (_hash(x + 14100, y + 14101) - 0.5) * 10;
+      return {
+        r: _clamp((p.coreR * falloff + p.outerR * (1 - falloff)) * pulse + pn),
+        g: _clamp((p.coreG * falloff + p.outerG * (1 - falloff)) * pulse + pn),
+        b: _clamp((p.coreB * falloff + p.outerB * (1 - falloff)) * pulse + pn),
+        a: _clamp(200 * falloff * pulse)
+      };
+    });
+  }
+
+  // Toggle indicator light — small circular lamp with glow halo.
+  function _genToggleLight(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2, cy = S / 2;
+      var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      // Glass bulb: solid circle radius 4
+      if (dist < 4) {
+        var edge = dist / 4;
+        return {
+          r: _clamp(p.glassR * (1.2 - edge * 0.4)),
+          g: _clamp(p.glassG * (1.2 - edge * 0.4)),
+          b: _clamp(p.glassB * (1.2 - edge * 0.4)),
+          a: 255
+        };
+      }
+      // Glow halo: soft falloff to radius 10
+      if (dist < 10) {
+        var glow = 1.0 - (dist - 4) / 6;
+        glow = glow * glow;
+        return {
+          r: _clamp(p.glowR), g: _clamp(p.glowG), b: _clamp(p.glowB),
+          a: _clamp(150 * glow)
+        };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // ── Hazard-adjacent wall decor ──────────────────────────────────
+
+  // Scorch mark — irregular soot/burn stain. Darkest at centre,
+  // fading to transparent at edges. Organic noise-shaped.
+  function _genScorch(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2, cy = S * 0.6; // centre-bottom weighted
+      var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      // Organic edge: noise-modulated radius
+      var noiseDist = dist + (_hash(x + 14200, y + 14201) - 0.5) * 8;
+      var maxR = S * 0.4;
+      if (noiseDist > maxR) return { r: 0, g: 0, b: 0, a: 0 };
+      var falloff = 1.0 - noiseDist / maxR;
+      // Darker at centre, brown soot at edges
+      var mix = falloff;
+      return {
+        r: _clamp(p.darkR * mix + p.midR * (1 - mix)),
+        g: _clamp(p.darkG * mix + p.midG * (1 - mix)),
+        b: _clamp(p.darkB * mix + p.midB * (1 - mix)),
+        a: _clamp(200 * falloff)
+      };
+    });
+  }
+
+  // Acid drip — green ooze dripping down from top. Multiple drip
+  // lines at random X positions, widening at bottom into pool.
+  function _genAcidDrip(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      // 3-4 drip lines at deterministic X positions
+      var numDrips = 3;
+      for (var di = 0; di < numDrips; di++) {
+        var dripX = Math.floor(_hash(di + 14300, 0) * (S - 6) + 3);
+        var dripLen = Math.floor(_hash(di + 14301, 1) * S * 0.5 + S * 0.3);
+        var dx = Math.abs(x - dripX);
+        // Drip widens toward bottom
+        var progress = y / dripLen;
+        var width = 1 + progress * 2;
+        if (dx < width && y < dripLen) {
+          // Bright highlight at drip edge
+          var edge = dx / width;
+          var pn = (_hash(x + 14400, y + 14401) - 0.5) * 6;
+          if (edge > 0.5) {
+            return { r: _clamp(p.hiR + pn), g: _clamp(p.hiG + pn), b: _clamp(p.hiB + pn), a: _clamp(220 * (1 - edge)) };
+          }
+          return {
+            r: _clamp(p.dripR * (1 - progress * 0.3) + pn * 0.5),
+            g: _clamp(p.dripG * (1 - progress * 0.3) + pn),
+            b: _clamp(p.dripB * (1 - progress * 0.3) + pn * 0.3),
+            a: _clamp(240 - progress * 40)
+          };
+        }
+        // Pool at bottom of each drip
+        if (y >= dripLen && y < dripLen + 4 && dx < 3 + (dripLen + 4 - y)) {
+          return { r: _clamp(p.poolR), g: _clamp(p.poolG), b: _clamp(p.poolB), a: 180 };
+        }
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Warning scratches — diagonal claw/tool marks gouged into stone.
+  function _genWarningScratches(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      // 3 diagonal scratch lines from upper-left to lower-right
+      for (var si = 0; si < 3; si++) {
+        var offset = si * 7 - 7;
+        // Line: y = x + offset (45-degree diagonal)
+        var lineDist = Math.abs((y - S * 0.3) - (x - S * 0.3 + offset)) / 1.414;
+        // Only in the central area
+        var inBounds = x > 4 && x < S - 4 && y > 4 && y < S - 4;
+        if (lineDist < 2.5 && inBounds) {
+          var depth = 1.0 - lineDist / 2.5;
+          if (lineDist < 1) {
+            // Deep gouge shadow
+            return { r: _clamp(p.deepR), g: _clamp(p.deepG), b: _clamp(p.deepB), a: _clamp(220 * depth) };
+          }
+          // Exposed stone at edges
+          return {
+            r: _clamp(p.scratchR), g: _clamp(p.scratchG), b: _clamp(p.scratchB),
+            a: _clamp(180 * depth)
+          };
+        }
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // ── Biome variety wall decor ────────────────────────────────────
+
+  // Wanted poster — rectangular parchment with border and text lines.
+  function _genWantedPoster(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var margin = 3;
+      // Poster rectangle
+      if (x < margin || x >= S - margin || y < margin || y >= S - margin) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+      // Dark border (2px inset)
+      var bx = x - margin, by = y - margin;
+      var bw = S - margin * 2, bh = S - margin * 2;
+      if (bx < 2 || bx >= bw - 2 || by < 2 || by >= bh - 2) {
+        return { r: _clamp(p.borderR), g: _clamp(p.borderG), b: _clamp(p.borderB), a: 250 };
+      }
+      // "WANTED" header (top band, thicker text)
+      if (by < 8 && bx > 4 && bx < bw - 4) {
+        var headerLine = by % 3 < 2;
+        if (headerLine) {
+          return { r: _clamp(p.textR), g: _clamp(p.textG), b: _clamp(p.textB), a: 240 };
+        }
+      }
+      // Text lines (body)
+      var textLine = (by > 10 && by % 4 < 1 && bx > 3 && bx < bw - 3);
+      if (textLine) {
+        var tlen = _hash(Math.floor(by / 4) + 14500, 0);
+        if (bx < bw * tlen * 0.6 + bw * 0.2) {
+          return { r: _clamp(p.textR + 10), g: _clamp(p.textG + 8), b: _clamp(p.textB + 5), a: 200 };
+        }
+      }
+      // Paper
+      var pn = (_hash(x + 14600, y + 14601) - 0.5) * 5;
+      return { r: _clamp(p.paperR + pn), g: _clamp(p.paperG + pn), b: _clamp(p.paperB + pn * 0.8), a: 240 };
+    });
+  }
+
+  // Cobweb — delicate web radiating from upper corner. Strands fan
+  // out from the top-left anchor point.
+  function _genCobweb(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      // Anchor at top-left (2,2)
+      var ax = 2, ay = 2;
+      var dx = x - ax, dy = y - ay;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > S * 0.85 || dist < 1) return { r: 0, g: 0, b: 0, a: 0 };
+      // Radial strands: 5 lines fanning from anchor
+      var angle = Math.atan2(dy, dx);
+      var numStrands = 5;
+      var closest = Math.PI;
+      for (var si = 0; si < numStrands; si++) {
+        var strandAngle = (si / numStrands) * Math.PI * 0.5 + 0.05; // 0 to 90 degrees
+        var diff = Math.abs(angle - strandAngle);
+        if (diff < closest) closest = diff;
+      }
+      // Strand visibility: thin line near strand angles
+      var strandThickness = 0.08 + dist / S * 0.04;
+      if (closest < strandThickness) {
+        var alpha = (1 - closest / strandThickness) * (1 - dist / (S * 0.85)) * 0.7;
+        return { r: p.anchorR, g: p.anchorG, b: p.anchorB, a: _clamp(255 * alpha) };
+      }
+      // Concentric catch-threads: arcs at regular distances
+      var arcSpacing = S * 0.18;
+      var arcDist = dist % arcSpacing;
+      if (arcDist < 1.5 && angle > 0.05 && angle < Math.PI * 0.5 - 0.05) {
+        var alpha2 = (1 - arcDist / 1.5) * (1 - dist / (S * 0.85)) * 0.5;
+        return { r: p.silkR, g: p.silkG, b: p.silkB, a: _clamp(255 * alpha2) };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Stress crack — jagged line with shadow depth and exposed edge.
+  function _genCrack(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      // Jagged vertical crack from top to bottom with horizontal jitter
+      var crackX = S / 2;
+      for (var cy = 0; cy <= y; cy += 3) {
+        crackX += (_hash(cy + 14700, 0) - 0.5) * 4;
+      }
+      var dist = Math.abs(x - crackX);
+      // Main crack: 2px wide with edge highlight
+      if (dist < 3 && y > 2 && y < S - 2) {
+        if (dist < 1.2) {
+          // Deep shadow
+          var depth = 1.0 - dist / 1.2;
+          return { r: _clamp(p.crackR), g: _clamp(p.crackG), b: _clamp(p.crackB), a: _clamp(230 * depth) };
+        }
+        // Edge highlight (exposed stone)
+        var edgeAlpha = 1.0 - (dist - 1.2) / 1.8;
+        return { r: _clamp(p.edgeR), g: _clamp(p.edgeG), b: _clamp(p.edgeB), a: _clamp(180 * edgeAlpha) };
+      }
+      // Branch cracks (smaller, at random Y positions)
+      for (var bi = 0; bi < 2; bi++) {
+        var branchY = Math.floor(_hash(bi + 14800, 0) * S * 0.6 + S * 0.2);
+        if (Math.abs(y - branchY) < 1) {
+          var branchDist = Math.abs(x - crackX);
+          var branchLen = _hash(bi + 14801, 1) * 6 + 3;
+          if (branchDist < branchLen && branchDist > 0.5) {
+            var ba = 1.0 - branchDist / branchLen;
+            return { r: _clamp(p.crackR + 15), g: _clamp(p.crackG + 12), b: _clamp(p.crackB + 10), a: _clamp(160 * ba) };
+          }
+        }
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Hanging chain — vertical chain with linked oval loops.
+  function _genChain(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      // Chain links: alternating vertical and horizontal ovals
+      var linkH = 6;  // each link is 6px tall
+      var linkIdx = Math.floor(y / linkH);
+      var ly = y % linkH;
+      var isHoriz = linkIdx % 2 === 0;
+      // Link shape: oval ring (outline only)
+      var ovalW = isHoriz ? 4 : 3;
+      var ovalH = linkH / 2;
+      var ovalCy = linkH / 2;
+      var dx = Math.abs(x - cx);
+      var dy = Math.abs(ly - ovalCy);
+      // Parametric oval distance
+      var oDist = (dx * dx) / (ovalW * ovalW) + (dy * dy) / (ovalH * ovalH);
+      // Ring: between 0.5 and 1.0 on the oval
+      if (oDist > 0.3 && oDist < 1.0) {
+        var edge = oDist > 0.65 ? 0.85 : 1.15; // inner shadow, outer highlight
+        var ln = (_hash(x + 14900, y + 14901) - 0.5) * 5;
+        return {
+          r: _clamp((oDist < 0.65 ? p.hiR : p.linkR) * edge + ln),
+          g: _clamp((oDist < 0.65 ? p.hiG : p.linkG) * edge + ln),
+          b: _clamp((oDist < 0.65 ? p.hiB : p.linkB) * edge + ln),
+          a: 255
+        };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
   // ── Torch wall texture ──────────────────────────────────────────
   // Stone wall with centered iron bracket and torch. Lit variant has
   // orange flame + ember sparks; unlit has charred stub + soot stains.
@@ -2903,6 +3572,849 @@ var TextureAtlas = (function () {
     });
   }
 
+  // ── Hazard floor textures ─────────────────────────────────────────
+
+  // Trap pressure plate — stone flags with a recessed iron plate at centre.
+  // The plate is a 20×20px rounded rectangle with rivet dots. Surrounding
+  // flags are identical to floor_stone so the hazard reads as "embedded."
+  function _genFloorTrap(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2, cy = S / 2;
+      var plateHalf = 10; // 20px plate centred in 64px tile
+      var grooveW = 2;    // groove around the plate edge
+
+      // Distance to plate centre (Chebyshev — rounded rectangle)
+      var dx = Math.abs(x - cx);
+      var dy = Math.abs(y - cy);
+      var inPlate = dx <= plateHalf && dy <= plateHalf;
+      var inGroove = !inPlate && dx <= plateHalf + grooveW && dy <= plateHalf + grooveW;
+
+      if (inGroove) {
+        var gn = (_hash(x + 8100, y + 8101) - 0.5) * 4;
+        return { r: _clamp(p.grooveR + gn), g: _clamp(p.grooveG + gn), b: _clamp(p.grooveB + gn) };
+      }
+
+      if (inPlate) {
+        // Iron plate surface with subtle cross-hatch texture
+        var edgeDist = Math.min(plateHalf - dx, plateHalf - dy);
+        var tier = edgeDist < 2 ? 0.85 : (edgeDist > 5 ? 1.08 : 1.0);
+        var pn = (_hash(x + 8200, y + 8201) - 0.5) * 5;
+        // Rivet dots at corners of the plate
+        var rivet = false;
+        if ((dx > plateHalf - 3 && dy > plateHalf - 3) ||
+            (dx < 3 && dy > plateHalf - 3) ||
+            (dx > plateHalf - 3 && dy < 3)) {
+          rivet = Math.abs(dx % 6 - 3) < 1.5 && Math.abs(dy % 6 - 3) < 1.5;
+        }
+        var rMul = rivet ? 1.25 : 1.0;
+        return {
+          r: _clamp(p.plateR * tier * rMul + pn),
+          g: _clamp(p.plateG * tier * rMul + pn * 0.9),
+          b: _clamp(p.plateB * tier * rMul + pn * 0.8)
+        };
+      }
+
+      // Surrounding stone flags — same pattern as floor_stone
+      var blockW = 14, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      if (lx < 1 || ly < 1) {
+        return { r: _clamp(p.stoneR * 0.5), g: _clamp(p.stoneG * 0.5), b: _clamp(p.stoneB * 0.5) };
+      }
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 8300, row + 8301) - 0.5) * 12;
+      var pn2 = (_hash(x + 8400, y + 8401) - 0.5) * 3;
+      return {
+        r: _clamp(p.stoneR + bt + pn2),
+        g: _clamp(p.stoneG + bt + pn2 * 0.9),
+        b: _clamp(p.stoneB + bt + pn2 * 0.8)
+      };
+    });
+  }
+
+  // Fire — charred stone with glowing ember cracks running through.
+  // Cracks follow mortar lines but glow orange-red. Surface is scorched.
+  function _genFloorFire(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var blockW = 12, blockH = 9;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+
+      // Mortar cracks — these glow with ember heat
+      if (lx < 2 || ly < 2) {
+        var crackIntensity = _hash(x + 8500, y + 8501);
+        // Some cracks glow brighter than others
+        var glow = crackIntensity > 0.4 ? 1.0 : 0.4;
+        var cn = (_hash(x + 8502, y + 8503) - 0.5) * 15;
+        return {
+          r: _clamp(p.crackR * glow + cn),
+          g: _clamp(p.crackG * glow + cn * 0.3),
+          b: _clamp(p.crackB * glow + cn * 0.1)
+        };
+      }
+
+      // Scorched stone surface — dark with random ash patches
+      var blockId = row * 6 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 8600, row + 8601) - 0.5) * 10;
+      var pn = (_hash(x + 8700, y + 8701) - 0.5) * 4;
+      var ash = _hash(x + 8800, y + 8801) > 0.88;
+      var ashDim = ash ? 0.65 : 1.0;
+      // Warm tint — edge glow from nearby cracks
+      var edgeDist = Math.min(lx, ly, blockW - lx, blockH - ly);
+      var edgeWarm = edgeDist < 3 ? (3 - edgeDist) / 3 * 0.15 : 0;
+
+      return {
+        r: _clamp((p.stoneR + bt) * ashDim + pn + edgeWarm * p.crackR),
+        g: _clamp((p.stoneG + bt) * ashDim + pn * 0.8 + edgeWarm * p.crackG * 0.3),
+        b: _clamp((p.stoneB + bt) * ashDim + pn * 0.6)
+      };
+    });
+  }
+
+  // Spikes — iron spike tips visible through a grate over a dark pit.
+  // Grid pattern: dark pit gaps with bright iron spike points at centres.
+  function _genFloorSpikes(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cellSize = 8;      // 8×8px per grate cell
+      var barW = 2;          // grate bar width
+      var lx = x % cellSize;
+      var ly = y % cellSize;
+
+      // Grate bars — stone-coloured cross-hatch
+      var onBarX = lx < barW;
+      var onBarY = ly < barW;
+      if (onBarX || onBarY) {
+        var tier = (onBarX && onBarY) ? 1.1 : 0.95; // intersection brighter
+        var bn = (_hash(x + 8900, y + 8901) - 0.5) * 3;
+        return {
+          r: _clamp(p.stoneR * tier + bn),
+          g: _clamp(p.stoneG * tier + bn),
+          b: _clamp(p.stoneB * tier + bn)
+        };
+      }
+
+      // Inside each cell — dark pit with a spike point at centre
+      var cellCx = barW + (cellSize - barW) / 2;
+      var cellCy = barW + (cellSize - barW) / 2;
+      var cdx = Math.abs(lx - cellCx);
+      var cdy = Math.abs(ly - cellCy);
+      var dist = cdx + cdy; // Manhattan distance — makes diamond spike tips
+
+      if (dist < 2) {
+        // Spike tip — bright iron with specular highlight at very centre
+        var specular = dist < 1 ? 1.3 : 1.0;
+        return {
+          r: _clamp(p.spikeR * specular),
+          g: _clamp(p.spikeG * specular),
+          b: _clamp(p.spikeB * specular)
+        };
+      }
+
+      // Dark pit below — near-black with subtle noise
+      var dn = (_hash(x + 9000, y + 9001) - 0.5) * 4;
+      return {
+        r: _clamp(p.gapR + dn),
+        g: _clamp(p.gapG + dn),
+        b: _clamp(p.gapB + dn)
+      };
+    });
+  }
+
+  // Poison — stone with sickly green toxic pools filling the low areas.
+  // Uses noise to create organic puddle shapes in the mortar channels.
+  function _genFloorPoison(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var blockW = 13, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+
+      // Mortar channels — filled with toxic green liquid
+      if (lx < 2 || ly < 2) {
+        var poolDepth = _hash(x + 9100, y + 9101);
+        // Puddle variation — some channels deeper than others
+        var depth = poolDepth > 0.3 ? 1.0 : 0.6;
+        // Bubble highlights — rare bright spots
+        var bubble = _hash(x + 9200, y + 9201) > 0.95;
+        if (bubble) {
+          return { r: p.bubbleR, g: p.bubbleG, b: p.bubbleB };
+        }
+        var pn = (_hash(x + 9102, y + 9103) - 0.5) * 8;
+        return {
+          r: _clamp(p.poolR * depth + pn * 0.5),
+          g: _clamp(p.poolG * depth + pn),
+          b: _clamp(p.poolB * depth + pn * 0.3)
+        };
+      }
+
+      // Stone surface — greenish tint from toxic staining
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 9300, row + 9301) - 0.5) * 10;
+      var pn = (_hash(x + 9400, y + 9401) - 0.5) * 3;
+      // Seepage stain — stone near edges is more green-tinted
+      var edgeDist = Math.min(lx, ly, blockW - lx, blockH - ly);
+      var stain = edgeDist < 3 ? (3 - edgeDist) / 3 * 0.35 : 0;
+      return {
+        r: _clamp(p.stoneR + bt + pn - stain * 15),
+        g: _clamp(p.stoneG + bt + pn * 0.9 + stain * 25),
+        b: _clamp(p.stoneB + bt + pn * 0.7 - stain * 10)
+      };
+    });
+  }
+
+  // ── Environmental floor textures ──────────────────────────────────
+
+  // Corpse — bloodstained stone with pale bone fragments scattered.
+  // Dark dried-blood pools in mortar channels, bone chips on stone face.
+  function _genFloorCorpse(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var blockW = 14, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+
+      // Mortar — blood-filled channels
+      if (lx < 1 || ly < 1) {
+        var bloodMix = _hash(x + 9500, y + 9501);
+        var isBlood = bloodMix > 0.3; // Most channels have blood
+        if (isBlood) {
+          var bn = (_hash(x + 9502, y + 9503) - 0.5) * 8;
+          return {
+            r: _clamp(p.bloodR + bn),
+            g: _clamp(p.bloodG + bn * 0.3),
+            b: _clamp(p.bloodB + bn * 0.2)
+          };
+        }
+        return {
+          r: _clamp(p.stoneR * 0.4), g: _clamp(p.stoneG * 0.4), b: _clamp(p.stoneB * 0.4)
+        };
+      }
+
+      // Bone fragments — small clusters of 2-3px bright spots
+      var boneNoise = _hash(x + 9600, y + 9601);
+      var boneCluster = _hash(Math.floor(x / 3) + 9700, Math.floor(y / 3) + 9701);
+      if (boneCluster > 0.88 && boneNoise > 0.5) {
+        var bn2 = (_hash(x + 9602, y + 9603) - 0.5) * 10;
+        return {
+          r: _clamp(p.boneR + bn2),
+          g: _clamp(p.boneG + bn2 * 0.9),
+          b: _clamp(p.boneB + bn2 * 0.7)
+        };
+      }
+
+      // Blood stain pools on stone surface — larger organic shapes
+      var stainNoise = _hash(x + 9800, y + 9801) + _hash(Math.floor(x / 4) + 9802, Math.floor(y / 4) + 9803);
+      if (stainNoise > 1.55) {
+        var sn = (_hash(x + 9804, y + 9805) - 0.5) * 6;
+        return {
+          r: _clamp(p.bloodR * 1.2 + sn),
+          g: _clamp(p.bloodG * 0.8 + sn * 0.2),
+          b: _clamp(p.bloodB * 0.7 + sn * 0.1)
+        };
+      }
+
+      // Regular stone — darker tint than normal (grime)
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 9900, row + 9901) - 0.5) * 10;
+      var pn = (_hash(x + 9902, y + 9903) - 0.5) * 3;
+      return {
+        r: _clamp(p.stoneR + bt + pn),
+        g: _clamp(p.stoneG + bt + pn * 0.9),
+        b: _clamp(p.stoneB + bt + pn * 0.8)
+      };
+    });
+  }
+
+  // Detritus — scattered adventurer gear on dungeon stone. Metal scraps
+  // and torn cloth/leather on a standard flagstone base.
+  function _genFloorDetritus(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var blockW = 14, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+
+      // Mortar (standard)
+      if (lx < 1 || ly < 1) {
+        return {
+          r: _clamp(p.stoneR * 0.45), g: _clamp(p.stoneG * 0.45), b: _clamp(p.stoneB * 0.45)
+        };
+      }
+
+      // Scattered metal scraps — small angular shapes
+      var scrapNoise = _hash(Math.floor(x / 4) + 10000, Math.floor(y / 3) + 10001);
+      if (scrapNoise > 0.85) {
+        var edge = _hash(x + 10002, y + 10003);
+        var shine = edge > 0.6 ? 1.2 : 0.9;
+        return {
+          r: _clamp(p.gearR * shine),
+          g: _clamp(p.gearG * shine),
+          b: _clamp(p.gearB * shine)
+        };
+      }
+
+      // Torn cloth/leather patches — larger soft shapes
+      var clothNoise = _hash(Math.floor(x / 5) + 10100, Math.floor(y / 5) + 10101);
+      if (clothNoise > 0.82) {
+        var cn = (_hash(x + 10102, y + 10103) - 0.5) * 8;
+        return {
+          r: _clamp(p.clothR + cn),
+          g: _clamp(p.clothG + cn * 0.7),
+          b: _clamp(p.clothB + cn * 0.5)
+        };
+      }
+
+      // Base stone
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 10200, row + 10201) - 0.5) * 10;
+      var pn = (_hash(x + 10202, y + 10203) - 0.5) * 3;
+      return {
+        r: _clamp(p.stoneR + bt + pn),
+        g: _clamp(p.stoneG + bt + pn),
+        b: _clamp(p.stoneB + bt + pn)
+      };
+    });
+  }
+
+  // Puzzle — smooth worked stone with etched grid lines. The grid
+  // reads as a sliding-tile panel. Faint arcane runes in some cells.
+  function _genFloorPuzzle(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cellSize = 16;  // 4×4 grid on 64px texture
+      var lineW = 1;
+      var lx = x % cellSize;
+      var ly = y % cellSize;
+
+      // Etched grid lines — carved groove with highlight edge
+      if (lx < lineW || ly < lineW) {
+        return { r: _clamp(p.lineR), g: _clamp(p.lineG), b: _clamp(p.lineB) };
+      }
+      // Shadow side of groove (right/bottom of line)
+      if (lx === lineW || ly === lineW) {
+        return {
+          r: _clamp(p.stoneR * 0.7), g: _clamp(p.stoneG * 0.7), b: _clamp(p.stoneB * 0.7)
+        };
+      }
+
+      // Arcane rune marks — faint blue-tinted symbols in some cells
+      var cellX = Math.floor(x / cellSize);
+      var cellY = Math.floor(y / cellSize);
+      var hasRune = _hash(cellX + 10300, cellY + 10301) > 0.6;
+      if (hasRune) {
+        var runeLx = lx - cellSize / 2;
+        var runeLy = ly - cellSize / 2;
+        var runeDist = Math.abs(runeLx) + Math.abs(runeLy); // diamond shape
+        if (runeDist < 4 && runeDist > 1) {
+          var rn = (_hash(x + 10302, y + 10303) - 0.5) * 5;
+          return {
+            r: _clamp(p.glyphR + rn),
+            g: _clamp(p.glyphG + rn),
+            b: _clamp(p.glyphB + rn * 1.5)
+          };
+        }
+      }
+
+      // Smooth worked stone — less variation than natural stone
+      var pn = (_hash(x + 10400, y + 10401) - 0.5) * 4;
+      return {
+        r: _clamp(p.stoneR + pn),
+        g: _clamp(p.stoneG + pn * 0.9),
+        b: _clamp(p.stoneB + pn * 0.8)
+      };
+    });
+  }
+
+  // ── Living infrastructure wall textures ──────────────────────────
+
+  // Well — circular stone rim. Top half shows dark water; bottom half
+  // shows curved masonry rim stones. Reads as "looking into a well."
+  function _genWellStone(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Top third: dark water surface
+      if (y < S * 0.35) {
+        var wn = (_hash(x + 10500, y + 10501) - 0.5) * 6;
+        var ripple = Math.sin(x * 0.4 + y * 0.2) * 3;
+        return {
+          r: _clamp(p.waterR + wn + ripple),
+          g: _clamp(p.waterG + wn * 1.2 + ripple),
+          b: _clamp(p.waterB + wn * 1.5 + ripple * 1.5)
+        };
+      }
+
+      // Stone rim — curved masonry blocks
+      var stoneW = 10, stoneH = 7;
+      var rowOff = (Math.floor(y / stoneH) % 2 === 0) ? 0 : stoneW / 2;
+      var sCol = Math.floor((x + rowOff) / stoneW);
+      var sRow = Math.floor(y / stoneH);
+      var slx = (x + rowOff) - sCol * stoneW;
+      var sly = y - sRow * stoneH;
+
+      // Mortar
+      if (slx < 1 || slx >= stoneW - 1 || sly < 1 || sly >= stoneH - 1) {
+        var mn = (_hash(x + 10600, y + 10601) - 0.5) * 4;
+        return { r: _clamp(p.mortarR + mn), g: _clamp(p.mortarG + mn), b: _clamp(p.mortarB + mn) };
+      }
+
+      // Stone face with curvature shading — darker at edges
+      var distFromCenter = Math.abs(x - cx) / cx; // 0 at center, 1 at edge
+      var curveDim = 1.0 - distFromCenter * 0.3;
+      var blockId = sRow * 7 + sCol;
+      var bt = (_hash(blockId + 10700, sRow + 10701) - 0.5) * 12;
+      var pn = (_hash(x + 10702, y + 10703) - 0.5) * 3;
+      return {
+        r: _clamp((p.stoneR + bt) * curveDim + pn),
+        g: _clamp((p.stoneG + bt) * curveDim + pn * 0.9),
+        b: _clamp((p.stoneB + bt) * curveDim + pn * 0.8)
+      };
+    });
+  }
+
+  // Bench — horizontal slats on a simple frame. Dark frame bottom,
+  // warm wood slats in the upper two-thirds with visible gaps.
+  function _genBench(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var slatH = 6;   // slat thickness
+      var gapH = 2;    // gap between slats
+      var frameH = S * 0.3; // bottom 30% is frame/legs
+
+      // Bottom frame
+      if (y > S - frameH) {
+        var legW = 8;
+        var legX = x % (S / 2);
+        var isLeg = legX < legW || legX > (S / 2) - legW;
+        var fn = (_hash(x + 10800, y + 10801) - 0.5) * 4;
+        var mul = isLeg ? 1.0 : 0.85; // cross bar slightly dimmer
+        return {
+          r: _clamp(p.frameR * mul + fn),
+          g: _clamp(p.frameG * mul + fn * 0.8),
+          b: _clamp(p.frameB * mul + fn * 0.6)
+        };
+      }
+
+      // Slat region
+      var slatLocal = y % (slatH + gapH);
+      if (slatLocal >= slatH) {
+        // Gap — dark void
+        return { r: p.gapR, g: p.gapG, b: p.gapB };
+      }
+
+      // Wood slat — grain lines
+      var slatIdx = Math.floor(y / (slatH + gapH));
+      var grain = _hash(x, Math.floor(y / 2) + slatIdx * 400 + 10900);
+      var slatShift = (_hash(slatIdx + 11000, 0) - 0.5) * 12;
+      var gn = (grain - 0.5) * 8;
+      return {
+        r: _clamp(p.slatR + slatShift + gn),
+        g: _clamp(p.slatG + slatShift * 0.7 + gn * 0.7),
+        b: _clamp(p.slatB + slatShift * 0.5 + gn * 0.5)
+      };
+    });
+  }
+
+  // Notice board — two dark wood posts with a lighter board between them.
+  // Parchment notes pinned with coloured pins in the centre region.
+  function _genNoticeBoard(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var postW = 8;  // post width on each side
+
+      // Left post
+      if (x < postW) {
+        var pn = (_hash(x + 11100, y + 11101) - 0.5) * 4;
+        var grain = _hash(x, Math.floor(y / 3) + 11200);
+        return {
+          r: _clamp(p.postR + (grain - 0.5) * 8 + pn),
+          g: _clamp(p.postG + (grain - 0.5) * 6 + pn * 0.8),
+          b: _clamp(p.postB + (grain - 0.5) * 4 + pn * 0.6)
+        };
+      }
+      // Right post
+      if (x >= S - postW) {
+        var pn2 = (_hash(x + 11102, y + 11103) - 0.5) * 4;
+        var grain2 = _hash(x, Math.floor(y / 3) + 11300);
+        return {
+          r: _clamp(p.postR + (grain2 - 0.5) * 8 + pn2),
+          g: _clamp(p.postG + (grain2 - 0.5) * 6 + pn2 * 0.8),
+          b: _clamp(p.postB + (grain2 - 0.5) * 4 + pn2 * 0.6)
+        };
+      }
+
+      // Board backing
+      var boardNoise = (_hash(x + 11400, y + 11401) - 0.5) * 5;
+
+      // Parchment notes — rectangles in the centre zone
+      var noteId = _hash(Math.floor(x / 12) + 11500, Math.floor(y / 14) + 11501);
+      if (noteId > 0.45 && x > postW + 3 && x < S - postW - 3 && y > 6 && y < S - 6) {
+        // Inside a note rectangle
+        var noteEdgeX = x % 12;
+        var noteEdgeY = y % 14;
+        if (noteEdgeX > 1 && noteEdgeX < 11 && noteEdgeY > 1 && noteEdgeY < 13) {
+          // Pin at top-centre of each note
+          if (noteEdgeX > 4 && noteEdgeX < 8 && noteEdgeY < 4) {
+            return { r: p.pinR, g: p.pinG, b: p.pinB };
+          }
+          var nn = (_hash(x + 11600, y + 11601) - 0.5) * 6;
+          return {
+            r: _clamp(p.paperR + nn),
+            g: _clamp(p.paperG + nn * 0.8),
+            b: _clamp(p.paperB + nn * 0.6)
+          };
+        }
+      }
+
+      // Board surface
+      return {
+        r: _clamp(p.boardR + boardNoise),
+        g: _clamp(p.boardG + boardNoise * 0.8),
+        b: _clamp(p.boardB + boardNoise * 0.6)
+      };
+    });
+  }
+
+  // Anvil — dark iron body on a lighter stone pedestal. Classic anvil
+  // profile: horn (narrow left), face (wide top), base (bottom third).
+  function _genAnvil(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+      var baseH = S * 0.3; // stone pedestal
+
+      // Stone pedestal — bottom 30%
+      if (y > S - baseH) {
+        var bn = (_hash(x + 11700, y + 11701) - 0.5) * 5;
+        return {
+          r: _clamp(p.baseR + bn),
+          g: _clamp(p.baseG + bn * 0.9),
+          b: _clamp(p.baseB + bn * 0.8)
+        };
+      }
+
+      // Anvil profile — wider in the middle, narrows at left (horn)
+      var anvilY = y / (S - baseH); // 0 at top, 1 at base
+      var halfW;
+      if (anvilY < 0.15) {
+        halfW = cx * 0.85; // top face — wide
+      } else if (anvilY < 0.45) {
+        halfW = cx * 0.55; // waist — narrow
+      } else {
+        halfW = cx * 0.75; // base flare
+      }
+
+      var dx = Math.abs(x - cx);
+      if (dx > halfW) {
+        // Outside anvil silhouette — transparent (let wall behind show)
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      // Iron surface — edge highlighting
+      var edgeFrac = dx / halfW;
+      var edgeTier = edgeFrac > 0.8 ? 1.0 : (edgeFrac < 0.3 ? 0.9 : 0.95);
+      var worn = anvilY < 0.15 ? 1.1 : 1.0; // top face has use-wear shine
+      var an = (_hash(x + 11800, y + 11801) - 0.5) * 4;
+      var useHi = worn > 1.0;
+      return {
+        r: _clamp((useHi ? p.hiR : p.ironR) * edgeTier + an),
+        g: _clamp((useHi ? p.hiG : p.ironG) * edgeTier + an),
+        b: _clamp((useHi ? p.hiB : p.ironB) * edgeTier + an)
+      };
+    });
+  }
+
+  // Barrel — vertical oak staves with two iron hoops. Lighter lid at
+  // top, darker staves below. Classic cask silhouette.
+  function _genBarrel(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Barrel curvature — wider in middle, narrower at top/bottom
+      var yFrac = y / S;
+      var bulge = 1.0 - Math.pow((yFrac - 0.5) * 2, 2) * 0.15; // subtle barrel shape
+      var halfW = cx * bulge;
+      var dx = Math.abs(x - cx);
+
+      if (dx > halfW + 1) {
+        return { r: 0, g: 0, b: 0, a: 0 }; // outside barrel
+      }
+
+      // Iron hoops — two horizontal bands
+      var hoopY1 = S * 0.22, hoopY2 = S * 0.75;
+      var hoopH = 3;
+      var isHoop = (y >= hoopY1 && y < hoopY1 + hoopH) || (y >= hoopY2 && y < hoopY2 + hoopH);
+      if (isHoop) {
+        var hn = (_hash(x + 11900, y + 11901) - 0.5) * 4;
+        return {
+          r: _clamp(p.bandR + hn),
+          g: _clamp(p.bandG + hn),
+          b: _clamp(p.bandB + hn)
+        };
+      }
+
+      // Lid — top 10%
+      if (y < S * 0.1) {
+        var ln = (_hash(x + 12000, y + 12001) - 0.5) * 5;
+        return {
+          r: _clamp(p.topR + ln),
+          g: _clamp(p.topG + ln * 0.8),
+          b: _clamp(p.topB + ln * 0.6)
+        };
+      }
+
+      // Stave surface — vertical plank grain with curvature shading
+      var staveW = 8;
+      var staveIdx = Math.floor(x / staveW);
+      var staveLocal = x % staveW;
+      var isStaveEdge = staveLocal < 1;
+      if (isStaveEdge) {
+        return { r: _clamp(p.staveR * 0.6), g: _clamp(p.staveG * 0.6), b: _clamp(p.staveB * 0.6) };
+      }
+
+      var curveDim = 1.0 - (dx / halfW) * 0.25; // darker at edges
+      var staveShift = (_hash(staveIdx + 12100, 0) - 0.5) * 10;
+      var grain = _hash(x, Math.floor(y / 2) + staveIdx * 300 + 12200);
+      var gn = (grain - 0.5) * 6;
+      return {
+        r: _clamp((p.staveR + staveShift + gn) * curveDim),
+        g: _clamp((p.staveG + staveShift * 0.7 + gn * 0.7) * curveDim),
+        b: _clamp((p.staveB + staveShift * 0.5 + gn * 0.5) * curveDim)
+      };
+    });
+  }
+
+  // Soup cauldron — cast iron pot on a brazier frame. Pot takes upper
+  // 2/3, brazier legs below. Steam wisps at very top edge.
+  function _genSoupCauldron(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+      var potBottom = S * 0.65; // pot takes top 65%
+
+      // Steam wisps at top (top 4px)
+      if (y < 4) {
+        var steamChance = _hash(x + 12300, y + 12301);
+        if (steamChance > 0.5) {
+          var sn = (_hash(x + 12302, y + 12303) - 0.5) * 8;
+          return {
+            r: _clamp(p.steamR + sn), g: _clamp(p.steamG + sn), b: _clamp(p.steamB + sn),
+            a: _clamp(120 + steamChance * 80)
+          };
+        }
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      // Pot rim (y 4-8)
+      if (y < 8) {
+        var rn = (_hash(x + 12400, y + 12401) - 0.5) * 4;
+        return { r: _clamp(p.rimR + rn), g: _clamp(p.rimG + rn), b: _clamp(p.rimB + rn) };
+      }
+
+      // Pot body — rounded silhouette
+      if (y < potBottom) {
+        var potFrac = (y - 8) / (potBottom - 8);
+        var potHalfW = cx * (0.85 + 0.15 * Math.sin(potFrac * Math.PI)); // bulge
+        var dx = Math.abs(x - cx);
+        if (dx > potHalfW) {
+          return { r: 0, g: 0, b: 0, a: 0 };
+        }
+        var curveDim = 1.0 - (dx / potHalfW) * 0.3;
+        var pn = (_hash(x + 12500, y + 12501) - 0.5) * 4;
+        return {
+          r: _clamp(p.potR * curveDim + pn),
+          g: _clamp(p.potG * curveDim + pn),
+          b: _clamp(p.potB * curveDim + pn)
+        };
+      }
+
+      // Brazier legs — three vertical bars
+      var legPositions = [cx - 12, cx, cx + 12];
+      var onLeg = false;
+      for (var li = 0; li < legPositions.length; li++) {
+        if (Math.abs(x - legPositions[li]) < 3) { onLeg = true; break; }
+      }
+      if (onLeg) {
+        var bn = (_hash(x + 12600, y + 12601) - 0.5) * 4;
+        return { r: _clamp(p.brazR + bn), g: _clamp(p.brazG + bn * 0.8), b: _clamp(p.brazB + bn * 0.6) };
+      }
+
+      return { r: 0, g: 0, b: 0, a: 0 }; // gaps between legs
+    });
+  }
+
+  // Cot — canvas bedroll draped over a low wooden frame. Frame visible
+  // at bottom, canvas folds visible across the surface.
+  function _genCot(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var frameH = S * 0.25; // bottom 25% is frame
+
+      // Wooden frame — bottom portion
+      if (y > S - frameH) {
+        var legW = 6;
+        var legSpan = S / 2;
+        var legX = x % legSpan;
+        var isLeg = legX < legW || legX > legSpan - legW;
+        var crossBar = y < S - frameH + 3;
+        var fn = (_hash(x + 12700, y + 12701) - 0.5) * 4;
+        var mul = (isLeg || crossBar) ? 1.0 : 0.75;
+        return {
+          r: _clamp(p.frameR * mul + fn),
+          g: _clamp(p.frameG * mul + fn * 0.8),
+          b: _clamp(p.frameB * mul + fn * 0.6)
+        };
+      }
+
+      // Canvas surface with wrinkle fold lines
+      var foldH = 10;
+      var foldLocal = y % foldH;
+      var isFold = foldLocal < 2;
+      var foldIdx = Math.floor(y / foldH);
+      var foldShift = (_hash(foldIdx + 12800, 0) - 0.5) * 8;
+
+      if (isFold) {
+        // Fold shadow line
+        return {
+          r: _clamp(p.foldR + foldShift),
+          g: _clamp(p.foldG + foldShift * 0.9),
+          b: _clamp(p.foldB + foldShift * 0.8)
+        };
+      }
+
+      // Canvas body — flat with minimal texture
+      var cn = (_hash(x + 12900, y + 12901) - 0.5) * 4;
+      var weave = _hash(x + 13000, Math.floor(y / 2) + 13001);
+      var wn = (weave - 0.5) * 3;
+      return {
+        r: _clamp(p.canvasR + cn + wn + foldShift * 0.3),
+        g: _clamp(p.canvasG + cn * 0.9 + wn * 0.9 + foldShift * 0.25),
+        b: _clamp(p.canvasB + cn * 0.7 + wn * 0.7 + foldShift * 0.2)
+      };
+    });
+  }
+
+  // ── Retrofuture infrastructure textures ────────────────────────────
+
+  // Charging cradle — upright metal frame with vertical conduit cables.
+  // Three cables (left, centre, right) glow blue against steel frame.
+  function _genChargingCradle(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Steel frame — outer border (4px on each side)
+      var frameW = 4;
+      if (x < frameW || x >= S - frameW || y < frameW || y >= S - frameW) {
+        var fn = (_hash(x + 13100, y + 13101) - 0.5) * 4;
+        var edgeTier = (x < 2 || x >= S - 2 || y < 2 || y >= S - 2) ? 1.1 : 0.9;
+        return {
+          r: _clamp(p.frameR * edgeTier + fn),
+          g: _clamp(p.frameG * edgeTier + fn),
+          b: _clamp(p.frameB * edgeTier + fn)
+        };
+      }
+
+      // Interior — dark cavity with three vertical conduit cables
+      var conduitPositions = [cx - 14, cx, cx + 14];
+      var conduitW = 4;
+      for (var ci = 0; ci < conduitPositions.length; ci++) {
+        var cdx = Math.abs(x - conduitPositions[ci]);
+        if (cdx < conduitW) {
+          // Conduit cable — brighter at centre
+          var glow = 1.0 - cdx / conduitW;
+          var cn = (_hash(x + 13200, y + 13201) - 0.5) * 5;
+          // Segmented: every 8px has a darker band (cable insulation)
+          var segment = y % 8;
+          var isBand = segment < 2;
+          if (isBand) {
+            return {
+              r: _clamp(p.conduitR * 0.5 + cn),
+              g: _clamp(p.conduitG * 0.5 + cn),
+              b: _clamp(p.conduitB * 0.5 + cn)
+            };
+          }
+          return {
+            r: _clamp(p.conduitR + glow * (p.glowR - p.conduitR) + cn),
+            g: _clamp(p.conduitG + glow * (p.glowG - p.conduitG) + cn),
+            b: _clamp(p.conduitB + glow * (p.glowB - p.conduitB) + cn)
+          };
+        }
+      }
+
+      // Dark interior cavity — near-black with subtle noise
+      var dn = (_hash(x + 13300, y + 13301) - 0.5) * 3;
+      return { r: _clamp(20 + dn), g: _clamp(22 + dn), b: _clamp(25 + dn) };
+    });
+  }
+
+  // Switchboard — brass toggle panel. Dark wood backing with rows of
+  // brass toggle switches and red/green indicator lights.
+  function _genSwitchboard(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Wood panel backing with subtle grain
+      var grain = _hash(x, Math.floor(y / 3) + 13400);
+      var baseNoise = (grain - 0.5) * 6;
+      var pn = (_hash(x + 13500, y + 13501) - 0.5) * 3;
+
+      // Toggle switch rows — 4 rows of 6 toggles each
+      var rowH = 14;
+      var colW = 10;
+      var rowIdx = Math.floor(y / rowH);
+      var colIdx = Math.floor(x / colW);
+      var ly = y % rowH;
+      var lx = x % colW;
+
+      // Toggle switch — small brass rectangle in centre of each cell
+      if (rowIdx < 4 && colIdx < 6) {
+        var switchCx = colW / 2;
+        var switchCy = rowH / 2;
+        var sdx = Math.abs(lx - switchCx);
+        var sdy = Math.abs(ly - switchCy);
+
+        // Indicator light — small dot above the toggle
+        if (sdy < 2 && ly < switchCy - 2 && sdx < 2) {
+          var lightSeed = _hash(colIdx + 13600, rowIdx + 13601);
+          var isGreen = lightSeed > 0.5;
+          return isGreen
+            ? { r: p.lightGR, g: p.lightGG, b: p.lightGB }
+            : { r: p.lightR, g: p.lightG, b: p.lightB };
+        }
+
+        // Toggle lever — brass
+        if (sdx < 2 && sdy < 4) {
+          var toggleSeed = _hash(colIdx + 13700, rowIdx + 13701);
+          var toggleUp = toggleSeed > 0.4;
+          var toggleTier = toggleUp ? 1.15 : 0.85; // up = highlight, down = shadow
+          var tn = (_hash(x + 13702, y + 13703) - 0.5) * 4;
+          return {
+            r: _clamp(p.brassR * toggleTier + tn),
+            g: _clamp(p.brassG * toggleTier + tn * 0.8),
+            b: _clamp(p.brassB * toggleTier + tn * 0.5)
+          };
+        }
+      }
+
+      // Panel surface
+      return {
+        r: _clamp(p.panelR + baseNoise + pn),
+        g: _clamp(p.panelG + baseNoise * 0.8 + pn * 0.9),
+        b: _clamp(p.panelB + baseNoise * 0.6 + pn * 0.8)
+      };
+    });
+  }
+
   // ── Bonfire stone ring texture ───────────────────────────────────
   // Low cylindrical wall for the 0.3× bonfire tile. Riverrock masonry
   // with soot blackening at top and inner fire glow along the upper edge.
@@ -3064,6 +4576,65 @@ var TextureAtlas = (function () {
         r: _clamp(p.spoolR + pn + wrapShade),
         g: _clamp(p.spoolG + pn + wrapShade),
         b: _clamp(p.spoolB + pn + wrapShade),
+        a: 255
+      };
+    });
+  }
+
+  // ── Roof shingle texture ────────────────────────────────────────
+  // Overlapping rows of angled shingles/tiles. Works for terracotta,
+  // slate, and thatch via palette swap. Horizontal tiling so adjacent
+  // roof tiles produce a continuous roofline.
+  function _genRoofShingle(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var n = _hash(x, y);
+
+      // Shingle row height (8px rows for chunky look)
+      var rowH = 8;
+      var row = Math.floor(y / rowH);
+      var ry = y % rowH;
+
+      // Stagger every other row by half a shingle width
+      var shingleW = 12;
+      var stagger = (row % 2 === 0) ? 0 : Math.floor(shingleW / 2);
+      var sx = (x + stagger) % shingleW;
+
+      // Mortar/seam line between shingles (vertical) and rows (horizontal)
+      var isVertSeam = sx === 0 || sx === 1;
+      var isHorizSeam = ry === 0;
+
+      if (isHorizSeam || isVertSeam) {
+        var mn = n * 12 - 6;
+        return {
+          r: _clamp(p.mortarR + mn),
+          g: _clamp(p.mortarG + mn),
+          b: _clamp(p.mortarB + mn),
+          a: 255
+        };
+      }
+
+      // Shingle body — slight gradient: lighter at top (exposed edge),
+      // darker at bottom (shadow under next row's overlap)
+      var overlap = ry / rowH;          // 0 at top of shingle -> 1 at bottom
+      var shade = 1.0 - overlap * 0.25; // Top brighter, bottom 25% darker
+
+      // Highlight on exposed top-left edge of each shingle
+      var isHiEdge = ry <= 2 && sx >= 2 && sx <= 5;
+
+      var pn = n * 16 - 8; // per-pixel noise
+      if (isHiEdge) {
+        return {
+          r: _clamp(p.hiR + pn),
+          g: _clamp(p.hiG + pn),
+          b: _clamp(p.hiB + pn),
+          a: 255
+        };
+      }
+
+      return {
+        r: _clamp(p.baseR * shade + pn),
+        g: _clamp(p.baseG * shade + pn),
+        b: _clamp(p.baseB * shade + pn),
         a: 255
       };
     });

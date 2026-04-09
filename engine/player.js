@@ -45,7 +45,13 @@ var Player = (function () {
     str: 2, dex: 2, stealth: 1,
     lastMoveDirection: 'north',
     flags:    {},
-    debuffs:  []
+    debuffs:  [],
+    // ── Fatigue (mirrors EyesOnly GAMESTATE fatigue subsystem) ──
+    // 0 = fresh, 100 = exhausted. Inverse resource: higher = worse.
+    playerFatigue: 0,
+    maxFatigue: 100,
+    _fatigueDecimal: 0.0,     // Sub-integer accumulator for smooth drain/recovery
+    fatigueThreshold: 70      // Above this: future card cost increases
   };
 
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
@@ -102,6 +108,43 @@ var Player = (function () {
   }
 
   function resetLookOffset() { _state.lookOffset = 0; _state.lookPitch = 0; }
+
+  // ── Screen shake ──────────────────────────────────────────────────
+  // Sinusoidal decay on combat hit. Amplitude decays linearly over
+  // duration; oscillation via sin(). Applied as horizontal camera offset.
+  var _shakeAmplitude = 0;   // current max displacement (radians)
+  var _shakeTimer     = 0;   // remaining ms
+  var _shakeDuration  = 0;   // total ms (for decay ratio)
+  var SHAKE_FREQ      = 25;  // oscillation Hz — fast judder, not slow sway
+
+  /**
+   * Trigger a screen shake.
+   * @param {number} [amplitude=0.03] — peak horizontal offset (radians, ~1.7°)
+   * @param {number} [durationMs=300] — total shake duration
+   */
+  function triggerShake(amplitude, durationMs) {
+    _shakeAmplitude = amplitude || 0.03;
+    _shakeDuration  = durationMs || 300;
+    _shakeTimer     = _shakeDuration;
+  }
+
+  /**
+   * Advance shake timer and return current offset.
+   * Call once per render frame with frameDt.
+   * @param {number} dt — frame delta in ms
+   * @returns {number} horizontal offset in radians (apply to camera yaw)
+   */
+  function tickShake(dt) {
+    if (_shakeTimer <= 0) return 0;
+    _shakeTimer -= dt;
+    if (_shakeTimer <= 0) { _shakeTimer = 0; return 0; }
+    // Linear envelope decay: full amplitude → 0 over duration
+    var envelope = _shakeTimer / _shakeDuration;
+    // Sinusoidal oscillation
+    var elapsed = _shakeDuration - _shakeTimer;
+    var offset = Math.sin(elapsed * SHAKE_FREQ * 2 * Math.PI / 1000) * _shakeAmplitude * envelope;
+    return offset;
+  }
 
   // ── Direction conversion ───────────────────────────────────────────
 
@@ -177,6 +220,153 @@ var Player = (function () {
     return restored;
   }
 
+  // ── Fatigue System (mirrors EyesOnly GAMESTATE) ────────────────────
+  // 0 = fresh, 100 = exhausted. Drains UP from exertion, recovers DOWN
+  // passively. Uses _fatigueDecimal accumulator for sub-integer precision.
+
+  // ── Recovery constants ──
+  var FATIGUE_IDLE_RATE = 1.0;    // fatigue/sec while idle
+  var FATIGUE_WALK_RATE = 0.5;    // fatigue/sec while walking
+
+  function getFatigue() {
+    return _state.playerFatigue || 0;
+  }
+
+  function getMaxFatigue() {
+    return _state.maxFatigue || 100;
+  }
+
+  /**
+   * Add fatigue (from hose work, bag encumbrance, future sprint).
+   * @param {number} amount - Fatigue to add
+   * @returns {number} New fatigue value
+   */
+  function addFatigue(amount) {
+    _state.playerFatigue = Math.min(_state.maxFatigue, (_state.playerFatigue || 0) + amount);
+    return _state.playerFatigue;
+  }
+
+  /**
+   * Reduce fatigue (from food items, rest actions).
+   * @param {number} amount - Fatigue to remove
+   * @returns {number} New fatigue value
+   */
+  function reduceFatigue(amount) {
+    _state.playerFatigue = Math.max(0, (_state.playerFatigue || 0) - amount);
+    return _state.playerFatigue;
+  }
+
+  /**
+   * Full reset (bonfire, bed, combat end, non-lethal defeat).
+   */
+  function resetFatigue() {
+    _state.playerFatigue = 0;
+    _state._fatigueDecimal = 0.0;
+  }
+
+  /**
+   * Passive fatigue recovery tick. Called every frame when NOT hosing/in combat.
+   * Mirrors EyesOnly tickFatigueRecovery() with equipment modifier hooks.
+   *
+   * @param {number} deltaTime - Seconds since last frame
+   * @param {boolean} [isWalking=false] - Walking recovers at half speed
+   * @returns {string|null} 'tick' if integer decreased, 'topped_off' if 0, null otherwise
+   */
+  function tickFatigueRecovery(deltaTime, isWalking) {
+    if (_state.playerFatigue <= 0) return null;
+
+    var rate = isWalking ? FATIGUE_WALK_RATE : FATIGUE_IDLE_RATE;
+
+    // Equipment modifier hook (CardAuthority equipped items)
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.getEquipped) {
+      var equipped = CardAuthority.getEquipped();
+      for (var i = 0; i < equipped.length; i++) {
+        if (equipped[i] && equipped[i].fatigueRecoveryModifier) {
+          rate *= equipped[i].fatigueRecoveryModifier;
+        }
+      }
+    }
+
+    // Status effect modifier hook
+    if (typeof StatusEffect !== 'undefined' && StatusEffect.getFatigueRecoveryMult) {
+      rate *= StatusEffect.getFatigueRecoveryMult();
+    }
+
+    _state._fatigueDecimal -= rate * deltaTime;
+
+    if (_state._fatigueDecimal <= -1.0) {
+      var drop = Math.floor(Math.abs(_state._fatigueDecimal));
+      var prev = _state.playerFatigue;
+      _state.playerFatigue = Math.max(0, _state.playerFatigue - drop);
+      _state._fatigueDecimal += drop;
+
+      if (_state.playerFatigue <= 0 && prev > 0) return 'topped_off';
+      return 'tick';
+    }
+    return null;
+  }
+
+  /**
+   * Hose fatigue drain. Called per tile while carrying hose.
+   * Applies equipment hoseFatigueModifier and status effect hoseFatigueMult.
+   *
+   * @param {number} drain - Raw drain amount from hose formula
+   * @returns {boolean} True if fatigue rolled over to next integer
+   */
+  function drainHoseFatigue(drain) {
+    var mod = 1.0;
+
+    // Equipment modifier hook (gloves, harness)
+    if (typeof CardAuthority !== 'undefined' && CardAuthority.getEquipped) {
+      var equipped = CardAuthority.getEquipped();
+      for (var i = 0; i < equipped.length; i++) {
+        if (equipped[i] && equipped[i].hoseFatigueModifier) {
+          mod *= equipped[i].hoseFatigueModifier;
+        }
+      }
+    }
+
+    // Status effect modifier hook (SORE = 1.5x)
+    if (typeof StatusEffect !== 'undefined' && StatusEffect.getHoseFatigueMult) {
+      mod *= StatusEffect.getHoseFatigueMult();
+    }
+
+    _state._fatigueDecimal += drain * mod;
+
+    var rolled = false;
+    if (_state._fatigueDecimal >= 1.0) {
+      var intPart = Math.floor(_state._fatigueDecimal);
+      _state.playerFatigue = Math.min(_state.maxFatigue, _state.playerFatigue + intPart);
+      _state._fatigueDecimal -= intPart;
+      rolled = true;
+    }
+    return rolled;
+  }
+
+  /**
+   * Can the player attach/hold the hose? False if fully exhausted.
+   */
+  function canHose() {
+    return _state.playerFatigue < _state.maxFatigue;
+  }
+
+  /**
+   * Bag encumbrance fatigue. Called per tile moved.
+   * Each bag item adds 0.02 fatigue per step.
+   */
+  function drainBagEncumbrance() {
+    if (typeof CardAuthority === 'undefined') return;
+    var bagCount = CardAuthority.getBag().length;
+    if (bagCount <= 0) return;
+    var drain = bagCount * 0.02;
+    _state._fatigueDecimal += drain;
+    if (_state._fatigueDecimal >= 1.0) {
+      var intPart = Math.floor(_state._fatigueDecimal);
+      _state.playerFatigue = Math.min(_state.maxFatigue, _state.playerFatigue + intPart);
+      _state._fatigueDecimal -= intPart;
+    }
+  }
+
   // ── Item utility methods (read from CardAuthority) ──────────────────
   //
   // These are game logic that searches across containers. They read from
@@ -194,9 +384,10 @@ var Player = (function () {
     if (item.effects) {
       for (var i = 0; i < item.effects.length; i++) {
         var fx = item.effects[i];
-        if (fx.type === 'hp')     heal(fx.value);
-        if (fx.type === 'energy') restoreEnergy(fx.value);
-        if (fx.type === 'damage') damage(fx.value);
+        if (fx.type === 'hp')      heal(fx.value);
+        if (fx.type === 'energy')  restoreEnergy(fx.value);
+        if (fx.type === 'fatigue') reduceFatigue(Math.abs(fx.value));
+        if (fx.type === 'damage')  damage(fx.value);
       }
     }
 
@@ -334,18 +525,22 @@ var Player = (function () {
     return expired;
   }
 
+  var MAX_WALK_TIME_MULT = 3.0; // Cap: prevent debuff stacking from softlocking
+
   function getWalkTimeMultiplier() {
+    var mult;
     if (typeof StatusEffect !== 'undefined') {
-      return StatusEffect.getWalkTimeMultiplier();
-    }
-    var mult = 1.0;
-    for (var i = 0; i < _state.debuffs.length; i++) {
-      var def = DEBUFFS[_state.debuffs[i].id];
-      if (def && def.walkTimeMult) {
-        mult *= def.walkTimeMult;
+      mult = StatusEffect.getWalkTimeMultiplier();
+    } else {
+      mult = 1.0;
+      for (var i = 0; i < _state.debuffs.length; i++) {
+        var def = DEBUFFS[_state.debuffs[i].id];
+        if (def && def.walkTimeMult) {
+          mult *= def.walkTimeMult;
+        }
       }
     }
-    return mult;
+    return Math.min(mult, MAX_WALK_TIME_MULT);
   }
 
   function getCleanEfficiencyMod() {
@@ -388,6 +583,7 @@ var Player = (function () {
   function fullRestore() {
     _state.hp = _state.maxHp;
     _state.energy = _state.maxEnergy;
+    resetFatigue();
   }
 
   // ── Reset ──────────────────────────────────────────────────────────
@@ -395,6 +591,7 @@ var Player = (function () {
   function reset() {
     _state.hp = _state.maxHp;
     _state.energy = _state.maxEnergy;
+    resetFatigue();
     _state.lookOffset = 0;
     _state.lookPitch = 0;
     _state.lastMoveDirection = 'north';
@@ -430,6 +627,17 @@ var Player = (function () {
     applyHOT: applyHOT,
     tickHOT: tickHOT,
 
+    // ── Fatigue (mirrors EyesOnly GAMESTATE) ──
+    getFatigue:          getFatigue,
+    getMaxFatigue:       getMaxFatigue,
+    addFatigue:          addFatigue,
+    reduceFatigue:       reduceFatigue,
+    resetFatigue:        resetFatigue,
+    tickFatigueRecovery: tickFatigueRecovery,
+    drainHoseFatigue:    drainHoseFatigue,
+    drainBagEncumbrance: drainBagEncumbrance,
+    canHose:             canHose,
+
     // ── Item utilities (read from CardAuthority) ──
     useItem:        useItem,
     hasItem:        hasItem,
@@ -455,6 +663,10 @@ var Player = (function () {
     onDeath:     onDeath,
     fullRestore: fullRestore,
     reset:       reset,
+
+    // Screen shake
+    triggerShake: triggerShake,
+    tickShake:    tickShake,
 
     // Constants
     DIR_NAMES:       DIR_NAMES,

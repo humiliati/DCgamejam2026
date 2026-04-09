@@ -262,7 +262,16 @@ var FloorManager = (function () {
             22: 'shrub',           // SHRUB — wayfinding hedgerows (half-height, see-over)
             35: 'fence_wood',      // FENCE — wooden rail
             37: 'shrub',           // MAILBOX — shrub base matching grass floor (emoji billboard above via MailboxSprites)
-            38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck body
+            38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck body
+            // Living infrastructure tiles (DOC-84 §1)
+            47: 'soup_cauldron',   // SOUP_KITCHEN — iron pot on brazier stand
+            48: 'cot_canvas',      // COT — canvas bedroll on low frame
+            // Roof tiles — cool grey slate for rustic approach
+            60: 'roof_slate',      // ROOF_EAVE_L
+            61: 'roof_slate',      // ROOF_SLOPE_L
+            62: 'roof_slate',      // ROOF_PEAK
+            63: 'roof_slate',      // ROOF_SLOPE_R
+            64: 'roof_slate'       // ROOF_EAVE_R
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — 3.5× tall multi-story facade (dominates skyline)
@@ -276,7 +285,9 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge (player sees over to buildings)
             35: 0.4,               // FENCE — railing, player sees over
             37: 0.25,              // MAILBOX — short stone platform, emoji framed inside
-            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            47: 0.7,               // SOUP_KITCHEN — cauldron on brazier
+            48: 0.3                // COT — low bedroll
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
@@ -315,7 +326,19 @@ var FloorManager = (function () {
             22: 'shrub',           // SHRUB — wayfinding hedgerows
             35: 'fence_wood',      // FENCE — wooden rail
             37: 'shrub',           // MAILBOX — shrub base matching grass floor
-            38: 'truck_body'       // DUMP_TRUCK — blue pressure wash truck body
+            38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck body
+            // Living infrastructure tiles (DOC-84 §1)
+            40: 'well_stone',      // WELL — circular stone rim, dark water
+            41: 'bench_wood',      // BENCH — wooden slat seat
+            42: 'notice_board_wood', // NOTICE_BOARD — posts with pinned parchment
+            47: 'soup_cauldron',   // SOUP_KITCHEN — iron pot on brazier stand
+            48: 'cot_canvas',      // COT — canvas bedroll on low frame
+            // Roof tiles — warm terracotta for sunset boardwalk
+            60: 'roof_shingle',    // ROOF_EAVE_L
+            61: 'roof_shingle',    // ROOF_SLOPE_L
+            62: 'roof_shingle',    // ROOF_PEAK
+            63: 'roof_shingle',    // ROOF_SLOPE_R
+            64: 'roof_shingle'     // ROOF_EAVE_R
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — multi-story facade (towers over treeline)
@@ -329,7 +352,13 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
-            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            40: 0.5,               // WELL — stone rim
+            41: 0.35,              // BENCH — low seating
+            42: 1.2,               // NOTICE_BOARD — tall posts with parchment
+            44: 0.6,               // BARREL — banded oak
+            47: 0.7,               // SOUP_KITCHEN — cauldron on brazier
+            48: 0.3                // COT — low bedroll
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
@@ -415,7 +444,8 @@ var FloorManager = (function () {
             26: 'wood_dark',        // BAR_COUNTER — bar surface
             27: 'bed_quilt',        // BED — inn guest bed
             28: 'table_wood',       // TABLE — dining table
-            29: 'hearth_riverrock'  // HEARTH — tavern fireplace
+            29: 'hearth_riverrock', // HEARTH — tavern fireplace
+            41: 'bench_wood'       // BENCH — wooden slat seat
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling for close-up immersion
@@ -424,7 +454,8 @@ var FloorManager = (function () {
             26: 0.8,               // BAR_COUNTER — counter height
             27: 0.6,               // BED — low inn bed
             28: 0.7,               // TABLE — dining height
-            29: 0.5                // HEARTH — short base stone (sandwich: mantle above fire cavity)
+            29: 0.5,               // HEARTH — short base stone (sandwich: mantle above fire cavity)
+            41: 0.35               // BENCH — low cushioned seat
           }),
           floorTexture: 'floor_wood'
         };
@@ -468,7 +499,18 @@ var FloorManager = (function () {
             22: 'shrub',            // SHRUB — wayfinding hedgerows
             35: 'fence_wood',       // FENCE — wooden rail
             37: 'shrub',            // MAILBOX — shrub base matching grass floor
-            38: 'truck_body'        // DUMP_TRUCK — blue pressure wash truck body
+            38: 'truck_body',       // DUMP_TRUCK — blue pressure wash truck body
+            // Living infrastructure tiles (DOC-84 §1)
+            40: 'well_stone',       // WELL — circular stone rim
+            41: 'bench_wood',       // BENCH — wooden slat seat
+            42: 'notice_board_wood', // NOTICE_BOARD — posts with parchment
+            44: 'barrel_wood',      // BARREL — banded oak barrel
+            47: 'soup_cauldron',    // SOUP_KITCHEN — iron pot on brazier
+            48: 'cot_canvas',       // COT — canvas bedroll
+            // Economy tiles (DOC-84 §17) — Clinic on Floor 2
+            55: 'cot_canvas',       // STRETCHER_DOCK — reuses cot texture
+            56: 'cot_canvas',       // TRIAGE_BED — reuses cot texture (tinted)
+            59: 'switchboard_panel' // REFRIG_LOCKER — metal cabinet (placeholder)
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — multi-story commercial facades
@@ -482,7 +524,16 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
-            38: 0.5                // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            40: 0.5,               // WELL — stone rim
+            41: 0.35,              // BENCH — low seating
+            42: 1.2,               // NOTICE_BOARD — tall posts
+            44: 0.6,               // BARREL — banded oak
+            47: 0.7,               // SOUP_KITCHEN — cauldron on brazier
+            48: 0.3,               // COT — low bedroll
+            55: 0.4,               // STRETCHER_DOCK — low frame
+            56: 0.4,               // TRIAGE_BED — low bed
+            59: 1.0                // REFRIG_LOCKER — cabinet height
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
@@ -519,7 +570,21 @@ var FloorManager = (function () {
             21: 'tree_trunk',        // TREE — perimeter/forest trees
             22: 'shrub',             // SHRUB — border hedges
             35: 'wall_pier',         // FENCE — salt-worn pier railing
-            37: 'shrub'              // MAILBOX — shrub base
+            37: 'shrub',             // MAILBOX — shrub base
+            // Living infrastructure tiles (DOC-84 §1)
+            40: 'well_stone',        // WELL — circular stone rim
+            41: 'bench_wood',        // BENCH — wooden slat seat
+            42: 'notice_board_wood', // NOTICE_BOARD — posts with parchment
+            43: 'anvil_iron',        // ANVIL — dark iron on stone
+            44: 'barrel_wood',       // BARREL — banded oak barrel
+            47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
+            48: 'cot_canvas',        // COT — canvas bedroll
+            // Economy tiles (DOC-84 §17) — Morgue + Union Hall on Floor 3
+            55: 'cot_canvas',        // STRETCHER_DOCK — reuses cot texture (wider aspect)
+            56: 'cot_canvas',        // TRIAGE_BED — reuses cot texture (tinted)
+            57: 'table_wood',        // MORGUE_TABLE — stone slab (placeholder: table)
+            58: 'hearth_riverrock',  // INCINERATOR — iron grate (placeholder: hearth)
+            59: 'switchboard_panel'  // REFRIG_LOCKER — metal cabinet (placeholder: switchboard)
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — fortress walls (shorter than commercial)
@@ -533,7 +598,19 @@ var FloorManager = (function () {
             21: 2.5,               // TREE — perimeter trees
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — pier railing
-            37: 0.25               // MAILBOX — short platform
+            37: 0.25,              // MAILBOX — short platform
+            40: 0.5,               // WELL — stone rim
+            41: 0.35,              // BENCH — low seating
+            42: 1.2,               // NOTICE_BOARD — tall posts
+            43: 0.5,               // ANVIL — waist-height iron block
+            44: 0.6,               // BARREL — banded oak
+            47: 0.7,               // SOUP_KITCHEN — cauldron on brazier
+            48: 0.3,               // COT — low bedroll
+            55: 0.4,               // STRETCHER_DOCK — low frame
+            56: 0.4,               // TRIAGE_BED — low bed
+            57: 0.5,               // MORGUE_TABLE — stone slab
+            58: 1.2,               // INCINERATOR — tall iron frame
+            59: 1.0                // REFRIG_LOCKER — cabinet height
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN
@@ -584,12 +661,14 @@ var FloorManager = (function () {
             7:  'stash_chest',      // CHEST — supply chest (iron-bound)
             10: 'stone_cathedral',  // PILLAR — stone columns
             25: 'bookshelf',        // BOOKSHELF — records shelves
-            28: 'table_wood'        // TABLE — planning table
+            28: 'table_wood',       // TABLE — planning table
+            48: 'cot_canvas'        // COT — guard bunks
           }),
           tileWallHeights: Object.freeze({
             7:  0.7,               // CHEST — waist-height stash box
             10: 2.2,               // PILLAR — imposing columns
-            28: 0.7                // TABLE — planning table height
+            28: 0.7,               // TABLE — planning table height
+            48: 0.3                // COT — low guard bunk
           }),
           floorTexture: 'floor_stone'
         };
@@ -629,13 +708,17 @@ var FloorManager = (function () {
             10: 'wood_dark',        // PILLAR — dark wood display columns
             25: 'bookshelf',        // BOOKSHELF — supply shelves / weapon racks
             26: 'wood_dark',        // BAR_COUNTER — display case surface
-            30: 'wood_plank'        // TORCH_LIT — torch bracket (warm wood)
+            30: 'wood_plank',       // TORCH_LIT — torch bracket (warm wood)
+            43: 'anvil_iron',       // ANVIL — dark iron work surface
+            44: 'barrel_wood'       // BARREL — banded oak barrel
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling
             10: 2.2,               // PILLAR — tall display columns
             26: 0.8,               // BAR_COUNTER — counter height
-            30: 1.0                // TORCH_LIT — wall sconce height
+            30: 1.0,               // TORCH_LIT — wall sconce height
+            43: 0.5,               // ANVIL — waist-height iron block
+            44: 0.6                // BARREL — banded oak
           }),
           floorTexture: 'floor_stone'
         };
@@ -658,9 +741,18 @@ var FloorManager = (function () {
           textures: Object.freeze({
             1: 'stone_rough', 2: 'door_cellar', 3: 'door_cellar', 4: 'door_cellar',
             5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
-            29: 'hearth_riverrock'   // HEARTH — dungeon rest point
+            29: 'hearth_riverrock',  // HEARTH — dungeon rest point
+            // Creature verb tiles (DOC-84 §12)
+            49: 'roost_ceiling',     // ROOST — ceiling claw-mark anchor (walkable overhead)
+            50: 'nest_debris',       // NEST — bone/cloth debris pile
+            51: 'den_hollow',        // DEN — hollowed alcove recess
+            52: 'fungal_glow',       // FUNGAL_PATCH — bioluminescent floor growth
+            54: 'scorch_mark'        // TERRITORIAL_MARK — claw gouge on floor
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
+          tileWallHeights: Object.freeze({
+            7: 0.65, 11: 0.6, 29: 0.5,
+            50: 0.3, 51: 0.5
+          }),
           floorTexture: 'floor_dirt'
         };
       case 'foundry':
@@ -669,9 +761,19 @@ var FloorManager = (function () {
           textures: Object.freeze({
             1: 'metal_plate', 2: 'door_foundry', 3: 'door_foundry', 4: 'door_foundry',
             5: 'stairs_down', 6: 'stairs_up', 14: 'door_iron',
-            29: 'hearth_riverrock'   // HEARTH — dungeon rest point
+            29: 'hearth_riverrock',  // HEARTH — dungeon rest point
+            // Creature verb tiles (DOC-84 §12)
+            50: 'nest_debris',       // NEST — scrap/vent debris (Soot Imp clusters)
+            51: 'den_hollow',        // DEN — pack creature alcove (Slag Hounds)
+            53: 'conduit_spark',     // ENERGY_CONDUIT — exposed power junction
+            54: 'scorch_mark',       // TERRITORIAL_MARK — scorch mark on floor
+            46: 'switchboard_panel'  // SWITCHBOARD — comms panel
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
+          tileWallHeights: Object.freeze({
+            7: 0.65, 11: 0.6, 29: 0.5,
+            46: 1.0,                 // SWITCHBOARD — full-height panel
+            50: 0.3, 51: 0.5, 53: 0.8
+          }),
           floorTexture: 'floor_dirt',
           fogColor: { r: 12, g: 6, b: 3 },    // Warm furnace tint
           stepColor: '#1a1210'
@@ -688,9 +790,23 @@ var FloorManager = (function () {
             6:  'stairs_up',       // STAIRS_UP
             10: 'porthole_wall',   // PILLAR — porthole windows (animated ocean)
             14: 'door_iron',       // BOSS_DOOR
-            29: 'hearth_riverrock' // HEARTH — dungeon rest point
+            29: 'hearth_riverrock', // HEARTH — dungeon rest point
+            45: 'charging_cradle', // CHARGING_CRADLE — construct charging station
+            46: 'switchboard_panel', // SWITCHBOARD — lab comms panel
+            // Creature verb tiles (DOC-84 §12)
+            49: 'roost_ceiling',   // ROOST — ceiling coil anchor (Shock Eels)
+            50: 'nest_debris',     // NEST — marine prey cache (Deep Crawlers)
+            51: 'den_hollow',      // DEN — tidal pool alcove (Tide Stalkers)
+            52: 'fungal_glow',     // FUNGAL_PATCH — brine seep bioluminescence
+            53: 'conduit_spark',   // ENERGY_CONDUIT — exposed lab power junction
+            54: 'scorch_mark'      // TERRITORIAL_MARK — claw gouge
           }),
-          tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
+          tileWallHeights: Object.freeze({
+            7: 0.65, 11: 0.6, 29: 0.5,
+            45: 0.8,               // CHARGING_CRADLE — tall metal frame
+            46: 1.0,               // SWITCHBOARD — full-height panel
+            50: 0.3, 51: 0.5, 53: 0.8
+          }),
           floorTexture: 'floor_tile',
           fogColor: { r: 2, g: 5, b: 12 },    // Cold fluorescent tint
           stepColor: '#0a1018'
@@ -1170,7 +1286,8 @@ var FloorManager = (function () {
   var _FLOOR0_W = 50;
   var _FLOOR0_H = 36;
   // Legend: 0=EMPTY, 1=WALL, 2=DOOR, 10=PILLAR, 18=BONFIRE, 21=TREE, 22=SHRUB,
-  //         32=ROAD, 33=PATH, 34=GRASS, 35=FENCE, 37=MAILBOX
+  //         32=ROAD, 33=PATH, 34=GRASS, 35=FENCE, 37=MAILBOX,
+  //         61=ROOF_SLOPE_L, 62=ROOF_PEAK, 63=ROOF_SLOPE_R
   //
   // 40×30 exterior — The Approach. Interstate exit ramp campground.
   //
@@ -1197,7 +1314,7 @@ var FloorManager = (function () {
     [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 7  NE shack solid; upper facade solid (interiors deferred — see BUILDING_INTERIORS_ROADMAP)
     [1,1,21,22,34,22,34,34,21,34,34,34,22,34,34,22,34,34,18,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 8  NC campfire(18,8); NE shack solid
     [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 9  NE shack front wall solid (door deferred)
-    [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //10  pod interiors
+    [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,61,62,62,63,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //10  NE shack peaked roof row
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,18,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //11  NE bonfire(29,11) outside shack
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //12  pod interiors
     [1,1,21,22,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //13  pod bottoms (C-shape gaps)
@@ -1211,7 +1328,7 @@ var FloorManager = (function () {
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //21  S-N path stubs to south pods
     [1,1,21,22,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //22  pod tops (SW, SC, SE) — open NORTH
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //23  pod interiors
-    [1,1,21,22,34,22,34,34,34,34,37,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //24  SW mailbox(10,24)
+    [1,1,21,22,34,22,34,61,62,63,37,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //24  SW house peaked roof + mailbox(10,24)
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,21,34,18,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //25  SW house front wall solid (door deferred — see BUILDING_INTERIORS_ROADMAP); SC bonfire(20,25)
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //26  SW house solid; SC tree + SE tree
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,34,34,34,1,1,21,21,21], //27  SW house solid; SC tree — facade courtyard opens
@@ -1251,6 +1368,7 @@ var FloorManager = (function () {
       grid[y] = _FLOOR0_GRID[y].slice();
     }
     return {
+      floorId: '0',
       grid: grid,
       rooms: _FLOOR0_ROOMS.slice(),
       doors: {
@@ -1368,6 +1486,7 @@ var FloorManager = (function () {
       grid[y] = _FLOOR1_GRID[y].slice();
     }
     return {
+      floorId: '1',
       grid: grid,
       rooms: _FLOOR1_ROOMS.slice(),
       doors: {
@@ -1662,6 +1781,167 @@ var FloorManager = (function () {
             anchorV: 0.22,
             scale: 0.30
           });
+        }
+      }
+    }
+
+    // ── Infrastructure tile decor (placed on tile faces) ──────────
+    var infraTiles = [T.WELL, T.NOTICE_BOARD, T.SOUP_KITCHEN, T.ANVIL,
+                      T.CHARGING_CRADLE, T.SWITCHBOARD];
+    for (var iy = 0; iy < H; iy++) {
+      for (var ix = 0; ix < W; ix++) {
+        var it = grid[iy][ix];
+        if (infraTiles.indexOf(it) < 0) continue;
+
+        // Find walkable neighbor faces
+        var iFaces = [];
+        if (iy > 0 && T.isWalkable(grid[iy - 1][ix])) iFaces.push('n');
+        if (iy < H - 1 && T.isWalkable(grid[iy + 1][ix])) iFaces.push('s');
+        if (ix > 0 && T.isWalkable(grid[iy][ix - 1])) iFaces.push('w');
+        if (ix < W - 1 && T.isWalkable(grid[iy][ix + 1])) iFaces.push('e');
+        if (iFaces.length === 0) continue;
+
+        if (!decor[iy][ix]) decor[iy][ix] = { n: [], s: [], e: [], w: [] };
+        for (var iif = 0; iif < iFaces.length; iif++) {
+          var iface = iFaces[iif];
+          if (it === T.WELL) {
+            decor[iy][ix][iface].push({
+              spriteId: 'decor_rope_bucket', anchorU: 0.35, anchorV: 0.7, scale: 0.3
+            });
+          } else if (it === T.NOTICE_BOARD) {
+            decor[iy][ix][iface].push({
+              spriteId: 'decor_pinned_note', anchorU: 0.65, anchorV: 0.7, scale: 0.22
+            });
+          } else if (it === T.SOUP_KITCHEN) {
+            decor[iy][ix][iface].push({
+              spriteId: 'decor_ladle', anchorU: 0.65, anchorV: 0.75, scale: 0.22
+            });
+          } else if (it === T.ANVIL) {
+            decor[iy][ix][iface].push({
+              spriteId: 'decor_spark', anchorU: 0.5, anchorV: 0.85, scale: 0.2,
+              cavityGlow: true, glowR: 255, glowG: 180, glowB: 40, glowA: 0.2
+            });
+          } else if (it === T.CHARGING_CRADLE) {
+            decor[iy][ix][iface].push({
+              spriteId: 'decor_conduit_glow', anchorU: 0.5, anchorV: 0.6, scale: 0.25,
+              cavityGlow: true, glowR: 80, glowG: 160, glowB: 220, glowA: 0.25
+            });
+          } else if (it === T.SWITCHBOARD) {
+            // Red and green indicator lights on alternating faces
+            var lightSeed = ((ix * 374761 + iy * 668265) & 0x7fffffff) / 0x7fffffff;
+            var lightSprite = lightSeed > 0.5 ? 'decor_toggle_light_green' : 'decor_toggle_light_red';
+            decor[iy][ix][iface].push({
+              spriteId: lightSprite, anchorU: 0.5, anchorV: 0.8, scale: 0.15,
+              cavityGlow: true,
+              glowR: lightSeed > 0.5 ? 50 : 180,
+              glowG: lightSeed > 0.5 ? 160 : 40,
+              glowB: lightSeed > 0.5 ? 60 : 25,
+              glowA: 0.2
+            });
+          }
+        }
+      }
+    }
+
+    // ── Hazard-adjacent wall decor ──────────────────────────────────
+    // Walls next to hazard floor tiles get environmental staining.
+    var hazardDecorMap = {};
+    hazardDecorMap[T.FIRE]   = { spriteId: 'decor_scorch', anchorU: 0.5, anchorV: 0.4, scale: 0.35 };
+    hazardDecorMap[T.POISON] = { spriteId: 'decor_acid_drip', anchorU: 0.5, anchorV: 0.8, scale: 0.25 };
+    hazardDecorMap[T.TRAP]   = { spriteId: 'decor_warning_scratch', anchorU: 0.5, anchorV: 0.55, scale: 0.28 };
+    hazardDecorMap[T.SPIKES] = { spriteId: 'decor_warning_scratch', anchorU: 0.5, anchorV: 0.55, scale: 0.28 };
+
+    for (var hy = 1; hy < H - 1; hy++) {
+      for (var hx = 1; hx < W - 1; hx++) {
+        if (grid[hy][hx] !== T.WALL) continue;
+
+        // Check each neighbor for hazard floor tiles
+        var hazardNeighbors = [
+          { dy: -1, dx: 0, face: 'n' }, { dy: 1, dx: 0, face: 's' },
+          { dy: 0, dx: -1, face: 'w' }, { dy: 0, dx: 1, face: 'e' }
+        ];
+        for (var hi = 0; hi < hazardNeighbors.length; hi++) {
+          var hn = hazardNeighbors[hi];
+          var ny = hy + hn.dy, nx = hx + hn.dx;
+          if (ny < 0 || ny >= H || nx < 0 || nx >= W) continue;
+          var neighborTile = grid[ny][nx];
+          var hazDecor = hazardDecorMap[neighborTile];
+          if (!hazDecor) continue;
+
+          // Sparse: ~40% of eligible walls (hazard adjacency is already rare)
+          var hHash = ((hx * 374761 + hy * 668265 + hi * 12345) & 0x7fffffff) / 0x7fffffff;
+          if (hHash > 0.40) continue;
+
+          if (!decor[hy][hx]) decor[hy][hx] = { n: [], s: [], e: [], w: [] };
+          // Place decor on the face toward the hazard
+          decor[hy][hx][hn.face].push({
+            spriteId: hazDecor.spriteId,
+            anchorU: hazDecor.anchorU + (hHash - 0.2) * 0.3, // slight U jitter
+            anchorV: hazDecor.anchorV,
+            scale: hazDecor.scale
+          });
+        }
+      }
+    }
+
+    // ── Biome variety wall decor ────────────────────────────────────
+    // Additional sparse decor on plain WALL tiles based on biome type.
+    // Layered on top of the existing torch/banner pass — walls that
+    // already have torch decor are skipped.
+    var biomeDecor = null;
+    if (biome === 'exterior' || biome === 'promenade' || biome === 'lantern') {
+      biomeDecor = { spriteId: 'decor_wanted_poster', chance: 0.04, anchorV: 0.6, scale: 0.25 };
+    } else if (biome === 'cellar' || biome === 'cellar_entry' || biome === 'catacomb') {
+      biomeDecor = { spriteId: 'decor_cobweb', chance: 0.06, anchorV: 0.9, scale: 0.22 };
+    } else if (biome === 'foundry') {
+      biomeDecor = { spriteId: 'decor_chain', chance: 0.05, anchorV: 0.65, scale: 0.2 };
+    } else if (biome === 'sealab') {
+      biomeDecor = { spriteId: 'decor_crack', chance: 0.04, anchorV: 0.5, scale: 0.2 };
+    }
+    // Generic dungeon floors get cracks and cobwebs mixed
+    if (!biomeDecor && isDungeonDecor) {
+      biomeDecor = { spriteId: 'decor_crack', chance: 0.05, anchorV: 0.5, scale: 0.2 };
+    }
+
+    if (biomeDecor) {
+      for (var vy = 1; vy < H - 1; vy++) {
+        for (var vx = 1; vx < W - 1; vx++) {
+          if (grid[vy][vx] !== T.WALL) continue;
+          // Skip walls that already have decor (torch, banner, hazard stain)
+          if (decor[vy][vx]) continue;
+
+          // Find faces bordering walkable tiles
+          var vFaces = [];
+          if (T.isWalkable(grid[vy - 1][vx])) vFaces.push('n');
+          if (vy < H - 1 && T.isWalkable(grid[vy + 1][vx])) vFaces.push('s');
+          if (T.isWalkable(grid[vy][vx - 1])) vFaces.push('w');
+          if (vx < W - 1 && T.isWalkable(grid[vy][vx + 1])) vFaces.push('e');
+          if (vFaces.length === 0) continue;
+
+          // Deterministic sparse placement
+          var vHash = ((vx * 998677 + vy * 441113) & 0x7fffffff) / 0x7fffffff;
+          if (vHash > biomeDecor.chance) continue;
+
+          var vFace = vFaces[Math.floor(vHash / biomeDecor.chance * vFaces.length) % vFaces.length];
+
+          decor[vy][vx] = { n: [], s: [], e: [], w: [] };
+          decor[vy][vx][vFace].push({
+            spriteId: biomeDecor.spriteId,
+            anchorU: 0.5 + (vHash - biomeDecor.chance / 2) * 2, // slight jitter
+            anchorV: biomeDecor.anchorV,
+            scale: biomeDecor.scale
+          });
+
+          // Cobweb gets a second sprite on the perpendicular corner (if available)
+          if (biomeDecor.spriteId === 'decor_cobweb' && vFaces.length > 1) {
+            var altFace = vFaces[(vFaces.indexOf(vFace) + 1) % vFaces.length];
+            decor[vy][vx][altFace].push({
+              spriteId: 'decor_cobweb',
+              anchorU: 0.1, // corner placement
+              anchorV: 0.92,
+              scale: 0.18
+            });
+          }
         }
       }
     }

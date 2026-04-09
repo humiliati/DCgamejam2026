@@ -141,6 +141,8 @@ Exterior DOOR tiles on depth-1 floors register as steady light sources (radius 3
 
 Central to the "cleaning" game loop. Torches are not binary on/off — they're **slot containers** (like crates and corpse stocks) with fuel management and a flame state.
 
+> **Peek reclassification (Apr 8):** TORCH_LIT is a **context-gated peek** — inventory-checked. If the player has water or hose: one-button "Extinguish" action peek (quick, micro-peek feel). If not: passive micro face-to (warm glow, no action). TORCH_UNLIT is always a **full peek** with the 3-slot restock menu below. The torch interaction is therefore a two-phase loop: extinguish (quick) → restock (full menu). Phase animations (lit→ember→smoke for extinguish; ember→smoke→bare handle for restock) are documented in `PEEK_SYSTEM_ROADMAP.md` §13.7.1.
+
 ### 3a. Torch Slot Model ✅
 
 Implemented in `torch-state.js`. Every torch (lit or unlit) has **3 slots**:
@@ -169,9 +171,11 @@ torch = {
 
 ### 3b. Torch Peek (Interaction Surface) ✅
 
-When player faces a torch tile and presses interact → opens **TorchPeek** (same peek pattern as CratePeek, CorpsePeek):
+> **Updated Apr 8:** The peek flow is now split into two distinct interactions. Facing a TORCH_LIT tile first checks inventory for water/hose — if present, shows a one-button "Extinguish" action peek (no full TorchPeek menu). If absent, shows only a passive warm-glow micro face-to. Pressing interact on TORCH_UNLIT always opens the full TorchPeek restock menu below. The previous design (interact on any torch → always open TorchPeek) is superseded by the context-gated model in `PEEK_SYSTEM_ROADMAP.md` §13.7.1.
 
-**Lit torch peek** shows:
+When player faces a TORCH_UNLIT tile and presses interact → opens **TorchPeek** (same peek pattern as CratePeek, CorpsePeek):
+
+**Unlit torch peek** shows:
 - Slot 1: 🔥 (flame — draggable/interactive)
 - Slot 2: empty / fuel_dry / fuel_hydrated
 - Slot 3: empty / fuel_dry / fuel_hydrated
@@ -194,8 +198,8 @@ This creates a **knowledge sink**: players who read in-game books learn which fu
 
 Three ways to extinguish a lit torch:
 
-1. **TorchPeek drag** (careful method) — drag water bottle onto flame slot. Hydrates fuel, preserves slot contents. **Best readiness outcome.**
-2. **Pressure washing** (hose method) — spraying a lit torch tile OR an adjacent tile with the pressure washer knocks out the flame slot with **zero chance of fuel hydration**. The water blast extinguishes but also soaks/ruins any dry fuel in other slots. Fast but wasteful. (Requires PRESSURE_WASHING_ROADMAP Phase PW-3.)
+1. **One-button action peek** (careful method, updated Apr 8) — Player faces TORCH_LIT, inventory-gate detects water container or hose equipped. A one-button "Extinguish" action peek appears. On activate: flame slot becomes `fuel_hydrated` (water freed the slot AND hydrated fuel beneath) or `empty` (if no fuel was under the flame). Consumes 1 water bottle. Tile mutates TORCH_LIT→TORCH_UNLIT, light source removed. Phase animation plays lit→ember→smoke during the action. **Best readiness outcome.** Player can then face the now-TORCH_UNLIT tile to open the full TorchPeek restock menu.
+2. **Pressure washing** (hose method) — spraying a lit torch tile OR an adjacent tile with the pressure washer knocks out the flame slot with **zero chance of fuel hydration**. The water blast extinguishes but also soaks/ruins any dry fuel in other slots. Fast but wasteful. If hose is equipped, the one-button action peek (method 1) is the interact path; pressure washing is the spray path (distinct input). (Requires PRESSURE_WASHING_ROADMAP Phase PW-3.)
 3. **Future: combat knockback** — hero or enemy collision extinguishes torches in radius. Post-jam.
 
 **Design intent**: Pressure washing torches is a **trap for impatient players**. It's faster than opening TorchPeek and carefully hydrating, but it destroys fuel state. Careful players who use water bottles through TorchPeek get higher readiness scores. The game rewards reading details from in-game books (fuel matching, hydration order) while still letting spray-everything players progress.

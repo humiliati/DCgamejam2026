@@ -213,12 +213,18 @@ var MouseLook = (function () {
   /**
    * Call once per frame to advance smoothing and apply offsets.
    * Must be called BEFORE Raycaster.render().
+   * @param {number} [dt] — frame delta in ms (defaults to 16.667 for
+   *   backwards compatibility, but callers should always pass frameDt)
    */
-  function tick() {
+  function tick(dt) {
+    if (!dt || dt <= 0) dt = 16.667; // fallback: assume 60fps
+    if (dt > 100) dt = 100;          // clamp: prevent spiral after tab-away
+
     if (_locked) {
-      // Lock-on: smoothly pan toward lock target
-      _smoothYaw   += (_lockYaw   - _smoothYaw)   * LOCK_LERP;
-      _smoothPitch += (_lockPitch - _smoothPitch) * LOCK_LERP;
+      // Lock-on: smoothly pan toward lock target (also dt-aware)
+      var lockF = 1 - Math.pow(1 - LOCK_LERP, dt / 16.667);
+      _smoothYaw   += (_lockYaw   - _smoothYaw)   * lockF;
+      _smoothPitch += (_lockPitch - _smoothPitch) * lockF;
       if (Math.abs(_smoothYaw)   < 0.0005) _smoothYaw = 0;
       if (Math.abs(_smoothPitch) < 0.0005) _smoothPitch = 0;
     } else {
@@ -232,9 +238,9 @@ var MouseLook = (function () {
         _targetPitch = 0;
       }
 
-      // Normal freelook: two-stage smoothing per axis
-      _smoothYaw   = _lerp2(_smoothYaw,   _targetYaw);
-      _smoothPitch = _lerp2(_smoothPitch, _targetPitch);
+      // Normal freelook: two-stage dt-aware smoothing per axis
+      _smoothYaw   = _lerp2(_smoothYaw,   _targetYaw,   dt);
+      _smoothPitch = _lerp2(_smoothPitch, _targetPitch, dt);
     }
 
     if (typeof Player !== 'undefined') {
@@ -243,11 +249,18 @@ var MouseLook = (function () {
     }
   }
 
-  /** Two-stage lerp: faster attack, slower decay. */
-  function _lerp2(current, target) {
+  /**
+   * Two-stage dt-aware lerp: faster attack, slower decay.
+   * Uses frame-rate-independent exponential smoothing so convergence
+   * speed is consistent regardless of frame timing irregularity.
+   * A 50ms frame applies ~3× the correction of a 16ms frame.
+   */
+  function _lerp2(current, target, dt) {
     var diff = target - current;
     var growing = Math.abs(target) > Math.abs(current);
-    var factor = growing ? SMOOTH_ATTACK : SMOOTH_DECAY;
+    var base = growing ? SMOOTH_ATTACK : SMOOTH_DECAY;
+    // dt-independent: factor = 1 - (1 - base)^(dt / 16.667)
+    var factor = 1 - Math.pow(1 - base, dt / 16.667);
     var result = current + diff * factor;
     if (Math.abs(result) < 0.0005) result = 0;
     return result;

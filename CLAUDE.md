@@ -10,9 +10,10 @@ The **conspiracy layer** (contributor knowledge — revealed to the player gradu
 
 The game opens with a **character creation flow** (title screen → callsign selection → operative class selection → deploy animation). Callsign is the player's operative codename; class sets starting stat bonuses (Blade/Ranger/Shadow/Sentinel/Seer/Wildcard).
 
-Jam entry for DC Jam 2026 (March 27 – April 5, 2026). Post-jam target: LG Content Store webOS TV app driven by Magic Remote.
+Jam entry for DC Jam 2026 (March 27 – April 5, 2026). Post-jam target: April 25th fresh bug free version at the conclusion of Jam submission voting
 
-Deadline: playable by April 5. Post-jam polish and webOS packaging are separate passes.
+
+Deadline: Winter 2026 for LG Content Store webOS TV app driven by Magic Remote.
 
 The living design document is `docs/Biome Plan.html` (v5). It defines the world structure, biome palettes, enemy populations, quest items, and module wiring. `docs/STREET_CHRONICLES_NARRATIVE_OUTLINE.md` defines the faction structure, conspiracy arcs, and NPC roster.
 
@@ -22,8 +23,11 @@ The living design document is `docs/Biome Plan.html` (v5). It defines the world 
 - **IIFE module pattern.** Every engine file is `var ModuleName = (function() { 'use strict'; ... return { publicAPI }; })();` attaching to a single global. No ES modules, no require, no import.
 - **Script load order is the dependency graph.** `index.html` loads scripts in 5 layers (0-4). A module can only reference globals defined by scripts loaded before it. Adding a new module means inserting it in the correct layer.
 - **No external CDN dependencies at runtime.** Everything ships in the project folder. The game must work offline (webOS apps are local).
-- **Never scope-compromise the correct solution.** If the right answer is X, build X. Do not substitute a cheaper/simpler Z "for jam scope" or "for now." Scope-compromised implementations create layers of low-fidelity code that fail silently when composed together. A correct implementation that takes longer is always preferable to a shortcut that passes syntax checks but doesn't actually work. If the timeline is tight, cut features — don't cut corners on the features you do build.
-- **Never fabricate when EyesOnly has a reference implementation.** EyesOnly is ALWAYS available at `EyesOnly/` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there.
+- **Never scope-compromise the correct solution.** If the right answer is X, build X. Do not substitute a cheaper/simpler Z "for jam scope" or "for now." Scope-compromised implementations create layers of low-fidelity code that fail silently when composed together. A correct implementation that takes longer is always preferable to a shortcut that passes syntax checks but doesn't actually work. 
+/////If the timeline is tight, cut features — don't cut corners on the features you do build.////////////
+
+
+**Never fabricate when EyesOnly has a reference implementation.** EyesOnly is ALWAYS available at `EyesOnly/` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there. If EyesOnly has no suitable refrence material regroup with user on research and brainstorming.
 
 ## Direction convention
 
@@ -58,12 +62,12 @@ Current world map:
 "1.3.1"   Soft Cellar         (dungeon — tutorial trap, easy enemies)
 "2"       Lantern Row         (exterior — commercial district, more shops)
 "2.1"     Dispatcher's Office (interior — employer, mission briefing)
-"2.2"     Watchman's Post     (interior — shaken NPC, dungeon staging)
+"2.2"     Watchman's Post     (interior — NPC, dungeon staging)
 "2.2.1"   Hero's Wake B1      (dungeon — Hero reveal, high-level corpses)
 "2.2.2"   Hero's Wake B2      (dungeon — deeper scavenge)
 ```
 
-Future floors: `"3"` Frontier Gate (ext), `"3.1"` Armory (int), `"3.1.1"+` Deep Vaults (dungeon).
+Future floors: 4+ and living infrastructure for 0-3
 
 ### Floor ID navigation
 

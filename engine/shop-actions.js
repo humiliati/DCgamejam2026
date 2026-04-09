@@ -138,7 +138,8 @@ var ShopActions = (function() {
   }
 
   /**
-   * Player sells a salvage part from their bag at the current faction shop.
+   * Player sells a bag item (salvage, supply, consumable, equipment)
+   * at the current faction shop.
    * Called by MenuBox shop Face 3 (sell-parts pane) keybind.
    * @param {number} bagIndex - Index into Player.state().bag
    */
@@ -147,35 +148,60 @@ var ShopActions = (function() {
 
     var bag = Player.state().bag;
     var item = bag[bagIndex];
-    if (!item || item.type !== 'salvage') return;
+    if (!item) return;
 
-    var result = Shop.sellPart(item.id);
-    if (result.ok) {
+    // Vendor buy-preference check
+    var itemType = item.type || 'supply';
+    if (Shop.factionBuysType && !Shop.factionBuysType(itemType)) {
+      Toast.show(i18n.t('shop.vendor_no_want', 'Vendor doesn\'t want that'), 'warning');
+      return;
+    }
+
+    // Calculate price via Shop's unified pricing
+    var sellPrice = (Shop.getBagItemSellPrice)
+      ? Shop.getBagItemSellPrice(item) : (item.baseValue || 1);
+
+    // Use CardTransfer for atomic sell (bag removal + gold award)
+    var result = (typeof CardTransfer !== 'undefined')
+      ? CardTransfer.sellFromBag(bagIndex, sellPrice)
+      : { success: false };
+
+    if (result.success) {
+      // Record sale for faction reputation
+      var repResult = null;
+      var _fid = Shop.getCurrentFaction();
+      if (_fid && typeof Salvage !== 'undefined' && Salvage.recordSale) {
+        repResult = Salvage.recordSale(
+          _fid,
+          Player.getFlag.bind(Player),
+          Player.setFlag.bind(Player)
+        );
+      }
+
       Toast.show(
         i18n.t('shop.sold', 'Sold') + ' ' + item.emoji + ' ' + item.name +
-        ' (+' + result.amount + 'g)',
+        ' (+' + sellPrice + 'g)',
         'loot'
       );
       AudioSystem.playRandom('coin');
-      // Salvage sell — coin burst + salvage spark
       if (typeof ParticleFX !== 'undefined') {
         var canvas4 = GameActions.getCanvas();
         var cx = canvas4 ? canvas4.width / 2 : 320;
         var cy = canvas4 ? canvas4.height * 0.5 : 220;
-        ParticleFX.salvageSpark(cx, cy);
-        if (result.amount >= 15) {
-          ParticleFX.coinRain(cx, cy - 20, result.amount);
+        if (item.type === 'salvage') ParticleFX.salvageSpark(cx, cy);
+        if (sellPrice >= 15) {
+          ParticleFX.coinRain(cx, cy - 20, sellPrice);
         } else {
-          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
+          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(sellPrice / 3)));
         }
       }
       HUD.updatePlayer(Player.state());
-      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + item.emoji + ' +' + result.amount + 'g', 'loot');
+      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + item.emoji + ' +' + sellPrice + 'g', 'loot');
 
       // Rep tier changed — show toast + level-up particles
-      if (result.repResult && result.repResult.tierChanged) {
+      if (repResult && repResult.tierChanged) {
         var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
-        Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
+        Toast.show(fLabel + ' Rep Tier ' + repResult.newTier + '!', 'info');
         if (typeof ParticleFX !== 'undefined') {
           var canvas4b = GameActions.getCanvas();
           ParticleFX.levelUp(canvas4b ? canvas4b.width / 2 : 320, canvas4b ? canvas4b.height * 0.3 : 150);
@@ -187,10 +213,96 @@ var ShopActions = (function() {
     }
   }
 
+  /**
+   * Player sells a card from the backup deck (collection) via SlotWheel.
+   * The card is identified by its id. Uses Shop.sell() which already
+   * handles CardTransfer.sellFromBackup() + gold + rep internally.
+   * @param {string} cardId - Card id from backup deck
+   */
+  function shopSellFromBackup(cardId) {
+    if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
+    if (!cardId) return;
+
+    var card = (typeof CardSystem !== 'undefined') ? CardSystem.getById(cardId) : null;
+    var result = Shop.sell(cardId);
+    if (result.ok) {
+      var name = card ? (card.emoji + ' ' + card.name) : cardId;
+      Toast.show(
+        i18n.t('shop.sold', 'Sold') + ' ' + name +
+        ' (+' + result.amount + 'g)',
+        'loot'
+      );
+      AudioSystem.playRandom('coin');
+      if (typeof ParticleFX !== 'undefined') {
+        var canvas5 = GameActions.getCanvas();
+        var cx = canvas5 ? canvas5.width / 2 : 320;
+        var cy = canvas5 ? canvas5.height * 0.45 : 200;
+        if (result.amount >= 15) {
+          ParticleFX.coinRain(cx, cy, result.amount);
+        } else {
+          ParticleFX.coinBurst(cx, cy, Math.max(3, Math.floor(result.amount / 3)));
+        }
+      }
+      HUD.updatePlayer(Player.state());
+      if (typeof DebriefFeed !== 'undefined') DebriefFeed.logEvent('Sold ' + (card ? card.emoji : '') + ' +' + result.amount + 'g', 'loot');
+
+      if (result.repResult && result.repResult.tierChanged) {
+        var fLabel = Shop.getFactionLabel(Shop.getCurrentFaction());
+        Toast.show(fLabel + ' Rep Tier ' + result.repResult.newTier + '!', 'info');
+        if (typeof ParticleFX !== 'undefined') {
+          var canvas5b = GameActions.getCanvas();
+          ParticleFX.levelUp(canvas5b ? canvas5b.width / 2 : 320, canvas5b ? canvas5b.height * 0.3 : 150);
+        }
+      }
+      GameActions.refreshPanels();
+    } else {
+      Toast.show(i18n.t('shop.sell_fail', 'Cannot sell'), 'warning');
+    }
+  }
+
+  /**
+   * Player sells a bag item (any type) via SlotWheel.
+   * For salvage parts, uses Shop.sellPart(); for cards in bag, uses
+   * Shop.sell() after removing the card from bag.
+   * @param {number} bagIndex - Index into CardAuthority.getBag()
+   */
+  function shopSellFromBag(bagIndex) {
+    if (typeof Shop === 'undefined' || !Shop.isOpen()) return;
+
+    var bag = CardAuthority.getBag();
+    var item = bag[bagIndex];
+    if (!item) return;
+
+    // Card-in-bag: sell as card
+    if (item._bagStored || (item.suit !== undefined && item.type === 'card')) {
+      var cardId = item.cardId || item.id;
+      // Remove from bag first, then sell as card
+      CardAuthority.removeFromBag(bagIndex);
+      var price = (typeof Shop !== 'undefined' && Shop.getCardSellPrice)
+        ? Shop.getCardSellPrice(item) : 12;
+      CardAuthority.addGold(price);
+      Toast.show(
+        i18n.t('shop.sold', 'Sold') + ' ' + (item.emoji || '\uD83C\uDCCF') + ' ' + (item.name || '') +
+        ' (+' + price + 'g)',
+        'loot'
+      );
+      AudioSystem.playRandom('coin');
+      HUD.updatePlayer(Player.state());
+      GameActions.refreshPanels();
+      return;
+    }
+
+    // All other bag items (salvage, supply, consumable, equipment):
+    // unified sell path with vendor preference check + proper pricing
+    shopSellPart(bagIndex);
+  }
+
   return Object.freeze({
     buy: shopBuy,
     buySupply: shopBuySupply,
     sellFromHand: shopSellFromHand,
-    sellPart: shopSellPart
+    sellPart: shopSellPart,
+    sellFromBackup: shopSellFromBackup,
+    sellFromBag: shopSellFromBag
   });
 })();

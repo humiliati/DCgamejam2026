@@ -109,7 +109,8 @@
   "_comment_fanfare": "=== FANFARE — tier-ups, readiness, milestones ===",
   "tier_up":              { "src": "sfx/sq-sq-ring.webm",        "category": "ui", "_note": "Rep tier unlock chime (alias of ui-ring)" },
   "readiness-fanfare":    { "src": "sfx/sq-sq-improvement1.webm","category": "ui", "_note": "Dungeon readiness fanfare (alias of advantage-chime)" },
-  "fire_crackle":         { "src": "sfx/steam-1.webm",           "category": "environment", "_note": "Bonfire/torch proximity crackle (placeholder — steam hiss)" },
+  "fire_crackle":         { "src": "sfx/fire-crackling.webm",    "category": "environment", "_note": "Bonfire fire crackling — spatial loop, from EyesOnly Fire_Crackling.mp3" },
+  "torch_extinguish":     { "src": "sfx/steam-1.webm",           "category": "environment", "_note": "Extinguished torch steam hiss — fades over ~5s (was fire_crackle placeholder)" },
 
   "_comment_aliases": "=== ALIASES — orphaned keys mapped to closest existing SFX ===",
   "ascend-3":          { "src": "sfx/sq-sq-showup1.webm",       "category": "movement", "_note": "Deep ascend alias" },

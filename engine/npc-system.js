@@ -108,6 +108,54 @@ var NpcSystem = (function () {
   var SPAWN_STAGGER_MS = 400;   // Max random added to each NPC's first step timer
   var BARK_STAGGER_MS  = 8000;  // Max random offset to stagger initial bark window
 
+  // ── Verb-field tuning constants ──────────────────────────────────
+  // See VERB_FIELD_NPC_ROADMAP.md §6.2
+
+  var VF_DISTANCE_WEIGHT    = 0.15;   // How much distance penalises pull (lower = NPCs walk farther)
+  var VF_NOISE_FACTOR       = 0.05;   // Random perturbation on node score (breaks ties)
+  var VF_SATISFACTION_DROP   = 0.50;   // How much need drops on node arrival
+  var VF_LINGER_MIN         = 3000;   // Min ms NPC pauses at a node
+  var VF_LINGER_MAX         = 7000;   // Max ms NPC pauses at a node
+  var VF_TRANSITION_BARK_P  = 0.20;   // Probability of solo transition bark on verb switch
+
+  // ── Verb-field archetype presets ─────────────────────────────────
+  // Personality expressed as decay rate coefficients.
+  // See VERB_FIELD_NPC_ROADMAP.md §5.3
+
+  var VF_ARCHETYPES = {
+    scholar: {
+      duty:    { need: 0.8, decayRate: 0.0020, satisfiers: ['faction_post'] },
+      social:  { need: 0.3, decayRate: 0.0012, satisfiers: ['bonfire', 'well', 'bench'] },
+      errands: { need: 0.4, decayRate: 0.0008, satisfiers: ['shop_entrance', 'bulletin_board'] }
+    },
+    worker: {
+      duty:    { need: 0.8, decayRate: 0.0025, satisfiers: ['work_station', 'faction_post'] },
+      social:  { need: 0.2, decayRate: 0.0008, satisfiers: ['bonfire', 'well'] },
+      errands: { need: 0.5, decayRate: 0.0010, satisfiers: ['shop_entrance', 'bulletin_board'] }
+    },
+    citizen: {
+      duty:    { need: 0.2, decayRate: 0.0005, satisfiers: ['work_station'] },
+      social:  { need: 0.5, decayRate: 0.0018, satisfiers: ['bonfire', 'well', 'bench'] },
+      errands: { need: 0.6, decayRate: 0.0020, satisfiers: ['shop_entrance', 'bulletin_board'] }
+    },
+    drunk: {
+      duty:    { need: 0.0, decayRate: 0.0002, satisfiers: ['work_station'] },
+      social:  { need: 0.8, decayRate: 0.0030, satisfiers: ['bonfire', 'well', 'bench'] },
+      errands: { need: 0.1, decayRate: 0.0005, satisfiers: ['shop_entrance'] }
+    },
+    guard: {
+      duty:    { need: 0.9, decayRate: 0.0028, satisfiers: ['faction_post'] },
+      social:  { need: 0.1, decayRate: 0.0004, satisfiers: ['bonfire'] },
+      errands: { need: 0.1, decayRate: 0.0003, satisfiers: ['shop_entrance', 'bulletin_board'] }
+    },
+    granny: {
+      duty:    { need: 0.7, decayRate: 0.0022, satisfiers: ['work_station'] },
+      social:  { need: 0.3, decayRate: 0.0010, satisfiers: ['bonfire', 'well', 'bench'] },
+      errands: { need: 0.1, decayRate: 0.0004, satisfiers: ['shop_entrance'] },
+      rest:    { need: 0.4, decayRate: 0.0015, satisfiers: ['rest_spot', 'bench'] }
+    }
+  };
+
   /**
    * Register NPC definitions for a floor.
    * Calling register() for the same floor appends (does not replace).
@@ -169,7 +217,14 @@ var NpcSystem = (function () {
       // dialogue tree wraps to decide whether to set unlock flags.
       // Shape: { requiredBookId, unlockFlags:[], targetFloor,
       //          rejectBarkPool, acceptBarkPool }
-      gateCheck:     def.gateCheck    || null
+      gateCheck:     def.gateCheck    || null,
+
+      // ── Verb-field system (VERB_FIELD_NPC_ROADMAP.md) ──────────
+      // If verbSet is provided (or verbArchetype resolves one), the NPC
+      // uses verb-field movement instead of patrolPoints bounce patrol.
+      verbArchetype: def.verbArchetype || null,   // Key into VF_ARCHETYPES
+      verbSet:       def.verbSet       || null,   // Direct verb set (overrides archetype)
+      verbFaction:   def.verbFaction   || def.factionId || null  // Faction lock for duty verbs
     };
   }
 
@@ -291,8 +346,41 @@ var NpcSystem = (function () {
 
       // Conversation lock — true while player is talking to this NPC
       _talking:      false,
-      _talkTimer:    0
+      _talkTimer:    0,
+
+      // ── Verb-field state ───────────────────────────────────────
+      _verbSet:      _resolveVerbSet(def),
+      _verbTarget:   null,       // Current target node (or null)
+      _verbSatisfyTimer: 0,      // ms remaining lingering at a node
+      _currentNode:  null,       // Node the NPC is currently at (for encounter detection)
+      _dominantVerb: null        // Which verb drove us to _currentNode
     };
+  }
+
+  /**
+   * Resolve a verb set from def.verbSet, def.verbArchetype, or null.
+   * Deep-copies so each NPC gets independent need state.
+   */
+  function _resolveVerbSet(def) {
+    var source = def.verbSet;
+    if (!source && def.verbArchetype && VF_ARCHETYPES[def.verbArchetype]) {
+      source = VF_ARCHETYPES[def.verbArchetype];
+    }
+    if (!source) return null;
+
+    // Deep copy — each NPC gets its own mutable need values
+    var copy = {};
+    var keys = Object.keys(source);
+    for (var i = 0; i < keys.length; i++) {
+      var v = source[keys[i]];
+      copy[keys[i]] = {
+        need:       v.need != null ? v.need : 0.5,
+        decayRate:  v.decayRate || 0.001,
+        satisfiers: v.satisfiers ? v.satisfiers.slice() : [],
+        factionLock: v.factionLock || def.verbFaction || null
+      };
+    }
+    return copy;
   }
 
   // ── Tick ──────────────────────────────────────────────────────────
@@ -327,9 +415,21 @@ var NpcSystem = (function () {
         }
       }
 
-      // Patrol advance — skip if NPC is in conversation
-      if (npc._patrolPoints && npc._patrolPoints.length >= 2
-          && npc.npcType !== TYPES.DISPATCHER && !npc._talking) {
+      // Movement advance — skip if NPC is in conversation
+      if (npc._talking) {
+        // locked in place
+      } else if (npc._verbSet && npc.npcType !== TYPES.DISPATCHER) {
+        // Verb-field driven movement (VERB_FIELD_NPC_ROADMAP.md §6)
+        var floorForNodes = (typeof FloorManager !== 'undefined' && FloorManager.getFloor)
+          ? FloorManager.getFloor() : null;
+        var nodes = (typeof VerbNodes !== 'undefined' && floorForNodes)
+          ? VerbNodes.getNodes(floorForNodes) : [];
+        if (nodes.length > 0) {
+          _tickVerbField(npc, dt, grid, nodes);
+        }
+      } else if (npc._patrolPoints && npc._patrolPoints.length >= 2
+          && npc.npcType !== TYPES.DISPATCHER) {
+        // Legacy 2-point bounce patrol
         _tickPatrol(npc, dt, grid);
       }
 
@@ -349,6 +449,12 @@ var NpcSystem = (function () {
   var DIALOGUE_PAIR_DIST = 2;    // Max tile distance for NPC-NPC dialogue
   var DIALOGUE_BEAT_MS   = 1800; // Time per speech beat before switching speaker
   var DIALOGUE_BEATS     = 6;    // Total beats before pair goes silent
+
+  // ── Verb-encounter state ──────────────────────────────────────────
+  // Cooldown map: pairKey → timestamp of last encounter bark fire.
+  // Prevents the same two NPCs from barking at each other repeatedly.
+  var _encounterCooldowns = {};
+  var ENCOUNTER_COOLDOWN_MS = 180000;  // 3 minutes between same-pair encounters
 
   function _tickDialoguePingPong(dt) {
     if (typeof KaomojiCapsule === 'undefined') return;
@@ -436,11 +542,344 @@ var NpcSystem = (function () {
         _dialoguePairs.splice(p, 1);
       }
     }
+
+    // ── Verb encounter detection ─────────────────────────────────
+    // When two verb-field NPCs are both lingering at the same node
+    // (or adjacent nodes), fire a classified encounter bark.
+    _checkVerbEncounters();
+  }
+
+  /**
+   * Detect verb-field NPC encounters and fire semantically classified
+   * barks. See VERB_FIELD_NPC_ROADMAP.md §7.
+   */
+  function _checkVerbEncounters() {
+    if (typeof BarkLibrary === 'undefined') return;
+
+    var now = Date.now();
+
+    for (var i = 0; i < _active.length; i++) {
+      var a = _active[i];
+      if (!a._verbSet || !a._currentNode || a._verbSatisfyTimer <= 0) continue;
+
+      for (var j = i + 1; j < _active.length; j++) {
+        var b = _active[j];
+        if (!b._verbSet || !b._currentNode || b._verbSatisfyTimer <= 0) continue;
+
+        // Are they at the same node or adjacent nodes?
+        var adx = Math.abs(a._currentNode.x - b._currentNode.x);
+        var ady = Math.abs(a._currentNode.y - b._currentNode.y);
+        if (adx + ady > 2) continue;
+
+        // Cooldown check
+        var pairKey = a.id < b.id ? a.id + ':' + b.id : b.id + ':' + a.id;
+        if (_encounterCooldowns[pairKey] && now - _encounterCooldowns[pairKey] < ENCOUNTER_COOLDOWN_MS) {
+          continue;
+        }
+
+        // Classify the encounter
+        var encType = _classifyEncounter(a, b);
+        var nodeType = a._currentNode.type || 'bonfire';
+
+        // Build the bark pool key: encounter.<nodeType>.<encounterType>
+        var poolKey = 'encounter.' + nodeType + '.' + encType;
+
+        // Try the specific pool; fall back to generic encounter pool
+        if (!BarkLibrary.hasPool(poolKey)) {
+          poolKey = 'encounter.' + encType;
+        }
+        if (!BarkLibrary.hasPool(poolKey)) {
+          continue; // No bark pool for this encounter type yet
+        }
+
+        // Fire the encounter bark
+        BarkLibrary.fire(poolKey);
+        _encounterCooldowns[pairKey] = now;
+
+        // Face each other during encounter
+        _faceToward(a, b.x, b.y);
+        _faceToward(b, a.x, a.y);
+
+        // Extend linger so they don't walk away mid-bark
+        a._verbSatisfyTimer = Math.max(a._verbSatisfyTimer, 4000);
+        b._verbSatisfyTimer = Math.max(b._verbSatisfyTimer, 4000);
+
+        // Show speech capsules
+        if (typeof KaomojiCapsule !== 'undefined') {
+          KaomojiCapsule.startSpeech(a.id, 'speaking');
+          setTimeout(function (bid) {
+            KaomojiCapsule.startSpeech(bid, 'speaking');
+          }.bind(null, b.id), DIALOGUE_BEAT_MS);
+          setTimeout(function (aid, bid) {
+            KaomojiCapsule.stopSpeech(aid);
+            KaomojiCapsule.stopSpeech(bid);
+          }.bind(null, a.id, b.id), DIALOGUE_BEAT_MS * 3);
+        }
+      }
+    }
+  }
+
+  /**
+   * Classify an encounter between two verb-field NPCs.
+   * Returns a string key used to select the bark pool.
+   * See VERB_FIELD_NPC_ROADMAP.md §7.2.
+   */
+  function _classifyEncounter(a, b) {
+    var sameVerb = a._dominantVerb && b._dominantVerb
+                   && a._dominantVerb === b._dominantVerb;
+    var aFaction = a.factionId || null;
+    var bFaction = b.factionId || null;
+    var sameFaction = aFaction && bFaction && aFaction === bFaction;
+    var bothFaction = aFaction && bFaction;
+
+    if (!bothFaction) {
+      // At least one is a non-faction citizen
+      return 'gossip';
+    }
+
+    if (sameVerb && sameFaction) {
+      return 'camaraderie';
+    }
+    if (sameVerb && !sameFaction) {
+      return 'uneasy';
+    }
+    if (!sameVerb && sameFaction) {
+      return 'passing';
+    }
+    // Different verbs, different factions
+    return 'tension';
+  }
+
+  // ── Verb-field tick ───────────────────────────────────────────────
+  // See VERB_FIELD_NPC_ROADMAP.md §6 — Sundog-diffused movement.
+  //
+  // Each verb's need decays upward over time. The NPC moves toward the
+  // spatial node with the highest combined pull (need / distance).
+  // On arrival, the matching verb's need drops (bloom collapse) and the
+  // NPC lingers before other verbs pull them elsewhere.
+
+  function _tickVerbField(npc, dt, grid, nodes) {
+    var verbs = npc._verbSet;
+    var keys = Object.keys(verbs);
+
+    // 1. Decay — increase all verb needs over time
+    for (var vi = 0; vi < keys.length; vi++) {
+      var v = verbs[keys[vi]];
+      v.need = Math.min(1.0, v.need + v.decayRate * dt);
+    }
+
+    // 2. Satisfaction linger — if paused at a node, don't move
+    if (npc._verbSatisfyTimer > 0) {
+      npc._verbSatisfyTimer -= dt;
+      return;
+    }
+
+    // 3. Step timer — respect the NPC's step interval cadence
+    npc._stepTimer -= dt;
+    if (npc._stepTimer > 0) return;
+    npc._stepTimer = npc._stepInterval + (Math.random() * 200 - 100);
+
+    // 4. Score all reachable nodes — find the strongest pull
+    var bestScore = -1;
+    var bestNode  = null;
+
+    for (var ni = 0; ni < nodes.length; ni++) {
+      var node = nodes[ni];
+
+      // Compute total pull from all verbs this node satisfies
+      var pull = 0;
+      for (var vi2 = 0; vi2 < keys.length; vi2++) {
+        var vb = verbs[keys[vi2]];
+        for (var si = 0; si < vb.satisfiers.length; si++) {
+          if (vb.satisfiers[si] === node.type) {
+            // Faction lock check: faction_post nodes only satisfy
+            // NPCs whose verbFaction matches the node's faction tag
+            if (node.type === 'faction_post' && node.faction) {
+              if (vb.factionLock && vb.factionLock !== node.faction) continue;
+              if (!vb.factionLock && npc.factionId !== node.faction) continue;
+            }
+            pull += vb.need;
+            break; // Each verb counts once per node
+          }
+        }
+      }
+
+      if (pull <= 0) continue;
+
+      // Distance penalty — closer nodes score higher
+      var dx = npc.x - node.x;
+      var dy = npc.y - node.y;
+      var dist = Math.abs(dx) + Math.abs(dy); // Manhattan
+      if (dist === 0) dist = 0.5; // Already at the node
+
+      var score = pull / (dist * VF_DISTANCE_WEIGHT);
+      // Small random perturbation to break ties and create variety
+      score += Math.random() * VF_NOISE_FACTOR;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestNode  = node;
+      }
+    }
+
+    // 5. Step toward the winning node
+    if (bestNode) {
+      npc._verbTarget = bestNode;
+      _stepToward(npc, bestNode.x, bestNode.y, grid);
+    }
+
+    // 6. Check arrival — are we at or adjacent to any node?
+    for (var ai = 0; ai < nodes.length; ai++) {
+      var arrNode = nodes[ai];
+      var adx = Math.abs(npc.x - arrNode.x);
+      var ady = Math.abs(npc.y - arrNode.y);
+      if (adx + ady > 1) continue; // Not at this node
+
+      // Find which verb(s) this node satisfies and reduce their need
+      var dominated = null;
+      var bestNeed  = -1;
+      for (var vk = 0; vk < keys.length; vk++) {
+        var verb = verbs[keys[vk]];
+        for (var sk = 0; sk < verb.satisfiers.length; sk++) {
+          if (verb.satisfiers[sk] === arrNode.type) {
+            // Faction check (same as scoring)
+            if (arrNode.type === 'faction_post' && arrNode.faction) {
+              if ((verb.factionLock || npc.factionId) !== arrNode.faction) continue;
+            }
+            verb.need = Math.max(0, verb.need - VF_SATISFACTION_DROP);
+            if (verb.need + VF_SATISFACTION_DROP > bestNeed) {
+              bestNeed = verb.need + VF_SATISFACTION_DROP;
+              dominated = keys[vk];
+            }
+            break;
+          }
+        }
+      }
+
+      // Linger at the node
+      npc._verbSatisfyTimer = VF_LINGER_MIN +
+        Math.random() * (VF_LINGER_MAX - VF_LINGER_MIN);
+      npc._currentNode  = arrNode;
+      npc._dominantVerb = dominated;
+      npc._verbTarget   = null;
+
+      // Face toward the node
+      _faceToward(npc, arrNode.x, arrNode.y);
+      break;
+    }
+  }
+
+  /**
+   * Move one greedy step toward (tx, ty). Extracted from _tickPatrol
+   * for reuse by both patrol and verb-field systems.
+   */
+  function _stepToward(npc, tx, ty, grid) {
+    var diffX = tx - npc.x;
+    var diffY = ty - npc.y;
+    if (diffX === 0 && diffY === 0) return;
+
+    var dx = 0, dy = 0;
+    // Move along dominant axis first; fall back to other if blocked
+    if (Math.abs(diffX) >= Math.abs(diffY) && diffX !== 0) {
+      dx = diffX > 0 ? 1 : -1;
+    } else if (diffY !== 0) {
+      dy = diffY > 0 ? 1 : -1;
+    } else if (diffX !== 0) {
+      dx = diffX > 0 ? 1 : -1;
+    }
+
+    var nx = npc.x + dx;
+    var ny = npc.y + dy;
+
+    // Wall / occupancy check
+    var blocked = false;
+    if (grid && grid[ny] && grid[ny][nx] !== undefined) {
+      var tile = grid[ny][nx];
+      if (typeof TILES !== 'undefined' && !TILES.isWalkable(tile)) {
+        blocked = true;
+      }
+    }
+
+    if (blocked) {
+      // Try the other axis as fallback
+      var dx2 = 0, dy2 = 0;
+      if (dx !== 0 && diffY !== 0) {
+        dy2 = diffY > 0 ? 1 : -1;
+      } else if (dy !== 0 && diffX !== 0) {
+        dx2 = diffX > 0 ? 1 : -1;
+      }
+      if (dx2 !== 0 || dy2 !== 0) {
+        nx = npc.x + dx2;
+        ny = npc.y + dy2;
+        blocked = false;
+        if (grid && grid[ny] && grid[ny][nx] !== undefined) {
+          var tile2 = grid[ny][nx];
+          if (typeof TILES !== 'undefined' && !TILES.isWalkable(tile2)) {
+            blocked = true;
+          }
+        }
+        if (!blocked) { dx = dx2; dy = dy2; }
+        else return; // Both axes blocked — stay put
+      } else {
+        return; // No fallback axis
+      }
+    }
+
+    // Commit the step
+    npc._prevX = npc.x;
+    npc._prevY = npc.y;
+    npc._lerpT = 0;
+
+    npc.x = nx;
+    npc.y = ny;
+
+    if      (dx > 0)  npc.facing = 'east';
+    else if (dx < 0)  npc.facing = 'west';
+    else if (dy > 0)  npc.facing = 'south';
+    else if (dy < 0)  npc.facing = 'north';
+
+    _playNpcStep(nx, ny);
+  }
+
+  /**
+   * Face NPC toward a specific grid position.
+   */
+  function _faceToward(npc, tx, ty) {
+    var dx = tx - npc.x;
+    var dy = ty - npc.y;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      npc.facing = dx > 0 ? 'east' : (dx < 0 ? 'west' : npc.facing);
+    } else {
+      npc.facing = dy > 0 ? 'south' : (dy < 0 ? 'north' : npc.facing);
+    }
   }
 
   // Natural pause range at waypoint endpoints (ms)
   var WAYPOINT_PAUSE_MIN = 1500;
   var WAYPOINT_PAUSE_MAX = 4000;
+
+  // ── Spatial footstep for NPC patrol ──
+  // Softer than enemy steps — friendly villagers walk lightly.
+  // Contract-aware radius/volume like all spatial audio.
+  function _playNpcStep(nx, ny) {
+    if (typeof AudioSystem === 'undefined' || !AudioSystem.playSpatial) return;
+    if (typeof Player === 'undefined' || !Player.getPos) return;
+    var p = Player.getPos();
+
+    var contract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
+      ? FloorManager.getFloorContract() : null;
+    var depth = contract ? contract.depth : 'exterior';
+
+    var maxDist = depth === 'nested_dungeon' ? 3
+               : depth === 'interior' ? 4 : 6;
+    var baseVol = depth === 'nested_dungeon' ? 0.25
+                : depth === 'interior' ? 0.18 : 0.12;
+
+    var rate = 0.92 + Math.random() * 0.16;
+
+    AudioSystem.playSpatial('step', nx, ny, p.x, p.y,
+      { volume: baseVol, maxDist: maxDist, playbackRate: rate });
+  }
 
   function _tickPatrol(npc, dt, grid) {
     // Waypoint pause: NPC idles at endpoints before turning around
@@ -511,6 +950,9 @@ var NpcSystem = (function () {
       else if (dx < 0)  npc.facing = 'west';
       else if (dy > 0)  npc.facing = 'south';
       else if (dy < 0)  npc.facing = 'north';
+
+      // Spatial footstep — NPC patrol (softer than enemies)
+      _playNpcStep(nx, ny);
     }
   }
 
@@ -1039,7 +1481,9 @@ var NpcSystem = (function () {
         barkRadius:   4,
         barkInterval: 22000
       },
-      // ── 2. Tide Scholar — near Inn courtyard (NC pod) ────────
+      // ── 2. Tide Scholar — verb-field: scholar archetype ───────
+      //    Starts at tide_post (NC pod). Orbits between post, bonfire,
+      //    and noticeboard. Faction-locked duty verb.
       {
         id:           'floor1_tide_1',
         type:         TYPES.AMBIENT,
@@ -1048,13 +1492,16 @@ var NpcSystem = (function () {
         emoji:        '\uD83E\uDDD9',
         name:         'Tide Scholar',
         role:         'tide_member',
-        patrolPoints: [{ x: 22, y: 10 }, { x: 26, y: 10 }],
+        verbArchetype: 'scholar',
+        verbFaction:  'tide',
         stepInterval: 1600,
         barkPool:     'faction.tide',
         barkRadius:   3,
         barkInterval: 25000
       },
-      // ── 3. Foundry Rep — near Noticeboard (NE cluster) ───────
+      // ── 3. Foundry Rep — verb-field: worker archetype ────────
+      //    Starts at foundry_post (NE cluster). Strong duty pull,
+      //    occasional errands to noticeboard and bazaar entrance.
       {
         id:           'floor1_foundry_1',
         type:         TYPES.AMBIENT,
@@ -1063,13 +1510,16 @@ var NpcSystem = (function () {
         emoji:        '\uD83D\uDC68',
         name:         'Foundry Rep',
         role:         'foundry_member',
-        patrolPoints: [{ x: 36, y: 10 }, { x: 40, y: 10 }],
+        verbArchetype: 'worker',
+        verbFaction:  'foundry',
         stepInterval: 1500,
         barkPool:     'faction.foundry',
         barkRadius:   3,
         barkInterval: 30000
       },
-      // ── 4. Admiralty Officer — south road arcade patrol ───────
+      // ── 4. Admiralty Officer — verb-field: guard archetype ────
+      //    Starts at admiralty_post (south road). Very strong duty
+      //    pull — rarely leaves post. Occasional bonfire visit.
       {
         id:           'floor1_admiralty_1',
         type:         TYPES.AMBIENT,
@@ -1078,7 +1528,8 @@ var NpcSystem = (function () {
         emoji:        '\uD83D\uDC69',
         name:         'Admiralty Officer',
         role:         'admiralty_member',
-        patrolPoints: [{ x: 14, y: 22 }, { x: 26, y: 22 }],
+        verbArchetype: 'guard',
+        verbFaction:  'admiralty',
         stepInterval: 1300,
         barkPool:     'faction.admiralty',
         barkRadius:   3,

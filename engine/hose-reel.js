@@ -110,6 +110,13 @@ var HoseReel = (function () {
       AudioSystem.play('hose-reel-start', { volume: 0.4 });
     }
 
+    // TODO:SFX hose-zipline-loop — persistent looping zipline cable whir
+    // while reel is active. High-tension wire hum + fast spool whine,
+    // ~2-4s seamless loop, volume 0.25-0.35. Start here, stop in
+    // _arrive() and _abort(). Use AudioSystem.loop() or equivalent.
+    // The zipline whir IS the reel — it should feel like cable paying
+    // out under tension. Layer under hose-reel-step ticks.
+
     // Start first step
     _advance();
     return true;
@@ -222,6 +229,9 @@ var HoseReel = (function () {
         : 'Hose returned to truck.', 'loot');
     }
 
+    // TODO:SFX hose-zipline-loop-stop — stop the zipline cable whir loop
+    // here (counterpart to hose-zipline-loop started in start()).
+
     // TODO:SFX hose-reel-done — satisfying mechanical latch + water cutoff
     // silence, 300-500ms, volume 0.35-0.45. The sudden silence after the
     // drag loop stopping IS part of the sound design — let it breathe.
@@ -243,6 +253,9 @@ var HoseReel = (function () {
 
     // Restore normal movement speed
     if (MC && MC.setSpeedOverride) MC.setSpeedOverride(1);
+
+    // TODO:SFX hose-zipline-loop-stop — stop the zipline cable whir loop
+    // here too (abort path, counterpart to hose-zipline-loop in start()).
 
     if (typeof Toast !== 'undefined') {
       Toast.show(typeof i18n !== 'undefined'

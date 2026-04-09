@@ -332,6 +332,34 @@ var EnemyAI = (function () {
     }
   }
 
+  // ── Spatial footstep for NPC/enemy movement ──
+  // Contract-aware: dungeon corridors carry sound further (higher vol,
+  // shorter radius), exteriors dampen (lower vol, wider radius).
+  function _playEntityStep(nx, ny, isChase) {
+    if (typeof AudioSystem === 'undefined' || !AudioSystem.playSpatial) return;
+    if (typeof Player === 'undefined' || !Player.getPos) return;
+    var p = Player.getPos();
+
+    var contract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
+      ? FloorManager.getFloorContract() : null;
+    var depth = contract ? contract.depth : 'exterior';
+
+    // Tighter spaces → louder steps, shorter carry distance
+    var maxDist = depth === 'nested_dungeon' ? 4
+               : depth === 'interior' ? 5 : 7;
+    var baseVol = depth === 'nested_dungeon' ? 0.35
+                : depth === 'interior' ? 0.25 : 0.18;
+
+    // Chase footsteps are heavier
+    if (isChase) baseVol *= 1.4;
+
+    // Slight pitch randomisation (0.90–1.10) for organic feel
+    var rate = 0.90 + Math.random() * 0.20;
+
+    AudioSystem.playSpatial('step', nx, ny, p.x, p.y,
+      { volume: baseVol, maxDist: maxDist, playbackRate: rate });
+  }
+
   function _moveToPoint(enemy, pt, grid, W, H) {
     if (!pt) return;
     var nx = pt.x;
@@ -349,6 +377,9 @@ var EnemyAI = (function () {
     enemy.x = nx;
     enemy.y = ny;
     _onEnemyArrived(enemy, nx, ny);
+
+    // Spatial footstep — patrol pace
+    _playEntityStep(nx, ny, false);
   }
 
   // ── Chase behavior ──
@@ -395,6 +426,9 @@ var EnemyAI = (function () {
     enemy.x = nx;
     enemy.y = ny;
     _onEnemyArrived(enemy, nx, ny);
+
+    // Spatial footstep — chase pace (heavier)
+    _playEntityStep(nx, ny, true);
     return true;
   }
 

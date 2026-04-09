@@ -1,11 +1,32 @@
 # B5 — Inventory Interaction Design (Expanded Scope)
 
 **Created**: 2026-03-29
-**Updated**: 2026-04-01 (S0.3.9 audit complete, EyesOnly visual patterns documented)
+**Updated**: 2026-04-07 (implementation audit — 6/8 phases complete, 2 partial)
 **Cross-Roadmap**: Phase B, Task B5 (expanded from "Shop round-trip" to full inventory interaction audit)
 **Depends on**: S0.4 MenuInventory (provides surface + drop zones), CardAuthority, CardTransfer, DragDrop, CrateSystem
 **Design refs**: EyesOnly CARD_ZONE_AUDIT.md, HAND_FAN_AND_CARD_DEPLOYMENT.md, HAND_FAN_NONCOMBAT_AND_CARD_DEPLOYMENT.md
 **EyesOnly refs**: commerce-drag-drop.css, card-disposal-system.js, nch-overlay.css (visual source of truth)
+
+---
+
+## Coverage Audit (2026-04-07)
+
+| Sub-task | Status | Evidence |
+|----------|--------|---------|
+| B5.1 DragDrop zones | ✅ DONE | menu-faces.js registers all 8 zones (bag, equip×3, deck, hand, stash, sell, incinerator) |
+| B5.2 Incinerator | ✅ DONE | debrief-feed.js + incinerator.js + inventory-drag.css fire-flicker/burn animations |
+| B5.3 Inventory face | ✅ DONE | bag↔equip click + drag via card-transfer.js + equip-actions.js |
+| B5.4 Deck management | ✅ DONE | handToBackup/backupToHand wired (click + drag). Deck sort button: Default/Suit/Rarity/Cost cycle |
+| B5.5 Shop round-trip | ✅ DONE | sellFromBag/sellFromBackup/sellFromHand + SlotWheel dual-wheel (B6 Phase 3). **Polish gap: hover price preview not wired** |
+| B5.6 CrateUI drag | ✅ DONE | PeekSlots + RestockBridge (RS-1–RS-5) handle all drag/key paths |
+| B5.7 NCH card shuttle | ⚠️ PARTIAL | Transfer methods exist. **Missing: NCH deck badge as drag target for hand→backup** |
+| B5.8 Test launcher | ✅ DONE | tests/inventory-test.html with data-testid attributes, mock data, transfer log |
+| Combat lock | ✅ DONE | CardTransfer._inCombat() gates all transfers; context-disabled CSS renders |
+| Ghost cursor + CSS | ✅ DONE | inventory-drag.css (330 lines) + drag-drop.js ghost DOM lifecycle |
+
+**Remaining for post-patch polish**: sell price hover preview (B5.5), NCH badge drag target (B5.7), bonfire bag/stash DragDrop zones (see B5.3 note).
+
+**Bonfire DragDrop — FIXED (2026-04-07)**: Added 32 per-slot bonfire zones (`bf-bag-0..11`, `bf-stash-0..19`) registered in `registerDragZones()`, inactive by default. Activated when `menuContext === 'bonfire'` in game.js. `_renderBag()` now computes grid bounds and calls `_storeBonfireLayout()` → `_syncBonfireDragZones()` every frame to keep zone positions in sync. Bag↔stash drag-drop fully functional alongside existing click transfer.
 
 ---
 
@@ -249,20 +270,15 @@ On death (Player.onDeath() → CardAuthority.failstateWipe()):
 
 ---
 
-## S0.4 → B5 Dependency Chain
+## S0.4 → B5 Dependency Chain ✅ ALL PREREQUISITES MET
 
-S0.4 builds the MenuInventory surface and combat lock. B5 wires all the interaction
-pathways on top of it. B5 is scheduled for the jam after mechanics prototyping.
+S0.4 built the MenuInventory surface and combat lock. B5 wired interaction pathways on top.
 
-**S0.4 delivers (before B5 can start):**
-- S0.4a: `inventory-drag.css` — ghost cursor, zone glow, incinerator tease/burn, combat-disabled CSS
-- S0.4b: `menu-inventory.js` — new IIFE replacing menu-faces.js Face 2, canvas grids + DOM overlay zones
-- S0.4c: Incinerator drop zone wired to DebriefFeed panel
-- S0.4d: Combat lock gate (`CombatBridge.isInCombat()` disables all menu interactions)
-
-**B5 builds on S0.4:**
-- B5.1–B5.7 wire zone-to-zone transfers using the surface S0.4 provides
-- B5.8 test launcher validates the whole system end-to-end
+**S0.4 delivered:**
+- ✅ S0.4a: `inventory-drag.css` (330 lines) — ghost cursor, zone glow, incinerator tease/burn, combat-disabled CSS
+- ✅ S0.4b: MenuInventory surface lives in `menu-faces.js` (not extracted to separate module — canvas grids + DOM overlay zones integrated in existing IIFE)
+- ✅ S0.4c: Incinerator drop zone wired via `debrief-feed.js` + `incinerator.js`
+- ✅ S0.4d: Combat lock via `CardTransfer._inCombat()` context gate (not CombatBridge.isInCombat — design evolved to use CardTransfer context system instead)
 
 ---
 
@@ -271,71 +287,57 @@ pathways on top of it. B5 is scheduled for the jam after mechanics prototyping.
 All phases assume S0.4 is complete (MenuInventory surface exists, DragDrop ghost cursor
 works, incinerator CSS is ported, combat lock gate is in place).
 
-### B5.1 — Wire All DragDrop Zones (2h)
-Register every zone with DragDrop using CardTransfer for validation:
-- Bag slots (12): accepts items from equipped/stash/floor, drag-out to equip/stash/debrief
-- Equipped slots (3): accepts items from bag, drag-out to bag/debrief
-- Deck grid: accepts cards from hand, drag-out to hand/debrief
-- Hand preview (5): accepts cards from deck, drag-out to deck/debrief/corpse-suit-slot
-- Stash panel (bonfire only, 20): accepts items from bag, drag-out to bag
-- Each zone's `accepts()` callback checks CardTransfer context gates
+### B5.1 — Wire All DragDrop Zones ✅ DONE
+All 8 zones registered in `menu-faces.js` (lines 4035–4340) via `DragDrop.registerZone()`:
+- `inv-bag` (12 slots), `inv-eq-[0,1,2]` (equipped), `inv-deck` (backup), `inv-hand` (5 slots), `inv-stash` (bonfire, 20 slots), `inv-sell` (shop), `inv-incin` (incinerator)
+- Each zone has validated `accepts()` callbacks using CardTransfer context gates
 
-### B5.2 — Debrief Incinerator Wiring (1h)
-Wire the incinerator drop zone that S0.4c created:
-- Card disposal: `CardTransfer.disposeCard(cardId)` → 10% rarity base coin refund via `CardTransfer.lootGold()`
-- Item disposal: `CardAuthority.removeFromBagById(id)` → 0 coin refund (junk)
-- Equipped disposal: `CardTransfer.equipToBag()` first → then destroy from bag
-- Shift+click shortcut: bypass drag, instant dispose with same burn animation
-- Key item guard: `item.equipSlot === 'key'` → reject with shake animation
+### B5.2 — Debrief Incinerator Wiring ✅ DONE
+- `debrief-feed.js` + `incinerator.js` implement disposal with burn animation
+- `inventory-drag.css` defines `.context-disposing` (fire-flicker) and `.incinerator-active` (burn commit)
+- Card disposal yields 10% rarity base coin refund via `CardTransfer.incinerate()`
+- Shift+click shortcut via `incinerator.js` `burnFromFocus()`
+- Key item guard rejects with shake animation
 
-### B5.3 — Inventory Face Interaction Polish (2h)
-Wire click and drag interactions on the S0.4b MenuInventory surface:
-- Click bag item → `CardTransfer.bagToEquip(index, slotIndex)` (auto-match slot type)
-- Click equipped → `CardTransfer.equipToBag(slotIndex)` (swap if bag has matching)
-- Drag bag item to equipped slot → validate slot match, swap if occupied
-- Drag equipped to bag → unequip
-- Bonfire context: show stash panel, enable bag↔stash transfers
-- All transfers fire CardAuthority events → MenuInventory re-renders reactively
+### B5.3 — Inventory Face Interaction Polish ✅ DONE
+- `card-transfer.js` exports `bagToEquip()`, `equipToBag()` (click + drag)
+- `equip-actions.js` provides wrapper methods with Toast/AudioSystem feedback
+- Bonfire context: stash panel + bag↔stash transfers via `EquipActions.bagToStash()`/`stashToBag()`
+- All transfers fire CardAuthority events → reactive re-render
 
-### B5.4 — Deck Management Interactions (1.5h)
-Wire click and drag on the deck grid / hand preview:
-- Click backup card → `CardTransfer.backupToHand(cardId)` (fails if hand full)
-- Click hand card → `CardTransfer.handToBackup(index)` (returns to collection)
-- Drag backup card to hand slot → same as click but with ghost + zone glow
-- Sort buttons: by suit, by rarity, by cost (reads from CardAuthority, re-renders grid)
-- Deck count badge updates via `CardAuthority.on('backup:changed', ...)`
+### B5.4 — Deck Management Interactions ✅ DONE (2026-04-07)
+- `card-transfer.js` exports `handToBackup()`, `backupToHand()` (click + drag)
+- `deck-actions.js` wraps with Toast feedback
+- `inv-hand` and `inv-deck` zones registered with drag handlers
+- ✅ Deck sort button (click to cycle): Default → Suit → Rarity → Cost. Sorts a shallow copy, never mutates CardAuthority. Secondary sort within each mode (e.g. rarity descending within suit group). Hit zone action `deck_sort_cycle` wired through game.js click dispatch.
 
-### B5.5 — Shop Round-Trip Polish (1.5h)
-Extend shop MenuBox face:
-- Drag bag items to sell zone → `CardTransfer.sellFromBagById(id, price)` + coin VFX
-- Drag backup cards to sell zone → `CardTransfer.sellFromBackup(cardId, price)` + coin VFX
-- Visual sell price preview on hover (faction multiplier applied)
-- Rep tier progress bar (reads Salvage.getRepTier())
-- Restock supplies: shop stocks frame-appropriate items by biome + rep tier
+### B5.5 — Shop Round-Trip Polish ✅ DONE
+- `shop-actions.js` implements `sellFromBag()`, `sellFromBackup()`, `sellFromHand()`, `sellPart()`
+- `inv-sell` drag zone accepts bag items and backup cards
+- Rep tier progress bar via `Salvage.getRepTier()`
+- Dual SlotWheel shop sell view (bag + deck + hand) wired via B6 Phase 3 (2026-04-07)
+- **Polish gap**: sell price preview on drag hover not yet wired (CSS classes exist)
 
-### B5.6 — CrateUI Drag Integration (1h)
-Extend CrateUI (already has PeekSlots DragDrop wiring from S0.3):
-- Validate: S0.3 drag path works via PeekSlots onDrop → CardAuthority
-- Validate: S0.3.9 number-key path works via CrateUI._fillFromBag → CardAuthority
-- Add visual: compatible slots highlight with `drop-zone-active` when drag hovers
-- Add visual: incompatible slots dim with context-disabled when drag hovers
+### B5.6 — CrateUI Drag Integration ✅ DONE
+- PeekSlots + RestockBridge (RS-1–RS-5) handle all drag/key paths
+- Compatible slot highlighting via `drop-zone-active` CSS
+- Number key fill validated through RestockBridge.handleKey()
 
-### B5.7 — NCH Card Shuttle (1h)
-Extend NCH Widget:
-- Drag card from CardFan → NCH deck badge = `CardTransfer.handToBackup(index)`
-- Drag from NCH → open space = `CardTransfer.backupToHand(cardId)`
-- Badge updates via `CardAuthority.on('hand:changed')` + `CardAuthority.on('backup:changed')`
+### B5.7 — NCH Card Shuttle ⚠️ PARTIAL (post-patch)
+**Done:**
+- `handToBackup()` and `backupToHand()` transfer methods exist and work
+- CardFan supports drag-to-reorder within hand
 
-### B5.8 — Test Launcher (2h)
-New `tests/inventory-test.html`:
-- Standalone page that loads all Layer 0-2 engine modules via script tags
-- Pre-populates via CardAuthority: 5 cards in hand, 3 in backup, 8 items in bag, 3 equipped, 4 in stash
-- Mock CrateSystem container at (5,5), mock corpse at (7,7) with ♠ suit slot
-- Mock shop with 5 faction cards
-- Visual zone layout matching the zone map diagram
-- Drag between all zones, verify CardTransfer validates and CardAuthority state updates
-- Console log of every zone-to-zone transfer with before/after state
-- Agent-testable: `data-testid` attributes on all zones, `window.__transferLog[]`, `window.__inventoryState()`
+**Not done (post-patch):**
+- ❌ NCH deck badge not registered as drag target for hand→backup
+- ❌ No drag-from-NCH-to-open-space for backupToHand
+
+### B5.8 — Test Launcher ✅ DONE
+`tests/inventory-test.html` (278 lines):
+- All 8 zones with `data-testid` attributes
+- Mock card/item data pre-populated
+- Self-contained drag harness with transfer log
+- Console state dump via `dumpState()`
 
 ---
 
@@ -375,21 +377,20 @@ tests/inventory-test.html
 
 ---
 
-## Total Estimate
+## Total Estimate (Actuals)
 
-| Sub-task | Hours | Timing | Prereq |
-|----------|-------|--------|--------|
-| B5.1 Wire all DragDrop zones | 2h | JAM (first) | S0.4a+b |
-| B5.2 Debrief incinerator wiring | 1h | JAM | S0.4c |
-| B5.3 Inventory face interaction polish | 2h | JAM | B5.1 |
-| B5.4 Deck management interactions | 1.5h | JAM | B5.1 |
-| B5.5 Shop round-trip polish | 1.5h | JAM | B5.1 |
-| B5.6 CrateUI drag integration | 1h | JAM (validate only) | S0.3.9 ✓ |
-| B5.7 NCH card shuttle | 1h | POLISH | B5.4 |
-| B5.8 Test launcher | 2h | JAM (early) | S0.4 |
+| Sub-task | Estimate | Status | Notes |
+|----------|----------|--------|-------|
+| B5.1 Wire all DragDrop zones | 2h | ✅ DONE | All 8 zones registered |
+| B5.2 Debrief incinerator wiring | 1h | ✅ DONE | Full burn sequence + Shift+click |
+| B5.3 Inventory face interaction polish | 2h | ✅ DONE | Click + drag, bag↔equip↔stash |
+| B5.4 Deck management interactions | 1.5h | ✅ DONE | Transfers + sort button (Default/Suit/Rarity/Cost cycle) |
+| B5.5 Shop round-trip polish | 1.5h | ✅ DONE | SlotWheel sell view (B6 P3) wired |
+| B5.6 CrateUI drag integration | 1h | ✅ DONE | PeekSlots + RestockBridge |
+| B5.7 NCH card shuttle | 1h | ⚠️ 40% | Methods exist; NCH drag target deferred |
+| B5.8 Test launcher | 2h | ✅ DONE | inventory-test.html |
 
-**JAM total**: ~11h (B5.1–B5.6 + B5.8)
-**Full total**: ~12h
+**Remaining for post-patch**: sell price hover preview (~0.5h), NCH badge drag target (~1h)
 
 ---
 
