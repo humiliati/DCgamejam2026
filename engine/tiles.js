@@ -74,11 +74,110 @@ var TILES = (function () {
     REFRIG_LOCKER:    59,  // Cold storage panel — 1.0× metal cabinet. Errands for corpse preservation.
 
     // ── Architectural Shape Tiles (ARCHITECTURAL_SHAPES_ROADMAP §1-3) ────────
-    ROOF_EAVE_L:      60,  // Left eave — 0.20× thin strip, +0.05 raised. Lowest roof point.
-    ROOF_SLOPE_L:     61,  // Left slope — 0.25× strip, +0.15 raised. Ascending slope.
-    ROOF_PEAK:        62,  // Ridge beam — 0.30× thickest strip, +0.30 raised. Highest point.
-    ROOF_SLOPE_R:     63,  // Right slope — 0.25× strip, +0.15 raised. Mirror of SLOPE_L.
-    ROOF_EAVE_R:      64   // Right eave — 0.20× thin strip, +0.05 raised. Mirror of EAVE_L.
+    ROOF_EAVE_L:      60,  // Left eave — 0.20× thin strip, raised. Floating (no step fill).
+    ROOF_SLOPE_L:     61,  // Left slope — 0.25× strip, raised. Floating.
+    ROOF_PEAK:        62,  // Ridge beam — 0.30× thickest strip, raised highest. Floating.
+    ROOF_SLOPE_R:     63,  // Right slope — 0.25× strip, raised. Floating.
+    ROOF_EAVE_R:      64,  // Right eave — 0.20× thin strip, raised. Floating.
+    CANOPY:           65,  // Tree canopy ring — 0.25× thin strip, raised high. Walkable + floating.
+                           //   OPAQUE LID variant: underside rendered via per-column
+                           //   floor-cast that stops at the tile footprint, solid fill.
+    CANOPY_MOSS:      66,  // Swampy hanging-moss canopy — same floating strip, but the
+                           //   underside uses a translucent fog-darkened band sampled from
+                           //   the texture edge. Reads as hanging Spanish moss / vines:
+                           //   the sky shows through in patches, which is the whole point.
+    ROOF_CRENEL:      67,  // Crenellated rampart — floating slab with a geometric toothed
+                           //   silhouette on the top half (4 teeth per tile UV, solid bottom).
+                           //   Single-pane: only the ray-entry face renders (no back-face
+                           //   injection) so the silhouette reads as a clean merlon line
+                           //   instead of a doubled lattice. Drop on a roof perimeter cell
+                           //   directly above the building wall — the wall's top cap shows
+                           //   between the teeth via the N-layer back-layer pass.
+    PERGOLA:          68,  // Open-air beam lattice — same toothed silhouette as ROOF_CRENEL
+                           //   but WITH back-face injection, so both front and back faces
+                           //   render the tooth pattern. The duplicated silhouette reads
+                           //   as vertical posts holding up a horizontal cross-beam — the
+                           //   correct look for a pergola or shade trellis over a public
+                           //   plaza, market row, or temple courtyard. Same altitude model
+                           //   as CRENEL (offset sets slab bottom, wallH sets thickness).
+
+    // ── Freeform community pyre (RAYCAST_FREEFORM_UPGRADE_ROADMAP §4 Phase 2) ──
+    CITY_BONFIRE:     69,  // City Bonfire — Olympic-model community pyre kept lit
+                           //   during the games. Framed as a "greater hearth":
+                           //   2-tile tall freeform column split into three bands.
+                           //     • 0.50 world units — waist-high limestone pedestal
+                           //     • 0.70 world units — narrow fire window (animated
+                           //       gradient via the 'city_bonfire_fire' gap filler)
+                           //     • 0.80 world units — suspended chimney hood, same
+                           //       mantle thickness as interior HEARTH so the two
+                           //       read as kin. The PERGOLA_BEAM canopy ring lands
+                           //       on top of this hood to frame the outdoor plaza
+                           //       around the pyre.
+                           //   Opaque to rays (z-bypass is applied by the freeform
+                           //   path so the pyre itself doesn't occlude nearby sprites).
+                           //   Not walkable. Anchors the Lantern Row plaza and marks
+                           //   safe-rest zones for the Dispatcher's briefing in Act 1.
+                           //   See contract exterior() tileFreeform entry for per-
+                           //   biome tuning.
+
+    // ── Freeform pergola beam (RAYCAST_FREEFORM_UPGRADE_ROADMAP §4 Phase 2b) ──
+    PERGOLA_BEAM:     70,  // Pergola Beam — freeform canopy strip that rests on
+                           //   top of the adjacent CITY_BONFIRE chimney hood as a
+                           //   thin "landing" rail — roughly one quarter the
+                           //   thickness of the chimney so the pergola reads as
+                           //   delicate beam lattice instead of a second full-mass
+                           //   slab.
+                           //   2-tile tall freeform column with:
+                           //     • hLower 0.0  — no pedestal (nothing at plaza grade)
+                           //     • gap    1.80 — transparent cavity (sky + plaza
+                           //       show through so the player can walk under the
+                           //       canopy and still see the pyre column)
+                           //     • hUpper 0.20 — stained-hardwood canopy strip at
+                           //       world-unit elevation 1.80–2.00. That sits at
+                           //       the top of the CITY_BONFIRE chimney's 1.20–2.00
+                           //       hood band so a ring of beams appears to land on
+                           //       top of the chimney.
+                           //   Uses the '_default' gap filler (transparent cavity) —
+                           //   no custom filler needed. The beam is the only painted
+                           //   band; everything below is sky/plaza.
+                           //   Opaque to rays so the raycaster registers a hit and
+                           //   feeds the freeform path, but the z-bypass applied to
+                           //   all freeform tiles means sprites behind the beam
+                           //   render cleanly (and the new pedestal-mask branch is
+                           //   a no-op here because hLower = 0).
+                           //   Walkable — the player passes under the canopy the
+                           //   same way they walk under CANOPY / ROOF strips.
+                           //   Placement: ring of 7 around CITY_BONFIRE on the
+                           //   Promenade, plus future cells at the Dispatcher's
+                           //   Office approach (Lantern Row, floor "2.1").
+                           //   See contract exterior() tileFreeform entry.
+
+    // ── Freeform tavern window (RAYCAST_FREEFORM_UPGRADE_ROADMAP §4 Phase 4) ──
+    // Note: IDs 71–72 are reserved for Phase 3 (ARCH_DOORWAY, PORTHOLE)
+    // which ship with per-column alpha-mask freeform. WINDOW_TAVERN takes
+    // 73 so those IDs stay open. Phase 4 uses the SAME row-range freeform
+    // path as HEARTH / CITY_BONFIRE / DUMP_TRUCK — no new renderer work,
+    // just a new tile + gap filler + interior-scene billboard.
+    WINDOW_TAVERN:    73   // Tavern Window — exterior building-facade wall tile
+                           //   with a row-range "glass" cavity in the middle
+                           //   of a 2.0-tall wall. Three bands, reading bottom-up:
+                           //     • 0.00 → 0.40 — wooden sill + wall below the window
+                           //     • 0.40 → 1.15 — transparent glass slot (0.75 tall,
+                           //       centred on eye level) filled with a faint amber
+                           //       tint via the 'window_tavern_interior' gap filler
+                           //     • 1.15 → 2.00 — lintel + wall above the window
+                           //   The interior scene (amber glow, silhouette of bar
+                           //   patrons / furniture) is emitted as a billboard
+                           //   sprite by WindowSprites (Layer 3) so the gap filler
+                           //   stays transparent — same pattern as HEARTH's
+                           //   dragonfire and DUMP_TRUCK's hose reel.
+                           //   Opaque (DDA hit → freeform path), not walkable —
+                           //   it replaces WALL tiles on building exteriors so
+                           //   the player walks past it on the street side.
+                           //   Intended placement: Driftwood Inn and Coral Bazaar
+                           //   facades on the Promenade (`1`), with future
+                           //   placement on Lantern Row shops (`2`).
+                           //   See contract exterior() tileFreeform entry.
   };
 
   /** Check if a tile blocks movement */
@@ -91,7 +190,11 @@ var TILES = (function () {
            tile === T.BONFIRE || tile === T.CORPSE || tile === T.COLLECTIBLE ||
            tile === T.PUZZLE || tile === T.ROAD || tile === T.PATH ||
            tile === T.GRASS || tile === T.DETRITUS ||
-           tile === T.ROOST || tile === T.FUNGAL_PATCH || tile === T.TERRITORIAL_MARK;
+           tile === T.ROOST || tile === T.FUNGAL_PATCH || tile === T.TERRITORIAL_MARK ||
+           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL ||
+           tile === T.PERGOLA || tile === T.PERGOLA_BEAM ||
+           tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK ||
+           tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -106,7 +209,9 @@ var TILES = (function () {
            tile === T.WELL || tile === T.BENCH || tile === T.NOTICE_BOARD || tile === T.ANVIL || tile === T.BARREL || tile === T.CHARGING_CRADLE || tile === T.SWITCHBOARD || tile === T.SOUP_KITCHEN || tile === T.COT ||
            tile === T.NEST || tile === T.DEN || tile === T.ENERGY_CONDUIT ||
            tile === T.STRETCHER_DOCK || tile === T.TRIAGE_BED || tile === T.MORGUE_TABLE || tile === T.INCINERATOR || tile === T.REFRIG_LOCKER ||
-           tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R;
+           tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
+           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL || tile === T.PERGOLA ||
+           tile === T.CITY_BONFIRE || tile === T.PERGOLA_BEAM || tile === T.WINDOW_TAVERN;
   };
 
   /** Check if tile is a torch (lit or unlit) */
@@ -119,6 +224,98 @@ var TILES = (function () {
     return tile === T.DOOR || tile === T.DOOR_BACK || tile === T.DOOR_EXIT ||
            tile === T.STAIRS_DN || tile === T.STAIRS_UP || tile === T.BOSS_DOOR ||
            tile === T.LOCKED_DOOR;
+  };
+
+  /** Check if tile is a floating architectural shape (no step fill, walkable + opaque) */
+  T.isFloating = function (tile) {
+    return tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L ||
+           tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R ||
+           tile === T.ROOF_EAVE_R || tile === T.CANOPY || tile === T.CANOPY_MOSS ||
+           tile === T.ROOF_CRENEL || tile === T.PERGOLA;
+  };
+
+  /**
+   * Check if a floating tile carries a per-column silhouette cutout (merlons
+   * + crenels). Tiles in this set draw their ray-entry face with a UV-driven
+   * tooth pattern so alternating bands clip the slab's upper half, revealing
+   * sky/back-geometry through the gaps. Back layers behind the slab are
+   * gathered by the N-layer loop's floating-foreground branch (which starts
+   * _maxTop=0 so under-slab walls still register).
+   *
+   * ROOF_CRENEL uses single-pane rendering (no back-face injection) — the
+   * silhouette reads as one clean merlon line crowning the wall below it.
+   * PERGOLA uses the same tooth pattern WITH back-face injection — the
+   * duplicated silhouette reads as vertical posts + horizontal cross-beam,
+   * the correct look for an open-air shade structure.
+   */
+  T.isCrenellated = function (tile) {
+    return tile === T.ROOF_CRENEL || tile === T.PERGOLA;
+  };
+
+  /**
+   * Check if a crenellated tile should inject a back-face for the N-layer
+   * stack. PERGOLA does (both sides of the lattice show); CRENEL does not
+   * (single-pane rampart silhouette). Used by the raycaster to suppress
+   * back-face injection on CRENEL while still firing it on other floating
+   * tiles (CANOPY, ROOF_PEAK, PERGOLA, etc.) that need the far face to
+   * avoid a paper-cutout silhouette.
+   */
+  T.isFloatingBackFace = function (tile) {
+    // All floating tiles EXCEPT ROOF_CRENEL need a back face.
+    return T.isFloating(tile) && tile !== T.ROOF_CRENEL;
+  };
+
+  /**
+   * Check if a floating tile uses the translucent "hanging moss" underside
+   * rendering style (sky visible in patches) vs. the opaque-lid underside
+   * (solid footprint-clipped projection). Only CANOPY_MOSS uses the moss
+   * style; all other floating tiles use the opaque lid.
+   */
+  T.isFloatingMoss = function (tile) {
+    return tile === T.CANOPY_MOSS;
+  };
+
+  /**
+   * Check if a floating tile uses the opaque-lid underside rendering style.
+   * Used by the raycaster to decide between moss band and floor-cast pass.
+   */
+  T.isFloatingLid = function (tile) {
+    return tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L ||
+           tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R ||
+           tile === T.ROOF_EAVE_R || tile === T.CANOPY ||
+           tile === T.ROOF_CRENEL || tile === T.PERGOLA;
+  };
+
+  /**
+   * Check if a tile is a candidate for freeform two-segment rendering.
+   * Freeform tiles split their wall column into an upper brick band, a
+   * gap (fire cavity / arch opening / window), and a lower brick band.
+   * The per-tile gap geometry is configured on the spatial contract via
+   * the `tileFreeform` table ({ hUpper, hLower } in world units).
+   *
+   * This predicate is just a fast-path filter — the raycaster still
+   * consults `SpatialContract.getTileFreeform()` to get the actual
+   * segment bounds (and gracefully degrades to single-segment rendering
+   * when no config exists for the active contract).
+   *
+   * See docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md for the phased plan.
+   */
+  T.isFreeform = function (tile) {
+    // Phase 1: HEARTH (fire-cavity sandwich — interior).
+    // Phase 2: + CITY_BONFIRE (Olympic pyre — exterior community pyre).
+    // Phase 2b: + PERGOLA_BEAM (top-anchored beam, same chimney elevation
+    //   as CITY_BONFIRE so a ring of beams snaps flush to the hood).
+    // Phase 2c: + DUMP_TRUCK (HEARTH-stature pressure-wash truck with a
+    //   thin ground-level spool cavity instead of a mid-body fire window).
+    //   The freeform path lets the spool slot render as a genuine cutout
+    //   while the lower body carries wheel decor and the upper chassis
+    //   reads as a tall solid mass.
+    // Phase 3: + ARCH_DOORWAY, PORTHOLE.
+    // Phase 4: + WINDOW_TAVERN (row-range glass slot on building facades,
+    //   interior scene billboard renders inside the transparent gap).
+    return tile === T.HEARTH || tile === T.CITY_BONFIRE ||
+           tile === T.PERGOLA_BEAM || tile === T.DUMP_TRUCK ||
+           tile === T.WINDOW_TAVERN;
   };
 
   return T;

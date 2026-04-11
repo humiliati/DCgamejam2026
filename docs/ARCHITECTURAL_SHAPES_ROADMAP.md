@@ -7,6 +7,16 @@
 (texture system + height offsets), `SpatialContract` (rendering rules),
 `Raycaster` (wall/floor/sprite pipeline).
 
+> **2026-04-10 update — Phase 7 & 8 superseded.** The multi-segment
+> column work and per-column alpha-mask work described in Phases 7–8
+> below have been rescoped into a dedicated plan modelled on the
+> `raycast.js-master` reference engine's freeform block tile type. See
+> **`RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`** for the phased path:
+> two-segment walls (hearth sandwich, civilized bonfire + pergola
+> moat), per-column alpha-mask gaps (arches, portholes), and window
+> interior scenes. Phases 1–6 in this document still stand as the
+> data-only / single-segment additions.
+
 ---
 
 ## Engine Summary for Outside Contributors

@@ -215,6 +215,24 @@ var TitleScreen = (function () {
     if (_phase === 2 && _hoveredZoneIdx >= 0 && _hoveredZoneIdx < AVATARS.length) {
       _avatarIndex = _hoveredZoneIdx;
     }
+
+    // Unified hover→keyboard sync: if the hovered zone declares a
+    // hoverSelect callback, run it so keyboard state (_settingsSelected,
+    // _selected, etc.) lines up with whichever row the mouse is over.
+    // Keyboard and mouse never disagree after this.
+    _applyHoverSelect();
+  }
+
+  // Call the hoverSelect callback on the currently-hovered hit zone, if
+  // any. Used from _onMouseMove (mouse-driven) and from the end of
+  // render() (cursor didn't move but layout did — eg. scroll, phase
+  // change, freshly-added row).
+  function _applyHoverSelect() {
+    if (_hoveredZoneIdx < 0 || _hoveredZoneIdx >= _hitZones.length) return;
+    var z = _hitZones[_hoveredZoneIdx];
+    if (z && typeof z.hoverSelect === 'function') {
+      z.hoverSelect();
+    }
   }
 
   function _onKey(e) {
@@ -506,6 +524,11 @@ var TitleScreen = (function () {
         break;
       }
     }
+    // Sync keyboard state to whatever the cursor is over now. Without
+    // this, a row that scrolls / appears under a stationary cursor
+    // would light up as "hovered" while keyboard selection stayed on
+    // a different row — the classic disjoint state.
+    _applyHoverSelect();
   }
 
   /**
@@ -1350,6 +1373,9 @@ var TitleScreen = (function () {
     { key: 'music',  label: 'Music',            type: 'toggle' },
     { key: 'screen', label: 'Screen Shake',     type: 'toggle' },
     { key: 'invertY', label: 'Invert Free Look', type: 'toggle' },
+    { key: 'renderScale', label: 'Render Scale', type: 'cycle',
+      values: ['100% (native)', '75%', '50% (recommended)', '33%', '25% (lowest)'],
+      map: [1.00, 0.75, 0.50, 0.33, 0.25] },
     { key: 'lang',   label: 'Language',          type: 'toggle' },
     // ── Gamepad ──
     { key: '_header_gp', label: 'GAMEPAD', type: 'header' },
@@ -1368,10 +1394,22 @@ var TitleScreen = (function () {
 
   var _settings = {
     sfx: true, music: true, screen: true, invertY: false, lang: true,
+    renderScale: 0,  // index into SETTINGS_ITEMS renderScale values — synced from Raycaster
     gpEnabled: true, gpDeadzone: 1, gpVibration: true,
     quadStick: false, holdConfirm: 0, autoAim: false,
     largeText: false, highContrast: false, slowMode: false
   };
+
+  /** Find the nearest render scale step index for a given raw scale (0.0-1.0). */
+  function _findRenderScaleStepIdx(rawScale) {
+    var map = [1.00, 0.75, 0.50, 0.33, 0.25];
+    var bestI = 0, bestD = Infinity;
+    for (var i = 0; i < map.length; i++) {
+      var d = Math.abs(map[i] - rawScale);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return bestI;
+  }
 
   // Scroll state for settings panel
   var _settingsScroll = 0;
@@ -1393,6 +1431,12 @@ var TitleScreen = (function () {
         i18n.setLocale(savedLang);
       }
     } catch (e) { /* no localStorage — use defaults */ }
+
+    // Sync render scale index from Raycaster (single source of truth).
+    // Raycaster loads its own persisted value from 'dg_render_scale' on init.
+    if (typeof Raycaster !== 'undefined' && Raycaster.getRenderScale) {
+      _settings.renderScale = _findRenderScaleStepIdx(Raycaster.getRenderScale());
+    }
   }
 
   function _saveSettings() {
@@ -1448,6 +1492,10 @@ var TitleScreen = (function () {
     // Gamepad deadzone
     if (item.key === 'gpDeadzone' && typeof InputManager !== 'undefined' && InputManager.setGamepadDeadzone) {
       InputManager.setGamepadDeadzone(item.map[_settings.gpDeadzone] || 0.40);
+    }
+    // Render scale — bridge to Raycaster (which persists via its own localStorage key)
+    if (item.key === 'renderScale' && typeof Raycaster !== 'undefined' && Raycaster.setRenderScale) {
+      Raycaster.setRenderScale(item.map[_settings.renderScale] || 1.0);
     }
     // QuadStick mode: slow down game speed + increase hold timing
     if (item.key === 'quadStick') {
@@ -1748,11 +1796,14 @@ var TitleScreen = (function () {
           _ctx.fillText(isOn ? 'ON' : 'OFF', rowX + rowW - 16, y);
         }
 
-        // Hit zone (only for visible items, clip-aware)
+        // Hit zone (only for visible items, clip-aware). hoverSelect
+        // moves the keyboard cursor to whichever row the mouse is on,
+        // so keyboard and hover never disagree.
         (function (idx) {
           _hitZones.push({
             x: rowX, y: rowTop, w: rowW, h: rowH,
             clipY: contentTop, clipH: contentH,
+            hoverSelect: function () { _settingsSelected = idx; },
             action: function () { _settingsSelected = idx; _toggleSetting(idx); }
           });
         })(navIdx);
@@ -1781,11 +1832,17 @@ var TitleScreen = (function () {
       _ctx.textBaseline = 'middle';
       _ctx.fillText('\u2716 BACK', cx, backY + backBtnH / 2);
 
-      _hitZones.push({
-        x: backX, y: backY, w: backBtnW, h: backBtnH,
-        clipY: contentTop, clipH: contentH,
-        action: function () { _settingsOpen = false; }
-      });
+      // BACK uses the "past-last-nav-idx" sentinel, matching how
+      // _navigateDown wraps into it. Hovering BACK moves keyboard
+      // selection onto it so the highlight stays unified.
+      (function (backIdx) {
+        _hitZones.push({
+          x: backX, y: backY, w: backBtnW, h: backBtnH,
+          clipY: contentTop, clipH: contentH,
+          hoverSelect: function () { _settingsSelected = backIdx; },
+          action: function () { _settingsOpen = false; }
+        });
+      })(navIdx);
     }
 
     _ctx.restore(); // End clip
@@ -1831,7 +1888,7 @@ var TitleScreen = (function () {
     _ctx.fillText(hintText, cx, panelY + panelH - 14);
   }
 
-  // ── Lifecycle ─────────────────────────────────────────────────────
+  // ── Lifecycle ──────────────────────────────────────────────────────────
 
   function init(canvas) {
     _canvas = canvas;
@@ -1881,7 +1938,7 @@ var TitleScreen = (function () {
 
   function isActive() { return _active; }
 
-  // ── Public API ───────────────────────────────────────────────────
+  // ── Public API ───────────────
 
   return {
     init: init,

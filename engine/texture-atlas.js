@@ -256,6 +256,49 @@ var TextureAtlas = (function () {
       hiR: 185, hiG: 160, hiB: 90             // Sunlit straw tip
     });
 
+    // Canopy leaf textures — dense foliage for tree canopy rings
+    _genCanopyLeaf('canopy_oak', {
+      baseR: 45, baseG: 100, baseB: 35,       // Deep green leaf body
+      hiR: 85, hiG: 155, hiB: 60,             // Sunlit leaf highlight
+      gapR: 20, gapG: 45, gapB: 15            // Dark gaps between clusters
+    });
+    _genCanopyLeaf('canopy_autumn', {
+      baseR: 140, baseG: 80, baseB: 25,       // Warm autumn orange
+      hiR: 195, hiG: 130, hiB: 45,            // Bright autumn highlight
+      gapR: 60, gapG: 35, gapB: 12            // Dark autumn gap
+    });
+    // Swampy hanging-moss variant — used by CANOPY_MOSS (translucent
+    // underside band). Muted grey-green with lots of gap pixels, so
+    // the per-column moss band reads as dangling strands rather than
+    // a solid leaf wall.
+    _genCanopyLeaf('canopy_moss', {
+      baseR: 75, baseG: 95, baseB: 55,        // Pale grey-green moss
+      hiR: 115, hiG: 135, hiB: 80,            // Sun-bleached strand highlight
+      gapR: 30, gapG: 40, gapB: 20            // Dark strand gap (lots of these)
+    });
+
+    // Crenel cap stone — slightly lighter & warmer than the base wall
+    // stone so the rampart reads as finished top-course masonry. The
+    // toothed silhouette is generated geometrically in the raycaster
+    // via per-column UV bands, so this texture stays a flat solid
+    // stone pattern (no alpha cutouts baked in).
+    _genStone('roof_crenel', { baseR: 118, baseG: 112, baseB: 100, variance: 22 });
+
+    // Pergola beam — dark stained hardwood for open-air trellis covers
+    // over plazas, markets, and temple courtyards. Shares the crenel's
+    // geometric tooth silhouette in the raycaster, but with back-face
+    // injection enabled: the duplicated silhouette reads as vertical
+    // posts supporting a horizontal cross-beam instead of a wall top.
+    _genStone('pergola_beam', { baseR: 62, baseG: 42, baseB: 26, variance: 14 });
+
+    // City Bonfire pedestal — carved pale limestone for the Olympic-style
+    // community pyre (CITY_BONFIRE tile). Warm cream tint so it reads as
+    // ceremonial masonry next to the warmer flame gradient above.
+    // wallHeight is 3.0; the lower 1.2 world units sample this texture
+    // (the rest of the column is the fire cavity — see raycaster
+    // 'city_bonfire_fire' gap filler).
+    _genStone('city_bonfire_stone', { baseR: 162, baseG: 148, baseB: 118, variance: 24 });
+
     // Breakable crate texture — wooden slat box with cross-braces
     _genCrateWood('crate_wood', {
       baseR: 110, baseG: 78, baseB: 42,      // Pale wood slats
@@ -320,11 +363,22 @@ var TextureAtlas = (function () {
     });
 
     // Hearth fire — flame + dragon silhouette for porthole cavity
+    // (legacy procedural texture; used by the original step-fill lip
+    // path and the wall-decor billboard system)
     _genHearthFire('decor_hearth_fire', {
       coreR: 255, coreG: 230, coreB: 120,     // Bright yellow-white core
       outerR: 210, outerG: 100, outerB: 25,    // Deep orange outer flame
       dragonR: 60,  dragonG: 30,  dragonB: 15  // Dark ember dragon silhouette
     });
+
+    // Dragonfire emoji stack — real 🔥 + 🐉 glyphs composited on a
+    // transparent canvas, sampled per-column by the freeform HEARTH
+    // cavity renderer. Matches the exterior BONFIRE billboard look
+    // (BonfireSprites) so interior hearths read as "same fire, different
+    // container" instead of "procedural oval." Alpha outside the emoji
+    // body is zero so the dark cavity backdrop shows through rather
+    // than being overwritten by opaque paint.
+    _genDragonfireEmoji('decor_hearth_dragonfire');
 
     // Iron grate — horizontal bars with gaps (dungeon vents)
     _genWallGrate('decor_grate', {
@@ -1482,33 +1536,117 @@ var TextureAtlas = (function () {
   // ── Floor: wood planks (interior) ──
 
   function _genFloorWood(id, p) {
-    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
-      // Horizontal planks (running left-right, seen from above)
-      var plankH = 8;
-      var plankIdx = Math.floor(y / plankH);
-      var localY = y % plankH;
+    // Laid-board floor — narrow, long planks running along x-axis with
+    // varied per-row stagger so the end-cut seams never land in a
+    // predictable column rhythm. This prevents the "marching vertical
+    // seam" the eye latches onto during freelook.
+    //
+    // Dimensions (relative to brick at 16W × 10H, mortar 2):
+    //   plankH    = 4   (narrower — brick is 10 tall, this is ~40%)
+    //   rowPitch  = 4   (no dedicated gap row; top-pixel edge-shade
+    //                    provides the row seam. Divides 64 cleanly →
+    //                    16 plank rows per tile, no partial bottom row.)
+    //   plankLen  = 64  (one "long board" per row, broken by a SINGLE
+    //                    end-cut seam at a per-row varied position →
+    //                    average section length ≈ 32 = 2× brick, but
+    //                    with high variance: some sections ≈ 12, some
+    //                    ≈ 52 → reads as longer, more natural planks.)
+    //   gapV      = 1   (vertical end-cut seam thickness)
+    //
+    // Stagger: per-row end-cut position pulled from a 7-value hash set
+    // (12,18,24,30,36,42,48) so no two adjacent rows share the same cut
+    // column and the seams distribute across most of the tile width.
+    var plankH      = 4;
+    var rowPitch    = 4;    // plankH + 0 (top-pixel darkening = seam)
+    var gapV        = 1;
 
-      // Plank gap
-      if (localY < 1) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var row    = Math.floor(y / rowPitch);
+      var localY = y - row * rowPitch;
+
+      // Per-row end cut — one seam per row, varied position.
+      // Hash maps row → index 0..6 → cut position in {12,18,24,30,36,42,48}.
+      // These values avoid the cell boundary (x=0,63) so tiling is clean.
+      var cutIdx   = Math.floor(_hash(row, 137) * 7) % 7;
+      var rowCut   = 12 + cutIdx * 6;
+
+      // Which plank section are we in? Left of cut = 0, right of cut = 1.
+      // Each row has exactly two sections, lengths rowCut and (64 - rowCut).
+      var section, localX, sectionLen;
+      if (x < rowCut) {
+        section    = 0;
+        localX     = x;
+        sectionLen = rowCut;
+      } else {
+        section    = 1;
+        localX     = x - rowCut;
+        sectionLen = TEX_SIZE - rowCut;
+      }
+
+      // Horizontal row seam — top pixel of each row (acts as the gap
+      // between plank rows without stealing a whole row slot).
+      if (localY === 0 && row > 0) {
+        var hgn = (_hash(x + 3300, y + 3310) - 0.5) * 4;
         return {
-          r: _clamp(p.baseR * 0.4),
-          g: _clamp(p.baseG * 0.4),
-          b: _clamp(p.baseB * 0.4)
+          r: _clamp(p.baseR * 0.35 + hgn),
+          g: _clamp(p.baseG * 0.35 + hgn * 0.85),
+          b: _clamp(p.baseB * 0.30 + hgn * 0.7)
         };
       }
 
-      // Wood grain — horizontal streaks
-      var grain = Math.sin(y * 0.3 + _hash(0, plankIdx) * 6) * 0.5 + 0.5;
-      var darkGrain = grain < 0.3 ? p.grainDark : 1.0;
+      // Vertical end-cut seam at rowCut
+      if (localX < gapV && section === 1) {
+        var vgn = (_hash(x + 3350, y + 3360) - 0.5) * 4;
+        return {
+          r: _clamp(p.baseR * 0.35 + vgn),
+          g: _clamp(p.baseG * 0.35 + vgn * 0.85),
+          b: _clamp(p.baseB * 0.30 + vgn * 0.7)
+        };
+      }
 
-      // Per-plank color variation
-      var plankNoise = (_hash(plankIdx, plankIdx + 77) - 0.5) * 15;
-      var pn = (_hash(x + 3400, y + 3500) - 0.5) * 6;
+      // Per-section identity — row × prime + section × prime2 so
+      // every board gets its own tone. Prime mix gives aperiodic
+      // color distribution across the 16-row tile.
+      var boardId   = row * 17 + section * 29;
+      var plankTone = (_hash(boardId, row + 31) - 0.5) * 22;
+
+      // 3-tier edge shading — section-local bounds so end cuts read
+      // as physical joints instead of color steps. plankH is very
+      // small (4), so y-edge shading uses a 1px dark rim on the
+      // underside only (localY === 1 is rim, localY > 1 is field).
+      var edgeX = Math.min(localX - (section === 1 ? gapV : 0),
+                           sectionLen - 1 - localX);
+      var yEdge = (localY === 1 || localY === plankH - 1) ? 1 : 0;
+      var tier;
+      if (yEdge || edgeX < 1) tier = 0.82;
+      else if (edgeX > 6)     tier = 1.08;
+      else                    tier = 1.0;
+
+      // Per-board grain — each board has its own grain phase and
+      // frequency seeded from boardId. Horizontal streaks dominate
+      // (along the board length) with mild localY modulation.
+      var grainFreq = _hash(boardId, 0) * 0.25 + 0.15;
+      var grain     = Math.sin(localX * grainFreq + boardId * 1.7 +
+                               localY * 0.4) * 0.5 + 0.5;
+      var grainMult = grain < 0.3 ? p.grainDark : (grain > 0.78 ? 1.05 : 1.0);
+
+      // Sparse knots — ~10% of boards get one knot blob
+      var knotRand  = _hash(boardId + 91, 0);
+      var knotDark  = 0;
+      if (knotRand > 0.90) {
+        var kx = ((knotRand * 997) % sectionLen) | 0;
+        var dx = localX - kx;
+        var dy = (localY - 1) * 2;
+        if (dx * dx + dy * dy < 3) knotDark = -20;
+      }
+
+      // Per-pixel noise — subtle, lets plank banding dominate.
+      var pn = (_hash(x + 3400, y + 3500) - 0.5) * 4;
 
       return {
-        r: _clamp(p.baseR * darkGrain + plankNoise + pn),
-        g: _clamp(p.baseG * darkGrain + plankNoise * 0.8 + pn * 0.7),
-        b: _clamp(p.baseB * darkGrain + plankNoise * 0.5 + pn * 0.4)
+        r: _clamp((p.baseR + plankTone) * tier * grainMult + pn + knotDark),
+        g: _clamp((p.baseG + plankTone * 0.75) * tier * grainMult + pn * 0.75 + knotDark),
+        b: _clamp((p.baseB + plankTone * 0.5)  * tier * grainMult + pn * 0.5  + knotDark)
       };
     });
   }
@@ -2791,6 +2929,67 @@ var TextureAtlas = (function () {
         a: flameA
       };
     });
+  }
+
+  /**
+   * Dragonfire emoji texture — 🔥 + translucent 🐉 overlay rendered
+   * via Canvas 2D fillText. Unlike _genHearthFire (procedural oval),
+   * this produces real glyphs the OS emoji font draws, matching the
+   * exterior BONFIRE billboard sprite. Stored with an alpha channel
+   * so the freeform cavity backdrop shows through the transparent
+   * margins around the glyph.
+   *
+   * The raycaster samples this texture per-column in the freeform
+   * cavity band, so columns at the tile center see the emoji body
+   * and columns near the cell edges see alpha=0 (pure backdrop).
+   */
+  function _genDragonfireEmoji(id) {
+    var W = 64;
+    var H = 64;
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // ── Base flame 🔥 ──
+    // Large, centered, slightly low so the flame tip reads as the
+    // natural focal point of the cavity.
+    ctx.font = Math.floor(H * 0.82) + 'px serif';
+    ctx.fillText('\uD83D\uDD25', W / 2, H * 0.56);
+
+    // ── Dragon overlay 🐉 ──
+    // Translucent, slightly bigger than the flame, nudged up so the
+    // silhouette perches above the flame's hottest band — matches
+    // the BonfireSprites DRAGON_OVERLAY composition.
+    ctx.globalAlpha = 0.45;
+    ctx.font = Math.floor(H * 0.94) + 'px serif';
+    ctx.fillText('\uD83D\uDC09', W / 2, H * 0.48);
+    ctx.globalAlpha = 1.0;
+
+    // Read the composited pixels back so the raycaster's `data`-backed
+    // consumers (grime pipeline, step-color sampler, etc.) can inspect
+    // them. We store both the raw canvas (for ctx.drawImage) and the
+    // Uint8ClampedArray (for per-pixel reads).
+    var imgData;
+    try {
+      imgData = ctx.getImageData(0, 0, W, H);
+    } catch (e) {
+      // getImageData can throw on tainted canvases (unlikely here — we
+      // only drew local glyphs) or in hosts without canvas support.
+      // Fall back to an empty buffer so the raycaster still has a
+      // `data` array to index into without crashing.
+      imgData = { data: new Uint8ClampedArray(W * H * 4) };
+    }
+    _textures[id] = {
+      width: W,
+      height: H,
+      canvas: canvas,
+      data: imgData.data
+    };
   }
 
   /** Iron grate — horizontal bars with gaps (dungeon air vents). */
@@ -4635,6 +4834,61 @@ var TextureAtlas = (function () {
         r: _clamp(p.baseR * shade + pn),
         g: _clamp(p.baseG * shade + pn),
         b: _clamp(p.baseB * shade + pn),
+        a: 255
+      };
+    });
+  }
+
+  // ── Canopy leaf texture generator ────────────────────────────────
+  // Dense leaf clusters with dappled light. Organic irregular pattern.
+  function _genCanopyLeaf(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var n = _hash(x, y);
+      var n2 = _hash(x + 37, y + 53);
+
+      // Leaf cluster cells — irregular Voronoi-ish via dual hash
+      var cellSize = 6;
+      var cx = Math.floor(x / cellSize);
+      var cy = Math.floor(y / cellSize);
+      var cellN = _hash(cx * 7 + 3, cy * 13 + 5);
+
+      // Local position within cell (0–1)
+      var lx = (x % cellSize) / cellSize;
+      var ly = (y % cellSize) / cellSize;
+
+      // Dark gap between leaf clusters
+      var edgeDist = Math.min(lx, 1 - lx, ly, 1 - ly);
+      var isGap = edgeDist < 0.15 && n < 0.4;
+
+      if (isGap) {
+        return {
+          r: _clamp(p.gapR + n * 10 - 5),
+          g: _clamp(p.gapG + n * 10 - 5),
+          b: _clamp(p.gapB + n * 10 - 5),
+          a: 255
+        };
+      }
+
+      // Dappled sunlight — scattered bright spots
+      var isSunlit = n2 > 0.82;
+
+      // Per-cell hue shift for variety (some leaves lighter/darker)
+      var cellShift = (cellN - 0.5) * 30;
+      var pn = n * 14 - 7;
+
+      if (isSunlit) {
+        return {
+          r: _clamp(p.hiR + pn + cellShift * 0.3),
+          g: _clamp(p.hiG + pn + cellShift * 0.5),
+          b: _clamp(p.hiB + pn),
+          a: 255
+        };
+      }
+
+      return {
+        r: _clamp(p.baseR + pn + cellShift * 0.3),
+        g: _clamp(p.baseG + pn + cellShift * 0.5),
+        b: _clamp(p.baseB + pn),
         a: 255
       };
     });

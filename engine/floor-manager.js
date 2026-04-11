@@ -271,7 +271,11 @@ var FloorManager = (function () {
             61: 'roof_slate',      // ROOF_SLOPE_L
             62: 'roof_slate',      // ROOF_PEAK
             63: 'roof_slate',      // ROOF_SLOPE_R
-            64: 'roof_slate'       // ROOF_EAVE_R
+            64: 'roof_slate',      // ROOF_EAVE_R
+            65: 'canopy_oak',      // CANOPY — dense green leaf ring (opaque lid)
+            66: 'canopy_moss',     // CANOPY_MOSS — hanging moss strands (translucent)
+            67: 'roof_crenel',     // ROOF_CRENEL — cap stone rampart (toothed silhouette)
+            68: 'pergola_beam'     // PERGOLA — stained hardwood open-air beam lattice
           }),
           tileWallHeights: Object.freeze({
             1:  3.5,               // WALL — 3.5× tall multi-story facade (dominates skyline)
@@ -285,16 +289,45 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge (player sees over to buildings)
             35: 0.4,               // FENCE — railing, player sees over
             37: 0.25,              // MAILBOX — short stone platform, emoji framed inside
-            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 2.0,               // DUMP_TRUCK — HEARTH-stature pressure-wash truck
+                                   //   (freeform: 0.40 lower body w/ wheel decor +
+                                   //   0.25 ground-level spool cavity + 1.35 upper
+                                   //   chassis). See spatial-contract.js tileFreeform
+                                   //   entry 38 for the band split and truck_spool_cavity
+                                   //   gap filler. Must match the base exterior() value
+                                   //   (2.0) or the biome merge will clobber the
+                                   //   freeform geometry and fall back to a flat slab.
             47: 0.7,               // SOUP_KITCHEN — cauldron on brazier
-            48: 0.3                // COT — low bedroll
+            48: 0.3,               // COT — low bedroll
+            65: 0.25,              // CANOPY — thin leaf strip (floats via tileHeightOffset)
+            66: 0.25,              // CANOPY_MOSS — thin moss strip (floats via tileHeightOffset)
+            67: 0.50,              // ROOF_CRENEL — 0.5-thick slab, solid lower half caps wall top,
+                                   //   toothed upper half pokes above (see tileHeightOffsets)
+            68: 0.50               // PERGOLA — same slab thickness as CRENEL (shared tooth pattern)
           }),
           tileHeightOffsets: Object.freeze({
             5:  -0.12,   // STAIRS_DN — sunken (base default)
             6:   0.06,   // STAIRS_UP — slight rise (base default)
-            14:  0.15    // BOSS_DOOR — elevated (base default)
+            14:  0.15,   // BOSS_DOOR — elevated (base default)
             // BONFIRE: no offset on exterior — ring sits at ground level (visible like mailbox)
             // DUMP_TRUCK: no offset — truck sits at ground level (same as bonfire)
+            // Floating roof moat — positioned near top of 3.5× building walls
+            60:  2.8,    // ROOF_EAVE_L — eave at building-top level
+            61:  3.0,    // ROOF_SLOPE_L — ascending toward peak
+            62:  3.2,    // ROOF_PEAK — above building top
+            63:  3.0,    // ROOF_SLOPE_R — descending
+            64:  2.8,    // ROOF_EAVE_R — eave level
+            // Floating canopy — positioned near top of 2.5× trees
+            65:  2.0,    // CANOPY — leaf ring at tree crown height
+            66:  2.0,    // CANOPY_MOSS — moss strands at tree crown height
+            // Crenellated rampart — caps the 3.5× building wall.
+            // Wall top altitude = 3.0 (3.5× wall anchored at ground, eye at 0.5).
+            // Slab spans 2.75–3.25: solid lower half (2.75–3.00) interleaves with
+            // the wall upper portion, toothed upper half (3.00–3.25) pokes 0.25
+            // above the wall top as the merlon line.
+            67:  3.0,    // ROOF_CRENEL — midline at wall top, teeth extend upward
+            68:  2.5     // PERGOLA — plaza shade beam at courtyard canopy height
+                         //   (unused in approach biome yet — reserved for Lantern Row plaza)
           }),
           floorTexture: 'floor_brick_red',
           tileFloorTextures: Object.freeze({
@@ -304,7 +337,17 @@ var FloorManager = (function () {
             33: 'floor_dirt',        // PATH — dirt trails
             34: 'floor_grass',       // GRASS — meadow clearings
             35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
-            37: 'floor_grass'        // MAILBOX — grass under mailbox
+            37: 'floor_grass',       // MAILBOX — grass under mailbox
+            // Floating tiles — grass visible below when looking down
+            60: 'floor_grass',       // ROOF_EAVE_L
+            61: 'floor_grass',       // ROOF_SLOPE_L
+            62: 'floor_grass',       // ROOF_PEAK
+            63: 'floor_grass',       // ROOF_SLOPE_R
+            64: 'floor_grass',       // ROOF_EAVE_R
+            65: 'floor_grass',       // CANOPY
+            66: 'floor_grass',       // CANOPY_MOSS
+            67: 'floor_brick_red',   // ROOF_CRENEL — red brick beneath the rampart (approach building base)
+            68: 'floor_cobble'       // PERGOLA — plaza flagstones beneath the beam lattice
           })
         };
       case 'promenade':
@@ -352,7 +395,14 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
-            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 2.0,               // DUMP_TRUCK — HEARTH-stature pressure-wash truck
+                                   //   (freeform: 0.40 lower body w/ wheel decor +
+                                   //   0.25 ground-level spool cavity + 1.35 upper
+                                   //   chassis). See spatial-contract.js tileFreeform
+                                   //   entry 38 for the band split and truck_spool_cavity
+                                   //   gap filler. Must match the base exterior() value
+                                   //   (2.0) or the biome merge will clobber the
+                                   //   freeform geometry and fall back to a flat slab.
             40: 0.5,               // WELL — stone rim
             41: 0.35,              // BENCH — low seating
             42: 1.2,               // NOTICE_BOARD — tall posts with parchment
@@ -422,7 +472,7 @@ var FloorManager = (function () {
             7:  0.7,               // CHEST — waist-height stash box
             10: 2.0,               // PILLAR — full wall height decorative column
             27: 0.6,               // BED — low, player sees over it
-            28: 0.7,               // TABLE — half-height surface
+            28: 0.4,               // TABLE — low third-height surface
             29: 2.5,               // HEARTH — full chimney stack
             36: 1.0                // TERMINAL — desk-height CRT station
           }),
@@ -453,7 +503,7 @@ var FloorManager = (function () {
             10: 2.2,               // PILLAR — tall decorative beams
             26: 0.8,               // BAR_COUNTER — counter height
             27: 0.6,               // BED — low inn bed
-            28: 0.7,               // TABLE — dining height
+            28: 0.4,               // TABLE — low dining surface
             29: 0.5,               // HEARTH — short base stone (sandwich: mantle above fire cavity)
             41: 0.35               // BENCH — low cushioned seat
           }),
@@ -524,7 +574,14 @@ var FloorManager = (function () {
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
-            38: 0.5,               // DUMP_TRUCK — short truck body, hose billboard above (bonfire pattern)
+            38: 2.0,               // DUMP_TRUCK — HEARTH-stature pressure-wash truck
+                                   //   (freeform: 0.40 lower body w/ wheel decor +
+                                   //   0.25 ground-level spool cavity + 1.35 upper
+                                   //   chassis). See spatial-contract.js tileFreeform
+                                   //   entry 38 for the band split and truck_spool_cavity
+                                   //   gap filler. Must match the base exterior() value
+                                   //   (2.0) or the biome merge will clobber the
+                                   //   freeform geometry and fall back to a flat slab.
             40: 0.5,               // WELL — stone rim
             41: 0.35,              // BENCH — low seating
             42: 1.2,               // NOTICE_BOARD — tall posts
@@ -643,7 +700,7 @@ var FloorManager = (function () {
           }),
           tileWallHeights: Object.freeze({
             10: 2.0,               // PILLAR — formal columns
-            28: 0.7                // TABLE — desk height
+            28: 0.4                // TABLE — low desk surface
           }),
           floorTexture: 'floor_stone'
         };
@@ -667,7 +724,7 @@ var FloorManager = (function () {
           tileWallHeights: Object.freeze({
             7:  0.7,               // CHEST — waist-height stash box
             10: 2.2,               // PILLAR — imposing columns
-            28: 0.7,               // TABLE — planning table height
+            28: 0.4,               // TABLE — low planning surface
             48: 0.3                // COT — low guard bunk
           }),
           floorTexture: 'floor_stone'
@@ -692,7 +749,7 @@ var FloorManager = (function () {
           tileWallHeights: Object.freeze({
             10: 2.2,               // PILLAR — imposing garrison columns
             18: 0.3,               // BONFIRE — low stone ring
-            28: 0.7                // TABLE — planning table height
+            28: 0.4                // TABLE — low planning surface
           }),
           floorTexture: 'floor_stone'
         };
@@ -953,8 +1010,18 @@ var FloorManager = (function () {
         return SpatialContract.interior(Object.assign({
           label: "Gleaner's Home",
           wallHeight: 2.0,
-          renderDistance: 14,
-          fogDistance: 12,
+          // Home is a 24×20 multi-room interior. The previous 14/12 range
+          // stopped rays at pd=14, which was shorter than the longest
+          // through-doorway sightline (player in living room seeing the
+          // far storage east wall at x=23, pd≈15.5). That produced the
+          // "merlon band" visible above half-height furniture: columns
+          // whose rays hit the living-room east wall (pd≈9) rendered a
+          // back layer; adjacent columns whose rays threaded through the
+          // row-5 doorway hit the far storage wall at pd≈15.5 and the
+          // layer was fog-clamped to 1.0 and culled. 22/18 lets those
+          // far walls render dim-but-visible, filling the horizon.
+          renderDistance: 22,
+          fogDistance: 18,
           fogColor: { r: 20, g: 10, b: 5 },
           ceilColor: '#2a1808',
           floorColor: '#4a3018',
@@ -1286,8 +1353,7 @@ var FloorManager = (function () {
   var _FLOOR0_W = 50;
   var _FLOOR0_H = 36;
   // Legend: 0=EMPTY, 1=WALL, 2=DOOR, 10=PILLAR, 18=BONFIRE, 21=TREE, 22=SHRUB,
-  //         32=ROAD, 33=PATH, 34=GRASS, 35=FENCE, 37=MAILBOX,
-  //         61=ROOF_SLOPE_L, 62=ROOF_PEAK, 63=ROOF_SLOPE_R
+  //         32=ROAD, 33=PATH, 34=GRASS, 35=FENCE, 37=MAILBOX
   //
   // 40×30 exterior — The Approach. Interstate exit ramp campground.
   //
@@ -1314,7 +1380,7 @@ var FloorManager = (function () {
     [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 7  NE shack solid; upper facade solid (interiors deferred — see BUILDING_INTERIORS_ROADMAP)
     [1,1,21,22,34,22,34,34,21,34,34,34,22,34,34,22,34,34,18,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 8  NC campfire(18,8); NE shack solid
     [1,1,21,22,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,1, 1, 1,1,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], // 9  NE shack front wall solid (door deferred)
-    [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,61,62,62,63,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //10  NE shack peaked roof row
+    [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //10  pod interiors
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,18,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //11  NE bonfire(29,11) outside shack
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //12  pod interiors
     [1,1,21,22,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //13  pod bottoms (C-shape gaps)
@@ -1328,7 +1394,7 @@ var FloorManager = (function () {
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //21  S-N path stubs to south pods
     [1,1,21,22,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,22,22,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //22  pod tops (SW, SC, SE) — open NORTH
     [1,1,21,22,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //23  pod interiors
-    [1,1,21,22,34,22,34,61,62,63,37,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //24  SW house peaked roof + mailbox(10,24)
+    [1,1,21,22,34,22,34,34,34,34,37,34,22,34,34,22,34,34,34,34,34,34,22,34,34,22,34,34,34,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //24  SW mailbox(10,24)
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,21,34,18,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //25  SW house front wall solid (door deferred — see BUILDING_INTERIORS_ROADMAP); SC bonfire(20,25)
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,34,34,21,34,34,22,34,34,22,34,34,34,21,34,34,22,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //26  SW house solid; SC tree + SE tree
     [1,1,21,22,34,22,34,1,1,1,1,34,22,34,34,22,34,21,34,34,34,34,22,34,34,22,34,34,21,34,34,34,22,34,34,34,34,34,34,34,34,1,34,34,34,1,1,21,21,21], //27  SW house solid; SC tree — facade courtyard opens
@@ -1367,6 +1433,33 @@ var FloorManager = (function () {
     for (var y = 0; y < _FLOOR0_H; y++) {
       grid[y] = _FLOOR0_GRID[y].slice();
     }
+
+    // ── Floating tile test placements ──────────────────────────────
+    // Canopy ring around isolated tree at (17,10) — mixed variants so
+    // both underside rendering styles are visible on the same tree:
+    //   N, S → CANOPY (65)      — opaque lid (floor-cast underside)
+    //   W, E → CANOPY_MOSS (66) — hanging moss (translucent band)
+    grid[9][17]  = 65;  // CANOPY       — north (opaque lid)
+    grid[10][16] = 66;  // CANOPY_MOSS  — west  (hanging moss)
+    grid[10][18] = 66;  // CANOPY_MOSS  — east  (hanging moss)
+    grid[11][17] = 65;  // CANOPY       — south (opaque lid)
+
+    // Crenellated rampart around NE shack (walls at cols 27-30, rows 6-9).
+    // Each tile is ROOF_CRENEL (67) — single-tile crenellation via raycaster
+    // tooth modulation (4 teeth per tile UV, solid bottom half). The moat
+    // sits at offset 3.0 (wall top altitude) with a 0.5 slab, so the solid
+    // lower half caps the 3.5× wall and the toothed upper half pokes above.
+    // Top edge (y=5): cols 26-31
+    grid[5][26] = 67; grid[5][27] = 67; grid[5][28] = 67;
+    grid[5][29] = 67; grid[5][30] = 67; grid[5][31] = 67;
+    // Bottom edge (y=10): cols 26-31
+    grid[10][26] = 67; grid[10][27] = 67; grid[10][28] = 67;
+    grid[10][29] = 67; grid[10][30] = 67; grid[10][31] = 67;
+    // Left edge (x=26): rows 6-9 — west face visible from spawn approach
+    grid[6][26] = 67; grid[7][26] = 67; grid[8][26] = 67; grid[9][26] = 67;
+    // Right edge (x=31): rows 6-9
+    grid[6][31] = 67; grid[7][31] = 67; grid[8][31] = 67; grid[9][31] = 67;
+
     return {
       floorId: '0',
       grid: grid,
@@ -1411,13 +1504,43 @@ var FloorManager = (function () {
   //   East — GATE(48,17)+(48,18)     → "2"  Lantern Row
   //
   // Landmarks:
-  //   BONFIRE(24,17) — central road plaza rest point (single exterior bonfire)
+  //   CITY_BONFIRE(24,16) — Olympic community pyre, tall freeform column on the
+  //                         north path shoulder. Now the sole rest fixture of the
+  //                         road plaza (the former adjacent BONFIRE at 24,17 was
+  //                         retired in favor of the pergola canopy). Interactive
+  //                         "Camp" — same rest flow as BONFIRE via game.js bonfire
+  //                         menu path. See raycaster 'city_bonfire_fire' gap
+  //                         filler + exterior() tileFreeform.
+  //   PERGOLA_BEAM ring — 8 beam cells ringing the CITY_BONFIRE: (23–25,15)
+  //                         north, (23,16)(25,16) east/west flanks,
+  //                         (23–25,17) south canopy (now a full strip — the
+  //                         old BONFIRE(24,17) was replaced with the 8th beam
+  //                         cell to close the ring). Beams use hUpper=0.20 on
+  //                         a 2.0-unit tall freeform column so the canopy
+  //                         strip lands at world height 1.80–2.00 — a thin
+  //                         "~1/4 the chimney thickness" rail resting on
+  //                         top of the pyre's 1.20–2.00 chimney hood.
+  //                         Walkable — player passes under the canopy the
+  //                         same way they walk under CANOPY strips.
   //   MAILBOX(22,25) — 2 tiles north of home door (22,27) in SC pod.
   //                     Blockout-agnostic: MailboxPeek._findMailboxTile() scans
   //                     for TILES.MAILBOX rather than hardcoding position.
   //                     If the blockout moves the house door, move the MAILBOX
   //                     tile to stay adjacent to the new approach path.
   //   DUMP_TRUCK(30,26) — pressure wash truck parked between SC and SE pods
+  //   WINDOW_TAVERN(9,8)(11,8) — Coral Bazaar facade windows flanking DOOR(10,8)
+  //   WINDOW_TAVERN(21,8)(23,8) — Driftwood Inn facade windows flanking DOOR(22,8)
+  //                     3.5-tall freeform column matching WALL height: 0.40 sill +
+  //                     0.75 glass slot at waist-to-chin height (world Y 0.40–1.15,
+  //                     slot center 0.775 — below the 1.0 eye level so the player
+  //                     looks slightly DOWN into the interior) + 2.35 lintel /
+  //                     upper floors. The glass slot uses window_tavern_interior
+  //                     gap filler which paints amber interior wash + blue glass
+  //                     sheen + 2×2 mullion cross + dark frame border (not just
+  //                     an open hole — a real pane of glass with divisions).
+  //                     WindowSprites emits a 🍺 billboard inside each cavity
+  //                     via the z-bypass path, so the player sees lit tavern
+  //                     interiors framed by mullions while walking past.
 
   var _FLOOR1_W = 50;
   var _FLOOR1_H = 36;
@@ -1432,16 +1555,16 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,1,1,1,1,1,1,0,0,0,22,22,0,1,1,1,1,1,1,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 5  Bazaar+Inn buildings
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 6  Noticeboard pillars
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,21,0,0,1,0,0,21,0,0,22,0,0,35,35,35], // 7  Board tile (38,7)
-    [21,21,21,22,0,22,0,1,1,1,2,1,1,0,0,0,22,22,0,1,1,1,2,1,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) + Inn DOOR(22,8)
+    [21,21,21,22,0,22,0,1,1,73,2,73,1,0,0,0,22,22,0,1,1,73,2,73,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) flanked by WINDOW_TAVERN(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_TAVERN(21,8)(23,8)
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 9
     [21,21,21,22,0,22,0,21,0,0,33,33,21,0,0,0,22,22,0,0,0,0,33,33,0,21,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //10  path stubs N
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //11  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //12
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //13  pod bottoms (C-gaps)
     [21,21,21,22,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,0,10,0,33,33,0,0,10,0,0,0,0,0,0,35,35,35], //14  pillar arcades
-    [21,21,10,10,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,10,10,35], //15  W gate pillars + E gate pillars
-    [1,1,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,35], //16  path shoulder N
-    [1,1,4,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,18,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,0,2,0], //17  ★ ROAD + DOOR_EXIT(2,17)→0 + DOOR(48,17)→2
+    [21,21,10,10,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,33,70,70,70,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,10,10,35], //15  W+E gate pillars; PERGOLA_BEAM(23–25,15) north canopy over pyre
+    [1,1,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,70,69,70,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,35], //16  path shoulder N — CITY_BONFIRE(24,16) pyre with PERGOLA_BEAM(23,16)(25,16) flanks
+    [1,1,4,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,70,70,70,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,0,2,0], //17  ★ ROAD + DOOR_EXIT(2,17)→0 + DOOR(48,17)→2; PERGOLA_BEAM(23–25,17) south canopy (closes the 8-cell ring)
     [1,1,4,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,0,2,0], //18  ★ ROAD + DOOR_EXIT(2,18)→0 + DOOR(48,18)→2
     [1,1,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,35], //19  path shoulder S
     [21,21,10,10,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,10,10,35], //20  gate pillars
@@ -1504,6 +1627,20 @@ var FloorManager = (function () {
         '2,18':  '0',     // DOOR_EXIT → The Approach (west, lower tile)
         '48,17': '2',     // Gate → Lantern Row (east)
         '48,18': '2'      // Gate → Lantern Row (east, lower tile)
+      },
+      // Explicit exterior-face declarations for WINDOW_TAVERN tiles.
+      // Same contract as doorTargets: "x,y" → face index
+      // (0=E, 1=S, 2=W, 3=N). Winning over the auto-detect heuristic
+      // in WindowSprites because Promenade row 8 has walkable EMPTY
+      // on BOTH sides of each window (interior corridor N, street S),
+      // which the neighbor-scoring heuristic can't disambiguate for
+      // the column-aligned windows (9,8) and (21,8) whose souths
+      // aren't directly over a path tile.
+      windowFaces: {
+        '9,8':  1,   // Bazaar left window  → facing SOUTH (the promenade)
+        '11,8': 1,   // Bazaar right window → facing SOUTH
+        '21,8': 1,   // Inn left window     → facing SOUTH
+        '23,8': 1    // Inn right window    → facing SOUTH
       },
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
@@ -1668,15 +1805,27 @@ var FloorManager = (function () {
             glowR: cgR, glowG: cgG, glowB: cgB, glowA: cgA,
             wobble: isHearth ? 0.02 : 0.015
           });
-          // HEARTH air intake grate — painted ON the base stone face
-          // (porthole method repurposed: surface-mounted hardware, not
-          // interior cavity effect). Low on the wall, small vent.
+          // HEARTH air intake grate — painted ON the upper mantle, as
+          // close to the ceiling as it'll fit. Originally anchored low
+          // on the base stone (anchorV 0.35) back when the hearth's
+          // fire cavity was narrow enough to leave real estate below
+          // it; the current freeform (hUpper 0.80, hLower 0.40) puts
+          // the cavity at world Y 0.40–1.20 on a 2.0-tall face, which
+          // is exactly where anchorV 0.35 lands the sprite — floating
+          // over the dragonfire. Moved to anchorV 0.94 (center world
+          // Y 1.88 on a 2.0-tall face) so the grate sits flush under
+          // the ceiling, inside the top 0.80-unit mantle band. Scale
+          // dropped to 0.10 so the sprite half-height (0.10 world
+          // units) keeps the whole grate between world Y 1.78–1.98 —
+          // tight to the ceiling, clear of the cavity, clear of any
+          // clipping at the top edge. Will get a proper hUpper/hLower-
+          // aware anchoring pass in the architecture roadmap.
           if (isHearth) {
             decor[by][bx][bFaces[bf]].push({
               spriteId: 'decor_grate',
               anchorU: 0.5,
-              anchorV: 0.35,  // Low on base stone wall
-              scale: 0.20
+              anchorV: 0.94,  // Squished onto the mantle ceiling
+              scale: 0.10
             });
           }
         }
@@ -1750,9 +1899,46 @@ var FloorManager = (function () {
     }
 
     // ── Dump truck wheel decor on DUMP_TRUCK faces ─────────────────
-    // Wheels at bottom-left and bottom-right of each visible face.
-    // Hose reel is now a billboard sprite (DumpTruckSprites) floating
-    // above the short truck body wall, matching the bonfire pattern.
+    // Two wheels per side face. DUMP_TRUCK is a 2.0-unit-tall freeform
+    // tile (HEARTH stature) with three bands:
+    //   • Lower body  — world Y 0.00–0.10  (0.10 units, bumper strip)
+    //   • Spool cavity — world Y 0.10–0.50  (0.40 units, transparent)
+    //   • Upper chassis — world Y 0.50–2.00 (1.50 units)
+    //
+    // The cavity sits "practically on the ground" so the wheels MUST
+    // overlap into the cavity band — real trucks have wheel wells
+    // cut into the body, and with only 0.10 world units of solid
+    // bumper below the cavity there's nowhere else for a readable-
+    // sized wheel to go. This overlap is intentional, not a bug.
+    //
+    // Paint order (wall texture → cavity tint → wallDecor → sprites)
+    // lets the wheels draw ON TOP of the transparent cavity tint on
+    // the side face, producing a clean "wheel arch cut into body"
+    // silhouette. The 🧵 billboard from DumpTruckSprites still renders
+    // INSIDE the cavity via the z-bypass sprite path regardless.
+    //
+    // anchorV is wall-face proportional: 0=bottom, 1=top. On a 2.0-tall
+    // wall, anchorV 0.09 puts the sprite CENTER at world Y 0.18.
+    // Square-texture vExtent = scale = 0.15 face units = 0.30 world
+    // units tall, so the sprite spans world Y 0.03 → 0.33 — straddling
+    // the cavity floor (0.10) for the wheel-well read.
+    //
+    // Horizontal: two wheels per face at U 0.22 / 0.78 (bottom-left
+    // and bottom-right of the face) so they parallax with viewing
+    // angle just like any other wallDecor sprite.
+    //
+    // 4-of-6 panes: emitted on the N/S/E/W side faces wherever the
+    // neighbor tile is walkable. Top (ceiling) and bottom (floor)
+    // faces of the tile cube are never wall-decor targets, so this
+    // naturally maps to "4 of the 6 floor-adjacent/perpendicular
+    // panes" the design calls for.
+    //
+    // IMPORTANT: DumpTruckSpawner mutates the grid AFTER this function
+    // runs (the truck node circuit relocates the tiles daily). The
+    // wallDecor cache built here would be stale at the new spawn
+    // location. See FloorManager.rebuildDumpTruckDecor() below —
+    // it is the live-update mirror of this block, called by the
+    // spawner whenever it stamps or clears a truck tile.
     for (var dty = 0; dty < H; dty++) {
       for (var dtx = 0; dtx < W; dtx++) {
         if (grid[dty][dtx] !== T.DUMP_TRUCK) continue;
@@ -1771,15 +1957,15 @@ var FloorManager = (function () {
           decor[dty][dtx][f].push({
             spriteId: 'decor_truck_wheel',
             anchorU: 0.22,
-            anchorV: 0.22,  // Low on the wall (near ground)
-            scale: 0.30
+            anchorV: 0.09,   // Low on 2.0-tall face → center world Y 0.18
+            scale: 0.15      // vExtent 0.30 world units → spans 0.03–0.33
           });
           // Right wheel — bottom-right of wall face
           decor[dty][dtx][f].push({
             spriteId: 'decor_truck_wheel',
             anchorU: 0.78,
-            anchorV: 0.22,
-            scale: 0.30
+            anchorV: 0.09,
+            scale: 0.15
           });
         }
       }
@@ -2329,6 +2515,97 @@ var FloorManager = (function () {
     return touched;
   }
 
+  /**
+   * Stamp or clear DUMP_TRUCK wheel decor on a specific tile of a
+   * (potentially cached) floor. This exists because DumpTruckSpawner
+   * mutates the grid AFTER the wallDecor cache was built at floor
+   * generation — without this helper, the wheels disappear the moment
+   * the truck is relocated on its scheduled node circuit.
+   *
+   * This is the live-update mirror of the DUMP_TRUCK decor emission in
+   * _buildWallDecorFromGrid — the pair is the contract. Any change to
+   * the generator's dimensions / anchors must be mirrored in BOTH
+   * places or the daily-relocated truck will render differently from
+   * a newly-generated one.
+   *
+   * mode = 'stamp'  — add wheel decor on the 4 side faces that face a
+   *                   walkable neighbor (2 wheels per face). Idempotent:
+   *                   strips any prior decor_truck_wheel entries first
+   *                   so re-stamping doesn't double up.
+   * mode = 'clear'  — remove all decor_truck_wheel entries on this tile
+   *                   (leaves other decor like torches untouched).
+   *
+   * The grid is read to decide which faces get wheels, so callers
+   * should stamp AFTER writing the DUMP_TRUCK tile and clear BEFORE
+   * overwriting it back to road/path.
+   *
+   * @param {string} floorId  — floor to update (current or cached)
+   * @param {number} x        — grid X
+   * @param {number} y        — grid Y
+   * @param {string} mode     — 'stamp' | 'clear'
+   * @returns {boolean} true if decor was changed
+   */
+  function rebuildDumpTruckDecor(floorId, x, y, mode) {
+    var fd = _resolveFloorData(floorId);
+    if (!fd || !fd.wallDecor || !fd.grid) return false;
+    var decor = fd.wallDecor;
+    var grid  = fd.grid;
+    var H     = grid.length;
+    var W     = grid[0] ? grid[0].length : 0;
+    if (y < 0 || y >= H || x < 0 || x >= W) return false;
+
+    // Strip any existing wheel decor on this tile first (both modes).
+    var cell = decor[y] && decor[y][x];
+    if (cell) {
+      var faces = ['n', 's', 'e', 'w'];
+      for (var f = 0; f < faces.length; f++) {
+        var arr = cell[faces[f]];
+        if (!arr || arr.length === 0) continue;
+        var kept = [];
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i].spriteId !== 'decor_truck_wheel') kept.push(arr[i]);
+        }
+        cell[faces[f]] = kept;
+      }
+    }
+
+    if (mode === 'clear') return true;
+
+    // Stamp: compute walkable neighbor faces and push two wheels each.
+    var T = TILES;
+    if (grid[y][x] !== T.DUMP_TRUCK) return false;
+
+    var dtFaces = [];
+    if (y > 0     && T.isWalkable(grid[y - 1][x])) dtFaces.push('n');
+    if (y < H - 1 && T.isWalkable(grid[y + 1][x])) dtFaces.push('s');
+    if (x > 0     && T.isWalkable(grid[y][x - 1])) dtFaces.push('w');
+    if (x < W - 1 && T.isWalkable(grid[y][x + 1])) dtFaces.push('e');
+    if (dtFaces.length === 0) return true;
+
+    if (!decor[y]) decor[y] = [];
+    if (!decor[y][x]) decor[y][x] = { n: [], s: [], e: [], w: [] };
+    var target = decor[y][x];
+    for (var df = 0; df < dtFaces.length; df++) {
+      var fc = dtFaces[df];
+      if (!target[fc]) target[fc] = [];
+      // Left wheel — bottom-left of wall face
+      target[fc].push({
+        spriteId: 'decor_truck_wheel',
+        anchorU: 0.22,
+        anchorV: 0.09,
+        scale:   0.15
+      });
+      // Right wheel — bottom-right of wall face
+      target[fc].push({
+        spriteId: 'decor_truck_wheel',
+        anchorU: 0.78,
+        anchorV: 0.09,
+        scale:   0.15
+      });
+    }
+    return true;
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
@@ -2379,6 +2656,12 @@ var FloorManager = (function () {
 
     // Torch decor sync (live wall-decor updates on extinguish/relight)
     syncTorchDecor: syncTorchDecor,
+
+    // Dump-truck wheel decor rebuild (called by DumpTruckSpawner when
+    // it relocates the truck on its scheduled node circuit — the floor-
+    // gen wallDecor cache would otherwise leave the wheels stranded at
+    // the previous spawn site).
+    rebuildDumpTruckDecor: rebuildDumpTruckDecor,
 
     /**
      * Get cached floorData for a previously-visited floor (read-only).

@@ -83,6 +83,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BED]         = { action: 'interact.rest',  icon: '🛏️' };
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
     ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
+    ACTION_MAP[TILES.CITY_BONFIRE] = { action: 'interact.rest',   icon: '🔥' };
     ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
     ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
     ACTION_MAP[TILES.MAILBOX]     = { action: 'interact.check_mail', icon: '📫' };
@@ -104,6 +105,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.BED].hint       = 'hint.rest';
     ACTION_MAP[TILES.TABLE].hint     = 'hint.inspect';
     ACTION_MAP[TILES.HEARTH].hint    = 'hint.rest';
+    ACTION_MAP[TILES.CITY_BONFIRE].hint = 'hint.rest';
     ACTION_MAP[TILES.TORCH_LIT].hint = 'hint.extinguish';
     ACTION_MAP[TILES.TORCH_LIT].gleanerHint = 'hint.refuel';
     ACTION_MAP[TILES.TORCH_UNLIT].hint = 'hint.refuel';
@@ -167,7 +169,7 @@ var InteractPrompt = (function () {
       }
 
       // §11d: Depth-based verb for bonfire/hearth tiles ("Camp" vs "Rest")
-      if (tile === TILES.BONFIRE || tile === TILES.HEARTH) {
+      if (tile === TILES.BONFIRE || tile === TILES.HEARTH || tile === TILES.CITY_BONFIRE) {
         var fId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
         var fDepth = fId ? fId.split('.').length : 1;
         if (fDepth >= 3) {

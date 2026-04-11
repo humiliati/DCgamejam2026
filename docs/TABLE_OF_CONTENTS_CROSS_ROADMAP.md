@@ -58,6 +58,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-19 | [DOOR_EFFECTS_ROADMAP.md](#doc-19-door_effects_roadmapmd) | docs/ |
 | DOC-72 | [GAME_JS_EXTRACTION_ROADMAP.md](#doc-72-game_js_extraction_roadmapmd) | docs/ |
 | DOC-73 | [ARCHITECTURAL_SHAPES_ROADMAP.md](#doc-73-architectural_shapes_roadmapmd) | docs/ |
+| DOC-87 | [RAYCAST_FREEFORM_UPGRADE_ROADMAP.md](#doc-87-raycast_freeform_upgrade_roadmapmd) — freeform wall blocks (hearth sandwich, civilized bonfire + pergola moat, arches, portholes) modelled on raycast.js-master reference | docs/ |
 
 ### Card, Inventory And Combat
 

@@ -13,11 +13,74 @@
 var Raycaster = (function () {
   'use strict';
 
-  var _canvas = null;
-  var _ctx = null;
-  var _width = 0;
-  var _height = 0;
+  // Main canvas — owned by the page, stays at native CSS resolution so
+  // HUD / minimap / menus / overlays all draw at full fidelity. We DO NOT
+  // shrink this canvas when RENDER_SCALE < 1.0 — only the 3D viewport
+  // offscreen canvas is shrunk. The main canvas is used solely by the
+  // final blit at the end of render() to copy the offscreen into place.
+  var _canvas = null;      // <canvas> DOM element (main)
+  var _mainCtx = null;     // main canvas 2d context (full-res)
+
+  // Offscreen 3D viewport — internal render target. All raycasting,
+  // floor casting, wall drawing, sprite billboards write here. Its dims
+  // = CSS size × RENDER_SCALE. At the end of render(), it's blitted
+  // (nearest-neighbor) onto the main canvas at full CSS size.
+  var _offCanvas = null;
+  var _ctx = null;         // offscreen 2d context — "ctx" throughout render code means this
+  var _width = 0;          // offscreen width  (= cssW * scale)
+  var _height = 0;         // offscreen height (= cssH * scale)
   var _zBuffer = [];
+
+  // ── Internal render resolution (pixel-cost lever) ────────────────
+  // The raycaster is pure-JS per-pixel. Every doubling of either axis
+  // roughly quadruples per-frame cost because _renderFloor paints every
+  // floor pixel in JavaScript and the column loop casts one ray per
+  // pixel column. Classic software raycasters (Doom, Wolf3D) rendered
+  // at a small fixed backing store and scaled up — we do the same.
+  //
+  //   RENDER_SCALE = fraction of the display's CSS size to cast at.
+  //     1.00 → native (e.g. 1920×925)
+  //     0.75 → 1440×693 (~56% of native pixels)
+  //     0.50 → 960×462  (~25% of native pixels, 4× faster)
+  //     0.33 → 633×305  (~11% of native pixels, 9× faster)
+  //     0.25 → 480×231  (~6%  of native pixels, 16× faster)
+  //
+  // `_ctx.imageSmoothingEnabled = false` (set in init) keeps the CSS
+  // upscale crisp-pixelated rather than blurry. Re-applied after every
+  // _resize because some browsers reset it on canvas backing-store
+  // changes.
+  var RENDER_SCALE = 1.0;
+  var RENDER_SCALE_KEY = 'dg_render_scale';
+  try {
+    var _savedScale = parseFloat(localStorage.getItem(RENDER_SCALE_KEY));
+    if (!isNaN(_savedScale) && _savedScale >= 0.2 && _savedScale <= 1.0) {
+      RENDER_SCALE = _savedScale;
+    }
+  } catch (e) { /* no localStorage — keep default */ }
+
+  // ── Pedestal occlusion mask (parallel to _zBuffer) ──────────────
+  // Freeform tiles with a solid lower band (HEARTH base stone,
+  // CITY_BONFIRE limestone pedestal) set these per column so sprites
+  // positioned BEHIND the pedestal (not inside the same cell) get
+  // their bottom half clipped at the pedestal's top screen row.
+  // Without this, zBypass lets sprites render straight through the
+  // solid stone — NPCs talking to the player across a bonfire appear
+  // ghostly from the waist down.
+  //
+  //   _zBufferPedTopY[col]  — screen Y of the pedestal's top edge
+  //                           (unclipped; may be off-screen). 0 = no
+  //                           pedestal in this column.
+  //   _zBufferPedDist[col]  — perpDist of the pedestal's front face.
+  //                           0 = no pedestal.
+  //   _zBufferPedMX[col]    — map X of the pedestal tile. -1 = none.
+  //   _zBufferPedMY[col]    — map Y of the pedestal tile. -1 = none.
+  //
+  // The sprite renderer uses (mx,my) to detect same-tile sprites
+  // (dragonfire emoji inside HEARTH cavity) and skip clipping there.
+  var _zBufferPedTopY = [];
+  var _zBufferPedDist = [];
+  var _zBufferPedMX   = [];
+  var _zBufferPedMY   = [];
 
   // Floor casting buffer (reused across frames to avoid GC)
   var _floorImgData = null;
@@ -41,9 +104,20 @@ var Raycaster = (function () {
   // Pre-allocated buffer for multi-hit DDA results. Avoids per-frame
   // allocation. Each layer stores the grid hit info; geometry (perpDist,
   // drawStart, etc.) is computed on-demand during back-to-front render.
-  var _MAX_LAYERS = 6; // shrub → pillar → tree → building → far wall → skyline
+  // Back-layer capacity. Sized for the boosted renderDist regime
+  // (up to ~48 cells at RENDER_SCALE 0.5): a contiguous freeform
+  // cluster like a pergola beam ring can eat 3-4 slots on its own
+  // before the ray reaches any meaningful back geometry, so 6 was
+  // too tight — distant walls / gates fell off the end. 8 gives
+  // room for: near freeform cluster (2-3) + back face + back wall
+  // + distant gate pair + skyline. Each additional slot costs one
+  // extra _layerBuf struct at init and one extra strip draw in the
+  // rare column where collection actually fills the buffer.
+  var _MAX_LAYERS = 8;
   var _MAX_BG_STEPS = 24; // max DDA steps past first hit (increased for deeper views)
   var _layerBuf = [
+    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
@@ -52,23 +126,353 @@ var Raycaster = (function () {
     { mx: 0, my: 0, sd: 0, tile: 0 }
   ];
 
+  // ── Freeform two-segment wall feature flag ───────────────────────
+  // Phase 1 of the raycast freeform upgrade. When enabled, tiles
+  // registered in `contract.tileFreeform` (currently only HEARTH) render
+  // as upper brick band + fire cavity + lower brick band instead of
+  // the legacy step-fill lip trick. Toggle via URL param ?freeform=1
+  // or via Raycaster.setFreeformEnabled(bool) at runtime.
+  // See docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md.
+  var _freeformEnabled = true;
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.search) {
+      var _qs = window.location.search;
+      if (_qs.indexOf('freeform=0') >= 0) _freeformEnabled = false;
+      if (_qs.indexOf('freeform=1') >= 0) _freeformEnabled = true;
+    }
+  } catch (e) {}
+
+  // ── Freeform gap filler registry ─────────────────────────────────
+  // When a freeform tile's two-segment render produces a visible cavity
+  // (upper band + gap + lower band), the gap is painted by a registered
+  // filler function selected via the tile's contract entry:
+  //
+  //   tileFreeform[TILE] = { hUpper, hLower, fillGap: 'my_key' }
+  //
+  // The raycaster looks up `fillGap` in `_gapFillers` and calls the
+  // function with the shared `_gapInfo` object describing the column
+  // state. Tiles without a `fillGap` slot use the `_default` filler
+  // (dark placeholder — easy to spot unstyled cavities during dev).
+  //
+  // This is the shared "freeform gap filler" extension point called
+  // out in docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md §3.5 — the same
+  // pipeline is used by HEARTH (fire glow), CIVILIZED_BONFIRE (Phase 2
+  // fire column), WELL (water surface), DUMP_TRUCK (trash fill), and
+  // any future cavity-bearing tile. Layer-3 modules (e.g. WellSprites,
+  // DumpTruckSprites) should register their fillers via
+  // Raycaster.registerFreeformGapFiller(key, fn) during init instead
+  // of editing raycaster.js. That keeps per-tile gap behavior out of
+  // the hot path module and next to the module that owns the tile.
+  //
+  // Zero-alloc: `_gapInfo` is a single shared object reused across all
+  // columns each frame. Fillers MUST treat it as read-only and MUST NOT
+  // cache references to it past the call — the fields change as the
+  // renderer sweeps the column buffer.
+  //
+  // Filler signature: function (ctx, col, gapStart, gapH, info)
+  //   ctx       — 2D canvas context
+  //   col       — screen x
+  //   gapStart  — first screen row inside the gap (clipped to viewport)
+  //   gapH      — gap height in screen pixels (clipped)
+  //   info      — see field list in `_gapInfo` below
+  var _gapInfo = {
+    brightness: 1,
+    fogFactor: 0,
+    fogColor: null,
+    tintStr: null,
+    tintIdx: null,
+    tintRGB: null,
+    mapX: 0,
+    mapY: 0,
+    side: 0,
+    perpDist: 0,
+    hitTile: 0,
+    wallX: 0,
+    wallTop: 0,
+    lineH: 0,
+    halfH: 0,
+    screenH: 0,
+    wallHeightMult: 1,
+    // Gap band extent in world units (handy for content that needs
+    // to know "how tall is the cavity physically" — e.g. reflection
+    // offset on a water surface).
+    gapWorldH: 0,
+    // Reference to the active tile's frozen freeform config
+    // ({ hUpper, hLower, fillGap }). Fillers that need to compute
+    // unclipped gap extents (e.g. the city bonfire's vertical flame
+    // gradient) read `ff.hUpper` and `ff.hLower` to project band
+    // boundaries independent of viewport clipping.
+    ff: null
+  };
+
+  var _gapFillers = {
+    // Default: dark placeholder. Shows through floor prepass + back
+    // layers with a dim fog-blended tint so an unregistered cavity
+    // still reads as "something goes here" rather than a hole.
+    _default: function (ctx, col, gapStart, gapH, info) {
+      ctx.fillStyle = _applyFogAndBrightness(
+        '#141414', info.fogFactor, info.brightness * 0.5, info.fogColor
+      );
+      ctx.fillRect(col, gapStart, 1, gapH);
+    },
+
+    // Transparent: explicit no-op filler for tiles whose cavity should
+    // be a literal hole through the column — sky above horizon, floor
+    // below. The sky/skybox and floor prepasses have already painted
+    // both halves of the screen before walls start drawing, and the
+    // back-layer collection flag (_fgIsFreeformSeeThrough) emits any
+    // walls behind the freeform tile into this Y range as well. Doing
+    // nothing here preserves all of that.
+    //
+    // Used by PERGOLA_BEAM (70) — a top-anchored beam with hLower=0
+    // and a huge gap below the beam band; painting anything here would
+    // cover the sky/plaza the player expects to see under the canopy.
+    _transparent: function () { /* intentional no-op */ },
+
+    // HEARTH / BONFIRE fire cavity: transparent window through the
+    // column with a warm amber glow overlay. The dragonfire emoji is
+    // NOT drawn here — BonfireSprites emits a billboard sprite at the
+    // tile center so the glyph has proper single-instance parallax.
+    // HEARTH columns bypass the z-buffer (see zBypass in the main DDA
+    // loop) so the sprite isn't culled by the front face distance.
+    //
+    // The cavity is literally see-through: no opaque backdrop is
+    // painted. Whatever was drawn by prior passes (floor prepass +
+    // back layers) shows through and is merely tinted by the glow.
+    hearth_fire: function (ctx, col, gapStart, gapH, info) {
+      var glowA = 0.08 * info.brightness * (1 - Math.min(0.85, info.fogFactor));
+      if (glowA > 0.01) {
+        ctx.fillStyle = 'rgba(255,120,30,' + glowA.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, gapH);
+      }
+    },
+
+    // CITY_BONFIRE (Olympic community pyre): tall vertical flame column
+    // rising from the stone pedestal into the open sky. Unlike the
+    // HEARTH cavity — which is a small amber wash behind a billboard —
+    // the city bonfire IS the cavity visual: a layered vertical
+    // gradient from hot white-yellow at the base, through saturated
+    // orange, to near-transparent red at the crown (so sky peeks
+    // through). Per-column flicker phases keep adjacent columns and
+    // adjacent pyres out of sync so the flame reads as alive.
+    //
+    // The gradient is anchored to the UNCLIPPED gap extents (computed
+    // from info.ff.hUpper / info.ff.hLower) so band proportions stay
+    // correct even when the viewport clips the top of the pyre —
+    // otherwise walking up close would squish the crown into a red
+    // band instead of fading out against the sky.
+    //
+    // Runs one createLinearGradient per visible column. At close range
+    // that is ~16–32 gradients per frame; well within budget.
+    city_bonfire_fire: function (ctx, col, gapStart, gapH, info) {
+      if (gapH <= 0) return;
+      var ff = info.ff;
+      if (!ff) return;
+
+      var whMult = info.wallHeightMult;
+      var lineH  = info.lineH;
+      var wallTop = info.wallTop;
+
+      // Full (unclipped) gap extents in screen pixels. The gradient is
+      // anchored here so band proportions stay correct at close range.
+      var fullGapTop = wallTop + (ff.hUpper / whMult) * lineH;
+      var fullGapBot = wallTop + lineH * (1 - ff.hLower / whMult);
+      if (fullGapBot - fullGapTop < 1) return;
+
+      // Per-column flicker. Slow sine modulated by column + tile so
+      // adjacent columns and adjacent pyres desynchronise naturally.
+      var t = Date.now();
+      var flicker = 0.88 + 0.12 * Math.sin(
+        t * 0.012 + col * 0.31 + info.mapX * 1.7 + info.mapY * 2.9
+      );
+      var fogFade = 1 - Math.min(0.85, info.fogFactor);
+      var bAdj    = info.brightness * flicker * fogFade;
+
+      var aBase  = (0.88 * bAdj).toFixed(3);  // hot core (pedestal top)
+      var aMid   = (0.72 * bAdj).toFixed(3);  // body
+      var aCrown = (0.34 * bAdj).toFixed(3);  // fade-out cap
+
+      var grad = ctx.createLinearGradient(0, fullGapTop, 0, fullGapBot);
+      // Crown (top of gap) — transparent → faint red, sky shows through
+      grad.addColorStop(0.00, 'rgba(255, 60, 10, 0)');
+      grad.addColorStop(0.15, 'rgba(220, 60, 15, ' + aCrown + ')');
+      // Upper body — red-orange
+      grad.addColorStop(0.35, 'rgba(240, 110, 30, ' + aMid   + ')');
+      // Mid body — warm orange
+      grad.addColorStop(0.55, 'rgba(255, 150, 40, ' + aMid   + ')');
+      // Lower body — yellow-orange
+      grad.addColorStop(0.78, 'rgba(255, 200, 90, ' + aBase  + ')');
+      // Base (flush with pedestal top) — hot white-yellow core
+      grad.addColorStop(1.00, 'rgba(255, 235, 170, ' + aBase + ')');
+
+      ctx.fillStyle = grad;
+      ctx.fillRect(col, gapStart, 1, gapH);
+    },
+
+    // DUMP_TRUCK spool cavity: transparent ground-level slot through the
+    // truck body housing the pressure-wash hose reel. Follows the same
+    // pattern as hearth_fire — the cavity is LITERALLY see-through and
+    // painted with nothing but a subtle cool-blue tint on top of the
+    // back-layer content the freeform see-through logic has already
+    // emitted behind the tile. The 🧵 spool glyph itself is NOT drawn
+    // here: DumpTruckSprites emits a billboard sprite at the tile center
+    // (mirror of BonfireSprites for HEARTH) and the z-bypass path lets
+    // that billboard render even though the truck's front face is closer
+    // to the camera than the sprite. The result is "the player looks
+    // into the slot and sees the reel bobbing inside," NOT "a blue
+    // rubber band painted across the truck."
+    //
+    // If the filler painted anything opaque the cavity would become an
+    // emoji-coloured band on the wall face — which is exactly the bug
+    // this rewrite fixes. KEEP THIS TRANSPARENT.
+    truck_spool_cavity: function (ctx, col, gapStart, gapH, info) {
+      if (gapH <= 0) return;
+      // Cool-blue "pressure wash" tint. Alpha scales with brightness
+      // and inverse fog so the glow fades at distance, matching the
+      // hearth_fire warm-glow pattern exactly.
+      var glowA = 0.10 * info.brightness * (1 - Math.min(0.85, info.fogFactor));
+      if (glowA > 0.01) {
+        ctx.fillStyle = 'rgba(70, 130, 200, ' + glowA.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, gapH);
+      }
+    }
+
+    // NOTE: window_tavern_interior is registered at Layer 3 init time
+    // from engine/window-sprites.js via registerFreeformGapFiller().
+    // That module owns the per-floor exterior-face cache the filler
+    // reads from (for skipping interior paint on non-exterior faces),
+    // so the filler closes over WindowSprites state naturally. See
+    // docs/LIVING_WINDOWS_ROADMAP.md §4 for the window depth contract.
+  };
+
+  function registerFreeformGapFiller(key, fn) {
+    if (typeof key !== 'string' || typeof fn !== 'function') return false;
+    _gapFillers[key] = fn;
+    return true;
+  }
+
+  // ── Debug layer trace (URL param ?debug=1) ───────────────────────
+  // Dumps the N-layer collection buffer for a sparse set of sample
+  // columns on the next rendered frame. Press `P` in-game to arm a
+  // one-shot trace. Gate is a single boolean check per column so the
+  // hot path stays free when debug is off.
+  // Sample layout: 13 columns across the viewport (every w/12, plus
+  // exact center). Output is a flat console log sequence the user can
+  // copy-paste back.
+  var _debugEnabled = false;
+  var _debugTraceOnce = false;
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.search) {
+      if (window.location.search.indexOf('debug=1') >= 0) {
+        _debugEnabled = true;
+      }
+    }
+  } catch (e) {}
+  if (_debugEnabled && typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'p' || e.key === 'P') {
+        _debugTraceOnce = true;
+        try { console.log('[RC-DBG] trace armed — next frame will dump sampled columns'); } catch (_) {}
+      }
+    });
+  }
+
   function init(canvas) {
     _canvas = canvas;
-    _ctx = canvas.getContext('2d');
-    _ctx.imageSmoothingEnabled = false;
-    if (_ctx.webkitImageSmoothingEnabled !== undefined) _ctx.webkitImageSmoothingEnabled = false;
+    _mainCtx = canvas.getContext('2d');
+    _mainCtx.imageSmoothingEnabled = false;
+    if (_mainCtx.webkitImageSmoothingEnabled !== undefined) _mainCtx.webkitImageSmoothingEnabled = false;
+
+    // Create the offscreen 3D viewport canvas. All internal rendering
+    // targets this surface; the main canvas only receives a single
+    // scaled drawImage blit per frame.
+    _offCanvas = (typeof document !== 'undefined') ? document.createElement('canvas') : null;
+    _ctx = _offCanvas ? _offCanvas.getContext('2d') : null;
+    if (_ctx) {
+      _ctx.imageSmoothingEnabled = false;
+      if (_ctx.webkitImageSmoothingEnabled !== undefined) _ctx.webkitImageSmoothingEnabled = false;
+    }
+
     _resize();
     window.addEventListener('resize', _resize);
   }
 
   function _resize() {
     var container = _canvas.parentElement;
-    _canvas.width = container.clientWidth;
-    _canvas.height = container.clientHeight;
-    _width = _canvas.width;
-    _height = _canvas.height;
+    var cssW = container.clientWidth;
+    var cssH = container.clientHeight;
+
+    // ── Main canvas: always at native CSS resolution ────────────────
+    // The main canvas hosts all UI drawing (HUD, minimap, menus,
+    // dialog box, overlays). Keeping it at full CSS size means layout
+    // math based on _canvas.width / _canvas.height stays correct
+    // regardless of RENDER_SCALE.
+    _canvas.width  = Math.max(2, cssW);
+    _canvas.height = Math.max(2, cssH);
+    _canvas.style.width  = cssW + 'px';
+    _canvas.style.height = cssH + 'px';
+
+    // Browsers reset smoothing when backing store is resized.
+    if (_mainCtx) {
+      _mainCtx.imageSmoothingEnabled = false;
+      if (_mainCtx.webkitImageSmoothingEnabled !== undefined) {
+        _mainCtx.webkitImageSmoothingEnabled = false;
+      }
+    }
+
+    // ── Offscreen 3D viewport: CSS size × RENDER_SCALE ──────────────
+    // This is the pixel-cost lever. Every per-pixel raycaster op
+    // (floor casting, column fills, sprite columns) runs against this
+    // smaller surface, then a single drawImage upscales it crisp.
+    var scale = RENDER_SCALE;
+    if (scale > 1.0) scale = 1.0;
+    if (scale < 0.2) scale = 0.2;
+    if (_offCanvas) {
+      _offCanvas.width  = Math.max(2, Math.floor(cssW * scale));
+      _offCanvas.height = Math.max(2, Math.floor(cssH * scale));
+      _width  = _offCanvas.width;
+      _height = _offCanvas.height;
+      if (_ctx) {
+        _ctx.imageSmoothingEnabled = false;
+        if (_ctx.webkitImageSmoothingEnabled !== undefined) {
+          _ctx.webkitImageSmoothingEnabled = false;
+        }
+      }
+    } else {
+      _width  = _canvas.width;
+      _height = _canvas.height;
+    }
+
     _zBuffer = new Array(_width);
+    _zBufferPedTopY = new Array(_width);
+    _zBufferPedDist = new Array(_width);
+    _zBufferPedMX   = new Array(_width);
+    _zBufferPedMY   = new Array(_width);
+    for (var _i = 0; _i < _width; _i++) {
+      _zBufferPedTopY[_i] = 0;
+      _zBufferPedDist[_i] = 0;
+      _zBufferPedMX[_i]   = -1;
+      _zBufferPedMY[_i]   = -1;
+    }
+
+    // Floor buffer is tied to backing store dims — invalidate so the
+    // next frame re-allocates at the new size.
+    _floorImgData = null;
+    _floorBufW = 0;
+    _floorBufH = 0;
   }
+
+  // Public: change render scale at runtime. Clamps, persists, resizes.
+  function setRenderScale(s) {
+    if (typeof s !== 'number' || isNaN(s)) return;
+    if (s > 1.0) s = 1.0;
+    if (s < 0.2) s = 0.2;
+    RENDER_SCALE = s;
+    try { localStorage.setItem(RENDER_SCALE_KEY, String(s)); } catch (e) {}
+    if (_canvas) _resize();
+  }
+
+  function getRenderScale() { return RENDER_SCALE; }
 
   function setBiomeColors(biome) {
     if (!biome || !biome.wallLight) return;
@@ -109,10 +513,31 @@ var Raycaster = (function () {
     var halfFov = fov / 2;
 
     // Read contract (fall back to defaults if none set)
-    var renderDist = _contract ? _contract.renderDistance : 16;
-    var fogDist    = _contract ? _contract.fogDistance : 12;
-    var fogColor   = _contract ? _contract.fogColor : { r: 0, g: 0, b: 0 };
-    var baseWallH  = _contract ? _contract.wallHeight : 1.0;
+    var baseRenderDist = _contract ? _contract.renderDistance : 16;
+    var baseFogDist    = _contract ? _contract.fogDistance : 12;
+    var fogColor       = _contract ? _contract.fogColor : { r: 0, g: 0, b: 0 };
+    var baseWallH      = _contract ? _contract.wallHeight : 1.0;
+
+    // ── Render-scale-aware distance boost ──────────────────────────
+    // The pixel-cost lever (RENDER_SCALE) shrinks the offscreen
+    // viewport quadratically: at 0.5 scale the raycaster paints ~25%
+    // of the pixels it used to. That headroom lets us cast FURTHER
+    // without losing framerate. Linear boost = 1/scale keeps per-
+    // column DDA cost roughly constant while the per-pixel floor
+    // caster gets a free quadratic win. Clamped so contracts with
+    // very short renderDistance (small interior rooms) don't blow up
+    // into absurd depths.
+    var _distBoost = (RENDER_SCALE > 0.01) ? (1.0 / RENDER_SCALE) : 1.0;
+    if (_distBoost < 1.0) _distBoost = 1.0;
+    // Cap: exterior floors already cast 20 tiles; 4× that = 80 is a
+    // sensible ceiling even with a huge gridW. Interior contracts cap
+    // naturally at their grid edge.
+    var _MAX_BOOSTED_DIST = 80;
+    var renderDist = Math.min(_MAX_BOOSTED_DIST, baseRenderDist * _distBoost);
+    // Fog distance rides the same multiplier so the ramp start and
+    // end both expand together — keeps the fog curve looking correct
+    // (not a hard clamp wall at a distant edge).
+    var fogDist    = Math.min(_MAX_BOOSTED_DIST * 0.8, baseFogDist * _distBoost);
 
     // ── Light tint maps (colored glow from dynamic light sources) ──
     var _hasLighting = typeof Lighting !== 'undefined';
@@ -194,6 +619,30 @@ var Raycaster = (function () {
     var py = player.y + 0.5;
     var pDir = player.dir;
 
+    // ── Debug trace: snapshot flag for this frame, dump player state ──
+    // Snapshot into a frame-local so the trace is atomic — the global
+    // flag clears at end of frame, so a keypress between frames queues
+    // the next full-frame dump and nothing else.
+    var _dbgFrame = _debugTraceOnce;
+    if (_dbgFrame) {
+      try {
+        var _dbgCid = _contract ? (_contract.floorId || _contract.biome || '?') : 'no-contract';
+        console.log(
+          '[RC-DBG] ===== FRAME TRACE =====\n' +
+          '  player px=' + px.toFixed(3) + ' py=' + py.toFixed(3) +
+          ' dir=' + pDir.toFixed(3) + ' pitch=' + (player.pitch || 0).toFixed(3) + '\n' +
+          '  screen w=' + w + ' h=' + h + ' halfH=' + halfH +
+          ' baseWallH=' + baseWallH + ' renderDist=' + renderDist +
+          ' fogDist=' + fogDist + '\n' +
+          '  contract=' + _dbgCid +
+          ' tileWallHeights=' + (_contract && _contract.tileWallHeights ? 'yes' : 'NO') +
+          ' freeform=' + _freeformEnabled
+        );
+      } catch (_dbgErr) { _dbgFrame = false; }
+    }
+    var _dbgSampleStep = Math.max(1, Math.floor(w / 12));
+    var _dbgCenterCol = w >> 1;
+
     for (var col = 0; col < w; col++) {
       var cameraX = (2 * col / w) - 1;
       var rayAngle = pDir + Math.atan(cameraX * Math.tan(halfFov));
@@ -254,11 +703,45 @@ var Raycaster = (function () {
         _layerBuf[0].tile = hitTile;
         _lc = 1;
 
-        // Track tallest layer seen — only collect hits that add visible
-        // area above the current stack. Same-height walls (e.g. shrub
-        // behind shrub) are fully occluded by the closer one, so skip
-        // them and keep searching for something taller.
-        var _maxH = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
+        // Track tallest TOP EDGE seen in world-space altitude — only
+        // collect hits that add visible area above the current stack.
+        // Using the top edge (heightOffset + wallHeight/2) rather than
+        // slab thickness alone is critical for floating tiles: a roof
+        // tile is only ~0.25 thick but sits 2.0 above the ground, so
+        // its top at 2.125 clearly extends above a 1.0 building wall
+        // whose top is only at 0.5. A pure "wallHeight > prev" check
+        // would reject the roof because 0.25 < 1.0, leaving a hole
+        // between the crenellations where the flat roof should be.
+        //
+        // Same-silhouette tiles (shrub behind shrub, wall behind wall
+        // at equal height/offset) still get occluded by the closer one
+        // and skipped, so layer slots aren't wasted on fully hidden
+        // back geometry.
+        var _fgWH = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
+        var _fgOff = SpatialContract.getTileHeightOffset(_contract, hitTile) || 0;
+        var _fgTop = _fgWH / 2 + _fgOff;
+        // Floating foregrounds (canopy, crenel, thin roof slabs) don't
+        // create a monolithic silhouette: there's an UNDER-SLAB gap
+        // (0 → slabBottom) AND an OVER-SLAB gap (slabTop → ∞) where
+        // back geometry is still visible. For these, start the
+        // occlusion threshold at 0 so ground-level walls behind the
+        // slab qualify as back layers — they're visible through the
+        // under-slab gap (and through the tooth gaps on crenel tiles).
+        // The _cTop > _maxTop progression then handles multi-layer
+        // back-to-front ordering correctly: each new layer must be
+        // taller than the previous ones to add fresh pixels.
+        //
+        // Regular (ground-anchored) foregrounds still use their true
+        // top edge — only tiles that peek above the fg silhouette
+        // contribute new pixels.
+        // Freeform tiles (HEARTH etc.) have a transparent cavity band, so
+        // back geometry behind them must be collected and rendered — the
+        // cavity reveals whatever is beyond. Treat them like floating tiles
+        // for layer collection: start _maxTop at 0 so equal-height back
+        // walls pass the strict _cTop > _maxTop gate.
+        var _fgIsFloating = TILES.isFloating(hitTile);
+        var _fgIsFreeformSeeThrough = (_freeformEnabled && TILES.isFreeform(hitTile));
+        var _maxTop = (_fgIsFloating || _fgIsFreeformSeeThrough) ? 0 : _fgTop;
 
         // ── Short-wall back-face injection flag ────────────────────
         // Short walls (height < 1.0×) need their inner face visible so
@@ -268,21 +751,68 @@ var Raycaster = (function () {
         // completing the 3D box illusion.
         //
         // Applies to: MAILBOX (0.25×), BONFIRE (0.3×), DUMP_TRUCK (0.5×),
-        //   TABLE (0.7×), BED (0.6×), CHEST (0.65–0.7×), BAR_COUNTER (0.8×).
+        //   TABLE (0.4×), BED (0.6×), CHEST (0.65–0.7×), BAR_COUNTER (0.8×).
+        // Also applies to FLOATING tiles (CANOPY, ROOF_*, PERGOLA) —
+        // thin slabs raised high need the opposite wall drawn so they
+        // don't look like paper cutouts viewed from one side only.
+        //
+        // EXCEPTION: ROOF_CRENEL intentionally opts out via
+        // isFloatingBackFace(). A crenel tile renders as a single-pane
+        // merlon line crowning the wall below it — injecting a back-face
+        // would duplicate the tooth silhouette at a slightly offset
+        // screen position, reading as a pergola-style double lattice
+        // instead of a clean rampart edge. PERGOLA is the dedicated
+        // tile type for the double-lattice look and DOES inject.
+        //
         // Does NOT apply to: SHRUB, FENCE (exterior see-over tiles —
-        //   back face would reveal "inside the hedge" which reads wrong).
+        // back face would reveal "inside the hedge" which reads wrong).
         var _needBackFace = (
           hitTile === TILES.MAILBOX || hitTile === TILES.BONFIRE ||
           hitTile === TILES.DUMP_TRUCK ||
           hitTile === TILES.TABLE  || hitTile === TILES.BED ||
-          hitTile === TILES.CHEST  || hitTile === TILES.BAR_COUNTER
+          hitTile === TILES.CHEST  || hitTile === TILES.BAR_COUNTER ||
+          TILES.isFloatingBackFace(hitTile) ||
+          // Freeform tiles (HEARTH etc.) inject a back face so that
+          // approaching the hearth up close reveals the opposing wall
+          // of the fire cavity — matches the mailbox/canopy pattern.
+          // The back face re-runs freeform rendering, so its cavity
+          // is transparent and the glowing coals behind it show.
+          (_fgIsFreeformSeeThrough)
         );
 
-        // Continue DDA to collect up to MAX_LAYERS total hits
+        // Continue DDA to collect up to MAX_LAYERS total hits.
+        //
+        // Termination is bounded by THREE independent conditions:
+        //   1. _lc < _MAX_LAYERS — layer-buffer capacity
+        //   2. (_cDep - depth) < _MAX_BG_STEPS — back-step budget past
+        //      the first hit (24 cells). This is the correct budget
+        //      for this loop because the back-layer collection is
+        //      specifically "additional cells PAST the first hit."
+        //   3. Grid-edge break below — prevents infinite walk off the map
+        //
+        // NOTE: Previously this loop also gated on `_cDep < renderDist`
+        // which created an asymmetric interior culling bug. For a ray
+        // that first-hits at depth=8 (e.g. HEARTH or PILLAR close to the
+        // player) and renderDist=14, only 6 additional steps would be
+        // allowed — not enough to reach the opposite perimeter wall in
+        // a 20-cell interior. Straight-axis rays would squeak through
+        // because they don't burn depth on x/y diagonal DDA drift, but
+        // off-angle rays ran out of budget mid-room, leaving the back
+        // wall collected for a single column while adjacent columns
+        // missed it entirely. That produced the "solo column pops in
+        // with no peripheral neighbors" artifact.
+        //
+        // renderDist is the correct cap for the FIRST-hit DDA loop
+        // (which must stop somewhere on empty maps), but the BACK-layer
+        // loop has its own explicit budget in _MAX_BG_STEPS and its
+        // own per-layer fog-skip in _renderBackLayer (`fog > 0.98`
+        // returns early). Removing the renderDist cap here lets back
+        // layers register consistently across all ray angles; layers
+        // that are invisible in fog cost nothing to render.
         var _cSdX = sideDistX, _cSdY = sideDistY;
         var _cMX = mapX, _cMY = mapY, _cSd = 0;
         var _cDep = depth;
-        while (_lc < _MAX_LAYERS && _cDep < renderDist && (_cDep - depth) < _MAX_BG_STEPS) {
+        while (_lc < _MAX_LAYERS && (_cDep - depth) < _MAX_BG_STEPS) {
           if (_cSdX < _cSdY) {
             _cSdX += deltaDistX; _cMX += stepX; _cSd = 0;
           } else {
@@ -292,40 +822,133 @@ var Raycaster = (function () {
 
           if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
 
+          // Read the next cell's tile once — used by both the back-face
+          // dedup gate below and the regular layer-collection check.
+          var _cT = grid[_cMY][_cMX];
+          var _cTSolid = (TILES.isOpaque(_cT) || TILES.isDoor(_cT));
+
           // Inject back-face for short walls on first step past the tile.
           // Bounds-checked above — back-face coordinates are always in-grid.
+          //
+          // DEDUP: when the next cell contains the SAME tile type as the
+          // foreground (e.g. a row of PERGOLA_BEAM or a cluster of MAILBOX
+          // tiles), its own front face — collected immediately below by
+          // the regular branch — already renders at the exact (mx, my, sd)
+          // that the back-face injection would write. Emitting both
+          // produces a pixel-identical duplicate that burns one of the
+          // _MAX_LAYERS slots, starving distant back geometry (gates,
+          // buildings, skyline) that would otherwise register farther
+          // along the ray. Skip the injection in that case — the next
+          // cell's front face serves as the back face already.
           if (_needBackFace && _lc < _MAX_LAYERS) {
-            _layerBuf[_lc].mx = _cMX;
-            _layerBuf[_lc].my = _cMY;
-            _layerBuf[_lc].sd = _cSd;
-            _layerBuf[_lc].tile = hitTile;
-            _lc++;
+            var _skipBackFace = (_cTSolid && _cT === hitTile);
+            if (!_skipBackFace) {
+              _layerBuf[_lc].mx = _cMX;
+              _layerBuf[_lc].my = _cMY;
+              _layerBuf[_lc].sd = _cSd;
+              _layerBuf[_lc].tile = hitTile;
+              _lc++;
+            }
             _needBackFace = false;
           }
-          var _cT = grid[_cMY][_cMX];
-          if (TILES.isOpaque(_cT) || TILES.isDoor(_cT)) {
+          if (_cTSolid) {
             var _cH = SpatialContract.getWallHeight(_contract, _cMX, _cMY, _rooms, _cT, _cellHeights);
-            // Only record if taller than everything in front — shorter or
-            // equal hits are fully occluded and waste a layer slot
-            if (_cH > _maxH) {
+            var _cOff = SpatialContract.getTileHeightOffset(_contract, _cT) || 0;
+            var _cTop = _cH / 2 + _cOff;
+            // Record if this tile's top edge rises above the current
+            // stack's top — that's the only way it adds visible pixels
+            // we haven't already covered. Shorter/lower or equal top
+            // tiles are fully occluded by the foreground silhouette.
+            if (_cTop > _maxTop) {
               _layerBuf[_lc].mx = _cMX;
               _layerBuf[_lc].my = _cMY;
               _layerBuf[_lc].sd = _cSd;
               _layerBuf[_lc].tile = _cT;
               _lc++;
-              _maxH = _cH;
-              // Stop at max-height tiles — nothing visible behind them
-              if (_cH >= 3.0) break;
+              // Ground-anchored tiles cover altitude [0, _cTop] fully,
+              // so they raise the occlusion threshold and can terminate
+              // collection once the stack reaches the practical ceiling.
+              // Floating tiles (CANOPY, ROOF_*, crenel) are slabs —
+              // they only cover [slabBottom, slabTop] and leave an
+              // under-slab gap. Recording them as back layers is
+              // correct (they contribute pixels in the slab band),
+              // but they must NOT advance _maxTop or trigger the
+              // break, because the building wall BEHIND them still
+              // needs to register to fill the under-slab gap.
+              // Without this skip, a short foreground tile followed
+              // by a canopy/crenel along the ray would consume the
+              // break condition and leave the tall back wall sky-out.
+              //
+              // Freeform tiles (HEARTH, future arch/porthole/window)
+              // have a transparent cavity band and must NOT advance
+              // _maxTop either — the wall behind a hearth/arch needs
+              // to register so it can fill the cavity on render.
+              var _cIsFreeformSeeThrough = (_freeformEnabled && TILES.isFreeform(_cT));
+              if (!TILES.isFloating(_cT) && !_cIsFreeformSeeThrough) {
+                _maxTop = _cTop;
+                // Stop when the stack covers altitude ≥3.0 — nothing
+                // practical in the tileset rises above a 3m top edge,
+                // and anything that did would be hidden anyway.
+                if (_cTop >= 3.0) break;
+              }
             }
-            // Same or shorter height: skip, keep searching
+            // Same or lower top edge: skip, keep searching
           }
         }
+      }
+
+      // ── Debug trace: dump sampled columns' layer buffers ──────
+      if (_dbgFrame && (col === _dbgCenterCol || (col % _dbgSampleStep) === 0)) {
+        try {
+          var _dbgLines = '[RC-DBG] col=' + col +
+            ' ray=(' + rayDirX.toFixed(3) + ',' + rayDirY.toFixed(3) + ')' +
+            ' hit=' + hit + ' firstTile=' + hitTile +
+            ' firstHit=(' + mapX + ',' + mapY + ')' +
+            ' depth=' + depth + ' _lc=' + _lc;
+          for (var _dbgI = 0; _dbgI < _lc; _dbgI++) {
+            var _dL = _layerBuf[_dbgI];
+            var _dWh = _contract
+              ? SpatialContract.getWallHeight(_contract, _dL.mx, _dL.my, _rooms, _dL.tile, _cellHeights)
+              : baseWallH;
+            var _dOff = _contract
+              ? (SpatialContract.getTileHeightOffset(_contract, _dL.tile) || 0)
+              : 0;
+            var _dPd;
+            if (_dL.sd === 0) {
+              _dPd = (_dL.mx - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
+            } else {
+              _dPd = (_dL.my - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
+            }
+            _dPd = Math.abs(_dPd);
+            if (_dPd < 0.2) _dPd = 0.2;
+            var _dLineH = Math.max(2, Math.floor((h * _dWh) / _dPd));
+            var _dBaseLH = Math.max(2, Math.floor((h * baseWallH) / _dPd));
+            var _dFlatBot = Math.floor(halfH + _dBaseLH / 2);
+            var _dFlatTop = _dFlatBot - _dLineH;
+            var _dVertShift = Math.floor((h * _dOff) / _dPd);
+            var _dDrStart = Math.max(0, _dFlatTop - _dVertShift);
+            var _dDrEnd = Math.min(h - 1, _dFlatBot - _dVertShift);
+            var _dCapGated = (_dWh < 0.95 && _dWh > 0.25 && _dDrStart > halfH);
+            var _dFog = _contract
+              ? SpatialContract.getFogFactor(_contract, _dPd, renderDist, fogDist).toFixed(2)
+              : Math.min(1, _dPd / fogDist).toFixed(2);
+            _dbgLines += '\n  L' + _dbgI +
+              ' tile=' + _dL.tile + ' @(' + _dL.mx + ',' + _dL.my + ')' +
+              ' sd=' + _dL.sd + ' pd=' + _dPd.toFixed(2) +
+              ' wh=' + _dWh + ' off=' + _dOff +
+              ' draw=[' + _dDrStart + ',' + _dDrEnd + ']' +
+              ' lineH=' + _dLineH + ' baseLH=' + _dBaseLH +
+              ' fog=' + _dFog +
+              (_dCapGated ? ' CAP' : '');
+          }
+          console.log(_dbgLines);
+        } catch (_dbgErr2) {}
       }
 
       // ── Handle no-hit: consult spatial contract ──
       if (!hit) {
         if (_contract) {
-          var distRes = SpatialContract.resolveDistantWall(_contract, renderDist);
+          var distRes = SpatialContract.resolveDistantWall(_contract, renderDist, renderDist);
           if (distRes.draw && distRes.isClamped) {
             // Draw a clamped wall at render distance (CLAMP / DARKNESS model)
             var clampH = Math.floor(h * baseWallH / renderDist);
@@ -337,6 +960,9 @@ var Raycaster = (function () {
           // FADE model: don't draw anything — sky/parallax shows through
         }
         _zBuffer[col] = renderDist;
+        _zBufferPedDist[col] = 0;  // no pedestal in this column
+        _zBufferPedMX[col]   = -1;
+        _zBufferPedMY[col]   = -1;
         continue;
       }
 
@@ -363,15 +989,31 @@ var Raycaster = (function () {
         wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
       }
 
-      // Z-buffer: very short walls (platforms, rings) don't occlude sprites.
-      // Billboard sprites behind these tiles (mailbox emoji, bonfire tent,
-      // dump truck hose) float above them and must remain visible. The wall
-      // still renders normally — we write renderDist so sprite culling sees
-      // "no wall" for these columns.
-      // Tile-type override: DUMP_TRUCK (0.5×) is taller than the 0.35
-      // height threshold but still needs its billboard sprite visible.
-      var _zBypass = (hitTile === TILES.DUMP_TRUCK);
+      // Z-buffer: initial write based on the tile's class. This is a
+      // DEFAULT — the short ground-wall block further below (after
+      // drawStart/drawEnd are known) may override this and populate
+      // the pedestal mask for partial sprite clipping.
+      //
+      //   • DUMP_TRUCK — legacy short-body representation, always
+      //     renderDist so the hose billboard floats above. Will be
+      //     rebuilt as a 2×1×1 vehicle (see pending spec below).
+      //   • Freeform tiles — zBypass so their transparent cavity
+      //     lets sprites/back-layers show through; the foreground
+      //     helper owns its own pedestal mask write for the solid
+      //     bands.
+      //   • Ultra-short props (<0.35×) — already transparent to the
+      //     sprite pass via the legacy threshold; the post-hoc
+      //     short-wall block upgrades them to also publish a clip Y.
+      //   • Tall walls (≥1.0×) — normal perpDist occlusion.
+      var _zBypass = (hitTile === TILES.DUMP_TRUCK) ||
+                     (_freeformEnabled && TILES.isFreeform(hitTile));
       _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
+      // Default-clear the pedestal mask for this column. Freeform
+      // tiles populate it inside _renderFreeformForeground; short
+      // ground walls populate it in the dedicated block below.
+      _zBufferPedDist[col] = 0;
+      _zBufferPedMX[col]   = -1;
+      _zBufferPedMY[col]   = -1;
       // No cap on lineHeight — proper texture UV clipping handles
       // close-range walls. Removing the cap fixes the stretch bug where
       // nearby walls widen (more columns) without getting proportionally
@@ -389,6 +1031,31 @@ var Raycaster = (function () {
       var heightOffset = _contract
         ? SpatialContract.getTileHeightOffset(_contract, hitTile)
         : 0;
+
+      // ── Freeform two-segment config lookup ─────────────────────
+      // If the active contract has a tileFreeform entry for this
+      // tile (currently HEARTH in interior()), render as upper brick
+      // band + fire cavity + lower brick band instead of the legacy
+      // sunken step-fill lip trick. Suppress heightOffset in that
+      // case — the cavity comes from the segment split, not a
+      // displacement offset.
+      //
+      // Degenerate guard: when hUpper + hLower ≥ wallHeightMult the
+      // bands would overlap, so fall back to the legacy single-segment
+      // render. This preserves the short-stub HEARTH look biomes use
+      // for decorative fireplaces (inn, cellar).
+      var freeformCfg = null;
+      if (_freeformEnabled && _contract && TILES.isFreeform(hitTile)) {
+        freeformCfg = SpatialContract.getTileFreeform(_contract, hitTile);
+        if (freeformCfg &&
+            (freeformCfg.hUpper + freeformCfg.hLower) >= wallHeightMult - 1e-6) {
+          freeformCfg = null;
+        }
+      }
+      if (freeformCfg) {
+        heightOffset = 0;  // suppress Doom-rule displacement
+      }
+
       var vertShift = Math.floor((h * heightOffset) / perpDist);
 
       // Unshifted positions (where the wall would draw at floor level)
@@ -404,9 +1071,82 @@ var Raycaster = (function () {
       var drawStart = Math.max(0, flatTop - vertShift);
       var drawEnd   = Math.min(h - 1, flatBottom - vertShift);
 
-      // Fog from contract
+      // ── Short ground-wall pedestal mask ──────────────────────────
+      // Any tile shorter than a full wall that sits at plaza grade
+      // (no positive Doom-rule height offset) should NOT cull sprites
+      // behind it — players need to see an NPC's head & torso above
+      // a hedge, fence, mailbox, or bonfire ring. We override the
+      // default z-buffer (which would cull fully) to renderDist and
+      // publish the wall-top screen row into the pedestal mask so
+      // the sprite pass clips the bottom half of far sprites.
+      //
+      // Excluded:
+      //   • Freeform tiles — they own their own mask write inside
+      //     _renderFreeformForeground (different band math).
+      //   • DUMP_TRUCK — the current short-body representation is a
+      //     known wrong spec that will be rebuilt as a 2×1×1 full-
+      //     height vehicle. Leaving it untouched here keeps the
+      //     existing billboard rendering stable until the rebuild.
+      //   • Elevated tiles (heightOffset > 0) — roofs, canopies,
+      //     crenels, pergolas etc. These occupy a mid-height band
+      //     (not bottom-anchored), so a single bottom clip would be
+      //     wrong. Handled as a future 'band clip' pass.
+      if (!freeformCfg &&
+          hitTile !== TILES.DUMP_TRUCK &&
+          wallHeightMult < 1.0 - 1e-6 &&
+          heightOffset <= 0) {
+        _zBuffer[col] = renderDist;
+        _zBufferPedTopY[col] = flatTop - vertShift;
+        _zBufferPedDist[col] = perpDist;
+        _zBufferPedMX[col]   = mapX;
+        _zBufferPedMY[col]   = mapY;
+      }
+
+      // ── Crenellated tile silhouette cutout (foreground) ──────────
+      // ROOF_CRENEL (and any future isCrenellated tile) gets a
+      // per-column tooth pattern on its top half. 4 merlons per tile
+      // UV = 8 alternating bands along wallX. In crenel-gap bands we
+      // raise drawStart by half the slab's screen height, clipping
+      // the top half of the wall column to nothing. The solid bottom
+      // half remains, so the player sees alternating "tooth / notch"
+      // along the rampart edge. The back face (injected via
+      // _needBackFace) gets the same treatment in _renderBackLayer.
+      //
+      // wallX has already been folded to [0,1) and flipped for
+      // consistent left-to-right; same for the back face, so the
+      // tooth pattern reads identically from both sides of the slab.
+      //
+      // NOTE: wallX isn't actually computed until ~line 473 below
+      // (inside the foreground wall block). We recompute it inline
+      // here so the cutout can also narrow drawStart BEFORE the back
+      // layer loop, which matters for the N-layer occlusion midline
+      // decision for crenel layer 0 (handled separately above).
+      if (_contract && TILES.isCrenellated(hitTile)) {
+        var _crWX;
+        if (side === 0) {
+          _crWX = py + perpDist * rayDirY;
+        } else {
+          _crWX = px + perpDist * rayDirX;
+        }
+        _crWX = _crWX - Math.floor(_crWX);
+        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+          _crWX = 1 - _crWX;
+        }
+        // 4 teeth = 8 alternating bands (merlon, gap, merlon, gap, ...)
+        var _crBand = Math.floor(_crWX * 8);
+        var _crIsGap = (_crBand & 1) === 1;
+        if (_crIsGap) {
+          // Clip the top half of the slab on screen. Keep drawEnd as
+          // the solid base, so the bottom half (the solid part of
+          // the rampart) renders untouched.
+          var _crHalf = Math.floor(lineHeight / 2);
+          drawStart = Math.min(drawEnd + 1, drawStart + _crHalf);
+        }
+      }
+
+      // Fog from contract (boosted render/fog dist when RENDER_SCALE < 1)
       var fogFactor = _contract
-        ? SpatialContract.getFogFactor(_contract, perpDist)
+        ? SpatialContract.getFogFactor(_contract, perpDist, renderDist, fogDist)
         : Math.min(1, perpDist / fogDist);
 
       // Lightmap brightness
@@ -426,7 +1166,7 @@ var Raycaster = (function () {
           _renderBackLayer(
             ctx, col, _layerBuf[_li], h, halfH, baseWallH,
             px, py, rayDirX, rayDirY, stepX, stepY,
-            fogDist, fogColor, lightMap,
+            renderDist, fogDist, fogColor, lightMap,
             tintStr, tintIdx, tintRGB
           );
         }
@@ -476,44 +1216,75 @@ var Raycaster = (function () {
         var texX = Math.floor(wallX * tex.width);
         if (texX >= tex.width) texX = tex.width - 1;
 
-        // Draw textured wall column — WALL tiles (brick) get vertical tiling
-        // so patterns repeat on tall facades. All other tiles stretch.
-        // PW-1 hook: if this wall tile has a grime grid, use the per-pixel
-        // path so grime tint can be composited. Otherwise fast ctx.drawImage.
         var shiftedTop = flatTop - vertShift;
-        var _fgGrime = (typeof GrimeGrid !== 'undefined')
-          ? GrimeGrid.get(_bloodFloorId, mapX, mapY) : null;
-        if (_fgGrime) {
-          _drawTiledColumnPixel(ctx, tex, texX, shiftedTop, lineHeight,
-                                drawStart, drawEnd, col, wallHeightMult, hitTile,
-                                _fgGrime, wallX);
+
+        if (freeformCfg) {
+          // ── Freeform two-segment render (HEARTH sandwich) ────
+          // Upper brick band + cavity + lower brick band. Each
+          // strip is sampled from the matching vertical band of
+          // the source texture so the mantle reads as stone-top
+          // and the base reads as stone-bottom. The cavity in
+          // between is filled with fire sprite + warm glow
+          // (owned by the helper for HEARTH/BONFIRE; fallback
+          // fill for other freeform tiles added in later phases).
+          _renderFreeformForeground(
+            ctx, tex, texX, col, wallX,
+            shiftedTop, lineHeight, wallHeightMult,
+            drawStart, drawEnd, freeformCfg,
+            side, fogFactor, brightness, fogColor,
+            tintStr, tintIdx, tintRGB, mapY, mapX,
+            hitTile, perpDist, h, halfH,
+            stepX, stepY
+          );
+
+          // Wall decor sprites on freeform tiles (e.g. DUMP_TRUCK wheels).
+          // The non-freeform path already calls this below; mirror the
+          // call here so freeform tiles like DUMP_TRUCK can also carry
+          // anchored side-face sprites. anchorV=0 (bottom) lands on the
+          // floor-adjacent lower body of the truck. Fillers with
+          // cavityBand: true are skipped inside _renderWallDecor so the
+          // spool slot doesn't get wheels painted over it.
+          _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
+                           shiftedTop, mapX, mapY, side, stepX, stepY);
         } else {
-          _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
-                           drawStart, drawEnd, col, wallHeightMult, hitTile);
-        }
-
-        // Wall decor sprites (drawn before overlays so fog/shade affect them)
-        _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
-                         shiftedTop, mapX, mapY, side, stepX, stepY);
-
-        // Side shading (side=1 faces are darker, matching flat-color convention)
-        if (side === 1) {
-          ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.fillRect(col, drawStart, 1, stripH);
-        }
-
-        // Fog + brightness combined overlay — single pass to avoid alpha-stacking flicker.
-        // Compute both fog and brightness darkening, then draw the dominant one.
-        var _fgDark = (brightness < 0.95) ? (1 - brightness) : 0;
-        if (fogFactor > 0.05 || _fgDark > 0.05) {
-          if (fogFactor >= _fgDark) {
-            // Fog dominates — draw fog-colored overlay
-            ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+          // Draw textured wall column — WALL tiles (brick) get vertical tiling
+          // so patterns repeat on tall facades. All other tiles stretch.
+          // PW-1 hook: if this wall tile has a grime grid, use the per-pixel
+          // path so grime tint can be composited. Otherwise fast ctx.drawImage.
+          var _fgGrime = (typeof GrimeGrid !== 'undefined')
+            ? GrimeGrid.get(_bloodFloorId, mapX, mapY) : null;
+          if (_fgGrime) {
+            _drawTiledColumnPixel(ctx, tex, texX, shiftedTop, lineHeight,
+                                  drawStart, drawEnd, col, wallHeightMult, hitTile,
+                                  _fgGrime, wallX);
           } else {
-            // Brightness/tint dominates — draw tint-colored darkness
-            ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, _fgDark);
+            _drawTiledColumn(ctx, tex, texX, shiftedTop, lineHeight,
+                             drawStart, drawEnd, col, wallHeightMult, hitTile);
           }
-          ctx.fillRect(col, drawStart, 1, stripH);
+
+          // Wall decor sprites (drawn before overlays so fog/shade affect them)
+          _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
+                           shiftedTop, mapX, mapY, side, stepX, stepY);
+
+          // Side shading (side=1 faces are darker, matching flat-color convention)
+          if (side === 1) {
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.fillRect(col, drawStart, 1, stripH);
+          }
+
+          // Fog + brightness combined overlay — single pass to avoid alpha-stacking flicker.
+          // Compute both fog and brightness darkening, then draw the dominant one.
+          var _fgDark = (brightness < 0.95) ? (1 - brightness) : 0;
+          if (fogFactor > 0.05 || _fgDark > 0.05) {
+            if (fogFactor >= _fgDark) {
+              // Fog dominates — draw fog-colored overlay
+              ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+            } else {
+              // Brightness/tint dominates — draw tint-colored darkness
+              ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, _fgDark);
+            }
+            ctx.fillRect(col, drawStart, 1, stripH);
+          }
         }
       } else {
         // Flat-color fallback (original path — no texture assigned)
@@ -540,7 +1311,105 @@ var Raycaster = (function () {
       // Step color is sampled from the tile's texture edge pixel when
       // available, so each biome's door/stair texture automatically gets
       // a matching step color. Falls back to contract.stepColor.
-      if (vertShift !== 0 && _contract) {
+      // ── Floating-slab underside: two distinct rendering modes ───
+      //
+      // Moss variant (CANOPY_MOSS): translucent hanging-moss band.
+      //   A fog-darkened strip below the front face, sized to the
+      //   geometric gap between front & back face drawEnds. Sky
+      //   shows through in patches — reads as Spanish moss / vines
+      //   on swampy canopies. The column-based approach has visual
+      //   artifacts at slab corners (known & desired for the moss
+      //   aesthetic — the "placeholder" look reads as hanging growth).
+      //
+      // Opaque-lid variant (CANOPY, ROOF_*): proper per-column floor
+      //   cast. See _renderFloatingLid() — walks screen rows from the
+      //   front face drawEnd toward the horizon, projects each row
+      //   back to the slab's bottom plane, stops at the actual tile
+      //   footprint boundary. No corner bleed; fog is continuous
+      //   per-pixel (no snap-to-opaque as the player approaches).
+      if (vertShift > 0 && _contract && TILES.isFloatingMoss(hitTile)) {
+        var rawUndersideColor = _contract.stepColor || '#222';
+        if (tex && tex.data) {
+          var uTexX = Math.floor(wallX * tex.width);
+          if (uTexX >= tex.width) uTexX = tex.width - 1;
+          var uIdx = ((tex.height - 1) * tex.width + uTexX) * 4;
+          rawUndersideColor = 'rgb(' + tex.data[uIdx] + ',' + tex.data[uIdx + 1] + ',' + tex.data[uIdx + 2] + ')';
+        }
+        var undersideColor = _applyFogAndBrightness(
+          rawUndersideColor, fogFactor, brightness * 0.45, fogColor
+        );
+        ctx.fillStyle = undersideColor;
+        var undersideH = Math.floor(
+          (h * (heightOffset - baseWallH / 2)) / (perpDist * (perpDist + 1))
+        );
+        if (undersideH > 0) {
+          if (undersideH > h) undersideH = h;
+          var uTop = drawEnd + 1;
+          var uBot = Math.min(h, uTop + undersideH);
+          if (uBot > uTop) {
+            ctx.fillRect(col, uTop, 1, uBot - uTop);
+          }
+        }
+      } else if (vertShift > 0 && _contract && TILES.isFloatingLid(hitTile)) {
+        // ── Compute slab exit distance along this ray ─────────────
+        // Walk the DDA forward from the hit cell until we either
+        // leave the floating-lid footprint or hit a walk limit. The
+        // exit distance is the ray-perpDist of the first non-lid
+        // cell — that's where the slab's back edge lands on screen.
+        //
+        // Doing the walk ONCE per column and passing the result as
+        // a single screen-space fill range eliminates the per-row
+        // grid sampling that caused barcode tearing in the earlier
+        // floor-cast approach. Adjacent columns get perpDist and
+        // backDist that vary continuously with ray direction, so
+        // the fill extent varies ~1 pixel per column — smooth.
+        var _fldBackDist = perpDist;
+        var _fldSdX = sideDistX, _fldSdY = sideDistY;
+        var _fldMX = mapX, _fldMY = mapY;
+        var _fldMaxSteps = 8;
+        var _fldStepped = false;
+        for (var _fldI = 0; _fldI < _fldMaxSteps; _fldI++) {
+          var _fldSide;
+          if (_fldSdX < _fldSdY) {
+            _fldSdX += deltaDistX; _fldMX += stepX; _fldSide = 0;
+          } else {
+            _fldSdY += deltaDistY; _fldMY += stepY; _fldSide = 1;
+          }
+          // Distance to the entry edge of the cell we just stepped
+          // into (equivalently, the exit edge of the cell we were
+          // just in). In Lode-DDA, (new sideDist - deltaDist) equals
+          // the old sideDist, which is that entry distance along ray.
+          var _fldEntryDist = (_fldSide === 0)
+            ? _fldSdX - deltaDistX
+            : _fldSdY - deltaDistY;
+
+          if (_fldMX < 0 || _fldMX >= gridW || _fldMY < 0 || _fldMY >= gridH) {
+            _fldBackDist = _fldEntryDist;
+            _fldStepped = true;
+            break;
+          }
+          var _fldT = grid[_fldMY][_fldMX];
+          if (!TILES.isFloatingLid(_fldT)) {
+            _fldBackDist = _fldEntryDist;
+            _fldStepped = true;
+            break;
+          }
+          // Still inside the slab — keep walking.
+        }
+        if (!_fldStepped) {
+          // Hit the walk limit without exiting — clamp to a generous
+          // fallback so the fill still terminates.
+          _fldBackDist = perpDist + _fldMaxSteps;
+        }
+
+        _renderFloatingLid(
+          ctx, col, drawEnd, halfH, h, baseWallH, heightOffset,
+          perpDist, _fldBackDist, tex, fogColor, lightMap,
+          mapX, mapY, renderDist, fogDist
+        );
+      }
+
+      if (vertShift !== 0 && _contract && !TILES.isFloating(hitTile)) {
         var rawStepColor = _contract.stepColor || '#222';
 
         // Sample texture edge for per-tile step color
@@ -684,7 +1553,7 @@ var Raycaster = (function () {
       // correct at all distances. The cap color is sampled from the
       // wall texture's top-edge pixels at reduced brightness (reads as
       // a lit horizontal surface vs the vertical wall face).
-      if (wallHeightMult < 0.95 && wallHeightMult > 0.35 && drawStart > halfH) {
+      if (wallHeightMult < 0.95 && wallHeightMult > 0.25 && drawStart > halfH) {
         var _isCapTile = (hitTile === TILES.TABLE || hitTile === TILES.BED ||
                           hitTile === TILES.CHEST || hitTile === TILES.BAR_COUNTER);
         if (_isCapTile) {
@@ -754,6 +1623,12 @@ var Raycaster = (function () {
       }
     }
 
+    // ── Debug trace: one-shot clear after the column loop ────────
+    if (_dbgFrame) {
+      _debugTraceOnce = false;
+      try { console.log('[RC-DBG] ===== END FRAME ====='); } catch (_) {}
+    }
+
     // ── Sprite + terminus-veil sandwich ──────────────────────────
     // The terminus fog veil (below) masks wall pop-in at the horizon
     // on exterior FADE floors. Historically all sprites were drawn
@@ -821,6 +1696,19 @@ var Raycaster = (function () {
     if (pDt > 0 && pDt < 100) {
       _updateAndRenderParticles(ctx, pDt);
     }
+
+    // ── Blit offscreen 3D viewport → main canvas ───────────────────
+    // The raycaster drew everything above into `_offCanvas` at the
+    // scaled backing resolution. Now copy it to the main canvas at
+    // full CSS size with nearest-neighbor upscale. The main canvas
+    // stays at native size so HUD/minimap/menus drawn AFTER this
+    // render() (elsewhere in the game loop) get full-fidelity pixels.
+    // Any ctx transform already applied to _mainCtx (e.g. CombatFX
+    // zoom set up by game.js before calling render) is respected by
+    // drawImage.
+    if (_mainCtx && _offCanvas && _canvas) {
+      _mainCtx.drawImage(_offCanvas, 0, 0, _canvas.width, _canvas.height);
+    }
   }
 
   var _lastParticleTime = 0;
@@ -857,6 +1745,208 @@ var Raycaster = (function () {
   //   col       - screen column X
   //   whMult    - wall height multiplier (from tileWallHeights)
   //   tileType  - TILES constant (only WALL tiles get tiled)
+  /**
+   * Freeform two-segment wall column renderer (Phase 1: HEARTH).
+   *
+   * Splits the wall column into three bands — upper brick strip,
+   * cavity gap, lower brick strip — rather than stretching a single
+   * texture over the full height. The upper band samples from the
+   * top portion of the source texture, the lower band from the
+   * bottom portion, so brick / stone patterns read as a true
+   * stone-fire-stone fireplace instead of a paint-over-opaque
+   * lip trick.
+   *
+   * Per-tile configuration lives on the spatial contract's
+   * `tileFreeform` table; `{ hUpper, hLower }` is in world units.
+   * The cavity gap = wallHeightMult − (hUpper + hLower). When the
+   * sum meets or exceeds wallHeightMult the caller skips freeform
+   * entirely (degenerate solid column — same look as the legacy
+   * path on short stub hearths).
+   *
+   * For HEARTH/BONFIRE the cavity is filled with a fire sprite and
+   * warm glow overlay (ported from the legacy step-fill trick).
+   * Other freeform tiles get a plain dark fill; later phases will
+   * register cavity content handlers (arch, porthole, tavern window).
+   *
+   * See docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md §3, §4.
+   */
+  function _renderFreeformForeground(
+    ctx, tex, texX, col, wallX,
+    wallTop, lineH, whMult,
+    drawStart, drawEnd, ff,
+    side, fogFactor, brightness, fogColor,
+    tintStr, tintIdx, tintRGB, mapY, mapX,
+    hitTile, perpDist, screenH, halfH,
+    stepX, stepY
+  ) {
+    if (lineH <= 0) return;
+
+    // World-unit → pixel fractions of the full wall column.
+    var upperFrac = ff.hUpper / whMult;
+    var lowerFrac = ff.hLower / whMult;
+    if (upperFrac < 0) upperFrac = 0;
+    if (lowerFrac < 0) lowerFrac = 0;
+
+    // Unclipped wall extent (matches _drawTiledColumn's wallTop/lineH).
+    var wallBot = wallTop + lineH;
+
+    // Segment boundaries in screen pixels (unclipped).
+    var upperBotPx = wallTop + upperFrac * lineH;
+    var lowerTopPx = wallBot - lowerFrac * lineH;
+    // Pathological guard (should be prevented by caller's degenerate check).
+    if (lowerTopPx < upperBotPx) lowerTopPx = upperBotPx;
+
+    // ── Pedestal occlusion mask ─────────────────────────────────
+    // When this freeform tile has a solid lower band, publish its
+    // top screen row + front-face distance + tile coordinates so the
+    // sprite pass can clip NPCs standing BEHIND the pedestal (but
+    // not sprites living inside the same cell — the HEARTH fire
+    // emoji, future bonfire halos, etc.).
+    if (ff.hLower > 0) {
+      _zBufferPedTopY[col] = lowerTopPx;
+      _zBufferPedDist[col] = perpDist;
+      _zBufferPedMX[col]   = mapX;
+      _zBufferPedMY[col]   = mapY;
+    }
+
+    // Clip to visible band.
+    var upStart = Math.max(drawStart, Math.floor(wallTop));
+    var upEnd   = Math.min(drawEnd,   Math.ceil(upperBotPx) - 1);
+
+    var loStart = Math.max(drawStart, Math.floor(lowerTopPx));
+    var loEnd   = Math.min(drawEnd,   Math.ceil(wallBot) - 1);
+
+    var gapStart = Math.max(drawStart, Math.floor(upperBotPx));
+    var gapEnd   = Math.min(drawEnd,   Math.ceil(lowerTopPx) - 1);
+
+    var _dark = (brightness < 0.95) ? (1 - brightness) : 0;
+
+    // ── Upper brick band (mantle) — top slice of texture ──────
+    if (upEnd >= upStart) {
+      var upStripH = upEnd - upStart + 1;
+      // Source: map screen rows back into the top slice of the texture.
+      // Upper band maps to texY ∈ [0, upperFrac * texH].
+      var upSrcY = (upStart - wallTop) / lineH * tex.height;
+      var upSrcH = upStripH / lineH * tex.height;
+      if (upSrcY < 0) { upSrcH += upSrcY; upSrcY = 0; }
+      if (upSrcY + upSrcH > tex.height) upSrcH = tex.height - upSrcY;
+      if (upSrcH < 0.5) upSrcH = 0.5;
+      ctx.drawImage(tex.canvas, texX, upSrcY, 1, upSrcH,
+                    col, upStart, 1, upStripH);
+
+      if (side === 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(col, upStart, 1, upStripH);
+      }
+      if (fogFactor > 0.05 || _dark > 0.05) {
+        if (fogFactor >= _dark) {
+          ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+        } else {
+          ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, _dark);
+        }
+        ctx.fillRect(col, upStart, 1, upStripH);
+      }
+      // Dark separator line — mantle underside shadow.
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(col, upEnd, 1, 1);
+    }
+
+    // ── Lower brick band (base stone) — bottom slice of texture ──
+    if (loEnd >= loStart) {
+      var loStripH = loEnd - loStart + 1;
+      var loSrcY = (loStart - wallTop) / lineH * tex.height;
+      var loSrcH = loStripH / lineH * tex.height;
+      if (loSrcY < 0) { loSrcH += loSrcY; loSrcY = 0; }
+      if (loSrcY + loSrcH > tex.height) loSrcH = tex.height - loSrcY;
+      if (loSrcH < 0.5) loSrcH = 0.5;
+      ctx.drawImage(tex.canvas, texX, loSrcY, 1, loSrcH,
+                    col, loStart, 1, loStripH);
+
+      if (side === 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(col, loStart, 1, loStripH);
+      }
+      if (fogFactor > 0.05 || _dark > 0.05) {
+        if (fogFactor >= _dark) {
+          ctx.fillStyle = 'rgba(' + fogColor.r + ',' + fogColor.g + ',' + fogColor.b + ',' + fogFactor + ')';
+        } else {
+          ctx.fillStyle = _tintedDark(tintStr, tintIdx, tintRGB, mapY, mapX, _dark);
+        }
+        ctx.fillRect(col, loStart, 1, loStripH);
+      }
+      // Dark separator line — base top edge.
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(col, loStart, 1, 1);
+    }
+
+    // ── Cavity (gap) ──────────────────────────────────────────
+    // Dispatch to a registered gap filler keyed by ff.fillGap.
+    // Back-layer collection flags HEARTH (and any freeform tile) as
+    // see-through via _fgIsFreeformSeeThrough, so walls behind the
+    // tile register and paint into this Y range before the foreground
+    // bands overdraw. The filler just tints / overlays that content.
+    //
+    // New cavity-bearing tiles (wells, dump_truck, arches, windows)
+    // register their filler from Layer-3 init via
+    // Raycaster.registerFreeformGapFiller('my_key', fn) and set
+    // `fillGap: 'my_key'` on their tileFreeform contract entry. They
+    // never edit this function.
+    if (gapEnd >= gapStart) {
+      var gapH = gapEnd - gapStart + 1;
+
+      // Populate the shared info object once per column. Fillers are
+      // expected to treat this as read-only and not retain references
+      // past the call (it gets overwritten for the next column).
+      _gapInfo.brightness     = brightness;
+      _gapInfo.fogFactor      = fogFactor;
+      _gapInfo.fogColor       = fogColor;
+      _gapInfo.tintStr        = tintStr;
+      _gapInfo.tintIdx        = tintIdx;
+      _gapInfo.tintRGB        = tintRGB;
+      _gapInfo.mapX           = mapX;
+      _gapInfo.mapY           = mapY;
+      _gapInfo.side           = side;
+      _gapInfo.perpDist       = perpDist;
+      _gapInfo.hitTile        = hitTile;
+      _gapInfo.wallX          = wallX;
+      _gapInfo.wallTop        = wallTop;
+      _gapInfo.lineH          = lineH;
+      _gapInfo.halfH          = halfH;
+      _gapInfo.screenH        = screenH;
+      _gapInfo.wallHeightMult = whMult;
+      _gapInfo.gapWorldH      = whMult - (ff.hUpper + ff.hLower);
+      if (_gapInfo.gapWorldH < 0) _gapInfo.gapWorldH = 0;
+      _gapInfo.ff             = ff;
+
+      // ── Hit face index (CLAUDE.md direction convention) ─────────
+      // 0 = EAST face of tile, 1 = SOUTH, 2 = WEST, 3 = NORTH.
+      // Derived from DDA side + step direction:
+      //   side 0 (x-face), stepX>0  → ray heading east, hits WEST  face (2)
+      //   side 0, stepX<0           → ray heading west, hits EAST  face (0)
+      //   side 1 (y-face), stepY>0  → ray heading south, hits NORTH face (3)
+      //   side 1, stepY<0           → ray heading north, hits SOUTH face (1)
+      // Fillers that want to restrict painting to one face of a tile
+      // (e.g. windows only render the interior through the exterior
+      // face of the building) compare this against a per-tile exterior
+      // face map. Back-layer calls may pass stepX/stepY = 0 when the
+      // step direction is unknown; in that case hitFace falls back to
+      // a best-guess from `side` alone (side 0 → 0, side 1 → 1).
+      var _hitFace;
+      if (stepX === 0 && stepY === 0) {
+        _hitFace = (side === 0) ? 0 : 1;
+      } else if (side === 0) {
+        _hitFace = (stepX > 0) ? 2 : 0;
+      } else {
+        _hitFace = (stepY > 0) ? 3 : 1;
+      }
+      _gapInfo.hitFace = _hitFace;
+
+      var fillerKey = ff.fillGap || '_default';
+      var filler    = _gapFillers[fillerKey] || _gapFillers._default;
+      filler(ctx, col, gapStart, gapH, _gapInfo);
+    }
+  }
+
   function _drawTiledColumn(ctx, tex, texX, wallTop, lineH, drawStart, drawEnd, col, whMult, tileType) {
     var stripH = drawEnd - drawStart + 1;
     if (stripH <= 0 || lineH <= 0) return;
@@ -1189,6 +2279,118 @@ var Raycaster = (function () {
     }
   }
 
+  // ── Floating-slab underside (opaque lid) ────────────────────────
+  // Renders the slab's bottom horizontal face as an opaque fill,
+  // spanning from the front face's bottom edge to the back face's
+  // bottom edge on screen.
+  //
+  // Geometry (camera at world-Y = baseWallH/2, slab bottom at world-Y
+  // = heightOffset, ray distance d along the ray):
+  //   slabBottomY = heightOffset - baseWallH/2   (height above eye)
+  //   screenY(d)  = halfH - slabBottomY * h / d  (projection of the
+  //                                                 slab-bottom plane)
+  //
+  // The near edge of the slab along this ray is at d = perpDist; the
+  // far edge is at d = backDist (supplied by the caller after a
+  // short DDA walk from the hit cell until it leaves the floating-
+  // lid footprint). Fill the column from just below the front face
+  // (y = frontDrawEnd + 1) down to screenY(backDist).
+  //
+  // This replaces the earlier per-row grid-sampling approach. Because
+  // the caller's DDA walk already answered "where does the slab end
+  // along this ray?", the lid fill is a pure screen-space operation.
+  // Adjacent columns have perpDist/backDist that vary continuously
+  // with ray direction, so the fill extent varies ~1 pixel per column
+  // — no more barcode tears when freelooking up, and roof rings no
+  // longer drag down at the corners.
+  //
+  // Per-row fog is still computed from each pixel's own rowDistance
+  // so distant slab interiors blend continuously with the sky.
+  function _renderFloatingLid(ctx, col, frontDrawEnd, halfH, h,
+                              baseWallH, heightOffset,
+                              perpDist, backDist,
+                              tex, fogColor, lightMap,
+                              slabMX, slabMY,
+                              renderDist, fogDist) {
+    var slabBottomY = heightOffset - baseWallH / 2;
+    if (slabBottomY <= 0) return;
+    if (backDist <= perpDist) return;
+
+    // Screen Y of the slab's back edge along this ray. Asymptotes
+    // toward halfH as backDist grows; clamp one pixel short of the
+    // horizon to avoid filling across it.
+    var backP = (slabBottomY * h) / backDist;
+    var yEnd  = Math.floor(halfH - backP);
+    var horizonRow = Math.floor(halfH) - 1;
+    if (yEnd > horizonRow) yEnd = horizonRow;
+    if (yEnd >= h) yEnd = h - 1;
+
+    var yStart = frontDrawEnd + 1;
+    if (yStart < 0) yStart = 0;
+    if (yStart > yEnd) return;
+
+    // Sample the slab's underside base color once per column from
+    // the texture's bottom row. Using column index as the U
+    // coordinate gives neighboring columns neighboring texels,
+    // so the underside has a stable texture banding across the
+    // slab's screen footprint.
+    var baseR = 40, baseG = 40, baseB = 40;
+    if (tex && tex.data) {
+      var texW = tex.width;
+      var texH_ = tex.height;
+      var tX = ((col % texW) + texW) % texW;
+      var tIdx = ((texH_ - 1) * texW + tX) * 4;
+      baseR = tex.data[tIdx];
+      baseG = tex.data[tIdx + 1];
+      baseB = tex.data[tIdx + 2];
+    }
+
+    // Darken the raw color — underside sits in the slab's own shadow.
+    baseR = Math.floor(baseR * 0.55);
+    baseG = Math.floor(baseG * 0.55);
+    baseB = Math.floor(baseB * 0.55);
+
+    // Lightmap sampled once at the slab cell itself. A single sample
+    // (not per-pixel) keeps the fill flat-shaded, which reads fine
+    // for a small slab — the underside doesn't span multiple
+    // lightmap cells meaningfully.
+    if (lightMap && lightMap[slabMY] && lightMap[slabMY][slabMX] !== undefined) {
+      var bri = lightMap[slabMY][slabMX];
+      if (bri < 1.0) {
+        baseR = Math.floor(baseR * bri);
+        baseG = Math.floor(baseG * bri);
+        baseB = Math.floor(baseB * bri);
+      }
+    }
+
+    // Fill row by row, applying fog at each row's own distance so
+    // the underside blends smoothly with the sky as it recedes.
+    for (var y = yStart; y <= yEnd; y++) {
+      var p = halfH - y;
+      if (p <= 0) break;
+      var rowDistance = (slabBottomY * h) / p;
+
+      var fogF = _contract
+        ? SpatialContract.getFogFactor(_contract, rowDistance,
+                                       renderDist, fogDist)
+        : 0;
+      var r, g, bl;
+      if (fogF > 0) {
+        var inv = 1 - fogF;
+        r  = Math.floor(baseR * inv + fogColor.r * fogF);
+        g  = Math.floor(baseG * inv + fogColor.g * fogF);
+        bl = Math.floor(baseB * inv + fogColor.b * fogF);
+      } else {
+        r  = baseR;
+        g  = baseG;
+        bl = baseB;
+      }
+
+      ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + bl + ')';
+      ctx.fillRect(col, y, 1, 1);
+    }
+  }
+
   // ── N-layer back-wall renderer ──────────────────────────────────
   // Renders a single background wall layer for the N-layer compositing
   // system. Called for each layer behind the foreground, farthest first
@@ -1200,7 +2402,7 @@ var Raycaster = (function () {
   // lock check, no Doom-rule step fill. Back layers are static scenery.
   function _renderBackLayer(ctx, col, L, h, halfH, baseWallH,
                             px, py, rayDirX, rayDirY, stepX, stepY,
-                            fogDist, fogColor, lightMap,
+                            renderDist, fogDist, fogColor, lightMap,
                             tintStr, tintIdx, tintRGB) {
     // Perpendicular distance
     var pd;
@@ -1217,17 +2419,26 @@ var Raycaster = (function () {
     var lineH = Math.max(2, Math.floor((h * wh) / pd));
     var baseLH = Math.max(2, Math.floor((h * baseWallH) / pd));
 
+    // Vertical shift from tile height offset (raised/sunken tiles).
+    // CRITICAL for floating tiles: without this, the back face of a
+    // raised slab (canopy, roof) would draw at ground level while the
+    // front face floats high — visual mismatch. Back face must track
+    // the same vertShift as the foreground face so both align at the
+    // raised slab position.
+    var blHeightOffset = SpatialContract.getTileHeightOffset(_contract, L.tile);
+    var blVertShift = Math.floor((h * blHeightOffset) / pd);
+
     // Bottom-anchored positioning (same as foreground)
     var flatBot = Math.floor(halfH + baseLH / 2);
     var flatTop = flatBot - lineH;
-    var drStart = Math.max(0, flatTop);
-    var drEnd   = Math.min(h - 1, flatBot);
+    var drStart = Math.max(0, flatTop - blVertShift);
+    var drEnd   = Math.min(h - 1, flatBot - blVertShift);
     var stripH  = drEnd - drStart + 1;
     if (stripH <= 0) return;
 
     // Fog — skip fully fogged layers (invisible, saves draw calls)
     var fog = _contract
-      ? SpatialContract.getFogFactor(_contract, pd)
+      ? SpatialContract.getFogFactor(_contract, pd, renderDist, fogDist)
       : Math.min(1, pd / fogDist);
     if (fog > 0.98) return;
 
@@ -1249,9 +2460,80 @@ var Raycaster = (function () {
       wx = 1 - wx;
     }
 
+    // ── Crenellated back-face tooth cutout ──────────────────────
+    // Mirror of the foreground crenel modulation: when a crenel tile
+    // is rendered as a back layer (specifically the back face injected
+    // via _needBackFace for floating tiles), apply the same per-column
+    // tooth cutout so the teeth line up from both sides of the slab.
+    // The UV is folded identically to the foreground, so band indices
+    // match up on the opposing face and the gaps don't get "filled in"
+    // by the back face peeking through.
+    if (TILES.isCrenellated(L.tile)) {
+      var _blCrBand = Math.floor(wx * 8);
+      var _blCrIsGap = (_blCrBand & 1) === 1;
+      if (_blCrIsGap) {
+        var _blCrHalf = Math.floor(lineH / 2);
+        drStart = Math.min(drEnd + 1, drStart + _blCrHalf);
+        stripH = drEnd - drStart + 1;
+        if (stripH <= 0) return;
+      }
+    }
+
     // Texture lookup
     var texId = SpatialContract.getTexture(_contract, L.tile);
     var tex = texId ? TextureAtlas.get(texId) : null;
+
+    // ── Freeform back-layer path ───────────────────────────────
+    // When a back layer is a freeform tile (HEARTH, future arch/
+    // porthole/window), render with the same upper-band + cavity +
+    // lower-band sandwich used by the foreground pass. Two cases
+    // drive this:
+    //
+    //   (a) A HEARTH sits behind another see-through or short
+    //       tile along the ray (e.g. TABLE kitty-corner to the
+    //       hearth). Without this path the back-hit HEARTH would
+    //       paint as a solid opaque column and occlude the wall
+    //       beyond it. The freeform sandwich keeps the cavity
+    //       transparent so the wall behind the hearth registers.
+    //
+    //   (b) HEARTH is flagged in _needBackFace, so the foreground
+    //       collection injects a second HEARTH layer at the next
+    //       cell. That injected layer has to render as freeform
+    //       too — otherwise the "back face" of the hearth would
+    //       be an opaque painted column covering the cavity from
+    //       the other side, breaking the 3D "see into the fire
+    //       from either side" illusion we get for mailbox/canopy.
+    //
+    // The freeform helper bakes side shading + fog + brightness
+    // into each band, so we return after it runs (matching the
+    // foreground path at line ~644).
+    var bgFreeformCfg = null;
+    if (tex && _freeformEnabled && _contract && TILES.isFreeform(L.tile)) {
+      bgFreeformCfg = SpatialContract.getTileFreeform(_contract, L.tile);
+      if (bgFreeformCfg &&
+          (bgFreeformCfg.hUpper + bgFreeformCfg.hLower) >= wh - 1e-6) {
+        bgFreeformCfg = null;  // degenerate stub → fall through to solid
+      }
+    }
+    if (bgFreeformCfg) {
+      var _bfTexX = Math.floor(wx * tex.width);
+      if (_bfTexX >= tex.width) _bfTexX = tex.width - 1;
+      var _bgTSff = tintStr && tintStr[L.my] ? tintStr[L.my][L.mx] : 0;
+      var _bgTIff = tintIdx && tintIdx[L.my] ? tintIdx[L.my][L.mx] : 0;
+      _renderFreeformForeground(
+        ctx, tex, _bfTexX, col, wx,
+        flatTop, lineH, wh,
+        drStart, drEnd, bgFreeformCfg,
+        L.sd, fog, bri, fogColor,
+        _bgTSff, _bgTIff, tintRGB, L.my, L.mx,
+        L.tile, pd, h, halfH,
+        stepX, stepY
+      );
+      // Wall decor on back layers (still wanted around the bands)
+      _renderWallDecor(ctx, col, wx, drStart, drEnd, lineH,
+                       flatTop, L.mx, L.my, L.sd, stepX, stepY);
+      return;  // freeform bakes fog + side shading into each band
+    }
 
     if (tex) {
       var texX = Math.floor(wx * tex.width);
@@ -1297,12 +2579,18 @@ var Raycaster = (function () {
       ctx.fillRect(col, drStart, 1, stripH);
     }
 
+    // NOTE: The underside fill for floating slabs is NOT drawn here.
+    // It's drawn in the foreground pass so it can span FROM the front
+    // face's drawEnd TO the back face's drawEnd (covering the back
+    // face strip in the overlap region — which is the correct 3D
+    // projection of the slab's bottom horizontal face).
+
     // ── Back-layer cap for furniture ────────────────────────────
     // When a back layer is a furniture tile (injected via _needBackFace),
     // draw a cap surface above the wall face — same logic as the
     // foreground cap but using back-layer geometry. Prevents a bare
     // wall sliver from peeking above the foreground cap at steep angles.
-    if (wh < 0.95 && wh > 0.35 && drStart > halfH) {
+    if (wh < 0.95 && wh > 0.25 && drStart > halfH) {
       var _blCap = (L.tile === TILES.TABLE || L.tile === TILES.BED ||
                     L.tile === TILES.CHEST || L.tile === TILES.BAR_COUNTER);
       if (_blCap) {
@@ -2057,7 +3345,7 @@ var Raycaster = (function () {
       if (!visible) continue;
 
       var fogFactor = _contract
-        ? SpatialContract.getFogFactor(_contract, dist)
+        ? SpatialContract.getFogFactor(_contract, dist, renderDist, fogDist)
         : Math.min(1, dist / fogDist);
       // Interactive/solid sprites (mailbox, bonfire ring) stay opaque —
       // fog fade on close-range interactables looks like a rendering bug.
@@ -2101,6 +3389,43 @@ var Raycaster = (function () {
 
       // Horizontal squish ratio for perpendicular flattening
       var hSquish = spriteH > 0 ? spriteW / spriteH : 1;
+
+      // ── Pedestal occlusion (sprite behind a freeform stone base) ──
+      // Scan the columns the sprite spans; if any column has a
+      // freeform pedestal in front of the sprite AND that pedestal
+      // is NOT in the same grid cell as the sprite, clip the
+      // sprite's bottom at the tightest pedestal-top screen row.
+      // Same-cell sprites (HEARTH dragonfire emoji, future bonfire
+      // glow billboards) skip the clip so they can render through
+      // the cavity band.
+      var _pedClipped = false;
+      var _pedClipY = Infinity;
+      var _spriteMX = Math.floor(s.x);
+      var _spriteMY = Math.floor(s.y);
+      for (var _pcol = startCol; _pcol <= endCol; _pcol++) {
+        var _pd = _zBufferPedDist[_pcol];
+        if (_pd > 0 && _pd < dist) {
+          // Different tile than the sprite → pedestal occludes.
+          if (_zBufferPedMX[_pcol] !== _spriteMX ||
+              _zBufferPedMY[_pcol] !== _spriteMY) {
+            var _py2 = _zBufferPedTopY[_pcol];
+            if (_py2 < _pedClipY) _pedClipY = _py2;
+          }
+        }
+      }
+      if (_pedClipY < Infinity) {
+        var _spriteBottom = spriteCenterY + spriteH * 0.5 * ySquish;
+        if (_pedClipY < _spriteBottom) {
+          ctx.save();
+          ctx.beginPath();
+          // Clip the sprite's draw region to rows ABOVE the pedestal
+          // top. Extra horizontal padding lets overhead capsule/glow
+          // render outside the raw sprite rect without re-clipping.
+          ctx.rect(screenX - spriteW, 0, spriteW * 2, _pedClipY);
+          ctx.clip();
+          _pedClipped = true;
+        }
+      }
 
       // ── Counter occlusion (vendor behind half-height counter) ──
       var _counterClipped = false;
@@ -2163,6 +3488,11 @@ var Raycaster = (function () {
 
       // Close counter occlusion clip if active
       if (_counterClipped) {
+        ctx.restore();
+      }
+      // Close pedestal occlusion clip if active (restored after
+      // counter clip so the two nested save/restores stay balanced).
+      if (_pedClipped) {
         ctx.restore();
       }
 
@@ -2499,6 +3829,15 @@ var Raycaster = (function () {
     var h = _height;
     if (w < 1 || h < 1) return null;
 
+    // Incoming pointer coords are in main-canvas (CSS) pixel space,
+    // but raycasting happens in the offscreen viewport at w × h. Map
+    // the cursor from CSS space → offscreen space so the cameraX /
+    // screenY math below stays in the casting coordinate system.
+    if (_canvas.width > 0 && _canvas.height > 0) {
+      screenX = screenX * (w / _canvas.width);
+      screenY = screenY * (h / _canvas.height);
+    }
+
     // Reconstruct player eye state (same sources as render())
     var MC = (typeof MovementController !== 'undefined') ? MovementController : null;
     if (!MC || typeof Player === 'undefined') return null;
@@ -2514,7 +3853,12 @@ var Raycaster = (function () {
     var rawHalfH = h / 2;
     var pitchShift = pitch * rawHalfH;
     var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
-    var renderDist = _contract ? _contract.renderDistance : 16;
+    // Match the boosted render distance used by render() so cursor
+    // picks on far-off walls succeed at the same distance the wall
+    // is actually visible at.
+    var _baseRenderDist = _contract ? _contract.renderDistance : 16;
+    var _csBoost = (RENDER_SCALE > 0.01) ? Math.max(1.0, 1.0 / RENDER_SCALE) : 1.0;
+    var renderDist = Math.min(80, _baseRenderDist * _csBoost);
     var baseWallH = _contract ? _contract.wallHeight : 1.0;
 
     // ── Horizontal: screen column → ray angle ──
@@ -2602,7 +3946,7 @@ var Raycaster = (function () {
     var wallV = (screenY - drawStart) / (drawEnd - drawStart);
     wallV = Math.max(0, Math.min(1, wallV));
 
-    // ── Map UV to grime grid subcell ──
+    // Map UV to grime grid subcell
     var grimeRes = 0;
     var subX = 0;
     var subY = 0;
@@ -2637,6 +3981,11 @@ var Raycaster = (function () {
     setBiomeColors: setBiomeColors,
     setContract: setContract,
     setBloodFloorId: function (id) { _bloodFloorId = id; },
-    castScreenRay: castScreenRay
+    castScreenRay: castScreenRay,
+    setRenderScale: setRenderScale,
+    getRenderScale: getRenderScale,
+    setFreeformEnabled: function (enabled) { _freeformEnabled = !!enabled; },
+    isFreeformEnabled: function () { return _freeformEnabled; },
+    registerFreeformGapFiller: registerFreeformGapFiller
   };
 })();

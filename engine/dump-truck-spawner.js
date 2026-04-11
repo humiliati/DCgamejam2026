@@ -146,12 +146,23 @@ var DumpTruckSpawner = (function () {
         var tx = _placedTiles[i][0];
         var ty = _placedTiles[i][1];
         if (fd.grid[ty] && fd.grid[ty][tx] === _truckTile()) {
+          // Strip wheel decor BEFORE overwriting the tile — the
+          // helper reads the tile's current state for diagnostic
+          // validation but the 'clear' mode just removes decor
+          // entries so leaving stale wheels on a plain road tile
+          // is impossible.
+          if (typeof FloorManager !== 'undefined' &&
+              FloorManager.rebuildDumpTruckDecor) {
+            FloorManager.rebuildDumpTruckDecor(_placedFloorId, tx, ty, 'clear');
+          }
           fd.grid[ty][tx] = empty;
         }
       }
     }
 
-    // Invalidate sprite cache for old floor
+    // Invalidate sprite cache for old floor (legacy billboard cache —
+    // DumpTruckSprites is now a no-op stub but clearCache() is still
+    // safe to call and keeps the contract explicit).
     if (typeof DumpTruckSprites !== 'undefined') {
       DumpTruckSprites.clearCache();
     }
@@ -217,13 +228,23 @@ var DumpTruckSpawner = (function () {
       var ty = site.tiles[i][1];
       if (fd.grid[ty]) {
         fd.grid[ty][tx] = truck;
+        // Stamp wheel decor AFTER writing the tile — the helper reads
+        // the grid to pick which side faces get wheels based on which
+        // neighbours are walkable. This is the live mirror of the
+        // floor-gen wheel emission in _buildWallDecorFromGrid; without
+        // it the wheels would live only on the floor's original spawn
+        // site and the truck would ride wheel-less on its node circuit.
+        if (typeof FloorManager !== 'undefined' &&
+            FloorManager.rebuildDumpTruckDecor) {
+          FloorManager.rebuildDumpTruckDecor(site.floorId, tx, ty, 'stamp');
+        }
       }
     }
 
     _placedFloorId = site.floorId;
     _placedTiles   = site.tiles.slice();
 
-    // Invalidate sprite cache so hose-reel billboard rebuilds
+    // Invalidate sprite cache (legacy no-op stub, kept for contract).
     if (typeof DumpTruckSprites !== 'undefined') {
       DumpTruckSprites.clearCache();
     }
@@ -416,8 +437,15 @@ var DumpTruckSpawner = (function () {
     if (_staticCleared) return;
     var fd = _getFloorData('1');
     if (!fd || !fd.grid) return;   // floor 1 not cached yet — retry later
-    // Grid is now accessible — clear the static tile and mark done
+    // Grid is now accessible — clear the static tile and mark done.
+    // Also strip any wheel decor the floor-gen emission stamped on
+    // this tile so the road/empty replacement doesn't keep ghost
+    // wheels floating at the old blockout location.
     if (fd.grid[26] && fd.grid[26][30] === _truckTile()) {
+      if (typeof FloorManager !== 'undefined' &&
+          FloorManager.rebuildDumpTruckDecor) {
+        FloorManager.rebuildDumpTruckDecor('1', 30, 26, 'clear');
+      }
       fd.grid[26][30] = _emptyTile();
     }
     _staticCleared = true;         // only set AFTER grid was reachable

@@ -713,6 +713,11 @@ var Game = (function () {
             if (typeof MenuFaces !== 'undefined' && MenuFaces.handleLanguageCycle) {
               MenuFaces.handleLanguageCycle();
             }
+          } else if (hit.action === 'cycle_render_scale') {
+            // Face 3 render scale cycle
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.handleRenderScaleCycle) {
+              MenuFaces.handleRenderScaleCycle();
+            }
           } else if (hit.action === 'slider_click') {
             // Face 3 slider click-to-set — select row AND jump value
             var sliderIdx = hit.slot - 800;
@@ -2688,7 +2693,7 @@ var Game = (function () {
 
     // ── Tile-type interactions (structural, ambient) ───────────────
     // CORPSE, DETRITUS, CHEST already handled above cleaning priority.
-    if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH) {
+    if (tile === TILES.BONFIRE || tile === TILES.BED || tile === TILES.HEARTH || tile === TILES.CITY_BONFIRE) {
       // Home bed → BedPeek handles sleep/day-advance (Floor 1.6, position 2,2)
       if (typeof BedPeek !== 'undefined' && FloorManager.getFloor() === '1.6' && fx === 2 && fy === 2) {
         // BedPeek overlay is already showing via update(). The F-key interact
@@ -3686,7 +3691,49 @@ var Game = (function () {
           scale: dts.scale,
           bobY: dts.bobY || 0,
           glow: dts.glow || null,
-          glowRadius: dts.glowRadius || 0
+          glowRadius: dts.glowRadius || 0,
+          // groundLevel shifts sprite center DOWN ~35% of screen-height
+          // so the 🧵 lands inside the low (world Y 0.10–0.50) cavity
+          // instead of at eye level. Without this copy the flag is
+          // stripped here and the spool floats mid-truck.
+          groundLevel: dts.groundLevel === true,
+          noFogFade: dts.noFogFade === true
+        });
+      }
+    }
+
+    // ── Window tavern interior billboard sprites (🍺 in glass slot) ─
+    // Mirror of the DumpTruckSprites pattern above. Each WINDOW_TAVERN
+    // tile gets a warm amber glyph inside its eye-level glass cavity
+    // so the slot reads as "a lit tavern interior" instead of a blank
+    // amber pane. No groundLevel flag — the cavity center sits just
+    // below eye level on a 2.0-tall facade, so the default sprite
+    // placement lands inside the slot naturally.
+    if (typeof WindowSprites !== 'undefined') {
+      var _wsFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
+      // Pass floorData.windowFaces (an optional per-tile override map
+      // keyed by "x,y" → face index 0=E/1=S/2=W/3=N) so authored
+      // facades can declare which side is the street. WindowSprites
+      // falls back to its auto-detect heuristic for any tile not in
+      // the map. See LIVING_WINDOWS_ROADMAP §4 for the contract.
+      var windowSprites = WindowSprites.buildSprites(
+        _wsFloorId, floorData.grid, floorData.gridW, floorData.gridH,
+        floorData.windowFaces || null
+      );
+      WindowSprites.animate(now);
+      for (var wsi = 0; wsi < windowSprites.length; wsi++) {
+        var wss = windowSprites[wsi];
+        _sprites.push({
+          x: wss.x,
+          y: wss.y,
+          emoji: wss.emoji,
+          emojiOverlay: wss.emojiOverlay || null,
+          scale: wss.scale,
+          bobY: wss.bobY || 0,
+          glow: wss.glow || null,
+          glowRadius: wss.glowRadius || 0,
+          groundLevel: wss.groundLevel === true,
+          noFogFade: wss.noFogFade === true
         });
       }
     }

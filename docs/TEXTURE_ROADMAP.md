@@ -6,6 +6,12 @@
 **Prerequisite reads:** `CLAUDE.md` (module conventions), `SpatialContract`
 (rendering rules), `Raycaster` (current wall rendering pipeline).
 
+> **Related roadmap:** see `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` for the
+> plan to unlock texture-alpha-driven wall cutouts (arches, portholes,
+> windows) and freeform blocks (hearth cavities, civilized bonfires).
+> That work requires the atlas to stop forcing α=255 on every pixel —
+> a small but deliberate extension tracked there.
+
 ---
 
 ## Current State (Wolfenstein Flat-Color)

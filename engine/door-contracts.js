@@ -391,17 +391,22 @@ var DoorContracts = (function () {
   function _inferInteriorSide(grid, W, H, doorPos) {
     var dx = doorPos.x, dy = doorPos.y;
 
-    // Check if door is in a horizontal wall (walls flanking E/W)
+    // Check if door is in a horizontal wall (non-walkable barriers flanking
+    // E/W). Using !isWalkable (instead of WALL/PILLAR literals) catches
+    // WINDOW_TAVERN, BAR_COUNTER, BOOKSHELF, FENCE, TREE, SHRUB, etc. —
+    // any structural barrier that forms a wall line. Without this, doors
+    // embedded in facades with windows on either side (e.g. Driftwood Inn
+    // at Promenade 22,8) fail orientation detection and the retreat spawn
+    // falls through to openNeighbors scoring alone, which has picked
+    // interior-trapped tiles on iteration order.
     var wallEW = false, wallNS = false;
     if (dx > 0 && dx < W - 1) {
       var west = grid[dy][dx - 1], east = grid[dy][dx + 1];
-      wallEW = (west === TILES.WALL || west === TILES.PILLAR) &&
-               (east === TILES.WALL || east === TILES.PILLAR);
+      wallEW = !TILES.isWalkable(west) && !TILES.isWalkable(east);
     }
     if (dy > 0 && dy < H - 1) {
       var northT = grid[dy - 1][dx], southT = grid[dy + 1][dx];
-      wallNS = (northT === TILES.WALL || northT === TILES.PILLAR) &&
-               (southT === TILES.WALL || southT === TILES.PILLAR);
+      wallNS = !TILES.isWalkable(northT) && !TILES.isWalkable(southT);
     }
 
     var CAP = 40;   // enough to clearly separate pockets (<10) from exteriors
@@ -543,7 +548,14 @@ var DoorContracts = (function () {
           // (away from the door) instead of a diagonal that picks an
           // arbitrary axis. E.g. for a west-wall gate, spawning directly
           // east (same row) gives a clean EAST facing.
-          var alignBonus = (tx === targetDoor.x || ty === targetDoor.y) ? 0.25 : 0;
+          //
+          // Weight 4.0 (not a tiebreaker) so a single-tile lateral offset
+          // doesn't get outscored by the avoidDist*4 term. Without this,
+          // candidates one tile diagonal from the door reliably beat the
+          // axis-aligned candidate on floors where avoidDoor sits to the
+          // side of the door's orientation axis (e.g. 1.2 Driftwood Inn,
+          // where stairsDn at (7,9) pulled the spawn east to (11,14)).
+          var alignBonus = (tx === targetDoor.x || ty === targetDoor.y) ? 4.0 : 0;
 
           var score = avoidDist * 4 + openNeighbors + alignBonus; // avoidDist dominant, open + align tiebreaker
           if (!best || score > bestScore) {

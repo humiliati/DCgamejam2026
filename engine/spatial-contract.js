@@ -116,12 +116,128 @@ var SpatialContract = (function () {
         61: 0.15,     // ROOF_SLOPE_L — ascending slope
         62: 0.30,     // ROOF_PEAK — ridge, highest point
         63: 0.15,     // ROOF_SLOPE_R — descending slope (mirror)
-        64: 0.05      // ROOF_EAVE_R — barely raised (mirror)
+        64: 0.05,     // ROOF_EAVE_R — barely raised (mirror)
+        65: 0.70,     // CANOPY — floating high, tree crown ring (opaque lid)
+        66: 0.70,     // CANOPY_MOSS — floating high, translucent moss strands
+        67: 0.50,     // ROOF_CRENEL — rampart slab, midline at eye+0.5 (== 1.0 wall top).
+                      //   Biomes with taller walls override (approach: 3.5× wall → offset 3.0).
+                      //   See raycaster tooth pass for the per-column crenel cutout.
+        68: 0.50,     // PERGOLA — open-air beam lattice, same base altitude as CRENEL.
+                      //   Biomes override to place the cross-beam at the right canopy height
+                      //   for the structure below (plaza shade ≈ 2.0, temple courtyard ≈ 2.5).
+        69: 0,        // CITY_BONFIRE — Olympic community pyre (greater-hearth). Tall
+                      //   freeform column (3.0 world units): waist-high pedestal +
+                      //   fire cavity + suspended chimney hood. Pedestal sits flush
+                      //   with plaza floor (no Doom-rule offset). Freeform path
+                      //   suppresses heightOffset anyway when tileFreeform is active,
+                      //   so this value is defensive / semantic only.
+        70: 0         // PERGOLA_BEAM — freeform cross-beam at chimney elevation.
+                      //   Tall column (3.0 world units) with hLower = 0, so there
+                      //   is nothing at plaza grade to offset. Same defensive-only
+                      //   semantics as CITY_BONFIRE.
       }), opts.tileHeightOffsets),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
       // Raised tiles show this below the wall; sunken tiles show it above.
       stepColor:        opts.stepColor || '#2a3a2a',
+
+      // ── Freeform tile config (two-segment wall columns) ──────────
+      // Exterior freeform tiles: Olympic-model community pyre framed as
+      // a "greater hearth." The CITY_BONFIRE column is 2.0 world units
+      // tall (tileWallHeights override below) and splits into three
+      // bands:
+      //   • hLower 0.50 — short limestone pedestal at plaza grade
+      //     (half a base wall height; waist-high, easy to read as an
+      //     altar or fire-bowl base).
+      //   • gap    0.70 — narrow fire cavity filled by the raycaster's
+      //     'city_bonfire_fire' gap filler (animated flame gradient).
+      //     Previously 1.70; slimmed so the fire reads as a controlled
+      //     window instead of a towering jet — a realistic pyre with
+      //     a visible hood, not a bonfire eating its own chimney.
+      //   • hUpper 0.80 — suspended chimney hood / lid, matching the
+      //     HEARTH mantle thickness so the two structures read as
+      //     kin. The hood now begins at world Y=1.20 (instead of
+      //     2.20) — "starts sooner" in the vertical order — and
+      //     anchors the PERGOLA_BEAM canopy ring around the plaza.
+      // Unlike HEARTH (interior, solid ceiling overhead), the chimney
+      // hood here hangs from the top of the 2.0-unit tall freeform
+      // column — the skybox shows above it, which sells the "outdoor
+      // stack with a capped flue" silhouette.
+      // Degrades gracefully to single-segment rendering on biomes that
+      // shrink wallHeights below the hUpper + hLower sum (the freeform
+      // path enforces the degenerate guard).
+      tileFreeform: _mergeTileTable({
+        // DUMP_TRUCK — HEARTH-stature pressure-wash truck (2.0 wallHeight).
+        // Three-band silhouette modelled on the HEARTH sandwich, with
+        // the slice pushed DOWN to sit practically on the ground:
+        //   • Lower body  (0.00 → 0.10) — ultra-thin ground strip.
+        //     Wheels live here via wallDecor and may overhang up into
+        //     the cavity band (wheel arches cutting into the body,
+        //     the way real truck wheel wells do).
+        //   • Spool slot  (0.10 → 0.50) — 0.40-unit SEE-THROUGH cavity.
+        //     Like HEARTH / CITY_BONFIRE this band is transparent: the
+        //     gap filler paints only a subtle cool-blue glow over
+        //     whatever the back layers have drawn behind the tile, so
+        //     the player genuinely looks INTO the truck instead of at
+        //     a blue rubber band painted across the face. The 🧵 spool
+        //     billboard sprite (DumpTruckSprites) renders inside this
+        //     cavity via the z-bypass path, exactly how BonfireSprites
+        //     puts the dragonfire glyph inside the hearth cavity.
+        //   • Upper body  (0.50 → 2.00) — dominant 1.50-unit chassis
+        //     that carries the truck's bulk above the slot, giving the
+        //     silhouette "similar to the hearth in stature."
+        38: Object.freeze({ hUpper: 1.50, hLower: 0.10, fillGap: 'truck_spool_cavity' }),
+        // WINDOW_TAVERN — three-band building facade window sized to match
+        // the 3.5-unit exterior WALL height (all three exterior biomes —
+        // approach, promenade, lantern — set WALL=3.5 as multi-story
+        // facade). A 2.0-unit window next to a 3.5-unit wall would leave
+        // a 1.5-unit notch in the facade, so the column is sized to the
+        // full building height with a narrow glass slot punched at eye
+        // level. The player reads the result as "multi-story building
+        // with a ground-floor window," not a short bay annex.
+        //
+        // The glass slot sits at WAIST-to-chin height so the player
+        // looks slightly DOWN into the tavern interior — the camera is
+        // at world Y 1.0 and the slot spans 0.40–1.15, putting the slot
+        // center at world Y 0.775 (below eye level). An earlier pass
+        // had the slot at 0.90–1.65 (center 1.275, above eye), which
+        // made the window read as mounted above the player's head
+        // instead of as a real ground-floor pub window to peer into.
+        //   • Sill       (0.00 → 0.40) — waist-high sill course below
+        //     the opening. Opaque wood-plank texture (same as lintel).
+        //   • Glass slot (0.40 → 1.15) — 0.75-unit SEE-THROUGH cavity
+        //     at waist-to-chin height. The 'window_tavern_interior'
+        //     gap filler paints a warm amber interior wash, a thin
+        //     blue-white glass-sheen gradient, a divided-pane mullion
+        //     cross, and a dark frame border — together the slot reads
+        //     as "looking through a window with actual glass" instead
+        //     of a painted rectangle or an open hole. WindowSprites
+        //     puts a 🍺 billboard in the cavity via the z-bypass path.
+        //   • Lintel     (1.15 → 3.50) — 2.35-unit lintel + upper floors
+        //     carrying the load above the opening. Dominates the facade
+        //     silhouette so the window reads as a small cut-out in a
+        //     full wall rather than half the building.
+        73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior' }),
+        69: Object.freeze({ hUpper: 0.80, hLower: 0.50, fillGap: 'city_bonfire_fire' }),
+        // PERGOLA_BEAM sits at the TOP of the 2.0-unit column as a
+        // thin canopy strip — 0.20 world units, roughly one quarter
+        // the thickness of the adjacent CITY_BONFIRE chimney hood
+        // (0.80). The band occupies world height 1.80–2.00, which
+        // overlaps the top 0.20 of the chimney's 1.20–2.00 elevation
+        // range so the beam reads as "a delicate rail landing on top
+        // of the chimney" instead of a slab that matches its bulk.
+        // Column height dropped from 3.0 → 2.0 in lockstep with
+        // CITY_BONFIRE so the canopy continues to meet the chimney
+        // top after the pyre was shortened. No pedestal (hLower = 0)
+        // and a fully transparent gap so the area below the canopy
+        // shows sky (above horizon) + plaza floor (below horizon).
+        // Must use the '_transparent' gap filler (no-op) — the
+        // '_default' filler paints dim fog-tinted #141414, which
+        // would render the "under the canopy" area as a solid black
+        // cube. Degrades gracefully to a single-band wall on biomes
+        // that shrink wallHeights below 0.20.
+        70: Object.freeze({ hUpper: 0.20, hLower: 0.0, fillGap: '_transparent' })
+      }, opts.tileFreeform),
 
       // ── Wall textures ──
       // Keyed by TILES constant value → TextureAtlas texture ID.
@@ -140,12 +256,31 @@ var SpatialContract = (function () {
         30: 'torch_bracket_lit',   // TORCH_LIT — stone wall + burning torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — stone wall + charred bracket
         35: 'fence_wood',      // FENCE — wooden rail (0.4× half-wall)
-        38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck (0.5× short wall, hose billboard above)
+        38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck (2.0× HEARTH-stature
+                               //   freeform: 0.40 lower body w/ wheel decor + 0.25 spool
+                               //   cavity + 1.35 upper chassis). See tileFreeform for bands.
         60: 'roof_shingle',    // ROOF_EAVE_L — left eave strip
         61: 'roof_shingle',    // ROOF_SLOPE_L — left ascending slope
         62: 'roof_shingle',    // ROOF_PEAK — ridge beam
         63: 'roof_shingle',    // ROOF_SLOPE_R — right descending slope
-        64: 'roof_shingle'     // ROOF_EAVE_R — right eave strip
+        64: 'roof_shingle',    // ROOF_EAVE_R — right eave strip
+        65: 'canopy_oak',      // CANOPY — dense leaf texture
+        66: 'canopy_moss',     // CANOPY_MOSS — hanging-moss strands
+        67: 'roof_crenel',     // ROOF_CRENEL — cap stone for rampart slab
+        68: 'pergola_beam',    // PERGOLA — stained hardwood beam for open-air trellis
+        69: 'city_bonfire_stone', // CITY_BONFIRE — carved limestone for both bands:
+                               //   0.50-unit pedestal (bottom) + 0.80-unit chimney hood
+                               //   (top), with 1.70-unit fire cavity between them.
+                               //   See tileFreeform for the three-band split.
+        70: 'pergola_beam',    // PERGOLA_BEAM — stained hardwood cross-beam shared
+                               //   with the PERGOLA slab texture. The freeform band
+                               //   (0.80 world units) samples a clean horizontal
+                               //   strip of the beam texture.
+        73: 'wood_plank'       // WINDOW_TAVERN — stained plank frame for the sill
+                               //   and lintel bands. The middle glass slot is
+                               //   painted by the 'window_tavern_interior' gap
+                               //   filler (amber tint over back layers), not by
+                               //   this texture.
       }), opts.textures),
 
       // ── Floor texture ──
@@ -167,7 +302,14 @@ var SpatialContract = (function () {
         34: 'floor_grass',       // GRASS — meadow clearings
         35: 'floor_boardwalk',   // FENCE — boardwalk planks under railing
         37: 'bonfire_ring',      // MAILBOX — reuse stone ring base texture
-        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
+        39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
+        65: 'floor_grass',       // CANOPY — grass visible below floating canopy
+        66: 'floor_grass',       // CANOPY_MOSS — grass visible below moss strands
+        67: 'floor_grass',       // ROOF_CRENEL — ground below a rampart (overridden per biome)
+        68: 'floor_cobble',      // PERGOLA — plaza flagstones below the beam lattice (biome-overridable)
+        69: 'floor_cobble',      // CITY_BONFIRE — plaza flagstones around the community pyre
+        70: 'floor_cobble',      // PERGOLA_BEAM — plaza flagstones under the beam canopy
+        73: 'floor_cobble'       // WINDOW_TAVERN — street cobblestones outside the facade
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -177,12 +319,43 @@ var SpatialContract = (function () {
         22: 0.5,    // SHRUB — half-height hedge
         35: 0.4,    // FENCE — railing, player sees over to skybox
         37: 0.5,    // MAILBOX — half-height post, emoji billboard sits above
-        38: 0.5,    // DUMP_TRUCK — short truck body, hose billboard floats above
+        38: 2.0,    // DUMP_TRUCK — HEARTH-stature pressure-wash truck. Freeform path
+                    //   splits this into 0.40 lower body (wheel decor band) + 0.25
+                    //   ground-level spool cavity (0.40–0.65) + 1.35 upper chassis
+                    //   (0.65–2.00). The spool reel (decor_truck_hose) lives in the
+                    //   cavity instead of floating as a billboard, and wheels are
+                    //   wallDecor sprites on the 4 floor-adjacent side faces so they
+                    //   parallax flat with viewing angle.
         60: 0.20,   // ROOF_EAVE_L — thin strip, eave overhang
         61: 0.25,   // ROOF_SLOPE_L — slightly taller ascending slope
         62: 0.30,   // ROOF_PEAK — thickest strip, ridge beam
         63: 0.25,   // ROOF_SLOPE_R — mirror of SLOPE_L
-        64: 0.20    // ROOF_EAVE_R — mirror of EAVE_L
+        64: 0.20,   // ROOF_EAVE_R — mirror of EAVE_L
+        65: 0.25,   // CANOPY — thin leaf strip, floating high
+        66: 0.25,   // CANOPY_MOSS — thin moss strip, floating high
+        67: 0.50,   // ROOF_CRENEL — thick slab, solid bottom half + toothed top half
+        68: 0.50,   // PERGOLA — same slab thickness as CRENEL (shares tooth generator)
+        69: 2.0,    // CITY_BONFIRE — Olympic pyre (2x wall height). Freeform path
+                    //   splits this into 0.50 pedestal + 0.70 narrow fire window +
+                    //   0.80 chimney hood (greater-hearth silhouette; pergola beams
+                    //   land on the hood). Dropped from 3.0 → 2.0 so the fire reads
+                    //   as a controlled window under a visible hood instead of a
+                    //   towering jet, and so the chimney "starts sooner" — its
+                    //   bottom is now at world Y=1.20 instead of 2.20.
+        70: 2.0,    // PERGOLA_BEAM — same 2x wall height as CITY_BONFIRE so the
+                    //   top-anchored canopy strip (hUpper 0.20) lands at world
+                    //   Y=1.80–2.00, just below the chimney top. A ring of beams
+                    //   around the pyre reads as a delicate rail sitting on top
+                    //   of the chimney rather than a second full-mass slab.
+        73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
+                    //   on all exterior biomes so the window cuts into the
+                    //   wall plane without creating a notch). Freeform path
+                    //   splits this into 0.90 sill + 0.75 glass slot at eye
+                    //   level (world Y 0.90–1.65, spanning the 1.0 eye) +
+                    //   1.85 lintel/upper floors. Biomes that override
+                    //   tileWallHeights MUST NOT re-list this key at a
+                    //   different value or the freeform sandwich will fall
+                    //   out of scale with the band world-unit extents.
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -242,8 +415,27 @@ var SpatialContract = (function () {
         6:  0.06,     // STAIRS_UP — slight rise toward exit
         14: 0.12,     // BOSS_DOOR — elevated archway
         29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+                      //   (legacy step-fill path; freeform path ignores this
+                      //    offset when tileFreeform[29] is active)
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#151518',
+
+      // ── Freeform tile config (two-segment wall columns) ──────────
+      // Opt-in per-tile upper/lower brick bands with a gap in between.
+      // Renders as: mantle band (top) + cavity (middle) + base band
+      // (bottom). Units are world-space; gap is wallHeight − (hUpper +
+      // hLower). When the sum ≥ wallHeight the tile degrades to a
+      // solid two-band column (no visible gap) — safe fallback for
+      // biomes that set HEARTH to a short base stone.
+      //
+      // See docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md §3 for the design
+      // and §4 Phase 1 for the HEARTH migration.
+      tileFreeform: _mergeTileTable({
+        // HEARTH: mantle 0.80 world units, base 0.40 world units.
+        // On a 2.5-tall chimney stack the gap is 1.30 units (generous
+        // fire cavity). On a 0.5-tall stub it degrades to fully solid.
+        29: Object.freeze({ hUpper: 0.80, hLower: 0.40, fillGap: 'hearth_fire' })
+      }, opts.tileFreeform),
 
       // ── Wall textures ──
       textures: _mergeTileTable(_buildTextures({
@@ -534,10 +726,15 @@ var SpatialContract = (function () {
    *
    * @param {Object} contract
    * @param {number} perpDist - perpendicular distance of the ray
+   * @param {number} [renderDistOverride] - effective render distance
+   *   (Raycaster passes a boosted value when RENDER_SCALE < 1.0 to
+   *   extend draw distance; if absent, contract.renderDistance is used)
    * @returns {Object} { draw: boolean, color: string, alpha: number }
    */
-  function resolveDistantWall(contract, perpDist) {
-    if (perpDist < contract.renderDistance) {
+  function resolveDistantWall(contract, perpDist, renderDistOverride) {
+    var rd = (typeof renderDistOverride === 'number')
+      ? renderDistOverride : contract.renderDistance;
+    if (perpDist < rd) {
       // Within range — render normally
       return { draw: true, isClamped: false };
     }
@@ -552,7 +749,7 @@ var SpatialContract = (function () {
         return {
           draw: true,
           isClamped: true,
-          clampDist: contract.renderDistance,
+          clampDist: rd,
           clampColor: _fogToCSS(contract.fogColor)
         };
 
@@ -561,7 +758,7 @@ var SpatialContract = (function () {
         return {
           draw: true,
           isClamped: true,
-          clampDist: contract.renderDistance,
+          clampDist: rd,
           clampColor: '#000'
         };
 
@@ -576,16 +773,22 @@ var SpatialContract = (function () {
    *
    * @param {Object} contract
    * @param {number} dist
+   * @param {number} [renderDistOverride] - boosted render distance
+   * @param {number} [fogDistOverride]    - boosted fog distance
    * @returns {number}
    */
-  function getFogFactor(contract, dist) {
+  function getFogFactor(contract, dist, renderDistOverride, fogDistOverride) {
+    var rd = (typeof renderDistOverride === 'number')
+      ? renderDistOverride : contract.renderDistance;
+    var fd = (typeof fogDistOverride === 'number')
+      ? fogDistOverride : contract.fogDistance;
     if (dist <= 0) return 0;
-    if (dist >= contract.renderDistance) return 1;
-    if (dist <= contract.fogDistance * 0.5) return 0; // No fog up close
+    if (dist >= rd) return 1;
+    if (dist <= fd * 0.5) return 0; // No fog up close
 
     // Smooth ramp from fogDistance*0.5 to renderDistance
-    var start = contract.fogDistance * 0.5;
-    var range = contract.renderDistance - start;
+    var start = fd * 0.5;
+    var range = rd - start;
     return Math.min(1, (dist - start) / range);
   }
 
@@ -764,6 +967,35 @@ var SpatialContract = (function () {
   }
 
   /**
+   * Get the freeform two-segment configuration for a tile, if any.
+   * Returns null for tiles that should render as standard single-segment
+   * wall columns on this contract.
+   *
+   * The returned object has shape `{ hUpper, hLower, fillGap? }` in world
+   * units:
+   *   hUpper  — upper brick band height, measured from ceiling downward
+   *   hLower  — lower brick band height, measured from floor upward
+   *   fillGap — (optional) string key selecting a gap filler registered via
+   *             Raycaster.registerFreeformGapFiller(). Omitted → '_default'
+   *             (transparent see-through + subtle dark wash). Examples:
+   *             'hearth_fire' (warm cavity glow), future 'well_water',
+   *             'dump_truck_bed', etc. Keys decouple Layer-1 contracts from
+   *             Layer-2 raycaster without creating a circular dependency.
+   *
+   * The gap between the two bands is `wallHeight - (hUpper + hLower)`. When
+   * hUpper + hLower ≥ wallHeight the tile is effectively solid (the
+   * raycaster should skip the freeform path and render single-segment).
+   *
+   * @param {Object} contract
+   * @param {number} tileType
+   * @returns {{hUpper:number, hLower:number, fillGap?:string}|null}
+   */
+  function getTileFreeform(contract, tileType) {
+    if (!contract || !contract.tileFreeform) return null;
+    return contract.tileFreeform[tileType] || null;
+  }
+
+  /**
    * Get the floor texture ID for a contract.
    * Used by the raycaster's floor casting pass.
    *
@@ -867,26 +1099,17 @@ var SpatialContract = (function () {
     interior: interior,
     nestedDungeon: nestedDungeon,
 
-    // Build-time computation
-    computeDoorHeights: computeDoorHeights,
-
-    // Runtime queries (called by raycaster)
+    // Queries
     getWallHeight: getWallHeight,
-    getTileHeightOffset: getTileHeightOffset,
-    getTexture: getTexture,
-    getFloorTexture: getFloorTexture,
+    computeDoorHeights: computeDoorHeights,
     resolveDistantWall: resolveDistantWall,
     getFogFactor: getFogFactor,
     getGradients: getGradients,
     getParallax: getParallax,
     getAudio: getAudio,
-
-    // Presets
-    PRESETS: PRESETS,
-
-    // Constants
-    DEPTH: DEPTH,
-    FOG: FOG,
-    CEILING: CEILING
+    getTileHeightOffset: getTileHeightOffset,
+    getTexture: getTexture,
+    getTileFreeform: getTileFreeform,
+    getFloorTexture: getFloorTexture
   };
 })();

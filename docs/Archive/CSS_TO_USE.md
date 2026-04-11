@@ -4,6 +4,8 @@ Line 0-945 - cutscene
 Line 945-1095 - celestial body candidate fire orb on stary background
 Line 1095-1654 - day / night indicator widget (sun should start to slide slowly in late afternoon and land at night between 7 or 10 between ~4pm - ~8pm as day progresses )
 Line 1654-1790 - hose peek overlay (replace cubes with wet shapes)
+Line 1791 + dragonfire (hearth/bonfire/campfire tile sprite — BoxForge)
+
 
 #synthwave {
   position: relative;
@@ -1785,6 +1787,109 @@ cubes {
   color: #ffe49a;
 }
 
-.item:nth-child(6):after {
-  color: #ffda77;
+/* ============================================================ */
+/* DRAGONFIRE — flame with eye + bobbing particles               */
+/* Purpose: hearth/bonfire/campfire tile sprites (BoxForge:      */
+/* bonfire-related peeks). Replaces stacked-emoji placeholders.  */
+/* Wrap markup: <div class="loader"><div class="head">          */
+/*   <div class="eye"></div></div><div class="flames">          */
+/*   <div class="particle"></div> ×8 </div></div>               */
+/* ============================================================ */
+
+.loader {
+  --size: 150px;
+  --duration: 2s;
+  --logo-color: grey;
+  --background: linear-gradient(
+    0deg,
+    rgba(50, 50, 50, 0.2) 0%,
+    rgba(100, 100, 100, 0.2) 100%
+  );
+  height: var(--size);
+  aspect-ratio: 1;
+  position: relative;
 }
+
+.loader .head {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  transform: translate(-50%, -80%) rotate(45deg);
+  background: crimson;
+  width: 50%;
+  aspect-ratio: 1;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 0 30px crimson, 0 0 60px red, 0 0 90px darkred;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loader .eye {
+  position: absolute;
+  top: 38%;
+  left: 38%;
+  width: 24%;
+  height: 24%;
+  background: radial-gradient(circle, black 20%, white 21%, white 70%, black 71%);
+  border-radius: 50%;
+  transform: rotate(-45deg);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+.loader .eye::before {
+  content: "";
+  position: absolute;
+  top: 35%;
+  left: 35%;
+  width: 30%;
+  height: 30%;
+  background: black;
+  border-radius: 50%;
+  animation: blink 3s infinite;
+}
+
+.loader .flames {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 80%;
+}
+
+.loader .particle {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle, orange, red, transparent);
+  border-radius: 50%;
+  animation: move var(--duration) infinite ease-in-out;
+  opacity: 0.9;
+}
+
+.loader .particle:nth-child(1) { left: 10%; animation-delay: 0s;   }
+.loader .particle:nth-child(2) { left: 25%; animation-delay: 0.3s; }
+.loader .particle:nth-child(3) { left: 40%; animation-delay: 0.6s; }
+.loader .particle:nth-child(4) { left: 55%; animation-delay: 0.9s; }
+.loader .particle:nth-child(5) { left: 70%; animation-delay: 1.2s; }
+.loader .particle:nth-child(6) { left: 85%; animation-delay: 1.5s; }
+.loader .particle:nth-child(7) { left: 15%; animation-delay: 1.8s; }
+.loader .particle:nth-child(8) { left: 60%; animation-delay: 2.1s; }
+
+@keyframes move {
+  0%   { transform: translateY(0)     scale(1);   opacity: 1; }
+  50%  { transform: translateY(-50px) scale(1.2); opacity: 0.8; }
+  100% { transform: translateY(-100px) scale(0.5); opacity: 0; }
+}
+
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 30px crimson, 0 0 60px red, 0 0 90px darkred; }
+  50%      { box-shadow: 0 0 40px orange, 0 0 80px red, 0 0 120px darkred; }
+}
+
+.item:nth-child(6):afte

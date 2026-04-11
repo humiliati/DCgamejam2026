@@ -3255,9 +3255,42 @@ var MenuFaces = (function () {
       desc: 'Background music and ambient tracks', bind: 'Scroll' }
   ];
 
-  // Total navigable rows: 3 sliders + 10 toggles + 1 language = 14
+  // Render scale cycle — internal raycaster resolution. Lower = faster.
+  // Stored on Raycaster itself (persisted via localStorage 'dg_render_scale');
+  // this list is just the UI cycle order.
+  var _RENDER_SCALE_STEPS = [
+    { value: 1.00, label: '100% (native)' },
+    { value: 0.75, label: '75%' },
+    { value: 0.50, label: '50% (recommended)' },
+    { value: 0.33, label: '33%' },
+    { value: 0.25, label: '25% (lowest)' }
+  ];
+
+  // Total navigable rows:
+  //   3 sliders + 10 toggles + 1 render-scale cycle + 1 language = 15
   var _TOGGLE_COUNT = 10;
-  var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + 1;
+  var _CYCLE_COUNT  = 1; // render scale
+  var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + _CYCLE_COUNT + 1;
+
+  // Find nearest step in _RENDER_SCALE_STEPS for the current Raycaster
+  // scale. Tolerates tiny floating-point drift from localStorage round-trip.
+  function _findRenderScaleIdx() {
+    var cur = (typeof Raycaster !== 'undefined' && Raycaster.getRenderScale)
+      ? Raycaster.getRenderScale() : 1.0;
+    var bestI = 0, bestD = Infinity;
+    for (var i = 0; i < _RENDER_SCALE_STEPS.length; i++) {
+      var d = Math.abs(_RENDER_SCALE_STEPS[i].value - cur);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return bestI;
+  }
+
+  function _cycleRenderScale() {
+    if (typeof Raycaster === 'undefined' || !Raycaster.setRenderScale) return;
+    var idx = _findRenderScaleIdx();
+    var next = (idx + 1) % _RENDER_SCALE_STEPS.length;
+    Raycaster.setRenderScale(_RENDER_SCALE_STEPS[next].value);
+  }
 
   /**
    * Move selected settings row up (-1) or down (+1). Wraps.
@@ -3297,10 +3330,11 @@ var MenuFaces = (function () {
    */
   function handleSettingsInteract() {
     var row = _settingsState.row;
+    var cycleStart = _SLIDER_DEFS.length + _TOGGLE_COUNT;
     if (row < _SLIDER_DEFS.length) {
       // Slider row — toggle lock
       _settingsLocked = !_settingsLocked;
-    } else if (row < _SLIDER_DEFS.length + _TOGGLE_COUNT) {
+    } else if (row < cycleStart) {
       // Toggle row — fire the toggle
       var toggleKeys = [
         'screenShake', 'invertYFreeLook', 'showFps', 'minimapVisible',
@@ -3311,6 +3345,9 @@ var MenuFaces = (function () {
       if (tIdx >= 0 && tIdx < toggleKeys.length) {
         handleSettingsToggle(toggleKeys[tIdx]);
       }
+    } else if (row === cycleStart) {
+      // Render-scale cycle row — step to next scale
+      _cycleRenderScale();
     } else {
       // Language row
       handleLanguageCycle();
@@ -3491,9 +3528,9 @@ var MenuFaces = (function () {
       ctx.fillStyle = togVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
       ctx.fillText(togVal ? 'ON' : 'OFF', listX + trackW + Math.round(6 * S), togY + Math.round(10 * S));
 
-      // Hit zone for toggle click
+      // Hit zone for toggle click — compensate for Face 3 scroll translate
       _hitZones.push({
-        x: x + 6, y: togY - 2,
+        x: x + 6, y: togY - 2 - _f3ScrollY,
         w: w - 12, h: toggleRowH - 2,
         slot: 810 + ti, action: 'toggle', toggleKey: td.key
       });
@@ -3595,9 +3632,9 @@ var MenuFaces = (function () {
                        Math.round(2 * S));
       }
 
-      // Hit zone for slider click-to-set
+      // Hit zone for slider click-to-set — compensate for Face 3 scroll translate
       _hitZones.push({
-        x: listX + Math.round(14 * S), y: trackY - 2,
+        x: listX + Math.round(14 * S), y: trackY - 2 - _f3ScrollY,
         w: trackW, h: trackH + 4,
         slot: 800 + s, action: 'slider_click'
       });
@@ -3636,8 +3673,55 @@ var MenuFaces = (function () {
       }
     }
 
+    // ── Render Scale (clickable cycle) ────────────────────────────
+    // Position well below the slider description + nudge hint area
+    // so the row doesn't collide with the bottom slider's label/track.
+    var rsY = sliderStartY + _SLIDER_DEFS.length * rowH + Math.round(24 * S);
+    ctx.strokeStyle = COL.divider;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, rsY - Math.round(4 * S));
+    ctx.lineTo(x + w - 10, rsY - Math.round(4 * S));
+    ctx.stroke();
+
+    var rsIdx = _findRenderScaleIdx();
+    var rsLabel = _RENDER_SCALE_STEPS[rsIdx].label;
+    var rsRowH = Math.max(18, Math.round(22 * S));
+    var rsHov = (_hoverSlot === 840);
+    var rsSelected = (_settingsState.row === _SLIDER_DEFS.length + _TOGGLE_COUNT);
+    var rsActive = rsHov || rsSelected;
+
+    if (rsActive) {
+      ctx.fillStyle = rsSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
+      ctx.fillRect(x + 6, rsY - 2, w - 12, rsRowH - 2);
+    }
+
+    if (rsSelected) {
+      ctx.fillStyle = COL.accent;
+      ctx.font = 'bold ' + F_BODY + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('\u25B6', x + Math.round(6 * S), rsY + Math.round(10 * S));
+    }
+
+    ctx.fillStyle = rsActive ? COL.accent : COL.dim;
+    ctx.font = (rsSelected ? 'bold ' : '') + F_BODY + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      'Render Scale:  ' + rsLabel,
+      listX + Math.round(14 * S), rsY + Math.round(10 * S)
+    );
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = F_SMALL + 'px monospace';
+    ctx.fillText(rsSelected ? '[Enter] cycle' : '[Click] cycle', listX + trackW + Math.round(6 * S), rsY + Math.round(10 * S));
+
+    _hitZones.push({
+      x: x + 6, y: rsY - 2 - _f3ScrollY, w: w - 12, h: rsRowH - 2,
+      slot: 840, action: 'cycle_render_scale'
+    });
+
     // ── Language (clickable cycle) ────────────────────────────────
-    var langY = sliderStartY + _SLIDER_DEFS.length * rowH + Math.round(4 * S);
+    var langY = rsY + rsRowH + Math.round(4 * S);
     ctx.strokeStyle = COL.divider;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -3651,7 +3735,7 @@ var MenuFaces = (function () {
     var langLabel = _LANG_LABELS[curLang] || curLang;
     var langRowH = Math.max(18, Math.round(22 * S));
     var langHov = (_hoverSlot === 830);
-    var langSelected = (_settingsState.row === _SLIDER_DEFS.length + _TOGGLE_COUNT);
+    var langSelected = (_settingsState.row === _SLIDER_DEFS.length + _TOGGLE_COUNT + 1);
     var langActive = langHov || langSelected;
 
     if (langActive) {
@@ -3679,7 +3763,7 @@ var MenuFaces = (function () {
     ctx.fillText(langSelected ? '[Enter] cycle' : '[Click] cycle', listX + trackW + Math.round(6 * S), langY + Math.round(10 * S));
 
     _hitZones.push({
-      x: x + 6, y: langY - 2, w: w - 12, h: langRowH - 2,
+      x: x + 6, y: langY - 2 - _f3ScrollY, w: w - 12, h: langRowH - 2,
       slot: 830, action: 'cycle_language'
     });
 
@@ -3752,7 +3836,7 @@ var MenuFaces = (function () {
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(i18n.t('menu.resume', 'Return to Game') + '  [BACK]', x + w / 2, exitY + exitBtnH * 0.65);
-      _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
+      _hitZones.push({ x: exitBtnX, y: exitY - _f3ScrollY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
 
       // Quit to Title button
       var quitY = exitY + exitBtnH + Math.round(6 * S);
@@ -3766,7 +3850,7 @@ var MenuFaces = (function () {
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(i18n.t('menu.quit_title', 'Quit to Title'), x + w / 2, quitY + exitBtnH * 0.65);
-      _hitZones.push({ x: exitBtnX, y: quitY, w: exitBtnW, h: exitBtnH, slot: 821, action: 'quit_title' });
+      _hitZones.push({ x: exitBtnX, y: quitY - _f3ScrollY, w: exitBtnW, h: exitBtnH, slot: 821, action: 'quit_title' });
     } else {
       var closeHov = (_hoverSlot === 820);
       ctx.fillStyle = closeHov ? 'rgba(100,200,120,0.15)' : 'rgba(100,200,120,0.06)';
@@ -3778,7 +3862,7 @@ var MenuFaces = (function () {
       ctx.font = F_BODY + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('[BACK] ' + i18n.t('shop.close', 'Close'), x + w / 2, exitY + exitBtnH * 0.65);
-      _hitZones.push({ x: exitBtnX, y: exitY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
+      _hitZones.push({ x: exitBtnX, y: exitY - _f3ScrollY, w: exitBtnW, h: exitBtnH, slot: 820, action: 'resume' });
     }
 
     // Track content bottom for scroll range
@@ -4599,6 +4683,7 @@ var MenuFaces = (function () {
     handleSettingsInteract:  handleSettingsInteract,
     isSettingsLocked:        isSettingsLocked,
     handleLanguageCycle:     handleLanguageCycle,
+    handleRenderScaleCycle:  _cycleRenderScale,
     handleSettingsSelectRow: handleSettingsSelectRow,
     handleSettingsSetValue:  handleSettingsSetValue,
     resetSettings:           resetSettings,

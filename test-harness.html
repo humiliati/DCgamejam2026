@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Gleaner — Debug Launcher</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; min-height: 100vh;
+      background:
+        radial-gradient(ellipse at top, #1a0d2e 0%, #0a0515 60%, #000 100%);
+      color: #e8e2ff;
+      font-family: 'Courier New', monospace;
+      overflow-x: hidden;
+    }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: 100%;
+      max-width: 680px;
+      background: linear-gradient(180deg, rgba(30,15,55,0.92), rgba(12,6,25,0.96));
+      border: 2px solid #b8116e;
+      box-shadow:
+        0 0 40px rgba(184,17,110,0.35),
+        inset 0 0 28px rgba(42,252,224,0.08);
+      padding: 28px 32px;
+      border-radius: 4px;
+    }
+
+    .hdr {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 1px dashed rgba(42,252,224,0.3);
+      padding-bottom: 12px;
+      margin-bottom: 22px;
+    }
+    .hdr h1 {
+      font-size: 20px;
+      color: #fcff1a;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px rgba(184,17,110,0.8);
+    }
+    .hdr .tag {
+      font-size: 11px;
+      color: #2afce0;
+      letter-spacing: 2px;
+    }
+
+    fieldset {
+      border: 1px solid rgba(42,252,224,0.22);
+      padding: 12px 14px 14px;
+      margin-bottom: 18px;
+      border-radius: 2px;
+    }
+    legend {
+      font-size: 11px;
+      color: #fcff1a;
+      letter-spacing: 2px;
+      padding: 0 8px;
+      text-transform: uppercase;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #b7a8e0;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    input[type=text], select {
+      width: 100%;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.45);
+      color: #2afce0;
+      padding: 8px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 15px;
+      letter-spacing: 2px;
+      outline: none;
+    }
+    input[type=text]:focus, select:focus {
+      border-color: #fcff1a;
+      box-shadow: 0 0 8px rgba(252,255,26,0.4);
+    }
+
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .row > div { flex: 1 1 180px; }
+
+    .chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .chip {
+      background: rgba(42,252,224,0.08);
+      border: 1px solid rgba(42,252,224,0.5);
+      color: #2afce0;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.15s;
+    }
+    .chip:hover {
+      background: rgba(252,80,198,0.25);
+      border-color: #fc50c6;
+      color: #fff;
+    }
+    .chip small {
+      display: block;
+      font-size: 9px;
+      color: #888;
+      margin-top: 2px;
+      letter-spacing: 0;
+    }
+
+    .toggles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      cursor: pointer;
+      border-bottom: 1px dotted rgba(255,255,255,0.08);
+    }
+    .toggle:hover { background: rgba(42,252,224,0.04); }
+    .toggle input[type=checkbox] {
+      width: 16px; height: 16px;
+      accent-color: #fc50c6;
+      cursor: pointer;
+    }
+    .toggle span {
+      font-size: 12px;
+      color: #d6cff0;
+      letter-spacing: 1px;
+      text-transform: none;
+    }
+    .toggle small {
+      display: block;
+      color: #6e6490;
+      font-size: 10px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    button.launch {
+      flex: 2;
+      padding: 14px;
+      background: linear-gradient(180deg, #fc50c6 0%, #b8116e 100%);
+      border: 2px solid #fcff1a;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      font-weight: bold;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 0 16px rgba(252,80,198,0.5);
+      transition: all 0.15s;
+    }
+    button.launch:hover {
+      background: linear-gradient(180deg, #fcff1a 0%, #fc50c6 100%);
+      color: #120b22;
+      box-shadow: 0 0 28px rgba(252,255,26,0.7);
+    }
+    button.secondary {
+      flex: 1;
+      padding: 14px;
+      background: transparent;
+      border: 1px solid #2afce0;
+      color: #2afce0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    button.secondary:hover {
+      background: rgba(42,252,224,0.15);
+    }
+
+    .preview {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.5);
+      border-left: 2px solid #2afce0;
+      font-size: 11px;
+      color: #88a;
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+    }
+    .preview strong { color: #2afce0; }
+
+    .foot {
+      margin-top: 16px;
+      font-size: 10px;
+      color: #555;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="hdr">
+      <h1>◆ GLEANER DEV HARNESS</h1>
+      <div class="tag">debug=1</div>
+    </div>
+
+    <form id="harness-form" autocomplete="off">
+      <fieldset>
+        <legend>◇ Target Floor</legend>
+        <label for="floor">Floor ID (N / N.N / N.N.N)</label>
+        <input type="text" id="floor" name="floor" value="1" placeholder="e.g. 1, 1.3.1, 2.2.1">
+        <div class="chips" id="floor-chips"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>◇ Operative Profile (bypass creation)</legend>
+        <div class="row">
+          <div>
+            <label for="callsign">Callsign</label>
+            <input type="text" id="callsign" name="callsign" value="DEBUG" maxlength="10">
+          </div>
+          <div>
+            <label for="klass">Class</label>
+            <select id="klass" name="klass">
+              <option value="Blade">Blade (STR)</option>
+              <option value="Ranger">Ranger (DEX)</option>
+              <option value="Shadow">Shadow (STEALTH)</option>
+              <option value="Sentinel">Sentinel (HP)</option>
+              <option value="Seer">Seer (ENERGY)</option>
+              <option value="Wildcard">Wildcard (???)</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>◇ Debug Toggles</legend>
+        <div class="toggles">
+          <label class="toggle">
+            <input type="checkbox" id="t-skipMono" checked>
+            <span>Skip monologues<small>deploy dropoff + all cutscenes</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-skipSplash" checked>
+            <span>Skip splash &amp; title<small>boot straight to gameplay</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-god">
+            <span>God mode<small>Player.damage absorbed</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-noEnemies">
+            <span>Disable enemies<small>clears spawned entities</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-gold">
+            <span>Give 500 gold<small>CardAuthority.setGold(500)</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-fullHp">
+            <span>Full HP/Energy<small>top up stats on land</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-hideHud">
+            <span>Hide HUD<small>cleaner viewport for screenshots</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-logState">
+            <span>Log state on land<small>prints player + floor snapshot</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-perfMon">
+            <span>Resource tracker<small>FPS, frame time, stutter log, scene counts</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="preview" id="preview"></div>
+
+      <div class="actions">
+        <button type="button" class="secondary" id="btn-reset">Reset</button>
+        <button type="submit" class="launch">▶ Deploy</button>
+      </div>
+    </form>
+
+    <div class="foot">
+      Bypasses SPLASH → TITLE → callsign → class → deploy cutscene → dropoff monologue.
+      Warps Gleaner to the requested floor via FloorTransition.go().
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // Known floors from CLAUDE.md world map — quick-jump chips.
+    var FLOORS = [
+      { id: '0',     label: 'Approach' },
+      { id: '1',     label: 'Promenade' },
+      { id: '1.1',   label: 'Bazaar' },
+      { id: '1.2',   label: 'Driftwood Inn' },
+      { id: '1.3',   label: 'Cellar Ent.' },
+      { id: '1.6',   label: 'Home' },
+      { id: '1.3.1', label: 'Soft Cellar' },
+      { id: '2',     label: 'Lantern Row' },
+      { id: '2.1',   label: 'Dispatcher' },
+      { id: '2.2',   label: 'Watchman' },
+      { id: '2.2.1', label: "Hero's Wake B1" },
+      { id: '2.2.2', label: "Hero's Wake B2" }
+    ];
+
+    var form     = document.getElementById('harness-form');
+    var chipRoot = document.getElementById('floor-chips');
+    var floorIn  = document.getElementById('floor');
+    var preview  = document.getElementById('preview');
+
+    // Build quick-jump chips
+    FLOORS.forEach(function (f) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.innerHTML = f.id + '<small>' + f.label + '</small>';
+      b.addEventListener('click', function () {
+        floorIn.value = f.id;
+        updatePreview();
+      });
+      chipRoot.appendChild(b);
+    });
+
+    // Restore last-used config
+    try {
+      var saved = JSON.parse(localStorage.getItem('gleaner_harness') || 'null');
+      if (saved && typeof saved === 'object') {
+        if (saved.floor)     floorIn.value = saved.floor;
+        if (saved.callsign)  document.getElementById('callsign').value = saved.callsign;
+        if (saved.klass)     document.getElementById('klass').value = saved.klass;
+        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon'].forEach(function (k) {
+          var el = document.getElementById('t-' + k);
+          if (el && typeof saved[k] === 'boolean') el.checked = saved[k];
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    function collect() {
+      return {
+        floor:      floorIn.value.trim() || '0',
+        callsign:   (document.getElementById('callsign').value || 'DEBUG').trim().toUpperCase(),
+        klass:      document.getElementById('klass').value || 'Blade',
+        skipMono:   document.getElementById('t-skipMono').checked,
+        skipSplash: document.getElementById('t-skipSplash').checked,
+        god:        document.getElementById('t-god').checked,
+        noEnemies:  document.getElementById('t-noEnemies').checked,
+        gold:       document.getElementById('t-gold').checked,
+        fullHp:     document.getElementById('t-fullHp').checked,
+        hideHud:    document.getElementById('t-hideHud').checked,
+        logState:   document.getElementById('t-logState').checked,
+        perfMon:    document.getElementById('t-perfMon').checked
+      };
+    }
+
+    function buildUrl() {
+      var c = collect();
+      var params = new URLSearchParams();
+      params.set('debug', '1');
+      params.set('floor', c.floor);
+      params.set('call',  c.callsign);
+      params.set('class', c.klass);
+      // Flags — only include the ones that are ON (shorter URL)
+      if (c.skipMono)   params.set('skipMono',   '1');
+      if (c.skipSplash) params.set('skipSplash', '1');
+      if (c.god)        params.set('god',        '1');
+      if (c.noEnemies)  params.set('noEnemies',  '1');
+      if (c.gold)       params.set('gold',       '500');
+      if (c.fullHp)     params.set('fullHp',     '1');
+      if (c.hideHud)    params.set('hideHud',    '1');
+      if (c.logState)   params.set('logState',   '1');
+      if (c.perfMon)    params.set('perfMon',    '1');
+      return 'index.html?' + params.toString();
+    }
+
+    function updatePreview() {
+      var url = buildUrl();
+      preview.innerHTML = '<strong>LAUNCH →</strong> ' + url;
+    }
+
+    // Save & launch
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      try { localStorage.setItem('gleaner_harness', JSON.stringify(collect())); }
+      catch (e) { /* ignore */ }
+      window.location.href = buildUrl();
+    });
+
+    // Reset
+    document.getElementById('btn-reset').addEventListener('click', function () {
+      try { localStorage.removeItem('gleaner_harness'); } catch (e) {}
+      window.location.reload();
+    });
+
+    // Live preview of the URL for copy/paste
+    form.addEventListener('input',  updatePreview);
+    form.addEventListener('change', updatePreview);
+    updatePreview();
+  })();
+  </script>
+</body>
+</html>

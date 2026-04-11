@@ -2383,6 +2383,7 @@
   <script src="engine/bonfire-sprites.js"></script>
   <script src="engine/mailbox-sprites.js"></script>
   <script src="engine/dump-truck-sprites.js"></script>
+  <script src="engine/window-sprites.js"></script>
   <script src="engine/detritus-sprites.js"></script>
 
   <!-- Layer 2: Rendering + UI (depend on core systems) -->
@@ -2520,5 +2521,9 @@
   <script src="data/strings/ps.js"></script>
   <script src="data/barks/en.js"></script>
   <script src="data/books.js"></script>
+
+  <!-- Dev harness boot hook (inert unless URL has ?debug=1) -->
+  <script src="engine/debug-perf-monitor.js"></script>
+  <script src="engine/debug-boot.js"></script>
 </body>
 </html>

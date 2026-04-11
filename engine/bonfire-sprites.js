@@ -1,10 +1,12 @@
 /**
- * BonfireSprites — Spawns dragonfire emoji billboard for BONFIRE tiles.
+ * BonfireSprites — Spawns dragonfire emoji billboards for fire-source tiles.
  *
- * When a floor is generated with BONFIRE tiles (TILES.BONFIRE = 18),
- * this module creates a 🔥+🐉 dragonfire emoji sprite at the tile center.
- * The billboard sits above the short stone ring wall (0.3× height), matching
- * the mailbox composition pattern: opaque short wall + emoji billboard above.
+ * When a floor is generated with BONFIRE tiles (TILES.BONFIRE = 18) OR
+ * HEARTH tiles (TILES.HEARTH = 29), this module creates a 🔥+🐉 dragonfire
+ * emoji sprite at the tile center. The billboard sits above the short stone
+ * ring wall (0.3× height for BONFIRE) or inside the freeform cavity (HEARTH),
+ * matching the mailbox composition pattern: opaque short wall + emoji
+ * billboard above (or the freeform sandwich + billboard inside the cavity).
  *
  * The dragon emoji (🐉) renders as a translucent overlay on top of the flame
  * via the raycaster's emojiOverlay system. This is the canonical "Dragonfire"
@@ -68,22 +70,31 @@ var BonfireSprites = (function () {
     if (!grid || !gridW || !gridH) return _cachedSprites;
 
     var bonfireTile = (typeof TILES !== 'undefined') ? TILES.BONFIRE : 18;
+    var hearthTile  = (typeof TILES !== 'undefined') ? TILES.HEARTH  : 29;
 
     for (var gy = 0; gy < gridH; gy++) {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
-        if (grid[gy][gx] === bonfireTile) {
-          // Position at grid index — _renderSprites adds 0.5 to center
+        var t = grid[gy][gx];
+        if (t === bonfireTile || t === hearthTile) {
+          // Position at grid index — _renderSprites adds 0.5 to center.
+          // HEARTH gets a MUCH bigger flame (2.5x the bonfire size) so
+          // the dragonfire glyph fills the freeform fire cavity bounded
+          // by the hUpper stone mantle and hLower base stone. At default
+          // bonfire scale the glyph reads too small inside the hearth's
+          // tall cavity.
+          var isHearth = (t === hearthTile);
           _cachedSprites.push({
             x: gx,
             y: gy,
             emoji: FIRE.emoji,
             emojiOverlay: DRAGON_OVERLAY,
-            scale: FIRE.scale,
+            scale: isHearth ? (FIRE.scale * 2.5) : FIRE.scale,
             glow: FIRE.glow,
             glowRadius: FIRE.glowRadius,
             bonfire: true,
             bonfireType: 'dragonfire',
+            hearth: isHearth,
             noFogFade: true,
             bobY: 0   // Set by animate() each frame
           });

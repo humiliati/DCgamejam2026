@@ -430,13 +430,19 @@ var Skybox = (function () {
   //                     depth, drift, opacity }
   var _starLayers = null;
 
-  // Layer definitions (ported from EyesOnly 4-tier model, counts scaled
-  // down ~40% because DC skybox is only the top 75% of viewport, not full).
+  // Layer definitions (4-tier parallax model). Counts were trimmed
+  // 2026-04-10 to lighten the per-frame cost: total 295 stars (down
+  // from 497). The foreground layer is preserved in full since those
+  // are the stars the player actually notices.
+  //
+  // Drift is no longer stored per-layer — stars now revolve at the
+  // celestial rate (see _renderStars), so each layer only needs its
+  // depth (parallax) and opacity.
   var _STAR_DEFS = [
-    { count: 350, rMin: 0.3, rMax: 0.5, depth: 0.02, drift: 0.00003, opacity: 0.40, twinkle: true  },  // deep dust
-    { count: 100, rMin: 0.4, rMax: 0.6, depth: 0.08, drift: 0.00012, opacity: 0.65, twinkle: true  },  // mid-field
-    { count: 35,  rMin: 0.5, rMax: 0.9, depth: 0.15, drift: 0.00025, opacity: 0.85, twinkle: true  },  // bright
-    { count: 12,  rMin: 0.7, rMax: 1.2, depth: 0.22, drift: 0.0005,  opacity: 0.95, twinkle: false }   // foreground
+    { count: 180, rMin: 0.3, rMax: 0.5, depth: 0.02, opacity: 0.40, twinkle: true  },  // deep dust
+    { count: 70,  rMin: 0.4, rMax: 0.6, depth: 0.08, opacity: 0.65, twinkle: true  },  // mid-field
+    { count: 35,  rMin: 0.5, rMax: 0.9, depth: 0.15, opacity: 0.85, twinkle: true  },  // bright
+    { count: 10,  rMin: 0.7, rMax: 1.2, depth: 0.22, opacity: 0.95, twinkle: false }   // foreground
   ];
 
   function _generateStarField() {
@@ -445,7 +451,6 @@ var Skybox = (function () {
 
     for (var d = 0; d < _STAR_DEFS.length; d++) {
       var def = _STAR_DEFS[d];
-      var driftAngle = 0.3 + d * 0.7; // each layer drifts at a different angle
       var stars = [];
       for (var i = 0; i < def.count; i++) {
         // Color: 70% white, 15% warm, 10% blue-white, 5% orange
@@ -473,8 +478,6 @@ var Skybox = (function () {
       _starLayers.push({
         stars:   stars,
         depth:   def.depth,
-        driftX:  Math.cos(driftAngle) * def.drift,
-        driftY:  Math.sin(driftAngle) * def.drift,
         opacity: def.opacity,
         twinkle: def.twinkle
       });
@@ -486,31 +489,45 @@ var Skybox = (function () {
     if (pa < 0.01) return;
     if (!_starLayers) _generateStarField();
 
+    // Stars revolve at the celestial rate: one full panorama cycle per
+    // in-game day (1/24 normalized per game hour), matching the sun and
+    // moon's apparent motion. Driven by DayCycle — not by real-elapsed
+    // _time — so stars don't swirl and paused floors freeze the sky.
+    var gameTimeDrift = 0;
+    if (typeof DayCycle !== 'undefined') {
+      gameTimeDrift = (DayCycle.getHour() + DayCycle.getMinute() / 60) / 24;
+    }
+
     for (var L = 0; L < _starLayers.length; L++) {
       var layer = _starLayers[L];
       var parallax = angle * layer.depth;
-      var driftOffX = _time * layer.driftX;
-      var driftOffY = _time * layer.driftY;
       var layerStars = layer.stars;
+      // Scintillation spikes only matter on the foreground-facing bright
+      // layers; the deepest dust is sub-pixel and invisible at 0.4 opacity,
+      // so we skip the extra sin() per star there.
+      var doScint = layer.twinkle && L > 0;
 
       for (var i = 0; i < layerStars.length; i++) {
         var star = layerStars[i];
 
-        // Position: normalized [0,1] → pixel, with parallax + drift
-        var sx = (star.x + parallax + driftOffX) % 1;
+        // Position: normalized [0,1] → pixel, with parallax + celestial drift.
+        // No vertical drift — real stars don't fall.
+        var sx = (star.x + parallax + gameTimeDrift) % 1;
         if (sx < 0) sx += 1;
-        var sy = (star.y + driftOffY) % 1;
-        if (sy < 0) sy += 1;
         var px = sx * w;
-        var py = sy * h;
+        var py = star.y * h;
 
-        // Twinkle with scintillation spikes
+        // Twinkle (sin driven by real time — atmospheric scintillation is
+        // a local effect, not celestial, so it stays real-time based)
         var twinkle = 1;
         if (layer.twinkle) {
           twinkle = 0.5 + 0.5 * Math.sin(_time * star.twRate + star.twPhase);
-          // Occasional bright flare (scintillation spike)
-          var scint = Math.sin(_time * star.twRate * 3.7 + star.twPhase * 2.1);
-          if (scint > 0.97) twinkle = Math.min(1, twinkle + 0.4);
+          if (doScint) {
+            // Occasional bright flare (scintillation spike) — only on
+            // layers where the player can actually perceive it
+            var scint = Math.sin(_time * star.twRate * 3.7 + star.twPhase * 2.1);
+            if (scint > 0.97) twinkle = Math.min(1, twinkle + 0.4);
+          }
         }
 
         var alpha = layer.opacity * star.brightness * twinkle * pa;

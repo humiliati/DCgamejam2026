@@ -15,6 +15,14 @@ Phases 2, 4 deferred (unnecessary). Phase 5 partial (early-out + step limit
 done; profiling + adaptive layers remaining). Phase 6 layout done, needs
 visual verification. Phase 7 post-jam.
 
+> **Follow-up:** the next architectural step beyond the N-layer stack
+> is **two-segment wall columns** — letting a single layer contribute
+> an upper-band + gap + lower-band instead of one strip. That work is
+> planned in **`RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`** and unlocks
+> real hearth cavities, civilized bonfire + pergola moats, arched
+> doorways, and windows. The N-layer compositor described here is the
+> load-bearing foundation that freeform rides on top of.
+
 ---
 
 ## 1. Current Architecture
