@@ -264,7 +264,7 @@ var SpatialContract = (function () {
         // the dark interior + door frame on the exterior face, transparent
         // on the interior face, masonry on side faces (same model as
         // WINDOW_TAVERN's three-face treatment).
-        74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door' })
+        74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door', recessD: 0.25 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──

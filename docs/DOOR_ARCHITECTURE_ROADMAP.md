@@ -1,9 +1,9 @@
 # Door Architecture Roadmap
 
-**Status**: Active — Phase 0 ✅, Phase 1 ✅, Phase 1.5 ✅, Phase 2 ✅  
+**Status**: Active — Phase 0 ✅, Phase 1 ✅, Phase 1.5 ✅, Phase 2 ✅, Phase 5A ✅, Phase 5B–D specced  
 **Last updated**: 2026-04-12  
 **Depends on**: Raycast Freeform Upgrade (shipped), Living Windows (Phase 0–1 shipped), Texture Atlas  
-**Cross-refs**: `LIVING_WINDOWS_ROADMAP.md`, `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`, `ARCHITECTURAL_SHAPES_ROADMAP.md`
+**Cross-refs**: `LIVING_WINDOWS_ROADMAP.md`, `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`, `ARCHITECTURAL_SHAPES_ROADMAP.md` (Phase 9 — Octagonal Columns)
 
 ---
 
@@ -372,11 +372,12 @@ building via future DoorRegistry metadata.
   └────────────┴──────┘
 ```
 
-**Status**: Complete. Recess visible and confirmed in browser. File truncation
-repaired.
+**Status**: Implemented. Raycaster recess block in place; visual browser test
+pending.
 
 **Files modified**: `engine/raycaster.js` (recess block after perpDist
-calculation, ~45 lines).
+calculation, ~45 lines; z-buffer override for jamb columns; freeformCfg
+suppression for jamb columns).
 
 ### Phase 2 — Interior trapdoors (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED
 
@@ -444,6 +445,119 @@ Detail passes on door frame rendering.
 4. Interior door transom variant: glass panel above the door (stretch goal —
    requires a second freeform band or a nested gap)
 
+### Phase 5 — Cavity Sprite Content (beyond the dark gradient)
+
+**Goal**: The recessed door cavity renders actual visual content instead of
+the current 3-band dark gradient. The dark square is a placeholder — most
+doors in the world should show a recognizable door face, and in some cases
+a scene behind the door.
+
+**Motivation**: The recess from Phase 1.5 moves the door face into the tile,
+creating a convincing 3D pocket. But the pocket is currently filled with a
+flat dark wash. The player reads "dark hole in wall." We want the player to
+read "actual door" or "glimpse of interior."
+
+**Content tiers** (progressive, each tier builds on the previous):
+
+#### Tier A — Door panel texture ✅ SHIPPED
+
+The gap filler samples a door-panel texture from TextureAtlas instead of
+computing a procedural gradient. The texture is a 64×64 canvas showing
+wooden planks with a handle, iron studs, or a glass panel — depending on
+the building.
+
+**Delivered:**
+
+1. **`_doorPanels` cache** in DoorSprites — `"x,y"` → texture ID, with
+   `setDoorPanel()` / `getDoorPanel()` public API. Cleared on floor switch.
+2. **`_facadeDoorFiller` Tier A path** — on exterior face, looks up panel
+   texture via `getDoorPanel()`. If found: `ctx.drawImage()` for 1px column
+   sampling (same technique as the lintel band), then side shading (side=1
+   gets 0.25 overlay), fog+brightness overlay. If no texture: falls back to
+   existing 3-band dark gradient. Door frame overlay (jamb edges + lintel
+   bottom + threshold bottom) drawn on top of both paths.
+3. **`_genDoorPanel()` texture generator** in TextureAtlas — per-pixel
+   procedural texture with vertical wood planks, grain bands, knots, frame
+   border, handle (brass/iron rectangle at 55% height), hinges (iron
+   rectangles at top/bottom left). Variants via parameters:
+   - `studs: true` — iron stud grid overlay (military/fortress)
+   - `glassInsert: true` — frosted amber glass in upper half (shops)
+   - `ironPlate: true` — riveted iron plate with horizontal seams
+4. **Five panel textures** registered in `_generateAll()`:
+   - `door_panel_wood` — warm oak (Driftwood Inn)
+   - `door_panel_dark` — worn dark wood (Gleaner's Home)
+   - `door_panel_studded` — heavy oak + iron studs (Storm Shelter, Watchman's)
+   - `door_panel_glass` — frosted glass insert (Coral Bazaar)
+   - `door_panel_iron` — riveted iron plate (Dispatcher's Office)
+5. **`doorPanel` field** added to all BuildingRegistry records. FloorManager
+   populates `DoorSprites.setDoorPanel()` during building iteration for
+   DOOR_FACADE tiles, same pattern as `setTexture()`.
+
+**Files modified**: `engine/door-sprites.js` (cache + gap filler Tier A path),
+`engine/texture-atlas.js` (`_genDoorPanel` + 5 texture registrations),
+`engine/building-registry.js` (`doorPanel` field on 6 buildings),
+`engine/floor-manager.js` (`setDoorPanel()` call in building iteration).
+
+#### Tier B — Interior scene glimpse (~80 lines)
+
+When a building's door is "ajar" or the player has visited the interior,
+the gap filler composites a faint interior scene behind the door panel.
+Same pattern as WINDOW_TAVERN's gap filler showing amber glow + furniture
+silhouettes behind the glass.
+
+```
+Gap filler logic (tier B):
+  1. Draw door panel texture (tier A)
+  2. If door state is OPEN or VISITED:
+     - Blend door panel at 40% opacity (semi-transparent)
+     - Behind it: warm amber wash + furniture silhouettes
+       sampled from a scene texture
+  3. If door state is CLOSED:
+     - Draw door panel at full opacity (tier A only)
+```
+
+Scene textures: reuse the WINDOW_TAVERN interior scene system. Each
+building declares a `doorScene` alongside `windowScenes` in its
+BuildingRegistry entry.
+
+#### Tier C — Live interior peek (~120 lines, stretch)
+
+The cavity shows a **live view** of the floor behind the door. The gap
+filler casts a secondary mini-raycast from the door position into the
+interior floor's grid, rendering a few columns of interior wall/floor
+into the cavity region.
+
+Expensive (secondary raycast per column, ~40–60 columns) but gated to
+fire only when the player is within 3 tiles. At distance, fall back to
+tier B (static scene).
+
+Performance budget: ~40 secondary casts × ~8 DDA steps = ~320 extra steps
+per frame at close range. Viable but needs profiling on webOS.
+
+**Generalization**: This technique applies to any freeform cavity.
+Trapdoor shafts (Phase 2) could show the floor below. Arch doorways
+could show the courtyard beyond. The cavity is a viewport into another
+world — the gap filler is the compositor.
+
+#### Tier D — NPC silhouette in doorway (stretch)
+
+When an NPC stands near the interior side of a door, render their sprite
+silhouette inside the door cavity. The NPC billboard system already
+depth-sorts and z-clips — this tier connects the sprite pass to the
+cavity region.
+
+After the gap filler paints door content, check if any NPC sprites in
+the interior floor are within 2 tiles of the door. If yes, project their
+sprite into the cavity's screen region with depth-correct scaling.
+"Shopkeeper standing in the doorway" effect makes the town feel alive.
+
+**Relationship to octagonal columns** (Phase 9 in ARCHITECTURAL_SHAPES):
+The cavity content system applies specifically to freeform cavities
+(DOOR_FACADE, WINDOW_TAVERN, HEARTH, trapdoors). Octagonal columns use
+the recess technique for solid textured surfaces — no cavities, no gap
+filler. The recess is shared infrastructure; cavity content is a
+door/window layer on top.
+
 ---
 
 ## 6. Touch List
@@ -472,6 +586,12 @@ Detail passes on door frame rendering.
 | `engine/floor-manager.js` | 2 | ✅ | Depth-2→TRAPDOOR_DN, depth-3→TRAPDOOR_UP in GridGen call. Stair tracking includes trapdoors |
 | `engine/floor-manager.js` | 3 | pending | Stamp-out remaining buildings to DOOR_FACADE |
 | `engine/door-animator.js` | 4 | pending | Cavity-aware animation for DOOR_FACADE |
+| `engine/door-sprites.js` | 5A | ✅ | `_doorPanels` cache + `setDoorPanel`/`getDoorPanel` API + Tier A texture sampling in gap filler |
+| `engine/texture-atlas.js` | 5A | ✅ | `_genDoorPanel` generator + 5 panel textures (`door_panel_wood/dark/studded/glass/iron`) |
+| `engine/building-registry.js` | 5A | ✅ | `doorPanel` field on all 6 building records |
+| `engine/floor-manager.js` | 5A | ✅ | `DoorSprites.setDoorPanel()` call in DOOR_FACADE building iteration |
+| `engine/door-sprites.js` | 5B | pending | Interior scene blend in gap filler (visited state check) |
+| `engine/raycaster.js` | 5C | pending | Secondary mini-raycast in cavity for live interior peek |
 | `index.html` | 0 | ✅ | `<script>` for `engine/door-sprites.js` in Layer 0 |
 
 ---
@@ -517,10 +637,22 @@ Detail passes on door frame rendering.
    jamb?" but the flag is set 100 lines earlier. Low priority — jamb columns
    are a small fraction of the viewport.
 
-8. **Raycaster file truncation** (new, blocking): The Edit tool truncated the
-   tail of `engine/raycaster.js` during the recess insertion. The
-   `castScreenRay` function and the module's `return` block are cut off.
-   Must be repaired from git HEAD before testing.
+8. ~~**Raycaster file truncation**~~ → **RESOLVED.** False alarm — the file
+   was intact after re-checking. `node --check` passes, `castScreenRay` and
+   the module `return` block are present and complete.
+
+9. **Cavity content roadmap** (new): Phase 5 now specced. Four progressive
+   tiers: (A) door panel texture in gap filler, (B) interior scene glimpse
+   for visited buildings, (C) live interior peek via secondary raycast,
+   (D) NPC silhouette in doorway. See Phase 5 section above.
+
+10. **Octagonal column cross-reference** (new): The recess technique
+    generalizes beyond doors to tree trunks, pillars, and round towers.
+    Phase 9 of `ARCHITECTURAL_SHAPES_ROADMAP.md` describes applying the
+    inset to all 4 faces of a tile + optional 45° chamfer planes for true
+    octagonal silhouettes. The DOOR_FACADE recess block in the raycaster
+    will be refactored into a shared `tileRecess` table when that work
+    ships.
 
 ---
 

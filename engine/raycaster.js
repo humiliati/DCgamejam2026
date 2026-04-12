@@ -1221,41 +1221,35 @@ var Raycaster = (function () {
       // reaching the inset plane, that column is a solid jamb wall
       // (the visible sidewall of the recess). Jamb columns suppress
       // freeform rendering and write normal z-buffer occlusion.
-      var _facadeJamb = false;
-      if (hitTile === TILES.DOOR_FACADE &&
-          typeof DoorSprites !== 'undefined' && DoorSprites.getExteriorFace) {
-        var _extFace = DoorSprites.getExteriorFace(mapX, mapY);
-        if (_extFace >= 0) {
-          // Convert DDA hit axis + step to face index (0=E,1=S,2=W,3=N)
-          var _hitFace = (side === 0)
-            ? (stepX > 0 ? 2 : 0)    // ray going right → hit WEST face; left → EAST
-            : (stepY > 0 ? 3 : 1);   // ray going down  → hit NORTH face; up → SOUTH
-          if (_hitFace === _extFace) {
-            var _recessD = 0.25;      // quarter-tile inset depth
-            // Perpendicular distance to the inset plane
-            var _rayComp = (side === 0) ? Math.abs(rayDirX) : Math.abs(rayDirY);
-            var _rPD = perpDist + _recessD / (_rayComp || 1e-10);
-            // Does the ray at _rPD still land inside this tile?
-            var _rX = px + _rPD * rayDirX;
-            var _rY = py + _rPD * rayDirY;
-            if (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY) {
-              // Inset hit — door face renders at recessed depth
-              perpDist = _rPD;
-            } else {
-              // Ray exits tile laterally before reaching inset → jamb wall
-              _facadeJamb = true;
-              if (side === 0) {
-                // Entered through X face, exits through Y boundary
-                var _jY = (stepY > 0) ? (mapY + 1) : mapY;
-                perpDist = Math.abs((_jY - py) / (rayDirY || 1e-10));
-                side = 1;
-              } else {
-                // Entered through Y face, exits through X boundary
-                var _jX = (stepX > 0) ? (mapX + 1) : mapX;
-                perpDist = Math.abs((_jX - px) / (rayDirX || 1e-10));
-                side = 0;
-              }
-            }
+      var _recessJamb = false;
+      if (TILES.isFreeform(hitTile) &&
+          typeof DoorSprites !== 'undefined' && DoorSprites.isExteriorHit &&
+          DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY)) {
+        // Per-tile recess depth from freeform config, or global default.
+        var _rfCfg = (_contract) ? SpatialContract.getTileFreeform(_contract, hitTile) : null;
+        var _recessD = (_rfCfg && _rfCfg.recessD) ? _rfCfg.recessD : 0.25;
+        // Perpendicular distance to the inset plane
+        var _rayComp = (side === 0) ? Math.abs(rayDirX) : Math.abs(rayDirY);
+        var _rPD = perpDist + _recessD / (_rayComp || 1e-10);
+        // Does the ray at _rPD still land inside this tile?
+        var _rX = px + _rPD * rayDirX;
+        var _rY = py + _rPD * rayDirY;
+        if (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY) {
+          // Inset hit — door face renders at recessed depth
+          perpDist = _rPD;
+        } else {
+          // Ray exits tile laterally before reaching inset → jamb wall
+          _recessJamb = true;
+          if (side === 0) {
+            // Entered through X face, exits through Y boundary
+            var _jY = (stepY > 0) ? (mapY + 1) : mapY;
+            perpDist = Math.abs((_jY - py) / (rayDirY || 1e-10));
+            side = 1;
+          } else {
+            // Entered through Y face, exits through X boundary
+            var _jX = (stepX > 0) ? (mapX + 1) : mapX;
+            perpDist = Math.abs((_jX - px) / (rayDirX || 1e-10));
+            side = 0;
           }
         }
       }
@@ -1295,7 +1289,7 @@ var Raycaster = (function () {
       _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
       // Jamb columns are solid walls — restore normal z-buffer so
       // sprites behind the jamb are properly culled.
-      if (_facadeJamb) { _zBuffer[col] = perpDist; }
+      if (_recessJamb) { _zBuffer[col] = perpDist; }
       // Default-clear the pedestal mask for this column. Freeform
       // tiles populate it inside _renderFreeformForeground; short
       // ground walls populate it in the dedicated block below.
@@ -1342,7 +1336,7 @@ var Raycaster = (function () {
       }
       // Jamb columns render as solid wall — suppress the freeform
       // cavity/lintel split so the column draws as one textured slab.
-      if (_facadeJamb) { freeformCfg = null; }
+      if (_recessJamb) { freeformCfg = null; }
       if (freeformCfg) {
         heightOffset = 0;  // suppress Doom-rule displacement
       }

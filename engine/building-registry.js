@@ -54,6 +54,8 @@ var BuildingRegistry = (function () {
   // `doorTexture` is a TextureAtlas ID for DOOR tiles on this building
   // (defaults to contract's 'door_wood' when null). `archTexture` is
   // a TextureAtlas ID for ARCH_DOORWAY tiles (defaults to 'arch_brick').
+  // `doorPanel` is a TextureAtlas ID for the door-face texture inside
+  // DOOR_FACADE cavities (Phase 5A). Null = dark gradient fallback.
   var _records = {};
 
   function _register(rec) {
@@ -72,6 +74,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'brick_red',       // coral brick facade
     mullionStyle:    'bronze',          // warm brass fittings on a merchant building
     doorTexture:     'door_redbrick',   // coral brick door surround
+    doorPanel:       'door_panel_glass', // frosted glass shop front
     archTexture:     'arch_redbrick',   // coral brick arch doorway
     defaultHours:    { openAt: 6, closeAt: 22 },
     defaultVignette: 'bazaar_cards',
@@ -89,6 +92,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'wood_plank',      // driftwood timber frame
     mullionStyle:    'bronze',          // warm brass — upscale tavern
     doorTexture:     'door_driftwood',  // weathered timber door surround
+    doorPanel:       'door_panel_wood', // warm oak planks
     archTexture:     'arch_driftwood',  // driftwood arch doorway
     defaultHours:    { openAt: 6, closeAt: 24 },
     defaultVignette: 'tavern_mug',
@@ -106,6 +110,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'stone_rough',     // civil defense bunker masonry
     mullionStyle:    'iron',            // institutional grey fittings
     doorTexture:     'door_greystone',  // fortified stone door surround
+    doorPanel:       'door_panel_studded', // heavy studded door
     archTexture:     'arch_stone',      // rough stone arch (shared)
     defaultHours:    { openAt: 0, closeAt: 24 },
     defaultVignette: null,
@@ -123,6 +128,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'wood_dark',       // worn plank residential
     mullionStyle:    'wood',            // plain dark oak — modest dwelling
     doorTexture:     'door_darkwood',   // dark oak door surround
+    doorPanel:       'door_panel_dark', // worn dark wood panel
     archTexture:     'arch_darkwood',   // dark oak arch doorway
     defaultHours:    { openAt: 20, closeAt: 8 },   // private = resident home at night
     defaultVignette: 'home_candle',
@@ -145,6 +151,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'concrete',        // government-issue concrete
     mullionStyle:    'iron',            // institutional cold metal
     doorTexture:     'door_concrete',   // poured concrete door surround
+    doorPanel:       'door_panel_iron', // institutional iron plate door
     archTexture:     'arch_concrete',   // concrete arch doorway
     defaultHours:    { openAt: 8, closeAt: 20 },
     defaultVignette: 'dispatch_lamp',
@@ -162,6 +169,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'stone_rough',     // fortified stone
     mullionStyle:    'iron',            // reinforced grey bars
     doorTexture:     'door_greystone',  // fortified stone door surround
+    doorPanel:       'door_panel_studded', // heavy studded door
     archTexture:     'arch_stone',      // rough stone arch (shared)
     defaultHours:    { openAt: 0, closeAt: 24 },
     defaultVignette: 'watch_lantern',

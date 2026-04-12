@@ -175,8 +175,8 @@ The recess block lives in `raycaster.js` between the `perpDist = Math.abs(perpDi
 
 ## Source codebases
 
-**Raycast, action & 3D** (mounted at `/mnt/raycast.js-master/`) The rendering routine is made up of vertical lines of texture-mapped walls at constant-Z, and perspective-correct texture-mapping for flat surfaces. An offscreen frame buffer is utilized to optimize per-pixel rendering.
-**EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI.
+**Raycast, action & 3D** (at `raycast.js-master/`) The rendering routine is made up of vertical lines of texture-mapped walls at constant-Z, and perspective-correct texture-mapping for flat surfaces. An offscreen frame buffer is utilized to optimize per-pixel rendering. **This reference repo has its own code-review-graph** (`raycast.js-master/.code-review-graph/graph.db`) — 33 files, 201 functions, 541 call edges, 27 communities, 48 flows. Build it with `python -m code_review_graph build` from inside `raycast.js-master/`. When working in that subdirectory, the graph MCP server will serve its graph instead of the main Dungeon Gleaner graph.
+**EyesOnly** (at `EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI.
 
 ## Browser testing (Cowork sessions) ***ONLY TEST IN BROWSER IF ABSOLUTELY NECESSARY OR IF ASKED TO DO SO***
 

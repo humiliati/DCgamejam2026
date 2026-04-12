@@ -198,6 +198,83 @@ var TextureAtlas = (function () {
     _genDoorWood('door_marble_asc', { baseR: 125, baseG: 122, baseB: 118,
       bandR: 110, bandG: 105, bandB: 100, porthole: 'asc' });
 
+    // ── Door panel textures (Phase 5A — cavity content) ──────────
+    // These are the actual door FACE textures rendered inside the
+    // DOOR_FACADE freeform cavity. Vertical planks + handle + hinges.
+    _genDoorPanel('door_panel_wood', {
+      baseR: 100, baseG: 68, baseB: 38,   // warm oak planks
+      handleR: 160, handleG: 140, handleB: 90,  // brass handle
+      hingeR: 55, hingeG: 50, hingeB: 45,  // dark iron hinges
+      plankW: 10, grainDark: 0.72
+    });
+    _genDoorPanel('door_panel_dark', {
+      baseR: 65, baseG: 42, baseB: 25,    // worn dark wood (Gleaner's Home)
+      handleR: 120, handleG: 100, handleB: 70,
+      hingeR: 45, hingeG: 40, hingeB: 35,
+      plankW: 10, grainDark: 0.65
+    });
+    _genDoorPanel('door_panel_studded', {
+      baseR: 85, baseG: 60, baseB: 38,    // heavy oak with iron studs
+      handleR: 110, handleG: 115, handleB: 120, // steel ring handle
+      hingeR: 70, hingeG: 72, hingeB: 75,  // iron strap hinges
+      plankW: 12, grainDark: 0.68, studs: true
+    });
+    _genDoorPanel('door_panel_glass', {
+      baseR: 90, baseG: 65, baseB: 40,    // wood frame + glass insert
+      handleR: 140, handleG: 130, handleB: 100,
+      hingeR: 50, hingeG: 48, hingeB: 42,
+      plankW: 10, grainDark: 0.7, glassInsert: true
+    });
+    _genDoorPanel('door_panel_iron', {
+      baseR: 70, baseG: 72, baseB: 78,    // riveted iron plate
+      handleR: 100, handleG: 105, handleB: 110,
+      hingeR: 55, hingeG: 58, hingeB: 62,
+      plankW: 16, grainDark: 0.8, ironPlate: true
+    });
+
+    // ── Blockout Refresh Phase A: new door panel textures ──────────
+    // See BLOCKOUT_REFRESH_PLAN.docx §2.2 — contrast system requires
+    // these panels so no building has wood-on-wood or dark-on-dark doors.
+
+    _genDoorPanel('door_panel_oiled', {
+      baseR: 60, baseG: 38, baseB: 18,    // dark oiled wood — rich walnut tone
+      handleR: 175, handleG: 148, handleB: 70,  // bright brass knob
+      hingeR: 50, hingeG: 45, hingeB: 38,  // dark iron hinges
+      plankW: 8, grainDark: 0.60           // tight planks, pronounced grain
+    });
+    _genDoorPanel('door_panel_charcoal', {
+      baseR: 28, baseG: 22, baseB: 18,    // near-black charred wood
+      handleR: 200, handleG: 170, handleB: 50,  // yellow-gold accent knob
+      hingeR: 40, hingeG: 35, hingeB: 30,  // barely-visible dark hinges
+      plankW: 10, grainDark: 0.55          // subtle grain on very dark base
+    });
+    _genDoorPanel('door_panel_ironbound', {
+      baseR: 95, baseG: 68, baseB: 40,    // heavy oak base
+      handleR: 90, handleG: 92, handleB: 98,  // iron ring pull (steel-grey)
+      hingeR: 65, hingeG: 68, hingeB: 72,  // iron strap hinges
+      plankW: 12, grainDark: 0.68, ironBands: true  // horizontal iron bands
+    });
+
+    // ── Blockout Refresh Phase A: new door surround textures ───────
+    // See BLOCKOUT_REFRESH_PLAN.docx §2.2 — surrounds for building
+    // types not yet covered (light brick, metal plate, cathedral stone).
+
+    _genDoorWood('door_lightbrick', {
+      baseR: 195, baseG: 175, baseB: 145,  // cream/sand brick fill
+      bandR: 180, bandG: 160, bandB: 130,  // warm sandstone frame
+      porthole: 'flat'
+    });
+    _genDoorMetal('door_metal', {
+      baseR: 100, baseG: 105, baseB: 112,  // brushed steel plate
+      bandR: 80,  bandG: 85,  bandB: 92,   // darker steel frame
+      rivetR: 130, rivetG: 135, rivetB: 140 // bright rivet highlights
+    });
+    _genDoorCathedral('door_cathedral', {
+      baseR: 140, baseG: 135, baseB: 125,  // warm dressed stone
+      bandR: 120, bandG: 115, bandB: 105,  // carved frame surround
+      archR: 155, archG: 148, archB: 135   // arch motif highlight
+    });
+
     _genConcrete('concrete', { baseR: 130, baseG: 128, baseB: 125, variance: 8 });
 
     _genConcrete('concrete_dark', { baseR: 70, baseG: 68, baseB: 72, variance: 6 });
@@ -1183,6 +1260,382 @@ var TextureAtlas = (function () {
         r: _clamp(p.baseR * 0.85 + bn + pn),
         g: _clamp(p.baseG * 0.85 + bn * 0.8 + pn * 0.7),
         b: _clamp(p.baseB * 0.85 + bn * 0.6 + pn * 0.4)
+      };
+    });
+  }
+
+  // ── Door panel (cavity content for DOOR_FACADE) ──
+  // Vertical wood planks with handle, hinges, and optional studs/glass.
+  // This texture fills the door OPENING (the cavity), not the archway
+  // surround. 64×64, no arch shape — just the rectangular door face.
+
+  function _genDoorPanel(id, p) {
+    var plankW   = p.plankW || 10;
+    var grainH   = 4;
+    var grainDk  = p.grainDark || 0.7;
+    var S        = TEX_SIZE;
+    var frameT   = 2;        // thin frame border (top/bottom/sides)
+
+    _createTexture(id, S, S, function (x, y) {
+      // ── Outer frame (dark trim around door edge) ──
+      if (x < frameT || x >= S - frameT || y < frameT || y >= S - frameT) {
+        var fn = _hash(x + 300, y + 310) * 4 - 2;
+        return {
+          r: _clamp(p.hingeR * 0.7 + fn),
+          g: _clamp(p.hingeG * 0.7 + fn),
+          b: _clamp(p.hingeB * 0.7 + fn)
+        };
+      }
+
+      // ── Iron plate variant ──
+      if (p.ironPlate) {
+        var ipn = (_hash(x + 200, y + 210) - 0.5) * 8;
+        // Horizontal rivet rows every 12px
+        var rivetRow = (y % 12 < 2) && (x % 8 > 2 && x % 8 < 6);
+        if (rivetRow) {
+          return {
+            r: _clamp(p.handleR + ipn),
+            g: _clamp(p.handleG + ipn),
+            b: _clamp(p.handleB + ipn)
+          };
+        }
+        // Horizontal seam every 16px
+        if (y % 16 < 1) {
+          return {
+            r: _clamp(p.baseR * 0.6 + ipn),
+            g: _clamp(p.baseG * 0.6 + ipn),
+            b: _clamp(p.baseB * 0.6 + ipn)
+          };
+        }
+        return {
+          r: _clamp(p.baseR + ipn),
+          g: _clamp(p.baseG + ipn),
+          b: _clamp(p.baseB + ipn)
+        };
+      }
+
+      // ── Glass insert variant (upper half) ──
+      if (p.glassInsert && y > 6 && y < S * 0.45 && x > 10 && x < S - 10) {
+        // Frosted glass with slight amber tint
+        var gn = (_hash(x + 400, y + 410) - 0.5) * 10;
+        var glassBase = 50 + gn;
+        return {
+          r: _clamp(glassBase + 15),
+          g: _clamp(glassBase + 12),
+          b: _clamp(glassBase + 5)
+        };
+      }
+
+      // ── Vertical wood planks ──
+      var plankIdx = Math.floor((x - frameT) / plankW);
+      var localX   = (x - frameT) % plankW;
+
+      // Plank boundary (dark vertical line)
+      if (localX < 1) {
+        return {
+          r: _clamp(p.baseR * grainDk * 0.65),
+          g: _clamp(p.baseG * grainDk * 0.65),
+          b: _clamp(p.baseB * grainDk * 0.65)
+        };
+      }
+
+      // Per-plank colour shift
+      var plankTone = (_hash(plankIdx + 100, 500) - 0.5) * 16;
+      // Horizontal grain bands
+      var grainBand = Math.floor(y / grainH);
+      var grainDarken = (_hash(plankIdx + 50, grainBand + 70) > 0.6) ? grainDk : 1.0;
+      // Knot (rare dark spot)
+      var knotZone = _hash(plankIdx + 700, Math.floor(y / 16) + 710);
+      var knotDark = (knotZone > 0.92 && localX > 2 && localX < plankW - 2) ? -12 : 0;
+      // Per-pixel noise
+      var pn = (_hash(x + 500, y + 600) - 0.5) * 4;
+
+      var r = (p.baseR + plankTone) * grainDarken + pn + knotDark;
+      var g = (p.baseG + plankTone) * grainDarken + pn * 0.7 + knotDark;
+      var b = (p.baseB + plankTone) * grainDarken + pn * 0.4 + knotDark;
+
+      // ── Horizontal iron bands (ironbound variant) ──
+      // 3 thick iron straps across the door face at 25%, 50%, 75% height.
+      // Each strap is 3px tall with a highlight line on the top edge and
+      // nail heads at the plank boundaries. Creates the fortress gate look
+      // for cathedral/stone buildings.
+      if (p.ironBands) {
+        var bandPositions = [Math.floor(S * 0.25), Math.floor(S * 0.50), Math.floor(S * 0.72)];
+        for (var _bi = 0; _bi < bandPositions.length; _bi++) {
+          var bandY = bandPositions[_bi];
+          if (y >= bandY && y < bandY + 3) {
+            var ibn = (_hash(x + 250, y + 260) - 0.5) * 6;
+            var bandShade = (y === bandY) ? 1.15 : 0.90; // top highlight
+            // Nail heads at plank boundaries
+            if (localX >= 0 && localX < 2 && y === bandY + 1) {
+              return {
+                r: _clamp(p.hingeR + 25 + ibn),
+                g: _clamp(p.hingeG + 25 + ibn),
+                b: _clamp(p.hingeB + 25 + ibn)
+              };
+            }
+            return {
+              r: _clamp(p.hingeR * bandShade + ibn),
+              g: _clamp(p.hingeG * bandShade + ibn),
+              b: _clamp(p.hingeB * bandShade + ibn)
+            };
+          }
+        }
+      }
+
+      // ── Iron studs (studded variant) ──
+      if (p.studs) {
+        // 3×3 px studs in a grid pattern every 8px
+        var sx = x % 8;
+        var sy = y % 8;
+        if (sx >= 3 && sx <= 5 && sy >= 3 && sy <= 5) {
+          var sn = _hash(x + 150, y + 160) * 6;
+          return {
+            r: _clamp(p.hingeR + 20 + sn),
+            g: _clamp(p.hingeG + 20 + sn),
+            b: _clamp(p.hingeB + 20 + sn)
+          };
+        }
+      }
+
+      // ── Handle (brass/iron rectangle at ~55% height, right of center) ──
+      var handleX = Math.floor(S * 0.62);
+      var handleY = Math.floor(S * 0.52);
+      if (x >= handleX - 2 && x <= handleX + 2 &&
+          y >= handleY - 4 && y <= handleY + 4) {
+        var hn = _hash(x + 900, y + 910) * 6;
+        return {
+          r: _clamp(p.handleR + hn),
+          g: _clamp(p.handleG + hn),
+          b: _clamp(p.handleB + hn)
+        };
+      }
+
+      // ── Hinges (dark rectangles at top/bottom, left edge) ──
+      var hingeX = frameT + 1;
+      var hingeW = 4;
+      var hingeTopY = Math.floor(S * 0.15);
+      var hingeBotY = Math.floor(S * 0.80);
+      var hingeH = 3;
+      var isHinge = (x >= hingeX && x < hingeX + hingeW) &&
+        ((y >= hingeTopY && y < hingeTopY + hingeH) ||
+         (y >= hingeBotY && y < hingeBotY + hingeH));
+      if (isHinge) {
+        var ihn = _hash(x + 800, y + 810) * 4;
+        return {
+          r: _clamp(p.hingeR + ihn),
+          g: _clamp(p.hingeG + ihn),
+          b: _clamp(p.hingeB + ihn)
+        };
+      }
+
+      return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
+    });
+  }
+
+  // ── Door surround: brushed metal plate ──────────────────────────
+  // Industrial door surround for metal_plate buildings. Flat brushed
+  // steel with horizontal brush marks, rivet grid, and dark weld seams.
+  // Uses the same arch opening geometry as _genDoorWood but replaces
+  // brick fill and stone frame with metal surfaces.
+
+  function _genDoorMetal(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // ── Archway geometry (shared with _genDoorWood) ──
+      var frameW = 5;
+      var archInnerL = 8;
+      var archInnerR = S - 8;
+      var archTopY = 10;
+      var archCx = cx;
+      var archRadius = (archInnerR - archInnerL) / 2;
+      var archCenterY = archTopY + archRadius;
+
+      var inOpening = false;
+      if (y >= archCenterY && x > archInnerL && x < archInnerR) {
+        inOpening = true;
+      } else if (y < archCenterY && y >= archTopY) {
+        var dx = x - archCx;
+        var dy = y - archCenterY;
+        if (dx * dx + dy * dy < archRadius * archRadius) {
+          inOpening = true;
+        }
+      }
+
+      // ── Dark portal interior ──
+      if (inOpening) {
+        var gn = _hash(x + 800, y + 900) * 6 - 3;
+        var sparkHash = _hash(x * 7 + 1234, y * 13 + 5678);
+        var rv = 8 + gn, gv = 7 + gn * 0.8, bv = 6 + gn * 0.5;
+        if (sparkHash > 0.94) {
+          var sp = (sparkHash - 0.94) * 600;
+          rv += sp; gv += sp; bv += sp * 0.8;
+        }
+        return { r: _clamp(rv), g: _clamp(gv), b: _clamp(bv) };
+      }
+
+      // ── Steel frame surround ──
+      var edgeDist = Math.min(x, S - 1 - x, y);
+      if (edgeDist < frameW) {
+        var fn = (_hash(x + 700, y + 750) - 0.5) * 6;
+        // Weld bead along inner edge
+        var innerDist = Math.abs(edgeDist - frameW + 1);
+        var weld = (innerDist < 1) ? 12 : 0;
+        return {
+          r: _clamp(p.bandR + fn + weld),
+          g: _clamp(p.bandG + fn + weld),
+          b: _clamp(p.bandB + fn + weld)
+        };
+      }
+
+      // ── Brushed metal fill (around the arch) ──
+      // Horizontal brush strokes + vertical panel seams + rivet grid
+      var brushNoise = (_hash(x + 1100, y + 1200) - 0.5) * 4;
+      var brushStroke = (_hash(x * 3 + 50, Math.floor(y / 2) + 60) - 0.5) * 6;
+
+      // Vertical panel seams every 16px
+      var panelLocalX = x % 16;
+      if (panelLocalX < 1) {
+        return {
+          r: _clamp(p.baseR * 0.65 + brushNoise),
+          g: _clamp(p.baseG * 0.65 + brushNoise),
+          b: _clamp(p.baseB * 0.65 + brushNoise)
+        };
+      }
+
+      // Rivet grid: every 16px horizontal, 12px vertical
+      var rivLX = x % 16;
+      var rivLY = y % 12;
+      if (rivLX >= 7 && rivLX <= 9 && rivLY >= 5 && rivLY <= 7) {
+        var rcx = rivLX - 8, rcy = rivLY - 6;
+        if (rcx * rcx + rcy * rcy <= 2) {
+          var rn = _hash(x + 350, y + 360) * 6;
+          return {
+            r: _clamp(p.rivetR + rn),
+            g: _clamp(p.rivetG + rn),
+            b: _clamp(p.rivetB + rn)
+          };
+        }
+      }
+
+      return {
+        r: _clamp(p.baseR + brushStroke + brushNoise),
+        g: _clamp(p.baseG + brushStroke + brushNoise),
+        b: _clamp(p.baseB + brushStroke * 0.8 + brushNoise)
+      };
+    });
+  }
+
+  // ── Door surround: cathedral carved stone ───────────────────────
+  // Ornate stone surround for stone_cathedral buildings. Large dressed
+  // stone blocks with a subtle arch motif carved into the frame, and a
+  // wider keystone at the apex. Warm stone tones with carved relief
+  // shadows for a Gothic/Romanesque fortress entrance look.
+
+  function _genDoorCathedral(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // ── Archway geometry ──
+      var frameW = 7;        // wider stone frame for monumental look
+      var archInnerL = 10;
+      var archInnerR = S - 10;
+      var archTopY = 8;      // taller arch
+      var archCx = cx;
+      var archRadius = (archInnerR - archInnerL) / 2;
+      var archCenterY = archTopY + archRadius;
+
+      var inOpening = false;
+      if (y >= archCenterY && x > archInnerL && x < archInnerR) {
+        inOpening = true;
+      } else if (y < archCenterY && y >= archTopY) {
+        var dx = x - archCx;
+        var dy = y - archCenterY;
+        if (dx * dx + dy * dy < archRadius * archRadius) {
+          inOpening = true;
+        }
+      }
+
+      // ── Dark portal interior ──
+      if (inOpening) {
+        var gn = _hash(x + 800, y + 900) * 6 - 3;
+        var sparkHash = _hash(x * 7 + 1234, y * 13 + 5678);
+        var rv = 8 + gn, gv = 7 + gn * 0.8, bv = 6 + gn * 0.5;
+        if (sparkHash > 0.94) {
+          var sp = (sparkHash - 0.94) * 600;
+          rv += sp; gv += sp; bv += sp * 0.8;
+        }
+        return { r: _clamp(rv), g: _clamp(gv), b: _clamp(bv) };
+      }
+
+      // ── Stone frame surround with arch motif ──
+      var edgeDist = Math.min(x, S - 1 - x, y);
+      if (edgeDist < frameW) {
+        // Wide keystone at apex (wider than _genDoorWood)
+        var isKeystone = (y < archTopY + 8) && Math.abs(x - cx) < 7;
+        if (isKeystone) {
+          var kn = _hash(x + 850, y + 850) * 6;
+          return {
+            r: _clamp(p.archR + 10 + kn),
+            g: _clamp(p.archG + 8 + kn),
+            b: _clamp(p.archB + 5 + kn)
+          };
+        }
+
+        // Carved arch motif: concentric relief line inside the frame
+        // Creates a subtle recessed arch outline 2px inside the outer edge
+        var innerEdge = Math.abs(edgeDist - 3);
+        if (innerEdge < 1) {
+          return {
+            r: _clamp(p.bandR * 0.75),
+            g: _clamp(p.bandG * 0.75),
+            b: _clamp(p.bandB * 0.75)
+          };
+        }
+
+        var fn = (_hash(x + 700, y + 750) - 0.5) * 8;
+        return {
+          r: _clamp(p.bandR + fn),
+          g: _clamp(p.bandG + fn),
+          b: _clamp(p.bandB + fn)
+        };
+      }
+
+      // ── Dressed stone blocks (larger than brick, ashlar pattern) ──
+      // 16×10 blocks (wider than _genDoorWood's 16×8 bricks) with
+      // staggered offset for ashlar coursing.
+      var blockH = 10;
+      var blockW = 16;
+      var bRow = Math.floor(y / blockH);
+      var bOx = (bRow % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var bLocalX = (x + bOx) % blockW;
+      var bLocalY = y % blockH;
+
+      // Mortar joints (wider than brick for dressed stone look)
+      if (bLocalX < 1 || bLocalY < 1) {
+        var mn = (_hash(x + 760, y + 770) - 0.5) * 4;
+        return {
+          r: _clamp(p.bandR * 0.60 + mn),
+          g: _clamp(p.bandG * 0.60 + mn),
+          b: _clamp(p.bandB * 0.60 + mn)
+        };
+      }
+
+      // Stone face with 3-tier depth shading (edge → mid → center)
+      var blockId = bRow * 5 + Math.floor((x + bOx) / blockW);
+      var blockTone = (_hash(blockId, bRow + 30) - 0.5) * 12;
+      var stoneDist = Math.min(bLocalX - 1, blockW - 2 - bLocalX,
+                               bLocalY - 1, blockH - 2 - bLocalY);
+      var stoneShade = stoneDist < 2 ? 0.88 : (stoneDist > 4 ? 1.05 : 0.97);
+      var pn = (_hash(x + 800, y + 900) - 0.5) * 5;
+
+      return {
+        r: _clamp((p.baseR + blockTone) * stoneShade + pn),
+        g: _clamp((p.baseG + blockTone) * stoneShade + pn * 0.8),
+        b: _clamp((p.baseB + blockTone) * stoneShade + pn * 0.5)
       };
     });
   }

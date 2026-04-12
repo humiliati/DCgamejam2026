@@ -2421,6 +2421,12 @@ var FloorManager = (function () {
           // DOOR_FACADE lintel band uses the building's wall texture
           // (not doorTexture — the lintel IS the wall above the door)
           DoorSprites.setTexture(_dtX, _dtY, _dtBldg.wallTexture);
+          // Door panel texture for the cavity content (Phase 5A).
+          // If doorPanel is set, the gap filler samples it instead of
+          // the procedural dark gradient.
+          if (_dtBldg.doorPanel && DoorSprites.setDoorPanel) {
+            DoorSprites.setDoorPanel(_dtX, _dtY, _dtBldg.doorPanel);
+          }
           // Exterior face: the face facing the street (away from interior).
           // Promenade south-pod buildings face NORTH; north-pod face SOUTH.
           // Use explicit doorFaces if available, else auto-detect.

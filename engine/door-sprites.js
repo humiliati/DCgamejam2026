@@ -29,6 +29,8 @@ var DoorSprites = (function () {
   // ── Cache ───────────────────────────────────────────────────────
   // "x,y" → TextureAtlas texture ID string (lintel band texture)
   var _doorTextures = {};
+  // "x,y" → TextureAtlas texture ID string (door panel in cavity)
+  var _doorPanels = {};
   // "x,y" → exterior face index (0=E, 1=S, 2=W, 3=N), set by FloorManager
   var _exteriorFaces = {};
   var _cachedFloorId = null;
@@ -57,6 +59,15 @@ var DoorSprites = (function () {
   }
 
   /**
+   * Set the door-panel texture for a DOOR_FACADE cavity at (x,y).
+   * This is the texture rendered INSIDE the door opening (the actual
+   * door face), distinct from the lintel band texture (setTexture).
+   */
+  function setDoorPanel(x, y, texId) {
+    _doorPanels[x + ',' + y] = texId;
+  }
+
+  /**
    * Set the exterior face for a DOOR_FACADE tile at (x,y).
    * The exterior face is the one facing the street — the gap filler
    * paints the door portal on this face. Interior face = opposite.
@@ -81,9 +92,35 @@ var DoorSprites = (function () {
     return _doorTextures[x + ',' + y] || null;
   }
 
+  function getDoorPanel(x, y) {
+    return _doorPanels[x + ',' + y] || null;
+  }
+
   function getExteriorFace(x, y) {
     var f = _exteriorFaces[x + ',' + y];
     return (typeof f === 'number') ? f : -1;
+  }
+
+  /**
+   * Does this DDA hit correspond to the exterior face of a recessed tile?
+   * Decodes (side, stepX, stepY) into a face index and compares against
+   * the registered exterior face.  Used by the raycaster recess block and
+   * any future recessed-tile type (shop windows, alcoves).
+   *
+   * @param {number} x — tile grid X
+   * @param {number} y — tile grid Y
+   * @param {number} hitSide — 0 (X-axis hit) or 1 (Y-axis hit)
+   * @param {number} stepX — DDA step direction on X (-1 or +1)
+   * @param {number} stepY — DDA step direction on Y (-1 or +1)
+   * @returns {boolean}
+   */
+  function isExteriorHit(x, y, hitSide, stepX, stepY) {
+    var extFace = getExteriorFace(x, y);
+    if (extFace < 0) return false;
+    var hitFace = (hitSide === 0)
+      ? (stepX > 0 ? 2 : 0)
+      : (stepY > 0 ? 3 : 1);
+    return hitFace === extFace;
   }
 
   /**
@@ -91,6 +128,7 @@ var DoorSprites = (function () {
    */
   function clear() {
     _doorTextures = {};
+    _doorPanels = {};
     _exteriorFaces = {};
     _cachedFloorId = null;
   }
@@ -136,40 +174,73 @@ var DoorSprites = (function () {
     }
 
     // ── Exterior face: door portal ───────────────────────────────
-    // Dark interior with door frame border.  Batch-drawn (no per-pixel
-    // loop) so filler cost is O(1) per column, not O(gapH).
+    // Batch-drawn (no per-pixel loop) so filler cost is O(1) per
+    // column, not O(gapH).
+    //
+    // Tier A: if a door-panel texture is assigned, sample it via
+    // ctx.drawImage (1px column). Otherwise fall back to the
+    // procedural 3-band dark gradient.
     var bAdj    = info.brightness;
     var fogFade = 1 - Math.min(0.85, info.fogFactor);
     var wallX   = info.wallX;
     var fF      = info.fogFactor;
+    var side    = info.side;
 
-    // 1. Dark interior wash — 3-band vertical gradient.
-    //    Top band (ambient spill), mid band (receding dark), bottom
-    //    band (deepest shadow).  Three fillRect calls total.
-    var bandCount = 3;
-    var bandH     = Math.max(1, Math.floor(gapH / bandCount));
-    // Horizontal edge darkening (vignette substitute)
-    var xDist   = Math.abs(wallX - 0.5) * 2;            // 0 center, 1 edge
-    var edgeDim = 1 - xDist * 0.35;                     // 0.65 at edge → 1 at center
-    // Per-band base brightness: top = warm, bottom = near-black
-    var bases = [0.18 * edgeDim, 0.08 * edgeDim, 0.03 * edgeDim];
-    for (var bi = 0; bi < bandCount; bi++) {
-      var bH = (bi === bandCount - 1) ? (gapH - bandH * (bandCount - 1)) : bandH;
-      if (bH <= 0) continue;
-      var b  = bases[bi] * bAdj * fogFade;
-      var bR = Math.round(Math.min(255, b * 100 + 8));
-      var bG = Math.round(Math.min(255, b * 80  + 6));
-      var bB = Math.round(Math.min(255, b * 60  + 4));
-      if (fF > 0) {
-        bR = Math.round(bR * (1 - fF) + info.fogColor.r * fF);
-        bG = Math.round(bG * (1 - fF) + info.fogColor.g * fF);
-        bB = Math.round(bB * (1 - fF) + info.fogColor.b * fF);
+    // ── 1. Door panel texture (Tier A) or dark gradient fallback ──
+    var panelId = getDoorPanel(info.mapX, info.mapY);
+    var panelTex = (panelId && typeof TextureAtlas !== 'undefined')
+      ? TextureAtlas.get(panelId) : null;
+
+    if (panelTex && panelTex.canvas) {
+      // Sample 1px-wide column from the door-panel texture.
+      // wallX → texX, full texture height → gapH stretch.
+      var texX = Math.floor(wallX * panelTex.width);
+      if (texX >= panelTex.width) texX = panelTex.width - 1;
+      ctx.drawImage(panelTex.canvas, texX, 0, 1, panelTex.height,
+                    col, gapStart, 1, gapH);
+      // Side shading — Y-axis faces (side=1) get shadow for
+      // consistent depth cue with the lintel band above.
+      if (side === 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(col, gapStart, 1, gapH);
       }
-      ctx.fillStyle = 'rgb(' + bR + ',' + bG + ',' + bB + ')';
-      ctx.fillRect(col, gapStart + bandH * bi, 1, bH);
+      // Fog + brightness overlay
+      if (fF > 0.01 || bAdj < 0.99) {
+        var dim = (1 - bAdj) + fF * bAdj;
+        if (dim > 0.01) {
+          var oR = Math.round(info.fogColor.r * fF);
+          var oG = Math.round(info.fogColor.g * fF);
+          var oB = Math.round(info.fogColor.b * fF);
+          ctx.fillStyle = 'rgba(' + oR + ',' + oG + ',' + oB + ',' + dim.toFixed(3) + ')';
+          ctx.fillRect(col, gapStart, 1, gapH);
+        }
+      }
+    } else {
+      // ── Fallback: 3-band dark gradient (no panel texture) ──
+      var bandCount = 3;
+      var bandH     = Math.max(1, Math.floor(gapH / bandCount));
+      var xDist   = Math.abs(wallX - 0.5) * 2;
+      var edgeDim = 1 - xDist * 0.35;
+      var bases = [0.18 * edgeDim, 0.08 * edgeDim, 0.03 * edgeDim];
+      for (var bi = 0; bi < bandCount; bi++) {
+        var bH = (bi === bandCount - 1) ? (gapH - bandH * (bandCount - 1)) : bandH;
+        if (bH <= 0) continue;
+        var b  = bases[bi] * bAdj * fogFade;
+        var bR = Math.round(Math.min(255, b * 100 + 8));
+        var bG = Math.round(Math.min(255, b * 80  + 6));
+        var bB = Math.round(Math.min(255, b * 60  + 4));
+        if (fF > 0) {
+          bR = Math.round(bR * (1 - fF) + info.fogColor.r * fF);
+          bG = Math.round(bG * (1 - fF) + info.fogColor.g * fF);
+          bB = Math.round(bB * (1 - fF) + info.fogColor.b * fF);
+        }
+        ctx.fillStyle = 'rgb(' + bR + ',' + bG + ',' + bB + ')';
+        ctx.fillRect(col, gapStart + bandH * bi, 1, bH);
+      }
     }
 
-    // 2. Door frame — dark vertical edges + top threshold.
+    // ── 2. Door frame overlay — dark jamb edges + lintel bottom ──
+    // Drawn on top of both the texture and the gradient fallback.
     var frameW = 0.06 + 0.02 / Math.max(0.5, info.perpDist);
     var isFrame = (wallX < frameW || wallX > 1 - frameW);
     var frR = Math.round(35 * bAdj);
@@ -188,6 +259,11 @@ var DoorSprites = (function () {
     // Lintel bottom edge — always 1px
     ctx.fillStyle = frameColor;
     ctx.fillRect(col, gapStart, 1, 1);
+    // Threshold top edge — 1px at bottom of gap
+    if (gapH > 2) {
+      ctx.fillStyle = frameColor;
+      ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
+    }
   }
 
 
@@ -295,10 +371,13 @@ var DoorSprites = (function () {
   // ── Public API ──────────────────────────────────────────────────
   return Object.freeze({
     setTexture:            setTexture,
+    setDoorPanel:          setDoorPanel,
     setExteriorFace:       setExteriorFace,
     setFloor:              setFloor,
     getWallTexture:        getWallTexture,
+    getDoorPanel:          getDoorPanel,
     getExteriorFace:       getExteriorFace,
+    isExteriorHit:         isExteriorHit,
     clear:                 clear,
     ensureFillerRegistered: _ensureFillerRegistered
   });

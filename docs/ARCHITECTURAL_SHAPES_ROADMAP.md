@@ -700,7 +700,152 @@ POST-JAM POLISH
      Per-column alpha ranges
      Arch curve computation
      Only if Phase 7 is stable and the art direction demands it
+
+ Phase 9: Octagonal Columns  (medium, extends recess technique)
+     Recess on all 4 faces of a tile → non-square cross-section
+     Optional 45° chamfer planes for true octagonal silhouette
+     Tree trunks, stone pillars, round towers, lamp posts
+     See dedicated section below
 ```
+
+---
+
+## Phase 9 — Octagonal Columns (Recess Generalization)
+
+**Difficulty:** Medium — extends proven DOOR_FACADE recess technique to all
+four faces of a tile.
+**Estimated size:** ~80 lines (raycaster recess generalization + chamfer math).
+**Prerequisite**: Phase 1.5 of `DOOR_ARCHITECTURE_ROADMAP.md` (Wolfenstein
+thin-wall offset for DOOR_FACADE — **SHIPPED**).
+
+### Problem
+
+Trees, stone pillars, and decorative columns all occupy a full grid tile. In
+the raycaster they render as **square pillars** — the ray hits the tile
+boundary and the wall face is flush with adjacent geometry. This is fine for
+walls but wrong for cylindrical/organic objects.
+
+### Insight: recess on all four faces
+
+The DOOR_FACADE recess offsets perpDist by `_recessD` on the **exterior face
+only**, producing visible jamb walls on either side. If we apply the same
+inset to **all four faces** of a tile, every approach angle sees the wall face
+recessed into the tile interior. The corners of the tile — where a ray enters
+one face but exits through the adjacent face before reaching the inset —
+render as jamb walls. The visual result: the tile's silhouette is no longer
+a square.
+
+### Cross-section profiles
+
+**Level 1 — Recessed square (plus/cross profile):**
+
+Apply the existing recess math to all 4 faces. No new raycaster geometry —
+just remove the "exterior face only" gate.
+
+```
+  Plan view (top-down, tile boundary = outer box):
+  ┌─────┬─────┬─────┐
+  │jamb │ face│jamb │    Each face is recessed by d units.
+  ├─────┘     └─────┤    Corner regions render as jamb walls
+  │                  │    (perpendicular face at the tile boundary).
+  │    recessed      │
+  │    column face   │    Result: plus-shaped cross-section.
+  │                  │    Reads as "chunky column" at distance.
+  ├─────┐     ┌─────┤
+  │jamb │ face│jamb │
+  └─────┴─────┴─────┘
+```
+
+This is the **cheap** implementation — reuse the exact DOOR_FACADE recess
+block in the raycaster, parameterized by tile type instead of exterior face.
+Every face gets the inset; jamb detection works identically.
+
+**Level 2 — Chamfered octagon (diagonal corner planes):**
+
+For a true octagonal silhouette, the corner regions render as 45° diagonal
+faces instead of axis-aligned jamb walls. This requires new geometry: when
+a ray enters the corner zone of a tile (the region that would be a jamb in
+Level 1), compute the intersection with a diagonal plane and render that
+column at the diagonal hit depth.
+
+```
+  Plan view (octagonal cross-section):
+       ╱─────╲
+     ╱         ╲       8 faces: 4 axis-aligned (N/S/E/W)
+    │           │               4 diagonal (NE/SE/SW/NW)
+    │  column   │
+    │  interior │      Diagonal faces connect adjacent
+     ╲         ╱       axis-aligned faces at 45°.
+       ╲─────╱
+```
+
+Diagonal plane intersection math for a chamfer of width `c` in a unit tile:
+
+```
+  NE corner: line from (1-c, 0) to (1, c)     →  x + y = (1-c) + mapOrigin
+  SE corner: line from (1, 1-c) to (1-c, 1)   →  x - y = (1-c) - 1 + mapOrigin
+  SW corner: line from (c, 1) to (0, 1-c)     →  x + y = c + mapOrigin
+  NW corner: line from (0, c) to (c, 0)       →  x - y = mapOrigin
+```
+
+The raycaster checks: did the axis-aligned inset produce a jamb hit (`_rOK
+= false`)? If yes, instead of computing the perpendicular boundary crossing,
+compute the diagonal plane crossing. Use the closer of the two as the hit
+point. The diagonal face renders with `side = 0.5` (a new flag) or by
+computing brightness from the diagonal normal direction.
+
+### Tile candidates
+
+| Tile | Current look | Target profile | Recess depth | Level |
+|---|---|---|---|---|
+| TREE (21) | Square green column | Octagonal trunk | 0.20 | 2 |
+| PILLAR (future ~77) | Square stone column | Octagonal pillar | 0.15 | 1 or 2 |
+| LAMP_POST (future ~78) | Billboard sprite | Thin recessed column | 0.35 | 1 |
+| ROUND_TOWER (future) | Square tower | Octagonal tower | 0.10 | 2 |
+| WELL (future) | Short square | Octagonal short wall | 0.15 | 1 |
+
+### Texture considerations
+
+The recessed faces use the tile's normal wall texture (bark for trees, stone
+for pillars). Jamb faces (Level 1) or diagonal faces (Level 2) should use
+a slightly darkened variant or apply the standard side-shading rule
+(`side === 1` → 0.75 brightness). For diagonal faces, brightness would
+interpolate between the two adjacent axis-aligned faces.
+
+### Implementation approach
+
+**Step 1**: Add a `tileRecess` table to SpatialContract — maps tile type →
+recess config `{ depth, allFaces: true, chamfer: false }`. The raycaster
+reads this the same way it reads `tileWallHeights`.
+
+**Step 2**: Generalize the DOOR_FACADE recess block in the raycaster. Instead
+of checking `hitTile === TILES.DOOR_FACADE` and reading the exterior face,
+check `tileRecess[hitTile]`. If `allFaces: true`, apply the inset to
+whichever face was hit (no exterior-face gate).
+
+**Step 3** (Level 2 only): When `chamfer: true` and the inset produces a
+jamb, compute the diagonal plane crossing instead. Add a `_chamferHit` flag
+analogous to `_facadeJamb`. Diagonal faces use interpolated brightness.
+
+### Performance
+
+The recess check adds 1 hash lookup + ~10 arithmetic ops per column that hits
+a recessed tile. For a tree occupying 20 columns on screen, that's ~200 extra
+ops/frame — negligible. The diagonal plane intersection (Level 2) adds
+another ~8 ops per corner column (typically 4–6 columns per face edge).
+
+### Relationship to DOOR_FACADE recess
+
+The DOOR_FACADE recess is a special case of the general column recess:
+- `allFaces: false` (exterior face only)
+- `chamfer: false`
+- Recess depth from `_recessD` constant or future DoorRegistry metadata
+
+The generalized system subsumes the DOOR_FACADE-specific code. Migration
+path: refactor the DOOR_FACADE recess block to read from `tileRecess`,
+add DOOR_FACADE's entry as `{ depth: 0.25, allFaces: false, chamfer: false,
+exteriorFaceSource: 'DoorSprites' }`. Then tree tiles are just
+`{ depth: 0.20, allFaces: true, chamfer: true }`.
 
 ---
 
@@ -715,6 +860,17 @@ POST-JAM POLISH
   window texture could register a warm-colored emitter at its wall
   position, casting glow onto nearby floor tiles.
 
+### DOOR_ARCHITECTURE_ROADMAP.md
+
+- **Phase 1.5 (Wolfenstein recess)** is the foundation for Phase 9 here.
+  The raycaster's `_facadeJamb` / perpDist inset block was built for
+  DOOR_FACADE and will be generalized to a `tileRecess` table for
+  octagonal columns.
+- **Phase 5 (Cavity Sprite Content)** is the door-specific layer on top
+  of the recess: door panel textures, interior scene glimpses, live
+  interior peeks. Phase 9 octagonal columns do NOT use cavities — they
+  are solid-face recesses with bark/stone textures.
+
 ### Biome Plan
 
 - Promenade (floor "1") and Lantern Row (floor "2") are the primary
@@ -723,6 +879,9 @@ POST-JAM POLISH
   streetscape.
 - Dungeon floors (depth 3+) primarily benefit from Phase 6 (props) and
   Phase 7 (windows into adjacent chambers).
+- **Phase 9 octagonal columns** benefit exterior biomes (trees along
+  streets, decorative pillars in plazas) and interior/dungeon biomes
+  (stone pillars, support columns, well structures).
 
 ### SpatialContract
 

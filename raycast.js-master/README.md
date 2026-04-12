@@ -64,6 +64,21 @@ You can check out the live demo [here](https://undefbehav.itch.io/raycast-js), a
 - Mini-map display
 
 
+### Code-Review-Graph
+
+This project has its own [code-review-graph](https://github.com/tirth8205/code-review-graph) knowledge graph (`.code-review-graph/graph.db`). When working with an MCP-aware AI editor (Claude Code, Cursor, Codex, etc.), the graph provides structural context — callers, callees, communities, flows — without re-reading every file.
+
+**First-time setup** (run once from this directory):
+
+```bash
+python -m code_review_graph build
+```
+
+The graph covers 33 files (201 functions, 541 call edges, 27 communities, 48 flows) across `src/engine/`, `src/refactor/`, `src/level-editor/`, and `tools/`.
+
+> **Note:** This directory has no `.git` — the `.code-review-graph/` marker directory tells `code-review-graph` to treat it as a project root.
+
+
 ### TODOs
 - 2-D sprites for in-game `thing`s
 - Translucent surfaces
