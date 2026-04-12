@@ -146,7 +146,7 @@ var DoorPeek = (function () {
     }
 
     var tile = floorData.grid[fy][fx];
-    if (!TILES.isDoor(tile) && tile !== TILES.STAIRS_DN && tile !== TILES.STAIRS_UP) {
+    if (!TILES.isDoor(tile) && tile !== TILES.STAIRS_DN && tile !== TILES.STAIRS_UP && tile !== TILES.TRAPDOOR_DN && tile !== TILES.TRAPDOOR_UP) {
       _hide(); return;
     }
 
@@ -199,9 +199,9 @@ var DoorPeek = (function () {
       if (floorData.doorTargets && floorData.doorTargets[exitKey]) {
         targetId = floorData.doorTargets[exitKey];
       }
-    } else if (tile === TILES.STAIRS_DN) {
+    } else if (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN) {
       direction = 'advance';
-    } else if (tile === TILES.STAIRS_UP) {
+    } else if (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP) {
       direction = 'retreat';
     }
 
@@ -254,8 +254,8 @@ var DoorPeek = (function () {
     } else {
       displayLabel = targetLabel;
       if (!displayLabel) {
-        if (tile === TILES.STAIRS_DN)   displayLabel = i18n.t('interact.descend', '▼ Descend');
-        else if (tile === TILES.STAIRS_UP) displayLabel = i18n.t('interact.ascend', '▲ Ascend');
+        if (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN)   displayLabel = i18n.t('interact.descend', '▼ Descend');
+        else if (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP) displayLabel = i18n.t('interact.ascend', '▲ Ascend');
         else if (tile === TILES.BOSS_DOOR) displayLabel = i18n.t('interact.enter', '⚠ Boss');
         else displayLabel = direction === 'advance'
           ? i18n.t('interact.enter', '► Enter')
@@ -382,4 +382,4 @@ var DoorPeek = (function () {
     forceHide: forceHide,
     isActive: function () { return _active; }
   };
-})();
+})();

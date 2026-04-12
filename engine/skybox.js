@@ -39,6 +39,35 @@ var Skybox = (function () {
     };
   }
 
+  // ── Parallax configuration ──────────────────────────────────────
+  //
+  // Damping factor applied to cloud / mountain angular-scroll rates.
+  // The pre-2026-04-11 formula (rate = 2 * depth) pushed distant layers
+  // well past 1:1 with camera rotation, which read fine from a moving
+  // vehicle but felt disorienting for a player standing on foot: real
+  // starfields, the sun, the moon and distant terrain roll past a
+  // standing observer at almost exactly head-rotation speed. This
+  // factor pulls every layer back toward a 1:1 (celestial-sphere) rate
+  // while preserving each layer's relative depth ordering.
+  //
+  //   0 = fully camera-locked (all layers rigid to rotation, zero parallax)
+  //   1 = legacy behavior (2 × depth)
+  //
+  // Sun/moon are already strictly 1:1 via _renderCelestials and stars
+  // are now also strictly 1:1 via _renderStars, so this only governs
+  // the atmospheric/terrain silhouettes.
+  var PARALLAX_STRENGTH = 0.3;
+
+  // Map a layer's legacy `depth` field to an angular-scroll multiplier.
+  // Preserves depth === 0 as a fully-pinned silhouette (intentionally
+  // used by frontier_title for its Vivec-canton city line) and otherwise
+  // pulls the layer's rate toward 1:1 camera-locked rotation.
+  function _parallaxRate(depth) {
+    if (depth === 0) return 0;
+    var legacy = 2 * depth;
+    return 1 + (legacy - 1) * PARALLAX_STRENGTH;
+  }
+
   /**
    * Resolve current zenith/horizon colors for a preset, interpolating
    * between the current DayCycle phase and the next phase.
@@ -331,6 +360,9 @@ var Skybox = (function () {
    * @param {number} [dt] - Frame delta for cloud drift (ms)
    */
   function render(ctx, w, h, angle, presetName, dt) {
+    // Sanitize angle — NaN/undefined during init or after teleport
+    // causes createRadialGradient to throw (non-finite argument).
+    if (!isFinite(angle)) angle = 0;
     var preset = PRESETS[presetName] || PRESETS.cedar;
     if (dt) _time += dt;
 
@@ -498,9 +530,20 @@ var Skybox = (function () {
       gameTimeDrift = (DayCycle.getHour() + DayCycle.getMinute() / 60) / 24;
     }
 
+    // Stars are pinned to the celestial sphere at infinity, so they
+    // slide past the viewport at exactly the camera-rotation rate —
+    // same formula as sun/moon in _renderCelestials. The old per-layer
+    // `depth` parallax (0.02 – 0.22) has been removed: real starfields
+    // show no perceptible head-turn parallax, and drifting the four
+    // tiers at different rates felt dreamlike and disorienting for a
+    // player standing on the ground (and was also sign-inverted vs
+    // the sun/moon, so stars drifted the wrong way as you turned).
+    // The `layer.depth` field is retained for possible future use
+    // (e.g. subtle wobble) but no longer consulted here.
+    var camAz = angle / (2 * Math.PI);
+
     for (var L = 0; L < _starLayers.length; L++) {
       var layer = _starLayers[L];
-      var parallax = angle * layer.depth;
       var layerStars = layer.stars;
       // Scintillation spikes only matter on the foreground-facing bright
       // layers; the deepest dust is sub-pixel and invisible at 0.4 opacity,
@@ -510,10 +553,10 @@ var Skybox = (function () {
       for (var i = 0; i < layerStars.length; i++) {
         var star = layerStars[i];
 
-        // Position: normalized [0,1] → pixel, with parallax + celestial drift.
-        // No vertical drift — real stars don't fall.
-        var sx = (star.x + parallax + gameTimeDrift) % 1;
-        if (sx < 0) sx += 1;
+        // Celestial-sphere → screen: subtract camera azimuth (matching
+        // sun/moon) and wrap through sidereal drift. No vertical drift
+        // — real stars don't fall.
+        var sx = ((star.x - camAz + gameTimeDrift) % 1 + 1) % 1;
         var px = sx * w;
         var py = star.y * h;
 
@@ -611,6 +654,9 @@ var Skybox = (function () {
    */
   function _renderCelestials(ctx, w, h, angle) {
     if (typeof DayCycle === 'undefined') return;
+    // Guard: angle can be NaN during init or after a teleport before
+    // the first MC tick.  createRadialGradient rejects non-finite args.
+    if (!isFinite(angle) || h <= 0) return;
     var hour = DayCycle.getHour() + DayCycle.getMinute() / 60;
 
     // ── Sun (06:00–18:00) ──
@@ -733,7 +779,10 @@ var Skybox = (function () {
   function _renderCloudBand(ctx, w, h, angle, params, tint) {
     var bandY = Math.floor(h * params.y);
     var bandH = Math.floor(h * params.h);
-    var scrollX = (angle / (2 * Math.PI)) * w * 2 * params.depth + _time * params.speed;
+    // Angular scroll — damped toward a 1:1 celestial-locked rate
+    // (see _parallaxRate). Time-based drift from params.speed is kept:
+    // real clouds drift even when the player stands still.
+    var scrollX = (angle / (2 * Math.PI)) * w * _parallaxRate(params.depth) + _time * params.speed;
 
     // Atmosphere-tinted cloud colors (dawn = pink/orange, night = dark blue)
     var cr = params.r, cg = params.g, cb = params.b;
@@ -798,7 +847,11 @@ var Skybox = (function () {
   }
 
   function _renderMountains(ctx, w, h, angle, params) {
-    var scrollX = (angle / (2 * Math.PI)) * w * 2 * params.depth;
+    // Angular scroll — distant silhouettes track camera rotation almost
+    // 1:1 via _parallaxRate. frontier_title intentionally uses depth === 0
+    // to fully pin its Vivec-canton skyline; _parallaxRate preserves that
+    // special case as a zero scroll rate.
+    var scrollX = (angle / (2 * Math.PI)) * w * _parallaxRate(params.depth);
     ctx.fillStyle = params.color;
     ctx.beginPath();
     ctx.moveTo(0, h);

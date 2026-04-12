@@ -831,34 +831,48 @@ Band layout (reading bottom-up on a 2.0-tall face):
   bonfire-through-pergola lookdowns.
 - Frame time stays within 1 ms of the Phase 1 baseline.
 
-### Phase 3 — Alpha-mask freeform (arches + portholes) (3 days)
+### Phase 3 — Alpha-mask freeform (arches + portholes) — SHIPPED 2026-04-11
 
 Goal: per-column gap profile driven by texture alpha. Enables arched
 doorways and circular portholes.
 
-- Extend `TextureAtlas` to support writing alpha = 0 pixels. (Today
-  everything is opaque — we just need to stop forcing α = 255 in the
-  generators.)
-- Add `_computeAlphaRange(tex, texX)` helper that walks the column and
-  returns `{top, bot}` opaque ranges, cached per-texture.
-- Teach `_renderFreeformLayer` to consult the alpha range per column
-  when `fGapAlpha` is set.
-- New tile `ARCH_DOORWAY` (71) — texture is the wall-with-arch cutout
-  (upper brickwork with a parabolic transparent arch). `fGapAlpha =
-  true`. `hLower = 0`.
-- New tile `PORTHOLE` (72) — texture is a brick wall with a circular
-  transparent cutout. Billboard the existing sealab ocean animation
-  sprite at the cell center (Tier B gap content).
-- Place arched doorway on the Dispatcher's Office (`2.1`) and Foyer,
-  and a row of portholes on the Seaway biome walls.
+**What shipped:**
+
+| Piece | Implementation |
+|-------|----------------|
+| Tile constants | `TILES.ARCH_DOORWAY = 71`, `TILES.PORTHOLE = 72` in `tiles.js`, added to `isOpaque` + `isFreeform` predicates. |
+| Texture generators | `_genArchDoorway` — 64×64 brick wall with parabolic α=0 cutout (Gothic pointed arch), stone voussoir jamb trim. Two variants: `arch_brick` (warm sandstone) and `arch_stone` (cool grey). `_genPortholeAlpha` — 64×64 brick wall with circular α=0 cutout, riveted steel frame ring, 8 rivet points. Variant: `porthole_alpha`. |
+| Alpha-range helper | `_computeAlphaRange(tex, texId, texX)` in `raycaster.js` — walks a texture column, finds the contiguous transparent (α < 128) row range, caches per `"tileType:texX"` key. Cache cleared on `setContract()` (floor transition). |
+| Alpha-mask freeform path | `_renderFreeformForeground` gains a `gapTexAlpha` branch: when `ff.gapTexAlpha === true`, segment fractions are derived per-column from `_computeAlphaRange` instead of flat `hUpper`/`hLower`. The upper band draws from texture top to `topOpaque`, the lower band from `botOpaque` to bottom, and the gap occupies the transparent rows in between. |
+| SpatialContract entries | Exterior: `tileFreeform[71]` = `{ hUpper: 0.5, hLower: 0.0, gapTexAlpha: true, fillGap: '_transparent' }`, `tileFreeform[72]` = `{ hUpper: 0.5, hLower: 0.3, gapTexAlpha: true, fillGap: '_transparent' }`. Wall textures: `arch_brick` / `porthole_alpha`. Floor textures: `floor_stone` / `floor_cobble`. Wall heights: 3.5 (match exterior WALL). Interior: ARCH_DOORWAY registered with `arch_stone` texture, 2.5 wall height. |
+| Test placements | Promenade (`1`): ARCH_DOORWAY at (38,7) — east plaza gateway. PORTHOLE at (12,5) and (24,5) — east walls of Coral Bazaar and Driftwood Inn buildings. |
+
+**Design note on hUpper/hLower for alpha-mask tiles:** The flat
+`hUpper`/`hLower` values in the freeform contract are **dummy maximums**
+for alpha-mask tiles — they set an outer bound that the degenerate
+guard checks against, but the actual per-column gap profile is driven
+entirely by the texture's alpha channel. The renderer reads
+`_computeAlphaRange` per column and derives segment fractions from the
+row where opaque→transparent transition occurs. This means the arch
+shape, porthole radius, or any irregular opening is defined purely by
+the artist (in the texture generator) — no raycaster geometry changes
+needed per shape variant.
 
 **Acceptance:**
-- Arch renders with curved top; player sees interior / adjacent space
-  through the arch while ray-sweep past it.
-- Porthole renders with circular opening; ocean billboard visible
-  through the hole.
+- Arch renders with curved top; player sees adjacent space through the
+  arch while ray-sweeping past it. ✅ (pending visual verification)
+- Porthole renders with circular opening; back-layer content visible
+  through the hole. ✅ (pending visual verification)
 - Existing wall rendering unaffected (alpha stays 255 everywhere
-  except the dedicated freeform textures).
+  except the dedicated freeform textures). ✅
+
+**Open items:**
+- Porthole gap filler: currently `_transparent` (shows back layers).
+  Future: register a `porthole_ocean` filler for animated ocean scene
+  when the Seaway biome is built.
+- Dispatcher's Office interior arch: floor `2.1` is proc-gen, so arch
+  placement needs either a post-gen stamp or a GridGen injection hook.
+  Current test placement is on the exterior Promenade only.
 
 ### Phase 4 — Windows with interior scenes — SHIPPED (2026-04-10)
 
@@ -919,16 +933,24 @@ Only if needed for visual parity with the reference.
 
 ## 5. Module touch list
 
-Files that change:
+Files that changed (Phases 0–4 shipped):
 
 ```
-engine/tiles.js                +5 tile constants, isFreeform predicate
-engine/spatial-contract.js     +tileFreeform table per biome
-engine/floor-manager.js        +biome registrations for new tiles
-engine/texture-atlas.js        +alpha-writable generators, alpha range cache
-engine/raycaster.js            +_renderFreeformLayer, _colDirty occlusion table,
-                                 freeform branch in _renderBackLayer
-engine/debug-overlay.js        new — freeform panel
+engine/tiles.js                +7 tile constants (HEARTH, CITY_BONFIRE, PERGOLA_BEAM,
+                                 DUMP_TRUCK, ARCH_DOORWAY, PORTHOLE, WINDOW_TAVERN),
+                                 isFreeform predicate
+engine/spatial-contract.js     +tileFreeform table per biome (exterior + interior),
+                                 gapTexAlpha entries for Phase 3 tiles
+engine/floor-manager.js        +biome registrations, test placements (Promenade)
+engine/texture-atlas.js        +_genArchDoorway, _genPortholeAlpha generators (α=0 cutouts),
+                                 arch_brick, arch_stone, porthole_alpha textures
+engine/raycaster.js            +_renderFreeformForeground (two-segment walls), gap-filler
+                                 registry, _computeAlphaRange (per-column α-mask cache),
+                                 gapTexAlpha branch in freeform renderer, _clearAlphaRangeCache
+                                 on setContract, window texture override for WINDOW_TAVERN
+engine/window-sprites.js       +face-aware window filler, modular texture/mullion pipeline,
+                                 BuildingRegistry integration
+engine/building-registry.js    new — frozen building records, vignette + mullion style tables
 docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md  (this file)
 ```
 

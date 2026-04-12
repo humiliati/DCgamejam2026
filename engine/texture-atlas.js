@@ -132,6 +132,50 @@ var TextureAtlas = (function () {
     _genDoorIron('door_iron', { baseR: 70, baseG: 72, baseB: 78,
       rivetR: 100, rivetG: 105, rivetB: 110 });
 
+    // ── Per-building door variants (Phase 0 — Door Architecture) ────
+    // Each building gets a door whose surround matches its wall material.
+    // Generated with _genDoorWood (same arch+porthole silhouette, different
+    // colour palette). Keyed by BuildingRegistry.doorTexture.
+
+    // Coral Bazaar — warm red brick surround, terracotta frame
+    _genDoorWood('door_redbrick', { baseR: 145, baseG: 65, baseB: 50,
+      bandR: 110, bandG: 55, bandB: 40, porthole: 'flat' });
+    // Driftwood Inn — pale sun-bleached plank surround, sandy frame
+    _genDoorWood('door_driftwood', { baseR: 150, baseG: 130, baseB: 100,
+      bandR: 120, bandG: 100, bandB: 70, porthole: 'flat' });
+    // Storm Shelter / Watchman's Post — cool grey stone, iron-dark frame
+    _genDoorWood('door_greystone', { baseR: 95, baseG: 90, baseB: 85,
+      bandR: 65, bandG: 62, bandB: 58, porthole: 'desc' });
+    // Gleaner's Home — dark worn plank, simple dark wood frame
+    _genDoorWood('door_darkwood', { baseR: 85, baseG: 58, baseB: 35,
+      bandR: 55, bandG: 38, bandB: 22, porthole: 'flat' });
+    // Dispatcher's Office — utilitarian concrete, steel frame
+    _genDoorWood('door_concrete', { baseR: 115, baseG: 112, baseB: 108,
+      bandR: 80, bandG: 78, bandB: 75, porthole: 'flat' });
+
+    // Per-building ARCH_DOORWAY variants (same Gothic profile, different
+    // surround material). Re-uses _genArchDoorway with building palettes.
+    _genArchDoorway('arch_redbrick', {
+      baseR: 145, baseG: 65,  baseB: 50,      // Red brick surround
+      mortarR: 70, mortarG: 50, mortarB: 40,
+      jambR: 170, jambG: 130, jambB: 100      // Warm terracotta trim
+    });
+    _genArchDoorway('arch_driftwood', {
+      baseR: 150, baseG: 130, baseB: 100,     // Pale sun-bleached plank
+      mortarR: 100, mortarG: 85, mortarB: 65,
+      jambR: 170, jambG: 155, jambB: 130      // Sandy lighter trim
+    });
+    _genArchDoorway('arch_darkwood', {
+      baseR: 85,  baseG: 58,  baseB: 35,      // Worn dark plank
+      mortarR: 50, mortarG: 35, mortarB: 22,
+      jambR: 110, jambG: 80,  jambB: 55       // Lighter oak trim
+    });
+    _genArchDoorway('arch_concrete', {
+      baseR: 115, baseG: 112, baseB: 108,     // Government concrete
+      mortarR: 75, mortarG: 72, mortarB: 68,
+      jambR: 135, jambG: 130, jambB: 125      // Pale cement keystone
+    });
+
     // Per-biome door variants
     // Cellar: dark stone arch with mossy frame — damp underground feel
     _genDoorWood('door_cellar', { baseR: 75, baseG: 70, baseB: 60,
@@ -316,6 +360,33 @@ var TextureAtlas = (function () {
       frameR: 50, frameG: 55, frameB: 65,
       rivetR: 75, rivetG: 80, rivetB: 90,
       glassR: 10, glassG: 25, glassB: 45    // Lighter — looking toward surface
+    });
+
+    // Arch doorway — brick wall with parabolic α=0 cutout. The raycaster's
+    // alpha-mask freeform path reads the per-column transparent row range
+    // to produce the curved opening. Gothic profile (pointed, not round).
+    _genArchDoorway('arch_brick', {
+      baseR: 140, baseG: 95,  baseB: 65,     // Warm sandstone brick surround
+      mortarR: 80, mortarG: 72, mortarB: 62,  // Dark mortar lines
+      jambR: 160, jambG: 145, jambB: 120      // Pale stone voussoir trim
+    });
+    _genArchDoorway('arch_stone', {
+      baseR: 110, baseG: 108, baseB: 100,     // Cool grey stone surround
+      mortarR: 70, mortarG: 68,  mortarB: 64,
+      jambR: 140, jambG: 135, jambB: 125      // Lighter keystone trim
+    });
+
+    // Porthole (alpha-cutout) — brick/metal wall with circular α=0 hole.
+    // Unlike the animated porthole_wall (which paints the glass region per
+    // frame), this texture leaves the hole genuinely transparent so the
+    // raycaster's alpha-mask freeform path can show back-layer content
+    // (or a gap-filler scene) through the opening.
+    _genPortholeAlpha('porthole_alpha', {
+      baseR: 90, baseG: 95, baseB: 100,       // Cool industrial grey-blue
+      mortarR: 55, mortarG: 58, mortarB: 60,
+      frameR: 60, frameG: 65, frameB: 72,     // Darker steel frame ring
+      rivetR: 85, rivetG: 90, rivetB: 100,    // Rivet highlights
+      radius: 18, frameWidth: 4               // Opening radius in texels
     });
 
     // Bed — warm quilted blanket texture, pillow band at top
@@ -4890,6 +4961,183 @@ var TextureAtlas = (function () {
         g: _clamp(p.baseG + pn + cellShift * 0.5),
         b: _clamp(p.baseB + pn),
         a: 255
+      };
+    });
+  }
+
+  // ── Arch Doorway ──
+  //
+  // 64×64 brick wall with a parabolic arch cutout. The cutout region
+  // returns α=0 so the raycaster's alpha-mask freeform path can read
+  // the per-column transparent row range and produce a curved opening.
+  // The arch spans ~70% of the texture width (centred), with the apex
+  // at ~row 6 and the spring line at ~row 50. Below the spring line
+  // the opening continues as a flat vertical slot down to the bottom
+  // of the texture (the doorway proper).
+
+  function _genArchDoorway(id, p) {
+    var archCX   = TEX_SIZE / 2;        // horizontal centre of the arch
+    var archHalf = TEX_SIZE * 0.35;     // half-width of the opening
+    var apexY    = 6;                   // top of arch curve (texel row)
+    var springY  = Math.floor(TEX_SIZE * 0.78); // where the curve meets
+                                        //   the vertical jambs (~row 50)
+    var jamb     = 3;                   // pixel-thick stone trim at edge
+
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Distance from horizontal centre (0 = dead centre, 1 = edge of arch)
+      var dx = Math.abs(x - archCX) / archHalf;
+
+      // Is this pixel inside the transparent opening?
+      var inside = false;
+      if (dx < 1.0) {
+        if (y >= springY) {
+          // Below the spring line: flat rectangular doorway
+          inside = true;
+        } else {
+          // Above the spring line: parabolic curve.
+          // Parabola: at y = apexY, dx = 0 (apex). At y = springY, dx = 1.
+          var t = (y - apexY) / (springY - apexY); // 0 at apex, 1 at spring
+          if (t < 0) t = 0;
+          // The arch boundary at this row: dx_boundary = sqrt(t)
+          // (parabolic profile — gives a slightly pointed Gothic feel
+          // vs. the semicircle's more squat Romanesque look).
+          var boundary = Math.sqrt(t);
+          if (dx < boundary) inside = true;
+        }
+      }
+
+      // Jamb trim: a narrow stone band tracing the arch edge.
+      // Check if the pixel is within `jamb` px of the arch boundary.
+      var isJamb = false;
+      if (!inside) {
+        for (var jd = 1; jd <= jamb; jd++) {
+          var testDx = Math.abs(x - archCX - (dx > 0 ? -jd : jd)) / archHalf;
+          if (testDx < 0) testDx = -testDx;
+          var insideTest = false;
+          if (testDx < 1.0) {
+            if (y >= springY) {
+              insideTest = true;
+            } else {
+              var tt = (y - apexY) / (springY - apexY);
+              if (tt < 0) tt = 0;
+              if (testDx < Math.sqrt(tt)) insideTest = true;
+            }
+          }
+          if (insideTest) { isJamb = true; break; }
+        }
+        // Also mark jamb below spring line (vertical door jambs)
+        if (!isJamb && y >= springY && dx >= 1.0 && dx < 1.0 + jamb / archHalf) {
+          isJamb = true;
+        }
+      }
+
+      if (inside) {
+        return { r: 0, g: 0, b: 0, a: 0 }; // transparent — the opening
+      }
+
+      var n = _hash(x, y) * 14 - 7;
+
+      if (isJamb) {
+        // Keystone / voussoir trim — lighter stone accent
+        return {
+          r: _clamp(p.jambR + n),
+          g: _clamp(p.jambG + n),
+          b: _clamp(p.jambB + n)
+        };
+      }
+
+      // Normal brickwork surround (reuse _genBrick inline pattern)
+      var brickH  = 10;
+      var brickW  = 16;
+      var mortarW = 2;
+      var row = Math.floor(y / brickH);
+      var localY = y % brickH;
+      var offsetX = (row % 2 === 1) ? Math.floor(brickW / 2) : 0;
+      var localX = (x + offsetX) % brickW;
+      var isMortar = localX < mortarW || localY < mortarW;
+      if (isMortar) {
+        return {
+          r: _clamp(p.mortarR + n * 0.5),
+          g: _clamp(p.mortarG + n * 0.5),
+          b: _clamp(p.mortarB + n * 0.5)
+        };
+      }
+      return {
+        r: _clamp(p.baseR + n),
+        g: _clamp(p.baseG + n),
+        b: _clamp(p.baseB + n)
+      };
+    });
+  }
+
+  // ── Porthole (alpha-cutout) ──
+  //
+  // 64×64 brick/metal wall with a circular cutout at the centre.
+  // The cutout region returns α=0. A riveted steel frame ring
+  // surrounds the opening (same aesthetic as the existing
+  // _genPortholeWall but the glass region is genuinely transparent
+  // instead of painted with an ocean scene).
+
+  function _genPortholeAlpha(id, p) {
+    var cx = TEX_SIZE / 2;
+    var cy = TEX_SIZE / 2;
+    var holeR = p.radius || Math.floor(TEX_SIZE * 0.30); // opening radius
+    var frameW = p.frameWidth || 4;  // steel frame ring width
+
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var dx = x - cx;
+      var dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Inside the opening — transparent
+      if (dist < holeR) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      var n = _hash(x, y) * 14 - 7;
+
+      // Steel frame ring
+      if (dist < holeR + frameW) {
+        // Rivet bumps at 8 evenly spaced points around the ring
+        var angle = Math.atan2(dy, dx);
+        var rivetAngle = ((angle + Math.PI) / (2 * Math.PI)) * 8;
+        var rivetDist = Math.abs(rivetAngle - Math.round(rivetAngle));
+        var isRivet = rivetDist < 0.12 && dist > holeR + 1 && dist < holeR + frameW - 1;
+
+        if (isRivet) {
+          return {
+            r: _clamp(p.rivetR + n * 0.5),
+            g: _clamp(p.rivetG + n * 0.5),
+            b: _clamp(p.rivetB + n * 0.5)
+          };
+        }
+        return {
+          r: _clamp(p.frameR + n * 0.4),
+          g: _clamp(p.frameG + n * 0.4),
+          b: _clamp(p.frameB + n * 0.4)
+        };
+      }
+
+      // Wall surround — brick/metal
+      var brickH  = 10;
+      var brickW  = 16;
+      var mortarW = 2;
+      var row = Math.floor(y / brickH);
+      var localY = y % brickH;
+      var offsetX = (row % 2 === 1) ? Math.floor(brickW / 2) : 0;
+      var localX = (x + offsetX) % brickW;
+      var isMortar = localX < mortarW || localY < mortarW;
+      if (isMortar) {
+        return {
+          r: _clamp(p.mortarR + n * 0.5),
+          g: _clamp(p.mortarG + n * 0.5),
+          b: _clamp(p.mortarB + n * 0.5)
+        };
+      }
+      return {
+        r: _clamp(p.baseR + n),
+        g: _clamp(p.baseG + n),
+        b: _clamp(p.baseB + n)
       };
     });
   }

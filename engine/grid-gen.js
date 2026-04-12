@@ -68,11 +68,14 @@ var GridGen = (function () {
     // ── Place stairs ──
     var doors = { stairsUp: null, stairsDn: null };
 
+    var _stairUpTile = opts.stairUpTile || TILES.STAIRS_UP;
+    var _stairDnTile = opts.stairDnTile || TILES.STAIRS_DN;
+
     if (opts.placeStairsUp !== false && rooms.length >= 1) {
       var upRoom = rooms[0];
       var upPos = _findWallAdjacent(grid, W, H, upRoom);
       if (upPos) {
-        grid[upPos.y][upPos.x] = TILES.STAIRS_UP;
+        grid[upPos.y][upPos.x] = _stairUpTile;
         doors.stairsUp = upPos;
       }
     }
@@ -82,7 +85,7 @@ var GridGen = (function () {
       var dnRoom = rooms[rooms.length - 1];
       var dnPos = _findWallAdjacent(grid, W, H, dnRoom);
       if (dnPos) {
-        grid[dnPos.y][dnPos.x] = TILES.STAIRS_DN;
+        grid[dnPos.y][dnPos.x] = _stairDnTile;
         doors.stairsDn = dnPos;
       }
     }

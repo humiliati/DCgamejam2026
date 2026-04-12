@@ -94,7 +94,7 @@ var DoorContracts = (function () {
   function _resolveDoorTarget(grid, W, H, doors, doorTargets) {
     if (!_exitTile) return null;
 
-    var isAdvance = (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR);
+    var isAdvance = (_exitTile === TILES.DOOR || _exitTile === TILES.BOSS_DOOR || _exitTile === TILES.DOOR_FACADE);
     var isRetreat = (_exitTile === TILES.DOOR_BACK || _exitTile === TILES.DOOR_EXIT);
 
     if (!isAdvance && !isRetreat) return null;
@@ -142,7 +142,7 @@ var DoorContracts = (function () {
     // ── Grid scan for matching door tile (last resort) ──
     var searchTiles = isAdvance
       ? [TILES.DOOR_BACK, TILES.DOOR_EXIT]
-      : [TILES.DOOR, TILES.BOSS_DOOR];
+      : [TILES.DOOR, TILES.BOSS_DOOR, TILES.DOOR_FACADE];
 
     for (var y = 1; y < H - 1; y++) {
       for (var x = 1; x < W - 1; x++) {
@@ -287,9 +287,17 @@ var DoorContracts = (function () {
     }
 
     if (!targetDoor) {
-      // Fallback: center of first room
-      var r = floorData.rooms[0];
-      return { x: r.cx, y: r.cy, dir: -Math.PI / 2 };
+      // Fallback chain: doorExit → doorEntry → center of first room.
+      // Exterior floors (depth 1) have no stairs, so the stairsUp/Down
+      // paths above both yield null. doorExit is the natural "I just
+      // arrived" spawn (the gate from the previous floor). doorEntry is
+      // the first building entrance — still on the street. Room-center
+      // is the last resort (may be inside a building).
+      targetDoor = doors.doorExit || doors.doorEntry || null;
+      if (!targetDoor) {
+        var r = floorData.rooms[0];
+        return { x: r.cx, y: r.cy, dir: -Math.PI / 2 };
+      }
     }
 
     var spawn = findSpawnNearDoor(grid, W, H, targetDoor, avoidDoor, GUARDRAIL_STEPS);

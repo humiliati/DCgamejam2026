@@ -114,7 +114,71 @@ var Raycaster = (function () {
   // extra _layerBuf struct at init and one extra strip draw in the
   // rare column where collection actually fills the buffer.
   var _MAX_LAYERS = 8;
-  var _MAX_BG_STEPS = 24; // max DDA steps past first hit (increased for deeper views)
+  // NOTE: the old _MAX_BG_STEPS step-count budget was removed in favor
+  // of a perpendicular-distance cap (renderDist) + a local safety step
+  // cap (_MAX_BG_SAFETY inside the loop). DDA steps are a bad proxy
+  // for perpDist on diagonal rays — off-axis rays burn steps on cross
+  // crossings and undershoot the visual horizon, producing "gate
+  // vanishes behind pergola canopy" artifacts on exterior floors.
+  // Stashed grid reference — set at the top of render() so helpers
+  // like _renderFreeformForeground can read the current floor grid
+  // without threading the parameter through every call.
+  var _renderGrid = null;
+  var _renderGridW = 0;
+  var _renderGridH = 0;
+
+  // ── ROOF_CRENEL face-aware visibility ────────────────────────────
+  // ROOF_CRENEL should only render on faces whose axis is aligned with
+  // an adjacent building WALL tile. Perpendicular faces (along the wall
+  // run) are transparent so the crenel reads as a roofline cap, not a
+  // pergola-style floating slab visible from all angles.
+  //
+  // The check has two tiers:
+  //   1. Direct: does this tile have a WALL neighbor on the hit axis?
+  //   2. Corner: no direct WALL at all, but CRENEL neighbors exist on
+  //      both perpendicular axes → L-bend corner piece that should
+  //      render on all faces to wrap the rampart roofline.
+  //
+  // Called from the DDA front-hit loop and the N-layer back-collection
+  // loop. Uses _renderGrid / _renderGridW / _renderGridH stashed at
+  // the top of render().
+  function _crenelFaceVisible(mx, my, side) {
+    var g = _renderGrid, gW = _renderGridW, gH = _renderGridH;
+    if (!g) return true; // safety fallback
+    var W = TILES.WALL;
+
+    // Tier 1 — direct WALL on the hit axis
+    if (side === 0) {
+      // X-axis hit (east/west face): check E/W neighbors for WALL
+      if (mx > 0 && g[my][mx - 1] === W) return true;
+      if (mx < gW - 1 && g[my][mx + 1] === W) return true;
+    } else {
+      // Y-axis hit (north/south face): check N/S neighbors for WALL
+      if (my > 0 && g[my - 1][mx] === W) return true;
+      if (my < gH - 1 && g[my + 1][mx] === W) return true;
+    }
+
+    // Tier 2 — corner detection: no direct WALL in ANY cardinal
+    // direction, but CRENEL neighbors on both perpendicular axes.
+    // Corners wrap the rampart roofline and render on all faces.
+    var hasAnyWall = false;
+    if (mx > 0 && g[my][mx - 1] === W) hasAnyWall = true;
+    if (!hasAnyWall && mx < gW - 1 && g[my][mx + 1] === W) hasAnyWall = true;
+    if (!hasAnyWall && my > 0 && g[my - 1][mx] === W) hasAnyWall = true;
+    if (!hasAnyWall && my < gH - 1 && g[my + 1][mx] === W) hasAnyWall = true;
+    if (hasAnyWall) return false; // has wall but not on this axis → skip
+
+    // No wall anywhere — possible corner piece.
+    var CR = TILES.ROOF_CRENEL;
+    var hasXCrenel = (mx > 0 && g[my][mx - 1] === CR) ||
+                     (mx < gW - 1 && g[my][mx + 1] === CR);
+    var hasYCrenel = (my > 0 && g[my - 1][mx] === CR) ||
+                     (my < gH - 1 && g[my + 1][mx] === CR);
+    if (hasXCrenel && hasYCrenel) return true; // L-bend corner
+
+    return false;
+  }
+
   var _layerBuf = [
     { mx: 0, my: 0, sd: 0, tile: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 },
@@ -351,6 +415,69 @@ var Raycaster = (function () {
     return true;
   }
 
+  // ── Alpha-range cache for alpha-mask freeform (Phase 3) ──────────
+  // For tiles with `gapTexAlpha: true`, the gap boundary is not a flat
+  // row-range but varies per texture column based on the texture's
+  // alpha channel. This helper walks a texture column once, finds the
+  // contiguous transparent (α < 128) row range, and caches the result
+  // per (textureId, texX) pair so subsequent frames are a plain lookup.
+  //
+  // Cache key: "texId:texX". Value: { topOpaque, botOpaque } — the
+  // last fully opaque row counting from the top, and the first fully
+  // opaque row counting from the bottom. The gap occupies
+  // [topOpaque+1 .. botOpaque-1]. If the column has no transparent
+  // pixels, topOpaque = texHeight-1 and botOpaque = 0 (no gap).
+
+  var _alphaRangeCache = {};
+
+  /**
+   * Walk texture column `texX` and return { topOpaque, botOpaque }.
+   * Cached per texture ID + column index.
+   * @param {Object} tex  - TextureAtlas texture { width, height, data }
+   * @param {string} texId - Texture ID (for cache keying)
+   * @param {number} texX  - Column index (0..width-1)
+   * @returns {{ topOpaque: number, botOpaque: number }}
+   */
+  function _computeAlphaRange(tex, texId, texX) {
+    var cacheKey = texId + ':' + texX;
+    if (_alphaRangeCache[cacheKey]) return _alphaRangeCache[cacheKey];
+
+    var w = tex.width;
+    var h = tex.height;
+    var d = tex.data;  // Uint8ClampedArray, RGBA stride
+    var topOpaque = h - 1;  // default: no gap (entire column opaque)
+    var botOpaque = 0;
+
+    // Walk down from top — find last opaque row before first transparent
+    for (var y = 0; y < h; y++) {
+      var a = d[(y * w + texX) * 4 + 3];
+      if (a < 128) { topOpaque = y - 1; break; }
+    }
+
+    // Walk up from bottom — find last opaque row before first transparent
+    for (var y2 = h - 1; y2 >= 0; y2--) {
+      var a2 = d[(y2 * w + texX) * 4 + 3];
+      if (a2 < 128) { botOpaque = y2 + 1; break; }
+    }
+
+    // Sanity: if topOpaque >= botOpaque there's no transparent band
+    // in this column (fully opaque or fully transparent edge case).
+    if (topOpaque < 0) topOpaque = 0;
+    if (botOpaque > h - 1) botOpaque = h - 1;
+
+    var result = { topOpaque: topOpaque, botOpaque: botOpaque };
+    _alphaRangeCache[cacheKey] = result;
+    return result;
+  }
+
+  /**
+   * Flush the alpha-range cache. Call on floor transition or when
+   * textures are regenerated.
+   */
+  function _clearAlphaRangeCache() {
+    _alphaRangeCache = {};
+  }
+
   // ── Debug layer trace (URL param ?debug=1) ───────────────────────
   // Dumps the N-layer collection buffer for a sparse set of sample
   // columns on the next rendered frame. Press `P` in-game to arm a
@@ -488,6 +615,7 @@ var Raycaster = (function () {
     _rooms = rooms || null;
     _cellHeights = cellHeights || null;
     _wallDecor = wallDecor || null;
+    _clearAlphaRangeCache();
   }
 
   /**
@@ -500,12 +628,15 @@ var Raycaster = (function () {
    * @param {Object} [lightMap]
    */
   function render(player, grid, gridW, gridH, sprites, lightMap) {
+    _renderGrid = grid;  // stash for helpers (_renderFreeformForeground etc.)
+    _renderGridW = gridW;
+    _renderGridH = gridH;
     var ctx = _ctx;
     var w = _width;
     var h = _height;
     // Horizon line — shifted by lookPitch for vertical free look.
-    // Negative pitch = look down (horizon moves up, more floor visible).
-    // Positive pitch = look up (horizon moves down, more ceiling/sky).
+    // Positive pitch = look down (horizon moves up, more floor visible).
+    // Negative pitch = look up (horizon moves down, more ceiling/sky).
     var rawHalfH = h / 2;
     var pitchShift = (player.pitch || 0) * rawHalfH;
     var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
@@ -603,7 +734,7 @@ var Raycaster = (function () {
       fGrad.addColorStop(0, floorGrads.floorTop);
       fGrad.addColorStop(1, floorGrads.floorBottom);
       ctx.fillStyle = fGrad;
-      ctx.fillRect(0, halfH, w, halfH);
+      ctx.fillRect(0, halfH, w, h - halfH);
     }
 
     // ── Parallax layers (behind walls, above floor gradient) ──
@@ -640,7 +771,10 @@ var Raycaster = (function () {
         );
       } catch (_dbgErr) { _dbgFrame = false; }
     }
-    var _dbgSampleStep = Math.max(1, Math.floor(w / 12));
+    // Denser sampling (w/24) so columns near the horizon center are
+    // captured — the ~15-col gap around center-of-view is where most
+    // "why is this tile culled?" investigations actually happen.
+    var _dbgSampleStep = Math.max(1, Math.floor(w / 24));
     var _dbgCenterCol = w >> 1;
 
     for (var col = 0; col < w; col++) {
@@ -667,7 +801,19 @@ var Raycaster = (function () {
       var hitTile = TILES.WALL;
       var depth = 0;
 
-      while (!hit && depth < renderDist) {
+      // Perpendicular-distance budget: same fix as the back-layer
+      // loop. `depth` alone is a DDA step count that under-shoots
+      // perpDist on diagonal rays by ~sqrt(2), so walls on 45° rays
+      // would disappear ~34 cells out while sprites (which test
+      // Euclidean dist directly) render all the way to renderDist.
+      // That asymmetry made NPCs visible past their tile backdrop.
+      // We now gate on min(sideDistX, sideDistY) — the perpDist at
+      // the next crossing — against renderDist, and keep a generous
+      // step cap as a safety rail.
+      var _SAFETY_FRONT = 128;
+      while (!hit && depth < _SAFETY_FRONT) {
+        var _frontNextPD = (sideDistX < sideDistY) ? sideDistX : sideDistY;
+        if (_frontNextPD >= renderDist) break;
         if (sideDistX < sideDistY) {
           sideDistX += deltaDistX; mapX += stepX; side = 0;
         } else {
@@ -680,7 +826,15 @@ var Raycaster = (function () {
         } else {
           var tile = grid[mapY][mapX];
           if (TILES.isOpaque(tile)) {
-            hit = true; hitTile = tile;
+            // ROOF_CRENEL face filter: only register the hit when the
+            // ray's hit axis is aligned with an adjacent building wall.
+            // Perpendicular faces are transparent — the ray passes through
+            // so the crenel reads as a roofline, not a pergola.
+            if (tile === TILES.ROOF_CRENEL && !_crenelFaceVisible(mapX, mapY, side)) {
+              // Skip — let DDA continue through this cell
+            } else {
+              hit = true; hitTile = tile;
+            }
           } else if (TILES.isDoor(tile)) {
             hit = true; hitTile = tile;
           }
@@ -777,55 +931,95 @@ var Raycaster = (function () {
           // of the fire cavity — matches the mailbox/canopy pattern.
           // The back face re-runs freeform rendering, so its cavity
           // is transparent and the glowing coals behind it show.
-          (_fgIsFreeformSeeThrough)
+          //
+          // EXCEPTION: WINDOW_TAVERN — the window is a thin glass
+          // pane on the building facade. No back face: the cavity is
+          // fully see-through and the lintel/sill bands should not
+          // render on the interior side (that would make the wall
+          // look hollow when viewed up close). The N-layer collector
+          // still gathers walls BEHIND the window tile because
+          // _fgIsFreeformSeeThrough sets _maxTop = 0.
+          (_fgIsFreeformSeeThrough && hitTile !== TILES.WINDOW_TAVERN && hitTile !== TILES.DOOR_FACADE && hitTile !== TILES.TRAPDOOR_DN && hitTile !== TILES.TRAPDOOR_UP)
         );
 
         // Continue DDA to collect up to MAX_LAYERS total hits.
         //
-        // Termination is bounded by THREE independent conditions:
+        // Termination is bounded by FOUR independent conditions:
         //   1. _lc < _MAX_LAYERS — layer-buffer capacity
-        //   2. (_cDep - depth) < _MAX_BG_STEPS — back-step budget past
-        //      the first hit (24 cells). This is the correct budget
-        //      for this loop because the back-layer collection is
-        //      specifically "additional cells PAST the first hit."
-        //   3. Grid-edge break below — prevents infinite walk off the map
+        //   2. _nextPD < renderDist — the next cell boundary crossing
+        //      must be within the render distance. This uses the
+        //      raycaster's native perpendicular-distance unit, not
+        //      DDA step count. Crucial fix: on diagonal rays, each
+        //      step advances perpDist by only ~0.5–1.0, so a 24-step
+        //      budget translates to only ~12 cells of perpDist on a
+        //      45° ray — not enough to reach opposite-side walls in a
+        //      48-cell-deep exterior view. Using perpDist directly
+        //      makes the budget angle-independent.
+        //   3. _safety < _MAX_BG_SAFETY — hard upper bound preventing
+        //      runaway loops on near-axis rays where deltaDist on the
+        //      cross axis is enormous.
+        //   4. Grid-edge break below — prevents infinite walk off the map
         //
-        // NOTE: Previously this loop also gated on `_cDep < renderDist`
-        // which created an asymmetric interior culling bug. For a ray
-        // that first-hits at depth=8 (e.g. HEARTH or PILLAR close to the
-        // player) and renderDist=14, only 6 additional steps would be
-        // allowed — not enough to reach the opposite perimeter wall in
-        // a 20-cell interior. Straight-axis rays would squeak through
-        // because they don't burn depth on x/y diagonal DDA drift, but
-        // off-angle rays ran out of budget mid-room, leaving the back
-        // wall collected for a single column while adjacent columns
-        // missed it entirely. That produced the "solo column pops in
-        // with no peripheral neighbors" artifact.
-        //
-        // renderDist is the correct cap for the FIRST-hit DDA loop
-        // (which must stop somewhere on empty maps), but the BACK-layer
-        // loop has its own explicit budget in _MAX_BG_STEPS and its
-        // own per-layer fog-skip in _renderBackLayer (`fog > 0.98`
-        // returns early). Removing the renderDist cap here lets back
-        // layers register consistently across all ray angles; layers
-        // that are invisible in fog cost nothing to render.
+        // NOTE: The old step-count budget _MAX_BG_STEPS=24 was exactly
+        // the X-distance from a mid-promenade first-hit (e.g. pergola
+        // at 24,17) to the far gate at (48,17). Any ray with slight Y
+        // drift burned a step on Y crossings and could not reach x=48
+        // within the 24-step budget, so gate tiles disappeared behind
+        // pergola canopies. Cols 264/312/336/360/384 all exited with
+        // _lc=2 exit=budget and ZERO rejection entries — proving the
+        // ray walked 23 steps through empty cells without ever
+        // encountering opaque geometry.
         var _cSdX = sideDistX, _cSdY = sideDistY;
         var _cMX = mapX, _cMY = mapY, _cSd = 0;
         var _cDep = depth;
-        while (_lc < _MAX_LAYERS && (_cDep - depth) < _MAX_BG_STEPS) {
+        var _safety = 0;
+        var _MAX_BG_SAFETY = 64;
+        // Debug: collect opaque cells that were VISITED during the back
+        // loop but were REJECTED (by the _cTop > _maxTop gate or any
+        // other filter). A gate wall that never shows up in _layerBuf
+        // is either "never reached" or "reached but rejected" — without
+        // this log those two cases are indistinguishable.
+        var _dbgRej = _dbgFrame ? [] : null;
+        // Exit reason so the trace can print WHY layer collection
+        // stopped growing. One of: 'cap' (hit _MAX_LAYERS), 'dist'
+        // (crossed renderDist), 'safety' (hit _MAX_BG_SAFETY),
+        // 'oob' (walked off the grid), 'tall' (_maxTop hit 3.0 early
+        // break).
+        var _dbgExit = null;
+        while (_lc < _MAX_LAYERS && _safety < _MAX_BG_SAFETY) {
+          // Perpendicular distance at the next cell boundary. If this
+          // already exceeds renderDist, the cell we'd step into is
+          // past the visible horizon — stop here.
+          var _nextPD = (_cSdX < _cSdY) ? _cSdX : _cSdY;
+          if (_nextPD >= renderDist) {
+            if (_dbgFrame) _dbgExit = 'dist';
+            break;
+          }
           if (_cSdX < _cSdY) {
             _cSdX += deltaDistX; _cMX += stepX; _cSd = 0;
           } else {
             _cSdY += deltaDistY; _cMY += stepY; _cSd = 1;
           }
           _cDep++;
+          _safety++;
 
-          if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) break;
+          if (_cMX < 0 || _cMX >= gridW || _cMY < 0 || _cMY >= gridH) {
+            if (_dbgFrame) _dbgExit = 'oob';
+            break;
+          }
 
           // Read the next cell's tile once — used by both the back-face
           // dedup gate below and the regular layer-collection check.
           var _cT = grid[_cMY][_cMX];
+          // ROOF_CRENEL face filter (same as front-hit loop): treat the
+          // crenel as non-solid when the ray's hit axis has no adjacent
+          // building wall. Prevents pergola-like back-layer rendering on
+          // perpendicular faces of the rampart.
           var _cTSolid = (TILES.isOpaque(_cT) || TILES.isDoor(_cT));
+          if (_cTSolid && _cT === TILES.ROOF_CRENEL &&
+              !_crenelFaceVisible(_cMX, _cMY, _cSd)) {
+            _cTSolid = false;
+          }
 
           // Inject back-face for short walls on first step past the tile.
           // Bounds-checked above — back-face coordinates are always in-grid.
@@ -852,6 +1046,16 @@ var Raycaster = (function () {
             _needBackFace = false;
           }
           if (_cTSolid) {
+            // Skip door tiles from back-layer collection ONLY when the
+            // foreground hit is a window tile. Doors behind windows
+            // bleed their texture through the transparent cavity onto
+            // the building facade. But doors behind short tiles (e.g.
+            // MAILBOX) must collect normally — they're the building
+            // entrance visible above the short obstacle.
+            if (TILES.isDoor(_cT) && hitTile === TILES.WINDOW_TAVERN) {
+              _safety++;
+              continue;
+            }
             var _cH = SpatialContract.getWallHeight(_contract, _cMX, _cMY, _rooms, _cT, _cellHeights);
             var _cOff = SpatialContract.getTileHeightOffset(_contract, _cT) || 0;
             var _cTop = _cH / 2 + _cOff;
@@ -889,11 +1093,28 @@ var Raycaster = (function () {
                 // Stop when the stack covers altitude ≥3.0 — nothing
                 // practical in the tileset rises above a 3m top edge,
                 // and anything that did would be hidden anyway.
-                if (_cTop >= 3.0) break;
+                if (_cTop >= 3.0) {
+                  if (_dbgFrame) _dbgExit = 'tall';
+                  break;
+                }
               }
+            } else if (_dbgRej) {
+              // Opaque cell visited but rejected because its top edge
+              // didn't rise above the current stack's ceiling. Record
+              // so the debug trace can explain "why isn't this tile
+              // showing up behind the pergola?"
+              _dbgRej.push({
+                mx: _cMX, my: _cMY, tile: _cT,
+                wh: _cH, off: _cOff, top: _cTop,
+                maxTop: _maxTop, step: _cDep - depth
+              });
             }
             // Same or lower top edge: skip, keep searching
           }
+        }
+        if (_dbgFrame && _dbgExit === null) {
+          if (_lc >= _MAX_LAYERS) _dbgExit = 'cap';
+          else if (_safety >= _MAX_BG_SAFETY) _dbgExit = 'safety';
         }
       }
 
@@ -904,7 +1125,8 @@ var Raycaster = (function () {
             ' ray=(' + rayDirX.toFixed(3) + ',' + rayDirY.toFixed(3) + ')' +
             ' hit=' + hit + ' firstTile=' + hitTile +
             ' firstHit=(' + mapX + ',' + mapY + ')' +
-            ' depth=' + depth + ' _lc=' + _lc;
+            ' depth=' + depth + ' _lc=' + _lc +
+            (typeof _dbgExit !== 'undefined' && _dbgExit ? ' exit=' + _dbgExit : '');
           for (var _dbgI = 0; _dbgI < _lc; _dbgI++) {
             var _dL = _layerBuf[_dbgI];
             var _dWh = _contract
@@ -941,6 +1163,22 @@ var Raycaster = (function () {
               ' fog=' + _dFog +
               (_dCapGated ? ' CAP' : '');
           }
+          // Rejected-cell log: opaque cells the back loop visited but
+          // couldn't add (blocked by the _cTop > _maxTop gate). Critical
+          // for "why isn't the gate showing?" — if (47,17) appears here
+          // the gate IS reached, just culled; if it doesn't appear at
+          // all the ray never walked to it within the step budget.
+          if (typeof _dbgRej !== 'undefined' && _dbgRej && _dbgRej.length) {
+            for (var _dRI = 0; _dRI < _dbgRej.length; _dRI++) {
+              var _dR = _dbgRej[_dRI];
+              _dbgLines += '\n  REJ tile=' + _dR.tile +
+                ' @(' + _dR.mx + ',' + _dR.my + ')' +
+                ' wh=' + _dR.wh + ' off=' + _dR.off +
+                ' top=' + _dR.top.toFixed(2) +
+                ' maxTop=' + _dR.maxTop.toFixed(2) +
+                ' step=' + _dR.step;
+            }
+          }
           console.log(_dbgLines);
         } catch (_dbgErr2) {}
       }
@@ -975,6 +1213,53 @@ var Raycaster = (function () {
       }
       perpDist = Math.abs(perpDist);
 
+      // ── DOOR_FACADE recess (Wolfenstein thin-wall offset) ─────────
+      // After perpDist is calculated for the tile boundary, recessed
+      // tiles advance the ray further into the tile so the door face
+      // renders at a greater distance than the surrounding wall plane.
+      // If the ray exits through a perpendicular tile boundary before
+      // reaching the inset plane, that column is a solid jamb wall
+      // (the visible sidewall of the recess). Jamb columns suppress
+      // freeform rendering and write normal z-buffer occlusion.
+      var _facadeJamb = false;
+      if (hitTile === TILES.DOOR_FACADE &&
+          typeof DoorSprites !== 'undefined' && DoorSprites.getExteriorFace) {
+        var _extFace = DoorSprites.getExteriorFace(mapX, mapY);
+        if (_extFace >= 0) {
+          // Convert DDA hit axis + step to face index (0=E,1=S,2=W,3=N)
+          var _hitFace = (side === 0)
+            ? (stepX > 0 ? 2 : 0)    // ray going right → hit WEST face; left → EAST
+            : (stepY > 0 ? 3 : 1);   // ray going down  → hit NORTH face; up → SOUTH
+          if (_hitFace === _extFace) {
+            var _recessD = 0.25;      // quarter-tile inset depth
+            // Perpendicular distance to the inset plane
+            var _rayComp = (side === 0) ? Math.abs(rayDirX) : Math.abs(rayDirY);
+            var _rPD = perpDist + _recessD / (_rayComp || 1e-10);
+            // Does the ray at _rPD still land inside this tile?
+            var _rX = px + _rPD * rayDirX;
+            var _rY = py + _rPD * rayDirY;
+            if (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY) {
+              // Inset hit — door face renders at recessed depth
+              perpDist = _rPD;
+            } else {
+              // Ray exits tile laterally before reaching inset → jamb wall
+              _facadeJamb = true;
+              if (side === 0) {
+                // Entered through X face, exits through Y boundary
+                var _jY = (stepY > 0) ? (mapY + 1) : mapY;
+                perpDist = Math.abs((_jY - py) / (rayDirY || 1e-10));
+                side = 1;
+              } else {
+                // Entered through Y face, exits through X boundary
+                var _jX = (stepX > 0) ? (mapX + 1) : mapX;
+                perpDist = Math.abs((_jX - px) / (rayDirX || 1e-10));
+                side = 0;
+              }
+            }
+          }
+        }
+      }
+
       // Minimum perpDist clamp — prevents division-by-near-zero when
       // peripheral rays graze very close surfaces. With ±32° free-look
       // the effective viewport spans up to ±62° total, so peripheral
@@ -1008,6 +1293,9 @@ var Raycaster = (function () {
       var _zBypass = (hitTile === TILES.DUMP_TRUCK) ||
                      (_freeformEnabled && TILES.isFreeform(hitTile));
       _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
+      // Jamb columns are solid walls — restore normal z-buffer so
+      // sprites behind the jamb are properly culled.
+      if (_facadeJamb) { _zBuffer[col] = perpDist; }
       // Default-clear the pedestal mask for this column. Freeform
       // tiles populate it inside _renderFreeformForeground; short
       // ground walls populate it in the dedicated block below.
@@ -1052,6 +1340,9 @@ var Raycaster = (function () {
           freeformCfg = null;
         }
       }
+      // Jamb columns render as solid wall — suppress the freeform
+      // cavity/lintel split so the column draws as one textured slab.
+      if (_facadeJamb) { freeformCfg = null; }
       if (freeformCfg) {
         heightOffset = 0;  // suppress Doom-rule displacement
       }
@@ -1183,6 +1474,27 @@ var Raycaster = (function () {
         texId = 'door_locked';
       }
 
+      // Per-tile window texture override: building-specific wall material
+      // for the freeform sill + lintel bands (brick, wood, stone, etc.)
+      if (hitTile === TILES.WINDOW_TAVERN &&
+          typeof WindowSprites !== 'undefined' &&
+          WindowSprites.getWallTexture) {
+        var winTex = WindowSprites.getWallTexture(mapX, mapY);
+        if (winTex) texId = winTex;
+      }
+
+      // Per-tile door/arch texture override: building-specific material
+      // for DOOR, DOOR_BACK, DOOR_EXIT, and ARCH_DOORWAY tiles.
+      // Phase 0 of Door Architecture Roadmap.
+      if ((hitTile === TILES.DOOR || hitTile === TILES.DOOR_BACK ||
+           hitTile === TILES.DOOR_EXIT || hitTile === TILES.ARCH_DOORWAY ||
+           hitTile === TILES.DOOR_FACADE) &&
+          typeof DoorSprites !== 'undefined' &&
+          DoorSprites.getWallTexture) {
+        var doorTex = DoorSprites.getWallTexture(mapX, mapY);
+        if (doorTex) texId = doorTex;
+      }
+
       var tex = texId ? TextureAtlas.get(texId) : null;
       var stripH = drawEnd - drawStart + 1;
 
@@ -1206,7 +1518,12 @@ var Raycaster = (function () {
       // rendering to DoorAnimator which draws the split/portcullis
       // reveal instead of the static door texture.
       if (typeof DoorAnimator !== 'undefined' &&
-          DoorAnimator.isAnimatingTile(mapX, mapY) && stripH > 0) {
+          DoorAnimator.isAnimatingTile(mapX, mapY) && stripH > 0 &&
+          hitTile !== TILES.DOOR_FACADE && hitTile !== TILES.TRAPDOOR_DN && hitTile !== TILES.TRAPDOOR_UP) {
+        // DOOR_FACADE tiles use freeform rendering — the door animation
+        // plays inside the gap filler, not as a full-column takeover.
+        // Skip DoorAnimator for DOOR_FACADE; it falls through to the
+        // freeform path below.
         DoorAnimator.renderColumn(
           ctx, col, drawStart, drawEnd, wallX, side,
           fogFactor, brightness, fogColor
@@ -1629,62 +1946,47 @@ var Raycaster = (function () {
       try { console.log('[RC-DBG] ===== END FRAME ====='); } catch (_) {}
     }
 
-    // ── Sprite + terminus-veil sandwich ──────────────────────────
-    // The terminus fog veil (below) masks wall pop-in at the horizon
-    // on exterior FADE floors. Historically all sprites were drawn
-    // before the veil, so close-range NPCs/props standing near the
-    // horizon line were painted over by the veil and looked like
-    // they were fading into fog only a few tiles away. Fix: split
-    // the sprite pass around the veil. Distant sprites (≥ NEAR_SPRITE_DIST
-    // tiles) render first and can be masked by the veil as intended;
-    // close sprites render after the veil and punch through it so
-    // they always appear at full fidelity.
-    var NEAR_SPRITE_DIST = 2.0;
+    // ── Sprite + weather-veil sandwich ──────────────────────────
+    // Weather overlays (veil gradient, parallax debris layers) sit
+    // between a distant and near sprite pass. Sprites closer than
+    // terminusDist punch through the weather for depth perception.
+    // terminusDist is per-floor via SpatialContract; WeatherSystem
+    // can override it per-preset when loaded (Phase 1+).
+    var terminusDist = (typeof WeatherSystem !== 'undefined' && WeatherSystem.getTerminusDist)
+      ? WeatherSystem.getTerminusDist()
+      : (_contract && _contract.terminusDist) || 2.0;
 
-    // Distant sprite pass — masked by veil along with distant walls.
-    if (sprites && sprites.length > 0) {
-      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, NEAR_SPRITE_DIST, null);
-    }
-
-    // ── Terminus fog veil (exterior FADE floors only) ────────────
-    // Draws a soft atmospheric gradient band centered on the horizon
-    // to mask two artifacts:
-    //   1. Horizon seam — floor fog color vs sky gradient color mismatch
-    //   2. Wall pop-in — buildings beyond renderDistance popping in
+    // Distant sprite pass — masked by weather along with distant walls.
     //
-    // The veil is a vertical gradient: transparent at edges, opaque
-    // fog color at center (horizon line). It covers ~15% of screen
-    // height above and below the horizon. Interior/dungeon floors
-    // use CLAMP or DARKNESS fog which have intentional hard cutoffs,
-    // so the veil is skipped for those models.
-    if (_contract && _contract.fogModel === 'fade' && _contract.terminusFog) {
-      var _tf = _contract.terminusFog;
-      var _tfOpacity = _tf.opacity || 0;
-      if (_tfOpacity > 0.01) {
-        var veilH = Math.floor(h * (_tf.height || 0.15));
-        var veilTop = Math.max(0, Math.floor(halfH) - veilH);
-        var veilBot = Math.min(h, Math.floor(halfH) + veilH);
-        var veilTotalH = veilBot - veilTop;
-        if (veilTotalH > 4) {
-          var _tfR = fogColor.r, _tfG = fogColor.g, _tfB = fogColor.b;
-          var _tfMid = _tfOpacity.toFixed(3);
-          var _tfSide = (_tfOpacity * 0.6).toFixed(3);
-          var veilGrad = ctx.createLinearGradient(0, veilTop, 0, veilBot);
-          veilGrad.addColorStop(0,    'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',0)');
-          veilGrad.addColorStop(0.35, 'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfSide + ')');
-          veilGrad.addColorStop(0.5,  'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfMid + ')');
-          veilGrad.addColorStop(0.65, 'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',' + _tfSide + ')');
-          veilGrad.addColorStop(1,    'rgba(' + _tfR + ',' + _tfG + ',' + _tfB + ',0)');
-          ctx.fillStyle = veilGrad;
-          ctx.fillRect(0, veilTop, w, veilTotalH);
-        }
-      }
+    // Sprite cull distance is biased slightly INSIDE the tile
+    // renderDist so NPCs always have a wall/floor backdrop behind
+    // them. Without the bias, a sprite can appear at perpDist ≈
+    // renderDist while the diagonal-corrected wall horizon is a
+    // few tenths shorter, producing an "NPC floating in fog with
+    // no tiles behind them" artifact at the very edge of view.
+    // 0.92 is empirically just inside the back-layer perpDist cap.
+    var _spriteRenderDist = renderDist * 0.92;
+    if (sprites && sprites.length > 0) {
+      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, _spriteRenderDist, fogDist, fogColor, terminusDist, null);
     }
 
-    // Near sprite pass — punches through the veil so close NPCs and
-    // props are never painted into the horizon band.
+    // ── Weather layer insertion point ─────────────────────────────
+    // When WeatherSystem is loaded (Phase 1+), it renders the veil,
+    // lower parallax (rolling debris), and upper parallax (wind
+    // streaks) here — between distant and near sprite passes.
+    // Fallback: the legacy terminus fog veil for exterior FADE floors.
+    if (typeof WeatherSystem !== 'undefined' && WeatherSystem.renderBelow) {
+      WeatherSystem.renderBelow(ctx, w, h, halfH, fogColor);
+    } else {
+      _renderWeatherVeil(ctx, w, h, halfH, fogColor);
+    }
+
+    // Near sprite pass — punches through the weather so close NPCs
+    // and props are never painted into the horizon band. Near sprites
+    // are always within terminusDist tiles of the player, so they're
+    // inside the tile backdrop and don't need the _spriteRenderDist bias.
     if (sprites && sprites.length > 0) {
-      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, 0, NEAR_SPRITE_DIST);
+      _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, 0, terminusDist);
     }
 
     // ── Render particles (above sprites, below HUD) ──
@@ -1726,6 +2028,37 @@ var Raycaster = (function () {
       ctx.fillStyle = layer.color;
       ctx.fillRect(0, bandY, w, bandH);
     }
+  }
+
+  // ── Terminus fog veil (legacy fallback) ──────────────────────────
+  // Draws a soft atmospheric gradient band centered on the horizon to
+  // mask the floor/sky seam and soften wall pop-in at render distance.
+  // Only active on exterior FADE floors when WeatherSystem is not loaded.
+  // When WeatherSystem is present, it takes over this slot entirely via
+  // renderBelow() and may draw additional parallax sprite layers.
+  function _renderWeatherVeil(ctx, w, h, halfH, fogColor) {
+    if (!_contract || _contract.fogModel !== 'fade' || !_contract.terminusFog) return;
+    var tf = _contract.terminusFog;
+    var tfOpacity = tf.opacity || 0;
+    if (tfOpacity <= 0.01) return;
+
+    var veilH = Math.floor(h * (tf.height || 0.15));
+    var veilTop = Math.max(0, Math.floor(halfH) - veilH);
+    var veilBot = Math.min(h, Math.floor(halfH) + veilH);
+    var veilTotalH = veilBot - veilTop;
+    if (veilTotalH <= 4) return;
+
+    var r = fogColor.r, g = fogColor.g, b = fogColor.b;
+    var mid = tfOpacity.toFixed(3);
+    var side = (tfOpacity * 0.6).toFixed(3);
+    var veilGrad = ctx.createLinearGradient(0, veilTop, 0, veilBot);
+    veilGrad.addColorStop(0,    'rgba(' + r + ',' + g + ',' + b + ',0)');
+    veilGrad.addColorStop(0.35, 'rgba(' + r + ',' + g + ',' + b + ',' + side + ')');
+    veilGrad.addColorStop(0.5,  'rgba(' + r + ',' + g + ',' + b + ',' + mid + ')');
+    veilGrad.addColorStop(0.65, 'rgba(' + r + ',' + g + ',' + b + ',' + side + ')');
+    veilGrad.addColorStop(1,    'rgba(' + r + ',' + g + ',' + b + ',0)');
+    ctx.fillStyle = veilGrad;
+    ctx.fillRect(0, veilTop, w, veilTotalH);
   }
 
   // ── Tiled texture column renderer ──────────────────────────────
@@ -1781,14 +2114,40 @@ var Raycaster = (function () {
   ) {
     if (lineH <= 0) return;
 
-    // World-unit → pixel fractions of the full wall column.
-    var upperFrac = ff.hUpper / whMult;
-    var lowerFrac = ff.hLower / whMult;
-    if (upperFrac < 0) upperFrac = 0;
-    if (lowerFrac < 0) lowerFrac = 0;
-
     // Unclipped wall extent (matches _drawTiledColumn's wallTop/lineH).
     var wallBot = wallTop + lineH;
+
+    // ── Segment fraction computation ──────────────────────────────
+    // Two modes:
+    //   (a) Flat row-range: hUpper/hLower in world units → fixed fracs.
+    //       Used by HEARTH, CITY_BONFIRE, DUMP_TRUCK, WINDOW_TAVERN.
+    //   (b) Alpha-mask: per-column frac derived from the texture's α
+    //       channel. Used by ARCH_DOORWAY, PORTHOLE (Phase 3).
+    var upperFrac, lowerFrac;
+
+    if (ff.gapTexAlpha && tex && tex.data) {
+      // Alpha-mask mode: walk (or cache-hit) the texture column to
+      // find the transparent row range, then convert to fractions.
+      var clampedTexX = Math.min(Math.max(Math.floor(texX), 0), tex.width - 1);
+      var aRange = _computeAlphaRange(tex, hitTile + '', clampedTexX);
+      // topOpaque = last opaque row from top; botOpaque = first opaque row from bot
+      // Upper band occupies rows 0..topOpaque → fraction = (topOpaque+1)/height
+      // Lower band occupies rows botOpaque..height-1 → fraction = (height-botOpaque)/height
+      upperFrac = (aRange.topOpaque + 1) / tex.height;
+      lowerFrac = (tex.height - aRange.botOpaque) / tex.height;
+      if (upperFrac < 0) upperFrac = 0;
+      if (lowerFrac < 0) lowerFrac = 0;
+      // Clamp so the bands don't exceed the column.
+      if (upperFrac + lowerFrac > 1) {
+        upperFrac = 0.5; lowerFrac = 0.5;
+      }
+    } else {
+      // Flat row-range: world-unit → pixel fractions of the full wall column.
+      upperFrac = ff.hUpper / whMult;
+      lowerFrac = ff.hLower / whMult;
+      if (upperFrac < 0) upperFrac = 0;
+      if (lowerFrac < 0) lowerFrac = 0;
+    }
 
     // Segment boundaries in screen pixels (unclipped).
     var upperBotPx = wallTop + upperFrac * lineH;
@@ -1894,6 +2253,32 @@ var Raycaster = (function () {
     if (gapEnd >= gapStart) {
       var gapH = gapEnd - gapStart + 1;
 
+      // ── Back-face coordinate + face recovery ────────────────
+      // When this freeform render is a back-face injection (the
+      // layer's coordinates point to the cell BEHIND the tile,
+      // not the tile itself), two corrections are needed:
+      //
+      //  1. COORDINATES: the gap filler needs the original tile's
+      //     grid coords for per-tile metadata lookups (windowFaces,
+      //     mullion colors). Recover by stepping back one DDA cell.
+      //
+      //  2. HIT FACE: the DDA step/side values are identical for
+      //     both the foreground hit and the back-face injection, so
+      //     the naïve hitFace formula returns the SAME face index
+      //     for both. The back face is the OPPOSITE face of the
+      //     tile — flip by 180° ((face + 2) % 4).
+      var _srcMapX = mapX;
+      var _srcMapY = mapY;
+      var _isBackFace = false;
+      if (_renderGrid && _renderGrid[mapY] && _renderGrid[mapY][mapX] !== hitTile) {
+        _isBackFace = true;
+        if (side === 0) {
+          _srcMapX = mapX - stepX;
+        } else {
+          _srcMapY = mapY - stepY;
+        }
+      }
+
       // Populate the shared info object once per column. Fillers are
       // expected to treat this as read-only and not retain references
       // past the call (it gets overwritten for the next column).
@@ -1903,8 +2288,8 @@ var Raycaster = (function () {
       _gapInfo.tintStr        = tintStr;
       _gapInfo.tintIdx        = tintIdx;
       _gapInfo.tintRGB        = tintRGB;
-      _gapInfo.mapX           = mapX;
-      _gapInfo.mapY           = mapY;
+      _gapInfo.mapX           = _srcMapX;
+      _gapInfo.mapY           = _srcMapY;
       _gapInfo.side           = side;
       _gapInfo.perpDist       = perpDist;
       _gapInfo.hitTile        = hitTile;
@@ -1939,7 +2324,11 @@ var Raycaster = (function () {
       } else {
         _hitFace = (stepY > 0) ? 3 : 1;
       }
-      _gapInfo.hitFace = _hitFace;
+      // Back-face injection: the ray exits through the opposite
+      // face of the tile, so flip 180° to get the correct face
+      // index for per-face filler logic (e.g. window mullion only
+      // on the exterior face, transparent on the interior face).
+      _gapInfo.hitFace = _isBackFace ? ((_hitFace + 2) % 4) : _hitFace;
 
       var fillerKey = ff.fillGap || '_default';
       var filler    = _gapFillers[fillerKey] || _gapFillers._default;
@@ -2481,6 +2870,25 @@ var Raycaster = (function () {
 
     // Texture lookup
     var texId = SpatialContract.getTexture(_contract, L.tile);
+
+    // Per-tile window texture override (back-layer mirror of foreground hook)
+    if (L.tile === TILES.WINDOW_TAVERN &&
+        typeof WindowSprites !== 'undefined' &&
+        WindowSprites.getWallTexture) {
+      var _blWinTex = WindowSprites.getWallTexture(L.mx, L.my);
+      if (_blWinTex) texId = _blWinTex;
+    }
+
+    // Per-tile door/arch texture override (back-layer mirror of foreground hook)
+    if ((L.tile === TILES.DOOR || L.tile === TILES.DOOR_BACK ||
+         L.tile === TILES.DOOR_EXIT || L.tile === TILES.ARCH_DOORWAY ||
+         L.tile === TILES.DOOR_FACADE) &&
+        typeof DoorSprites !== 'undefined' &&
+        DoorSprites.getWallTexture) {
+      var _blDoorTex = DoorSprites.getWallTexture(L.mx, L.my);
+      if (_blDoorTex) texId = _blDoorTex;
+    }
+
     var tex = texId ? TextureAtlas.get(texId) : null;
 
     // ── Freeform back-layer path ───────────────────────────────
@@ -2678,6 +3086,14 @@ var Raycaster = (function () {
     var fogRange = (fogDist * 1.5) - fogStart;
 
     var halfHFloor = Math.floor(halfH);
+    // True projection center — always h/2 regardless of pitch.
+    // The floor paints starting from halfH (the pitched horizon) so the
+    // visible region shifts correctly, but perspective distance uses the
+    // true center so floor rows at a wall's base position always produce
+    // rowDist == perpDist. Without this, pitched halfH scales distance
+    // non-uniformly: nearby floor stays correct but far floor detaches
+    // from wall bases ("jaw opening" artifact).
+    var trueHalfH = h / 2;
 
     for (var row = 0; row < floorH; row++) {
       // Screen Y (actual pixel row on screen)
@@ -2686,8 +3102,8 @@ var Raycaster = (function () {
       var rowFromCenter = screenY - halfH;
       if (rowFromCenter <= 0) rowFromCenter = 0.5;
 
-      // Floor distance for this scanline
-      var rowDist = (halfH * baseWallH) / rowFromCenter;
+      // Floor distance for this scanline (anchored to true center)
+      var rowDist = (trueHalfH * baseWallH) / rowFromCenter;
 
       // World position of left and right edges of this scanline
       var floorStepX = (2 * rowDist * planeX) / w;
@@ -3912,7 +4328,7 @@ var Raycaster = (function () {
     perpDist = Math.abs(perpDist);
     if (perpDist < 0.2) perpDist = 0.2;
 
-    // ── Wall U coordinate (horizontal position on face, 0..1) ──
+    // Wall U coordinate (horizontal position on face, 0..1)
     var wallU;
     if (side === 0) {
       wallU = py + perpDist * rayDirY;
@@ -3924,10 +4340,7 @@ var Raycaster = (function () {
       wallU = 1 - wallU;
     }
 
-    // ── Wall V coordinate (vertical position on face, 0..1) ──
-    // Derived from screenY: invert the projection formula
-    //   drawStart = halfH - lineHeight/2 + vertShift
-    //   screenY maps linearly within [drawStart..drawEnd] to V [0..1]
+    // Wall V coordinate (vertical position on face, 0..1)
     var wallHeightMult = baseWallH;
     if (_contract && typeof SpatialContract !== 'undefined') {
       wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);

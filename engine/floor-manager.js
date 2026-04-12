@@ -1070,7 +1070,6 @@ var FloorManager = (function () {
           roomCount: { min: 2, max: 3 },
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
-            5: -0.12,    // STAIRS_DN — sunken entry to dungeon
             29: -0.40    // HEARTH — deep sunken: fire cavity for sandwich rendering
           })
         }, biomeTextures));
@@ -1105,7 +1104,6 @@ var FloorManager = (function () {
           roomCount: { min: 3, max: 4 },
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
-            5: -0.12,    // STAIRS_DN — sunken descent to Hero's Wake
             28: -0.10    // TABLE — planning table
           })
         }, biomeTextures));
@@ -1233,7 +1231,6 @@ var FloorManager = (function () {
           roomCount: { min: 3, max: 4 },
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
-            5: -0.12,    // STAIRS_DN — sunken descent to Ironhold Depths
             28: -0.10    // TABLE — planning table
           })
         }, biomeTextures));
@@ -1552,9 +1549,9 @@ var FloorManager = (function () {
     [21,21,21,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,35,35,35,35,35,35,35,35,35,35,35,35,35,35], // 2  shrub inner + fence inner
     [21,21,21,22,0,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,22,0,0,0,0,22,22,22,22,22,22,22,22,22,22,22,22,0,0,35,35,35], // 3  pod tops NW+NC + NE cluster
     [21,21,21,22,21,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], // 4
-    [21,21,21,22,0,22,0,1,1,1,1,1,1,0,0,0,22,22,0,1,1,1,1,1,1,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 5  Bazaar+Inn buildings
+    [21,21,21,22,0,22,0,1,1,1,1,1,72,0,0,0,22,22,0,1,1,1,1,1,1,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 5  Bazaar east wall PORTHOLE(12,5) — Inn porthole removed (was 24,5)
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 6  Noticeboard pillars
-    [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,21,0,0,1,0,0,21,0,0,22,0,0,35,35,35], // 7  Board tile (38,7)
+    [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,21,0,0,71,0,0,21,0,0,22,0,0,35,35,35], // 7  ARCH_DOORWAY(38,7) — Phase 3 alpha-mask arch test
     [21,21,21,22,0,22,0,1,1,73,2,73,1,0,0,0,22,22,0,1,1,73,2,73,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) flanked by WINDOW_TAVERN(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_TAVERN(21,8)(23,8)
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 9
     [21,21,21,22,0,22,0,21,0,0,33,33,21,0,0,0,22,22,0,0,0,0,33,33,0,21,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //10  path stubs N
@@ -1572,9 +1569,9 @@ var FloorManager = (function () {
     [21,21,21,22,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,0,0,0,33,33,0,0,0,0,0,0,0,0,0,35,35,35], //22
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //23  pod tops S (open N)
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
-    [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,37,33,0,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(22,25) outside home
+    [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
     [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  DUMP_TRUCK(30,26) — parked in SE pod
-    [21,21,21,22,0,22,0,0,1,1,2,1,0,0,0,0,22,22,0,0,1,1,2,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + Home DOOR(22,27) + SE well
+    [21,21,21,22,0,22,0,0,1,1,2,1,0,0,0,0,22,22,0,0,1,1,74,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + Home DOOR_FACADE(22,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //30
@@ -1642,6 +1639,47 @@ var FloorManager = (function () {
         '21,8': 1,   // Inn left window     → facing SOUTH
         '23,8': 1    // Inn right window    → facing SOUTH
       },
+      // Explicit exterior-face declarations for DOOR_FACADE tiles.
+      // Same contract: "x,y" → face index (0=E, 1=S, 2=W, 3=N).
+      // Required when both sides of the door have walkable neighbors,
+      // which the auto-detect can't disambiguate (it picks the first
+      // walkable cardinal neighbor in E→S→W→N order).
+      doorFaces: {
+        '22,27': 3   // Gleaner's Home → exterior faces NORTH (street)
+      },
+      // Window scene declarations — maps each WINDOW_TAVERN tile to
+      // its building, vignette recipe, and interior placement. The
+      // vignette sprite is placed at facade + interiorStep (one tile
+      // inside the building footprint) so it renders BEHIND the glass
+      // with a visible depth gap. See LIVING_WINDOWS_ROADMAP §4.4.
+      windowScenes: [
+        // ── Coral Bazaar (NW pod) ─────────────────────────────────
+        {
+          facade:       { x: 9, y: 8 },
+          interiorStep: { dx: 0, dy: -1 },   // one tile north = (9,7) inside bazaar
+          building:     'coral_bazaar',
+          vignette:     'bazaar_cards'
+        },
+        {
+          facade:       { x: 11, y: 8 },
+          interiorStep: { dx: 0, dy: -1 },   // (11,7) inside bazaar
+          building:     'coral_bazaar',
+          vignette:     'bazaar_cards'
+        },
+        // ── Driftwood Inn (NC pod) ────────────────────────────────
+        {
+          facade:       { x: 21, y: 8 },
+          interiorStep: { dx: 0, dy: -1 },   // (21,7) inside inn
+          building:     'driftwood_inn',
+          vignette:     'tavern_mug'
+        },
+        {
+          facade:       { x: 23, y: 8 },
+          interiorStep: { dx: 0, dy: -1 },   // (23,7) inside inn
+          building:     'driftwood_inn',
+          vignette:     'tavern_mug'
+        }
+      ],
       gridW: _FLOOR1_W,
       gridH: _FLOOR1_H,
       biome: 'promenade',
@@ -2251,7 +2289,10 @@ var FloorManager = (function () {
       _enemies = [];  // No enemies in the plaza (safe zone)
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else {
-      _floorData = GridGen.generate({
+      // Depth-2 (interior) floors use trapdoor hatches for descent into dungeons;
+      // Depth-3 (nested dungeon) floors use trapdoor hatches for ascent back up.
+      var _genDepth = _depth(_floorId);
+      var _genOpts = {
         width: contract.gridSize.w,
         height: contract.gridSize.h,
         biome: getBiome(_floorId),
@@ -2260,7 +2301,14 @@ var FloorManager = (function () {
         placeStairsUp: true,
         placeStairsDn: true,
         roomCount: SeededRNG.randInt(contract.roomCount.min, contract.roomCount.max)
-      });
+      };
+      if (_genDepth === 2) {
+        _genOpts.stairDnTile = TILES.TRAPDOOR_DN;
+      }
+      if (_genDepth === 3) {
+        _genOpts.stairUpTile = TILES.TRAPDOOR_UP;
+      }
+      _floorData = GridGen.generate(_genOpts);
 
       _floorData.contract = contract;
 
@@ -2307,7 +2355,7 @@ var FloorManager = (function () {
           for (var _tx = 0; _tx < _floorData.gridW; _tx++) {
             var _tt = _floorData.grid[_ty][_tx];
             if (_tt === TILES.CORPSE) _corpsePos[_tx + ',' + _ty] = true;
-            if (_tt === TILES.STAIRS_DN || _tt === TILES.STAIRS_UP) _stairPos[_tx + ',' + _ty] = true;
+            if (_tt === TILES.STAIRS_DN || _tt === TILES.STAIRS_UP || _tt === TILES.TRAPDOOR_DN || _tt === TILES.TRAPDOOR_UP) _stairPos[_tx + ',' + _ty] = true;
           }
         }
         TorchState.applyHeroDamage(_floorId, _floorData.grid, {
@@ -2337,12 +2385,93 @@ var FloorManager = (function () {
       _floorData.doorTargets, _floorId
     );
 
+    // ── Populate DoorSprites with per-building door/arch textures ──
+    // For each door tile in doorTargets, resolve the target building
+    // via BuildingRegistry and stash its doorTexture / archTexture so
+    // the raycaster renders building-appropriate materials.
+    if (typeof DoorSprites !== 'undefined') {
+      DoorSprites.clear();
+      DoorSprites.setFloor(_floorId);
+      var _doorGrid = _floorData.grid;
+      var _doorTargets = _floorData.doorTargets || {};
+      var _DOOR = (typeof TILES !== 'undefined') ? TILES.DOOR : 2;
+      var _DOOR_BACK = (typeof TILES !== 'undefined') ? TILES.DOOR_BACK : 3;
+      var _DOOR_EXIT = (typeof TILES !== 'undefined') ? TILES.DOOR_EXIT : 4;
+      var _ARCH = (typeof TILES !== 'undefined') ? TILES.ARCH_DOORWAY : 71;
+      var _DOOR_FACADE = (typeof TILES !== 'undefined') ? TILES.DOOR_FACADE : 74;
+      // Build a reverse map: floorId → building record
+      var _floorToBuilding = {};
+      if (typeof BuildingRegistry !== 'undefined') {
+        var _bldgs = BuildingRegistry.listByFloor(_floorId);
+        for (var _bi = 0; _bi < _bldgs.length; _bi++) {
+          _floorToBuilding[_bldgs[_bi].floorId] = _bldgs[_bi];
+        }
+      }
+      for (var _dtKey in _doorTargets) {
+        var _dtParts = _dtKey.split(',');
+        var _dtX = parseInt(_dtParts[0], 10);
+        var _dtY = parseInt(_dtParts[1], 10);
+        var _dtTile = (_doorGrid[_dtY] && _doorGrid[_dtY][_dtX]) || 0;
+        var _dtTargetFloor = _doorTargets[_dtKey];
+        var _dtBldg = _floorToBuilding[_dtTargetFloor] || null;
+        if (!_dtBldg) continue;
+        if (_dtTile === _ARCH && _dtBldg.archTexture) {
+          DoorSprites.setTexture(_dtX, _dtY, _dtBldg.archTexture);
+        } else if (_dtTile === _DOOR_FACADE && _dtBldg.wallTexture) {
+          // DOOR_FACADE lintel band uses the building's wall texture
+          // (not doorTexture — the lintel IS the wall above the door)
+          DoorSprites.setTexture(_dtX, _dtY, _dtBldg.wallTexture);
+          // Exterior face: the face facing the street (away from interior).
+          // Promenade south-pod buildings face NORTH; north-pod face SOUTH.
+          // Use explicit doorFaces if available, else auto-detect.
+          var _dfKey = _dtX + ',' + _dtY;
+          if (_floorData.doorFaces && typeof _floorData.doorFaces[_dfKey] === 'number') {
+            DoorSprites.setExteriorFace(_dtX, _dtY, _floorData.doorFaces[_dfKey]);
+          } else {
+            // Auto-detect: the exterior face is the one whose neighbor
+            // is walkable (not opaque). Check all 4 cardinal neighbors.
+            var _dNbrs = [
+              { dx: 1, dy: 0, face: 0 },  // EAST
+              { dx: 0, dy: 1, face: 1 },  // SOUTH
+              { dx:-1, dy: 0, face: 2 },  // WEST
+              { dx: 0, dy:-1, face: 3 }   // NORTH
+            ];
+            for (var _dni = 0; _dni < 4; _dni++) {
+              var _dnx = _dtX + _dNbrs[_dni].dx;
+              var _dny = _dtY + _dNbrs[_dni].dy;
+              if (_doorGrid[_dny] && _doorGrid[_dny][_dnx] !== undefined) {
+                var _dnTile = _doorGrid[_dny][_dnx];
+                if (!TILES.isOpaque(_dnTile) && !TILES.isDoor(_dnTile)) {
+                  DoorSprites.setExteriorFace(_dtX, _dtY, _dNbrs[_dni].face);
+                  break;
+                }
+              }
+            }
+          }
+        } else if ((_dtTile === _DOOR || _dtTile === _DOOR_BACK || _dtTile === _DOOR_EXIT) && _dtBldg.doorTexture) {
+          DoorSprites.setTexture(_dtX, _dtY, _dtBldg.doorTexture);
+        }
+      }
+      // Lazy-register the facade_door gap filler (safe to call repeatedly)
+      if (typeof DoorSprites.ensureFillerRegistered === 'function') {
+        DoorSprites.ensureFillerRegistered();
+      }
+    }
+
     // Apply biome colors + contract to raycaster
     Raycaster.setBiomeColors(getBiomeColors(_floorId));
     Raycaster.setContract(contract, _floorData.rooms, _floorData.cellHeights, _floorData.wallDecor || null);
 
     // Register dynamic light sources from fire-emitting tiles + electric ceiling lights
     _registerLightSources(_floorData.grid, _floorData.gridW, _floorData.gridH, contract);
+
+    // Set weather preset from schedule (day-of-week × region) or contract fallback
+    if (typeof WeatherSystem !== 'undefined') {
+      var _weatherPreset = WeatherSystem.getScheduledPreset
+        ? WeatherSystem.getScheduledPreset(_floorId)
+        : (contract.weather || 'clear');
+      WeatherSystem.setPreset(_weatherPreset, contract);
+    }
 
     // Set post-process profile by floor depth
     if (typeof PostProcess !== 'undefined') {

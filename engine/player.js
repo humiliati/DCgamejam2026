@@ -56,9 +56,14 @@ var Player = (function () {
 
   var DIR_NAMES = ['east', 'south', 'west', 'north'];
   var FREE_LOOK_RANGE = 32 * Math.PI / 180;
-  // Vertical pitch range: more down (floor inspection) than up
-  var PITCH_DOWN_MAX = 0.55;   // fraction of halfH to shift horizon down (floor inspection)
-  var PITCH_UP_MAX   = 0.35;   // fraction of halfH to shift horizon up (ceiling/architecture)
+  // Vertical pitch range: more down (floor inspection) than up.
+  // Positive pitch = look down (horizon rises, more floor visible).
+  // Convention matches MouseLook and Raycaster — positive = DOWN
+  // throughout the chain.  Values were 0.55/0.35 but the old clamp
+  // was sign-swapped, so effective look-down was 0.35 (UP_MAX) and
+  // look-up was 0.55 (DOWN_MAX). Now fixed + tightened for comfort:
+  var PITCH_DOWN_MAX = 0.38;   // max look-down (floor inspection)
+  var PITCH_UP_MAX   = 0.25;   // max look-up (ceiling/sky)
 
   // ── Accessors ──────────────────────────────────────────────────────
 
@@ -100,11 +105,11 @@ var Player = (function () {
 
   /**
    * Set vertical pitch offset.
-   * @param {number} pitch - Negative = look down, positive = look up.
-   *   Clamped to [-PITCH_DOWN_MAX, +PITCH_UP_MAX].
+   * @param {number} pitch - Positive = look down, negative = look up.
+   *   Clamped to [-PITCH_UP_MAX, +PITCH_DOWN_MAX].
    */
   function setLookPitch(pitch) {
-    _state.lookPitch = Math.max(-PITCH_DOWN_MAX, Math.min(PITCH_UP_MAX, pitch));
+    _state.lookPitch = Math.max(-PITCH_UP_MAX, Math.min(PITCH_DOWN_MAX, pitch));
   }
 
   function resetLookOffset() { _state.lookOffset = 0; _state.lookPitch = 0; }

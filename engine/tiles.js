@@ -158,7 +158,11 @@ var TILES = (function () {
     // 73 so those IDs stay open. Phase 4 uses the SAME row-range freeform
     // path as HEARTH / CITY_BONFIRE / DUMP_TRUCK — no new renderer work,
     // just a new tile + gap filler + interior-scene billboard.
-    WINDOW_TAVERN:    73   // Tavern Window — exterior building-facade wall tile
+    // -- Alpha-mask freeform (Phase 3) --
+    ARCH_DOORWAY:     71,  // Arched doorway -- freeform alpha-mask arch opening
+    PORTHOLE:         72,  // Porthole -- freeform alpha-mask circular opening
+
+    WINDOW_TAVERN:    73,  // Tavern Window — exterior building-facade wall tile
                            //   with a row-range "glass" cavity in the middle
                            //   of a 2.0-tall wall. Three bands, reading bottom-up:
                            //     • 0.00 → 0.40 — wooden sill + wall below the window
@@ -178,6 +182,11 @@ var TILES = (function () {
                            //   facades on the Promenade (`1`), with future
                            //   placement on Lantern Row shops (`2`).
                            //   See contract exterior() tileFreeform entry.
+
+    // -- Door Architecture Roadmap tiles --
+    DOOR_FACADE:      74,  // Facade Door -- freeform full-height building entrance
+    TRAPDOOR_DN:      75,  // Trapdoor Down -- freeform interior hatch descending
+    TRAPDOOR_UP:      76   // Trapdoor Up -- freeform interior hatch ascending
   };
 
   /** Check if a tile blocks movement */
@@ -194,7 +203,9 @@ var TILES = (function () {
            tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL ||
            tile === T.PERGOLA || tile === T.PERGOLA_BEAM ||
            tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK ||
-           tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R;
+           tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
+           tile === T.DOOR_FACADE ||
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -211,7 +222,10 @@ var TILES = (function () {
            tile === T.STRETCHER_DOCK || tile === T.TRIAGE_BED || tile === T.MORGUE_TABLE || tile === T.INCINERATOR || tile === T.REFRIG_LOCKER ||
            tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
            tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL || tile === T.PERGOLA ||
-           tile === T.CITY_BONFIRE || tile === T.PERGOLA_BEAM || tile === T.WINDOW_TAVERN;
+           tile === T.CITY_BONFIRE || tile === T.PERGOLA_BEAM ||
+           tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
+           tile === T.WINDOW_TAVERN || tile === T.DOOR_FACADE ||
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
   /** Check if tile is a torch (lit or unlit) */
@@ -223,7 +237,8 @@ var TILES = (function () {
   T.isDoor = function (tile) {
     return tile === T.DOOR || tile === T.DOOR_BACK || tile === T.DOOR_EXIT ||
            tile === T.STAIRS_DN || tile === T.STAIRS_UP || tile === T.BOSS_DOOR ||
-           tile === T.LOCKED_DOOR;
+           tile === T.LOCKED_DOOR || tile === T.DOOR_FACADE ||
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
   /** Check if tile is a floating architectural shape (no step fill, walkable + opaque) */
@@ -315,7 +330,9 @@ var TILES = (function () {
     //   interior scene billboard renders inside the transparent gap).
     return tile === T.HEARTH || tile === T.CITY_BONFIRE ||
            tile === T.PERGOLA_BEAM || tile === T.DUMP_TRUCK ||
-           tile === T.WINDOW_TAVERN;
+           tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
+           tile === T.WINDOW_TAVERN || tile === T.DOOR_FACADE ||
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
   return T;

@@ -29,14 +29,28 @@ This is the same contract as `COZY_INTERIORS_DESIGN.md` §1 applied to *exterior
 
 ## 3. Layer 1 fix — Visible Glass Surface (shipped 2026-04-11)
 
-The glass filler now paints four stacked passes in order:
+The glass filler now paints three stacked passes in order (on glass-face hits only — see face-aware dispatch below):
 
-1. **Amber interior wash** — warm sodium-lamp tint (unchanged from the first shipment).
-2. **Blue-white sheen gradient** — vertical, brightest at the top fading to transparent at the bottom. Sells the sky reflecting off the pane.
-3. **Mullion cross — OPAQUE** — a vertical mullion at `wallX ≈ 0.5` and a horizontal mullion at the slot's vertical midpoint. These paint with `rgb(…)` not `rgba(…)`, so they do not inherit the transparency of the amber wash layered beneath them (that was the visibility regression: `rgba(48,28,14, mullionBase)` composited over amber reads as "slightly browner amber," not "solid wood bar"). Color is pre-multiplied by brightness and lerped toward the fog color so the mullions still respect lighting.
-4. **Top + bottom frame stops** — 1-pixel opaque dark bands at the edges of the slot, reinforcing the pane boundary.
+1. **Amber interior wash** — warm sodium-lamp tint (`rgba(255,180,60, 0.14 * brightness * fogFade)`). The only transparent layer; everything that follows is opaque.
+2. **Mullion cross — OPAQUE** — a vertical mullion at `wallX ≈ 0.5` and a horizontal mullion at the slot's vertical midpoint. These paint with `rgb(…)` not `rgba(…)`, so they do not inherit the transparency of the amber wash layered beneath them (that was the visibility regression: `rgba(48,28,14, mullionBase)` composited over amber reads as "slightly browner amber," not "solid wood bar"). Color is pre-multiplied by brightness and lerped toward the fog color so the mullions still respect lighting.
+3. **Top + bottom frame stops** — 1-pixel opaque dark bands at the edges of the slot, reinforcing the pane boundary.
+
+The blue-white sheen gradient (originally pass 2) was removed — it was barely visible and not the style we want. Phase 0.5 replaces it with a parallax glint sprite (rotating pixel stack driven by angle-from-normal and cyclone math — see `PRESSURE_WASH_SYSTEM.md` for the nozzle math reference).
 
 The mullions form a classic 2×2 colonial tavern pane grid. The 🍺 billboard still renders through the z-bypass path and sits *behind* the mullions — framed by them rather than overlapping — which is half the depth illusion for free.
+
+### 3.1 Face-aware dispatch
+
+A WINDOW_TAVERN tile has four faces. The gap filler is called for every column whose ray passes through the tile, regardless of which face the ray crossed. To prevent the interior wash + mullion from leaking through the sides of the building mass:
+
+- **`info.hitFace`** — computed in `raycaster.js` from the DDA's `side` + `stepX/stepY`. Convention: 0=E, 1=S, 2=W, 3=N.
+- **Exterior face** — per-tile, stored in `WindowSprites._exteriorFaces`. Populated from the explicit `windowFaces` map on floor data (§4.3) first; auto-detect heuristic as fallback.
+- **Interior face** — `(exteriorFace + 2) % 4`. The opposite side of the same glass pane.
+
+The filler checks: `isGlassFace = (hitFace === exteriorFace || hitFace === interiorFace)`.
+
+- **Glass faces** (exterior + interior): amber wash + mullion cross + frame. Cavity remains transparent so the billboard sprite and facade-interior content render through it from both directions.
+- **Perpendicular faces** (the two sides of the tile inside the building mass): opaque masonry fill matching adjacent WALL brightness + fog.
 
 This is Layer 1 of the depth contract: **the glass plane itself is physically present on screen**. Layers 2 and 3 below are what makes the space *beyond* it feel real.
 
@@ -54,18 +68,56 @@ This is Layer 1 of the depth contract: **the glass plane itself is physically pr
 
 Together these read as "through the window I see a pub sign on a table, and beyond it a patron walking around" — three distinct parallax layers without any new rendering machinery.
 
-### 4.2 Why the interior content lives on the EXTERIOR floor grid
+### 4.2 The Facade Model — why the interior content lives on the EXTERIOR floor grid
 
-Each building in Dungeon Gleaner has two representations:
+Each building in Dungeon Gleaner has **two separate representations** at different levels of the floor hierarchy:
 
-- **Exterior footprint** on the parent floor (e.g. Driftwood Inn at rows 5–8, cols 19–24 on Promenade floor `"1"`). Walls and door define the silhouette; the interior tiles of the footprint are currently `"0"` (empty) and never visited — the player enters via the door, which transitions to a separate floor.
-- **Interior floor** at depth 2 (e.g. `"1.2"`), a hand-authored room at a completely different scale.
+- **Exterior footprint** on the parent floor (e.g. Driftwood Inn at rows 5–8, cols 19–24 on Promenade floor `"1"`). Walls and a door define the silhouette. The interior tiles within the footprint are `"0"` (empty) — unreachable by the player, because the only entrance is the door, which transitions to a *different floor*.
+- **Interior floor** at depth 2 (e.g. `"1.2"` for the Inn), a hand-authored room at a completely different scale and coordinate system.
 
-A window on the exterior cannot "see into" the depth-2 interior floor — it's a different grid with a different coordinate system. But it *can* look at the empty tiles inside the footprint on its own floor. **The contract populates those empty interior-footprint tiles with billboards and NPC spawns so the window has something to see through to.**
+**The building interior on Floor N is a facade.** When the player stands on the Promenade and looks at the Driftwood Inn, they are looking at a shell of wall tiles with empty space behind them. The real Inn interior (Floor `"1.2"`) is a separate grid with its own geometry. No camera trick can make a window on Floor `"1"` show content from Floor `"1.2"` — they are different worlds.
 
-This is the same design trick Wolfenstein 3D used for its fake windows: the content behind the glass is actually on the same grid as the player, just behind a wall the player can't reach.
+This is the same design trick Wolfenstein 3D used for its fake windows: the content behind the glass is actually on the same grid as the player, just behind a wall the player can't reach. **The contract populates those empty interior-footprint tiles with billboards and NPC spawns so the window has something to "see through to"** — the facade becomes a diorama, not a hole.
 
-### 4.3 Declaration: `windowScenes` on floor data
+Because of this facade model, a WINDOW_TAVERN tile's glass pane has two rendered faces:
+
+- **Exterior face** (street side, e.g. SOUTH on the Promenade): amber wash + mullion cross + transparent cavity showing the billboard behind it.
+- **Interior face** (building-facade side, opposite the exterior): transparent — so the cavity reads as a window from both directions, and any billboard / NPC sprites placed on the facade's interior tiles can look natural when viewed through the glass from either angle. The glass pane is the same physical object from both sides.
+
+The two **perpendicular faces** (the sides of the tile that sit inside the building mass) render as opaque masonry — matching the adjacent WALL bands.
+
+### 4.2.1 Stampable modular design
+
+The facade + window system is designed to be **stamped onto any building on any exterior floor** without per-building engine changes:
+
+1. **Author the building footprint** on the exterior floor grid — wall tiles, a door tile, and WINDOW_TAVERN tiles wherever the facade has windows.
+2. **Declare `windowFaces`** on the floor data — a map of `"x,y" → face index` telling each window which direction faces the street (same contract as `doorTargets`). The auto-detect heuristic handles simple cases; explicit entries override it for facades with complex surroundings.
+3. **Declare `windowScenes`** (§4.3) — attach vignette sprites and patron NPCs to the empty tiles inside the footprint.
+4. **Register the building** in BuildingRegistry (§5) with its type, hours, and default content.
+
+That's it — the gap filler, the billboard z-bypass, and the face-aware rendering all trigger automatically from the tile type. New buildings on Lantern Row (`"2"`), future frontier floors, or even procedurally generated exterior floors can stamp windows by repeating these four steps. No new modules, no raycaster changes, no special cases per building.
+
+### 4.3 Declaration: `windowFaces` on floor data (shipped 2026-04-11)
+
+Explicit exterior-face declarations for WINDOW_TAVERN tiles, keyed by `"x,y"` → face index (0=E, 1=S, 2=W, 3=N). Same contract as `doorTargets`. Entries override the auto-detect heuristic in `WindowSprites._detectExteriorFace` — required for facades where both sides of the window are walkable or where street tiles don't align directly with the window column.
+
+```js
+{
+  floorId: '1',
+  grid: ...,
+  windowFaces: {
+    '9,8':  1,   // Bazaar left window  → facing SOUTH (the promenade)
+    '11,8': 1,   // Bazaar right window → facing SOUTH
+    '21,8': 1,   // Inn left window     → facing SOUTH
+    '23,8': 1    // Inn right window    → facing SOUTH
+  },
+  // ...
+}
+```
+
+`WindowSprites.buildSprites(floorId, grid, gridW, gridH, explicitFaces)` checks the explicit map first per tile; any tile not listed falls back to the street-scoring heuristic. `game.js` passes `floorData.windowFaces || null` as the 5th parameter.
+
+### 4.4 Declaration: `windowScenes` on floor data (future)
 
 A new optional field on exterior floor data:
 
@@ -100,7 +152,7 @@ The `building` key resolves through a new `BuildingRegistry` (§5) that knows th
 
 For convenience a floor that has N window tiles pointing at the same building can omit `windowScenes` entirely and declare `windows: { '21,8': 'driftwood_inn', '23,8': 'driftwood_inn' }` — the registry supplies the rest.
 
-### 4.4 Rules
+### 4.5 Rules
 
 **Public buildings** (Inn, Bazaar, Dispatcher's Office, Soup Kitchen, Shop, Bar):
 - Always have a vignette emoji at the interior-adjacent tile while the building is OPEN.
@@ -116,7 +168,7 @@ For convenience a floor that has N window tiles pointing at the same building ca
 - May have multiple window scenes with different vignettes (counter, back room, upstairs window).
 - Patron patrol paths can overlap (guards pacing, clerks at desks).
 
-### 4.5 Lifecycle hook
+### 4.6 Lifecycle hook
 
 Game calls `WindowScenes.refresh(floorId, hourOfDay)` on:
 - Floor arrive
@@ -128,9 +180,9 @@ Game calls `WindowScenes.refresh(floorId, hourOfDay)` on:
 
 ---
 
-## 5. BuildingRegistry (new module)
+## 5. BuildingRegistry (shipped 2026-04-11)
 
-A Layer 1 data module (`engine/building-registry.js`) with one frozen record per named building:
+Layer 0 data module (`engine/building-registry.js`) — one frozen record per named building. Zero dependencies; loaded before any rendering or game logic.
 
 ```js
 BuildingRegistry.get('driftwood_inn') →
@@ -140,9 +192,9 @@ BuildingRegistry.get('driftwood_inn') →
   parentFloorId: '1',              // where the exterior footprint lives
   type: 'public',                  // 'public' | 'private' | 'scale'
   kind: 'tavern',                  // drives default vignette + patron
-  footprint: {                     // rectangle on parentFloorId
-    x: 19, y: 5, w: 6, h: 4
-  },
+  footprint: { x: 19, y: 5, w: 6, h: 4 },
+  wallTexture: 'wood_plank',       // TextureAtlas ID for freeform bands
+  mullionStyle: 'bronze',          // MULLION_STYLES key for cross + frame
   defaultHours: { openAt: 6, closeAt: 24 },
   defaultVignette: 'tavern_mug',
   defaultPatron: 'tavern_patron',
@@ -152,10 +204,42 @@ BuildingRegistry.get('driftwood_inn') →
 
 The registry seeds itself from the building list already implicit in `floor-manager.js` (every door target is a building), so for the jam we don't need a separate data file — just a static table initialized at module load.
 
+Six buildings registered: `coral_bazaar`, `driftwood_inn`, `storm_shelter`, `gleaners_home`, `dispatchers_office`, `watchmans_post`.
+
 Public API:
 - `BuildingRegistry.get(id)` — fetch a record
 - `BuildingRegistry.listByFloor(parentFloorId)` — all buildings on an exterior
-- `BuildingRegistry.isOpen(id, hourOfDay, flags)` — state query
+- `BuildingRegistry.getVignette(name)` — resolve a vignette recipe `{ emoji, scale, glow, glowRadius }`
+- `BuildingRegistry.getMullionStyle(name)` — resolve mullion material `{ r, g, b }`
+- `BuildingRegistry.isOpen(id, hourOfDay, flags)` — state query with wrap-around hours + curfew/heroDay
+
+### 5.1 Modular texture architecture (approach C+B)
+
+Windows inherit their building's visual material through two data-driven overrides:
+
+**wallTexture** — the TextureAtlas texture ID used for the freeform sill + lintel bands. Without this, every WINDOW_TAVERN tile renders with the default `wood_plank` from `SpatialContract.getTexture()`. With the override, the raycaster swaps the band texture to `brick_red` (Coral Bazaar), `stone_rough` (Storm Shelter), `concrete` (Dispatcher's Office), etc. — the window frame matches the wall it's embedded in.
+
+**mullionStyle** → **MULLION_STYLES** — the base RGB for the mullion cross and frame lines. Three tiers matching the town's social strata:
+
+| Style | RGB | Character | Buildings |
+|---|---|---|---|
+| `bronze` | `(180, 140, 60)` | Warm aged brass | Coral Bazaar, Driftwood Inn |
+| `iron` | `(70, 72, 78)` | Cold grey institutional | Storm Shelter, Dispatcher, Watchman |
+| `wood` | `(48, 28, 14)` | Dark oak (original default) | Gleaner's Home |
+
+**Data flow:**
+
+1. `floor-manager.js` declares `windowScenes`, each entry referencing a `building` ID.
+2. `WindowSprites.buildSprites()` resolves the building record via `BuildingRegistry.get()` and writes `wallTexture` and `mullionStyle` into per-tile caches (`_windowTextures`, `_windowMullions`).
+3. The **raycaster** checks `WindowSprites.getWallTexture(mapX, mapY)` before resolving the default texture — overrides the band material for that column.
+4. The **gap filler** checks `_windowMullions[mapX + ',' + mapY]` at render time — overrides the mullion/frame color for that column.
+
+**Adding a new building's windows** requires zero code changes:
+1. Register the building in `building-registry.js` with `wallTexture` + `mullionStyle`.
+2. Add `windowScenes` entries on the exterior floor data referencing the building ID.
+3. Place WINDOW_TAVERN tiles on the grid.
+
+The system resolves everything else at build time.
 
 ---
 
@@ -222,18 +306,25 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 ### Phase 0 — Shipped 2026-04-11 (Layer 1 glass + naive billboard)
 - `WINDOW_TAVERN = 73` tile + freeform geometry + `window_tavern_interior` gap filler.
 - Naive `WindowSprites.buildSprites()` emits a 🍺 at every WINDOW_TAVERN tile center.
-- Mullion cross + sheen + frame (the visibility fix).
-- Coral Bazaar + Driftwood Inn facades on Promenade.
+- Mullion cross + frame (opaque `rgb()` so mullions don't inherit amber wash alpha).
+- Blue-white sheen removed — not the style we want; replaced in Phase 0.5 by parallax glint.
+- Coral Bazaar + Driftwood Inn facades on Promenade (4 windows total).
+- **Face-aware filler:** `info.hitFace` derived from DDA `side + stepX/stepY` in `raycaster.js`. The filler compares hitFace against the exterior-face map and only paints glass on the two pane faces (exterior + opposite interior); perpendicular faces get opaque masonry fill.
+- **Explicit `windowFaces` map** on floor data (same contract as `doorTargets`). The auto-detect heuristic works for simple facades but fails where both sides of the window are walkable EMPTY and street tiles don't align directly with the window column. Promenade row 8 required explicit entries for all 4 windows (face=1, SOUTH).
+- **Facade model acknowledged:** buildings on Floor N are shells — the real interiors are Floor N.N (a different grid). Windows look into the facade's empty interior tiles, not the depth-2 interior floor. The system is stampable to any new building (see §4.2.1).
 
 **Known gap:** the billboard is at the window plane, not behind it. Windows read as "mailbox-style pictograms" rather than views into a space.
 
-### Phase 1 — BuildingRegistry + window scenes (half day)
-- Add `engine/building-registry.js` with one record per building the current floors use (Bazaar, Inn, Dispatcher, Shelter, Home, Watchman, Soup Kitchen — 7 records).
-- Add `windowScenes` field to floor data on `"1"` and `"2"`.
-- Refactor `WindowSprites.buildSprites()` to read from `windowScenes`, position vignette sprites at the interior-adjacent tile instead of the window tile.
-- Verify the z-bypass path renders sprites one tile behind the freeform cavity correctly (it already does for DUMP_TRUCK but confirm for WINDOW_TAVERN).
+### Phase 1 — BuildingRegistry + window scenes (shipped 2026-04-11)
+- ✅ `engine/building-registry.js` — 6 building records with `wallTexture` + `mullionStyle` + vignettes + hours.
+- ✅ `windowScenes` field on Promenade (`"1"`) floor data — 4 scenes (2× Bazaar, 2× Inn).
+- ✅ `WindowSprites.buildSprites()` reads `windowScenes`, resolves vignettes from BuildingRegistry, positions sprites at interior-adjacent tile.
+- ✅ `game.js` passes `windowScenes` to `buildSprites()`.
+- ✅ Modular texture architecture: per-tile `wallTexture` override in raycaster, per-tile `mullionStyle` override in gap filler. See §5.1.
+- Remaining: verify z-bypass depth rendering with sprites one tile behind the freeform cavity.
+- Remaining: add `windowScenes` to `"2"` (Lantern Row) when windows are placed.
 
-**Acceptance:** The 🍺 renders visually *behind* the window mullion grid, with a clear depth gap between the glass and the glyph. The player reads it as "beer mug sitting on a table inside the tavern."
+**Acceptance:** The 🍺 renders visually *behind* the window mullion grid, with a clear depth gap between the glass and the glyph. The player reads it as "beer mug sitting on a table inside the tavern." Window mullions on the Bazaar are warm bronze, on the Inn warm bronze, on institutional buildings cold iron.
 
 ### Phase 2 — Patron NPCs (1 day)
 - Add `engine/window-patron.js` — minimal patrol sprite with step-lerp.
@@ -261,16 +352,24 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 
 ## 10. Touch list
 
+### Shipped (Phase 0 + Phase 1)
 | File | Change |
 |---|---|
-| `engine/building-registry.js` | **new** — frozen building records |
-| `engine/floor-manager.js` | add `windowScenes` field to `_buildFloor1()` + future exterior floors |
-| `engine/window-sprites.js` | refactor to read `windowScenes`, position vignettes at interior-adjacent tile |
+| `engine/window-sprites.js` | face-aware filler, explicit `explicitFaces` param on `buildSprites`, lazy filler registration, `_detectExteriorFace` heuristic + explicit-map-first lookup, two-face glass pane logic (`isGlassFace`), parallax glint effect, `windowScenes` + `BuildingRegistry` integration, per-tile `_windowTextures`/`_windowMullions` caches, `getWallTexture()`/`getMullionColor()` public API, per-tile mullion color in filler |
+| `engine/raycaster.js` | `info.hitFace` derivation from DDA `side + stepX/stepY`, threaded `stepX/stepY` through to freeform foreground + back-layer calls, per-tile window texture override for WINDOW_TAVERN freeform bands |
+| `engine/floor-manager.js` | `windowFaces` map on Promenade floor data, `windowScenes` array on Promenade (4 scenes: 2× Coral Bazaar, 2× Driftwood Inn) |
+| `engine/game.js` | pass `floorData.windowFaces || null` and `floorData.windowScenes || null` to `WindowSprites.buildSprites` |
+| `engine/building-registry.js` | **new** — Layer 0 frozen building records (6 buildings), `VIGNETTES` table, `MULLION_STYLES` table, `isOpen()` with wrap-around hours |
+| `index.html` | `<script src="engine/building-registry.js">` at Layer 0 |
+
+### Remaining (Phases 2–4)
+| File | Change |
+|---|---|
 | `engine/window-patron.js` | **new** — patrol-sprite driver for patrons |
 | `engine/window-scenes.js` | **new** (or fold into window-sprites) — `refresh()` / `clear()` / `isOpen()` |
 | `engine/game.js` | wire `WindowScenes.refresh()` into floor arrive + DayCycle hour tick |
 | `engine/raycaster.js` | verify z-bypass handles sprites one tile *behind* a freeform cavity (spot-check, probably no change) |
-| `index.html` | `<script>` tags in load order: registry (L1) → window-scenes (L3) → window-patron (L3) |
+| `index.html` | `<script>` tags for window-scenes (L3) → window-patron (L3) |
 | `docs/COZY_INTERIORS_DESIGN.md` | cross-reference this doc from §6 (Per-Building Interaction Inventory) |
 | `docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` | Phase 4 "open items" links here |
 | `docs/LIVING_WINDOWS_ROADMAP.md` | this file |

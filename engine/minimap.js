@@ -447,6 +447,10 @@ var Minimap = (function () {
           ctx.fillStyle = isLit ? COLORS.stairsUp : _dimColor(COLORS.stairsUp);
         } else if (tile === TILES.STAIRS_DN) {
           ctx.fillStyle = isLit ? COLORS.stairsDn : _dimColor(COLORS.stairsDn);
+        } else if (tile === TILES.TRAPDOOR_UP) {
+          ctx.fillStyle = isLit ? COLORS.stairsUp : _dimColor(COLORS.stairsUp);
+        } else if (tile === TILES.TRAPDOOR_DN) {
+          ctx.fillStyle = isLit ? COLORS.stairsDn : _dimColor(COLORS.stairsDn);
         } else if (TILES.isDoor && TILES.isDoor(tile)) {
           var _dc = _classifyDoor(key);
           var _doorCol = _dc === 'shop' ? COLORS.doorShop
@@ -496,6 +500,10 @@ var Minimap = (function () {
           if (tile === TILES.STAIRS_DN) {
             _drawChevron(ctx, px2, py2, tileSize, 'down');
           } else if (tile === TILES.STAIRS_UP) {
+            _drawChevron(ctx, px2, py2, tileSize, 'up');
+          } else if (tile === TILES.TRAPDOOR_DN) {
+            _drawChevron(ctx, px2, py2, tileSize, 'down');
+          } else if (tile === TILES.TRAPDOOR_UP) {
             _drawChevron(ctx, px2, py2, tileSize, 'up');
           }
         }

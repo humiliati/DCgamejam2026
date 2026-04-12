@@ -60,7 +60,7 @@ var DispatcherChoreography = (function() {
       for (var gx = 0; gx < floorData.gridW; gx++) {
         var tile = floorData.grid[gy][gx];
         var TILES_ref = (typeof TILES !== 'undefined') ? TILES : {};
-        if (tile === TILES_ref.STAIRS_DN || tile === TILES_ref.BOSS_DOOR) {
+        if (tile === TILES_ref.STAIRS_DN || tile === TILES_ref.TRAPDOOR_DN || tile === TILES_ref.BOSS_DOOR) {
           return { x: gx, y: gy };
         }
       }

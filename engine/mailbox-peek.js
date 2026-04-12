@@ -33,6 +33,7 @@ var MailboxPeek = (function () {
   var _hideTimer    = 0;
   var _overlay      = null;
   var _onCollect    = null;
+  var _manualDismiss = false; // blocks re-show until player looks away
 
   // ── Timing ─────────────────────────────────────────────────────
   var DWELL_THRESHOLD = 300;  // ms before exterior overlay shows
@@ -121,6 +122,7 @@ var MailboxPeek = (function () {
     _mode = null;
     _dwellTime = 0;
     _hideTimer = 0;
+    _manualDismiss = false;
     _overlay = null;
 
     // Create overlay element
@@ -144,11 +146,15 @@ var MailboxPeek = (function () {
     document.addEventListener('keydown', function (e) {
       if (!_isShowing) return;
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+        e.preventDefault();
         _pagePrev();
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+        e.preventDefault();
         _pageNext();
       } else if (e.key === 'Escape' || e.key === 'Backspace') {
-        _hide();
+        e.preventDefault();
+        e.stopPropagation();
+        _hide(true);
       }
     });
   }
@@ -167,11 +173,14 @@ var MailboxPeek = (function () {
     }
   }
 
-  function _hide() {
+  function _hide(manual) {
     _overlay.style.opacity = '0';
     _isShowing = false;
     _dwellTime = 0;
     _currentIndex = 0;
+
+    // Block dwell re-trigger until player looks away
+    if (manual) _manualDismiss = true;
 
     // Notify MailboxSprites
     if (_mode === 'exterior' && typeof MailboxSprites !== 'undefined') {
@@ -550,12 +559,19 @@ var MailboxPeek = (function () {
     // Check facing
     if (_isFacingPos(targetPos)) {
       _hideTimer = 0;
+
+      // If manually dismissed, block re-show until player looks away
+      if (_manualDismiss) return;
+
       _dwellTime += dt;
 
       if (_dwellTime >= threshold && !_isShowing) {
         _show(targetMode);
       }
     } else {
+      // Player looked away — clear manual dismiss lock
+      _manualDismiss = false;
+
       // Debounce hide
       if (_isShowing) {
         _hideTimer += dt;

@@ -62,12 +62,27 @@ var WindowSprites = (function () {
   var BOB_AMP    = 0.3;       // Subtle drift — patrons shuffling
   var BOB_PERIOD = 3200;      // Slow cycle — relaxed tavern mood
 
+  // ── Glint animation ────────────────────────────────────────────
+  // The glass glint streak rotates through - \ | / - on a slow cycle
+  // that tracks the skybox cloud drift pace — languid enough that the
+  // idle rock reads as ambient reflected light, not a metronome.
+  var GLINT_PERIOD = 20000;   // ms — one full rotation (~skybox cloud drift)
+  var _glintClock  = 0;       // updated by animate() each frame
+
   // ── Cache ───────────────────────────────────────────────────────
   var _cachedFloorId  = null;
   var _cachedSprites  = [];
   // Per-tile exterior-face index keyed by "x,y". Cleared when the
   // floor changes. Read by the gap filler on every column.
   var _exteriorFaces  = {};
+  // Per-tile wall texture override keyed by "x,y" → TextureAtlas ID.
+  // Built from BuildingRegistry.wallTexture via windowScenes. The
+  // raycaster reads this to swap the freeform band texture per window.
+  var _windowTextures = {};
+  // Per-tile mullion color keyed by "x,y" → { r, g, b }. Built from
+  // BuildingRegistry.mullionStyle. The gap filler reads this to tint
+  // the mullion cross per building material.
+  var _windowMullions = {};
 
   // ── Helpers ─────────────────────────────────────────────────────
 
@@ -187,22 +202,25 @@ var WindowSprites = (function () {
 
   /**
    * Build sprites for every WINDOW_TAVERN tile on the current floor.
-   * Cached per floorId — rebuilt only when the floor changes. The
-   * same pass populates the exterior-face map consumed by the gap
-   * filler registered below.
+   * Cached per floorId — rebuilt only when the floor changes.
+   *
+   * Two jobs:
+   *   1. Populate the exterior-face map consumed by the gap filler.
+   *   2. Emit one billboard sprite per window — positioned at the
+   *      **interior-adjacent tile** (one step behind the glass into the
+   *      building facade) when `windowScenes` is provided, or at the
+   *      window tile itself as a fallback for floors that haven't
+   *      declared scenes yet.
    *
    * @param {string} floorId
    * @param {Array<Array<number>>} grid
    * @param {number} gridW
    * @param {number} gridH
-   * @param {Object} [explicitFaces] — optional "x,y" → face index map
-   *   authored on the floor data. Same contract as `doorTargets`:
-   *   explicit declarations from the floor definition win over the
-   *   auto-detect heuristic, which is a fallback for tiles that
-   *   aren't listed. Face index is 0=E, 1=S, 2=W, 3=N.
+   * @param {Object} [explicitFaces] — "x,y" → face index map (§4.3)
+   * @param {Array}  [windowScenes]  — scene declarations (§4.4)
    * @returns {Array} sprite objects for the raycaster
    */
-  function buildSprites(floorId, grid, gridW, gridH, explicitFaces) {
+  function buildSprites(floorId, grid, gridW, gridH, explicitFaces, windowScenes) {
     // Lazy filler registration — safe to call repeatedly, costs
     // nothing once `_registered` flips true on the first successful
     // call. See comment on _ensureFillerRegistered.
@@ -212,6 +230,8 @@ var WindowSprites = (function () {
 
     _cachedSprites  = [];
     _exteriorFaces  = {};
+    _windowTextures = {};
+    _windowMullions = {};
     _cachedFloorId  = floorId;
 
     if (!grid || !gridW || !gridH) return _cachedSprites;
@@ -219,14 +239,13 @@ var WindowSprites = (function () {
     var winTile = (typeof TILES !== 'undefined' && TILES.WINDOW_TAVERN)
       ? TILES.WINDOW_TAVERN : 73;
 
+    // ── Pass 1: populate exterior-face cache for every window tile ──
+    // The gap filler needs this on every column draw, regardless of
+    // whether the sprite uses windowScenes or fallback placement.
     for (var gy = 0; gy < gridH; gy++) {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
         if (grid[gy][gx] !== winTile) continue;
-
-        // Compute + cache exterior face for this tile. Explicit
-        // floor-data entries win; the heuristic is only consulted
-        // when the tile isn't listed.
         var key = gx + ',' + gy;
         var face;
         if (explicitFaces && typeof explicitFaces[key] === 'number') {
@@ -235,22 +254,87 @@ var WindowSprites = (function () {
           face = _detectExteriorFace(grid, gridW, gridH, gx, gy);
         }
         _exteriorFaces[key] = face;
+      }
+    }
 
-        // Position at grid index — _renderSprites adds 0.5 to center.
-        // No groundLevel flag: default eye-level placement lands the
-        // glyph near the top of the 0.40–1.15 slot, which is where a
-        // bar patron's upraised mug would naturally be anyway.
+    // ── Pass 2: emit billboard sprites ──────────────────────────────
+    // When windowScenes is provided, each scene entry drives a sprite
+    // positioned at (facade + interiorStep) with the vignette recipe
+    // from BuildingRegistry. Any WINDOW_TAVERN tile NOT covered by a
+    // scene entry gets the old fallback (sprite at the window tile
+    // with the default INTERIOR config).
+
+    // Build a set of covered facade tiles for the fallback check.
+    var _coveredFacades = {};
+
+    if (windowScenes && windowScenes.length > 0) {
+      for (var si = 0; si < windowScenes.length; si++) {
+        var scene = windowScenes[si];
+        var fx = scene.facade.x;
+        var fy = scene.facade.y;
+        _coveredFacades[fx + ',' + fy] = true;
+
+        // Resolve building material for this window's bands + mullion.
+        var bldgId = scene.building || null;
+        var bldg   = (bldgId && typeof BuildingRegistry !== 'undefined')
+                   ? BuildingRegistry.get(bldgId) : null;
+        if (bldg) {
+          var fKey = fx + ',' + fy;
+          if (bldg.wallTexture)  _windowTextures[fKey] = bldg.wallTexture;
+          if (bldg.mullionStyle) _windowMullions[fKey] = BuildingRegistry.getMullionStyle(bldg.mullionStyle);
+        }
+
+        // Resolve the vignette recipe — from BuildingRegistry if
+        // available, else fall back to the default INTERIOR config.
+        var vKey  = scene.vignette || null;
+        var vData = null;
+        if (vKey && typeof BuildingRegistry !== 'undefined') {
+          vData = BuildingRegistry.getVignette(vKey);
+        }
+        var emoji = vData ? vData.emoji     : INTERIOR.emoji;
+        var scale = vData ? vData.scale     : INTERIOR.scale;
+        var glow  = vData ? vData.glow      : INTERIOR.glow;
+        var glowR = vData ? vData.glowRadius : INTERIOR.glowRadius;
+
+        // Sprite position: one step behind the glass into the facade.
+        var sprX = fx + (scene.interiorStep ? scene.interiorStep.dx : 0);
+        var sprY = fy + (scene.interiorStep ? scene.interiorStep.dy : 0);
+
         _cachedSprites.push({
-          x: gx,
-          y: gy,
+          x: sprX,
+          y: sprY,
+          emoji:        emoji,
+          emojiOverlay: null,
+          scale:        scale,
+          glow:         glow,
+          glowRadius:   glowR,
+          windowTavern: true,
+          noFogFade:    false,
+          bobY:         0
+        });
+      }
+    }
+
+    // Fallback: any WINDOW_TAVERN tile without a scene entry gets a
+    // sprite at the window tile itself (Phase 0 behavior). This keeps
+    // windows working on floors that haven't declared windowScenes yet.
+    for (var fy2 = 0; fy2 < gridH; fy2++) {
+      if (!grid[fy2]) continue;
+      for (var fx2 = 0; fx2 < gridW; fx2++) {
+        if (grid[fy2][fx2] !== winTile) continue;
+        if (_coveredFacades[fx2 + ',' + fy2]) continue;
+
+        _cachedSprites.push({
+          x: fx2,
+          y: fy2,
           emoji:        INTERIOR.emoji,
           emojiOverlay: null,
           scale:        INTERIOR.scale,
           glow:         INTERIOR.glow,
           glowRadius:   INTERIOR.glowRadius,
           windowTavern: true,
-          noFogFade:    false,  // vignette fades naturally with distance
-          bobY:         0       // set by animate() each frame
+          noFogFade:    false,
+          bobY:         0
         });
       }
     }
@@ -265,6 +349,11 @@ var WindowSprites = (function () {
    * @param {number} now — performance.now() or Date.now()
    */
   function animate(now) {
+    // Feed the glint clock — consumed by the gap filler on every
+    // column this frame. Runs even when there are no sprites (the
+    // filler is registered independently and the clock costs nothing).
+    _glintClock = now;
+
     if (_cachedSprites.length === 0) return;
     var phase  = (now % BOB_PERIOD) / BOB_PERIOD;
     var offset = Math.sin(phase * Math.PI * 2) * BOB_AMP;
@@ -297,6 +386,8 @@ var WindowSprites = (function () {
     _cachedFloorId  = null;
     _cachedSprites  = [];
     _exteriorFaces  = {};
+    _windowTextures = {};
+    _windowMullions = {};
   }
 
   // ── Gap filler ──────────────────────────────────────────────────
@@ -308,40 +399,42 @@ var WindowSprites = (function () {
   // gave the window the "mailbox cut through every side of the
   // block" look.
   //
-  // A glass pane has TWO visible faces though: the exterior face
-  // (street side, viewed by the player walking past) and the
-  // opposite face, which is the same pane viewed from inside the
-  // building. Both should render as glass so that when the player
-  // is inside the bazaar/inn and looks at the back of the window,
-  // they see the mullion cross and can look through the cavity at
-  // the street/sky beyond — not a solid wall. The two perpendicular
-  // faces (the sides of the tile that sit inside the building mass)
-  // are the ones that should be opaque masonry.
+  // Three-face model for the window cavity:
+  //   EXTERIOR face  → glass pane (mullion + amber + glint)
+  //   INTERIOR face  → transparent (no fill, back layers show through)
+  //   SIDE faces     → opaque wall masonry (close the tile edges)
+  // The window reads as a thin glass pane on the building facade:
+  // mullion on the front, see-through from front to back, solid
+  // wall on the edges where the tile meets its neighbours.
   function _windowTavernInteriorFiller(ctx, col, gapStart, gapH, info) {
     if (gapH <= 0) return;
 
     var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
     var exteriorFace = getExteriorFace(info.mapX, info.mapY);
-
-    // Back face of the same glass pane — opposite direction index.
-    // 0↔2 (E/W), 1↔3 (S/N). Both faces get the glass treatment.
     var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
-    var isGlassFace  = (exteriorFace >= 0) &&
-                       (hitFace === exteriorFace || hitFace === interiorFace);
 
-    // ── Perpendicular faces: paint as solid wall ──────────────────
-    // The freeform cavity is transparent by default (back layers
-    // bled through), which is what used to leak the amber wash on
-    // every face. Painting an opaque wall-colored strip here closes
-    // the hole on the two sides of the tile that are supposed to be
-    // solid masonry — i.e. the faces perpendicular to the glass
-    // pane. Color is derived from the tile's texture brightness +
-    // fog so the patch matches the adjacent WALL bands.
-    if (!isGlassFace) {
+    // Three face treatments:
+    //   Exterior face  → glass pane (mullion + amber wash + glint)
+    //   Interior face  → nothing (leave cavity transparent, see-through)
+    //   Side faces     → opaque wall masonry (close the tile edges)
+
+    // ── Interior face: leave transparent ─────────────────────────
+    // The back of the glass pane is open — the cavity stays clear
+    // so back-layer geometry (sky, far walls) shows through. No
+    // fill, no mullion. The player looking in from the street sees
+    // through the glass; the window reads as a thin pane, not a
+    // full-tile-depth cube.
+    if (exteriorFace >= 0 && hitFace === interiorFace) {
+      return;
+    }
+
+    // ── Side faces: paint as solid wall ──────────────────────────
+    // The two perpendicular faces (tile edges visible when looking
+    // at the window edge-on) fill with opaque wall-colored masonry
+    // so the freeform cavity doesn't leak. Color is derived from
+    // the tile's texture brightness + fog to match adjacent bands.
+    if (exteriorFace < 0 || hitFace !== exteriorFace) {
       var bAdjW = info.brightness;
-      // Mid-tone brick/stone color — not pure black, since the rest
-      // of the facade is textured. Later phases can swap this for a
-      // sampled texture column if needed.
       var wR = Math.round(70 * bAdjW);
       var wG = Math.round(55 * bAdjW);
       var wB = Math.round(40 * bAdjW);
@@ -356,7 +449,7 @@ var WindowSprites = (function () {
       return;
     }
 
-    // ── Exterior face: paint interior ─────────────────────────────
+    // ── Exterior face: glass pane with mullion ────────────────────
     var bAdj   = info.brightness;
     var fogFade = 1 - Math.min(0.85, info.fogFactor);
 
@@ -369,11 +462,52 @@ var WindowSprites = (function () {
       ctx.fillRect(col, gapStart, 1, gapH);
     }
 
-    // (Blue sheen deleted — barely visible and not the style we
-    //  want. LIVING_WINDOWS_ROADMAP Phase 1 replaces it with a
-    //  parallax glint sprite driven by angle-from-normal.)
+    // 2. Parallax glint — a bright streak on the glass surface that
+    //    rotates through the states  - \ | / -  as the player moves
+    //    past the window, selling the illusion of reflected light
+    //    catching at different angles. The streak's angle is driven
+    //    by wallX (encodes the ray's lateral hit position on the face)
+    //    with a slow time shimmer on top.
+    //
+    //    The streak is a 2-pixel-tall bright white band whose vertical
+    //    center shifts based on wallX × slope. The slope itself
+    //    oscillates slowly over time (cyclone nozzle math) so the
+    //    glint revolves even when the player is standing still.
+    //
+    //    The glint is drawn with low alpha so it doesn't overpower
+    //    the mullion cross painted on top of it in the next pass.
+    if (gapH >= 4) {
+      var _now      = _glintClock;
+      var _wallX    = info.wallX;
+      // Slow rotation: full cycle every ~4.2 seconds.
+      // The slope ranges from -1 to +1 (maps to / through - through \).
+      var _rotPhase = (_now % GLINT_PERIOD) / GLINT_PERIOD;
+      var _slope    = Math.sin(_rotPhase * Math.PI * 2);
+      // Vertical center offset within the gap: wallX drives parallax.
+      // At wallX=0.5 (face center) the streak is at gap midpoint.
+      // Slope tilts it: positive slope → streak rises left, drops right.
+      var _yNorm    = 0.5 + (_wallX - 0.5) * _slope * 0.35;
+      // Clamp to inner 80% of gap so streak doesn't touch frame edges.
+      if (_yNorm < 0.1) _yNorm = 0.1;
+      if (_yNorm > 0.9) _yNorm = 0.9;
+      var _glintY   = gapStart + Math.floor(_yNorm * gapH);
+      // Intensity: brightest near wallX ≈ 0.35 (off-center, like a
+      // real specular highlight), fading to 0 at edges.
+      var _xDist    = Math.abs(_wallX - 0.35);
+      var _glintA   = Math.max(0, 1 - _xDist * 3.5) * 0.45 * bAdj * fogFade;
+      if (_glintA > 0.02) {
+        // 6px tall white band (3× the original 2px — reads as a
+        // chunky reflected-light block, closer to Minecraft glass).
+        var _gH = Math.min(6, gapH - (_glintY - gapStart));
+        if (_gH > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, ' + _glintA.toFixed(3) + ')';
+          ctx.fillRect(col, _glintY, 1, _gH);
+        }
+      }
+    }
 
-    // 2. Mullion cross — divided-pane frame drawn with opaque
+    // 3. Mullion cross — divided-pane frame drawn with opaque
+    //    (renumbered from 2 after glint insertion)
     //    rgb() so the dark wood isn't swallowed by the amber wash.
     //    Brightness and fog are baked into the RGB channels; alpha
     //    stays 1.0. Vertical mullion at wallX ≈ 0.5; horizontal
@@ -382,7 +516,11 @@ var WindowSprites = (function () {
     var mullionHalfW = 0.05 + 0.03 / Math.max(0.6, info.perpDist);
     var vertMullion = (wallX >= 0.5 - mullionHalfW && wallX <= 0.5 + mullionHalfW);
 
-    var mR = 48, mG = 28, mB = 14;
+    // Per-tile mullion color from BuildingRegistry, or default wood.
+    var mRGB = _windowMullions[info.mapX + ',' + info.mapY] || null;
+    var mR = mRGB ? mRGB.r : 48;
+    var mG = mRGB ? mRGB.g : 28;
+    var mB = mRGB ? mRGB.b : 14;
     mR = Math.round(mR * bAdj);
     mG = Math.round(mG * bAdj);
     mB = Math.round(mB * bAdj);
@@ -407,7 +545,7 @@ var WindowSprites = (function () {
       ctx.fillRect(col, hmTop, 1, hMullionThickness);
     }
 
-    // 3. Top + bottom frame lines — 1px opaque dark bands at the
+    // 4. Top + bottom frame lines — 1px opaque dark bands at the
     //    slot's top and bottom edges (the stop bead).
     var fR = Math.round(mR * 0.6);
     var fG = Math.round(mG * 0.6);
@@ -437,11 +575,35 @@ var WindowSprites = (function () {
     }
   }
 
+  /**
+   * Return the wall texture ID for a window tile's freeform bands,
+   * or null if no override (raycaster falls back to SpatialContract).
+   * @param {number} x
+   * @param {number} y
+   * @returns {string|null}
+   */
+  function getWallTexture(x, y) {
+    return _windowTextures[x + ',' + y] || null;
+  }
+
+  /**
+   * Return the mullion RGB object {r,g,b} for a window tile, or null
+   * if no override (filler falls back to the default wood color).
+   * @param {number} x
+   * @param {number} y
+   * @returns {Object|null}
+   */
+  function getMullionColor(x, y) {
+    return _windowMullions[x + ',' + y] || null;
+  }
+
   return Object.freeze({
     buildSprites:    buildSprites,
     animate:         animate,
     clearCache:      clearCache,
     getAnimatedX:    getAnimatedX,
-    getExteriorFace: getExteriorFace
+    getExteriorFace: getExteriorFace,
+    getWallTexture:  getWallTexture,
+    getMullionColor: getMullionColor
   });
 })();

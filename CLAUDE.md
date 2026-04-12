@@ -27,7 +27,9 @@ The living design document is `docs/Biome Plan.html` (v5). It defines the world 
 /////If the timeline is tight, cut features — don't cut corners on the features you do build.////////////
 
 
-**Never fabricate when EyesOnly has a reference implementation.** EyesOnly is ALWAYS available at `EyesOnly/` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there. If EyesOnly has no suitable refrence material regroup with user on research and brainstorming.
+**Never fabricate when EyesOnly & Raycast.js-master has a reference implementation.** EyesOnly or raycast.js-master is ALWAYS available at `EyesOnly/` or `\workspace\LG Apps\Games\DCgamejam2026\raycast.js-master` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly or raycast.js-master, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for 2D game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. for raycast or 3D rendering, the path is `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\raycast.js-master\src` 
+
+If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there. If EyesOnly nor raycast.js-master has no suitable refrence material regroup with user on research and brainstorming.
 
 ## Direction convention
 
@@ -101,7 +103,7 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 
 | Layer | Purpose | Modules |
 |---|---|---|
-| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem` |
+| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem`, `DoorSprites` |
 | 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
 | 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
 | 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
@@ -128,6 +130,8 @@ Layer 3.5 modules were extracted from `game.js` in three phases (see `docs/GAME_
 **MovementController** — Queued lerp system ported from dcexjam2025. Dual-queue architecture: impulse_queue (raw input) and interp_queue (validated moves being animated). Runs at 60fps via `MC.tick(frameDt)` in the render loop. WALK_TIME=500ms, ROT_TIME=250ms. Double-time kicks in at queue depth > 3.
 
 **SpatialContract** — Frozen config objects that govern both generation and rendering per floor type. Three constructors: `exterior()`, `interior()`, `nestedDungeon()`. The raycaster reads the contract every frame for fog, wall height, and distance clamping.
+
+**DoorSprites** — Layer 0 module. Per-tile door texture cache (`"x,y"` → texture ID) and exterior face cache (`"x,y"` → face index 0–3). Owns the `facade_door` gap filler registered with the Raycaster for DOOR_FACADE freeform tiles. Three-face model: exterior face → dark interior portal with door frame; interior face → transparent; side faces → opaque masonry. Populated by FloorManager during floor generation.
 
 **DoorContractAudio** — Pure data module. Transition table keyed by `"srcDepth:tgtDepth"` returns a sound sequence array. Three-phase timing: DoorOpen (delay 0), Ascend/Descend (delay 250ms), DoorClose (delay 600ms). The pre-fade delay (350ms) ensures the player hears the door creak before the screen fades.
 
@@ -160,11 +164,21 @@ Design language by floor depth:
 
 The step fill (the colored strip in the gap) uses the contract's `stepColor` at 70% brightness to read as a physical platform edge. Regular walls and empty tiles always have offset 0.
 
+## DOOR_FACADE recess (Wolfenstein thin-wall offset)
+
+DOOR_FACADE tiles use a Wolfenstein 3D-style thin-wall technique to render the door face recessed inside the tile rather than flush with adjacent walls. After `perpDist` is calculated for a DOOR_FACADE hit on the exterior face, the raycaster advances the ray by `_recessD` (0.25) world units into the tile:
+
+- **Inset hit** (ray stays within tile): `perpDist` increases → door face + lintel render at greater distance than surrounding walls, creating visible depth.
+- **Jamb hit** (ray exits through perpendicular boundary): `_facadeJamb = true`, `side` flips, `perpDist` set to the side-exit crossing. Freeform rendering is suppressed → column renders as solid textured wall (the jamb masonry).
+
+The recess block lives in `raycaster.js` between the `perpDist = Math.abs(perpDist)` line and the perpDist minimum clamp. `_facadeJamb` propagates to the z-buffer write (solid occlusion, not see-through) and the freeformCfg lookup (nulled for jamb columns). `DoorSprites.getExteriorFace()` identifies which face of the tile faces the street.
+
 ## Source codebases
 
+**Raycast, action & 3D** (mounted at `/mnt/raycast.js-master/`) The rendering routine is made up of vertical lines of texture-mapped walls at constant-Z, and perspective-correct texture-mapping for flat surfaces. An offscreen frame buffer is utilized to optimize per-pixel rendering.
 **EyesOnly** (mounted at `/mnt/EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI.
 
-## Browser testing (Cowork sessions)
+## Browser testing (Cowork sessions) ***ONLY TEST IN BROWSER IF ABSOLUTELY NECESSARY OR IF ASKED TO DO SO***
 
 The game is a canvas-based HTML5 app. Testing in-browser requires specific setup:
 
@@ -176,3 +190,42 @@ The game is a canvas-based HTML5 app. Testing in-browser requires specific setup
 6. **Canvas apps return empty from `read_page`** — use `javascript_tool` to query game state and `computer` action `screenshot` for visuals.
 7. **Console errors**: Call `read_console_messages` once to start tracking, then reload the page to capture load-time errors.
 8. **Tab group**: The game tab must be dragged into the Claude MCP tab group before tools can access it.
+
+<!-- code-review-graph MCP tools -->
+## MCP Tools: code-review-graph
+
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
+
+### When to use graph tools FIRST
+
+- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
+- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
+- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
+- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview` + `list_communities`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Key Tools
+
+| Tool | Use when |
+|------|----------|
+| `detect_changes` | Reviewing code changes — gives risk-scored analysis |
+| `get_review_context` | Need source snippets for review — token-efficient |
+| `get_impact_radius` | Understanding blast radius of a change |
+| `get_affected_flows` | Finding which execution paths are impacted |
+| `query_graph` | Tracing callers, callees, imports, tests, dependencies |
+| `semantic_search_nodes` | Finding functions/classes by name or keyword |
+| `get_architecture_overview` | Understanding high-level codebase structure |
+| `refactor_tool` | Planning renames, finding dead code |
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes` for code review.
+3. Use `get_affected_flows` to understand impact.
+4. Use `query_graph` pattern="tests_for" to check coverage.

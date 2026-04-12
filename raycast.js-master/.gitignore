@@ -1,0 +1,18 @@
+# directories
+node_modules
+screenshots
+dist
+
+# dotfiles
+.DS_Store
+.Python
+*.sublime-workspace
+
+# misc.
+*.zip
+*.ini
+
+# build artefacts
+rce
+src/engine/assets.tjs
+tools/readdir

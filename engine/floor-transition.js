@@ -197,12 +197,12 @@ var FloorTransition = (function () {
     var tile = grid[pos.y][pos.x];
     var currentId = FloorManager.getFloor();
 
-    if (direction === 'down' && tile === TILES.STAIRS_DN) {
+    if (direction === 'down' && (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN)) {
       var target = _resolveStairTarget(currentId, 'down');
       if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'advance', null, currentId);
       go(target, 'advance');
-    } else if (direction === 'up' && tile === TILES.STAIRS_UP) {
+    } else if (direction === 'up' && (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP)) {
       var target = _resolveStairTarget(currentId, 'up');
       if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'retreat', null, currentId);
@@ -224,14 +224,14 @@ var FloorTransition = (function () {
     var tile = grid[fy][fx];
     var currentId = FloorManager.getFloor();
 
-    if (tile === TILES.STAIRS_DN) {
+    if (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN) {
       var target = _resolveStairTarget(currentId, 'down');
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'advance');
       DoorContracts.setContract({ x: fx, y: fy }, 'advance', null, currentId);
       go(target, 'advance');
       return true;
-    } else if (tile === TILES.STAIRS_UP) {
+    } else if (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP) {
       var target = _resolveStairTarget(currentId, 'up');
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'retreat');
@@ -276,7 +276,7 @@ var FloorTransition = (function () {
       return true;  // Always consumed — either unlocks or shows rejection
     }
 
-    if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR) {
+    if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR || tile === TILES.DOOR_FACADE) {
       if (tile === TILES.BOSS_DOOR && !_tryUnlockDoor(fx, fy, currentId)) {
         return true;  // Consumed the interaction (showed locked dialog)
       }

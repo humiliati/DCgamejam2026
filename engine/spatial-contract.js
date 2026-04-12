@@ -85,6 +85,16 @@ var SpatialContract = (function () {
       // opacity: peak alpha at horizon center (0.7 default, 0 disables)
       terminusFog:      opts.terminusFog || { height: 0.15, opacity: 0.7 },
 
+      // ── Weather system hooks ──
+      // terminusDist: tile distance at which sprites punch through weather
+      // overlays. The raycaster splits sprite rendering into a distant pass
+      // (masked by weather) and a near pass (drawn over weather) at this
+      // threshold. Higher values = weather visible over more of the scene.
+      terminusDist:     opts.terminusDist || 2.0,
+      // weather: named preset key consumed by WeatherSystem (when loaded).
+      // 'clear' = legacy behavior (terminus fog veil only on exterior).
+      weather:          opts.weather || 'clear',
+
       ceilingType:      CEILING.SKY,
       skyPreset:        opts.skyPreset || 'cedar',   // Skybox preset name
       ceilColor:        opts.ceilColor || '#2a3a4a',
@@ -236,7 +246,25 @@ var SpatialContract = (function () {
         // would render the "under the canopy" area as a solid black
         // cube. Degrades gracefully to a single-band wall on biomes
         // that shrink wallHeights below 0.20.
-        70: Object.freeze({ hUpper: 0.20, hLower: 0.0, fillGap: '_transparent' })
+        70: Object.freeze({ hUpper: 0.20, hLower: 0.0, fillGap: '_transparent' }),
+        // ARCH_DOORWAY — alpha-mask freeform. hUpper/hLower are dummy
+        // maximums; the actual per-column gap profile is driven by the
+        // texture's α channel (gapTexAlpha: true). The raycaster reads
+        // _computeAlphaRange per column instead of using flat fractions.
+        // fillGap: '_transparent' — the room behind shows through.
+        71: Object.freeze({ hUpper: 0.5, hLower: 0.0, gapTexAlpha: true, fillGap: '_transparent' }),
+        // PORTHOLE — alpha-mask freeform circular cutout. Similar to
+        // ARCH_DOORWAY but with a centred circular transparent region.
+        72: Object.freeze({ hUpper: 0.5, hLower: 0.3, gapTexAlpha: true, fillGap: '_transparent' }),
+        // DOOR_FACADE — full-height building entrance. The door opening
+        // is a 1.30-unit cavity at ground level (world Y 0.00→1.30),
+        // matching human-scale proportions against a 3.5-unit facade.
+        // hLower=0 (no sill — door meets floor), hUpper=2.20 (lintel +
+        // upper floors = 3.5 - 1.30). The 'facade_door' gap filler paints
+        // the dark interior + door frame on the exterior face, transparent
+        // on the interior face, masonry on side faces (same model as
+        // WINDOW_TAVERN's three-face treatment).
+        74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -250,6 +278,8 @@ var SpatialContract = (function () {
         4:  'door_wood',       // DOOR_EXIT
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
+        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
+        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron gate
         18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
@@ -276,11 +306,17 @@ var SpatialContract = (function () {
                                //   with the PERGOLA slab texture. The freeform band
                                //   (0.80 world units) samples a clean horizontal
                                //   strip of the beam texture.
-        73: 'wood_plank'       // WINDOW_TAVERN — stained plank frame for the sill
+        71: 'arch_brick',      // ARCH_DOORWAY — sandstone brick + parabolic α-cutout
+        72: 'porthole_alpha',  // PORTHOLE — industrial brick + circular α-cutout
+        73: 'wood_plank',      // WINDOW_TAVERN — stained plank frame for the sill
                                //   and lintel bands. The middle glass slot is
                                //   painted by the 'window_tavern_interior' gap
                                //   filler (amber tint over back layers), not by
                                //   this texture.
+        74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
+                               //   above the door opening. Per-tile override via
+                               //   DoorSprites.getWallTexture() replaces this with
+                               //   the building's own material.
       }), opts.textures),
 
       // ── Floor texture ──
@@ -309,7 +345,10 @@ var SpatialContract = (function () {
         68: 'floor_cobble',      // PERGOLA — plaza flagstones below the beam lattice (biome-overridable)
         69: 'floor_cobble',      // CITY_BONFIRE — plaza flagstones around the community pyre
         70: 'floor_cobble',      // PERGOLA_BEAM — plaza flagstones under the beam canopy
-        73: 'floor_cobble'       // WINDOW_TAVERN — street cobblestones outside the facade
+        71: 'floor_stone',       // ARCH_DOORWAY — stone threshold under the arch
+        72: 'floor_cobble',      // PORTHOLE — cobblestones below the porthole wall
+        73: 'floor_cobble',      // WINDOW_TAVERN — street cobblestones outside the facade
+        74: 'floor_stone'       // DOOR_FACADE — stone threshold under the door
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -347,6 +386,9 @@ var SpatialContract = (function () {
                     //   Y=1.80–2.00, just below the chimney top. A ring of beams
                     //   around the pyre reads as a delicate rail sitting on top
                     //   of the chimney rather than a second full-mass slab.
+        71: 3.5,    // ARCH_DOORWAY — full building facade height (matches WALL)
+        72: 3.5,    // PORTHOLE — full building facade height (matches WALL)
+        74: 3.5,    // DOOR_FACADE — full building facade height (matches WALL)
         73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
                     //   on all exterior biomes so the window cuts into the
                     //   wall plane without creating a notch). Freeform path
@@ -395,6 +437,8 @@ var SpatialContract = (function () {
       fogModel:         FOG.CLAMP,                 // Walls clamp to solid at distance
       fogDistance:       opts.fogDistance || 10,     // Fog starts close
       fogColor:         opts.fogColor || { r: 10, g: 10, b: 12 }, // Near-black
+      terminusDist:     opts.terminusDist || 1.5,   // Interior: tighter punch-through
+      weather:          opts.weather || 'clear',
       ceilingType:      CEILING.SOLID,
       ceilColor:        opts.ceilColor || '#1a1a1a',
       floorColor:       opts.floorColor || '#2a2a2a',
@@ -414,9 +458,11 @@ var SpatialContract = (function () {
         5: -0.08,     // STAIRS_DN — trap door feel
         6:  0.06,     // STAIRS_UP — slight rise toward exit
         14: 0.12,     // BOSS_DOOR — elevated archway
-        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+        29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
                       //   (legacy step-fill path; freeform path ignores this
                       //    offset when tileFreeform[29] is active)
+        75: -0.10,    // TRAPDOOR_DN — sunken, hatch reads as hole in floor
+        76:  0.10     // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#151518',
 
@@ -434,17 +480,29 @@ var SpatialContract = (function () {
         // HEARTH: mantle 0.80 world units, base 0.40 world units.
         // On a 2.5-tall chimney stack the gap is 1.30 units (generous
         // fire cavity). On a 0.5-tall stub it degrades to fully solid.
-        29: Object.freeze({ hUpper: 0.80, hLower: 0.40, fillGap: 'hearth_fire' })
+        29: Object.freeze({ hUpper: 0.80, hLower: 0.40, fillGap: 'hearth_fire' }),
+        71: Object.freeze({ hUpper: 0.5, hLower: 0.0, gapTexAlpha: true, fillGap: '_transparent' }),
+        // DOOR_FACADE on interior floors: 1.30-unit door opening in a
+        // 2.0-unit wall. hUpper = 0.70 (lintel above door).
+        74: Object.freeze({ hUpper: 0.70, hLower: 0.00, fillGap: 'facade_door' }),
+        // TRAPDOOR_DN: 0.50-unit hatch cavity at bottom of 2.0 wall
+        75: Object.freeze({ hUpper: 1.50, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
+        // TRAPDOOR_UP: 0.50-unit hatch cavity at top of 2.0 wall
+        76: Object.freeze({ hUpper: 0.00, hLower: 1.50, fillGap: 'trapdoor_shaft' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
       textures: _mergeTileTable(_buildTextures({
         1:  'wood_plank',      // WALL — warm wood interior
+        71: 'arch_stone',      // ARCH_DOORWAY — cool stone for interior arches
         2:  'door_wood',       // DOOR — room-to-room door
         3:  'door_wood',       // DOOR_BACK
         4:  'door_wood',       // DOOR_EXIT
+        74: 'wood_plank',      // DOOR_FACADE — lintel texture (interior wood)
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
+        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
+        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron archway
         18: 'bonfire_ring',    // BONFIRE — stone ring (interior hearth variant)
@@ -464,14 +522,22 @@ var SpatialContract = (function () {
         17: 'floor_poison',      // POISON — stone with toxic green pools
         19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
         23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
-        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
+        39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
+        71: 'floor_stone',      // ARCH_DOORWAY — stone threshold
+        74: 'floor_stone',      // DOOR_FACADE — stone threshold
+        75: 'floor_stone',      // TRAPDOOR_DN — stone around hatch
+        76: 'floor_stone'       // TRAPDOOR_UP — stone around hatch
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({
         1:  2.5,    // WALL — extends above ceiling plane for close-up immersion
         18: 0.3,    // BONFIRE — low stone ring
-        36: 0.6     // TERMINAL — desk height, CRT screen above
+        36: 0.6,    // TERMINAL — desk height, CRT screen above
+        71: 2.5,    // ARCH_DOORWAY — match interior WALL height
+        74: 2.5,    // DOOR_FACADE — match interior WALL height
+        75: 2.0,    // TRAPDOOR_DN — full interior wall height
+        76: 2.0     // TRAPDOOR_UP — full interior wall height
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -516,6 +582,8 @@ var SpatialContract = (function () {
       fogModel:         FOG.DARKNESS,              // Hard black cutoff
       fogDistance:       opts.fogDistance || 10,
       fogColor:         opts.fogColor || { r: 0, g: 0, b: 0 },  // Pure black
+      terminusDist:     opts.terminusDist || 1.0,   // Dungeon: tight punch-through
+      weather:          opts.weather || 'clear',
       ceilingType:      CEILING.VOID,
       ceilColor:        opts.ceilColor || '#0a0a0a',
       floorColor:       opts.floorColor || '#222',
@@ -542,9 +610,20 @@ var SpatialContract = (function () {
         5: -0.10,     // STAIRS_DN — hole in the floor
         6:  0.05,     // STAIRS_UP — rough hewn steps upward
         14: 0.15,     // BOSS_DOOR — chamber entrance
-        29: -0.40     // HEARTH — deep sunken: fire cavity for sandwich rendering
+        29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
+        75: -0.10,    // TRAPDOOR_DN — sunken, hatch reads as hole in floor
+        76:  0.10     // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#111',
+
+      // ── Freeform tile config ──
+      tileFreeform: _mergeTileTable({
+        29: Object.freeze({ hUpper: 0.40, hLower: 0.20, fillGap: 'hearth_fire' }),
+        // TRAPDOOR_DN: 0.20-unit hatch in a 1.2 dungeon wall (bottom cavity)
+        75: Object.freeze({ hUpper: 1.00, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
+        // TRAPDOOR_UP: 0.20-unit hatch in a 1.2 dungeon wall (top cavity)
+        76: Object.freeze({ hUpper: 0.00, hLower: 1.00, fillGap: 'trapdoor_shaft' })
+      }, opts.tileFreeform),
 
       // ── Wall textures ──
       textures: _mergeTileTable(_buildTextures({
@@ -554,6 +633,8 @@ var SpatialContract = (function () {
         4:  'door_wood',       // DOOR_EXIT
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
+        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
+        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron chamber door
         18: 'bonfire_ring',    // BONFIRE — dungeon rest point
@@ -573,13 +654,17 @@ var SpatialContract = (function () {
         17: 'floor_poison',      // POISON — stone with toxic green pools
         19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
         23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
-        39: 'floor_detritus'     // DETRITUS — scattered adventurer debris
+        39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
+        75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
+        76: 'floor_stone'        // TRAPDOOR_UP — stone around hatch
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({
         18: 0.3,    // BONFIRE — low stone ring
-        36: 0.6     // TERMINAL — desk height
+        36: 0.6,    // TERMINAL — desk height
+        75: 1.2,    // TRAPDOOR_DN — low dungeon wall around hatch
+        76: 1.2     // TRAPDOOR_UP — low dungeon wall around hatch
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──

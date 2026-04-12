@@ -2409,7 +2409,7 @@ var Game = (function () {
       var guardDepth = guardFloor ? guardFloor.split('.').length : 1;
       if (guardDepth === 2) {
         var tile = floorData.grid[fy] ? floorData.grid[fy][fx] : 0;
-        var isDoorExit = (tile === TILES.DOOR_EXIT || tile === TILES.DOOR_BACK || tile === TILES.STAIRS_UP);
+        var isDoorExit = (tile === TILES.DOOR_EXIT || tile === TILES.DOOR_BACK || tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP);
         if (isDoorExit && !_curfewExitConfirmed) {
           // Show confirmation dialog instead of transitioning
           if (typeof DialogBox !== 'undefined') {
@@ -3381,6 +3381,11 @@ var Game = (function () {
       if (typeof CombatReport !== 'undefined') {
         CombatReport.update(frameDt);
       }
+
+      // Weather above-HUD layers (heavy rain streaks, vignette overlay)
+      if (typeof WeatherSystem !== 'undefined') {
+        WeatherSystem.renderAbove(ctx, _canvas.width, _canvas.height);
+      }
     }
   }
 
@@ -3711,14 +3716,16 @@ var Game = (function () {
     // placement lands inside the slot naturally.
     if (typeof WindowSprites !== 'undefined') {
       var _wsFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
-      // Pass floorData.windowFaces (an optional per-tile override map
-      // keyed by "x,y" → face index 0=E/1=S/2=W/3=N) so authored
-      // facades can declare which side is the street. WindowSprites
-      // falls back to its auto-detect heuristic for any tile not in
-      // the map. See LIVING_WINDOWS_ROADMAP §4 for the contract.
+      // Pass floorData.windowFaces (per-tile face override, §4.3)
+      // and floorData.windowScenes (vignette placement, §4.4). When
+      // windowScenes is present, vignettes are positioned one tile
+      // inside the building facade instead of at the glass tile — the
+      // depth gap makes the billboard read as interior content behind
+      // the mullion grid rather than a pictogram stamped on the glass.
       var windowSprites = WindowSprites.buildSprites(
         _wsFloorId, floorData.grid, floorData.gridW, floorData.gridH,
-        floorData.windowFaces || null
+        floorData.windowFaces || null,
+        floorData.windowScenes || null
       );
       WindowSprites.animate(now);
       for (var wsi = 0; wsi < windowSprites.length; wsi++) {
@@ -3804,6 +3811,11 @@ var Game = (function () {
 
     // Screen shake: sinusoidal decay camera offset on combat hit
     var shakeOffset = (Player.tickShake) ? Player.tickShake(frameDt) : 0;
+
+    // Weather particle update (before raycaster so renderBelow has fresh positions)
+    if (typeof WeatherSystem !== 'undefined') {
+      WeatherSystem.tick(frameDt, _canvas.width, _canvas.height);
+    }
 
     Raycaster.render(
       { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset + shakeOffset,
