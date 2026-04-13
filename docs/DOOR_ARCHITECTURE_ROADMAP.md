@@ -379,7 +379,7 @@ pending.
 calculation, ~45 lines; z-buffer override for jamb columns; freeformCfg
 suppression for jamb columns).
 
-### Phase 2 — Interior trapdoors (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED
+### Phase 2 — Interior trapdoors (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED — ⚠️ NEEDS AUDIT
 
 **Goal**: Vertical transitions inside buildings render as floor/ceiling hatches
 with ladder rungs instead of featureless grey cubes.
@@ -405,6 +405,11 @@ with ladder rungs instead of featureless grey cubes.
 
 **Acceptance**: Descending into the Soft Cellar shows a hatch in the floor with
 ladder rungs. Ascending back shows a hatch in the ceiling. Grey cube is gone.
+
+**⚠️ AUDIT NEEDED**: Trapdoor rendering, interaction, and transition paths have
+not been visually verified since the DOOR_FACADE recess and freeform upgrades.
+Check: filler renders correctly on all four faces, height offsets look right,
+floor transition works in both directions, no FPS regression from gap filler.
 
 ### Phase 3 — Stamp-out & per-biome defaults
 
