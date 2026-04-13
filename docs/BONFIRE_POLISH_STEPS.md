@@ -1,7 +1,7 @@
 # Bonfire & Hearth — Interaction Audit & Polish Roadmap
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-08
-**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. **§15 bonfire interaction decoupling complete (Apr 3).** **§11 rewritten Apr 8: two-tier rest system (Full Rest vs Nap), bonfire demoted to nap tier, curfew-nap failstate designed, ownership gate for BED/HEARTH.** §10, §12 are expansion passes. §11p–11w are post-jam nap-tier implementation tasks.
+**Created**: 2026-03-28 | **Updated**: 2026-04-12
+**Status**: §1–§7 complete. §8a–8d complete (visual depth tiers). §9a–9f complete (bonfire UI polish). §11a–11e complete (depth branching + Dragonfire rebrand). §13 step-fill cavity technique implemented. §14 bonfire/hearth visual unification roadmapped. **§15 bonfire interaction decoupling complete (Apr 3).** **§11 rewritten Apr 8: two-tier rest system (Full Rest vs Nap), bonfire demoted to nap tier, curfew-nap failstate designed, ownership gate for BED/HEARTH.** **§16 CSS dragonfire DOM sprites with scan-based cavity positioning (Apr 12): HEARTH, CITY_BONFIRE, BONFIRE all wired.** §10, §12 are expansion passes. §11p–11w are post-jam nap-tier implementation tasks.
 *** REBRANDED PLAYER FACING BONFIRE TO DRAGONFIRE ***
 ---
 
@@ -458,3 +458,79 @@ Decoupled rest execution from bonfire interaction. Previously, approaching a bon
 | `engine/hazard-system.js` | `clearLastRestResult()` public API exposed |
 | `engine/interact-prompt.js` | 🐉→🔥 in 3 locations, `BOX_Y_FRAC = 0.60` positioning |
 | `engine/floor-manager.js` | HEARTH wallHeight 2.5 in home biome |
+
+---
+
+## §16 CSS Dragonfire DOM Sprites — Scan-Based Cavity Positioning (Apr 12)
+
+Replaced emoji billboards with CSS-animated DOM sprite overlays for all three fire tile types (HEARTH, CITY_BONFIRE, BONFIRE). The DOM sprites are `<div>` trees positioned absolutely over the canvas via `SpriteLayer`, a Layer 2 IIFE that projects world tiles to screen coordinates each frame.
+
+### The positioning problem
+
+DOM sprites sit **on top** of the canvas — they can't be masked by the raycaster's painter-algorithm freeform stone bands the way canvas-rendered emoji billboards can. Projecting to tile-center world coordinates (`tileX+0.5, tileY+0.5`) causes the sprite to drift outside the cavity at oblique angles because the DDA renders the cavity at the tile face boundary, not at the interior center. Face-aligned projection (projecting to nearest face center) improved things but still drifted because the face center point doesn't correspond to the visual center of the cavity as rendered by the DDA.
+
+### Solution: pedestal-buffer scan
+
+Instead of reverse-engineering the DDA's geometry with projection math, `Raycaster.findTileScreenRange(tileX, tileY)` scans the pedestal occlusion buffers (`_zBufferPedMX`/`_zBufferPedMY`) after each render to find the **exact column range** where the DDA rendered the tile. These buffers are populated for:
+
+- **Freeform tiles** (HEARTH, CITY_BONFIRE) — by `_renderFreeformForeground` when `ff.hLower > 0`
+- **Short-wall tiles** (BONFIRE at 0.3× height) — by the short-wall pedestal block when `wallHeightMult < 1.0` and `heightOffset <= 0`
+
+`SpriteLayer.tick()` uses the scan result for **horizontal positioning** (centerCol → displayX) and constrains sprite width to the visible column span. Vertical position, sizing, and fog still come from `projectWorldToScreen` (pitch-aware horizon + worldOffsetY). If the scan fails (tile off-screen), it falls back to projection-only.
+
+### Three-tile-type modularity
+
+`BonfireSprites.registerDOMSprites()` uses a per-tile-type config table:
+
+| Tile | scale | worldOffsetY | glowRadius | Notes |
+|------|-------|-------------|------------|-------|
+| HEARTH (29) | 0.7 | 0.35 | 4 | Interior freeform cavity, 1.6× wallHeight |
+| CITY_BONFIRE (69) | 0.9 | 0.20 | 6 | Exterior Olympic pyre, 2.0× wallHeight, wider glow |
+| BONFIRE (18) | 0.4 | 0.45 | 4 | Exterior step-fill ring, 0.3× wallHeight |
+
+`buildSprites()` now recognizes all three tile constants and tags each sprite with `hearth`, `cityBonfire`, or neither for downstream branching. Emoji billboard scale multiplier: CITY_BONFIRE 3.0×, HEARTH 2.5×, BONFIRE 1.0× (base).
+
+### CSS dragonfire template
+
+The `_DF_HTML` template is a `.df-flame` container with `.df-head` (body orb), `.df-eye` (pupil), and 8 `.df-particle` elements. CSS custom properties drive runtime state:
+
+- `--sl-scale` — projection scale factor (set per-frame by SpriteLayer from distance)
+- `--df-body-color`, `--df-eye-bg`, `--df-glow-color` — emotion-driven (future: wired from game state)
+- `--df-float-dur` — bob period
+
+Styles live in `index.html` under `.sl-sprite.dragonfire`. The particles use `nth-child` rules with staggered animation delays for organic drift.
+
+### Files changed
+
+| File | Changes |
+|------|---------|
+| `engine/raycaster.js` | Added `findTileScreenRange(tileX, tileY)` — scans pedestal buffers, returns `{ minCol, maxCol, centerCol, centerPedY, w, h }`. Added `_lastHalfH` for pitch-aware horizon. Fixed `projectWorldToScreen` to use render-space dimensions (`_width`/`_height`), perspective-correct `tan(angle)/tan(halfFov)` projection |
+| `engine/sprite-layer.js` | `tick()` rewritten: scan-based horizontal positioning via `findTileScreenRange`, width constrained to scan column span, fallback to projection when scan unavailable |
+| `engine/bonfire-sprites.js` | Added CITY_BONFIRE (69) to `buildSprites()`. `registerDOMSprites()` uses per-tile-type config table (`_SPRITE_CFG`). `alignToFace: true` on all DOM sprite registrations |
+| `index.html` | `.sl-sprite.dragonfire` CSS styles (flame, eye, particles, animations) |
+
+### Polish steps
+
+| # | Task | Est. | Depends on | Status |
+|---|------|------|------------|--------|
+| 16a | Scan-based horizontal centering via `findTileScreenRange` | 1h | Raycaster pedestal buffers | ✅ |
+| 16b | Pitch-aware vertical tracking (`_lastHalfH` horizon) | 30m | Raycaster render loop | ✅ |
+| 16c | Perspective-correct `tan/tan` projection formula | 30m | — | ✅ |
+| 16d | Render-space dimension fix (`_width`/`_height` not `_canvas.width`) | 20m | — | ✅ |
+| 16e | CITY_BONFIRE support in `buildSprites()` + `registerDOMSprites()` | 20m | — | ✅ |
+| 16f | Per-tile-type DOM sprite config table (`_SPRITE_CFG`) | 15m | 16e | ✅ |
+| 16g | Width constraint: sprite clamped to scan column span | 15m | 16a | ✅ |
+| 16h | Fix emoji flash on floor entry (mark `domSprite: true` in `buildSprites` cache, not just `registerDOMSprites`) | 15m | — | — |
+| 16i | Tune `worldOffsetY` per tile type after visual confirmation | 20m | 16a-16f | — |
+| 16j | Wire emotion CSS vars at runtime from game state (narrator mood) | 30m | Narrator system | — |
+| 16k | Extend to future fire-source tiles (TORCH_LIT wall-mounted, etc.) | 30m | — | — |
+
+### Cross-references
+
+| This Section | Links To | Relationship |
+|-------------|----------|-------------|
+| §16 DOM sprites | → §14 Visual Unification | DOM sprites replace emoji billboards; §14a pre-render texture is fallback for non-DOM canvas path |
+| §16 DOM sprites | → §8 Visual Depth Tiers | Glow tint and flicker per depth tier apply to DOM sprite opacity/color vars |
+| §16 scan positioning | → RAYCAST_FREEFORM_UPGRADE_ROADMAP | Pedestal buffers populated by freeform foreground pass |
+| §16 scan positioning | → BLOCKOUT_REFRESH_PLAN §1.1 | Freeform tile config audit ensures pedestal buffers are populated for all fire tiles |
+| §16 CITY_BONFIRE | → BLOCKOUT_REFRESH_PLAN §7.2 | Promenade Floor 1 placement at (24,16) with PERGOLA_BEAM flanks |

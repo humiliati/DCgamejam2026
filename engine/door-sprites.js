@@ -33,6 +33,10 @@ var DoorSprites = (function () {
   var _doorPanels = {};
   // "x,y" → exterior face index (0=E, 1=S, 2=W, 3=N), set by FloorManager
   var _exteriorFaces = {};
+  // "x,y" → { partner: "px,py", side: 'left'|'right' } for double-door pairs
+  var _doorPairs = {};
+  // "x,y" → TextureAtlas texture ID string (wide 128×64 double-door panel)
+  var _doubleDoorPanels = {};
   var _cachedFloorId = null;
 
   // ── Gap filler registration ─────────────────────────────────────
@@ -80,6 +84,33 @@ var DoorSprites = (function () {
   }
 
   /**
+   * Register a double-door or great-arch pair.
+   * Two adjacent tiles sharing an exterior face are paired: one is 'left',
+   * the other 'right' (relative to the exterior view).  The gap filler
+   * UV-splits a 128×64 wide texture across the two tiles.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} partnerX
+   * @param {number} partnerY
+   * @param {string} side — 'left' or 'right'
+   */
+  function setPairInfo(x, y, partnerX, partnerY, side) {
+    _doorPairs[x + ',' + y] = {
+      partner: partnerX + ',' + partnerY,
+      side: side
+    };
+  }
+
+  /**
+   * Set the wide (128×64) door-panel texture shared by a double-door pair.
+   * Both tiles in the pair should reference the same texture ID — the gap
+   * filler selects the correct half based on getPairInfo().side.
+   */
+  function setDoubleDoorPanel(x, y, texId) {
+    _doubleDoorPanels[x + ',' + y] = texId;
+  }
+
+  /**
    * Mark which floor the cache belongs to.
    */
   function setFloor(floorId) {
@@ -99,6 +130,22 @@ var DoorSprites = (function () {
   function getExteriorFace(x, y) {
     var f = _exteriorFaces[x + ',' + y];
     return (typeof f === 'number') ? f : -1;
+  }
+
+  /**
+   * Get double-door pairing info for tile at (x,y).
+   * @returns {{ partner: string, side: string }|null}
+   */
+  function getPairInfo(x, y) {
+    return _doorPairs[x + ',' + y] || null;
+  }
+
+  /**
+   * Get the wide (128×64) panel texture ID for a double-door tile.
+   * @returns {string|null}
+   */
+  function getDoubleDoorPanel(x, y) {
+    return _doubleDoorPanels[x + ',' + y] || null;
   }
 
   /**
@@ -130,6 +177,8 @@ var DoorSprites = (function () {
     _doorTextures = {};
     _doorPanels = {};
     _exteriorFaces = {};
+    _doorPairs = {};
+    _doubleDoorPanels = {};
     _cachedFloorId = null;
   }
 
@@ -187,14 +236,37 @@ var DoorSprites = (function () {
     var side    = info.side;
 
     // ── 1. Door panel texture (Tier A) or dark gradient fallback ──
-    var panelId = getDoorPanel(info.mapX, info.mapY);
-    var panelTex = (panelId && typeof TextureAtlas !== 'undefined')
-      ? TextureAtlas.get(panelId) : null;
+    // Check for double-door pairing: if paired, use the wide (128×64)
+    // texture and remap wallX to the correct half.
+    var pair    = getPairInfo(info.mapX, info.mapY);
+    var panelId, panelTex;
+
+    if (pair) {
+      panelId  = getDoubleDoorPanel(info.mapX, info.mapY);
+      panelTex = (panelId && typeof TextureAtlas !== 'undefined')
+        ? TextureAtlas.get(panelId) : null;
+    }
+    if (!panelTex || !panelTex.canvas) {
+      // Fall back to single-tile panel (standard or unpaired)
+      panelId  = getDoorPanel(info.mapX, info.mapY);
+      panelTex = (panelId && typeof TextureAtlas !== 'undefined')
+        ? TextureAtlas.get(panelId) : null;
+      pair = null;  // disable UV remap for single panels
+    }
 
     if (panelTex && panelTex.canvas) {
-      // Sample 1px-wide column from the door-panel texture.
-      // wallX → texX, full texture height → gapH stretch.
-      var texX = Math.floor(wallX * panelTex.width);
+      // Sample 1px-wide column from the panel texture.
+      // For paired tiles: remap wallX from 0–1 (single tile) to the
+      // correct half of the 128-wide texture.
+      var sampleU = wallX;
+      if (pair) {
+        if (pair.side === 'left') {
+          sampleU = wallX * 0.5;            // columns 0–63
+        } else {
+          sampleU = 0.5 + wallX * 0.5;     // columns 64–127
+        }
+      }
+      var texX = Math.floor(sampleU * panelTex.width);
       if (texX >= panelTex.width) texX = panelTex.width - 1;
       ctx.drawImage(panelTex.canvas, texX, 0, 1, panelTex.height,
                     col, gapStart, 1, gapH);
@@ -241,8 +313,18 @@ var DoorSprites = (function () {
 
     // ── 2. Door frame overlay — dark jamb edges + lintel bottom ──
     // Drawn on top of both the texture and the gradient fallback.
+    // For paired tiles: suppress the frame on the shared inner edge —
+    // the center seam is baked into the wide texture.
     var frameW = 0.06 + 0.02 / Math.max(0.5, info.perpDist);
-    var isFrame = (wallX < frameW || wallX > 1 - frameW);
+    var pairRef = getPairInfo(info.mapX, info.mapY);
+    var isFrame;
+    if (pairRef && pairRef.side === 'left') {
+      isFrame = (wallX < frameW);                    // outer jamb only
+    } else if (pairRef && pairRef.side === 'right') {
+      isFrame = (wallX > 1 - frameW);               // outer jamb only
+    } else {
+      isFrame = (wallX < frameW || wallX > 1 - frameW);
+    }
     var frR = Math.round(35 * bAdj);
     var frG = Math.round(28 * bAdj);
     var frB = Math.round(20 * bAdj);
@@ -269,15 +351,28 @@ var DoorSprites = (function () {
 
   // ── trapdoor_shaft gap filler ──────────────────────────────────
   //
-  // Renders the interior of a trapdoor hatch — a dark shaft with
-  // evenly spaced ladder rungs. Direction-aware:
-  //   TRAPDOOR_DN (75) → dark at bottom (looking down into shaft)
-  //   TRAPDOOR_UP (76) → dark at bottom conceptually but visually
-  //     the shaft is above so the gradient inverts (bright at bottom,
-  //     dark at top — light spills DOWN from the opening).
+  // Hearth-pattern transparent cavity: the shaft is LITERALLY see-
+  // through. Back-layer walls (the room behind the trapdoor tile)
+  // have already been painted by the N-layer collector because
+  // _fgIsFreeformSeeThrough allows collection behind this tile.
   //
-  // All faces render the same (no exterior/interior distinction like
-  // DOOR_FACADE). Trapdoors are visible from all 4 sides in a room.
+  // We paint three overlay layers on top of the existing content:
+  //
+  //   1. Cool-dark tint — direction-aware depth wash so the shaft
+  //      reads as a receding hole rather than a flat window.
+  //      TRAPDOOR_DN: darker toward bottom (looking down into abyss).
+  //      TRAPDOOR_UP: darker toward top (looking up into shadow).
+  //
+  //   2. Hatch frame border — dark 8% edge strips on left/right +
+  //      single-pixel top/bottom lines. Reads as the timber frame
+  //      of the opening.
+  //
+  //   3. No ladder rungs here — the ladder is a billboard sprite
+  //      emitted by BonfireSprites (same pattern as HEARTH dragonfire).
+  //      The sprite has proper parallax and depth through the z-bypass
+  //      path. See Tier 4 in TRAPDOOR_ARCHITECTURE_ROADMAP.md.
+  //
+  // All four faces render identically (no exterior/interior distinction).
   //
   function _trapdoorShaftFiller(ctx, col, gapStart, gapH, info) {
     if (gapH <= 0) return;
@@ -288,84 +383,47 @@ var DoorSprites = (function () {
     var wallX   = info.wallX;
     var isDown  = (info.hitTile === 75);  // TRAPDOOR_DN
 
-    // 1. Dark shaft gradient — 3 bands
-    var bandCount = 3;
-    var bandH     = Math.max(1, Math.floor(gapH / bandCount));
-    // Down shaft: dark at bottom (band 2 darkest).
-    // Up shaft: dark at top (band 0 darkest, invert).
-    var basesDown = [0.12, 0.06, 0.02];
-    var basesUp   = [0.02, 0.06, 0.12];
-    var bases     = isDown ? basesDown : basesUp;
+    // 1. Direction-aware depth tint — semi-transparent gradient overlay.
+    //    Two bands: near-opening (lighter) and deep-shaft (darker).
+    //    The tint is cool-blue-grey, not warm amber like hearth_fire.
+    var nearA = 0.10 * bAdj * fogFade;  // light wash near the opening
+    var deepA = 0.30 * bAdj * fogFade;  // heavier wash into the shaft
 
-    for (var bi = 0; bi < bandCount; bi++) {
-      var bH = (bi === bandCount - 1) ? (gapH - bandH * (bandCount - 1)) : bandH;
-      if (bH <= 0) continue;
-      var b  = bases[bi] * bAdj * fogFade;
-      var bR = Math.round(Math.min(255, b * 60 + 5));
-      var bG = Math.round(Math.min(255, b * 55 + 4));
-      var bB = Math.round(Math.min(255, b * 50 + 3));
-      if (fF > 0) {
-        bR = Math.round(bR * (1 - fF) + info.fogColor.r * fF);
-        bG = Math.round(bG * (1 - fF) + info.fogColor.g * fF);
-        bB = Math.round(bB * (1 - fF) + info.fogColor.b * fF);
-      }
-      ctx.fillStyle = 'rgb(' + bR + ',' + bG + ',' + bB + ')';
-      ctx.fillRect(col, gapStart + bandH * bi, 1, bH);
-    }
+    if (nearA > 0.005 || deepA > 0.005) {
+      var halfH = Math.max(1, Math.floor(gapH / 2));
+      // DN: top half is near-opening (lighter), bottom half is deep
+      // UP: bottom half is near-opening (lighter), top half is deep
+      var topA  = isDown ? nearA : deepA;
+      var botA  = isDown ? deepA : nearA;
 
-    // 2. Ladder rungs — horizontal bars spaced evenly through the cavity.
-    //    4 rungs regardless of gap height; each is 1–2px tall.
-    var rungCount = 4;
-    var rungSpacing = gapH / (rungCount + 1);
-    if (rungSpacing >= 2) {
-      // Rung colour: warm wood brown, dimmed by brightness + fog
-      var rB = Math.round(Math.min(255, 0.25 * bAdj * fogFade * 140 + 15));
-      var rG = Math.round(Math.min(255, 0.25 * bAdj * fogFade * 100 + 10));
-      var rBl = Math.round(Math.min(255, 0.25 * bAdj * fogFade * 50 + 5));
-      if (fF > 0) {
-        rB = Math.round(rB * (1 - fF) + info.fogColor.r * fF);
-        rG = Math.round(rG * (1 - fF) + info.fogColor.g * fF);
-        rBl = Math.round(rBl * (1 - fF) + info.fogColor.b * fF);
+      if (topA > 0.005) {
+        ctx.fillStyle = 'rgba(15,20,30,' + topA.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, halfH);
       }
-      ctx.fillStyle = 'rgb(' + rB + ',' + rG + ',' + rBl + ')';
-      // Only draw rungs in the center 60% of the face (ladder width)
-      var ladderL = 0.20;
-      var ladderR = 0.80;
-      if (wallX >= ladderL && wallX <= ladderR) {
-        for (var ri = 1; ri <= rungCount; ri++) {
-          var rungY = Math.floor(gapStart + ri * rungSpacing);
-          ctx.fillRect(col, rungY, 1, Math.max(1, Math.round(gapH / 40)));
-        }
+      if (botA > 0.005) {
+        ctx.fillStyle = 'rgba(15,20,30,' + botA.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart + halfH, 1, gapH - halfH);
       }
     }
 
-    // 3. Hatch frame — dark border around the cavity edge
+    // 2. Hatch frame — dark timber border around the cavity opening.
+    //    8% edge strips on left/right + 1px lines at top and bottom.
     var frameW = 0.08;
     var isFrame = (wallX < frameW || wallX > 1 - frameW);
     if (isFrame) {
-      var fR = Math.round(25 * bAdj);
-      var fG = Math.round(20 * bAdj);
-      var fBl = Math.round(15 * bAdj);
-      if (fF > 0) {
-        fR = Math.round(fR * (1 - fF) + info.fogColor.r * fF);
-        fG = Math.round(fG * (1 - fF) + info.fogColor.g * fF);
-        fBl = Math.round(fBl * (1 - fF) + info.fogColor.b * fF);
+      var frameA = 0.45 * bAdj * fogFade;
+      if (frameA > 0.005) {
+        ctx.fillStyle = 'rgba(20,15,10,' + frameA.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, gapH);
       }
-      ctx.fillStyle = 'rgb(' + fR + ',' + fG + ',' + fBl + ')';
-      ctx.fillRect(col, gapStart, 1, gapH);
     }
     // Top and bottom edge lines
-    var edgeR = Math.round(30 * bAdj);
-    var edgeG = Math.round(25 * bAdj);
-    var edgeBl = Math.round(18 * bAdj);
-    if (fF > 0) {
-      edgeR = Math.round(edgeR * (1 - fF) + info.fogColor.r * fF);
-      edgeG = Math.round(edgeG * (1 - fF) + info.fogColor.g * fF);
-      edgeBl = Math.round(edgeBl * (1 - fF) + info.fogColor.b * fF);
+    var edgeA = 0.35 * bAdj * fogFade;
+    if (edgeA > 0.005) {
+      ctx.fillStyle = 'rgba(20,15,10,' + edgeA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, 1);
+      if (gapH > 1) ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
     }
-    ctx.fillStyle = 'rgb(' + edgeR + ',' + edgeG + ',' + edgeBl + ')';
-    ctx.fillRect(col, gapStart, 1, 1);
-    ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
   }
 
   // ── Public API ──────────────────────────────────────────────────
@@ -373,10 +431,14 @@ var DoorSprites = (function () {
     setTexture:            setTexture,
     setDoorPanel:          setDoorPanel,
     setExteriorFace:       setExteriorFace,
+    setPairInfo:           setPairInfo,
+    setDoubleDoorPanel:    setDoubleDoorPanel,
     setFloor:              setFloor,
     getWallTexture:        getWallTexture,
     getDoorPanel:          getDoorPanel,
     getExteriorFace:       getExteriorFace,
+    getPairInfo:           getPairInfo,
+    getDoubleDoorPanel:    getDoubleDoorPanel,
     isExteriorHit:         isExteriorHit,
     clear:                 clear,
     ensureFillerRegistered: _ensureFillerRegistered

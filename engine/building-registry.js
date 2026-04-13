@@ -56,6 +56,11 @@ var BuildingRegistry = (function () {
   // a TextureAtlas ID for ARCH_DOORWAY tiles (defaults to 'arch_brick').
   // `doorPanel` is a TextureAtlas ID for the door-face texture inside
   // DOOR_FACADE cavities (Phase 5A). Null = dark gradient fallback.
+  // `windowType` selects the window tile type for this building:
+  //   'shop' → WINDOW_SHOP (77) — commercial plate glass + iron bars
+  //   'bay'  → WINDOW_BAY  (78) — residential protruding bay window
+  //   'slit' → WINDOW_SLIT (79) — institutional fortress slit
+  //   null   → WINDOW_TAVERN (73) — legacy fallback (Phase 0)
   var _records = {};
 
   function _register(rec) {
@@ -76,6 +81,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_redbrick',   // coral brick door surround
     doorPanel:       'door_panel_glass', // frosted glass shop front
     archTexture:     'arch_redbrick',   // coral brick arch doorway
+    windowType:      'shop',            // plate glass storefront + iron bars
     defaultHours:    { openAt: 6, closeAt: 22 },
     defaultVignette: 'bazaar_cards',
     defaultPatron:   'bazaar_merchant',
@@ -94,6 +100,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_driftwood',  // weathered timber door surround
     doorPanel:       'door_panel_wood', // warm oak planks
     archTexture:     'arch_driftwood',  // driftwood arch doorway
+    windowType:      'shop',            // plate glass storefront + iron bars
     defaultHours:    { openAt: 6, closeAt: 24 },
     defaultVignette: 'tavern_mug',
     defaultPatron:   'tavern_patron',
@@ -112,6 +119,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_greystone',  // fortified stone door surround
     doorPanel:       'door_panel_studded', // heavy studded door
     archTexture:     'arch_stone',      // rough stone arch (shared)
+    windowType:      'slit',            // fortress slit — civil defense bunker
     defaultHours:    { openAt: 0, closeAt: 24 },
     defaultVignette: null,
     defaultPatron:   null,
@@ -130,6 +138,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_darkwood',   // dark oak door surround
     doorPanel:       'door_panel_dark', // worn dark wood panel
     archTexture:     'arch_darkwood',   // dark oak arch doorway
+    windowType:      'bay',             // protruding bay window — cozy residential
     defaultHours:    { openAt: 20, closeAt: 8 },   // private = resident home at night
     defaultVignette: 'home_candle',
     defaultPatron:   null,
@@ -153,6 +162,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_concrete',   // poured concrete door surround
     doorPanel:       'door_panel_iron', // institutional iron plate door
     archTexture:     'arch_concrete',   // concrete arch doorway
+    windowType:      'slit',            // fortress slit — government building
     defaultHours:    { openAt: 8, closeAt: 20 },
     defaultVignette: 'dispatch_lamp',
     defaultPatron:   'dispatch_clerk',
@@ -171,6 +181,7 @@ var BuildingRegistry = (function () {
     doorTexture:     'door_greystone',  // fortified stone door surround
     doorPanel:       'door_panel_studded', // heavy studded door
     archTexture:     'arch_stone',      // rough stone arch (shared)
+    windowType:      'slit',            // fortress slit — fortified guard post
     defaultHours:    { openAt: 0, closeAt: 24 },
     defaultVignette: 'watch_lantern',
     defaultPatron:   'watchman',
@@ -249,17 +260,17 @@ var BuildingRegistry = (function () {
       return hourOfDay >= h.openAt && hourOfDay < h.closeAt;
     }
     // Wrap-around range (openAt > closeAt): open overnight
+    // e.g. openAt:20, closeAt:8 → open 8pm–8am
     return hourOfDay >= h.openAt || hourOfDay < h.closeAt;
   }
 
   // ── Public API ──────────────────────────────────────────────────
+
   return Object.freeze({
     get:             get,
     listByFloor:     listByFloor,
     getVignette:     getVignette,
     getMullionStyle: getMullionStyle,
-    isOpen:          isOpen,
-    VIGNETTES:       VIGNETTES,
-    MULLION_STYLES:  MULLION_STYLES
+    isOpen:          isOpen
   });
 })();

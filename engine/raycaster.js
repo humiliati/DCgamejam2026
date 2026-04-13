@@ -29,6 +29,7 @@ var Raycaster = (function () {
   var _ctx = null;         // offscreen 2d context — "ctx" throughout render code means this
   var _width = 0;          // offscreen width  (= cssW * scale)
   var _height = 0;         // offscreen height (= cssH * scale)
+  var _lastHalfH = 0;      // horizon line from last render (pitch-shifted)
   var _zBuffer = [];
 
   // ── Internal render resolution (pixel-cost lever) ────────────────
@@ -640,6 +641,7 @@ var Raycaster = (function () {
     var rawHalfH = h / 2;
     var pitchShift = (player.pitch || 0) * rawHalfH;
     var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
+    _lastHalfH = halfH;  // expose for projectWorldToScreen
     var fov = Math.PI / 3;
     var halfFov = fov / 2;
 
@@ -939,7 +941,7 @@ var Raycaster = (function () {
           // look hollow when viewed up close). The N-layer collector
           // still gathers walls BEHIND the window tile because
           // _fgIsFreeformSeeThrough sets _maxTop = 0.
-          (_fgIsFreeformSeeThrough && hitTile !== TILES.WINDOW_TAVERN && hitTile !== TILES.DOOR_FACADE && hitTile !== TILES.TRAPDOOR_DN && hitTile !== TILES.TRAPDOOR_UP)
+          (_fgIsFreeformSeeThrough && hitTile !== TILES.WINDOW_TAVERN && hitTile !== TILES.DOOR_FACADE)
         );
 
         // Continue DDA to collect up to MAX_LAYERS total hits.
@@ -1222,9 +1224,19 @@ var Raycaster = (function () {
       // (the visible sidewall of the recess). Jamb columns suppress
       // freeform rendering and write normal z-buffer occlusion.
       var _recessJamb = false;
-      if (TILES.isFreeform(hitTile) &&
-          typeof DoorSprites !== 'undefined' && DoorSprites.isExteriorHit &&
-          DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY)) {
+      // Recess gate: check BOTH door and window exterior-face registries.
+      // Door tiles use DoorSprites; window tiles use WindowSprites.
+      var _isExtHit = false;
+      if (TILES.isFreeform(hitTile)) {
+        if (TILES.isWindow && TILES.isWindow(hitTile)) {
+          _isExtHit = (typeof WindowSprites !== 'undefined' && WindowSprites.isExteriorHit &&
+                       WindowSprites.isExteriorHit(mapX, mapY, side, stepX, stepY));
+        } else {
+          _isExtHit = (typeof DoorSprites !== 'undefined' && DoorSprites.isExteriorHit &&
+                       DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY));
+        }
+      }
+      if (_isExtHit) {
         // Per-tile recess depth from freeform config, or global default.
         var _rfCfg = (_contract) ? SpatialContract.getTileFreeform(_contract, hitTile) : null;
         var _recessD = (_rfCfg && _rfCfg.recessD) ? _rfCfg.recessD : 0.25;
@@ -1234,22 +1246,40 @@ var Raycaster = (function () {
         // Does the ray at _rPD still land inside this tile?
         var _rX = px + _rPD * rayDirX;
         var _rY = py + _rPD * rayDirY;
-        if (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY) {
-          // Inset hit — door face renders at recessed depth
+        // Negative recessD (bay window protrusion): the inset point
+        // is OUTSIDE the tile (in the adjacent street tile). Accept
+        // it as long as _rPD > minPerpDist (not behind the player).
+        var _recessIsProtrusion = (_recessD < 0);
+        if (_recessIsProtrusion ? (_rPD > 0.05) :
+            (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY)) {
+          // Inset/protrusion hit — face renders at adjusted depth
           perpDist = _rPD;
         } else {
-          // Ray exits tile laterally before reaching inset → jamb wall
-          _recessJamb = true;
-          if (side === 0) {
-            // Entered through X face, exits through Y boundary
-            var _jY = (stepY > 0) ? (mapY + 1) : mapY;
-            perpDist = Math.abs((_jY - py) / (rayDirY || 1e-10));
-            side = 1;
+          // Ray exits tile laterally before reaching inset → jamb wall.
+          // EXCEPTION: if the adjacent tile is a double-door/arch partner,
+          // suppress the jamb — the two recesses merge into one cavity.
+          var _adjX = mapX + (side === 0 ? 0 : stepX);
+          var _adjY = mapY + (side === 0 ? stepY : 0);
+          var _pairInf = (typeof DoorSprites !== 'undefined' && DoorSprites.getPairInfo)
+            ? DoorSprites.getPairInfo(mapX, mapY) : null;
+          if (_pairInf && _pairInf.partner === _adjX + ',' + _adjY) {
+            // Partner tile — don't render jamb. Continue with the inset
+            // depth so this column renders the recessed face texture, and
+            // the partner's recess will handle its side when hit.
+            perpDist = _rPD;
           } else {
-            // Entered through Y face, exits through X boundary
-            var _jX = (stepX > 0) ? (mapX + 1) : mapX;
-            perpDist = Math.abs((_jX - px) / (rayDirX || 1e-10));
-            side = 0;
+            _recessJamb = true;
+            if (side === 0) {
+              // Entered through X face, exits through Y boundary
+              var _jY = (stepY > 0) ? (mapY + 1) : mapY;
+              perpDist = Math.abs((_jY - py) / (rayDirY || 1e-10));
+              side = 1;
+            } else {
+              // Entered through Y face, exits through X boundary
+              var _jX = (stepX > 0) ? (mapX + 1) : mapX;
+              perpDist = Math.abs((_jX - px) / (rayDirX || 1e-10));
+              side = 0;
+            }
           }
         }
       }
@@ -1276,17 +1306,40 @@ var Raycaster = (function () {
       //   • DUMP_TRUCK — legacy short-body representation, always
       //     renderDist so the hose billboard floats above. Will be
       //     rebuilt as a 2×1×1 vehicle (see pending spec below).
-      //   • Freeform tiles — zBypass so their transparent cavity
-      //     lets sprites/back-layers show through; the foreground
-      //     helper owns its own pedestal mask write for the solid
-      //     bands.
+      //   • Freeform tiles — zBypass mode determines z-buffer write:
+      //       'full'  (default) — renderDist (cavity fully transparent
+      //               to sprites/back-layers). Used by DOOR_FACADE,
+      //               ARCH_DOORWAY, PORTHOLE, HEARTH, etc.
+      //       'depth' — perpDist + 1.0 (vignette has real depth —
+      //               renders behind glass, behind mullions, in front
+      //               of back wall). Used by all window tiles.
+      //       'solid' — perpDist (no see-through). Reserved for
+      //               future canopy/roof freeform tiles.
+      //     The foreground helper still owns its own pedestal mask
+      //     write for the solid bands.
       //   • Ultra-short props (<0.35×) — already transparent to the
       //     sprite pass via the legacy threshold; the post-hoc
       //     short-wall block upgrades them to also publish a clip Y.
       //   • Tall walls (≥1.0×) — normal perpDist occlusion.
       var _zBypass = (hitTile === TILES.DUMP_TRUCK) ||
                      (_freeformEnabled && TILES.isFreeform(hitTile));
-      _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
+      if (_zBypass && _contract) {
+        var _zbCfg = SpatialContract.getTileFreeform(_contract, hitTile);
+        var _zbMode = (_zbCfg && _zbCfg.zBypassMode) ? _zbCfg.zBypassMode : 'full';
+        if (_zbMode === 'depth') {
+          // Window tiles: vignette emoji has real depth. perpDist + 1.0
+          // places the z-threshold one tile behind the glass so content
+          // inside the facade competes with geometry instead of floating.
+          _zBuffer[col] = perpDist + 1.0;
+        } else if (_zbMode === 'solid') {
+          _zBuffer[col] = perpDist;
+        } else {
+          // 'full' — original behavior: renderDist (fully transparent).
+          _zBuffer[col] = renderDist;
+        }
+      } else {
+        _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
+      }
       // Jamb columns are solid walls — restore normal z-buffer so
       // sprites behind the jamb are properly culled.
       if (_recessJamb) { _zBuffer[col] = perpDist; }
@@ -1520,7 +1573,7 @@ var Raycaster = (function () {
         // freeform path below.
         DoorAnimator.renderColumn(
           ctx, col, drawStart, drawEnd, wallX, side,
-          fogFactor, brightness, fogColor
+          fogFactor, brightness, fogColor, mapX, mapY
         );
       } else if (tex && stripH > 0) {
         // Texture column index
@@ -1528,6 +1581,32 @@ var Raycaster = (function () {
         if (texX >= tex.width) texX = tex.width - 1;
 
         var shiftedTop = flatTop - vertShift;
+
+        // ── Phase 6B: wide-arch UV remap for paired ARCH_DOORWAY ──
+        // If this is an alpha-mask freeform tile (ARCH_DOORWAY) that
+        // belongs to a double-door pair, swap to the wide 128×64
+        // texture and remap texX to the correct half. This ensures
+        // _computeAlphaRange walks the wide texture's column, giving
+        // a single continuous arch opening that spans both tiles.
+        if (freeformCfg && freeformCfg.gapTexAlpha &&
+            typeof DoorSprites !== 'undefined' && DoorSprites.getPairInfo) {
+          var _archPair = DoorSprites.getPairInfo(mapX, mapY);
+          if (_archPair) {
+            var _wideTexId = DoorSprites.getDoubleDoorPanel
+              ? DoorSprites.getDoubleDoorPanel(mapX, mapY) : null;
+            var _wideTex = (_wideTexId && typeof TextureAtlas !== 'undefined')
+              ? TextureAtlas.get(_wideTexId) : null;
+            if (_wideTex && _wideTex.data) {
+              tex = _wideTex;
+              if (_archPair.side === 'left') {
+                texX = Math.floor(wallX * 0.5 * tex.width);
+              } else {
+                texX = Math.floor((0.5 + wallX * 0.5) * tex.width);
+              }
+              if (texX >= tex.width) texX = tex.width - 1;
+            }
+          }
+        }
 
         if (freeformCfg) {
           // ── Freeform two-segment render (HEARTH sandwich) ────
@@ -3686,11 +3765,14 @@ var Raycaster = (function () {
     // into "distant" and "near" passes sandwiching the terminus fog
     // veil so close sprites punch through the horizon band. Defaults
     // to no filter (render everything in the normal render distance).
+    var _tanHF = Math.tan(halfFov);
     var hasMin = (typeof minDist === 'number');
     var hasMax = (typeof maxDist === 'number');
     var sorted = [];
     for (var i = 0; i < sprites.length; i++) {
       var s = sprites[i];
+      // Skip sprites that have a CSS DOM overlay (SpriteLayer handles them)
+      if (s.domSprite) continue;
       var dx = (s.x + 0.5) - px;
       var dy = (s.y + 0.5) - py;
       var dist = Math.sqrt(dx * dx + dy * dy);
@@ -3714,7 +3796,8 @@ var Raycaster = (function () {
       var dist = item.dist;
       var angle = item.angle;
 
-      var screenX = Math.floor(w / 2 + (angle / halfFov) * (w / 2));
+      // Perspective-correct column: exact inverse of DDA's atan mapping.
+      var screenX = Math.floor((1 + Math.tan(angle) / _tanHF) * w / 2);
       var baseScale = (s.scale || 0.6) / dist;
       // Pulse effect: scaleAdd oscillates 0..max, adds to base scale
       var pulseAdd = s.scaleAdd || 0;
@@ -4382,6 +4465,142 @@ var Raycaster = (function () {
     };
   }
 
+  // ── Sprite-layer projection API ──────────────────────────────────
+  // Exposes the same projection math _renderSprites uses internally
+  // so the DOM sprite-layer can position CSS overlays in world space.
+  var _FOV = Math.PI / 3;
+  var _HALF_FOV = _FOV / 2;
+
+  /**
+   * Project a world-space tile centre onto the display canvas.
+   * Returns { screenX, screenY, dist, scaleH, visible, startCol, endCol }
+   * or null if culled (behind camera, out of range, fully behind walls).
+   *
+   * @param {number} tileX   - grid X of the sprite tile
+   * @param {number} tileY   - grid Y of the sprite tile
+   * @param {number} camX    - player X (float)
+   * @param {number} camY    - player Y (float)
+   * @param {number} camDir  - player facing angle in radians
+   * @param {number} [spriteScale=0.6] - base sprite scale
+   */
+  // ── Pedestal-buffer tile scan ──────────────────────────────────
+  /**
+   * Scan the pedestal occlusion buffers to find the exact screen column
+   * range where a given tile was rendered as a freeform pedestal (HEARTH,
+   * CITY_BONFIRE, etc.). Returns the leftmost column, rightmost column,
+   * center column, and the pedestal top screen-Y at center.
+   *
+   * This is far more accurate than angular projection for positioning
+   * DOM sprites inside freeform cavities, because it uses the actual
+   * DDA rendering results rather than approximating the geometry.
+   *
+   * @param {number} tileX - grid X of the target tile
+   * @param {number} tileY - grid Y of the target tile
+   * @returns {Object|null} { minCol, maxCol, centerCol, centerPedY, w, h }
+   *   or null if the tile isn't visible in any pedestal column.
+   */
+  function findTileScreenRange(tileX, tileY) {
+    if (!_zBufferPedMX || !_zBufferPedMX.length) return null;
+
+    var minCol = -1;
+    var maxCol = -1;
+    var pedYSum = 0;
+    var pedYCount = 0;
+
+    for (var col = 0; col < _width; col++) {
+      if (_zBufferPedMX[col] === tileX && _zBufferPedMY[col] === tileY) {
+        if (minCol === -1) minCol = col;
+        maxCol = col;
+        pedYSum += _zBufferPedTopY[col];
+        pedYCount++;
+      }
+    }
+
+    if (minCol === -1) return null;
+
+    var centerCol = Math.floor((minCol + maxCol) / 2);
+    var avgPedY = Math.floor(pedYSum / pedYCount);
+
+    return {
+      minCol:     minCol,
+      maxCol:     maxCol,
+      centerCol:  centerCol,
+      centerPedY: avgPedY,
+      w:          _width,
+      h:          _height
+    };
+  }
+
+  /**
+   * Project a world tile to screen coordinates for DOM sprite overlay.
+   *
+   * @param {number} tileX, tileY  — grid position
+   * @param {number} camX, camY    — camera world position
+   * @param {number} camDir        — camera angle (radians)
+   * @param {number} [spriteScale] — billboard scale (default 0.6)
+   * @param {number} [worldOffsetY] — vertical offset: 0 = eye level,
+   *   positive = below eye level (toward floor). Units are fraction of
+   *   wall height at distance 1. 0.5 = bottom of a standard wall.
+   */
+  function projectWorldToScreen(tileX, tileY, camX, camY, camDir, spriteScale, worldOffsetY) {
+    // Use the RENDER-SPACE dimensions (_width/_height) — these match the
+    // z-buffer array length.  _canvas.width is the full-res display canvas
+    // which is larger than _width when RENDER_SCALE < 1.0; using it caused
+    // the z-buffer loop to read undefined entries for center-screen sprites,
+    // making them invisible when looked at directly.
+    var w = _width  || (_canvas ? _canvas.width  : 320);
+    var h = _height || (_canvas ? _canvas.height : 200);
+    var dx = (tileX + 0.5) - camX;
+    var dy = (tileY + 0.5) - camY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.3 || dist > 16) return null;
+
+    var angle = Math.atan2(dy, dx) - camDir;
+    while (angle >  Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    if (Math.abs(angle) > _HALF_FOV + 0.3) return null;
+
+    // Perspective-correct inverse of the DDA's column→angle mapping:
+    //   DDA: rayAngle = pDir + atan(cameraX * tan(halfFov))
+    //   Inverse: cameraX = tan(angle) / tan(halfFov)
+    // The old linear formula (angle / halfFov) drifted ~9% at 10° off-
+    // center, sliding DOM sprites out of freeform cavities.
+    var _tanHF = Math.tan(_HALF_FOV);
+    var screenX = Math.floor((1 + Math.tan(angle) / _tanHF) * w / 2);
+    var baseScale = (spriteScale || 0.6) / dist;
+    var spriteH = Math.floor(h * baseScale);
+    var spriteW = spriteH;
+    var drawX = screenX - spriteW / 2;
+    // Vertical position: use the pitch-shifted horizon (_lastHalfH) so
+    // DOM sprites track the camera's vertical look direction, matching
+    // the raycaster's wall/sprite rendering. Falls back to h/2 if no
+    // render has occurred yet.
+    var horizon = _lastHalfH || (h / 2);
+    var yShift = worldOffsetY ? Math.floor((worldOffsetY / dist) * h) : 0;
+    var screenY = Math.floor(horizon - spriteH / 2) + yShift;
+
+    // Z-buffer occlusion check
+    var startCol = Math.max(0, Math.floor(drawX));
+    var endCol   = Math.min(w - 1, Math.floor(drawX + spriteW));
+    var visible = false;
+    for (var col = startCol; col <= endCol; col++) {
+      if (_zBuffer[col] > dist) { visible = true; break; }
+    }
+
+    return {
+      screenX: screenX,
+      screenY: screenY,
+      dist: dist,
+      scaleH: spriteH,
+      scaleW: spriteW,
+      visible: visible,
+      startCol: startCol,
+      endCol: endCol,
+      canvasW: w,
+      canvasH: h
+    };
+  }
+
   return {
     init: init,
     render: render,
@@ -4393,6 +4612,10 @@ var Raycaster = (function () {
     getRenderScale: getRenderScale,
     setFreeformEnabled: function (enabled) { _freeformEnabled = !!enabled; },
     isFreeformEnabled: function () { return _freeformEnabled; },
-    registerFreeformGapFiller: registerFreeformGapFiller
+    registerFreeformGapFiller: registerFreeformGapFiller,
+    projectWorldToScreen: projectWorldToScreen,
+    findTileScreenRange: findTileScreenRange,
+    getZBuffer: function () { return _zBuffer; },
+    getCanvasSize: function () { return { w: _canvas ? _canvas.width : 320, h: _canvas ? _canvas.height : 200 }; }
   };
 })();

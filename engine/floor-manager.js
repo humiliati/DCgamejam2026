@@ -1357,7 +1357,7 @@ var FloorManager = (function () {
   // Layout: ROAD spine (cols 18-20) runs N-S from overpass to gate arcade.
   // West meadow = encampment zone (2 shacks, campfires, tree clusters).
   // East meadow = residential zone (1 house with fence yard, mailbox).
-  // North: Roman-arch gate facade (thin wall + wide arch) to Floor 1.
+  // North: Roman-arch great portal (paired ARCH_DOORWAY, Phase 6B) to Floor 1.
   // South: Concrete overpass wall — player was just dropped off here.
   // GRASS dominant, PATH dirt trails branch to structures, ROAD for spine.
   //
@@ -1384,8 +1384,8 @@ var FloorManager = (function () {
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //14  N-S path stubs
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,10,10,1,1,1,1,21,21,21], //15  path stubs + arch pillars(41,15)(42,15)
     [1,1,21,22,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,1,1,21,21,21], //16  path shoulder N
-    [1,1,21,22,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,2,1,1,21,21,21], //17  ★ ROAD + arch DOOR(44,17)→Floor 1
-    [1,1,21,22,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,2,1,1,21,21,21], //18  ★ ROAD + arch DOOR(44,18)→Floor 1
+    [1,1,21,22,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,71,71,34,34,34,34], //17  ★ ROAD + ARCH_DOORWAY(44,17)→Floor 1 + back arch(45,17) + skybox corridor(46-49) — no opaque behind arches
+    [1,1,21,22,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,71,71,34,34,34,34], //18  ★ ROAD + ARCH_DOORWAY(44,18)→Floor 1 + back arch(45,18) + skybox corridor(46-49) — no opaque behind arches
     [1,1,21,22,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,1,1,21,21,21], //19  path shoulder S
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,10,10,1,1,1,1,21,21,21], //20  path stubs S + arch pillars(41,20)(42,20)
     [1,1,21,22,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,33,33,34,34,34,34,34,34,34,34,34,34,34,1,1,1,1,1,1,21,21,21], //21  S-N path stubs to south pods
@@ -1474,6 +1474,15 @@ var FloorManager = (function () {
         // interior stubs are authored as proper cellar_entry rooms.
         // See docs/BUILDING_INTERIORS_ROADMAP.md (to be written).
       },
+      // Explicit exterior face overrides for ARCH_DOORWAY / DOOR_FACADE tiles.
+      // Back arches at (45,17)/(45,18) have no walkable neighbor for auto-detect
+      // (sandwiched between front arches and wall), so declare WEST face explicitly.
+      doorFaces: {
+        '44,17': 2,   // Front arch — facing WEST (toward player approach)
+        '44,18': 2,   // Front arch — facing WEST
+        '45,17': 2,   // Back arch  — facing WEST (same portal axis)
+        '45,18': 2    // Back arch  — facing WEST
+      },
       gridW: _FLOOR0_W,
       gridH: _FLOOR0_H,
       biome: 'exterior',
@@ -1552,7 +1561,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,1,1,1,1,1,72,0,0,0,22,22,0,1,1,1,1,1,1,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 5  Bazaar east wall PORTHOLE(12,5) — Inn porthole removed (was 24,5)
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 6  Noticeboard pillars
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,21,0,0,71,0,0,21,0,0,22,0,0,35,35,35], // 7  ARCH_DOORWAY(38,7) — Phase 3 alpha-mask arch test
-    [21,21,21,22,0,22,0,1,1,73,2,73,1,0,0,0,22,22,0,1,1,73,2,73,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) flanked by WINDOW_TAVERN(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_TAVERN(21,8)(23,8)
+    [21,21,21,22,0,22,0,1,1,77,2,77,1,0,0,0,22,22,0,1,1,77,2,77,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) flanked by WINDOW_SHOP(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_SHOP(21,8)(23,8)
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 9
     [21,21,21,22,0,22,0,21,0,0,33,33,21,0,0,0,22,22,0,0,0,0,33,33,0,21,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //10  path stubs N
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //11  (bonfire removed — consolidated to road plaza)
@@ -1571,7 +1580,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
     [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  DUMP_TRUCK(30,26) — parked in SE pod
-    [21,21,21,22,0,22,0,0,1,1,2,1,0,0,0,0,22,22,0,0,1,1,74,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + Home DOOR_FACADE(22,27) + SE well
+    [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,78,74,78,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_BAY(21,27)(23,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //30
@@ -1637,7 +1646,11 @@ var FloorManager = (function () {
         '9,8':  1,   // Bazaar left window  → facing SOUTH (the promenade)
         '11,8': 1,   // Bazaar right window → facing SOUTH
         '21,8': 1,   // Inn left window     → facing SOUTH
-        '23,8': 1    // Inn right window    → facing SOUTH
+        '23,8': 1,   // Inn right window    → facing SOUTH
+        '9,27':  3,  // Storm Shelter left slit  → facing NORTH (the promenade)
+        '11,27': 3,  // Storm Shelter right slit → facing NORTH
+        '21,27': 3,  // Gleaner's Home left bay  → facing NORTH
+        '23,27': 3   // Gleaner's Home right bay → facing NORTH
       },
       // Explicit exterior-face declarations for DOOR_FACADE tiles.
       // Same contract: "x,y" → face index (0=E, 1=S, 2=W, 3=N).
@@ -1678,6 +1691,22 @@ var FloorManager = (function () {
           interiorStep: { dx: 0, dy: -1 },   // (23,7) inside inn
           building:     'driftwood_inn',
           vignette:     'tavern_mug'
+        },
+        // ── Storm Shelter (SW pod) — fortress slits ─────────────
+        // defaultVignette is null (no emoji) — the slit is just a
+        // narrow cold opening. No scene content behind the glass.
+        // ── Gleaner's Home (SC pod) — residential bay windows ───
+        {
+          facade:       { x: 21, y: 27 },
+          interiorStep: { dx: 0, dy: 1 },    // (21,28) inside home
+          building:     'gleaners_home',
+          vignette:     'home_candle'
+        },
+        {
+          facade:       { x: 23, y: 27 },
+          interiorStep: { dx: 0, dy: 1 },    // (23,28) inside home
+          building:     'gleaners_home',
+          vignette:     'home_candle'
         }
       ],
       gridW: _FLOOR1_W,
@@ -1866,6 +1895,39 @@ var FloorManager = (function () {
               scale: 0.10
             });
           }
+        }
+      }
+    }
+
+    // ── Trapdoor ladder decor on TRAPDOOR_DN / TRAPDOOR_UP faces ──
+    // Ladder sprite rendered as wall decor on all walkable-neighbor faces.
+    // The ladder sits inside the freeform cavity (anchorV centered on the
+    // gap band). Scale tuned so the ladder fills most of the cavity height.
+    // Alpha-transparent background lets the see-through shaft show through
+    // between the rails and rungs — hearth pattern.
+    for (var tdy = 0; tdy < H; tdy++) {
+      for (var tdx = 0; tdx < W; tdx++) {
+        var tdt = grid[tdy][tdx];
+        if (tdt !== T.TRAPDOOR_DN && tdt !== T.TRAPDOOR_UP) continue;
+
+        var tdFaces = [];
+        if (tdy > 0 && T.isWalkable(grid[tdy - 1][tdx])) tdFaces.push('n');
+        if (tdy < H - 1 && T.isWalkable(grid[tdy + 1][tdx])) tdFaces.push('s');
+        if (tdx > 0 && T.isWalkable(grid[tdy][tdx - 1])) tdFaces.push('w');
+        if (tdx < W - 1 && T.isWalkable(grid[tdy][tdx + 1])) tdFaces.push('e');
+        if (tdFaces.length === 0) continue;
+
+        if (!decor[tdy][tdx]) decor[tdy][tdx] = { n: [], s: [], e: [], w: [] };
+        for (var tdf = 0; tdf < tdFaces.length; tdf++) {
+          // TRAPDOOR_DN: cavity is bottom of column → anchorV low (0.35)
+          // TRAPDOOR_UP: cavity is top of column  → anchorV high (0.65)
+          var tdAnchorV = (tdt === T.TRAPDOOR_DN) ? 0.35 : 0.65;
+          decor[tdy][tdx][tdFaces[tdf]].push({
+            spriteId: 'decor_ladder',
+            anchorU: 0.5,
+            anchorV: tdAnchorV,
+            scale: 0.55     // Fill most of the cavity height
+          });
         }
       }
     }
@@ -2414,10 +2476,38 @@ var FloorManager = (function () {
         var _dtTile = (_doorGrid[_dtY] && _doorGrid[_dtY][_dtX]) || 0;
         var _dtTargetFloor = _doorTargets[_dtKey];
         var _dtBldg = _floorToBuilding[_dtTargetFloor] || null;
+        // ARCH_DOORWAY: exterior face detection + optional texture override.
+        // Runs even without a building record (e.g. Floor 0's Roman Arch
+        // targets Floor "1" which is an exterior, not a building).
+        if (_dtTile === _ARCH) {
+          if (_dtBldg && _dtBldg.archTexture) {
+            DoorSprites.setTexture(_dtX, _dtY, _dtBldg.archTexture);
+          }
+          // Exterior face for pairing scan (Phase 6B)
+          var _adfKey = _dtX + ',' + _dtY;
+          if (_floorData.doorFaces && typeof _floorData.doorFaces[_adfKey] === 'number') {
+            DoorSprites.setExteriorFace(_dtX, _dtY, _floorData.doorFaces[_adfKey]);
+          } else {
+            var _aNbrs = [
+              { dx: 1, dy: 0, face: 0 }, { dx: 0, dy: 1, face: 1 },
+              { dx:-1, dy: 0, face: 2 }, { dx: 0, dy:-1, face: 3 }
+            ];
+            for (var _ani = 0; _ani < 4; _ani++) {
+              var _anx = _dtX + _aNbrs[_ani].dx;
+              var _any = _dtY + _aNbrs[_ani].dy;
+              if (_doorGrid[_any] && _doorGrid[_any][_anx] !== undefined) {
+                var _anTile = _doorGrid[_any][_anx];
+                if (!TILES.isOpaque(_anTile) && !TILES.isDoor(_anTile)) {
+                  DoorSprites.setExteriorFace(_dtX, _dtY, _aNbrs[_ani].face);
+                  break;
+                }
+              }
+            }
+          }
+          continue;
+        }
         if (!_dtBldg) continue;
-        if (_dtTile === _ARCH && _dtBldg.archTexture) {
-          DoorSprites.setTexture(_dtX, _dtY, _dtBldg.archTexture);
-        } else if (_dtTile === _DOOR_FACADE && _dtBldg.wallTexture) {
+        if (_dtTile === _DOOR_FACADE && _dtBldg.wallTexture) {
           // DOOR_FACADE lintel band uses the building's wall texture
           // (not doorTexture — the lintel IS the wall above the door)
           DoorSprites.setTexture(_dtX, _dtY, _dtBldg.wallTexture);
@@ -2458,6 +2548,132 @@ var FloorManager = (function () {
           DoorSprites.setTexture(_dtX, _dtY, _dtBldg.doorTexture);
         }
       }
+      // ── Exterior face backfill for decorative ARCH_DOORWAY tiles ──
+      // ARCH_DOORWAY tiles without doorTargets (e.g. back-pair arches)
+      // won't get exterior faces from the doorTargets loop above.
+      // Check explicit doorFaces first, then auto-detect from walkable neighbors.
+      var _dfMap = _floorData.doorFaces || {};
+      for (var _efy = 0; _efy < _floorData.gridH; _efy++) {
+        for (var _efx = 0; _efx < _floorData.gridW; _efx++) {
+          var _efTile = (_doorGrid[_efy] && _doorGrid[_efy][_efx]) || 0;
+          if (_efTile !== _ARCH) continue;
+          if (DoorSprites.getExteriorFace(_efx, _efy) >= 0) continue; // already set
+          // Check explicit doorFaces map
+          var _efKey = _efx + ',' + _efy;
+          if (typeof _dfMap[_efKey] === 'number') {
+            DoorSprites.setExteriorFace(_efx, _efy, _dfMap[_efKey]);
+            continue;
+          }
+          // Auto-detect from walkable neighbors
+          var _efNbrs = [
+            { dx: 1, dy: 0, face: 0 }, { dx: 0, dy: 1, face: 1 },
+            { dx:-1, dy: 0, face: 2 }, { dx: 0, dy:-1, face: 3 }
+          ];
+          for (var _efi = 0; _efi < 4; _efi++) {
+            var _enx = _efx + _efNbrs[_efi].dx;
+            var _eny = _efy + _efNbrs[_efi].dy;
+            if (_doorGrid[_eny] && _doorGrid[_eny][_enx] !== undefined) {
+              var _enTile = _doorGrid[_eny][_enx];
+              if (!TILES.isOpaque(_enTile) && !TILES.isDoor(_enTile)) {
+                DoorSprites.setExteriorFace(_efx, _efy, _efNbrs[_efi].face);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // ── Phase 6A/6B: detect double-door / great-arch pairs ────────
+      // Scan for adjacent DOOR_FACADE or ARCH_DOORWAY tiles that share
+      // an exterior face. Register them as left/right pairs in DoorSprites.
+      // "Left" and "right" are relative to the player viewing the exterior:
+      //   East-facing pair:  north=left, south=right
+      //   South-facing pair: east=left, west=right
+      //   West-facing pair:  south=left, north=right
+      //   North-facing pair: west=left, east=right
+      if (typeof DoorSprites.setPairInfo === 'function') {
+        var _gridH = _floorData.gridH;
+        var _gridW = _floorData.gridW;
+        for (var _py = 0; _py < _gridH; _py++) {
+          for (var _px = 0; _px < _gridW - 1; _px++) {
+            var _ptA = (_doorGrid[_py] && _doorGrid[_py][_px]) || 0;
+            if (_ptA !== _DOOR_FACADE && _ptA !== _ARCH) continue;
+            var _faceA = DoorSprites.getExteriorFace(_px, _py);
+            if (_faceA < 0) continue;
+            // Check east neighbor (horizontal pair)
+            var _ptB = (_doorGrid[_py] && _doorGrid[_py][_px + 1]) || 0;
+            if (_ptB === _ptA) {
+              var _faceB = DoorSprites.getExteriorFace(_px + 1, _py);
+              if (_faceB === _faceA) {
+                // Determine left/right relative to exterior face
+                // UV continuity: west tile is ALWAYS 'left' (wallX=1 → U=0.5),
+                // east tile is ALWAYS 'right' (wallX=0 → U=0.5). This ensures
+                // a seamless join at the tile boundary regardless of face direction.
+                var _sideA = 'left';
+                var _sideB = 'right';
+                DoorSprites.setPairInfo(_px, _py, _px + 1, _py, _sideA);
+                DoorSprites.setPairInfo(_px + 1, _py, _px, _py, _sideB);
+              }
+            }
+          }
+        }
+        // Vertical pairs (north-south adjacency)
+        for (var _py2 = 0; _py2 < _gridH - 1; _py2++) {
+          for (var _px2 = 0; _px2 < _gridW; _px2++) {
+            var _pvA = (_doorGrid[_py2] && _doorGrid[_py2][_px2]) || 0;
+            if (_pvA !== _DOOR_FACADE && _pvA !== _ARCH) continue;
+            var _fvA = DoorSprites.getExteriorFace(_px2, _py2);
+            if (_fvA < 0) continue;
+            var _pvB = (_doorGrid[_py2 + 1] && _doorGrid[_py2 + 1][_px2]) || 0;
+            if (_pvB === _pvA) {
+              var _fvB = DoorSprites.getExteriorFace(_px2, _py2 + 1);
+              if (_fvB === _fvA) {
+                // UV continuity: north tile is ALWAYS 'left' (wallX=1 → U=0.5),
+                // south tile is ALWAYS 'right' (wallX=0 → U=0.5). This ensures
+                // a seamless join at the tile boundary regardless of face direction.
+                var _svA = 'left';
+                var _svB = 'right';
+                DoorSprites.setPairInfo(_px2, _py2, _px2, _py2 + 1, _svA);
+                DoorSprites.setPairInfo(_px2, _py2 + 1, _px2, _py2, _svB);
+              }
+            }
+          }
+        }
+      }
+
+      // ── Assign wide textures to paired tiles ──────────────────────
+      // DOOR_FACADE pairs get the wide double-door panel texture;
+      // ARCH_DOORWAY pairs get the wide arch texture. Only assign if
+      // setDoubleDoorPanel API is available.
+      if (typeof DoorSprites.setDoubleDoorPanel === 'function') {
+        // Iterate grid, find left-side paired tiles, assign wide textures
+        // to both tiles in the pair.
+        for (var _tpy = 0; _tpy < _floorData.gridH; _tpy++) {
+          for (var _tpx = 0; _tpx < _floorData.gridW; _tpx++) {
+            var _tpInf = DoorSprites.getPairInfo(_tpx, _tpy);
+            if (!_tpInf || _tpInf.side !== 'left') continue;
+            var _tpTile = (_doorGrid[_tpy] && _doorGrid[_tpy][_tpx]) || 0;
+            if (_tpTile === _ARCH) {
+              // Paired ARCH_DOORWAY: assign wide arch texture to both tiles
+              DoorSprites.setDoubleDoorPanel(_tpx, _tpy, 'arch_wide_brick');
+              var _tpParts = _tpInf.partner.split(',');
+              DoorSprites.setDoubleDoorPanel(
+                parseInt(_tpParts[0], 10), parseInt(_tpParts[1], 10),
+                'arch_wide_brick'
+              );
+            } else if (_tpTile === _DOOR_FACADE) {
+              // Paired DOOR_FACADE: assign wide double-door panel
+              DoorSprites.setDoubleDoorPanel(_tpx, _tpy, 'double_door_wood');
+              var _tpParts2 = _tpInf.partner.split(',');
+              DoorSprites.setDoubleDoorPanel(
+                parseInt(_tpParts2[0], 10), parseInt(_tpParts2[1], 10),
+                'double_door_wood'
+              );
+            }
+          }
+        }
+      }
+
       // Lazy-register the facade_door gap filler (safe to call repeatedly)
       if (typeof DoorSprites.ensureFillerRegistered === 'function') {
         DoorSprites.ensureFillerRegistered();
@@ -2806,6 +3022,19 @@ var FloorManager = (function () {
     getFloorCache: function (floorId) {
       var entry = _floorCache[String(floorId)];
       return entry ? entry.floorData : null;
+    },
+
+    // Expose raw floor builders for tooling (blockout visualizer, extractor).
+    // Returns a map of floorId to builder function. Includes both the
+    // registered external builders and the hardcoded built-in floors.
+    _testGetBuilders: function () {
+      var all = {};
+      all['0'] = _buildFloor0;
+      all['1'] = _buildFloor1;
+      for (var id in _registeredBuilders) {
+        all[id] = _registeredBuilders[id];
+      }
+      return all;
     }
   };
 })();

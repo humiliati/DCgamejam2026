@@ -7,15 +7,16 @@
 (texture system + height offsets), `SpatialContract` (rendering rules),
 `Raycaster` (wall/floor/sprite pipeline).
 
-> **2026-04-10 update — Phase 7 & 8 superseded.** The multi-segment
-> column work and per-column alpha-mask work described in Phases 7–8
-> below have been rescoped into a dedicated plan modelled on the
-> `raycast.js-master` reference engine's freeform block tile type. See
-> **`RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`** for the phased path:
-> two-segment walls (hearth sandwich, civilized bonfire + pergola
-> moat), per-column alpha-mask gaps (arches, portholes), and window
-> interior scenes. Phases 1–6 in this document still stand as the
-> data-only / single-segment additions.
+> **2026-04-10 — Phases 7 & 8 superseded.** Multi-segment column work
+> and per-column alpha masks shipped as the freeform rendering system.
+> See **`RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`**.
+>
+> **2026-04-12 — Phase 1 pivoted.** Peaked roofs (graduated height
+> offsets) replaced by the **roof moat** system: floating tile strips
+> at building-top altitude, proven with tree canopy rings and
+> PERGOLA_BEAM lattices. Phase 9 (octagonal columns) scoped to tree
+> trunk rendering via all-face recess of the shipped DOOR_FACADE
+> technique. Phases 2–6 unchanged.
 
 ---
 
@@ -86,87 +87,67 @@ the floor plane  useful for awnings, railings on decks, window sills.
 
 ---
 
-## Phase 1  Peaked Roofs (Data-Only, No Renderer Changes)
+## Phase 1 — Roof Moat System (Floating Strips + Canopy Rings)
 
-**Difficulty:** Easy  pure tile data + new textures.
-**Estimated size:** ~60 lines (tile defs + texture generators + contract entries).
+> **2026-04-12 — Peaked roofs superseded.** The original graduated-height-
+> offset approach (ROOF_EAVE → ROOF_SLOPE → ROOF_PEAK) has been replaced by
+> the **roof moat** system: floating tile strips at building-top altitude
+> that create rooflines, canopies, and parapets. This pattern was proven
+> with tree canopy rings (CANOPY/CANOPY_MOSS) and the PERGOLA_BEAM lattice,
+> and borrows the canales principle — water-spout-like structural projections
+> that break the flat roofline and read as depth from any approach angle.
 
-### Concept
+**Status:** Tile types SHIPPED, rendering SHIPPED, placement in progress.
+**Difficulty:** Easy — pure data (tile placement in templates + contract tuning).
 
-A peaked roof is a row of tiles where the height offset graduates from
-low at the eaves to high at the ridge. Combined with a short wall height
-(the roof is a thin strip, not a full wall), the player reads a triangular
-roofline against the sky.
+### Shipped tile types
 
-### New tile types
+| Constant | ID | wallHeight | heightOffset | Rendering | Notes |
+|---|---|---|---|---|---|
+| `ROOF_EAVE_L` | 60 | 0.20 | 2.8 | Float (thin strip) | Left eave |
+| `ROOF_SLOPE_L` | 61 | 0.25 | 3.0 | Float (thin strip) | Left slope |
+| `ROOF_PEAK` | 62 | 0.30 | 3.2 | Float (thin strip) | Ridge beam |
+| `ROOF_SLOPE_R` | 63 | 0.25 | 3.0 | Float (thin strip) | Right slope |
+| `ROOF_EAVE_R` | 64 | 0.20 | 2.8 | Float (thin strip) | Right eave |
+| `CANOPY` | 65 | 0.25 | 2.0 | Float (opaque lid) | Tree canopy ring |
+| `CANOPY_MOSS` | 66 | 0.25 | 2.0 | Float (translucent) | Swamp canopy |
+| `ROOF_CRENEL` | 67 | 0.50 | 3.0 | Float (toothed) | Crenellated rampart |
+| `PERGOLA` | 68 | 0.50 | 2.5 | Float + back-face | Open-air beam lattice |
+| `CITY_BONFIRE` | 69 | 2.0 | — | Freeform column | Pyre (pedestal + fire + hood) |
+| `PERGOLA_BEAM` | 70 | 2.0 | — | Freeform canopy | Beam landing on pyre hood |
 
-```
-ROOF_EAVE_L   = 60   // Left eave — lowest roof point
-ROOF_SLOPE_L  = 61   // Left slope — intermediate
-ROOF_PEAK     = 62   // Ridge — highest point
-ROOF_SLOPE_R  = 63   // Right slope — intermediate
-ROOF_EAVE_R   = 64   // Right eave — lowest roof point
-```
-> **Note (Apr 9 2026):** IDs 40-48 are occupied by living infrastructure,
-> 49-59 reserved for dungeon/economy tiles. Architectural shapes start at 60.
+### Design principle: the roof moat
 
-All are solid (block movement, block LOS) and non-interactable.
+A "roof moat" is a ring of floating tiles placed at building-top altitude.
+From the player's ground-level perspective, the ring reads as a continuous
+roofline with visible depth — the gap between the floating strip and the
+building wall behind it creates a shadow channel (the "moat"). This is
+superior to the original peaked-roof approach for three reasons:
 
-### Height profile
+1. **Reads from all approach angles.** Graduated height offsets only
+   produced a convincing roofline from one direction. Floating strips at
+   constant altitude work from every angle — the player always sees the
+   strip silhouetted against sky or taller background geometry.
 
-| Tile | tileWallHeights | tileHeightOffsets | Visual effect |
-|---|---|---|---|
-| ROOF_EAVE_L | 0.20 | +0.05 | Thin strip, barely raised  eave overhang |
-| ROOF_SLOPE_L | 0.25 | +0.15 | Slightly taller, higher  ascending slope |
-| ROOF_PEAK | 0.30 | +0.30 | Thickest strip, highest  ridge beam |
-| ROOF_SLOPE_R | 0.25 | +0.15 | Mirror of SLOPE_L |
-| ROOF_EAVE_R | 0.20 | +0.05 | Mirror of EAVE_L |
+2. **Canales-style projections.** Mixing tile types at different offsets
+   along the ring (eave at 2.8, crenel at 3.0, pergola at 2.5) creates
+   the irregular projecting-beam roofline of adobe/pueblo architecture.
+   The visual rhythm is more interesting than a smooth graduated slope.
 
-The step fill below each roof tile reads as the underside shadow of the
-overhang. Use a dark `stepColor` or sample from a dark texture edge.
+3. **Proven with tree canopies.** CANOPY tiles at offset 2.0 already
+   render convincingly as leafy crowns floating above trunk columns. The
+   same technique at offset 2.8–3.2 produces building roofs. PERGOLA_BEAM
+   (freeform, transparent gap) proves that the system supports see-through
+   lattice structures at altitude.
 
-### New textures
+### Remaining work
 
-| Texture ID | Pattern | Notes |
-|---|---|---|
-| `roof_shingle` | Overlapping rows of angled shingles, warm terracotta | Main roof surface |
-| `roof_slate` | Flat rectangular slate tiles, cool grey | Dungeon/institutional variant |
-| `roof_thatch` | Irregular straw bundles, golden | Tavern/rustic variant |
-
-Each is 6464 procedural, tiling horizontally. The texture wraps across
-adjacent roof tiles so the shingle pattern reads continuously.
-
-### Floor template usage
-
-In a floor template, a building with a peaked roof facing the player might
-look like (top-down, player approaches from below):
-
-```
-  W  W  W  W  W  W  W        back wall
-  W  .  .  .  .  .  W        interior
-  W  .  .  .  .  .  W
-  W  .  .  D  .  .  W        D = door
-  RL RS RP RP RP RS RR       roof tiles (player sees this row as roofline)
-```
-
-The player sees the roof row as a peaked silhouette above the door. The
-building walls behind rise to full height. The N-layer system reveals the
-taller back wall through the gaps above the short roof tiles.
-
-### Eave drip line (bonus)
-
-The step-fill gap below ROOF_EAVE tiles can use a distinct color  a wet
-slate or moss green  to imply a drip line where rain runs off the eave.
-This is pure `stepColor` override, zero rendering cost.
-
-### What this does NOT solve
-
-The roof is only visible from one direction (the row facing the player).
-From the side, the player sees individual roof tiles at different heights,
-not a continuous slope. This is a fundamental raycaster limitation  walls
-are axis-aligned, so a diagonal roofline can only be approximated as a
-staircase of discrete tiles. At the 6464 texture scale and the chunky
-pixel-art aesthetic, this reads acceptably as a stepped gable.
+- Place roof moat rings on Promenade and Lantern Row building templates
+- Tune per-building heightOffset variation for architectural variety
+- Add `roof_shingle`, `roof_slate`, `roof_thatch` textures for the
+  floating strips (currently using default wall textures)
+- Canales detail: composite textures with protruding beam / drain channel
+  painted into the strip face
 
 ---
 
@@ -484,182 +465,44 @@ brain fills in the 3D shape.
 
 ---
 
-## Phase 7  True Window Transparency (Multi-Segment Columns)
+## Phase 7 — True Window Transparency ⛔ SUPERSEDED
 
-**Difficulty:** Hard  architectural change to raycaster inner loop.
-**Estimated effort:** 35 days focused work + performance validation.
-**Estimated size:** ~300 lines (raycaster refactor + texture alpha system).
-
-### Why this is hard
-
-The current raycaster resolves each column to a single wall hit:
-
-```
-DDA loop  first opaque tile hit  compute geometry  draw one strip
-```
-
-True transparency requires:
-
-```
-DDA loop  first tile hit  check if texture has transparent band 
-  if yes: draw upper wall segment, skip transparent band, draw lower
-  wall segment, cast secondary ray through gap for background content 
-  if no: draw as before
-```
-
-This multiplies the per-column work. Every column potentially needs 23
-wall segments instead of 1. The transparent band must be defined per-texture
-(not per-tile), and the background content behind the gap must be resolved
-(sky? interior wall color? secondary raycast?).
-
-### Proposed architecture
-
-#### Texture alpha masks
-
-Each texture optionally carries a **row-range alpha mask**: an array of
-booleans per row indicating which rows are transparent. For a window
-texture, rows 1244 might be transparent (the glass area), while 011
-(lintel) and 4563 (sill + wall below) are opaque.
-
-```javascript
-// In TextureAtlas, per texture:
-texture.alphaMask = new Uint8Array(64);  // 0 = opaque, 1 = transparent
-// Window: rows 12-44 are transparent
-for (var r = 12; r <= 44; r++) texture.alphaMask[r] = 1;
-```
-
-#### Multi-segment column renderer
-
-Replace the single `drawImage` call with a segment loop:
-
-```javascript
-// Pseudo-code for one column:
-var texRowTop = mapScreenToTexRow(drawStart);
-var texRowBot = mapScreenToTexRow(drawEnd);
-var segments = splitByAlpha(texture.alphaMask, texRowTop, texRowBot);
-
-for (var s = 0; s < segments.length; s++) {
-  if (segments[s].opaque) {
-    // Draw wall texture strip for this row range
-    ctx.drawImage(tex.canvas, texX, segments[s].srcY, 1, segments[s].srcH,
-                  col, segments[s].dstY, 1, segments[s].dstH);
-  } else {
-    // Transparent band  render background content
-    renderWindowBackground(col, segments[s].dstY, segments[s].dstH, ...);
-  }
-}
-```
-
-#### Background content behind transparent band
-
-Three options, in order of complexity:
-
-1. **Flat color fill:** Fill transparent band with a solid color
-   (sky blue for exterior windows, dark amber for interior glow).
-   Cheapest, reads OK at distance. ~5 lines.
-
-2. **Sky/ceiling gradient sample:** Sample the skybox or ceiling gradient
-   at the transparent band's screen position. Integrates with existing
-   sky rendering. ~15 lines.
-
-3. **Secondary raycast:** Continue the DDA through the transparent tile
-   and render whatever is behind it (interior wall, deeper building, sky).
-   This is the "correct" solution but doubles the ray cost for every
-   transparent column. ~80 lines + performance risk.
-
-**Recommendation:** Start with option 2 (sky gradient) for exterior
-windows. Option 3 only if the gameplay requires seeing actual rooms
-through windows.
-
-### Performance concerns
-
-At 480 columns/frame, if 20% of columns hit a transparent texture (a
-building facade fills ~96 columns), the segment loop adds ~96 extra
-`drawImage` calls per frame + 96 background fills. Total overhead: ~5%
-of frame budget. Acceptable.
-
-The danger is option 3 (secondary raycast): 96 additional DDA traversals
-per frame could push the frame time past 16ms on webOS TV hardware.
-Profile before committing.
-
-### Z-buffer implications
-
-The Z-buffer stores one depth per column. With multi-segment rendering,
-sprites behind a transparent band should be visible through the gap but
-occluded by the opaque segments. This requires either:
-
-- Per-pixel Z-buffer (expensive  480  screenHeight entries)
-- Per-segment Z-buffer update (set zBuffer to wall distance for opaque
-  segments, set to infinity/far for transparent segments so sprites show
-  through)
-
-The per-segment approach is simpler and sufficient: after rendering a
-transparent column, temporarily set `_zBuffer[col] = Infinity` so sprites
-behind the window are visible, then restore it after the sprite pass.
-This has edge cases (sprite partially behind opaque wall, partially
-behind window) but is acceptable for the visual quality target.
-
-### Prerequisite
-
-Phase 5 (painted-on windows) should ship first. The texture infrastructure
-(window frame + scene compositing) is reused here  the only change is
-that the scene region becomes transparent instead of painted.
+> **Superseded by `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`.**
+> The multi-segment column renderer, per-column alpha masks, and Z-buffer
+> bypass described here shipped as the **freeform rendering system**. Tiles
+> opt in via `tileFreeform` in SpatialContract; the raycaster renders upper
+> band → transparent cavity → lower band with per-column gap fillers and
+> Z-buffer bypass for sprite visibility through cavities. Currently used by
+> DOOR_FACADE, WINDOW_TAVERN, HEARTH, BONFIRE, TRAPDOOR_DN/UP, PORTHOLE,
+> CITY_BONFIRE, and PERGOLA_BEAM.
+>
+> No further work planned under this phase. See the freeform roadmap for
+> remaining tiers (secondary raycast through cavities, animated gap fillers).
 
 ---
 
-## Phase 8  Arched Doorways & Shaped Openings (Hard, Future)
+## Phase 8 — Arched Doorways & Shaped Openings ⛔ SUPERSEDED
 
-**Difficulty:** Very hard  per-pixel alpha in wall columns.
-**Estimated effort:** 57 days.
-
-### Why this is harder than Phase 7
-
-Phase 7 uses row-range transparency (a horizontal band). An arched doorway
-requires **per-pixel transparency**: the top of the door opening is curved,
-so each column has a different transparent row range. The arch shape must
-be encoded per-texture-column, not per-texture-row.
-
-### Proposed approach
-
-Replace the row-range alpha mask with a **per-column alpha range**:
-
-```javascript
-// Per texture column, store the transparent row range:
-texture.alphaRanges = new Array(64);  // one per texture column
-// Arch: wider opening at bottom, narrowing at top
-for (var c = 0; c < 64; c++) {
-  var archTop = computeArchCurve(c);  // parabola or semicircle
-  texture.alphaRanges[c] = { top: archTop, bot: 52 };
-}
-```
-
-The multi-segment renderer from Phase 7 reads the per-column range instead
-of a uniform row range. Each column gets its own segment split, creating
-the arch shape.
-
-### Performance
-
-Same as Phase 7 but with per-column alpha lookup instead of shared row
-range. Marginal additional cost (~1 array access per column). The real
-cost is implementation complexity and testing.
-
-### Use cases
-
-- Arched doorways on cathedral/guild buildings
-- Rounded window tops (Gothic architecture)
-- Irregular openings (cave mouths, broken walls)
+> **Superseded by `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`.**
+> Per-column alpha ranges (arch curves, irregular openings) are a future
+> tier of the freeform system, not a standalone phase. The freeform
+> architecture already supports per-tile hUpper/hLower splits; extending
+> to per-column variable splits is the natural next step when art direction
+> demands curved openings.
+>
+> No further work planned under this phase.
 
 ---
 
 ## Implementation Priority
 
 ```
-POST-JAM POLISH
+POST-JAM POLISH — updated 2026-04-12
 
- Phase 1: Peaked Roofs  (highest impact, zero renderer risk)
-    5 new tile types + height profiles
-    3 roof textures (shingle, slate, thatch)
-    Template placement for Promenade + Lantern Row buildings
+ Phase 1: Roof Moat System  ✔ TILES SHIPPED, placement in progress
+    11 tile types shipped (60–70): eaves, slopes, peak, canopy,
+      canopy_moss, crenel, pergola, city_bonfire, pergola_beam
+    Remaining: template placement, roof textures, canales detail
 
  Phase 2: Eaves & Awnings 
     1 new tile type (AWNING)
@@ -680,41 +523,34 @@ POST-JAM POLISH
     5 window textures (warm, dark, sky, stained, shutter)
     Composite wall-with-window textures
     Optional animated warm glow via porthole system
-    Prerequisite for Phase 7
 
  Phase 6: Billboard Props 
     wallFacing flag (~3 lines in raycaster)
     5 prop sprite definitions
     Placement rules for templates + proc-gen
 
-   difficulty cliff 
+ Phase 9: Octagonal Tree Trunks  (medium priority)
+    Stage 1: recessAllFaces flag + isExteriorHit gate bypass (~18 lines)
+    Stage 2: chamferCorners diagonal planes in jamb branch (~35 lines)
+    Reference: raycast.js-master WALL_DIAG + getIntersect
+    chamferTexture / jambTexture for bark on corner + face columns
+    Wire up tree tiles + CANOPY rings in templates
 
- Phase 7: True Window Transparency  (high payoff, high risk)
-    Texture alpha masks
-    Multi-segment column renderer
-    Background content behind transparent band
-    Z-buffer segment handling
-    Performance validation on webOS TV
+   ⛔ superseded — no further work ───────────────────
 
- Phase 8: Arched Openings  (niche, very expensive)
-     Per-column alpha ranges
-     Arch curve computation
-     Only if Phase 7 is stable and the art direction demands it
-
- Phase 9: Octagonal Columns  (medium, extends recess technique)
-     Recess on all 4 faces of a tile → non-square cross-section
-     Optional 45° chamfer planes for true octagonal silhouette
-     Tree trunks, stone pillars, round towers, lamp posts
-     See dedicated section below
+ Phase 7: True Window Transparency → RAYCAST_FREEFORM_UPGRADE_ROADMAP.md
+ Phase 8: Arched Openings → RAYCAST_FREEFORM_UPGRADE_ROADMAP.md
 ```
 
 ---
 
-## Phase 9 — Octagonal Columns (Recess Generalization)
+## Phase 9 — Octagonal Columns / Tree Trunks (Recess Generalization)
 
-**Difficulty:** Medium — extends proven DOOR_FACADE recess technique to all
-four faces of a tile.
-**Estimated size:** ~80 lines (raycaster recess generalization + chamfer math).
+**Priority:** Medium — primary use case is round tree trunk columns.
+**Difficulty:** Medium — extends DOOR_FACADE recess to all four faces, adds
+diagonal corner planes adapted from `raycast.js-master` WALL_DIAG.
+**Estimated size:** ~90 lines (all-face recess ~18, diagonal chamfer ~35,
+textures ~15, contract wiring ~20).
 **Prerequisite**: Phase 1.5 of `DOOR_ARCHITECTURE_ROADMAP.md` (Wolfenstein
 thin-wall offset for DOOR_FACADE — **SHIPPED**).
 
@@ -723,24 +559,39 @@ thin-wall offset for DOOR_FACADE — **SHIPPED**).
 Trees, stone pillars, and decorative columns all occupy a full grid tile. In
 the raycaster they render as **square pillars** — the ray hits the tile
 boundary and the wall face is flush with adjacent geometry. This is fine for
-walls but wrong for cylindrical/organic objects.
+walls but wrong for cylindrical/organic objects. Tree trunks are the most
+visible offender — a CANOPY ring floating above a square column reads as
+"box with hat" rather than "tree."
 
 ### Insight: recess on all four faces
 
 The DOOR_FACADE recess offsets perpDist by `_recessD` on the **exterior face
-only**, producing visible jamb walls on either side. If we apply the same
-inset to **all four faces** of a tile, every approach angle sees the wall face
-recessed into the tile interior. The corners of the tile — where a ray enters
-one face but exits through the adjacent face before reaching the inset —
-render as jamb walls. The visual result: the tile's silhouette is no longer
-a square.
+only**, producing visible jamb walls on either side. The gate is at
+`raycaster.js` line 1225–1227:
 
-### Cross-section profiles
+```javascript
+if (TILES.isFreeform(hitTile) &&
+    typeof DoorSprites !== 'undefined' && DoorSprites.isExteriorHit &&
+    DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY)) {
+```
 
-**Level 1 — Recessed square (plus/cross profile):**
+If we apply the same inset to **all four faces** of a tile, every approach
+angle sees the wall face recessed into the tile interior. The corners of the
+tile — where a ray enters one face but exits through the adjacent face before
+reaching the inset — render as jamb walls. The visual result: the tile's
+silhouette is no longer a square.
+
+### Two-stage cross-section: plus profile → octagonal chamfer
+
+The implementation builds in two stages. Stage 1 (all-face recess) gets
+the silhouette off the tile boundary. Stage 2 (diagonal chamfer) rounds
+the corners. Both stages ship together — a plus-shaped tree trunk doesn't
+read as round.
+
+**Stage 1 — Recessed square (plus/cross profile):**
 
 Apply the existing recess math to all 4 faces. No new raycaster geometry —
-just remove the "exterior face only" gate.
+just bypass the `isExteriorHit` gate for tiles flagged as columns.
 
 ```
   Plan view (top-down, tile boundary = outer box):
@@ -750,192 +601,166 @@ just remove the "exterior face only" gate.
   │                  │    (perpendicular face at the tile boundary).
   │    recessed      │
   │    column face   │    Result: plus-shaped cross-section.
-  │                  │    Reads as "chunky column" at distance.
+  │                  │
   ├─────┐     ┌─────┤
   │jamb │ face│jamb │
   └─────┴─────┴─────┘
 ```
 
-This is the **cheap** implementation — reuse the exact DOOR_FACADE recess
-block in the raycaster, parameterized by tile type instead of exterior face.
-Every face gets the inset; jamb detection works identically.
+**Stage 2 — Chamfered octagon (diagonal corner planes):**
 
-**Level 2 — Chamfered octagon (diagonal corner planes):**
-
-For a true octagonal silhouette, the corner regions render as 45° diagonal
-faces instead of axis-aligned jamb walls. This requires new geometry: when
-a ray enters the corner zone of a tile (the region that would be a jamb in
-Level 1), compute the intersection with a diagonal plane and render that
-column at the diagonal hit depth.
+Replace the axis-aligned jamb walls with 45° diagonal faces. When a ray
+enters the corner zone (the region that would be a jamb in Stage 1),
+compute intersection with a diagonal line segment connecting the inset
+points of the two adjacent faces. The column renders at the diagonal hit
+depth with texture U sampled from the parametric position along the segment.
 
 ```
   Plan view (octagonal cross-section):
-       ╱─────╲
-     ╱         ╲       8 faces: 4 axis-aligned (N/S/E/W)
-    │           │               4 diagonal (NE/SE/SW/NW)
-    │  column   │
-    │  interior │      Diagonal faces connect adjacent
-     ╲         ╱       axis-aligned faces at 45°.
-       ╲─────╱
+  ┌───┬───────┬───┐
+  │  ╱         ╲  │    Corner zones render as diagonal faces.
+  │╱             ╲│    d = recess depth (0.20 for trees).
+  │               │    Diagonal endpoints:
+  │   column      │      NE corner: (1-d, 0) → (1, d)
+  │   face        │      SE corner: (1, 1-d) → (1-d, 1)
+  │               │      SW corner: (d, 1) → (0, 1-d)
+  │╲             ╱│      NW corner: (0, d) → (d, 0)
+  │  ╲         ╱  │
+  └───┴───────┴───┘
 ```
 
-Diagonal plane intersection math for a chamfer of width `c` in a unit tile:
+The result: an 8-sided cross-section. At the 64×64 pixel-art scale this
+reads as round. Tree trunks get organic silhouettes from every angle.
 
+### Reference implementation
+
+`raycast.js-master` already ships diagonal walls (`WALL_DIAG` type) with
+the exact math we need:
+
+- **`OFFSET_DIAG_WALLS`** (line 372): 4 diagonal orientations defined as
+  endpoint pairs `[[x0,y0],[x1,y1]]` within a tile.
+- **`getIntersect`** (line 477): line-line intersection via 2D cross
+  product. Takes two line segments, returns intersection point or null.
+- **Rendering** (line 1841–1877): compute intersection, check visibility
+  via `pointVsRect`, sample texture U from `(hitX - x0) / (x1 - x0)`.
+
+For octagonal columns, we adapt this pattern: instead of one diagonal per
+tile (WALL_DIAG), we have 4 diagonals (one per corner), and we only test
+the corner that the jamb detection identified. The diagonal replaces the
+jamb — same column, different geometry.
+
+### Implementation plan
+
+**Step 1 — Contract flag: `recessAllFaces`** (~10 lines)
+
+Add `recessAllFaces: true` to the freeform config in SpatialContract.
+DOOR_FACADE keeps `recessAllFaces: false` (exterior-only, as shipped).
+Tree trunk tiles opt in.
+
+```javascript
+// In SpatialContract tileFreeform for tree trunk tile:
+TILES.TREE_TRUNK: Object.freeze({
+  hUpper: 0.0, hLower: 0.0,   // no freeform bands (solid column)
+  recessD: 0.20,               // inset depth
+  recessAllFaces: true,         // recess on all 4 faces
+  chamferCorners: true          // diagonal corner planes (Stage 2)
+})
 ```
-  NE corner: line from (1-c, 0) to (1, c)     →  x + y = (1-c) + mapOrigin
-  SE corner: line from (1, 1-c) to (1-c, 1)   →  x - y = (1-c) - 1 + mapOrigin
-  SW corner: line from (c, 1) to (0, 1-c)     →  x + y = c + mapOrigin
-  NW corner: line from (0, c) to (c, 0)       →  x - y = mapOrigin
+
+**Step 2 — Raycaster: all-face recess gate** (~8 lines)
+
+In the recess block (`raycaster.js` line 1225), add an alternative path:
+
+```javascript
+var _rfCfg = (_contract) ? SpatialContract.getTileFreeform(_contract, hitTile) : null;
+var _allFaceRecess = _rfCfg && _rfCfg.recessAllFaces;
+
+if (TILES.isFreeform(hitTile) && (
+    _allFaceRecess ||
+    (typeof DoorSprites !== 'undefined' && DoorSprites.isExteriorHit &&
+     DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY))
+)) {
 ```
 
-The raycaster checks: did the axis-aligned inset produce a jamb hit (`_rOK
-= false`)? If yes, instead of computing the perpendicular boundary crossing,
-compute the diagonal plane crossing. Use the closer of the two as the hit
-point. The diagonal face renders with `side = 0.5` (a new flag) or by
-computing brightness from the diagonal normal direction.
+When `recessAllFaces` is true, every face is treated as an exterior hit.
+The rest of the recess math (perpDist advance, jamb detection, side flip)
+works identically — no changes needed downstream.
 
-### Tile candidates
+**Step 3 — Raycaster: diagonal chamfer in jamb branch** (~35 lines)
 
-| Tile | Current look | Target profile | Recess depth | Level |
-|---|---|---|---|---|
-| TREE (21) | Square green column | Octagonal trunk | 0.20 | 2 |
-| PILLAR (future ~77) | Square stone column | Octagonal pillar | 0.15 | 1 or 2 |
-| LAMP_POST (future ~78) | Billboard sprite | Thin recessed column | 0.35 | 1 |
-| ROUND_TOWER (future) | Square tower | Octagonal tower | 0.10 | 2 |
-| WELL (future) | Short square | Octagonal short wall | 0.15 | 1 |
+When the existing recess block detects a jamb hit (ray exits tile
+laterally before reaching inset plane), and `chamferCorners` is true,
+replace the axis-aligned jamb with a diagonal intersection:
 
-### Texture considerations
+```javascript
+// Inside the jamb branch (line 1241), after _recessJamb = true:
+if (_rfCfg && _rfCfg.chamferCorners) {
+  // Identify which corner based on entry face (side) and exit direction
+  var d = _recessD;
+  var cx0, cy0, cx1, cy1; // diagonal segment endpoints (tile-local)
+  if (side === 0 && stepY > 0)      { cx0 = 1-d; cy0 = 0; cx1 = 1; cy1 = d; } // NE
+  else if (side === 0 && stepY <= 0) { cx0 = 1; cy0 = 1-d; cx1 = 1-d; cy1 = 1; } // SE
+  else if (side === 1 && stepX > 0)  { cx0 = 0; cy0 = d; cx1 = d; cy1 = 0; } // NW
+  else                               { cx0 = d; cy0 = 1; cx1 = 0; cy1 = 1-d; } // SW
+  // ... (select correct corner based on side + step direction)
 
-The recessed faces use the tile's normal wall texture (bark for trees, stone
-for pillars). Jamb faces (Level 1) or diagonal faces (Level 2) should use
-a slightly darkened variant or apply the standard side-shading rule
-(`side === 1` → 0.75 brightness). For diagonal faces, brightness would
-interpolate between the two adjacent axis-aligned faces.
+  // Ray-line intersection (adapted from raycast.js-master getIntersect)
+  var wx0 = mapX + cx0, wy0 = mapY + cy0;
+  var wx1 = mapX + cx1, wy1 = mapY + cy1;
+  var seg = [wx1 - wx0, wy1 - wy0];
+  var orig = [wx0 - px, wy0 - py];
+  var ray = [rayDirX, rayDirY];
+  var denom = seg[0] * ray[1] - seg[1] * ray[0];
+  if (Math.abs(denom) > 1e-10) {
+    var t = (orig[0] * ray[1] - orig[1] * ray[0]) / denom;
+    if (t >= 0 && t <= 1) {
+      var hitPx = wx0 + t * seg[0];
+      var hitPy = wy0 + t * seg[1];
+      perpDist = Math.abs((hitPx - px) * ... ); // perpendicular projection
+      wallX = t; // texture U from parametric position on diagonal
+      _recessJamb = true; // still a jamb for z-buffer purposes
+      // side stays as-is — the diagonal face uses the chamfer texture
+    }
+  }
+}
+```
 
-### Implementation approach
+The corner selection logic maps `(side, stepX, stepY)` to one of 4
+diagonal segments. The 8 possible `(side, stepDirection)` combinations
+map to 4 corners (two entry faces per corner). The exact mapping needs
+validation against the coordinate system (+Y = south), but the reference
+engine's `OFFSET_DIAG_WALLS` provides the template.
 
-**Step 1**: Add a `tileRecess` table to SpatialContract — maps tile type →
-recess config `{ depth, allFaces: true, chamfer: false }`. The raycaster
-reads this the same way it reads `tileWallHeights`.
+**Step 4 — Chamfer texture + jamb texture** (~15 lines)
 
-**Step 2**: Generalize the DOOR_FACADE recess block in the raycaster. Instead
-of checking `hitTile === TILES.DOOR_FACADE` and reading the exterior face,
-check `tileRecess[hitTile]`. If `allFaces: true`, apply the inset to
-whichever face was hit (no exterior-face gate).
+Add `chamferTexture` and `jambTexture` fields to the freeform config.
+DOOR_FACADE jambs render as masonry (tile's wall texture — unchanged).
+Tree trunk chamfer faces render as bark. Falls back to the tile's wall
+texture if unset.
 
-**Step 3** (Level 2 only): When `chamfer: true` and the inset produces a
-jamb, compute the diagonal plane crossing instead. Add a `_chamferHit` flag
-analogous to `_facadeJamb`. Diagonal faces use interpolated brightness.
+**Step 5 — Wire up tree trunk tiles** (~20 lines)
 
-### Performance
+Register tree tiles with the full freeform config. Place CANOPY rings
+above them in templates. The visual result: a bark-textured octagonal
+column with a leafy canopy floating at altitude — reads as a tree.
 
-The recess check adds 1 hash lookup + ~10 arithmetic ops per column that hits
-a recessed tile. For a tree occupying 20 columns on screen, that's ~200 extra
-ops/frame — negligible. The diagonal plane intersection (Level 2) adds
-another ~8 ops per corner column (typically 4–6 columns per face edge).
+### Collision note
 
-### Relationship to DOOR_FACADE recess
+The DDA grid is still square — the player's collision AABB tests against
+the full tile boundary, not the octagonal silhouette. The player cannot
+walk into the recessed corners. This is conservative (the collision box
+is larger than the visual shape) and matches DOOR_FACADE behavior (the
+player can't walk into the door recess). For tree trunks this is correct —
+you don't walk into a tree trunk.
 
-The DOOR_FACADE recess is a special case of the general column recess:
-- `allFaces: false` (exterior face only)
-- `chamfer: false`
-- Recess depth from `_recessD` constant or future DoorRegistry metadata
+If future use cases need tight collision (walking between octagonal
+pillars in a colonnade), the collision system would need diagonal wall
+checks adapted from `raycast.js-master`'s `c_collision.js` (line 197+).
+Not needed for trees.
 
-The generalized system subsumes the DOOR_FACADE-specific code. Migration
-path: refactor the DOOR_FACADE recess block to read from `tileRecess`,
-add DOOR_FACADE's entry as `{ depth: 0.25, allFaces: false, chamfer: false,
-exteriorFaceSource: 'DoorSprites' }`. Then tree tiles are just
-`{ depth: 0.20, allFaces: true, chamfer: true }`.
+### Use cases (priority order)
 
----
-
-## Cross-References
-
-### TEXTURE_ROADMAP.md
-
-- **Layer 2 (Wall Decor)** is now **SHIPPED** with 13 décor sprites and
-  auto-placement in FloorManager. Phase 4 can use either the wall décor
-  system for per-face fixture placement OR composite textures.
-- **Layer 3 (Emitter Lights)** would enhance Phase 5 windows: a lit
-  window texture could register a warm-colored emitter at its wall
-  position, casting glow onto nearby floor tiles.
-
-### DOOR_ARCHITECTURE_ROADMAP.md
-
-- **Phase 1.5 (Wolfenstein recess)** is the foundation for Phase 9 here.
-  The raycaster's `_facadeJamb` / perpDist inset block was built for
-  DOOR_FACADE and will be generalized to a `tileRecess` table for
-  octagonal columns.
-- **Phase 5 (Cavity Sprite Content)** is the door-specific layer on top
-  of the recess: door panel textures, interior scene glimpses, live
-  interior peeks. Phase 9 octagonal columns do NOT use cavities — they
-  are solid-face recesses with bark/stone textures.
-
-### Biome Plan
-
-- Promenade (floor "1") and Lantern Row (floor "2") are the primary
-  beneficiaries of Phases 15. Their building facades face the player
-  along street corridors  peaked roofs and lit windows define the
-  streetscape.
-- Dungeon floors (depth 3+) primarily benefit from Phase 6 (props) and
-  Phase 7 (windows into adjacent chambers).
-- **Phase 9 octagonal columns** benefit exterior biomes (trees along
-  streets, decorative pillars in plazas) and interior/dungeon biomes
-  (stone pillars, support columns, well structures).
-
-### SpatialContract
-
-All new tile types in Phases 13 must be registered in all three contract
-constructors (exterior, interior, nestedDungeon) with appropriate height
-profiles. Exterior gets the full range; interior and dungeon may use
-subsets. Biome overrides can remap textures per-district.
-
----
-
-## Tile ID Budget (Updated Apr 9 2026)
-
-Canonical tile allocation tracked in
-`TEXTURE_ROADMAP.md` → `Tile Asset Matrix (Canonical 0-59)`.
-
-Current allocation:
-- `0-48`: Runtime tile constants (all textures shipped, 0 missing keys).
-- `49-59`: Reserved for planned dungeon creature verb tiles (49-54) and
-  economy tiles (55-59) per LIVING_INFRASTRUCTURE_BLOCKOUT.md.
-- `60+`: **Architectural shapes** — roof (60-64), awning (65), stoop (66),
-  deck (67), wall variants (68+), window tiles (70+).
-
-All phase descriptions in this doc have been updated to use 60+ IDs.
-
-### Recommended ID Strategy
-
-1. Use `60+` for any new architectural tile constants.
-2. Prefer texture variants and per-cell texture overrides before consuming new IDs.
-3. Only mint new IDs when geometry/collision behavior differs (not just visual variation).
-
-### Architectural Candidates (Reserved Range)
-
-| Suggested ID | Name | Phase | Walkable | Opaque |
-|---|---|---|---|---|
-| 60 | ROOF_EAVE_L | 1 | No | Yes |
-| 61 | ROOF_SLOPE_L | 1 | No | Yes |
-| 62 | ROOF_PEAK | 1 | No | Yes |
-| 63 | ROOF_SLOPE_R | 1 | No | Yes |
-| 64 | ROOF_EAVE_R | 1 | No | Yes |
-| 65 | AWNING | 2 | No | Yes |
-| 66 | STOOP | 3 | Yes | No |
-| 67 | DECK | 3 | Yes | No |
-| 68 | WALL_PLANTER | 4 | No | Yes |
-| 69 | WALL_HVAC | 4 | No | Yes |
-| 70 | WALL_WINDOW_WARM | 5 | No | Yes |
-
-Additional window variants (`WALL_WINDOW_DARK`, `WALL_WINDOW_SKY`, etc.) should
-continue from `71+`.
-
-### Inclusion In Architectural Scope
-
-From the canonical matrix, these existing IDs should be referenced directly in
-architectural phases (do not duplicate IDs):
-- `35` FENCE (railings, deck edges)
-- `37` MAILBOX and `38` DUMP_TRUCK (billboard+short-wall mixed geometry patterns)
-- `40-48` living-infrastructure fixtures (short/full architecture props)
-- `58-59` economy heavy fixtures (full-height industrial forms)
+1. **Tree trunks** — primary motivation. CANOPY above, octagonal trunk below.
+2. **Stone pillars** — dungeon support columns, temple pillars.
+3. **Lamp posts** — tall thin columns (high recessD, very short wallHeight).
+4. **Round towers** — exterior tower silhouettes with large recessD.

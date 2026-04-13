@@ -1,8 +1,9 @@
 /**
  * BonfireSprites — Spawns dragonfire emoji billboards for fire-source tiles.
  *
- * When a floor is generated with BONFIRE tiles (TILES.BONFIRE = 18) OR
- * HEARTH tiles (TILES.HEARTH = 29), this module creates a 🔥+🐉 dragonfire
+ * When a floor is generated with BONFIRE tiles (TILES.BONFIRE = 18),
+ * HEARTH tiles (TILES.HEARTH = 29), or CITY_BONFIRE tiles
+ * (TILES.CITY_BONFIRE = 69), this module creates a 🔥+🐉 dragonfire
  * emoji sprite at the tile center. The billboard sits above the short stone
  * ring wall (0.3× height for BONFIRE) or inside the freeform cavity (HEARTH),
  * matching the mailbox composition pattern: opaque short wall + emoji
@@ -69,36 +70,45 @@ var BonfireSprites = (function () {
 
     if (!grid || !gridW || !gridH) return _cachedSprites;
 
-    var bonfireTile = (typeof TILES !== 'undefined') ? TILES.BONFIRE : 18;
-    var hearthTile  = (typeof TILES !== 'undefined') ? TILES.HEARTH  : 29;
+    var bonfireTile    = (typeof TILES !== 'undefined') ? TILES.BONFIRE      : 18;
+    var hearthTile     = (typeof TILES !== 'undefined') ? TILES.HEARTH       : 29;
+    var cityBonfTile   = (typeof TILES !== 'undefined') ? TILES.CITY_BONFIRE : 69;
 
     for (var gy = 0; gy < gridH; gy++) {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
         var t = grid[gy][gx];
-        if (t === bonfireTile || t === hearthTile) {
-          // Position at grid index — _renderSprites adds 0.5 to center.
-          // HEARTH gets a MUCH bigger flame (2.5x the bonfire size) so
-          // the dragonfire glyph fills the freeform fire cavity bounded
-          // by the hUpper stone mantle and hLower base stone. At default
-          // bonfire scale the glyph reads too small inside the hearth's
-          // tall cavity.
-          var isHearth = (t === hearthTile);
-          _cachedSprites.push({
-            x: gx,
-            y: gy,
-            emoji: FIRE.emoji,
-            emojiOverlay: DRAGON_OVERLAY,
-            scale: isHearth ? (FIRE.scale * 2.5) : FIRE.scale,
-            glow: FIRE.glow,
-            glowRadius: FIRE.glowRadius,
-            bonfire: true,
-            bonfireType: 'dragonfire',
-            hearth: isHearth,
-            noFogFade: true,
-            bobY: 0   // Set by animate() each frame
-          });
-        }
+        if (t !== bonfireTile && t !== hearthTile && t !== cityBonfTile) continue;
+
+        // Per-tile-type emoji billboard config. Scale multiplier on
+        // FIRE.scale controls billboard size; larger cavities need
+        // bigger flames so the glyph fills the opening.
+        //
+        // HEARTH: tall freeform cavity (hUpper–hLower gap) at 1.6×
+        //   wallHeight → 2.5× scale fills the cavity.
+        // CITY_BONFIRE: massive freeform column at 2.0× wallHeight,
+        //   cavity between hLower 0.50 and hUpper 0.80 → 3.0× scale.
+        // BONFIRE: short step-fill ring at 0.3× wallHeight → base scale.
+        var isHearth     = (t === hearthTile);
+        var isCityBonf   = (t === cityBonfTile);
+        var scaleMult    = isCityBonf ? 3.0 : isHearth ? 2.5 : 1.0;
+
+        _cachedSprites.push({
+          x: gx,
+          y: gy,
+          emoji: FIRE.emoji,
+          emojiOverlay: DRAGON_OVERLAY,
+          scale: FIRE.scale * scaleMult,
+          glow: FIRE.glow,
+          glowRadius: isCityBonf ? 6 : FIRE.glowRadius,
+          bonfire: true,
+          bonfireType: 'dragonfire',
+          hearth: isHearth,
+          cityBonfire: isCityBonf,
+          noFogFade: true,
+          domSprite: true,  // suppress emoji billboard from frame 0
+          bobY: 0   // Set by animate() each frame
+        });
       }
     }
 
@@ -138,10 +148,74 @@ var BonfireSprites = (function () {
     _cachedSprites = [];
   }
 
+  // ── DOM Sprite Layer registration (CSS dragonfire overlays) ─────
+  // The dragonfire HTML template — 8 particles + head with eye.
+  var _DF_HTML =
+    '<div class="df-flame">' +
+      '<div class="df-head"></div>' +
+      '<div class="df-eye"></div>' +
+      '<div class="df-flames">' +
+        '<div class="df-particle"></div><div class="df-particle"></div>' +
+        '<div class="df-particle"></div><div class="df-particle"></div>' +
+        '<div class="df-particle"></div><div class="df-particle"></div>' +
+        '<div class="df-particle"></div><div class="df-particle"></div>' +
+      '</div>' +
+    '</div>';
+
+  /**
+   * Register CSS dragonfire sprites via SpriteLayer for all fire tiles
+   * on the current floor. Call AFTER buildSprites() so _cachedSprites
+   * is populated with tile coordinates.
+   *
+   * SpriteLayer.clear() is called automatically on floor transitions
+   * by Game.js, so we don't need to track IDs for cleanup.
+   */
+  function registerDOMSprites() {
+    if (typeof SpriteLayer === 'undefined') return;
+    if (!_cachedSprites.length) return;
+
+    // Mark all cached sprites so the raycaster skips the emoji billboard
+    // for tiles that now have a CSS DOM overlay instead.
+    for (var i = 0; i < _cachedSprites.length; i++) {
+      _cachedSprites[i].domSprite = true;
+    }
+
+    // Per-tile-type DOM sprite config.
+    //
+    // scale: billboard projection size (distance-based). Larger = more
+    //   screen coverage at the same distance.
+    // worldOffsetY: vertical push below eye-level horizon. Positive =
+    //   downward. Tuned so the sprite sits inside each tile's cavity:
+    //   - HEARTH: cavity at ~0.35 below center (freeform hUpper/hLower)
+    //   - CITY_BONFIRE: cavity higher on a 2× tall column, offset 0.20
+    //   - BONFIRE: step-fill ring near floor level, offset 0.45
+    // alignToFace: enables pedestal-buffer scan positioning so the DOM
+    //   sprite locks to the exact screen columns the DDA rendered.
+    var _SPRITE_CFG = {
+      hearth:       { scale: 0.7,  worldOffsetY: 0.35 },
+      cityBonfire:  { scale: 0.55, worldOffsetY: -0.05 },
+      bonfire:      { scale: 0.30, worldOffsetY: 0.15 }
+    };
+
+    for (var i = 0; i < _cachedSprites.length; i++) {
+      var sp = _cachedSprites[i];
+      var cfg = sp.cityBonfire ? _SPRITE_CFG.cityBonfire
+              : sp.hearth      ? _SPRITE_CFG.hearth
+              :                  _SPRITE_CFG.bonfire;
+      SpriteLayer.addSprite(
+        sp.x, sp.y,
+        _DF_HTML,
+        'dragonfire',
+        { scale: cfg.scale, worldOffsetY: cfg.worldOffsetY, alignToFace: true }
+      );
+    }
+  }
+
   return Object.freeze({
-    buildSprites: buildSprites,
-    animate:      animate,
-    clearCache:   clearCache,
-    getAnimatedX: getAnimatedX
+    buildSprites:     buildSprites,
+    animate:          animate,
+    clearCache:       clearCache,
+    getAnimatedX:     getAnimatedX,
+    registerDOMSprites: registerDOMSprites
   });
 })();

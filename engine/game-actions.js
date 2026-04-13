@@ -53,6 +53,8 @@ var GameActions = (function () {
     if (typeof CorpsePeek  !== 'undefined' && CorpsePeek.isActive())  CorpsePeek.handleKey('Escape');
     if (typeof MerchantPeek !== 'undefined' && MerchantPeek.isActive()) MerchantPeek.handleKey('Escape');
     if (typeof PuzzlePeek  !== 'undefined' && PuzzlePeek.isActive())  PuzzlePeek.handleKey('Escape');
+    if (typeof ArchPeek    !== 'undefined' && ArchPeek.isActive())    ArchPeek.forceHide();
+    if (typeof DoorPeek    !== 'undefined' && DoorPeek.isActive())    DoorPeek.forceHide();
   }
 
   // ── Apply pickup (bag-add + HUD + VFX) ─────────────────────────────

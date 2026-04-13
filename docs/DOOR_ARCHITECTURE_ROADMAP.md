@@ -1,9 +1,9 @@
 # Door Architecture Roadmap
 
-**Status**: Active — Phase 0 ✅, Phase 1 ✅, Phase 1.5 ✅, Phase 2 ✅, Phase 5A ✅, Phase 5B–D specced  
-**Last updated**: 2026-04-12  
+**Status**: Active — Phase 0 ✅, Phase 1 ✅, Phase 1.5 ✅, Phase 2 ✅ (visual upgrade shipped), Phase 5A ✅, Phase 5B–D specced, **Phase 6A ✅ (double doors), Phase 6B ✅ (great arches) — Phase 3 stamp-out unblocked**  
+**Last updated**: 2026-04-13  
 **Depends on**: Raycast Freeform Upgrade (shipped), Living Windows (Phase 0–1 shipped), Texture Atlas  
-**Cross-refs**: `LIVING_WINDOWS_ROADMAP.md`, `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`, `ARCHITECTURAL_SHAPES_ROADMAP.md` (Phase 9 — Octagonal Columns)
+**Cross-refs**: `LIVING_WINDOWS_ROADMAP.md`, `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md`, `ARCHITECTURAL_SHAPES_ROADMAP.md` (Phase 9 — Octagonal Columns), `TRAPDOOR_ARCHITECTURE_ROADMAP.md` (detailed trapdoor visual tiers), `BLOCKOUT_REFRESH_PLAN.docx` §5 (Boss Doors — blocked on Phase 6)
 
 ---
 
@@ -82,11 +82,17 @@ door-shaped cavity cut at ground level. Replaces the current "short DOOR tile" +
 
 ### 3.2 Exterior Archway Gate (existing: ARCH_DOORWAY, tile 71)
 
-Already freeform with alpha-mask cutout. Currently uses `arch_brick` everywhere.
+Already freeform with alpha-mask cutout (`gapTexAlpha: true`, `fillGap:
+'_transparent'`). Currently uses `arch_brick` everywhere.
 
 **Upgrade**: per-building texture override via a `DoorRegistry` (mirrors
 `BuildingRegistry` for windows). Each building declares its arch texture ID:
 `arch_brick`, `arch_wood`, `arch_stone`, `arch_iron`.
+
+For **floor-to-floor transitional gates** (N→N, same depth), paired
+ARCH_DOORWAY tiles render as one wide 2-tile arch with a single continuous
+see-through portal. See **Phase 6B** (Great Arches). The Floor 0→1 Roman
+Arch is the flagship example.
 
 ### 3.3 Interior Room Door (existing: DOOR/DOOR_BACK/DOOR_EXIT, tiles 2/3/4)
 
@@ -97,40 +103,56 @@ room partitions — the wall IS the door. No freeform conversion needed for Phas
 **Future**: freeform variant with a transom window above the door (upper band =
 wall + transom glass, cavity = door, lower band = threshold). Low priority.
 
-### 3.4 Interior Vertical Transition — Trapdoor (new: TRAPDOOR_DN / TRAPDOOR_UP)
+### 3.4 Interior Vertical Transition — Trapdoor (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED
 
-New tile types for N.N → N.N.N vertical movement. Freeform tiles that render as a
-hatch in the floor or ceiling.
+Freeform tiles for N.N → N.N.N vertical movement. Render as a see-through shaft
+with a hatch-lid frame and a ladder inside — follows the HEARTH fire-cavity pattern
+(transparent gap, wall decor sprite inside, z-buffer bypass).
 
 **TRAPDOOR_DN** (descend):
 ```
-  ┌─────────────┐  ← wall height (2.0 interior)
-  │  wall tex    │     hUpper: ~1.50 (wall above hatch)
-  │             │
-  │  ┌───────┐  │  ← ~0.50 unit hatch opening
-  │  │ hatch │  │     cavity: ladder rungs + dark shaft
+  ┌─────────────┐  ← wall height (2.0 interior / 1.2 dungeon)
+  │ trapdoor_lid│     hUpper: 0.40 / 0.30 (hatch rim — player peers over)
+  │  ┌───────┐  │
+  │  │ shaft │  │  ← cavity: 1.60 / 0.90 units (see-through)
+  │  │🪜     │  │     cool-dark tint + decor_ladder wall sprite
+  │  │       │  │     back-layer walls visible through transparency
   │  └───────┘  │
-  │  floor slab │     hLower: ~0.00 (floor around the hole)
+  └─────────────┘     hLower: 0.00 (cavity reaches floor)
+```
+
+**TRAPDOOR_UP** (ascend):
+```
+  ┌─────────────┐
+  │  ┌───────┐  │     hUpper: 0.00 (cavity reaches ceiling)
+  │  │       │  │
+  │  │ shaft │  │  ← cavity: 1.60 / 0.90 units (see-through)
+  │  │🪜     │  │     tint darkens toward top (looking up into shadow)
+  │  └───────┘  │
+  │ trapdoor_lid│     hLower: 0.40 / 0.30 (floor-level hatch frame)
   └─────────────┘
 ```
 
-Gap filler (`trapdoor_shaft`): dark vertical shaft with ladder-rung cross bars.
-Height offset: negative (sunken, Doom rule — the hatch reads as a hole in the floor).
+- **Gap filler** (`trapdoor_shaft`): hearth-pattern transparent overlay — direction-
+  aware cool-blue-grey depth tint + dark timber frame border. No opaque paint.
+- **Ladder**: `decor_ladder` wall decor sprite on all walkable-neighbor faces.
+  32×32 alpha-transparent texture (2 rails, 5 rungs, iron bolts). anchorV shifts
+  per direction (0.35 DN, 0.65 UP).
+- **Wall texture**: `trapdoor_lid` — planked wood hatch with iron hinges/pull ring.
+- **Height offsets**: -0.10 DN (sunken), +0.10 UP (raised).
 
-**TRAPDOOR_UP** (ascend):
-Same freeform structure but the cavity sits at the TOP of the column (high hUpper
-is minimal, hLower is large). Height offset: positive (raised — the hatch reads as
-a hole in the ceiling reached by climbing).
-
-Gap filler: same `trapdoor_shaft` but with upward-looking perspective cue
-(lighter at top, darker at bottom).
+See `TRAPDOOR_ARCHITECTURE_ROADMAP.md` for the full tier breakdown.
 
 ### 3.5 Boss Door / Locked Door
 
-Existing tile types (14, 24) that already have dedicated textures (`door_iron`).
-These stay as single-column tiles but gain per-biome texture variants:
-`door_iron_rusty`, `door_iron_ornate`, `door_chain`. Texture selection via
-biome override in SpatialContract.
+Existing tile type (14) with dedicated texture (`door_iron`). Single-tile
+boss doors gain per-biome texture variants (`door_iron_rusty`,
+`door_iron_ornate`, `door_chain`) via biome override in SpatialContract.
+
+For **grand boss gates** (dungeon entrances, end-of-act doors), boss doors
+convert to paired DOOR_FACADE tiles rendering as one 2-tile-wide double
+door. See **Phase 6** for the full double-door spec. The lock/unlock
+system applies to the pair as a unit.
 
 ---
 
@@ -186,26 +208,38 @@ Same pattern as `_windowTavernInteriorFiller`. Three face treatments:
   door back — they see the DOOR_EXIT tile on the interior floor).
 - **Side faces**: wall masonry fill (same as window perpendicular faces).
 
-### 4.3 Trapdoor Gap Filler (new, registered from DoorSprites Layer 1)
+### 4.3 Trapdoor Gap Filler (DoorSprites Layer 1) ✅ SHIPPED
 
-Registered as `'trapdoor_shaft'`. Renders ladder rungs as horizontal
-mullion-style bars spaced evenly through the cavity. Dark gradient wash
-behind the rungs. Direction-aware: TRAPDOOR_DN is dark at bottom (looking
-down), TRAPDOOR_UP is dark at top (looking up into ceiling).
+Registered as `'trapdoor_shaft'`. Hearth-pattern transparent cavity — paints
+only a semi-transparent cool-blue-grey depth tint (`rgba(15,20,30,α)`) and a
+dark timber frame border over whatever back-layer content was already rendered.
+Direction-aware: TRAPDOOR_DN darkens toward bottom (looking into abyss),
+TRAPDOOR_UP darkens toward top (looking into shadow). The ladder is NOT drawn
+by the gap filler — it's a `decor_ladder` wall decor sprite registered by
+FloorManager (same pattern as HEARTH dragonfire).
 
 ### 4.4 Texture Atlas Additions
 
-New procedural textures keyed to building materials:
+Procedural textures keyed to building materials and door types:
 
-| ID | Description | Used by |
-|---|---|---|
-| `arch_wood` | Wood-plank arch surround | Driftwood Inn, beach buildings |
-| `arch_stone` | Grey stone arch | Watchman's Post, civic buildings |
-| `arch_redbrick` | Red brick arch | Coral Bazaar |
-| `door_plank` | Plank door face (for gap filler) | Wood buildings |
-| `door_studded` | Iron-studded oak door | Civic / military buildings |
-| `trapdoor_wood` | Wood hatch with iron bands | Interior trapdoors |
-| `ladder_rungs` | Repeating rung pattern | Trapdoor gap filler |
+| ID | Size | Description | Status |
+|---|---|---|---|
+| `arch_wood` | 64×64 | Wood-plank arch surround | ✅ Shipped |
+| `arch_stone` | 64×64 | Grey stone arch | ✅ Shipped |
+| `arch_redbrick` | 64×64 | Red brick arch | ✅ Shipped |
+| `door_panel_wood` | 64×64 | Warm oak door panel (Driftwood Inn) | ✅ Shipped |
+| `door_panel_dark` | 64×64 | Worn dark wood panel (Gleaner's Home) | ✅ Shipped |
+| `door_panel_studded` | 64×64 | Iron-studded oak panel (Watchman's) | ✅ Shipped |
+| `door_panel_glass` | 64×64 | Frosted glass insert (Coral Bazaar) | ✅ Shipped |
+| `door_panel_iron` | 64×64 | Riveted iron plate (Dispatcher's) | ✅ Shipped |
+| `door_panel_oiled` | 64×64 | Oiled wood panel | ✅ Shipped |
+| `door_panel_charcoal` | 64×64 | Charcoal dark panel | ✅ Shipped |
+| `door_panel_ironbound` | 64×64 | Iron-banded plank panel | ✅ Shipped |
+| `door_lightbrick` | 64×64 | Light brick surround | ✅ Shipped |
+| `door_metal` | 64×64 | Brushed steel surround | ✅ Shipped |
+| `door_cathedral` | 64×64 | Carved stone surround | ✅ Shipped |
+| `trapdoor_lid` | 64×64 | Planked wood hatch with iron hinges | ✅ Shipped |
+| `decor_ladder` | 32×32 | Alpha-transparent ladder sprite (rails+rungs) | ✅ Shipped |
 
 ### 4.5 SpatialContract Changes
 
@@ -226,27 +260,25 @@ tileWallHeights: {
 }
 ```
 
-**Interior contracts** gain:
+**Interior contracts** (actual shipped values):
 
 ```javascript
 tileFreeform: {
-  // TRAPDOOR_DN (new tile constant, e.g. 75)
-  75: Object.freeze({
-    hUpper: 1.50,
-    hLower: 0.00,
-    fillGap: 'trapdoor_shaft'
-  }),
-  // TRAPDOOR_UP (new tile constant, e.g. 76)
-  76: Object.freeze({
-    hUpper: 0.00,
-    hLower: 1.50,
-    fillGap: 'trapdoor_shaft'
-  })
+  // TRAPDOOR_DN (75) — cavity-dominant: small lid on top, large shaft below
+  75: Object.freeze({ hUpper: 0.40, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
+  // TRAPDOOR_UP (76) — cavity-dominant: large shaft above, small frame below
+  76: Object.freeze({ hUpper: 0.00, hLower: 0.40, fillGap: 'trapdoor_shaft' })
 }
+// Nested dungeon (depth 3, wallH 1.2): hUpper/hLower = 0.30 (same pattern)
 
 tileHeightOffsets: {
   75: -0.10,  // sunken — hole in the floor
   76:  0.10   // raised — hatch in the ceiling
+}
+
+textures: {
+  75: 'trapdoor_lid',   // planked wood hatch with iron hardware
+  76: 'trapdoor_lid'
 }
 ```
 
@@ -379,57 +411,84 @@ pending.
 calculation, ~45 lines; z-buffer override for jamb columns; freeformCfg
 suppression for jamb columns).
 
-### Phase 2 — Interior trapdoors (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED — ⚠️ NEEDS AUDIT
+### Phase 2 — Interior trapdoors (TRAPDOOR_DN / TRAPDOOR_UP) ✅ SHIPPED + VISUAL UPGRADE
 
-**Goal**: Vertical transitions inside buildings render as floor/ceiling hatches
-with ladder rungs instead of featureless grey cubes.
+**Goal**: Vertical transitions inside buildings render as see-through shaft
+hatches with ladder sprites instead of featureless grey cubes.
 
-**Work** (all complete):
+**Work — original implementation** (all complete):
 1. ✅ Added `TRAPDOOR_DN` (75) and `TRAPDOOR_UP` (76) to TILES. Added to `isDoor()`,
-   `isOpaque()`, `isFreeform()`, `isWalkable()`. Excluded from back-face collection
-   and DoorAnimator skip guard in raycaster
+   `isOpaque()`, `isFreeform()`, `isWalkable()`. Excluded from DoorAnimator skip
+   guard in raycaster
 2. ✅ Added tileFreeform, tileHeightOffsets, tileWallHeights, textures, and
    tileFloorTextures for both tiles on interior and nestedDungeon contracts
-3. ✅ Implemented `trapdoor_shaft` gap filler in door-sprites.js — 3-band dark
-   gradient, 4 ladder rungs in center 60%, hatch frame border.
-   Direction-aware via `info.hitTile === 75`
-4. ✅ Wired floor-transition.js, interact-prompt.js, minimap.js, game.js,
+3. ✅ Wired floor-transition.js, interact-prompt.js, minimap.js, game.js,
    door-peek.js, dispatcher-choreography.js to recognize TRAPDOOR tiles
-5. ✅ GridGen accepts `stairDnTile` / `stairUpTile` overrides. FloorManager
+4. ✅ GridGen accepts `stairDnTile` / `stairUpTile` overrides. FloorManager
    passes `TILES.TRAPDOOR_DN` for depth-2 floors and `TILES.TRAPDOOR_UP`
    for depth-3 floors. All depth-2 interior floors now generate trapdoors
    instead of featureless stair cubes
-6. ✅ Removed dead `5: -0.12` tileHeightOffset entries from depth-2 floor
+5. ✅ Removed dead `5: -0.12` tileHeightOffset entries from depth-2 floor
    contracts (1.3, 2.2, Ironhold garrison) — trapdoor offsets come from
    the interior/nestedDungeon base constructors
 
-**Acceptance**: Descending into the Soft Cellar shows a hatch in the floor with
-ladder rungs. Ascending back shows a hatch in the ceiling. Grey cube is gone.
+**Work — visual upgrade** (HEARTH-pattern rewrite):
+6. ✅ Rebalanced freeform splits — cavity now 75–80% of wall height (was ~15%).
+   Interior: hUpper/hLower 0.40, dungeon: 0.30. Lip is the hatch frame, cavity
+   is the shaft.
+7. ✅ Made cavity see-through — removed TRAPDOOR tiles from raycaster back-face
+   injection exception list. Back-layer walls now render behind trapdoor tiles
+   (same N-layer collection as HEARTH). Z-bypass already active via isFreeform.
+8. ✅ Rewrote `trapdoor_shaft` gap filler — transparent cool-dark tint overlay
+   replacing opaque 3-band gradient. Direction-aware depth wash + timber frame
+   border. No ladder in gap filler (moved to wall decor).
+9. ✅ Added `decor_ladder` wall decor sprite (32×32, alpha-transparent rails +
+   rungs + iron bolts). Registered on all walkable-neighbor faces of TRAPDOOR
+   tiles by FloorManager. anchorV direction-aware (0.35 DN, 0.65 UP).
+10. ✅ Added `trapdoor_lid` wall texture (64×64, planked wood with iron hinges +
+    pull ring). Replaced `wood_plank` on tile 75/76 in all three biome contracts.
 
-**⚠️ AUDIT NEEDED**: Trapdoor rendering, interaction, and transition paths have
-not been visually verified since the DOOR_FACADE recess and freeform upgrades.
-Check: filler renders correctly on all four faces, height offsets look right,
-floor transition works in both directions, no FPS regression from gap filler.
+**Acceptance**: The shaft reads as a transparent opening in the floor/ceiling
+with a visible ladder inside and a wood-and-iron hatch frame. Back-layer walls
+show through the cavity. The ladder parallaxes correctly on all four approach
+faces. Direction-aware tinting sells "looking down" vs "looking up."
+
+**Files modified (visual upgrade)**: `engine/spatial-contract.js`,
+`engine/raycaster.js`, `engine/door-sprites.js`, `engine/texture-atlas.js`,
+`engine/floor-manager.js`. Full tier breakdown in `TRAPDOOR_ARCHITECTURE_ROADMAP.md`.
+
+**Remaining**: Pedestal mask for solid band (Tier 6), biome-variant texture
+stamps (Tier 7), animation/SFX polish (Tier 8). See trapdoor roadmap.
 
 ### Phase 3 — Stamp-out & per-biome defaults
 
 **Goal**: Every building in the world map has correct door styles. New buildings
 can be added with a 3-step recipe.
 
+**Texture palette** (available for assignment — all shipped):
+- Door panels: `door_panel_wood`, `door_panel_dark`, `door_panel_studded`,
+  `door_panel_glass`, `door_panel_iron`, `door_panel_oiled`,
+  `door_panel_charcoal`, `door_panel_ironbound`
+- Door surrounds: `door_wood`, `door_lightbrick`, `door_metal`, `door_cathedral`
+
 **Work**:
 1. Define default door styles per biome in SpatialContract options:
-   `defaultDoorStyle: { wallTex: 'brick_red', frameTex: 'frame_wood_dark' }`
-2. DoorRegistry falls back to biome default when no per-tile override exists
-3. Convert ALL remaining buildings to appropriate door types:
-   - Gleaner's Home (1.6): wood plank facade door
-   - Dispatcher's Office (2.1): stone facade door with iron frame
-   - Watchman's Post (2.2): heavy stone arch
-4. Convert all interior vertical transitions to trapdoors
+   `defaultDoorStyle: { wallTex: 'brick_red', frameTex: 'door_lightbrick', panelTex: 'door_panel_wood' }`
+2. DoorSprites falls back to biome default when no per-tile override exists
+3. Convert ALL remaining buildings to DOOR_FACADE with appropriate textures:
+   - Gleaner's Home (1.6): ✅ already has DOOR_FACADE proof-of-concept
+   - Coral Bazaar (1.1): `door_panel_glass` + `door_lightbrick`
+   - Driftwood Inn (1.2): `door_panel_wood` + `door_wood`
+   - Dispatcher's Office (2.1): `door_panel_iron` + `door_metal`
+   - Watchman's Post (2.2): `door_panel_studded` + `door_cathedral`
+4. ✅ Convert all interior vertical transitions to trapdoors — DONE (GridGen
+   stairDnTile/stairUpTile overrides). All depth-2 floors generate TRAPDOOR_DN,
+   all depth-3 floors generate TRAPDOOR_UP. Visual upgrade shipped.
 5. Update boss doors with per-biome texture variants
 
 **3-step stamp-out recipe for new buildings**:
 1. Place `DOOR_FACADE` (74) tile in the building footprint on the floor grid
-2. Add a `doorStyles` entry for that tile coordinate with `wallTex` and `frameTex`
+2. Add a `doorStyles` entry for that tile coordinate with `wallTex` and `panelTex`
 3. Add a `doorTargets` entry mapping the tile to the interior floor ID
 
 No engine changes needed. No new modules. Just data.
@@ -553,119 +612,453 @@ cavity region.
 
 After the gap filler paints door content, check if any NPC sprites in
 the interior floor are within 2 tiles of the door. If yes, project their
-sprite into the cavity's screen region with depth-correct scaling.
-"Shopkeeper standing in the doorway" effect makes the town feel alive.
+sprite into the cavity's screen region with z-clipping against the
+cavity bounds. The sprite renders at reduced brightness (interior
+lighting) and is depth-sorted behind the door panel if the door is
+partially open.
 
-**Relationship to octagonal columns** (Phase 9 in ARCHITECTURAL_SHAPES):
-The cavity content system applies specifically to freeform cavities
-(DOOR_FACADE, WINDOW_TAVERN, HEARTH, trapdoors). Octagonal columns use
-the recess technique for solid textured surfaces — no cavities, no gap
-filler. The recess is shared infrastructure; cavity content is a
-door/window layer on top.
-
----
-
-## 6. Touch List
-
-| File | Phase | Status | Change |
-|---|---|---|---|
-| `engine/tiles.js` | 1 | ✅ | DOOR_FACADE (74) in `isDoor`, `isOpaque`, `isWalkable`, `isFreeform` |
-| `engine/tiles.js` | 2 | ✅ | TRAPDOOR_DN (75), TRAPDOOR_UP (76) in isDoor, isOpaque, isWalkable, isFreeform |
-| `engine/spatial-contract.js` | 1 | ✅ | tileFreeform, tileWallHeights, tileFloorTextures, textures for 74 across all 3 constructors |
-| `engine/spatial-contract.js` | 2 | ✅ | TRAPDOOR entries (tileFreeform, offsets, textures) on interior + nestedDungeon |
-| `engine/spatial-contract.js` | 3 | pending | Per-biome door defaults |
-| `engine/door-sprites.js` | 0,1 | ✅ | Layer 0 IIFE. Texture cache + exterior face cache + `facade_door` gap filler (3-face, batch-rendered) |
-| `engine/door-sprites.js` | 2 | ✅ | `trapdoor_shaft` gap filler (3-band gradient, 4 ladder rungs, hatch frame) |
-| `engine/raycaster.js` | 0,1 | ✅ | Texture override hook for DOOR/ARCH/DOOR_FACADE. DOOR_FACADE excluded from back-face injection. Z-bypass for freeform |
-| `engine/raycaster.js` | 1.5 | ✅ | Wolfenstein recess: perpDist inset, jamb detection, z-buffer fix, freeform suppression for jambs |
-| `engine/raycaster.js` | 2 | ✅ | TRAPDOOR_DN/UP in back-face exclusion + DoorAnimator skip guard |
-| `engine/door-contracts.js` | 1 | ✅ | Spawn fallback: doorExit → doorEntry → rooms[0] chain |
-| `engine/floor-transition.js` | 2 | ✅ | TRAPDOOR_DN/UP in useStairs + tryInteractStairs |
-| `engine/interact-prompt.js` | 2 | ✅ | ACTION_MAP entries for TRAPDOOR_DN/UP |
-| `engine/minimap.js` | 2 | ✅ | Trapdoor tile coloring + chevron overlays |
-| `engine/game.js` | 2 | ✅ | TRAPDOOR_UP in curfew isDoorExit check |
-| `engine/door-peek.js` | 2 | ✅ | TRAPDOOR checks in isDoor filter, direction, labels |
-| `engine/dispatcher-choreography.js` | 2 | ✅ | TRAPDOOR_DN in gate door scan |
-| `engine/grid-gen.js` | 2 | ✅ | stairDnTile/stairUpTile overrides for depth-aware tile placement |
-| `engine/floor-manager.js` | 1 | ✅ | `doorFaces` map for explicit exterior-face overrides. DoorSprites population during generation |
-| `engine/floor-manager.js` | 2 | ✅ | Depth-2→TRAPDOOR_DN, depth-3→TRAPDOOR_UP in GridGen call. Stair tracking includes trapdoors |
-| `engine/floor-manager.js` | 3 | pending | Stamp-out remaining buildings to DOOR_FACADE |
-| `engine/door-animator.js` | 4 | pending | Cavity-aware animation for DOOR_FACADE |
-| `engine/door-sprites.js` | 5A | ✅ | `_doorPanels` cache + `setDoorPanel`/`getDoorPanel` API + Tier A texture sampling in gap filler |
-| `engine/texture-atlas.js` | 5A | ✅ | `_genDoorPanel` generator + 5 panel textures (`door_panel_wood/dark/studded/glass/iron`) |
-| `engine/building-registry.js` | 5A | ✅ | `doorPanel` field on all 6 building records |
-| `engine/floor-manager.js` | 5A | ✅ | `DoorSprites.setDoorPanel()` call in DOOR_FACADE building iteration |
-| `engine/door-sprites.js` | 5B | pending | Interior scene blend in gap filler (visited state check) |
-| `engine/raycaster.js` | 5C | pending | Secondary mini-raycast in cavity for live interior peek |
-| `index.html` | 0 | ✅ | `<script>` for `engine/door-sprites.js` in Layer 0 |
+Performance: one distance check per NPC per door-cavity column. With
+≤5 NPCs and ~40 cavity columns, this is ~200 comparisons per frame —
+negligible. The sprite projection reuses the existing billboard renderer
+with a constrained screen rect.
 
 ---
 
-## 7. Open Questions
+### Phase 6A — Double Doors (Multi-Tile Coordinated Rendering) ✅ SHIPPED
 
-1. ~~**DOOR_FACADE tile constant**: Proposed 74~~ → **RESOLVED.** Tile 74
-   confirmed, no collision. Registered in TILES, all three SpatialContract
-   constructors, and the raycaster's texture/freeform paths.
+**Status**: Complete — infrastructure shipped, UV continuity bug fixed 2026-04-13
+**Priority**: HIGH — blocks Phase 3 stamp-out for boss doors
+**Difficulty**: Medium — data coordination, not renderer architecture
+**Estimated size**: ~120 lines (DoorSprites pairing + gap filler UV split +
+contract wiring)
+**Prerequisite**: Phase 1.5 (DOOR_FACADE recess — **SHIPPED**), Phase 5A
+(door panel textures — **SHIPPED**)
+**Cross-ref**: `BLOCKOUT_REFRESH_PLAN.docx` §5 (Boss Doors), `ARCHITECTURAL_SHAPES_ROADMAP.md`
 
-2. **DoorAnimator cavity split**: The current DoorAnimator uses a full-column
-   split/portcullis animation. The raycaster already skips DoorAnimator for
-   DOOR_FACADE tiles (`hitTile !== TILES.DOOR_FACADE` guard at the
-   `isAnimatingTile` check). Phase 4 will implement cavity-aware animation
-   that plays inside the gap band only. DoorAnimator does NOT currently
-   receive freeformCfg — it will need a new parameter path.
+#### Problem
 
-3. **Trapdoor collision**: Standard doors have collision based on door state.
-   Trapdoors in the floor need a different collision model — the player walks
-   ONTO the tile and interacts (press E), then drops through. This may need
-   a custom interaction check in InteractPrompt rather than the existing
-   "tile ahead is a door" pattern.
+Boss doors and grand entrances need to be **2 tiles wide**. The current
+DOOR_FACADE is a single-tile freeform column: one recess, one gap filler,
+one door panel. A single tile at 64×64 texture resolution can render a
+convincing single door, but a boss gate — iron double doors with a center
+seam, ornate knockers on each leaf, flanked by heavy stone pillars — needs
+two tiles worth of screen width.
 
-4. ~~**Interior door-on-wall**~~ → **RESOLVED.** The interior contract has its
-   own DOOR_FACADE freeform config: `{ hUpper: 0.70, hLower: 0.00 }` at
-   `tileWallHeights: 2.5`. Same tile type, depth-aware band sizing via
-   per-constructor SpatialContract entries.
+The raycaster has no concept of multi-tile rendering. Each column resolves
+to one tile hit, independently. Two adjacent DOOR_FACADE tiles currently
+render as two separate identical doors side by side — not one wide door.
 
-5. ~~**ARCH_DOORWAY persistence**~~ → **RESOLVED.** ARCH_DOORWAY stays for true
-   archway gates (courtyard entrances, district transitions). DOOR_FACADE is
-   for building doors. Both coexist — different tile types, different freeform
-   configs, different gap fillers.
+#### Design principle
 
-6. **Recess depth tuning** (new): `_recessD = 0.25` is hardcoded in the
-   raycaster. Should this be per-building via DoorRegistry metadata? Deep
-   recesses for stone buildings, shallow for wood shacks? Or is a global
-   constant sufficient for the visual language?
+**The raycaster stays single-tile. The coordination lives in data.**
 
-7. **Recess + back-layer overhead** (new): The `_fgIsFreeformSeeThrough` flag
-   is set before the recess check (during N-layer collection). For jamb
-   columns, back layers were collected but are painted over by the solid
-   jamb wall — wasted work. Could gate back-layer collection on "is this a
-   jamb?" but the flag is set 100 lines earlier. Low priority — jamb columns
-   are a small fraction of the viewport.
+We do NOT modify the raycaster inner loop to span tiles. Instead:
 
-8. ~~**Raycaster file truncation**~~ → **RESOLVED.** False alarm — the file
-   was intact after re-checking. `node --check` passes, `castScreenRay` and
-   the module `return` block are present and complete.
+1. Two adjacent tiles each render their own freeform column (recess,
+   cavity, gap filler) — this already works.
+2. The **gap filler** for each tile knows it's the LEFT or RIGHT leaf of
+   a pair and samples the correct half of a wide door texture.
+3. **DoorSprites** stores the pairing metadata so the gap filler can
+   look up its partner.
 
-9. **Cavity content roadmap** (new): Phase 5 now specced. Four progressive
-   tiers: (A) door panel texture in gap filler, (B) interior scene glimpse
-   for visited buildings, (C) live interior peek via secondary raycast,
-   (D) NPC silhouette in doorway. See Phase 5 section above.
+This is the same pattern as the roof moat system (multiple tiles
+composing a visual unit via coordinated data, not renderer changes).
 
-10. **Octagonal column cross-reference** (new): The recess technique
-    generalizes beyond doors to tree trunks, pillars, and round towers.
-    Phase 9 of `ARCHITECTURAL_SHAPES_ROADMAP.md` describes applying the
-    inset to all 4 faces of a tile + optional 45° chamfer planes for true
-    octagonal silhouettes. The DOOR_FACADE recess block in the raycaster
-    will be refactored into a shared `tileRecess` table when that work
-    ships.
+#### Architecture
+
+##### DoorSprites pairing registry (~30 lines)
+
+New cache in DoorSprites:
+
+```javascript
+// "x,y" → { partner: "px,py", side: 'left'|'right' }
+var _doorPairs = {};
+
+function setPairInfo(x, y, partnerX, partnerY, side) {
+  _doorPairs[x + ',' + y] = {
+    partner: partnerX + ',' + partnerY,
+    side: side   // 'left' or 'right' relative to exterior face
+  };
+}
+
+function getPairInfo(x, y) {
+  return _doorPairs[x + ',' + y] || null;
+}
+```
+
+Cleared on floor switch alongside other caches.
+
+##### Wide door panel textures (~25 lines in TextureAtlas)
+
+Double-door panels are 128×64 textures (2:1 aspect). The left tile's gap
+filler samples columns 0–63 (left leaf); the right tile samples columns
+64–127 (right leaf). Each leaf has its own knocker/handle, and the center
+seam runs down the middle.
+
+```javascript
+// _genDoubleDoorPanel(id, params) — 128×64 procedural texture
+// Left leaf: handle at col ~20, hinge plates at left edge
+// Right leaf: handle at col ~108, hinge plates at right edge
+// Center seam: 2px dark line at col 63–64
+// Iron banding across both leaves for boss variant
+```
+
+Registered variants:
+- `double_door_iron` — heavy iron plate, riveted, center seam, twin knockers
+- `double_door_wood` — grand oak, iron banding, center pull handles
+- `double_door_ornate` — cathedral style, decorative panels, brass fixtures
+
+##### Gap filler UV coordination (~30 lines)
+
+In `_facadeDoorFiller`, after the existing door panel sampling:
+
+```javascript
+var pair = DoorSprites.getPairInfo(info.mapX, info.mapY);
+if (pair) {
+  // Use wide texture instead of standard panel
+  var wideTexId = DoorSprites.getDoubleDoorPanel(info.mapX, info.mapY);
+  var wideTex = TextureAtlas.getTexture(wideTexId);
+  if (wideTex) {
+    // Standard wallX is 0–1 across this tile's face
+    // Remap to 0–0.5 (left leaf) or 0.5–1 (right leaf)
+    var texU;
+    if (pair.side === 'left') {
+      texU = wallX * 0.5;           // columns 0–63 of 128-wide tex
+    } else {
+      texU = 0.5 + wallX * 0.5;    // columns 64–127
+    }
+    var srcX = Math.floor(texU * 128);
+    // ... sample wide texture at srcX instead of standard panel
+  }
+}
+```
+
+The `wallX` value from the raycaster already gives 0–1 across each tile's
+face. The UV remap is pure arithmetic — no raycaster changes.
+
+##### Floor data wiring (~25 lines in FloorManager)
+
+During floor generation, when FloorManager encounters two adjacent
+DOOR_FACADE (or new DOUBLE_DOOR) tiles sharing the same exterior face:
+
+```javascript
+// Scan for horizontal pairs (same Y, adjacent X, same exterior face)
+// and vertical pairs (same X, adjacent Y, same exterior face)
+for each DOOR_FACADE tile at (x, y):
+  check (x+1, y) — if also DOOR_FACADE with same exteriorFace:
+    DoorSprites.setPairInfo(x, y, x+1, y, 'left');
+    DoorSprites.setPairInfo(x+1, y, x, y, 'right');
+  check (x, y+1) — if also DOOR_FACADE with same exteriorFace:
+    DoorSprites.setPairInfo(x, y, x, y+1, 'left');
+    DoorSprites.setPairInfo(x, y+1, x, y, 'right');
+```
+
+"Left" and "right" are relative to the exterior face direction:
+- East-facing pair: north tile = left, south tile = right
+- South-facing pair: east tile = left, west tile = right
+- (Follows the convention of the player looking at the door from outside)
+
+##### Recess continuity
+
+When two adjacent tiles both have DOOR_FACADE recess, the shared edge
+between them is a jamb wall (the ray exits one tile laterally into the
+neighboring tile). For a double door, this center jamb should NOT render —
+the two recesses should merge into one continuous cavity.
+
+Solution: add a `suppressJamb` flag to DoorSprites pairing data. When the
+raycaster's recess block detects a jamb hit, check if the adjacent tile
+is the pair partner. If yes, continue the ray into the partner tile's
+recess instead of rendering a jamb wall.
+
+```javascript
+// In raycaster recess block, jamb branch:
+if (_recessJamb && _rfCfg && _rfCfg.recessAllFaces !== true) {
+  // Check if the adjacent tile is our double-door partner
+  var adjX = mapX + (side === 0 ? stepX : 0);
+  var adjY = mapY + (side === 1 ? stepY : 0);
+  var pairInfo = DoorSprites.getPairInfo(mapX, mapY);
+  if (pairInfo && pairInfo.partner === adjX + ',' + adjY) {
+    // Suppress jamb — continue ray into partner's recess
+    // The partner tile will handle its own recess depth
+    _recessJamb = false;
+    // Don't flip side or modify perpDist — let DDA continue
+    // The next iteration will hit the partner tile and apply its recess
+  }
+}
+```
+
+This is the only raycaster-level change in the entire double-door system:
+~8 lines in the jamb branch, gated behind a pair lookup.
+
+##### DoorAnimator coordination
+
+Both tiles animate together. When the player interacts with either tile,
+DoorAnimator starts the open sequence on both. The existing
+`DoorAnimator.beginOpen(x, y)` call gets a paired variant:
+
+```javascript
+// If the interacted tile has a partner, animate both
+var pair = DoorSprites.getPairInfo(x, y);
+if (pair) {
+  var pCoords = pair.partner.split(',');
+  DoorAnimator.beginOpen(parseInt(pCoords[0]), parseInt(pCoords[1]));
+}
+```
+
+The two leaves split outward (left leaf slides left, right leaf slides
+right) within their respective cavities.
+
+#### New tile type (optional)
+
+A dedicated `DOUBLE_DOOR` tile type is optional. The pairing system works
+with two adjacent `DOOR_FACADE` tiles — no new tile ID needed. However, a
+`BOSS_GATE` tile (reusing ID 14 or a new ID) could carry the double-door
+semantics implicitly: any BOSS_GATE tile auto-pairs with an adjacent
+BOSS_GATE.
+
+Decision: keep using `DOOR_FACADE` (74) for both single and double doors.
+The pairing is data-driven (FloorManager detects adjacency), not
+tile-type-driven. This avoids burning a tile ID and keeps the system
+flexible (any two adjacent DOOR_FACADE tiles can be paired).
+
+#### Template usage
+
+```
+  Floor template (top-down, south-facing building):
+
+  W  W  W  W  W  W  W        back wall
+  W  .  .  .  .  .  W        interior
+  W  .  .  .  .  .  W
+  W  W  DF DF  W  W  W        DF = DOOR_FACADE (paired double door)
+```
+
+FloorManager scans the front face, finds two adjacent DOOR_FACADE tiles
+sharing an exterior face (south), registers the pair. Each tile gets its
+half of `double_door_iron`. The player sees one wide iron gate with a
+center seam.
+
+#### Boss door integration
+
+Existing BOSS_DOOR tiles (14) that need the double-door treatment get
+converted to paired DOOR_FACADE in the floor template. The lock/unlock
+system (`FloorTransition._tryUnlockDoor`) checks both tiles — unlocking
+one unlocks the pair.
+
+The `door_locked` texture (chains + padlock) also needs a wide variant:
+`double_door_locked` (128×64) with chains spanning both leaves and a
+single padlock at the center seam.
+
+#### Acceptance criteria (double door)
+
+1. Two adjacent DOOR_FACADE tiles with the same exterior face render as
+   one continuous double door — no visible seam at the tile boundary
+   (the center seam is part of the door texture, not a rendering artifact)
+2. Recess merges across the pair — no jamb wall between the two tiles
+3. Door panel texture is a single 128×64 image split across both tiles
+4. DoorAnimator opens both leaves simultaneously (left goes left, right
+   goes right)
+5. Lock/unlock applies to the pair as a unit
+6. Works with existing door SFX system (one sound, not two)
+
+#### Delivered (Phase 6A + 6B combined)
+
+**All infrastructure shipped** across prior sessions. The full pipeline:
+
+1. ✅ **DoorSprites pairing registry** — `_doorPairs` cache, `setPairInfo()`,
+   `getPairInfo()`, `_doubleDoorPanels` cache, `setDoubleDoorPanel()`,
+   `getDoubleDoorPanel()`. Cleared on floor switch.
+2. ✅ **Wide textures** in TextureAtlas — `_genDoubleDoorPanel()` (128×64)
+   producing `double_door_iron`, `double_door_wood`, `double_door_ornate`.
+   `_genWideArch()` (128×64) producing `arch_wide_brick`, `arch_wide_stone`,
+   `arch_wide_iron`. Same parabolic cutout algorithm scaled to 128 width.
+3. ✅ **Gap filler UV coordination** — `_facadeDoorFiller` detects paired tiles
+   via `getPairInfo()`, swaps to wide texture via `getDoubleDoorPanel()`,
+   remaps `wallX` to left half (0–0.5) or right half (0.5–1). Frame jamb
+   drawing suppressed on the inner edge of paired tiles.
+4. ✅ **Alpha-mask UV remap** — Raycaster freeform path (line 1547) detects
+   paired `gapTexAlpha` tiles, swaps to wide arch texture, remaps `texX`
+   to the correct half. `_computeAlphaRange` then samples the wide texture's
+   alpha channel, producing one continuous arch curve across both tiles.
+5. ✅ **Raycaster jamb suppression** — Recess block (line 1243) checks if the
+   adjacent tile at the jamb exit is the double-door partner. If yes,
+   suppresses the jamb wall and continues with the inset depth.
+6. ✅ **FloorManager pair detection** — Horizontal scan (`_px`/`_px+1`) and
+   vertical scan (`_py`/`_py+1`) detect adjacent DOOR_FACADE or ARCH_DOORWAY
+   tiles sharing the same exterior face. Registers pairs and assigns wide
+   textures (`arch_wide_brick` for arches, `double_door_wood` for doors).
+
+**Bug fix (2026-04-13): UV continuity in pair side assignment.**
+The original side assignment tried to match player-relative left/right per
+face direction, which broke UV continuity at tile boundaries. For vertical
+pairs on west-facing walls (Floor 0 arches), north tile got `'right'` and
+south got `'left'` — at the join, wallX=1 mapped to texture column 127
+(right pillar) next to wallX=0 mapping to column 0 (left pillar), producing
+a `/\/\` double-arch instead of a single `/ \`. Fix: side assignment now
+follows UV continuity unconditionally — west/north tile is always `'left'`
+(wallX=1 → U=0.5), east/south tile is always `'right'` (wallX=0 → U=0.5).
+Arch textures are symmetric so visual orientation is unaffected.
+
+**Known limitation**: 4-tile clusters (2×2 ARCH_DOORWAY grids like Floor 0)
+undergo two pairing passes — horizontal pairs are overwritten by vertical
+pairs. The final pairing is all-vertical, which is correct for west-facing
+arches but may produce visual artifacts where front/back pairs interact
+(porthole tearing). Not worth fixing unless a specific floor design needs it.
+
+**Files modified**: `engine/floor-manager.js` (pair side assignment fix),
+`engine/door-sprites.js` (pairing caches + gap filler UV — shipped prior),
+`engine/raycaster.js` (jamb suppression + alpha UV remap — shipped prior),
+`engine/texture-atlas.js` (wide textures — shipped prior).
 
 ---
 
-## 8. Out of Scope
+#### Phase 6B — Great Arches (Floor N→N Transitional Porthole Pairs) ✅ SHIPPED
 
-- **Door physics / swing animation**: Doors don't physically swing open on a
-  hinge. The split/reveal animation is the visual language of this engine.
-- **Double doors**: Two-tile-wide openings. Future architectural shapes work.
-- **Sliding doors**: Sci-fi / retrofuturism style. Separate tile type if needed.
-- **Per-NPC door access**: Faction-locked doors are a gameplay system, not a
-  rendering system. This roadmap covers visual representation only.
+**Status**: Complete — shares 6A infrastructure; UV continuity fix applied 2026-04-13
+**Priority**: HIGH — same infrastructure as 6A, needed for Floor 0→1 gate
+**Difficulty**: Low once Phase 6A ships — reuses pairing + UV split
+**Estimated size**: ~40 lines (wide arch texture + pairing for ARCH_DOORWAY)
+
+##### Problem
+
+Floor-to-floor transitions on exterior maps (N→N, same depth) use grand
+archway gates — the Roman Arch from Floor 0 to Floor 1 is the canonical
+example. These are currently two adjacent DOOR tiles at (44,17) and (44,18)
+that render as two independent single-tile arches side by side. The player
+reads "two narrow doorways" instead of "one grand stone gate."
+
+The ARCH_DOORWAY tile (71) already solves the single-tile version: a
+freeform alpha-mask arch cutout (`gapTexAlpha: true`) with transparent
+fill — the destination floor shows through the arch opening. But one tile
+wide, the arch reads as a narrow passage. A great arch needs to be 2 tiles
+wide: one continuous stone surround framing one wide see-through portal.
+
+##### Design: same pairing, no door leaves
+
+A great arch is a double door with no door panel and no animation. The
+pairing infrastructure from Phase 6A applies directly:
+
+| Aspect | Double Door (6A) | Great Arch (6B) |
+|---|---|---|
+| Tile type | DOOR_FACADE (74) | ARCH_DOORWAY (71) |
+| Pairing registry | DoorSprites `_doorPairs` | Same registry, same API |
+| UV split | 128×64 door panel, L/R leaves | 128×64 arch texture, L/R halves |
+| Cavity content | Door panel texture (opaque) | `_transparent` (see-through portal) |
+| Alpha mask | Not used (flat hUpper/hLower) | `gapTexAlpha: true` — wide arch curve |
+| Recess | Yes (Wolfenstein thin-wall) | Yes (same recess, same jamb suppression) |
+| DoorAnimator | Yes (leaves split open) | No (always open — walkthrough arch) |
+| Lock/unlock | Yes (boss doors) | No (always passable) |
+
+The key difference: the alpha-mask arch profile needs a **wide variant**.
+The current `arch_brick` texture is 64×64 with a parabolic alpha cutout
+sized for a single tile. A great arch needs a 128×64 texture where the
+alpha cutout spans the full width — a single wide parabola, not two
+narrow ones side by side.
+
+##### Wide arch texture (~25 lines in TextureAtlas)
+
+```javascript
+// _genWideArch(id, params) — 128×64 procedural texture with alpha channel
+// Stone/brick surround filling the full 128×64 area.
+// Parabolic alpha cutout centered at column 64, spanning columns ~8–120,
+// reaching from row ~10 (apex) to row 63 (ground).
+// The cutout α channel drives per-column gap rendering:
+//   Left tile samples columns 0–63 (left half of arch + left pillar)
+//   Right tile samples columns 64–127 (right half + right pillar)
+// Pillar width: ~8px on each side (stone columns flanking the opening)
+// Keystone: 6×4px opaque block at (62–65, 10–13) at arch apex
+```
+
+Registered variants:
+- `arch_wide_brick` — sandstone brick, warm tones (Floor 0→1 Roman gate)
+- `arch_wide_stone` — cool grey dressed stone (formal/institutional)
+- `arch_wide_iron` — iron-banded stone (industrial/military)
+
+##### Alpha-mask UV coordination
+
+The raycaster's `_computeAlphaRange` already reads the alpha channel of
+the tile's wall texture to determine the per-column transparent range.
+For paired ARCH_DOORWAY tiles, the UV remap from Phase 6A applies:
+
+```javascript
+// In the alpha-mask sampling path, before computing texU:
+var pair = DoorSprites.getPairInfo(mapX, mapY);
+if (pair) {
+  // Remap wallX from 0–1 (single tile) to 0–0.5 or 0.5–1 (wide texture)
+  if (pair.side === 'left')  texU = wallX * 0.5;
+  else                       texU = 0.5 + wallX * 0.5;
+  // Sample alpha from the 128-wide texture at the remapped column
+}
+```
+
+This means the arch curve is sampled from the wide texture — left tile
+gets the left half of the parabola, right tile gets the right half. The
+player sees one continuous arch opening. The transparent region behind
+the arch shows back-layer walls / sky / the destination floor, same as
+the single-tile ARCH_DOORWAY.
+
+##### Jamb suppression
+
+Same as Phase 6A: the shared edge between paired ARCH_DOORWAY tiles
+suppresses the center jamb wall. The two recesses merge into one
+continuous portal. Without this, a vertical stone pillar renders between
+the two halves of the arch — breaking the wide opening.
+
+##### Floor data wiring
+
+FloorManager's pairing scan from Phase 6A already detects adjacent
+freeform tiles. ARCH_DOORWAY tiles participate in the same scan:
+
+```javascript
+// Existing Phase 6A scan, extended:
+for each DOOR_FACADE or ARCH_DOORWAY tile at (x, y):
+  check adjacent tile — if same type with same exteriorFace:
+    register pair
+```
+
+The wide arch texture is assigned via the existing DoorSprites texture
+override system (`setTexture(x, y, 'arch_wide_brick')`). FloorManager
+sets this when it detects a paired ARCH_DOORWAY.
+
+##### Floor 0 Roman Arch conversion
+
+The existing Floor 0 blockout has:
+```
+DOOR (44,17) — Roman arch → Floor 1
+DOOR (44,18) — Roman arch lower tile → Floor 1
+```
+
+Convert to:
+```
+ARCH_DOORWAY (44,17) — paired, left half, arch_wide_brick
+ARCH_DOORWAY (44,18) — paired, right half, arch_wide_brick
+doorTargets: { "44,17": "1", "44,18": "1" }
+```
+
+Both tiles transition to Floor 1. The player walks through a single wide
+stone arch with a see-through portal showing the Promenade beyond.
+
+##### Future great arches
+
+| Location | Transition | Notes |
+|---|---|---|
+| Floor 0 → Floor 1 | The Approach → The Promenade | Roman gate (flagship) |
+| Floor 1 → Floor 2 | The Promenade → Lantern Row | Commercial district gate |
+| Floor 2 → Floor 3 | Lantern Row → (future) | District boundary arch |
+| Floor 3 → Floor 4 | (future) | Grand Arch from title screen |
+
+The title screen's "Grand Arch" (Layer 3 in the parallax horizon) is the
+Floor 3→4 gate. When the player finally reaches it in-game, it should
+match the title screen's visual language: stone pillars, cyan arch glow,
+wide portal framing the destination.
+
+#### Acceptance criteria (great arches)
+
+1. Two adjacent ARCH_DOORWAY tiles render as one continuous wide arch —
+   single parabolic opening spanning both tiles, no center pillar
+2. Alpha-mask arch curve samples from a 128×64 wide texture, UV-split
+   across the pair
+3. Transparent portal shows back-layer content (sky, destination floor
+   walls) through the opening — same as single-tile ARCH_DOORWAY
+4. Recess merges across the pair — no jamb at the shared tile edge
+5. Floor transition triggers from either tile, targeting the same floor
+6. No DoorAnimator involvement (always open, walkthrough)

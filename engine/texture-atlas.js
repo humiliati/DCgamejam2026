@@ -255,6 +255,49 @@ var TextureAtlas = (function () {
       plankW: 12, grainDark: 0.68, ironBands: true  // horizontal iron bands
     });
 
+    // ── Phase 6A: wide (128×64) double-door panel textures ──────────
+    // Two-leaf panels for paired DOOR_FACADE tiles. UV-split by gap filler:
+    // left tile samples cols 0–63, right tile samples cols 64–127.
+    _genDoubleDoorPanel('double_door_iron', {
+      baseR: 70, baseG: 72, baseB: 78,           // riveted iron plate
+      handleR: 100, handleG: 105, handleB: 110,   // iron ring pull
+      hingeR: 55, hingeG: 58, hingeB: 62,
+      plankW: 16, grainDark: 0.8, ironPlate: true
+    });
+    _genDoubleDoorPanel('double_door_wood', {
+      baseR: 95, baseG: 68, baseB: 40,           // grand oak
+      handleR: 160, handleG: 140, handleB: 90,    // brass pull handles
+      hingeR: 65, hingeG: 68, hingeB: 72,
+      plankW: 12, grainDark: 0.68, ironBands: true
+    });
+    _genDoubleDoorPanel('double_door_ornate', {
+      baseR: 80, baseG: 55, baseB: 30,           // dark cathedral wood
+      handleR: 180, handleG: 160, handleB: 70,    // gold fixtures
+      hingeR: 60, hingeG: 55, hingeB: 48,
+      plankW: 10, grainDark: 0.62
+    });
+
+    // ── Phase 6B: wide arch textures (128×64, paired ARCH_DOORWAY) ──
+    // A single parabolic opening spans the full 128px width. The left
+    // tile samples columns 0–63, the right tile samples 64–127.
+    // The raycaster's alpha-mask path UV-remaps texX when it detects
+    // a paired ARCH_DOORWAY tile via DoorSprites.getPairInfo().
+    _genWideArch('arch_wide_brick', {
+      baseR: 140, baseG: 90, baseB: 65,           // warm brick surround
+      mortarR: 110, mortarG: 100, mortarB: 90,
+      jambR: 165, jambG: 155, jambB: 140           // pale keystone trim
+    });
+    _genWideArch('arch_wide_stone', {
+      baseR: 120, baseG: 118, baseB: 112,          // grey ashlar
+      mortarR: 95, mortarG: 92, mortarB: 88,
+      jambR: 150, jambG: 148, jambB: 140
+    });
+    _genWideArch('arch_wide_iron', {
+      baseR: 65, baseG: 68, baseB: 74,             // dark iron frame
+      mortarR: 50, mortarG: 52, mortarB: 56,
+      jambR: 90, jambG: 95, jambB: 100
+    });
+
     // ── Blockout Refresh Phase A: new door surround textures ───────
     // See BLOCKOUT_REFRESH_PLAN.docx §2.2 — surrounds for building
     // types not yet covered (light brick, metal plate, cathedral stone).
@@ -573,6 +616,28 @@ var TextureAtlas = (function () {
       screenR: 10, screenG: 28, screenB: 12,
       glowR: 30, glowG: 90, glowB: 35,
       frameR: 45, frameG: 42, frameB: 40
+    });
+
+    // ── Trapdoor decor sprites ─────────────────────────────────────
+
+    // Ladder — two vertical rails with horizontal rungs, transparent
+    // background. Billboard sprite placed at trapdoor tile center.
+    // Parallaxes as the player strafes, same pattern as dragonfire.
+    _genLadder('decor_ladder', {
+      railR: 85, railG: 60, railB: 35,     // Dark oak rails
+      rungR: 110, rungG: 80, rungB: 45,    // Lighter rung wood
+      boltR: 65, boltG: 62, boltB: 58      // Iron bolts at joints
+    });
+
+    // Trapdoor hatch lid — planked wood door face with iron hinges.
+    // Used as the wall texture for TRAPDOOR_UP's solid band (the
+    // floor-level frame reads as the underside of the hatch lid) and
+    // TRAPDOOR_DN's solid band (the rim reads as the topside).
+    _genTrapdoorLid('trapdoor_lid', {
+      baseR: 75, baseG: 52, baseB: 30,     // Dark weathered wood
+      hingeR: 55, hingeG: 52, hingeB: 48,  // Iron hinge plates
+      boltR: 65, boltG: 62, boltB: 58,     // Iron bolts
+      handleR: 80, handleG: 75, handleB: 65 // Iron pull ring
     });
 
     // ── Infrastructure tile decor sprites ────────────────────────────
@@ -1430,6 +1495,257 @@ var TextureAtlas = (function () {
       }
 
       return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
+    });
+  }
+
+  // ── Double-door panel (128×64): two leaves with center seam ─────
+  // Phase 6A — used for boss gates and grand entrances that span two
+  // adjacent DOOR_FACADE tiles. The gap filler UV-splits this texture:
+  // left tile samples columns 0–63, right tile samples columns 64–127.
+  //
+  // Reuses _genDoorPanel's plank/grain/hinge/stud logic on each leaf,
+  // mirrored around the center seam. Handle position, hinge position,
+  // and iron bands all respect the half-width coordinate space.
+
+  var WIDE_TEX_W = 128;
+
+  function _genDoubleDoorPanel(id, p) {
+    var halfW    = WIDE_TEX_W / 2;   // 64 — each leaf
+    var S        = TEX_SIZE;          // 64 — height
+    var plankW   = p.plankW || 10;
+    var grainH   = 4;
+    var grainDk  = p.grainDark || 0.7;
+    var frameT   = 2;
+    var seamW    = 2;                 // center seam width (1px per leaf)
+
+    _createTexture(id, WIDE_TEX_W, S, function (x, y) {
+      // ── Which leaf? ──
+      var leaf   = (x < halfW) ? 0 : 1; // 0=left, 1=right
+      var lx     = (leaf === 0) ? x : (WIDE_TEX_W - 1 - x); // mirror right leaf
+
+      // ── Outer frame (top/bottom/far-side edges) ──
+      var isOuterFrame = (y < frameT || y >= S - frameT);
+      // Left leaf: frame on left edge only. Right leaf: frame on right edge only.
+      if (leaf === 0 && lx < frameT) isOuterFrame = true;
+      if (leaf === 1 && lx < frameT) isOuterFrame = true; // (mirrored: lx < frameT = right edge)
+
+      if (isOuterFrame) {
+        var fn = _hash(x + 300, y + 310) * 4 - 2;
+        return {
+          r: _clamp(p.hingeR * 0.7 + fn),
+          g: _clamp(p.hingeG * 0.7 + fn),
+          b: _clamp(p.hingeB * 0.7 + fn)
+        };
+      }
+
+      // ── Center seam (dark line where leaves meet) ──
+      if (x >= halfW - seamW && x < halfW + seamW) {
+        var sn = _hash(x + 700, y + 710) * 3 - 1;
+        return {
+          r: _clamp(p.hingeR * 0.45 + sn),
+          g: _clamp(p.hingeG * 0.45 + sn),
+          b: _clamp(p.hingeB * 0.45 + sn)
+        };
+      }
+
+      // ── Iron plate variant ──
+      if (p.ironPlate) {
+        var ipn = (_hash(x + 200, y + 210) - 0.5) * 8;
+        var rivetRow = (y % 12 < 2) && (lx % 8 > 2 && lx % 8 < 6);
+        if (rivetRow) {
+          return {
+            r: _clamp(p.handleR + ipn),
+            g: _clamp(p.handleG + ipn),
+            b: _clamp(p.handleB + ipn)
+          };
+        }
+        if (y % 16 < 1) {
+          return {
+            r: _clamp(p.baseR * 0.6 + ipn),
+            g: _clamp(p.baseG * 0.6 + ipn),
+            b: _clamp(p.baseB * 0.6 + ipn)
+          };
+        }
+        return {
+          r: _clamp(p.baseR + ipn),
+          g: _clamp(p.baseG + ipn),
+          b: _clamp(p.baseB + ipn)
+        };
+      }
+
+      // ── Vertical wood planks (per-leaf coordinate) ──
+      var plankIdx = Math.floor((lx - frameT) / plankW) + leaf * 100;
+      var localX   = (lx - frameT) % plankW;
+      if (localX < 1) {
+        return {
+          r: _clamp(p.baseR * grainDk * 0.65),
+          g: _clamp(p.baseG * grainDk * 0.65),
+          b: _clamp(p.baseB * grainDk * 0.65)
+        };
+      }
+      var plankTone  = (_hash(plankIdx + 100, 500) - 0.5) * 16;
+      var grainBand  = Math.floor(y / grainH);
+      var grainDarken = (_hash(plankIdx + 50, grainBand + 70) > 0.6) ? grainDk : 1.0;
+      var knotZone   = _hash(plankIdx + 700, Math.floor(y / 16) + 710);
+      var knotDark   = (knotZone > 0.92 && localX > 2 && localX < plankW - 2) ? -12 : 0;
+      var pn         = (_hash(x + 500, y + 600) - 0.5) * 4;
+
+      var r = (p.baseR + plankTone) * grainDarken + pn + knotDark;
+      var g = (p.baseG + plankTone) * grainDarken + pn * 0.7 + knotDark;
+      var b = (p.baseB + plankTone) * grainDarken + pn * 0.4 + knotDark;
+
+      // ── Iron bands (ironbound variant) ──
+      if (p.ironBands) {
+        var bandPositions = [Math.floor(S * 0.25), Math.floor(S * 0.50), Math.floor(S * 0.72)];
+        for (var _bi = 0; _bi < bandPositions.length; _bi++) {
+          var bandY = bandPositions[_bi];
+          if (y >= bandY && y < bandY + 3) {
+            var ibn = (_hash(x + 250, y + 260) - 0.5) * 6;
+            var bandShade = (y === bandY) ? 1.15 : 0.90;
+            if (localX >= 0 && localX < 2 && y === bandY + 1) {
+              return {
+                r: _clamp(p.hingeR + 25 + ibn),
+                g: _clamp(p.hingeG + 25 + ibn),
+                b: _clamp(p.hingeB + 25 + ibn)
+              };
+            }
+            return {
+              r: _clamp(p.hingeR * bandShade + ibn),
+              g: _clamp(p.hingeG * bandShade + ibn),
+              b: _clamp(p.hingeB * bandShade + ibn)
+            };
+          }
+        }
+      }
+
+      // ── Handle (each leaf gets its own, mirrored) ──
+      // Left leaf handle at ~38% from left edge, right leaf mirrors
+      var handleLx = Math.floor(halfW * 0.62);
+      var handleY  = Math.floor(S * 0.52);
+      if (lx >= handleLx - 2 && lx <= handleLx + 2 &&
+          y >= handleY - 4 && y <= handleY + 4) {
+        var hn = _hash(x + 900, y + 910) * 6;
+        return {
+          r: _clamp(p.handleR + hn),
+          g: _clamp(p.handleG + hn),
+          b: _clamp(p.handleB + hn)
+        };
+      }
+
+      // ── Hinges (far edge of each leaf, mirrored) ──
+      var hingeX   = frameT + 1;
+      var hingeW   = 4;
+      var hingeTopY = Math.floor(S * 0.15);
+      var hingeBotY = Math.floor(S * 0.80);
+      var hingeH    = 3;
+      var isHinge = (lx >= hingeX && lx < hingeX + hingeW) &&
+        ((y >= hingeTopY && y < hingeTopY + hingeH) ||
+         (y >= hingeBotY && y < hingeBotY + hingeH));
+      if (isHinge) {
+        var ihn = _hash(x + 800, y + 810) * 4;
+        return {
+          r: _clamp(p.hingeR + ihn),
+          g: _clamp(p.hingeG + ihn),
+          b: _clamp(p.hingeB + ihn)
+        };
+      }
+
+      return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
+    });
+  }
+
+  // ── Wide arch texture (Phase 6B: paired ARCH_DOORWAY) ────────────
+  // 128×64 texture with a single parabolic arch opening centred across
+  // the full width. The opening region returns α=0 (transparent) so the
+  // raycaster's alpha-mask freeform path clips per-column correctly.
+  // Voussoir trim borders the opening; surround is running-bond brick.
+
+  function _genWideArch(id, p) {
+    var W       = WIDE_TEX_W;           // 128
+    var H       = TEX_SIZE;             // 64
+    var archCX  = W / 2;               // horizontal centre (pixel 64)
+    var archHalf = W * 0.42;           // half-width of the opening (~54px)
+    var apexY   = 4;                   // top of arch curve (texel row)
+    var springY = Math.floor(H * 0.78); // where curve meets vertical jambs
+    var jamb    = 4;                    // pixel-thick stone trim at edge
+
+    _createTexture(id, W, H, function (x, y) {
+      var dx = Math.abs(x - archCX) / archHalf;
+
+      // ── Is this pixel inside the transparent opening? ──
+      var inside = false;
+      if (dx < 1.0) {
+        if (y >= springY) {
+          inside = true;
+        } else {
+          var t = (y - apexY) / (springY - apexY);
+          if (t < 0) t = 0;
+          var boundary = Math.sqrt(t);
+          if (dx < boundary) inside = true;
+        }
+      }
+
+      // ── Voussoir / jamb trim ──
+      var isJamb = false;
+      if (!inside) {
+        for (var jd = 1; jd <= jamb; jd++) {
+          var testDx = Math.abs(x - archCX - (dx > 0 ? -jd : jd)) / archHalf;
+          if (testDx < 0) testDx = -testDx;
+          var insideTest = false;
+          if (testDx < 1.0) {
+            if (y >= springY) {
+              insideTest = true;
+            } else {
+              var tt = (y - apexY) / (springY - apexY);
+              if (tt < 0) tt = 0;
+              if (testDx < Math.sqrt(tt)) insideTest = true;
+            }
+          }
+          if (insideTest) { isJamb = true; break; }
+        }
+        // Vertical jamb below spring line
+        if (!isJamb && y >= springY && dx >= 1.0 && dx < 1.0 + jamb / archHalf) {
+          isJamb = true;
+        }
+      }
+
+      // ── Transparent opening ──
+      if (inside) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      var n = _hash(x, y) * 14 - 7;
+
+      // ── Keystone / voussoir trim ──
+      if (isJamb) {
+        return {
+          r: _clamp(p.jambR + n),
+          g: _clamp(p.jambG + n),
+          b: _clamp(p.jambB + n)
+        };
+      }
+
+      // ── Running-bond brickwork surround ──
+      var brickH  = 10;
+      var brickW  = 16;
+      var mortarW = 2;
+      var row = Math.floor(y / brickH);
+      var localY = y % brickH;
+      var offsetX = (row % 2 === 1) ? Math.floor(brickW / 2) : 0;
+      var localX = (x + offsetX) % brickW;
+      var isMortar = localX < mortarW || localY < mortarW;
+      if (isMortar) {
+        return {
+          r: _clamp(p.mortarR + n * 0.5),
+          g: _clamp(p.mortarG + n * 0.5),
+          b: _clamp(p.mortarB + n * 0.5)
+        };
+      }
+      return {
+        r: _clamp(p.baseR + n),
+        g: _clamp(p.baseG + n),
+        b: _clamp(p.baseB + n)
+      };
     });
   }
 
@@ -3683,6 +3999,170 @@ var TextureAtlas = (function () {
   }
 
   // ── Infrastructure tile decor sprites ────────────────────────────
+
+  // ── Ladder — two vertical rails + horizontal rungs on transparent BG ──
+  //
+  // 32×32 decor sprite. Two parallel rails (3px wide each) run the full
+  // height. 5 evenly-spaced horizontal rungs connect them. Small iron
+  // bolt dots at each rail/rung joint. Everything outside is a=0 so the
+  // cavity behind shows through — the billboard sits inside the shaft.
+  //
+  function _genLadder(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;  // 32
+
+      // Rail geometry — center-relative
+      var cx = S / 2;               // 16
+      var railHalfSpan = S * 0.28;  // ~9px — distance from center to rail center
+      var railW = 1.5;              // half-width of each rail
+      var leftRail  = cx - railHalfSpan;
+      var rightRail = cx + railHalfSpan;
+
+      // Is this pixel on a rail?
+      var onLeftRail  = Math.abs(x - leftRail)  <= railW;
+      var onRightRail = Math.abs(x - rightRail) <= railW;
+
+      // Rung geometry — 5 evenly-spaced rungs
+      var rungCount  = 5;
+      var rungH      = 1.5;        // half-height of each rung
+      var topPad     = 2;          // top margin before first rung
+      var botPad     = 2;          // bottom margin after last rung
+      var rungSpan   = S - topPad - botPad;
+      var onRung     = false;
+      var rungY      = -1;
+      for (var ri = 0; ri < rungCount; ri++) {
+        rungY = topPad + (ri + 0.5) * (rungSpan / rungCount);
+        if (Math.abs(y - rungY) <= rungH) {
+          // Only between the two rails
+          if (x >= leftRail - railW && x <= rightRail + railW) {
+            onRung = true;
+          }
+          break;
+        }
+      }
+
+      // Bolt at rail/rung intersection — 2×2 iron dot
+      var onBolt = false;
+      if (onRung && (onLeftRail || onRightRail)) {
+        onBolt = true;
+      }
+
+      if (!onLeftRail && !onRightRail && !onRung) {
+        return { r: 0, g: 0, b: 0, a: 0 };  // transparent
+      }
+
+      // Wood noise for variation
+      var n = (_hash(x + 17700, y + 17701) - 0.5) * 12;
+
+      if (onBolt) {
+        // Iron bolt
+        return {
+          r: _clamp(p.boltR + n * 0.5),
+          g: _clamp(p.boltG + n * 0.5),
+          b: _clamp(p.boltB + n * 0.5),
+          a: 255
+        };
+      }
+
+      if (onRung) {
+        // Rung: slightly lighter wood, grain runs horizontal
+        var grainH = (Math.floor(x / 3) % 2 === 0) ? 1.05 : 0.92;
+        return {
+          r: _clamp(p.rungR * grainH + n),
+          g: _clamp(p.rungG * grainH + n * 0.8),
+          b: _clamp(p.rungB * grainH + n * 0.6),
+          a: 255
+        };
+      }
+
+      // Rail: dark wood, grain runs vertical
+      var grainV = (Math.floor(y / 3) % 2 === 0) ? 1.08 : 0.88;
+      return {
+        r: _clamp(p.railR * grainV + n),
+        g: _clamp(p.railG * grainV + n * 0.8),
+        b: _clamp(p.railB * grainV + n * 0.6),
+        a: 255
+      };
+    });
+  }
+
+  // ── Trapdoor hatch lid — planked wood with iron hardware ────────
+  //
+  // 64×64 wall texture (same size as standard wall textures). Horizontal
+  // planks with a 2px iron frame border, two hinge plates on the left
+  // edge, and a pull ring handle right of center.
+  //
+  function _genTrapdoorLid(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;  // 64
+      var n = (_hash(x + 18800, y + 18801) - 0.5) * 10;
+
+      // Iron frame border — 2px on all edges
+      var frameW = 2;
+      if (x < frameW || x >= S - frameW || y < frameW || y >= S - frameW) {
+        return {
+          r: _clamp(p.hingeR + n * 0.3),
+          g: _clamp(p.hingeG + n * 0.3),
+          b: _clamp(p.hingeB + n * 0.3),
+          a: 255
+        };
+      }
+
+      // Hinge plates — two rectangular plates on left side
+      var hingeW = 10;
+      var hingeH = 6;
+      var hinge1Y = S * 0.25;
+      var hinge2Y = S * 0.72;
+      var onHinge = (x >= frameW && x < frameW + hingeW) &&
+                    ((Math.abs(y - hinge1Y) < hingeH / 2) ||
+                     (Math.abs(y - hinge2Y) < hingeH / 2));
+      if (onHinge) {
+        // Hinge bolt at center
+        var hingeCenter = frameW + hingeW / 2;
+        var hingeCY = (Math.abs(y - hinge1Y) < hingeH / 2) ? hinge1Y : hinge2Y;
+        if (Math.abs(x - hingeCenter) < 1.5 && Math.abs(y - hingeCY) < 1.5) {
+          return { r: _clamp(p.boltR + n * 0.3), g: _clamp(p.boltG + n * 0.3),
+                   b: _clamp(p.boltB + n * 0.3), a: 255 };
+        }
+        return { r: _clamp(p.hingeR + 5 + n * 0.3), g: _clamp(p.hingeG + 5 + n * 0.3),
+                 b: _clamp(p.hingeB + 5 + n * 0.3), a: 255 };
+      }
+
+      // Pull ring handle — small iron circle right of center
+      var handleCX = S * 0.58;
+      var handleCY = S * 0.50;
+      var handleR = 4;
+      var dx = x - handleCX;
+      var dy = y - handleCY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= handleR - 1.5 && dist <= handleR + 1.0) {
+        return { r: _clamp(p.handleR + n * 0.3), g: _clamp(p.handleG + n * 0.3),
+                 b: _clamp(p.handleB + n * 0.3), a: 255 };
+      }
+
+      // Wood planks — horizontal, ~10px tall each with dark seam lines
+      var plankH = 10;
+      var plankIdx = Math.floor((y - frameW) / plankH);
+      var inPlank = (y - frameW) - plankIdx * plankH;
+      // Seam at plank boundary — dark line
+      if (inPlank === 0 && y > frameW) {
+        return { r: _clamp(p.baseR * 0.5 + n * 0.3),
+                 g: _clamp(p.baseG * 0.5 + n * 0.3),
+                 b: _clamp(p.baseB * 0.5 + n * 0.3), a: 255 };
+      }
+      // Wood grain — subtle horizontal stripes, alternate per plank
+      var grain = (Math.floor(x / 4 + plankIdx * 7) % 2 === 0) ? 1.06 : 0.92;
+      // Per-plank color shift for variety
+      var plankShift = ((plankIdx * 31 + 17) % 7 - 3) * 2;
+
+      return {
+        r: _clamp(p.baseR * grain + plankShift + n),
+        g: _clamp(p.baseG * grain + plankShift * 0.8 + n * 0.8),
+        b: _clamp(p.baseB * grain + plankShift * 0.6 + n * 0.6),
+        a: 255
+      };
+    });
+  }
 
   // Rope + bucket — hemp rope descending from top, wooden bucket at bottom.
   function _genRopeBucket(id, p) {

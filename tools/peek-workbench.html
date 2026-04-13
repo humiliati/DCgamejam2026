@@ -810,6 +810,162 @@
     100% { transform: rotateX(-20deg) translateY(0) scaleY(1) scaleX(1); }
   }
 
+  /* ═══ DRAGONFIRE PREVIEW (CSS flame template) ═══ */
+  /* Faithful reproduction of Uiverse.io 0x-maker/warm-fly-82.      */
+  /* df- prefix avoids collisions. CSS custom properties on root     */
+  /* allow BoxForge sidebar color tuning. Default values reproduce   */
+  /* the original exactly.                                           */
+  /* Source: docs/Archive/CSS_TO_USE.md lines 1789–1991              */
+  .df-flame {
+    --df-body-color: #e5f295;
+    --df-eye-bg: #efffc8;
+    --df-glow-color: #5beebd;
+    /* Emotion-driven properties (set by JS per phase state) */
+    --df-pupil-w: 1rem;       /* pupil slit width: narrow=agitated, wide=relaxed */
+    --df-float-dur: 3s;       /* head float speed: faster=agitated */
+    --df-eye-float-dur: 5s;   /* eye float speed */
+    --df-blink-dur: 4s;       /* blink interval: faster=nervous */
+    display: flex;
+    width: 8rem;
+    height: 8rem;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    pointer-events: none;
+    transform-style: preserve-3d;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) translateZ(var(--df-z, 40px));
+  }
+  .df-flame.df-hidden { display: none; }
+
+  .df-flame .df-head {
+    width: 100%;
+    height: 100%;
+    background-color: var(--df-body-color);
+    border-radius: 50%;
+    animation: df-float var(--df-float-dur) ease-in-out infinite;
+    box-shadow: 0 1rem 1rem var(--df-glow-color);
+    filter: blur(0.3rem);
+    z-index: 1;
+  }
+
+  .df-flame .df-eye {
+    display: flex;
+    position: absolute;
+    width: 4rem;
+    height: 4rem;
+    background-color: var(--df-eye-bg);
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    box-shadow: 0 0 1rem #000000;
+    animation: df-float var(--df-eye-float-dur) ease-in-out alternate infinite;
+  }
+
+  .df-flame .df-eye::before {
+    content: "";
+    display: flex;
+    width: var(--df-pupil-w);
+    height: 2rem;
+    background-color: #000;
+    border-radius: 50%;
+    animation: df-blink var(--df-blink-dur) ease-in-out alternate infinite;
+  }
+
+  .df-flame .df-flames {
+    display: flex;
+    position: absolute;
+    z-index: 0;
+  }
+
+  .df-flame .df-particle {
+    display: flex;
+    position: absolute;
+    background-color: var(--df-body-color);
+    border-radius: 50%;
+    filter: blur(0.3rem);
+    border-top: 5px solid var(--df-body-color);
+    border-left: 5px solid var(--df-body-color);
+  }
+
+  .df-flame .df-flames::before {
+    content: "";
+    position: absolute;
+    width: 8rem;
+    height: 8rem;
+    background: var(--df-body-color);
+    filter: blur(5rem);
+    opacity: 0.5;
+    border-radius: 50%;
+    top: -8rem;
+    left: -4rem;
+    z-index: 4;
+    animation: df-pulse 3s linear infinite;
+  }
+
+  .df-flame .df-particle:nth-child(1) {
+    width: 4rem; height: 4rem;
+    top: -6rem;
+    animation: df-move 7s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(2) {
+    width: 1.5rem; height: 1.5rem;
+    top: -8rem; left: -5rem;
+    animation: df-move 1.5s ease-in-out reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(3) {
+    width: 4rem; height: 4rem;
+    top: -5rem; left: -4rem;
+    animation: df-move 8s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(4) {
+    width: 3rem; height: 3rem;
+    top: -7.5rem;
+    animation: df-move 4s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(5) {
+    width: 2rem; height: 2rem;
+    top: -9rem; left: 1rem;
+    animation: df-move 2.5s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(6) {
+    width: 2rem; height: 2rem;
+    top: -6.8rem; left: -1.5rem;
+    animation: df-move 5s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(7) {
+    width: 1rem; height: 1rem;
+    top: -10rem; left: -1rem;
+    animation: df-move 1.2s alternate-reverse infinite;
+  }
+  .df-flame .df-particle:nth-child(8) {
+    width: 1.3rem; height: 1.3rem;
+    top: -7.5rem; left: -2rem;
+    animation: df-move 2.5s alternate-reverse infinite;
+  }
+
+  @keyframes df-move {
+    0%   { transform: translateY(0) rotate(0deg); }
+    50%  { transform: translateY(-1rem) rotate(180deg); }
+    100% { transform: translateY(0) rotate(360deg); }
+  }
+  @keyframes df-float {
+    0%   { transform: translateY(0); }
+    50%  { transform: translateY(-1rem); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes df-blink {
+    0%   { transform: scaleX(1); }
+    10%  { transform: scaleX(0.1); }
+    20%  { transform: scaleX(1); }
+  }
+  @keyframes df-pulse {
+    0%   { opacity: 0.5; transform: scale(1); }
+    50%  { opacity: 0.8; transform: scale(1.1); }
+    100% { opacity: 0.5; transform: scale(1); }
+  }
+
   /* Orb controls section in sidebar */
   .orb-ctrl { display: none; }
   .orb-ctrl.active { display: block; }
@@ -1254,6 +1410,30 @@
   </div>
   </div><!-- /glow-section -->
 
+  <div id="df-section">
+    <div class="section-head">
+      Dragonfire
+      <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
+        <button id="df-toggle" style="padding:2px 10px;font-size:10px;background:#1a1a28;color:#777;border:1px solid #2a2a3a;border-radius:3px;cursor:pointer" title="Toggle dragonfire flame preview">Off</button>
+      </span>
+    </div>
+    <div id="df-props" style="display:none">
+      <div class="cr">
+        <label>Offset Z</label>
+        <input type="range" id="df-oz" min="-100" max="200" value="40" style="flex:1">
+        <input type="number" class="num" id="df-oz-num" value="40" style="width:42px">
+      </div>
+      <div class="cr">
+        <label>Body</label>
+        <input type="color" id="df-body-color" value="#e5f295">
+        <label style="width:auto;margin-left:4px">Eye</label>
+        <input type="color" id="df-eye-bg" value="#efffc8">
+        <label style="width:auto;margin-left:4px">Glow</label>
+        <input type="color" id="df-glow-color" value="#5beebd">
+      </div>
+    </div>
+  </div>
+
   <div class="section-head">Display</div>
   <div class="cr" style="flex-direction:column;gap:6px;height:auto">
     <div>
@@ -1494,6 +1674,16 @@
             <div class="glow-plane gp2"></div>
           </div>
           <!-- Panes are rendered here dynamically -->
+          <div class="df-flame df-hidden" id="df-preview">
+            <div class="df-head"></div>
+            <div class="df-eye"></div>
+            <div class="df-flames">
+              <div class="df-particle"></div><div class="df-particle"></div>
+              <div class="df-particle"></div><div class="df-particle"></div>
+              <div class="df-particle"></div><div class="df-particle"></div>
+              <div class="df-particle"></div><div class="df-particle"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2407,6 +2597,83 @@
         p2: { squish: 0, bounce: 0, poke: 0, spin: 0, tilt: 0, glow: 100 },
         p3: { squish: 0, bounce: 0, poke: 100, spin: 0, tilt: 0, glow: 100 }
       };
+    },
+    'Dragonfire': function() {
+      // Standalone dragonfire — CSS flame as narrator / tutorial companion.
+      // Minimal shell (tiny transparent cube acts as SpriteLayer stand-in).
+      // Phases map to emotions:
+      //   p1 = calm/idle — gentle float, relaxed pupil
+      //   p2 = alert/agitated — faster wobble, narrow pupil, squish
+      //   p3 = happy/excited — bounce, wide pupil, bright glow
+      shell = { bw: 160, bh: 160, bd: 40, persp: 600, rx: -10, ry: 0 };
+      colors = { cDark: '#0a0a0a', cLight: '#1a1a1a', cFloor: '#060606', cCeil: '#101010', cGlow: '#5beebd' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back',   face: 'back',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Left',   face: 'left',   structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Right',  face: 'right',  structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Top',    face: 'top',    structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Bottom', face: 'bottom', structural: true, texture: 'hidden' }),
+        makePane({ id: _nextId++, name: 'Front',  face: 'front',  structural: true, texture: 'hidden' })
+      ];
+      glows = [
+        makeGlow({ name: 'Floor glow', color: '#5beebd', size: 200, rotX: 90, oy: 80, alpha: 60 }),
+        makeGlow({ name: 'Aura 1',     color: '#e5f295', size: 140, rotY: 0, alpha: 30 }),
+        makeGlow({ name: 'Aura 2',     color: '#5beebd', size: 120, rotY: 90, alpha: 25 })
+      ];
+      _nextGlowId = glows.length + 1;
+      // p1=calm: gentle squish breathing
+      // p2=agitated: fast squish + poke jitter
+      // p3=happy: bouncy + squish
+      phaseAnims = {
+        p1: { squish: 6,  bounce: 0, poke: 0,  spin: 0, tilt: 0, glow: 60 },
+        p2: { squish: 18, bounce: 0, poke: 12, spin: 0, tilt: 0, glow: 100 },
+        p3: { squish: 8,  bounce: 14, poke: 0, spin: 0, tilt: 0, glow: 100 }
+      };
+      _dfEnabled = true;
+    },
+    'Hearth + Dragonfire': function() {
+      // Hearth fireplace — stone mantle with dragonfire CSS flame inside.
+      // Enable dragonfire preview toggle to see the flame in the 3D viewport.
+      shell = { bw: 340, bh: 280, bd: 90, persp: 700, rx: -15, ry: -12 };
+      colors = { cDark: '#2a1a0a', cLight: '#6a4828', cFloor: '#1a1206', cCeil: '#3a2818', cGlow: '#ff6622' };
+      _nextId = 1;
+      panes = [
+        makePane({ id: _nextId++, name: 'Back Wall',    face: 'back',   structural: true, texture: 'stone', color: '#2a1808',
+                   wiring: 'Hearth back wall — soot-stained stone.' }),
+        makePane({ id: _nextId++, name: 'Left Pillar',  face: 'left',   structural: true, texture: 'stone', color: '#3a2810',
+                   ox: 120,
+                   wiring: 'Left stone pillar of the hearth mantle.' }),
+        makePane({ id: _nextId++, name: 'Right Pillar', face: 'right',  structural: true, texture: 'stone', color: '#3a2810',
+                   ox: 120,
+                   wiring: 'Right stone pillar of the hearth mantle.' }),
+        makePane({ id: _nextId++, name: 'Mantle Top',   face: 'top',    structural: true, texture: 'stone', color: '#4a3818',
+                   oy: 100,
+                   wiring: 'Stone mantle shelf — decorative top.' }),
+        makePane({ id: _nextId++, name: 'Hearth Floor', face: 'bottom', structural: true, texture: 'grid-lines', color: '#1a0e06',
+                   wiring: 'Ash-covered hearth floor. Dark.' }),
+        makePane({ id: _nextId++, name: 'Fire Cavity',  face: 'front',  role: 'lid', hinge: 'bottom',
+                   pw: 200, ph: 200, ox: 0, oy: 20, angle: 0, hoverAngle: 0,
+                   texture: 'hidden',
+                   wiring: 'TRANSPARENT front face — fire cavity opening.\n' +
+                           'The CSS dragonfire sprite renders INSIDE this space.\n' +
+                           'In-game: SpriteLayer billboards the flame at this tile.\n' +
+                           'Toggle dragonfire preview (sidebar) to see flame.' })
+      ];
+      glows = [
+        makeGlow({ name: 'Hearth glow',  color: '#ff6622', size: 200, rotX: 90, oy: 140, alpha: 80 }),
+        makeGlow({ name: 'Fire wash 1',  color: '#ff4400', size: 120, rotY: 0, alpha: 40 }),
+        makeGlow({ name: 'Fire wash 2',  color: '#ff8833', size: 100, rotY: 60, alpha: 35 }),
+        makeGlow({ name: 'Fire wash 3',  color: '#cc3300', size: 110, rotY: 120, alpha: 30 })
+      ];
+      _nextGlowId = glows.length + 1;
+      phaseAnims = {
+        p1: { squish: 3, bounce: 0, poke: 0, spin: 0, tilt: 0, glow: 100 },
+        p2: { squish: 6, bounce: 0, poke: 0, spin: 0, tilt: 0, glow: 100 },
+        p3: { squish: 0, bounce: 0, poke: 8, spin: 0, tilt: 0, glow: 100 }
+      };
+      // Auto-enable dragonfire preview for this template
+      _dfEnabled = true;
     }
   };
 
@@ -3238,6 +3505,7 @@
       syncPhaseAnimToggles();
       syncPyrUI();
       updatePyrDirtyLabels();
+      syncDragonfirePreview();
       render();
     });
   });
@@ -3374,6 +3642,7 @@
     syncPhaseAnimToggles();
     syncPyrUI();
     updatePyrDirtyLabels();
+    syncDragonfirePreview();
     render();
   }
 
@@ -3610,6 +3879,7 @@
       orbOnly = false;
       pyrPrimary = false;
       phaseMode = 'box';
+      _dfEnabled = false;
       glows = defaultGlows();
       _nextGlowId = glows.length + 1;
       _nextId = 1;
@@ -6026,7 +6296,14 @@
       pyrPrimary:    pyrPrimary,
       currentState:  currentState,
       peekType:      peekType,
-      jsHandoffModule: jsHandoffModule
+      jsHandoffModule: jsHandoffModule,
+      dragonfire:    _dfEnabled ? {
+        enabled: true,
+        oz: (typeof dfOzEl !== 'undefined' && dfOzEl) ? parseInt(dfOzEl.value, 10) : 40,
+        bodyColor: (typeof dfBodyColorEl !== 'undefined' && dfBodyColorEl) ? dfBodyColorEl.value : '#e5f295',
+        eyeBg: (typeof dfEyeBgEl !== 'undefined' && dfEyeBgEl) ? dfEyeBgEl.value : '#efffc8',
+        glowColor: (typeof dfGlowColorEl !== 'undefined' && dfGlowColorEl) ? dfGlowColorEl.value : '#5beebd'
+      } : null
     };
   }
 
@@ -6137,6 +6414,18 @@
     updatePhaseLabels();
     updateComposeBar();
     syncPeekTypeUI();
+
+    // Restore dragonfire preview state
+    if (data.dragonfire && data.dragonfire.enabled) {
+      _dfEnabled = true;
+      dfOzEl.value = dfOzNumEl.value = data.dragonfire.oz || 40;
+      dfBodyColorEl.value = data.dragonfire.bodyColor || '#e5f295';
+      dfEyeBgEl.value = data.dragonfire.eyeBg || '#efffc8';
+      dfGlowColorEl.value = data.dragonfire.glowColor || '#5beebd';
+    } else {
+      _dfEnabled = false;
+    }
+    syncDragonfirePreview();
 
     // Restore phase state
     document.querySelectorAll('#state-bar button').forEach(function(b) {
@@ -6520,6 +6809,65 @@
       render();
     });
   });
+
+  // ════════════════════════════════════════════════════
+  //  DRAGONFIRE PREVIEW (CSS flame template)
+  // ════════════════════════════════════════════════════
+
+  var _dfEnabled = false;
+  var dfPreviewEl    = document.getElementById('df-preview');
+  var dfToggleEl     = document.getElementById('df-toggle');
+  var dfPropsEl      = document.getElementById('df-props');
+  var dfOzEl         = document.getElementById('df-oz');
+  var dfOzNumEl      = document.getElementById('df-oz-num');
+  var dfBodyColorEl  = document.getElementById('df-body-color');
+  var dfEyeBgEl      = document.getElementById('df-eye-bg');
+  var dfGlowColorEl  = document.getElementById('df-glow-color');
+
+  // Emotion presets keyed by phase state → CSS custom property values
+  // pupilW: slit width (narrow=tense, wide=relaxed)
+  // floatDur: head bob speed (fast=agitated)
+  // eyeFloatDur: eye drift speed
+  // blinkDur: blink interval (fast=nervous)
+  var DF_EMOTIONS = {
+    closed:  { pupilW: '1rem',   floatDur: '3s',   eyeFloatDur: '5s',   blinkDur: '4s'   },  // calm
+    hover:   { pupilW: '0.5rem', floatDur: '1.6s',  eyeFloatDur: '2.5s', blinkDur: '1.8s' },  // alert/agitated
+    opened:  { pupilW: '1.4rem', floatDur: '2.2s',  eyeFloatDur: '3.5s', blinkDur: '5s'   },  // happy/relaxed
+    p4:      { pupilW: '0.3rem', floatDur: '1.2s',  eyeFloatDur: '1.8s', blinkDur: '1.2s' }   // angry/intense
+  };
+
+  function syncDragonfirePreview() {
+    dfPreviewEl.classList.toggle('df-hidden', !_dfEnabled);
+    dfToggleEl.textContent = _dfEnabled ? 'On' : 'Off';
+    dfToggleEl.style.color = _dfEnabled ? '#ff6633' : '#777';
+    dfToggleEl.style.borderColor = _dfEnabled ? '#883311' : '#2a2a3a';
+    dfPropsEl.style.display = _dfEnabled ? 'block' : 'none';
+    if (_dfEnabled) {
+      dfPreviewEl.style.setProperty('--df-z', dfOzEl.value + 'px');
+      dfPreviewEl.style.setProperty('--df-body-color', dfBodyColorEl.value);
+      dfPreviewEl.style.setProperty('--df-eye-bg', dfEyeBgEl.value);
+      dfPreviewEl.style.setProperty('--df-glow-color', dfGlowColorEl.value);
+      // Apply emotion-driven properties from current phase state
+      var emo = DF_EMOTIONS[currentState] || DF_EMOTIONS.closed;
+      dfPreviewEl.style.setProperty('--df-pupil-w', emo.pupilW);
+      dfPreviewEl.style.setProperty('--df-float-dur', emo.floatDur);
+      dfPreviewEl.style.setProperty('--df-eye-float-dur', emo.eyeFloatDur);
+      dfPreviewEl.style.setProperty('--df-blink-dur', emo.blinkDur);
+    }
+  }
+
+  dfToggleEl.addEventListener('click', function() {
+    _dfEnabled = !_dfEnabled;
+    syncDragonfirePreview();
+  });
+
+  // Z offset slider ↔ number sync
+  dfOzEl.addEventListener('input', function() { dfOzNumEl.value = dfOzEl.value; syncDragonfirePreview(); });
+  dfOzNumEl.addEventListener('input', function() { dfOzEl.value = dfOzNumEl.value; syncDragonfirePreview(); });
+  // Color pickers
+  dfBodyColorEl.addEventListener('input', syncDragonfirePreview);
+  dfEyeBgEl.addEventListener('input', syncDragonfirePreview);
+  dfGlowColorEl.addEventListener('input', syncDragonfirePreview);
 
   // ════════════════════════════════════════════════════
   //  ORB CONTROLS

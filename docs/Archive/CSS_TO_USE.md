@@ -1795,101 +1795,179 @@ cubes {
 /*   <div class="eye"></div></div><div class="flames">          */
 /*   <div class="particle"></div> ×8 </div></div>               */
 /* ============================================================ */
-
+/* From Uiverse.io by 0x-maker */ 
 .loader {
-  --size: 150px;
-  --duration: 2s;
-  --logo-color: grey;
-  --background: linear-gradient(
-    0deg,
-    rgba(50, 50, 50, 0.2) 0%,
-    rgba(100, 100, 100, 0.2) 100%
-  );
-  height: var(--size);
-  aspect-ratio: 1;
-  position: relative;
+  display: flex;
+  width: 8rem;
+  height: 8rem;
+  justify-items: center;
+  justify-content: center;
+  align-items: center;
 }
 
-.loader .head {
-  position: absolute;
-  z-index: 2;
-  left: 50%;
-  transform: translate(-50%, -80%) rotate(45deg);
-  background: crimson;
-  width: 50%;
-  aspect-ratio: 1;
-  border-radius: 50% 50% 50% 0;
-  box-shadow: 0 0 30px crimson, 0 0 60px red, 0 0 90px darkred;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.loader .eye {
-  position: absolute;
-  top: 38%;
-  left: 38%;
-  width: 24%;
-  height: 24%;
-  background: radial-gradient(circle, black 20%, white 21%, white 70%, black 71%);
+.head {
+  width: 100%;
+  height: 100%;
+  background-color: #e5f295;
   border-radius: 50%;
-  transform: rotate(-45deg);
-  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+  animation: move 3s linear infinite;
+  box-shadow: 0 1rem 1rem #5beebd;
+  filter: blur(0.3rem);
+  z-index: 1;
 }
 
-.loader .eye::before {
+.eye {
+  display: flex;
+  position: absolute;
+  width: 4rem;
+  height: 4rem;
+  background-color: #efffc8;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 0 1rem #000000;
+  animation: move 5s alternate infinite;
+}
+
+.eye::before {
+  content: "";
+  display: flex;
+  width: 1rem;
+  height: 2rem;
+  background-color: #000;
+  border-radius: 50%;
+  animation: blink 4s ease-in-out alternate infinite;
+}
+
+.flames {
+  display: flex;
+  position: absolute;
+  z-index: 0;
+}
+
+.particle {
+  display: flex;
+  position: absolute;
+  background-color: #e5f295;
+  border-radius: 50%;
+  filter: blur(0.3rem);
+  border-top: 5px solid #e5f295;
+  border-left: 5px solid #e5f295;
+}
+
+.flames::before {
   content: "";
   position: absolute;
-  top: 35%;
-  left: 35%;
-  width: 30%;
-  height: 30%;
-  background: black;
+  width: 8rem;
+  height: 8rem;
+  background: #e5f295;
+  filter: blur(5rem);
+  opacity: 0.5;
   border-radius: 50%;
-  animation: blink 3s infinite;
+  top: -8rem;
+  left: -4rem;
+  z-index: 4;
+  animation: pulse 3s linear infinite;
 }
 
-.loader .flames {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 80%;
+.particle:nth-child(1) {
+  width: 4rem;
+  height: 4rem;
+  top: -6rem;
+  animation: move 7s alternate-reverse infinite;
 }
 
-.loader .particle {
-  position: absolute;
-  bottom: 0;
-  width: 10px;
-  height: 10px;
-  background: radial-gradient(circle, orange, red, transparent);
-  border-radius: 50%;
-  animation: move var(--duration) infinite ease-in-out;
-  opacity: 0.9;
+.particle:nth-child(2) {
+  width: 1.5rem;
+  height: 1.5rem;
+  top: -8rem;
+  left: -5rem;
+  animation: move 1.5s ease-in-out reverse infinite;
 }
 
-.loader .particle:nth-child(1) { left: 10%; animation-delay: 0s;   }
-.loader .particle:nth-child(2) { left: 25%; animation-delay: 0.3s; }
-.loader .particle:nth-child(3) { left: 40%; animation-delay: 0.6s; }
-.loader .particle:nth-child(4) { left: 55%; animation-delay: 0.9s; }
-.loader .particle:nth-child(5) { left: 70%; animation-delay: 1.2s; }
-.loader .particle:nth-child(6) { left: 85%; animation-delay: 1.5s; }
-.loader .particle:nth-child(7) { left: 15%; animation-delay: 1.8s; }
-.loader .particle:nth-child(8) { left: 60%; animation-delay: 2.1s; }
+.particle:nth-child(3) {
+  width: 4rem;
+  height: 4rem;
+  top: -5rem;
+  left: -4rem;
+  animation: move 8s alternate-reverse infinite;
+}
+
+.particle:nth-child(4) {
+  width: 3rem;
+  height: 3rem;
+  top: -7.5rem;
+  animation: move 4s alternate-reverse infinite;
+}
+
+.particle:nth-child(5) {
+  width: 2rem;
+  height: 2rem;
+  top: -9rem;
+  left: 1rem;
+  animation: move 2.5s alternate-reverse infinite;
+}
+
+.particle:nth-child(6) {
+  width: 2rem;
+  height: 2rem;
+  top: -6.8rem;
+  left: -1.5rem;
+  animation: move 5s alternate-reverse infinite;
+}
+
+.particle:nth-child(7) {
+  width: 1rem;
+  height: 1rem;
+  top: -10rem;
+  left: -1rem;
+  animation: move 1.2s alternate-reverse infinite;
+}
+
+.particle:nth-child(8) {
+  width: 1.3rem;
+  height: 1.3rem;
+  top: -7.5rem;
+  left: -2rem;
+  animation: move 2.5s alternate-reverse infinite;
+}
 
 @keyframes move {
-  0%   { transform: translateY(0)     scale(1);   opacity: 1; }
-  50%  { transform: translateY(-50px) scale(1.2); opacity: 0.8; }
-  100% { transform: translateY(-100px) scale(0.5); opacity: 0; }
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-1rem) rotate(180deg);
+  }
+  100% {
+    transform: translateY(0) rotate(360deg);
+  }
 }
 
 @keyframes blink {
-  0%, 90%, 100% { transform: scaleY(1); }
-  95%           { transform: scaleY(0.1); }
+  0% {
+    transform: scaleY(1);
+  }
+  10% {
+    transform: scaleY(0.1);
+  }
+  20% {
+    transform: scaleY(1);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 30px crimson, 0 0 60px red, 0 0 90px darkred; }
-  50%      { box-shadow: 0 0 40px orange, 0 0 80px red, 0 0 120px darkred; }
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
 }
-
-.item:nth-child(6):afte

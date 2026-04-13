@@ -57,6 +57,10 @@ var DoorAnimator = (function () {
 
   // ── Animation control ──────────────────────────────────────────────
 
+  // Double-door partner tile (-1 = no partner)
+  var _partnerX = -1;
+  var _partnerY = -1;
+
   function start(tileX, tileY, hitTile, direction, currentFloorId, targetFloorId) {
     _active       = true;
     _tileX        = tileX;
@@ -68,6 +72,20 @@ var DoorAnimator = (function () {
     _currentFloor = currentFloorId || '';
     _targetFloor  = targetFloorId  || '';
     _screenValid  = false;
+
+    // Phase 6A: if this tile has a double-door partner, store it so
+    // isAnimatingTile() covers both tiles and renderColumn() can
+    // reverse the swing direction for the partner leaf.
+    _partnerX = -1;
+    _partnerY = -1;
+    if (typeof DoorSprites !== 'undefined' && DoorSprites.getPairInfo) {
+      var _pi = DoorSprites.getPairInfo(tileX, tileY);
+      if (_pi) {
+        var _pp = _pi.partner.split(',');
+        _partnerX = parseInt(_pp[0], 10);
+        _partnerY = parseInt(_pp[1], 10);
+      }
+    }
 
     // Determine porthole type from floor depth comparison
     var curDepth = _currentFloor ? String(_currentFloor).split('.').length : 1;
@@ -86,6 +104,8 @@ var DoorAnimator = (function () {
     _active      = false;
     _tileX       = -1;
     _tileY       = -1;
+    _partnerX    = -1;
+    _partnerY    = -1;
     _elapsed     = 0;
     _progress    = 0;
     _screenValid = false;
@@ -94,7 +114,11 @@ var DoorAnimator = (function () {
   function isAnimating() { return _active; }
 
   function isAnimatingTile(mapX, mapY) {
-    return _active && mapX === _tileX && mapY === _tileY;
+    if (!_active) return false;
+    if (mapX === _tileX && mapY === _tileY) return true;
+    // Phase 6A: partner tile also animates
+    if (_partnerX >= 0 && mapX === _partnerX && mapY === _partnerY) return true;
+    return false;
   }
 
   function update(dt) {
@@ -125,9 +149,13 @@ var DoorAnimator = (function () {
    * border provides the surround. Adjacent WALL tiles (rendered by
    * the N-layer compositor) provide the building facade context.
    */
-  function renderColumn(ctx, col, drawStart, drawEnd, wallX, side, fogFactor, brightness, fogColor) {
+  function renderColumn(ctx, col, drawStart, drawEnd, wallX, side, fogFactor, brightness, fogColor, mapX, mapY) {
     var stripH = drawEnd - drawStart + 1;
     if (stripH <= 0) return;
+
+    // Phase 6A: determine if this column is the partner (right leaf).
+    // Partner leaf swings in the mirror direction.
+    var _isPartnerLeaf = (_partnerX >= 0 && mapX === _partnerX && mapY === _partnerY);
 
     // Track screen bounds for overlay text
     if (col < _screenLeft)        _screenLeft   = col;
@@ -165,19 +193,22 @@ var DoorAnimator = (function () {
       ctx.fillRect(col, drawStart, 1, stripH);
     }
 
-    // ── Layer 2: Door panel (swings open from left hinge) ────────
+    // ── Layer 2: Door panel (swings open from hinge edge) ─────────
     // At progress 0, door covers entire width (wallX 0..1).
     // At progress 1, door is fully open (edge-on, invisible).
-    // The hinge is on the left (wallX=0), door swings away to the right.
+    // Primary leaf: hinge on left (wallX=0), swings right.
+    // Partner leaf: hinge on right (wallX=1), swings left (mirrored).
     if (_progress < 0.98) {
-      var doorEdge = 1.0 - _progress;  // Visible door: wallX 0..doorEdge
+      var doorEdge = 1.0 - _progress;
+      // For partner leaf, mirror wallX so the hinge is on the right
+      var swingWallX = _isPartnerLeaf ? (1.0 - wallX) : wallX;
 
-      if (wallX < doorEdge) {
+      if (swingWallX < doorEdge) {
         var doorTex = _getDoorTexture();
         if (doorTex) {
           // Map this column's position within the visible door portion
           // back to the full texture width for correct UV mapping.
-          var doorFrac = wallX / doorEdge;  // 0..1 within visible door
+          var doorFrac = swingWallX / doorEdge;  // 0..1 within visible door
           var dtx = Math.floor(doorFrac * doorTex.width);
           if (dtx >= doorTex.width) dtx = doorTex.width - 1;
 

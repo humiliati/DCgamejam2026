@@ -186,7 +186,24 @@ var TILES = (function () {
     // -- Door Architecture Roadmap tiles --
     DOOR_FACADE:      74,  // Facade Door -- freeform full-height building entrance
     TRAPDOOR_DN:      75,  // Trapdoor Down -- freeform interior hatch descending
-    TRAPDOOR_UP:      76   // Trapdoor Up -- freeform interior hatch ascending
+    TRAPDOOR_UP:      76,  // Trapdoor Up -- freeform interior hatch ascending
+
+    // -- Living Windows Roadmap §4.5: per-building window types --
+    WINDOW_SHOP:      77,  // Commercial storefront — large plate glass with thin iron
+                           //   bars (3 vertical muntins). Mostly glass, minimal frame.
+                           //   Slight inset (recessD: 0.10) behind the wall face.
+                           //   Buildings: Coral Bazaar, Driftwood Inn, future shops.
+                           //   Gap filler: 'window_shop_interior'.
+    WINDOW_BAY:       78,  // Residential bay window — projects 0.20 units OUTWARD from
+                           //   the wall face (negative recessD). Beveled side jambs in
+                           //   building wallTexture. 2×2 wood mullion cross (colonial).
+                           //   Buildings: Gleaner's Home, private residences.
+                           //   Gap filler: 'window_bay_interior'.
+    WINDOW_SLIT:      79   // Institutional fortress slit — narrow vertical opening
+                           //   (center 30% of tile width). Single iron bar. Cold
+                           //   blue-grey wash. Masonry flanks on wallX < 0.35 / > 0.65.
+                           //   Buildings: Storm Shelter, Watchman's Post, Dispatcher's.
+                           //   Gap filler: 'window_slit_interior'.
   };
 
   /** Check if a tile blocks movement */
@@ -224,7 +241,9 @@ var TILES = (function () {
            tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL || tile === T.PERGOLA ||
            tile === T.CITY_BONFIRE || tile === T.PERGOLA_BEAM ||
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
-           tile === T.WINDOW_TAVERN || tile === T.DOOR_FACADE ||
+           tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
+           tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
+           tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
@@ -328,11 +347,21 @@ var TILES = (function () {
     // Phase 3: + ARCH_DOORWAY, PORTHOLE.
     // Phase 4: + WINDOW_TAVERN (row-range glass slot on building facades,
     //   interior scene billboard renders inside the transparent gap).
+    // Phase 4b: + WINDOW_SHOP, WINDOW_BAY, WINDOW_SLIT (per-building
+    //   window types with zBypassMode:'depth' for real vignette depth).
     return tile === T.HEARTH || tile === T.CITY_BONFIRE ||
            tile === T.PERGOLA_BEAM || tile === T.DUMP_TRUCK ||
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
-           tile === T.WINDOW_TAVERN || tile === T.DOOR_FACADE ||
+           tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
+           tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
+           tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
+  };
+
+  /** Check if tile is any window type (TAVERN, SHOP, BAY, SLIT) */
+  T.isWindow = function (tile) {
+    return tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
+           tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT;
   };
 
   return T;

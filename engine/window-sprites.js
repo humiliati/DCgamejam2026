@@ -555,6 +555,316 @@ var WindowSprites = (function () {
     ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
   }
 
+  // ── WINDOW_SHOP gap filler ─────────────────────────────────────
+  // Commercial storefront — large plate glass with thin iron muntins.
+  // The glass dominates; the bars are minimal 1px verticals at
+  // wallX ≈ 0.25, 0.50, 0.75 with iron-grey color. Same three-face
+  // model as TAVERN (exterior=glass, interior=transparent, sides=masonry).
+  function _windowShopFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
+    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+
+    // Interior face: transparent (see-through)
+    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+
+    // Side faces: opaque masonry
+    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+      var bAdjW = info.brightness;
+      var wR = Math.round(70 * bAdjW);
+      var wG = Math.round(55 * bAdjW);
+      var wB = Math.round(40 * bAdjW);
+      var fFW = info.fogFactor;
+      if (fFW > 0) {
+        wR = Math.round(wR * (1 - fFW) + info.fogColor.r * fFW);
+        wG = Math.round(wG * (1 - fFW) + info.fogColor.g * fFW);
+        wB = Math.round(wB * (1 - fFW) + info.fogColor.b * fFW);
+      }
+      ctx.fillStyle = 'rgb(' + wR + ',' + wG + ',' + wB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // ── Exterior face: plate glass with iron bars ──────────────
+    var bAdj    = info.brightness;
+    var fogFade = 1 - Math.min(0.85, info.fogFactor);
+    var wallX   = info.wallX;
+
+    // 1. Amber interior wash — brighter than tavern (lit display case).
+    var warmA = 0.20 * bAdj * fogFade;
+    if (warmA > 0.01) {
+      ctx.fillStyle = 'rgba(255, 190, 70, ' + warmA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // 2. Parallax glint — same mechanic as TAVERN but on each of
+    //    the 4 pane segments between the iron bars. The glint shifts
+    //    per pane segment for extra parallax.
+    if (gapH >= 4) {
+      var _now2   = _glintClock;
+      var _rot2   = ((_now2 % GLINT_PERIOD) / GLINT_PERIOD);
+      var _slope2 = Math.sin(_rot2 * Math.PI * 2);
+      // Determine which pane segment (0–3) this wallX falls in.
+      var _seg    = Math.floor(wallX * 4);
+      if (_seg > 3) _seg = 3;
+      // Local wallX within the pane segment (0→1).
+      var _localX = (wallX * 4) - _seg;
+      var _yNorm2 = 0.5 + (_localX - 0.5) * _slope2 * 0.35;
+      if (_yNorm2 < 0.1) _yNorm2 = 0.1;
+      if (_yNorm2 > 0.9) _yNorm2 = 0.9;
+      var _glintY2 = gapStart + Math.floor(_yNorm2 * gapH);
+      var _xDist2  = Math.abs(_localX - 0.35);
+      var _glintA2 = Math.max(0, 1 - _xDist2 * 3.5) * 0.40 * bAdj * fogFade;
+      if (_glintA2 > 0.02) {
+        var _gH2 = Math.min(4, gapH - (_glintY2 - gapStart));
+        if (_gH2 > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 255, ' + _glintA2.toFixed(3) + ')';
+          ctx.fillRect(col, _glintY2, 1, _gH2);
+        }
+      }
+    }
+
+    // 3. Iron bars — 3 thin vertical muntins at wallX ≈ 0.25, 0.50, 0.75.
+    //    1px each, iron grey. These are thin enough to read as "mostly glass."
+    var barHalfW = 0.02 + 0.01 / Math.max(0.6, info.perpDist);
+    var isBar = (wallX >= 0.25 - barHalfW && wallX <= 0.25 + barHalfW) ||
+                (wallX >= 0.50 - barHalfW && wallX <= 0.50 + barHalfW) ||
+                (wallX >= 0.75 - barHalfW && wallX <= 0.75 + barHalfW);
+
+    // Iron color — always cold grey regardless of building mullion style.
+    var iR = Math.round(70 * bAdj);
+    var iG = Math.round(72 * bAdj);
+    var iB = Math.round(78 * bAdj);
+    var fF2 = info.fogFactor;
+    if (fF2 > 0) {
+      iR = Math.round(iR * (1 - fF2) + info.fogColor.r * fF2);
+      iG = Math.round(iG * (1 - fF2) + info.fogColor.g * fF2);
+      iB = Math.round(iB * (1 - fF2) + info.fogColor.b * fF2);
+    }
+
+    if (isBar) {
+      ctx.fillStyle = 'rgb(' + iR + ',' + iG + ',' + iB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // 4. Top + bottom iron frame — 2px each.
+    var frR = Math.round(iR * 0.7);
+    var frG = Math.round(iG * 0.7);
+    var frB = Math.round(iB * 0.7);
+    ctx.fillStyle = 'rgb(' + frR + ',' + frG + ',' + frB + ')';
+    ctx.fillRect(col, gapStart, 1, Math.min(2, gapH));
+    if (gapH > 2) ctx.fillRect(col, gapStart + gapH - 2, 1, 2);
+  }
+
+  // ── WINDOW_BAY gap filler ─────────────────────────────────────
+  // Residential bay window — warm amber wash + classic 2×2 wood
+  // mullion cross. Cozy colonial look. The protrusion is handled
+  // by negative recessD in the raycaster; this filler just paints
+  // the glass interior.
+  function _windowBayFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
+    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+
+    // Interior face: transparent
+    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+
+    // Side faces: building wall texture masonry (the beveled jambs).
+    // Use a warmer brown for residential wood.
+    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+      var bAdjW = info.brightness;
+      var wR = Math.round(58 * bAdjW);
+      var wG = Math.round(38 * bAdjW);
+      var wB = Math.round(22 * bAdjW);
+      var fFW = info.fogFactor;
+      if (fFW > 0) {
+        wR = Math.round(wR * (1 - fFW) + info.fogColor.r * fFW);
+        wG = Math.round(wG * (1 - fFW) + info.fogColor.g * fFW);
+        wB = Math.round(wB * (1 - fFW) + info.fogColor.b * fFW);
+      }
+      ctx.fillStyle = 'rgb(' + wR + ',' + wG + ',' + wB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // ── Exterior face: warm colonial window ──────────────────
+    var bAdj    = info.brightness;
+    var fogFade = 1 - Math.min(0.85, info.fogFactor);
+    var wallX   = info.wallX;
+
+    // 1. Warm amber wash — stronger than SHOP (cozy interior glow).
+    var warmA = 0.22 * bAdj * fogFade;
+    if (warmA > 0.01) {
+      ctx.fillStyle = 'rgba(255, 170, 50, ' + warmA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // 2. Parallax glint (subtle, residential).
+    if (gapH >= 4) {
+      var _now3   = _glintClock;
+      var _rot3   = ((_now3 % GLINT_PERIOD) / GLINT_PERIOD);
+      var _slope3 = Math.sin(_rot3 * Math.PI * 2);
+      var _yNorm3 = 0.5 + (wallX - 0.5) * _slope3 * 0.25;
+      if (_yNorm3 < 0.15) _yNorm3 = 0.15;
+      if (_yNorm3 > 0.85) _yNorm3 = 0.85;
+      var _glintY3 = gapStart + Math.floor(_yNorm3 * gapH);
+      var _xDist3  = Math.abs(wallX - 0.40);
+      var _glintA3 = Math.max(0, 1 - _xDist3 * 4) * 0.30 * bAdj * fogFade;
+      if (_glintA3 > 0.02) {
+        var _gH3 = Math.min(4, gapH - (_glintY3 - gapStart));
+        if (_gH3 > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 240, ' + _glintA3.toFixed(3) + ')';
+          ctx.fillRect(col, _glintY3, 1, _gH3);
+        }
+      }
+    }
+
+    // 3. Wood mullion cross — classic 2×2 colonial pane grid.
+    //    Per-tile mullion color from BuildingRegistry, or default wood.
+    var mullionHalfW = 0.06 + 0.03 / Math.max(0.6, info.perpDist);
+    var vertMullion = (wallX >= 0.5 - mullionHalfW && wallX <= 0.5 + mullionHalfW);
+
+    var mRGB = _windowMullions[info.mapX + ',' + info.mapY] || null;
+    var mR = mRGB ? mRGB.r : 48;
+    var mG = mRGB ? mRGB.g : 28;
+    var mB = mRGB ? mRGB.b : 14;
+    mR = Math.round(mR * bAdj);
+    mG = Math.round(mG * bAdj);
+    mB = Math.round(mB * bAdj);
+    var fF3 = info.fogFactor;
+    if (fF3 > 0) {
+      mR = Math.round(mR * (1 - fF3) + info.fogColor.r * fF3);
+      mG = Math.round(mG * (1 - fF3) + info.fogColor.g * fF3);
+      mB = Math.round(mB * (1 - fF3) + info.fogColor.b * fF3);
+    }
+    var mullionColor = 'rgb(' + mR + ',' + mG + ',' + mB + ')';
+
+    if (vertMullion) {
+      ctx.fillStyle = mullionColor;
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    var midY3 = gapStart + Math.floor(gapH * 0.5);
+    var hThick3 = Math.max(2, Math.floor(info.lineH / info.wallHeightMult * 0.06));
+    var hmTop3 = midY3 - Math.floor(hThick3 / 2);
+    if (hmTop3 >= gapStart && hmTop3 + hThick3 <= gapStart + gapH) {
+      ctx.fillStyle = mullionColor;
+      ctx.fillRect(col, hmTop3, 1, hThick3);
+    }
+
+    // 4. Frame — warm wood border (darker than mullion).
+    var fR3 = Math.round(mR * 0.55);
+    var fG3 = Math.round(mG * 0.55);
+    var fB3 = Math.round(mB * 0.55);
+    ctx.fillStyle = 'rgb(' + fR3 + ',' + fG3 + ',' + fB3 + ')';
+    ctx.fillRect(col, gapStart, 1, 1);
+    ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
+  }
+
+  // ── WINDOW_SLIT gap filler ────────────────────────────────────
+  // Institutional fortress slit — narrow vertical opening in the
+  // center 30% of the tile width. Everything outside that center
+  // strip is opaque masonry. Inside: cold blue-grey wash, single
+  // iron bar at center.
+  function _windowSlitFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
+    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+
+    // Interior face: transparent
+    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+
+    // Side faces: opaque masonry
+    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+      var bAdjW = info.brightness;
+      var wR = Math.round(65 * bAdjW);
+      var wG = Math.round(60 * bAdjW);
+      var wB = Math.round(55 * bAdjW);
+      var fFW = info.fogFactor;
+      if (fFW > 0) {
+        wR = Math.round(wR * (1 - fFW) + info.fogColor.r * fFW);
+        wG = Math.round(wG * (1 - fFW) + info.fogColor.g * fFW);
+        wB = Math.round(wB * (1 - fFW) + info.fogColor.b * fFW);
+      }
+      ctx.fillStyle = 'rgb(' + wR + ',' + wG + ',' + wB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // ── Exterior face ─────────────────────────────────────────
+    var bAdj    = info.brightness;
+    var fogFade = 1 - Math.min(0.85, info.fogFactor);
+    var wallX   = info.wallX;
+
+    // Narrow slit: masonry flanks on wallX < 0.35 and > 0.65.
+    // Only the center 30% is the actual glass opening.
+    if (wallX < 0.35 || wallX > 0.65) {
+      // Paint as opaque wall masonry matching the building stone.
+      var mwR = Math.round(65 * bAdj);
+      var mwG = Math.round(60 * bAdj);
+      var mwB = Math.round(55 * bAdj);
+      var fFM = info.fogFactor;
+      if (fFM > 0) {
+        mwR = Math.round(mwR * (1 - fFM) + info.fogColor.r * fFM);
+        mwG = Math.round(mwG * (1 - fFM) + info.fogColor.g * fFM);
+        mwB = Math.round(mwB * (1 - fFM) + info.fogColor.b * fFM);
+      }
+      ctx.fillStyle = 'rgb(' + mwR + ',' + mwG + ',' + mwB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // Center strip: the actual slit opening.
+
+    // 1. Cold blue-grey wash — institutional interior light.
+    var coldA = 0.10 * bAdj * fogFade;
+    if (coldA > 0.01) {
+      ctx.fillStyle = 'rgba(140, 160, 180, ' + coldA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // 2. Single iron bar at center (2px wide).
+    var barHalfW = 0.04 + 0.02 / Math.max(0.6, info.perpDist);
+    // Remap wallX to slit-local (0.35→0, 0.65→1)
+    var slitX = (wallX - 0.35) / 0.30;
+    var isBar = (slitX >= 0.5 - barHalfW && slitX <= 0.5 + barHalfW);
+
+    var iR = Math.round(60 * bAdj);
+    var iG = Math.round(62 * bAdj);
+    var iB = Math.round(68 * bAdj);
+    var fF4 = info.fogFactor;
+    if (fF4 > 0) {
+      iR = Math.round(iR * (1 - fF4) + info.fogColor.r * fF4);
+      iG = Math.round(iG * (1 - fF4) + info.fogColor.g * fF4);
+      iB = Math.round(iB * (1 - fF4) + info.fogColor.b * fF4);
+    }
+
+    if (isBar) {
+      ctx.fillStyle = 'rgb(' + iR + ',' + iG + ',' + iB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // 3. Iron frame — top/bottom 2px + edge bars where slit meets masonry.
+    var frR = Math.round(iR * 0.65);
+    var frG = Math.round(iG * 0.65);
+    var frB = Math.round(iB * 0.65);
+    ctx.fillStyle = 'rgb(' + frR + ',' + frG + ',' + frB + ')';
+    ctx.fillRect(col, gapStart, 1, Math.min(2, gapH));
+    if (gapH > 2) ctx.fillRect(col, gapStart + gapH - 2, 1, 2);
+
+    // Edge bars where slit meets masonry flanks (wallX ≈ 0.35 and ≈ 0.65).
+    if (slitX < 0.08 || slitX > 0.92) {
+      ctx.fillStyle = 'rgb(' + frR + ',' + frG + ',' + frB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+  }
+
   // ── Filler registration ─────────────────────────────────────────
   // This module currently loads in Layer 1 in index.html (alongside
   // bonfire-sprites / dump-truck-sprites), which is BEFORE the
@@ -570,6 +880,18 @@ var WindowSprites = (function () {
       Raycaster.registerFreeformGapFiller(
         'window_tavern_interior',
         _windowTavernInteriorFiller
+      );
+      Raycaster.registerFreeformGapFiller(
+        'window_shop_interior',
+        _windowShopFiller
+      );
+      Raycaster.registerFreeformGapFiller(
+        'window_bay_interior',
+        _windowBayFiller
+      );
+      Raycaster.registerFreeformGapFiller(
+        'window_slit_interior',
+        _windowSlitFiller
       );
       _registered = true;
     }
@@ -597,12 +919,33 @@ var WindowSprites = (function () {
     return _windowMullions[x + ',' + y] || null;
   }
 
+  /**
+   * Check if a ray hit on a window tile is from the exterior (street) side.
+   * Same contract as DoorSprites.isExteriorHit() — used by the raycaster's
+   * recess block to decide whether to apply the Wolfenstein inset.
+   * @param {number} x — tile grid X
+   * @param {number} y — tile grid Y
+   * @param {number} hitSide — 0 (X-axis hit) or 1 (Y-axis hit)
+   * @param {number} stepX — DDA step direction (-1 or +1)
+   * @param {number} stepY — DDA step direction (-1 or +1)
+   * @returns {boolean}
+   */
+  function isExteriorHit(x, y, hitSide, stepX, stepY) {
+    var extFace = getExteriorFace(x, y);
+    if (extFace < 0) return false;
+    var hitFace = (hitSide === 0)
+      ? (stepX > 0 ? 2 : 0)
+      : (stepY > 0 ? 3 : 1);
+    return hitFace === extFace;
+  }
+
   return Object.freeze({
     buildSprites:    buildSprites,
     animate:         animate,
     clearCache:      clearCache,
     getAnimatedX:    getAnimatedX,
     getExteriorFace: getExteriorFace,
+    isExteriorHit:   isExteriorHit,
     getWallTexture:  getWallTexture,
     getMullionColor: getMullionColor
   });

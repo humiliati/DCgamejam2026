@@ -1,8 +1,10 @@
 # Living Windows Roadmap — Believable Building Depth
 
-> **DOC-17** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-04-11
+> **DOC-17** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-04-11 | Updated: 2026-04-13
 >
-> Companion to `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` (Phase 4: WINDOW_TAVERN tile) and `COZY_INTERIORS_DESIGN.md`. Defines the contract that turns a raycast window from "a hole in the wall with a floating emoji" into a believable view into a lived-in interior — a three-layer composition of glass surface, interior vignette sprite, and a patron NPC on a short patrol path.
+> **Status**: Phase 0 ✅, Phase 1 ✅, **Phase 2 next** (Z-depth fix + 3 window types: SHOP/BAY/SLIT)
+>
+> Companion to `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` (Phase 4: WINDOW_TAVERN tile), `COZY_INTERIORS_DESIGN.md`, and `DOOR_ARCHITECTURE_ROADMAP.md` (recess tech adapted for window depth). Defines the contract that turns a raycast window from "a hole in the wall with a floating emoji" into a believable view into a lived-in interior — per-building window types with real depth, iron-bar commercial storefronts, protruding residential bays, and narrow fortress slits.
 
 ---
 
@@ -152,7 +154,97 @@ The `building` key resolves through a new `BuildingRegistry` (§5) that knows th
 
 For convenience a floor that has N window tiles pointing at the same building can omit `windowScenes` entirely and declare `windows: { '21,8': 'driftwood_inn', '23,8': 'driftwood_inn' }` — the registry supplies the rest.
 
-### 4.5 Rules
+### 4.5 Window Type Taxonomy
+
+Phase 0–1 shipped a single tile type (`WINDOW_TAVERN = 73`) used on every building. This creates two problems: (a) every shop/home/fortress has the same chunky colonial mullion grid, and (b) the z-bypass writes `renderDist` to the z-buffer so vignette emojis render on top of everything — they float in front of the glass instead of sitting on a table inside the building.
+
+The fix is a **window type per building archetype**, each with its own gap filler, freeform geometry, and z-depth contract. All three types share the same three-face architecture (glass exterior, transparent interior, masonry sides) and the same `windowScenes` data-driven hookup.
+
+#### WINDOW_SHOP = 77 (commercial storefront)
+
+The bazaar/tavern/shop window. Large plate glass panes divided by thin iron muntins — the texture is *mostly glass*. Think Victorian shopfront display case.
+
+```
+  ┌─────────────┐  ← 3.5 wall height
+  │  wall tex    │     hUpper: 2.35
+  │  ┌─┬─┬─┬─┐  │  ← glass slot top (1.15)
+  │  │ │ │ │ │  │     0.75-unit tall glass area
+  │  │ │ │ │ │  │     4 vertical panes, thin iron bars
+  │  └─┴─┴─┴─┘  │  ← glass slot bottom (0.40, waist-high sill)
+  │  wall tex    │     hLower: 0.40
+  └─────────────┘
+```
+
+- **Gap filler** (`window_shop_interior`): amber wash + 3 thin vertical iron bars at wallX ≈ 0.25, 0.50, 0.75 (1px each, iron grey `rgb(70,72,78)`). Horizontal top/bottom frame (iron). No mullion cross — the glass dominates. Optional parallax glint on each pane segment.
+- **Recess**: `recessD: 0.10` — slight inset so the glass sits behind the wall face, creating a shallow reveal. Less aggressive than DOOR_FACADE (0.25) but enough to read as "glass is behind the wall surface."
+- **Z-depth fix**: z-buffer writes `perpDist + 1.0` (interior tile depth) instead of `renderDist`. Vignette emoji competes with real geometry — renders behind glass, behind iron bars, in front of back wall.
+- **Buildings**: Coral Bazaar, Driftwood Inn, future shops on Lantern Row.
+- **Mullion material**: iron bars from `MULLION_STYLES.iron` (cold grey), regardless of building's door hardware tier. Commercial glass = iron frame always.
+
+#### WINDOW_BAY = 78 (residential bay window)
+
+The Gleaner's Home / private residence window. Projects **outward** from the wall face into the adjacent street tile. Uses the DOOR_FACADE recess tech *inverted*: instead of recessing 0.25 into the tile, the window box protrudes 0.20 outward. Beveled side jambs render in the building's wall texture, creating a visible shelf/sill.
+
+```
+        ┌───────┐         ← bay top (projects forward)
+       ╱│ glass │╲        ← beveled side jambs (wall texture)
+  ────╱ │  pane │ ╲────   ← wall face
+  wall   └───────┘  wall
+         ↑ 0.20 units forward of wall plane
+```
+
+- **Gap filler** (`window_bay_interior`): warm amber wash + single mullion cross (wood, `MULLION_STYLES.wood`). Classic 2×2 colonial pane grid — the cozy residential look. Frame lines in dark oak.
+- **Protrusion**: `recessD: -0.20` (negative = outward). The raycaster's recess block subtracts from perpDist instead of adding, so the glass face renders *closer* to the player than the surrounding wall. Jamb columns at the protrusion's lateral edges render in the building's `wallTexture`, creating the beveled side panels.
+- **Z-depth fix**: same `perpDist + 1.0` z-buffer write. Vignette (🕯️ candle) renders deep inside the bay.
+- **Buildings**: Gleaner's Home, future private residences.
+- **Sill**: hLower raised to 0.55 (higher than shop) — residential windows sit higher. hUpper: 2.50. Slot height 0.45 (smaller, cozier).
+
+#### WINDOW_SLIT = 79 (institutional fortress slit)
+
+The Storm Shelter / Watchman's Post / Dispatcher's window. Narrow vertical slot — a bunker peephole. Reads as "this building is fortified, you're not getting in through the window."
+
+```
+  ┌─────────────┐  ← 3.5 wall height
+  │  wall tex    │     hUpper: 1.80
+  │    ┌───┐     │  ← slit top (1.70)
+  │    │   │     │     1.20-unit tall, 0.30-unit wide
+  │    │   │     │     single vertical iron bar at center
+  │    └───┘     │  ← slit bottom (0.50)
+  │  wall tex    │     hLower: 0.50
+  └─────────────┘
+```
+
+- **Gap filler** (`window_slit_interior`): cold blue-grey wash (`rgba(140,160,180, 0.10)`). Single vertical iron bar at wallX ≈ 0.50 (2px wide). No horizontal mullion. Top/bottom iron frame. Minimal glow — cold institutional interior.
+- **Narrow slot**: the freeform cavity occupies only the center 30% of the tile width. The filler paints opaque masonry on wallX < 0.35 and wallX > 0.65, leaving the narrow center as the glass opening. The masonry bands use the building's `wallTexture`.
+- **Recess**: `recessD: 0.15` — moderate inset. The slit is recessed into thick fortress walls.
+- **Z-depth fix**: same pattern. Vignette (🔦 or 🏮) renders deep inside, barely visible through the narrow slot.
+- **Buildings**: Storm Shelter, Watchman's Post, Dispatcher's Office.
+
+#### Z-Depth Fix (applies to all window types)
+
+The current z-bypass in `raycaster.js` line ~1302 writes `renderDist` to `_zBuffer[col]` for all freeform tiles. This is correct for DOOR_FACADE (need to see through to interior) and ARCH_DOORWAY (open passageway), but wrong for windows — the glass is a *partial* barrier, and content behind it should have real depth.
+
+**Fix**: introduce a `zBypassMode` field on freeform configs:
+
+| Mode | z-buffer write | Use case |
+|---|---|---|
+| `'full'` | `renderDist` | DOOR_FACADE, ARCH_DOORWAY, PORTHOLE — open passageways |
+| `'depth'` | `perpDist + 1.0` | All window types — content behind glass has depth |
+| `'solid'` | `perpDist` | Canopy, roof — no see-through |
+
+The raycaster reads `zBypassMode` from the freeform config instead of unconditionally writing `renderDist`. Default is `'full'` for backward compatibility.
+
+#### Texture IDs (new in TextureAtlas)
+
+| ID | Size | Description |
+|---|---|---|
+| `window_shop_iron` | 64×64 | Iron bar grid: 3 vertical bars + top/bottom frame, glass fill between |
+| `window_slit_iron` | 64×64 | Single vertical bar + narrow frame, heavy masonry flanks |
+| `window_bay_wood` | 64×64 | Oak mullion cross + 4-pane grid, warm wood frame |
+
+These are optional — the gap fillers can paint procedurally (as WINDOW_TAVERN does now). But pre-rendered textures are cheaper per-column than per-pixel filler math, so we may migrate the filler to texture sampling in a polish pass.
+
+### 4.7 Rules
 
 **Public buildings** (Inn, Bazaar, Dispatcher's Office, Soup Kitchen, Shop, Bar):
 - Always have a vignette emoji at the interior-adjacent tile while the building is OPEN.
@@ -168,7 +260,7 @@ For convenience a floor that has N window tiles pointing at the same building ca
 - May have multiple window scenes with different vignettes (counter, back room, upstairs window).
 - Patron patrol paths can overlap (guards pacing, clerks at desks).
 
-### 4.6 Lifecycle hook
+### 4.8 Lifecycle hook
 
 Game calls `WindowScenes.refresh(floorId, hourOfDay)` on:
 - Floor arrive
@@ -326,15 +418,90 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 
 **Acceptance:** The 🍺 renders visually *behind* the window mullion grid, with a clear depth gap between the glass and the glyph. The player reads it as "beer mug sitting on a table inside the tavern." Window mullions on the Bazaar are warm bronze, on the Inn warm bronze, on institutional buildings cold iron.
 
-### Phase 2 — Patron NPCs (1 day)
+### Phase 2 — Z-Depth Fix + Window Type Foundation (HIGH PRIORITY)
+
+The single most impactful change: stop writing `renderDist` to the z-buffer for window tiles. This is why vignette emojis render on top of everything — they have no depth competition with the glass.
+
+**Work**:
+1. Add `zBypassMode` field to freeform tile configs in `SpatialContract`:
+   - `'full'` (default) = `renderDist` → DOOR_FACADE, ARCH_DOORWAY, PORTHOLE
+   - `'depth'` = `perpDist + 1.0` → all window tiles (vignette has real depth)
+   - `'solid'` = `perpDist` → canopy, roof tiles
+2. Raycaster reads `zBypassMode` from the freeform config instead of the blanket `_zBypass` boolean. One conditional change in the z-buffer write block (~line 1302).
+3. Set `zBypassMode: 'depth'` on WINDOW_TAVERN (73) freeform config. Existing windows immediately get correct depth.
+4. Register three new tile IDs in `tiles.js`:
+   - `WINDOW_SHOP: 77` — commercial plate glass + iron bars
+   - `WINDOW_BAY: 78` — residential protruding bay window
+   - `WINDOW_SLIT: 79` — institutional fortress slit
+5. Add `isFreeform()` entries for 77/78/79 in tiles.js.
+6. Add `SpatialContract` freeform configs for each new tile type (see §4.5 for geometry).
+
+**Acceptance:** The 🍺 in the Driftwood Inn window renders *behind* the mullion grid and *behind* the glass wash — visible through the window but clearly inside the building, not floating in front. Walking parallel to the facade produces visible parallax between glass surface and vignette depth.
+
+### Phase 2A — WINDOW_SHOP gap filler + stamp-out (1 day)
+
+The commercial storefront window. Replaces WINDOW_TAVERN on Coral Bazaar and Driftwood Inn.
+
+**Work**:
+1. Write `_windowShopFiller()` in `window-sprites.js`:
+   - Amber wash (warmer, higher opacity than TAVERN — this is a lit display case).
+   - 3 thin vertical iron bars at wallX ≈ 0.25, 0.50, 0.75 (1px each, iron grey).
+   - Horizontal top/bottom iron frame (2px).
+   - No mullion cross — the glass dominates. The vignette emoji is the star.
+   - Parallax glint on each of the 4 pane segments.
+2. Register filler as `'window_shop_interior'`.
+3. SpatialContract config: `recessD: 0.10` (slight inset — glass sits behind wall face).
+4. Generate `window_shop_iron` texture in TextureAtlas (optional — filler can paint procedurally first, migrate to texture sampling in polish).
+5. Convert Promenade windows:
+   - Coral Bazaar (9,8) and (11,8): WINDOW_TAVERN → WINDOW_SHOP
+   - Driftwood Inn (21,8) and (23,8): WINDOW_TAVERN → WINDOW_SHOP
+6. Update `windowScenes` to reference new tile type (scene data is tile-agnostic — just need filler dispatch).
+
+**Acceptance:** Coral Bazaar windows show 🃏 playing cards through large plate-glass panes with thin iron bars. The bars are visually minimal — the window reads as "glass display case" not "jail cell." The glass is subtly recessed behind the brick facade.
+
+### Phase 2B — WINDOW_BAY gap filler + Gleaner's Home (1 day)
+
+The residential bay window. Projects outward from the wall into the street tile.
+
+**Work**:
+1. Write `_windowBayFiller()` in `window-sprites.js`:
+   - Warm amber wash + classic 2×2 mullion cross (wood, dark oak).
+   - Frame in building's `wallTexture` color.
+2. Implement negative `recessD` in raycaster recess block:
+   - Current code: `_rPD = perpDist + _recessD / rayComponent` (positive = deeper).
+   - Negative `recessD` makes `_rPD < perpDist` — glass face renders closer to player.
+   - Jamb columns at lateral edges use the building's `wallTexture` → beveled side panels.
+3. SpatialContract config: `recessD: -0.20`, `hLower: 0.55`, `hUpper: 2.50` (smaller, higher slot).
+4. Place WINDOW_BAY tiles on Gleaner's Home facade (Floor 1).
+5. Add `windowScenes` for Gleaner's Home: vignette `home_candle` (🕯️), interiorStep pointing into the home footprint.
+
+**Acceptance:** Standing on the Promenade looking at Gleaner's Home, the bay window *protrudes* from the building face. The beveled side panels are visible in the building's dark wood texture. A warm candle glow is visible deep inside. The bay casts a subtle shadow line where it meets the wall.
+
+### Phase 2C — WINDOW_SLIT gap filler + institutional buildings (half day)
+
+The fortress slit. Narrow, cold, minimal.
+
+**Work**:
+1. Write `_windowSlitFiller()` in `window-sprites.js`:
+   - Cold blue-grey wash (institutional interior light).
+   - Opaque masonry on wallX < 0.35 and wallX > 0.65 (narrows the opening).
+   - Single vertical iron bar at center (2px).
+   - Iron top/bottom frame.
+2. SpatialContract config: `recessD: 0.15`, `hLower: 0.50`, `hUpper: 1.80` (tall narrow slit).
+3. Place WINDOW_SLIT tiles on Storm Shelter facade (Floor 1). If Storm Shelter has no windows currently, add 1–2 slits flanking the door.
+4. Reserve WINDOW_SLIT for Lantern Row institutional buildings (Dispatcher's, Watchman's) when those floors are built out.
+
+**Acceptance:** The Storm Shelter windows read as narrow fortress slits — a dim glow barely visible through thick walls. The contrast with the Bazaar's plate-glass storefronts sells the building's defensive character.
+
+### Phase 3 — Patron NPCs (1 day)
 - Add `engine/window-patron.js` — minimal patrol sprite with step-lerp.
 - Register 3-4 patron archetypes (tavern patron, bazaar merchant, dispatch clerk, home resident).
 - Patron definitions inline in `windowScenes` for jam scope; promote to a data file post-jam.
 - Hook into game render loop alongside WindowSprites.
 
-**Acceptance:** Standing outside the Driftwood Inn, the player sees a patron walking between two tiles inside the building, clearly visible through the window as they cross the mullion grid.
+**Acceptance:** Standing outside the Driftwood Inn, the player sees a patron walking between two tiles inside the building, clearly visible through the iron-bar glass as they cross behind the panes.
 
-### Phase 3 — Business hours + open/closed state (half day)
+### Phase 4 — Business hours + open/closed state (half day)
 - Extend BuildingRegistry with `defaultHours` + `isOpen(id, hour, flags)`.
 - Hook `WindowScenes.refresh()` into DayCycle hour rollover.
 - Closed-state vignette swap + patron despawn.
@@ -342,11 +509,12 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 
 **Acceptance:** The Inn windows are bright with a visible patron during the day, dim and empty at night (or vice versa for Gleaner's Home). Curfew closes all public buildings simultaneously.
 
-### Phase 4 — Scale + polish (stretch)
+### Phase 5 — Scale + polish (stretch)
 - Multi-window buildings with different vignettes per window (Watchman's Post: counter window + back room window).
 - Per-window lighting tint (warm tavern vs. cool Dispatcher vs. green alchemist).
 - Patron path variation with random dwell times.
 - Audio: low murmur from public buildings at open hours when the player is within 3 tiles of a window.
+- Migrate gap fillers to texture sampling (pre-rendered 64×64 textures) for per-column performance.
 
 ---
 
@@ -362,13 +530,23 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 | `engine/building-registry.js` | **new** — Layer 0 frozen building records (6 buildings), `VIGNETTES` table, `MULLION_STYLES` table, `isOpen()` with wrap-around hours |
 | `index.html` | `<script src="engine/building-registry.js">` at Layer 0 |
 
-### Remaining (Phases 2–4)
+### Remaining (Phase 2 — Z-Depth + Window Types)
+| File | Change |
+|---|---|
+| `engine/tiles.js` | Add `WINDOW_SHOP: 77`, `WINDOW_BAY: 78`, `WINDOW_SLIT: 79`; extend `isFreeform()` |
+| `engine/spatial-contract.js` | Freeform configs for 77/78/79 with `recessD` + `zBypassMode: 'depth'`; update tile 73 config with `zBypassMode: 'depth'` |
+| `engine/raycaster.js` | Replace blanket `_zBypass` z-buffer write with `zBypassMode`-driven conditional (~line 1302); support negative `recessD` for bay window protrusion |
+| `engine/window-sprites.js` | Three new gap fillers: `_windowShopFiller`, `_windowBayFiller`, `_windowSlitFiller`; lazy registration for all three |
+| `engine/texture-atlas.js` | Optional: `window_shop_iron`, `window_slit_iron`, `window_bay_wood` textures (64×64) |
+| `engine/floor-manager.js` | Convert Promenade WINDOW_TAVERN tiles (73→77); add WINDOW_BAY to Gleaner's Home; add WINDOW_SLIT to Storm Shelter; update `windowScenes` + `windowFaces` |
+| `engine/building-registry.js` | Add `windowType` field per building record (`'shop'`, `'bay'`, `'slit'`) |
+
+### Remaining (Phases 3–5)
 | File | Change |
 |---|---|
 | `engine/window-patron.js` | **new** — patrol-sprite driver for patrons |
 | `engine/window-scenes.js` | **new** (or fold into window-sprites) — `refresh()` / `clear()` / `isOpen()` |
 | `engine/game.js` | wire `WindowScenes.refresh()` into floor arrive + DayCycle hour tick |
-| `engine/raycaster.js` | verify z-bypass handles sprites one tile *behind* a freeform cavity (spot-check, probably no change) |
 | `index.html` | `<script>` tags for window-scenes (L3) → window-patron (L3) |
 | `docs/COZY_INTERIORS_DESIGN.md` | cross-reference this doc from §6 (Per-Building Interaction Inventory) |
 | `docs/RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` | Phase 4 "open items" links here |
@@ -395,6 +573,8 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 ## 12. Cross-references
 
 - `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` §4 Phase 4 — the tile + geometry + gap filler foundation this doc extends
+- `DOOR_ARCHITECTURE_ROADMAP.md` — recess tech (Wolfenstein thin-wall offset) adapted for WINDOW_SHOP inset and WINDOW_BAY protrusion; Phase 6A double-door UV split informs future paired-window spans
 - `COZY_INTERIORS_DESIGN.md` — the Safety Contract this is the *outside-looking-in* version of
 - `NPC_SYSTEM_ROADMAP.md` — main NPC system; window patrons are intentionally **not** part of it (lightweight billboards only)
 - `LIVING_INFRASTRUCTURE_BLOCKOUT.md` — building inventory that drives BuildingRegistry records
+- `BLOCKOUT_REFRESH_PLAN.docx` §6 — window-door consistency rules; mullion ↔ hardware tier alignment

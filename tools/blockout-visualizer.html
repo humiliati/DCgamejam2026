@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dungeon Gleaner — Blockout Visualizer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d0d0d;
+  color: #ccc;
+  font-family: 'Consolas', 'Monaco', monospace;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#toolbar label { font-size: 11px; color: #888; }
+#toolbar select, #toolbar button {
+  background: #222;
+  color: #ddd;
+  border: 1px solid #444;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+#toolbar select:hover, #toolbar button:hover { border-color: #777; }
+#toolbar button.active { background: #2a6a2a; border-color: #4a4; }
+#toolbar button.edit-active { background: #6a2a2a; border-color: #a44; }
+#toolbar button.tool-active { background: #4a3a6a; border-color: #86c; }
+#toolbar button.copy-btn { background: #2a4a6a; border-color: #49a; }
+#toolbar button.copy-btn:hover { background: #3a5a7a; }
+#toolbar button.copy-btn.flash { background: #2a6a2a; border-color: #4a4; transition: background 0.1s; }
+#toolbar .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+#toolbar .spacer { flex: 1; }
+#toolbar .title { font-size: 13px; font-weight: bold; color: #e8c547; letter-spacing: 1px; }
+#zoom-display { font-size: 10px; color: #666; min-width: 40px; text-align: center; }
+#edit-count { font-size: 10px; color: #e86a6a; display: none; }
+
+/* ── Resize bar ──────────────────────────────────────────── */
+#resize-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  font-size: 10px;
+  color: #888;
+  flex-shrink: 0;
+}
+#resize-bar button {
+  background: #222; color: #ddd; border: 1px solid #444;
+  padding: 1px 7px; font-family: inherit; font-size: 11px; cursor: pointer;
+  min-width: 22px;
+}
+#resize-bar button:hover { border-color: #777; }
+#resize-bar .rsep { width: 1px; height: 16px; background: #444; margin: 0 4px; }
+#resize-bar label { color: #999; font-size: 10px; }
+#resize-bar .dim-display { color: #e8c547; font-weight: bold; min-width: 60px; text-align: center; }
+
+/* ── Canvas area ─────────────────────────────────────────── */
+#canvas-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: crosshair;
+}
+canvas { display: block; }
+
+/* ── Tooltip ─────────────────────────────────────────────── */
+#tooltip {
+  position: absolute;
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+  display: none;
+  z-index: 10;
+  max-width: 280px;
+  white-space: pre-line;
+}
+#tooltip .tt-tile { color: #e8c547; font-weight: bold; }
+#tooltip .tt-coord { color: #888; }
+#tooltip .tt-prop { color: #6ab0e8; }
+#tooltip .tt-door { color: #e86a6a; }
+#tooltip .tt-edit { color: #e86a6a; font-style: italic; }
+
+/* ── Legend panel ─────────────────────────────────────────── */
+#legend-panel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #1a1a1acc;
+  border: 1px solid #333;
+  padding: 8px 12px;
+  font-size: 10px;
+  line-height: 1.8;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  z-index: 5;
+  display: none;
+}
+#legend-panel .legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+#legend-panel .legend-row:hover { background: #ffffff11; }
+#legend-panel .legend-row.selected { background: #e8c54722; outline: 1px solid #e8c547; }
+#legend-panel .legend-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #555;
+  flex-shrink: 0;
+}
+
+/* ── Tile picker (edit mode) ─────────────────────────────── */
+#tile-picker {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  padding: 6px 10px;
+  display: none;
+  z-index: 6;
+  max-width: 90vw;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+#tile-picker .tp-row { display: inline-flex; gap: 2px; align-items: center; margin-right: 10px; }
+#tile-picker .tp-tile {
+  width: 22px; height: 22px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+#tile-picker .tp-tile:hover { border-color: #fff; }
+#tile-picker .tp-tile.selected { border-color: #e8c547; box-shadow: 0 0 6px #e8c547; }
+#tile-picker .tp-tile .tp-label {
+  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+  font-size: 8px; color: #888; white-space: nowrap; pointer-events: none; display: none;
+}
+#tile-picker .tp-tile:hover .tp-label { display: block; }
+#tile-picker .tp-cat { font-size: 9px; color: #666; margin-right: 4px; writing-mode: vertical-rl; text-orientation: mixed; }
+
+/* ── Lasso selection ─────────────────────────────────────── */
+#lasso-rect {
+  position: absolute;
+  border: 2px dashed #e8c547;
+  background: #e8c54711;
+  pointer-events: none;
+  z-index: 4;
+  display: none;
+}
+
+/* ── Clipboard toast ─────────────────────────────────────── */
+#copy-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #2a6a2aee;
+  color: #fff;
+  padding: 12px 24px;
+  font-size: 14px;
+  border-radius: 6px;
+  z-index: 100;
+  display: none;
+  pointer-events: none;
+}
+
+/* ── Info bar ────────────────────────────────────────────── */
+#info-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 16px;
+  background: #1a1a1a;
+  border-top: 1px solid #333;
+  font-size: 11px;
+  color: #666;
+  flex-shrink: 0;
+}
+#info-bar .ib-label { color: #888; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title">BLOCKOUT VISUALIZER</span>
+  <div class="sep"></div>
+  <label>Floor:</label>
+  <select id="floor-select"></select>
+  <div class="sep"></div>
+  <button id="btn-edit">Edit</button>
+  <button id="btn-lasso" style="display:none" title="Lasso select (L) — drag to select, then drag selection to move">Lasso</button>
+  <button id="btn-undo" style="display:none">Undo</button>
+  <button id="btn-revert" style="display:none">Revert</button>
+  <span id="edit-count"></span>
+  <div class="sep"></div>
+  <button id="btn-copy-full" class="copy-btn">Copy Full</button>
+  <button id="btn-copy-diff" class="copy-btn">Copy Diff</button>
+  <div class="spacer"></div>
+  <button id="btn-legend">Legend</button>
+  <button id="btn-rooms" class="active">Rooms</button>
+  <button id="btn-doors" class="active">Doors</button>
+  <button id="btn-grid">Grid</button>
+  <button id="btn-ids">IDs</button>
+  <span id="zoom-display">1.0x</span>
+</div>
+
+<div id="resize-bar">
+  <label>Resize:</label>
+  <span>Cols</span>
+  <button id="btn-col-shrink-l" title="Remove column from left">-L</button>
+  <button id="btn-col-add-l" title="Add column to left">+L</button>
+  <span class="dim-display" id="dim-display">50 x 36</span>
+  <button id="btn-col-add-r" title="Add column to right">+R</button>
+  <button id="btn-col-shrink-r" title="Remove column from right">-R</button>
+  <span class="rsep"></span>
+  <span>Rows</span>
+  <button id="btn-row-shrink-t" title="Remove row from top">-T</button>
+  <button id="btn-row-add-t" title="Add row to top">+T</button>
+  <span>&middot;</span>
+  <button id="btn-row-add-b" title="Add row to bottom">+B</button>
+  <button id="btn-row-shrink-b" title="Remove row from bottom">-B</button>
+  <span class="rsep"></span>
+  <label>Fill tile:</label>
+  <select id="resize-fill-tile"></select>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="cv"></canvas>
+  <div id="tooltip"></div>
+  <div id="legend-panel"></div>
+  <div id="tile-picker"></div>
+  <div id="lasso-rect"></div>
+</div>
+
+<div id="copy-toast"></div>
+
+<div id="info-bar">
+  <span><span class="ib-label">Cursor:</span> <span id="ib-pos">--</span></span>
+  <span><span class="ib-label">Tile:</span> <span id="ib-tile">--</span></span>
+  <span><span class="ib-label">Grid:</span> <span id="ib-grid">--</span></span>
+  <span><span class="ib-label">Floor:</span> <span id="ib-floor">--</span></span>
+  <span><span class="ib-label">Paint:</span> <span id="ib-paint">--</span></span>
+  <span><span class="ib-label">Tool:</span> <span id="ib-tool">Paint</span></span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  TILE SCHEMA — all 77 tiles
+// ═══════════════════════════════════════════════════════════════
+var TILE_SCHEMA = {
+  0:  { name: 'EMPTY',           color: '#1a1a1a', cat: 'floor',     walk: true,  opq: false, glyph: '.' },
+  1:  { name: 'WALL',            color: '#6b5b4f', cat: 'structure', walk: false, opq: true,  glyph: '#' },
+  2:  { name: 'DOOR',            color: '#d4a44a', cat: 'door',      walk: true,  opq: false, glyph: 'D' },
+  3:  { name: 'DOOR_BACK',       color: '#b8863a', cat: 'door',      walk: true,  opq: false, glyph: 'B' },
+  4:  { name: 'DOOR_EXIT',       color: '#c97a30', cat: 'door',      walk: true,  opq: false, glyph: 'X' },
+  5:  { name: 'STAIRS_DN',       color: '#5577cc', cat: 'door',      walk: true,  opq: false, glyph: 'v' },
+  6:  { name: 'STAIRS_UP',       color: '#77aaee', cat: 'door',      walk: true,  opq: false, glyph: '^' },
+  7:  { name: 'CHEST',           color: '#cc9933', cat: 'interact',  walk: false, opq: true,  glyph: 'C' },
+  8:  { name: 'TRAP',            color: '#cc3333', cat: 'hazard',    walk: true,  opq: false, glyph: 'T' },
+  9:  { name: 'WATER',           color: '#2255aa', cat: 'terrain',   walk: true,  opq: false, glyph: '~' },
+  10: { name: 'PILLAR',          color: '#888888', cat: 'structure', walk: false, opq: true,  glyph: 'O' },
+  11: { name: 'BREAKABLE',       color: '#8b6b3a', cat: 'structure', walk: false, opq: true,  glyph: '%' },
+  12: { name: 'SHOP',            color: '#44bb88', cat: 'interact',  walk: true,  opq: false, glyph: '$' },
+  13: { name: 'SPAWN',           color: '#ff44ff', cat: 'meta',      walk: true,  opq: false, glyph: 'S' },
+  14: { name: 'BOSS_DOOR',       color: '#ff2222', cat: 'door',      walk: true,  opq: false, glyph: '!' },
+  15: { name: 'FIRE',            color: '#ff6622', cat: 'hazard',    walk: true,  opq: false, glyph: 'f' },
+  16: { name: 'SPIKES',          color: '#cc4444', cat: 'hazard',    walk: true,  opq: false, glyph: 's' },
+  17: { name: 'POISON',          color: '#44cc44', cat: 'hazard',    walk: true,  opq: false, glyph: 'p' },
+  18: { name: 'BONFIRE',         color: '#ff8800', cat: 'interact',  walk: true,  opq: true,  glyph: '*' },
+  19: { name: 'CORPSE',          color: '#775544', cat: 'interact',  walk: true,  opq: false, glyph: 'c' },
+  20: { name: 'COLLECTIBLE',     color: '#ffdd44', cat: 'interact',  walk: true,  opq: false, glyph: 'o' },
+  21: { name: 'TREE',            color: '#2d6b2d', cat: 'nature',    walk: false, opq: true,  glyph: 'Y' },
+  22: { name: 'SHRUB',           color: '#4a8a3a', cat: 'nature',    walk: false, opq: true,  glyph: 'h' },
+  23: { name: 'PUZZLE',          color: '#aa66cc', cat: 'interact',  walk: true,  opq: false, glyph: '?' },
+  24: { name: 'LOCKED_DOOR',     color: '#aa2222', cat: 'door',      walk: false, opq: true,  glyph: 'L' },
+  25: { name: 'BOOKSHELF',       color: '#7a5533', cat: 'furnish',   walk: false, opq: true,  glyph: 'b' },
+  26: { name: 'BAR_COUNTER',     color: '#5a4a3a', cat: 'furnish',   walk: false, opq: true,  glyph: '=' },
+  27: { name: 'BED',             color: '#6a4a6a', cat: 'furnish',   walk: false, opq: true,  glyph: 'B' },
+  28: { name: 'TABLE',           color: '#7a6a4a', cat: 'furnish',   walk: false, opq: true,  glyph: 't' },
+  29: { name: 'HEARTH',          color: '#cc5500', cat: 'freeform',  walk: false, opq: true,  glyph: 'H' },
+  30: { name: 'TORCH_LIT',       color: '#ffaa22', cat: 'light',     walk: false, opq: true,  glyph: 'i' },
+  31: { name: 'TORCH_UNLIT',     color: '#555533', cat: 'light',     walk: false, opq: true,  glyph: 'j' },
+  32: { name: 'ROAD',            color: '#7a7a6a', cat: 'terrain',   walk: true,  opq: false, glyph: '=' },
+  33: { name: 'PATH',            color: '#9a8a6a', cat: 'terrain',   walk: true,  opq: false, glyph: ':' },
+  34: { name: 'GRASS',           color: '#3a7a3a', cat: 'terrain',   walk: true,  opq: false, glyph: ',' },
+  35: { name: 'FENCE',           color: '#8a7a5a', cat: 'structure', walk: false, opq: true,  glyph: '|' },
+  36: { name: 'TERMINAL',        color: '#33aa55', cat: 'interact',  walk: false, opq: true,  glyph: '>' },
+  37: { name: 'MAILBOX',         color: '#5577bb', cat: 'interact',  walk: false, opq: true,  glyph: 'M' },
+  38: { name: 'DUMP_TRUCK',      color: '#667788', cat: 'freeform',  walk: false, opq: true,  glyph: 'K' },
+  39: { name: 'DETRITUS',        color: '#6a5a4a', cat: 'terrain',   walk: true,  opq: false, glyph: '~' },
+  40: { name: 'WELL',            color: '#4466aa', cat: 'infra',     walk: false, opq: true,  glyph: 'W' },
+  41: { name: 'BENCH',           color: '#7a6a4a', cat: 'infra',     walk: false, opq: true,  glyph: '_' },
+  42: { name: 'NOTICE_BOARD',    color: '#aa8844', cat: 'infra',     walk: false, opq: true,  glyph: 'N' },
+  43: { name: 'ANVIL',           color: '#555566', cat: 'infra',     walk: false, opq: true,  glyph: 'A' },
+  44: { name: 'BARREL',          color: '#7a5533', cat: 'infra',     walk: false, opq: true,  glyph: 'Q' },
+  45: { name: 'CHARGING_CRADLE', color: '#5588aa', cat: 'infra',     walk: false, opq: true,  glyph: 'Z' },
+  46: { name: 'SWITCHBOARD',     color: '#887744', cat: 'infra',     walk: false, opq: true,  glyph: '~' },
+  47: { name: 'SOUP_KITCHEN',    color: '#aa6633', cat: 'infra',     walk: false, opq: true,  glyph: 'U' },
+  48: { name: 'COT',             color: '#6a5a5a', cat: 'infra',     walk: false, opq: true,  glyph: '-' },
+  49: { name: 'ROOST',           color: '#5a4a3a', cat: 'creature',  walk: true,  opq: false, glyph: 'r' },
+  50: { name: 'NEST',            color: '#6a5a3a', cat: 'creature',  walk: false, opq: true,  glyph: 'n' },
+  51: { name: 'DEN',             color: '#5a4a4a', cat: 'creature',  walk: false, opq: true,  glyph: 'd' },
+  52: { name: 'FUNGAL_PATCH',    color: '#44aa77', cat: 'creature',  walk: true,  opq: false, glyph: 'g' },
+  53: { name: 'ENERGY_CONDUIT',  color: '#66aacc', cat: 'creature',  walk: false, opq: true,  glyph: 'E' },
+  54: { name: 'TERRITORIAL_MARK',color: '#aa5533', cat: 'creature',  walk: true,  opq: false, glyph: 'x' },
+  55: { name: 'STRETCHER_DOCK',  color: '#887766', cat: 'economy',   walk: false, opq: true,  glyph: '+' },
+  56: { name: 'TRIAGE_BED',      color: '#778877', cat: 'economy',   walk: false, opq: true,  glyph: '+' },
+  57: { name: 'MORGUE_TABLE',    color: '#667766', cat: 'economy',   walk: false, opq: true,  glyph: '+' },
+  58: { name: 'INCINERATOR',     color: '#884422', cat: 'economy',   walk: false, opq: true,  glyph: 'I' },
+  59: { name: 'REFRIG_LOCKER',   color: '#668899', cat: 'economy',   walk: false, opq: true,  glyph: 'R' },
+  60: { name: 'ROOF_EAVE_L',     color: '#8b4513', cat: 'floating',  walk: true,  opq: true,  glyph: '/' },
+  61: { name: 'ROOF_SLOPE_L',    color: '#9b5523', cat: 'floating',  walk: true,  opq: true,  glyph: '/' },
+  62: { name: 'ROOF_PEAK',       color: '#ab6533', cat: 'floating',  walk: true,  opq: true,  glyph: '^' },
+  63: { name: 'ROOF_SLOPE_R',    color: '#9b5523', cat: 'floating',  walk: true,  opq: true,  glyph: '\\' },
+  64: { name: 'ROOF_EAVE_R',     color: '#8b4513', cat: 'floating',  walk: true,  opq: true,  glyph: '\\' },
+  65: { name: 'CANOPY',          color: '#1a5a1a', cat: 'floating',  walk: true,  opq: true,  glyph: '@' },
+  66: { name: 'CANOPY_MOSS',     color: '#2a6a1a', cat: 'floating',  walk: true,  opq: true,  glyph: '@' },
+  67: { name: 'ROOF_CRENEL',     color: '#7a6a5a', cat: 'floating',  walk: true,  opq: true,  glyph: 'W' },
+  68: { name: 'PERGOLA',         color: '#6a5a3a', cat: 'floating',  walk: true,  opq: true,  glyph: '=' },
+  69: { name: 'CITY_BONFIRE',    color: '#ee7711', cat: 'freeform',  walk: false, opq: true,  glyph: '*' },
+  70: { name: 'PERGOLA_BEAM',    color: '#8a7a4a', cat: 'freeform',  walk: true,  opq: true,  glyph: '-' },
+  71: { name: 'ARCH_DOORWAY',    color: '#d4a44a', cat: 'freeform',  walk: true,  opq: true,  glyph: 'A' },
+  72: { name: 'PORTHOLE',        color: '#aaaacc', cat: 'freeform',  walk: true,  opq: true,  glyph: 'O' },
+  73: { name: 'WINDOW_TAVERN',   color: '#5599bb', cat: 'freeform',  walk: false, opq: true,  glyph: 'W' },
+  74: { name: 'DOOR_FACADE',     color: '#bb8833', cat: 'freeform',  walk: true,  opq: true,  glyph: 'F' },
+  75: { name: 'TRAPDOOR_DN',     color: '#5566aa', cat: 'freeform',  walk: true,  opq: true,  glyph: 'v' },
+  76: { name: 'TRAPDOOR_UP',     color: '#7788cc', cat: 'freeform',  walk: true,  opq: true,  glyph: '^' }
+};
+
+var CAT_ORDER = ['floor','terrain','nature','structure','door','freeform','floating','furnish','interact','hazard','light','infra','creature','economy','meta'];
+var CAT_LABELS = {
+  floor:'Floor', structure:'Structure', door:'Doors/Stairs', terrain:'Terrain',
+  nature:'Nature', furnish:'Furnishing', interact:'Interactive', hazard:'Hazard',
+  light:'Lighting', freeform:'Freeform', floating:'Floating/Roof', infra:'Infrastructure',
+  creature:'Creature', economy:'Economy', meta:'Meta'
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  FLOOR DATA LOADER
+// ═══════════════════════════════════════════════════════════════
+var FLOORS = {};
+var currentFloor = null;
+var currentFloorId = null;
+
+async function loadAllFloors() {
+  try {
+    var resp = await fetch('floor-data.json');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    FLOORS = data.floors || {};
+    console.log('Loaded ' + data.floorCount + ' floors (generated ' + data.generated + ')');
+  } catch (e) { console.warn('Could not load floor-data.json:', e); }
+  if (Object.keys(FLOORS).length > 0) populateFloorSelect();
+  else {
+    var wrap = document.getElementById('canvas-wrap');
+    var n = document.createElement('div');
+    n.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#e8c547;font-size:14px;line-height:2;';
+    n.innerHTML = '<strong>floor-data.json not found.</strong><br>Run: <code style="background:#222;padding:4px 12px;color:#6ab0e8">node tools/extract-floors.js</code><br>Then: <code style="background:#222;padding:4px 12px;color:#6ab0e8">python -m http.server 8080</code>';
+    wrap.appendChild(n);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EDIT STATE
+// ═══════════════════════════════════════════════════════════════
+var EDIT = {
+  active: false,
+  paintTile: 1,
+  originalGrid: null,
+  undoStack: [],        // [{type:'paint',x,y,oldTile,newTile}, {type:'resize',...}, {type:'lasso',...}]
+  dirtyCount: 0,
+  painting: false,
+  tool: 'paint'         // 'paint' | 'lasso'
+};
+
+// ── Lasso state ──
+var LASSO = {
+  selecting: false,     // currently dragging a selection rect
+  startGX: 0, startGY: 0,
+  sel: null,            // {x,y,w,h} grid-coords of selected region, or null
+  floating: null,       // {tiles:[][], origX, origY, curX, curY} — lifted tiles being dragged
+  dragging: false,
+  dragOffX: 0, dragOffY: 0
+};
+
+function snapshotGrid(grid) {
+  return grid.map(function(row) { return row.slice(); });
+}
+
+function countDirty() {
+  if (!EDIT.originalGrid || !currentFloor) return 0;
+  var count = 0, orig = EDIT.originalGrid, grid = currentFloor.grid;
+  for (var y = 0; y < grid.length; y++) {
+    for (var x = 0; x < grid[y].length; x++) {
+      if (grid[y][x] !== (orig[y] ? orig[y][x] : -1)) count++;
+    }
+  }
+  // Also count dimension changes
+  if (grid.length !== orig.length) count += Math.abs(grid.length - orig.length) * (grid[0] ? grid[0].length : 0);
+  if (grid[0] && orig[0] && grid[0].length !== orig[0].length) count += Math.abs(grid[0].length - orig[0].length) * grid.length;
+  return count;
+}
+
+function updateEditUI() {
+  EDIT.dirtyCount = countDirty();
+  var el = document.getElementById('edit-count');
+  if (EDIT.dirtyCount > 0) { el.textContent = EDIT.dirtyCount + ' changed'; el.style.display = 'inline'; }
+  else { el.style.display = 'none'; }
+
+  document.getElementById('btn-undo').style.display = EDIT.active ? 'inline-block' : 'none';
+  document.getElementById('btn-lasso').style.display = EDIT.active ? 'inline-block' : 'none';
+  document.getElementById('btn-revert').style.display = (EDIT.active && EDIT.dirtyCount > 0) ? 'inline-block' : 'none';
+  document.getElementById('resize-bar').style.display = EDIT.active ? 'flex' : 'none';
+
+  var ps = TILE_SCHEMA[EDIT.paintTile];
+  document.getElementById('ib-paint').textContent = EDIT.active ? (ps ? ps.name + ' (' + EDIT.paintTile + ')' : String(EDIT.paintTile)) : '--';
+  document.getElementById('ib-tool').textContent = EDIT.active ? (EDIT.tool === 'lasso' ? 'Lasso' : 'Paint') : '--';
+
+  // Lasso button highlight
+  document.getElementById('btn-lasso').classList.toggle('tool-active', EDIT.tool === 'lasso');
+
+  updateDimDisplay();
+}
+
+function updateDimDisplay() {
+  if (!currentFloor || !currentFloor.grid) return;
+  var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+  var gh = currentFloor.grid.length;
+  document.getElementById('dim-display').textContent = gw + ' x ' + gh;
+  document.getElementById('ib-grid').textContent = gw + ' x ' + gh;
+  currentFloor.gridW = gw;
+  currentFloor.gridH = gh;
+}
+
+function paintCell(gx, gy) {
+  if (!EDIT.active || EDIT.tool !== 'paint' || !currentFloor || !currentFloor.grid) return;
+  var grid = currentFloor.grid;
+  if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[gy].length) return;
+  var oldTile = grid[gy][gx];
+  if (oldTile === EDIT.paintTile) return;
+  grid[gy][gx] = EDIT.paintTile;
+  EDIT.undoStack.push({ type: 'paint', x: gx, y: gy, oldTile: oldTile, newTile: EDIT.paintTile });
+  updateEditUI();
+  draw();
+}
+
+function undoLast() {
+  if (EDIT.undoStack.length === 0) return;
+  var entry = EDIT.undoStack.pop();
+  if (entry.type === 'paint') {
+    currentFloor.grid[entry.y][entry.x] = entry.oldTile;
+  } else if (entry.type === 'resize') {
+    currentFloor.grid = entry.oldGrid;
+    currentFloor.gridW = entry.oldGrid[0] ? entry.oldGrid[0].length : 0;
+    currentFloor.gridH = entry.oldGrid.length;
+  } else if (entry.type === 'lasso-move') {
+    currentFloor.grid = entry.oldGrid;
+  }
+  clearLasso();
+  updateEditUI();
+  draw();
+}
+
+function revertAll() {
+  if (!EDIT.originalGrid || !currentFloor) return;
+  currentFloor.grid = snapshotGrid(EDIT.originalGrid);
+  currentFloor.gridW = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+  currentFloor.gridH = currentFloor.grid.length;
+  EDIT.undoStack = [];
+  clearLasso();
+  updateEditUI();
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GRID RESIZE
+// ═══════════════════════════════════════════════════════════════
+function getResizeFill() {
+  var sel = document.getElementById('resize-fill-tile');
+  return parseInt(sel.value) || 0;
+}
+
+function resizeGrid(side, action) {
+  if (!currentFloor || !currentFloor.grid) return;
+  var grid = currentFloor.grid;
+  var oldGrid = snapshotGrid(grid);
+  var gw = grid[0] ? grid[0].length : 0;
+  var gh = grid.length;
+  var fill = getResizeFill();
+
+  if (action === 'add') {
+    if (side === 'col-r') {
+      for (var y = 0; y < gh; y++) grid[y].push(fill);
+    } else if (side === 'col-l') {
+      for (var y = 0; y < gh; y++) grid[y].unshift(fill);
+    } else if (side === 'row-b') {
+      var row = []; for (var x = 0; x < gw; x++) row.push(fill);
+      grid.push(row);
+    } else if (side === 'row-t') {
+      var row = []; for (var x = 0; x < gw; x++) row.push(fill);
+      grid.unshift(row);
+    }
+  } else if (action === 'shrink') {
+    if (side === 'col-r' && gw > 1) {
+      for (var y = 0; y < gh; y++) grid[y].pop();
+    } else if (side === 'col-l' && gw > 1) {
+      for (var y = 0; y < gh; y++) grid[y].shift();
+    } else if (side === 'row-b' && gh > 1) {
+      grid.pop();
+    } else if (side === 'row-t' && gh > 1) {
+      grid.shift();
+    }
+  }
+
+  currentFloor.gridW = grid[0] ? grid[0].length : 0;
+  currentFloor.gridH = grid.length;
+  EDIT.undoStack.push({ type: 'resize', oldGrid: oldGrid });
+  clearLasso();
+  updateEditUI();
+  draw();
+}
+
+function populateResizeFill() {
+  var sel = document.getElementById('resize-fill-tile');
+  sel.innerHTML = '';
+  // Common fill tiles
+  var fillTiles = [0, 1, 34, 32, 33, 21, 22, 9];
+  fillTiles.forEach(function(id) {
+    var s = TILE_SCHEMA[id];
+    if (!s) return;
+    var opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id + ' ' + s.name;
+    sel.appendChild(opt);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LASSO TOOL
+// ═══════════════════════════════════════════════════════════════
+function clearLasso() {
+  LASSO.sel = null;
+  LASSO.floating = null;
+  LASSO.selecting = false;
+  LASSO.dragging = false;
+  document.getElementById('lasso-rect').style.display = 'none';
+}
+
+function lassoStartSelect(gx, gy) {
+  // If clicking inside existing selection, start drag
+  if (LASSO.sel && gx >= LASSO.sel.x && gx < LASSO.sel.x + LASSO.sel.w &&
+      gy >= LASSO.sel.y && gy < LASSO.sel.y + LASSO.sel.h) {
+    lassoStartDrag(gx, gy);
+    return;
+  }
+  // Drop any floating tiles first
+  if (LASSO.floating) lassoCommit();
+  LASSO.selecting = true;
+  LASSO.startGX = gx;
+  LASSO.startGY = gy;
+  LASSO.sel = { x: gx, y: gy, w: 1, h: 1 };
+  draw();
+}
+
+function lassoUpdateSelect(gx, gy) {
+  if (!LASSO.selecting) return;
+  var x1 = Math.min(LASSO.startGX, gx), y1 = Math.min(LASSO.startGY, gy);
+  var x2 = Math.max(LASSO.startGX, gx), y2 = Math.max(LASSO.startGY, gy);
+  LASSO.sel = { x: x1, y: y1, w: x2 - x1 + 1, h: y2 - y1 + 1 };
+  draw();
+}
+
+function lassoEndSelect() {
+  LASSO.selecting = false;
+}
+
+function lassoStartDrag(gx, gy) {
+  if (!LASSO.sel) return;
+  var s = LASSO.sel;
+  // Lift tiles if not already floating
+  if (!LASSO.floating) {
+    var grid = currentFloor.grid;
+    var tiles = [];
+    for (var dy = 0; dy < s.h; dy++) {
+      var row = [];
+      for (var dx = 0; dx < s.w; dx++) {
+        var sy = s.y + dy, sx = s.x + dx;
+        row.push((sy >= 0 && sy < grid.length && sx >= 0 && sx < grid[sy].length) ? grid[sy][sx] : 0);
+      }
+      tiles.push(row);
+    }
+    LASSO.floating = { tiles: tiles, origX: s.x, origY: s.y, curX: s.x, curY: s.y };
+    // Clear source area with fill tile
+    var fill = getResizeFill();
+    for (var dy = 0; dy < s.h; dy++) {
+      for (var dx = 0; dx < s.w; dx++) {
+        var sy = s.y + dy, sx = s.x + dx;
+        if (sy >= 0 && sy < grid.length && sx >= 0 && sx < grid[sy].length) {
+          grid[sy][sx] = fill;
+        }
+      }
+    }
+  }
+  LASSO.dragging = true;
+  LASSO.dragOffX = gx - LASSO.sel.x;
+  LASSO.dragOffY = gy - LASSO.sel.y;
+}
+
+function lassoUpdateDrag(gx, gy) {
+  if (!LASSO.dragging || !LASSO.floating) return;
+  var newX = gx - LASSO.dragOffX;
+  var newY = gy - LASSO.dragOffY;
+  LASSO.floating.curX = newX;
+  LASSO.floating.curY = newY;
+  LASSO.sel.x = newX;
+  LASSO.sel.y = newY;
+  draw();
+}
+
+function lassoEndDrag() {
+  LASSO.dragging = false;
+}
+
+function lassoCommit() {
+  if (!LASSO.floating || !currentFloor) return;
+  var f = LASSO.floating;
+  var grid = currentFloor.grid;
+  var oldGrid = snapshotGrid(grid);
+
+  // Stamp floating tiles onto grid
+  for (var dy = 0; dy < f.tiles.length; dy++) {
+    for (var dx = 0; dx < f.tiles[dy].length; dx++) {
+      var gy = f.curY + dy, gx = f.curX + dx;
+      if (gy >= 0 && gy < grid.length && gx >= 0 && gx < grid[gy].length) {
+        grid[gy][gx] = f.tiles[dy][dx];
+      }
+    }
+  }
+  EDIT.undoStack.push({ type: 'lasso-move', oldGrid: oldGrid });
+  LASSO.floating = null;
+  updateEditUI();
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CLIPBOARD
+// ═══════════════════════════════════════════════════════════════
+function gridToJSArray(grid) {
+  var lines = [];
+  for (var y = 0; y < grid.length; y++) {
+    var row = grid[y];
+    lines.push('    [' + row.join(',') + ']' + (y < grid.length - 1 ? ',' : '') + ' //' + String(y).padStart(2));
+  }
+  return lines.join('\n');
+}
+
+function gridToDiffArray(currentGrid, originalGrid) {
+  var lines = [];
+  var PH = '..';
+  var maxH = Math.max(currentGrid.length, originalGrid.length);
+  for (var y = 0; y < currentGrid.length; y++) {
+    var cur = currentGrid[y];
+    var orig = originalGrid[y];
+    if (!orig) {
+      // Entirely new row
+      lines.push('    [' + cur.join(',') + '], //' + String(y).padStart(2) + '  (NEW ROW)');
+      continue;
+    }
+    var cells = [];
+    var rowChanges = 0;
+    var maxW = Math.max(cur.length, orig.length);
+    for (var x = 0; x < cur.length; x++) {
+      if (x >= orig.length || cur[x] !== orig[x]) {
+        cells.push(String(cur[x]));
+        rowChanges++;
+      } else {
+        cells.push(PH);
+      }
+    }
+    if (rowChanges > 0) {
+      lines.push('    [' + cells.join(',') + '], //' + String(y).padStart(2) + '  (' + rowChanges + ' changed)');
+    } else {
+      lines.push('    // row ' + y + ' \u2014 unchanged');
+    }
+  }
+  return lines.join('\n');
+}
+
+function copyToClipboard(text, label) {
+  navigator.clipboard.writeText(text).then(function() {
+    showCopyToast(label + ' copied');
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showCopyToast(label + ' copied');
+  });
+}
+
+function showCopyToast(msg) {
+  var el = document.getElementById('copy-toast');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(function() { el.style.display = 'none'; }, 1200);
+}
+
+function doCopyFull() {
+  if (!currentFloor) return;
+  // Commit any floating lasso first
+  if (LASSO.floating) lassoCommit();
+  var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+  var gh = currentFloor.grid.length;
+  var header = '// Floor "' + currentFloorId + '" \u2014 ' + (FLOOR_NAMES[currentFloorId] || '') +
+               ' (' + gw + 'x' + gh + ')\n';
+  copyToClipboard(header + gridToJSArray(currentFloor.grid), 'Full grid');
+}
+
+function doCopyDiff() {
+  if (!currentFloor || !EDIT.originalGrid) return;
+  if (LASSO.floating) lassoCommit();
+  var dc = countDirty();
+  if (dc === 0) { showCopyToast('No changes to copy'); return; }
+  var header = '// Floor "' + currentFloorId + '" DIFF \u2014 ' + dc + ' cells changed\n' +
+               '// ".." = unchanged, numbers = new value\n';
+  copyToClipboard(header + gridToDiffArray(currentFloor.grid, EDIT.originalGrid), 'Diff (' + dc + ' cells)');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════════════════════
+var canvas = document.getElementById('cv');
+var ctx = canvas.getContext('2d');
+
+var VIEW = {
+  panX: 0, panY: 0, zoom: 1.0, cellSize: 20,
+  showGrid: false, showRooms: true, showDoors: true, showIDs: false, showLegend: false,
+  dragging: false, dragStartX: 0, dragStartY: 0, panStartX: 0, panStartY: 0
+};
+
+function cellPx() { return VIEW.cellSize * VIEW.zoom; }
+
+function draw() {
+  var w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, w, h);
+  if (!currentFloor || !currentFloor.grid) return;
+
+  var grid = currentFloor.grid;
+  var gw = grid[0] ? grid[0].length : 0;
+  var gh = grid.length;
+  var cp = cellPx();
+  var orig = EDIT.originalGrid;
+
+  // Draw tiles
+  for (var y = 0; y < gh; y++) {
+    for (var x = 0; x < gw; x++) {
+      var tile = grid[y] ? grid[y][x] : 0;
+      var schema = TILE_SCHEMA[tile];
+      var px = VIEW.panX + x * cp;
+      var py = VIEW.panY + y * cp;
+      if (px + cp < 0 || px > w || py + cp < 0 || py > h) continue;
+
+      ctx.fillStyle = schema ? schema.color : '#ff00ff';
+      ctx.fillRect(px, py, cp, cp);
+
+      // Dirty cell highlight
+      if (orig && orig[y] && grid[y][x] !== orig[y][x]) {
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 1, py + 1, cp - 2, cp - 2);
+      }
+
+      // Tile ID/glyph text
+      if (VIEW.showIDs && cp >= 16) {
+        ctx.fillStyle = '#ffffff88';
+        ctx.font = Math.max(8, cp * 0.35) + 'px Consolas';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cp >= 28 ? String(tile) : (schema ? schema.glyph : '?'), px + cp/2, py + cp/2);
+      }
+    }
+  }
+
+  // Grid lines
+  if (VIEW.showGrid) {
+    ctx.strokeStyle = '#ffffff11';
+    ctx.lineWidth = 0.5;
+    for (var x = 0; x <= gw; x++) {
+      var px = VIEW.panX + x * cp;
+      if (px >= 0 && px <= w) { ctx.beginPath(); ctx.moveTo(px, Math.max(0,VIEW.panY)); ctx.lineTo(px, Math.min(h,VIEW.panY+gh*cp)); ctx.stroke(); }
+    }
+    for (var y = 0; y <= gh; y++) {
+      var py = VIEW.panY + y * cp;
+      if (py >= 0 && py <= h) { ctx.beginPath(); ctx.moveTo(Math.max(0,VIEW.panX), py); ctx.lineTo(Math.min(w,VIEW.panX+gw*cp), py); ctx.stroke(); }
+    }
+  }
+
+  // Room overlays
+  if (VIEW.showRooms && currentFloor.rooms) {
+    ctx.strokeStyle = '#ffff0044'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    currentFloor.rooms.forEach(function(r) {
+      ctx.strokeRect(VIEW.panX+r.x*cp, VIEW.panY+r.y*cp, r.w*cp, r.h*cp);
+      if (r.cx !== undefined) { ctx.fillStyle='#ffff0044'; ctx.beginPath(); ctx.arc(VIEW.panX+(r.cx+.5)*cp, VIEW.panY+(r.cy+.5)*cp, 3, 0, Math.PI*2); ctx.fill(); }
+    });
+    ctx.setLineDash([]);
+  }
+
+  // Door target overlays
+  if (VIEW.showDoors && currentFloor.doorTargets) {
+    var targets = currentFloor.doorTargets;
+    ctx.font = Math.max(9, cp*0.4)+'px Consolas'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for (var key in targets) {
+      var parts = key.split(','), dx = parseInt(parts[0]), dy = parseInt(parts[1]);
+      var dpx = VIEW.panX+dx*cp, dpy = VIEW.panY+dy*cp;
+      ctx.fillStyle = '#ff333388';
+      ctx.beginPath(); ctx.moveTo(dpx+cp/2,dpy+2); ctx.lineTo(dpx+cp-2,dpy+cp/2); ctx.lineTo(dpx+cp/2,dpy+cp-2); ctx.lineTo(dpx+2,dpy+cp/2); ctx.closePath(); ctx.fill();
+      if (cp >= 20) { ctx.fillStyle='#ff6666'; ctx.fillText('>'+targets[key], dpx+cp/2, dpy+cp/2); }
+    }
+  }
+
+  // Spawn marker
+  var sp = currentFloor.spawn;
+  if (!sp && currentFloor.floorId === '0') sp = { x: 4, y: 17 };
+  if (sp) {
+    var spx = VIEW.panX+(sp.x+.5)*cp, spy = VIEW.panY+(sp.y+.5)*cp;
+    ctx.fillStyle='#ff44ff'; ctx.beginPath(); ctx.arc(spx, spy, Math.max(4,cp*.3), 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#ff88ff'; ctx.lineWidth=2; ctx.stroke();
+    if (cp>=20) { ctx.fillStyle='#ff88ff'; ctx.font=Math.max(9,cp*.35)+'px Consolas'; ctx.textAlign='center'; ctx.fillText('SPAWN',spx,spy-cp*.45); }
+  }
+
+  // Door entry/exit markers
+  if (currentFloor.doors) {
+    var d = currentFloor.doors, markers = [];
+    if (d.doorEntry) markers.push({pos:d.doorEntry, label:'ENTRY', color:'#44ff44'});
+    if (d.doorExit) markers.push({pos:d.doorExit, label:'EXIT', color:'#ff8844'});
+    if (d.stairsDn) markers.push({pos:d.stairsDn, label:'DN', color:'#4488ff'});
+    if (d.stairsUp) markers.push({pos:d.stairsUp, label:'UP', color:'#88bbff'});
+    markers.forEach(function(m) {
+      if (!m.pos) return;
+      ctx.strokeStyle=m.color; ctx.lineWidth=2; ctx.strokeRect(VIEW.panX+m.pos.x*cp+2, VIEW.panY+m.pos.y*cp+2, cp-4, cp-4);
+      if (cp>=16) { ctx.fillStyle=m.color; ctx.font='bold '+Math.max(8,cp*.3)+'px Consolas'; ctx.textAlign='center'; ctx.fillText(m.label, VIEW.panX+(m.pos.x+.5)*cp, VIEW.panY+(m.pos.y+.5)*cp+cp*.55); }
+    });
+  }
+
+  // Lasso selection rect
+  if (LASSO.sel && EDIT.tool === 'lasso') {
+    var s = LASSO.sel;
+    ctx.strokeStyle = '#e8c547';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(VIEW.panX + s.x * cp, VIEW.panY + s.y * cp, s.w * cp, s.h * cp);
+    ctx.setLineDash([]);
+  }
+
+  // Floating lasso tiles preview
+  if (LASSO.floating) {
+    var f = LASSO.floating;
+    ctx.globalAlpha = 0.7;
+    for (var dy = 0; dy < f.tiles.length; dy++) {
+      for (var dx = 0; dx < f.tiles[dy].length; dx++) {
+        var tile = f.tiles[dy][dx];
+        var schema = TILE_SCHEMA[tile];
+        var px = VIEW.panX + (f.curX + dx) * cp;
+        var py = VIEW.panY + (f.curY + dy) * cp;
+        ctx.fillStyle = schema ? schema.color : '#ff00ff';
+        ctx.fillRect(px, py, cp, cp);
+      }
+    }
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = '#44bbff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(VIEW.panX + f.curX * cp, VIEW.panY + f.curY * cp, f.tiles[0].length * cp, f.tiles.length * cp);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INTERACTION — pan, zoom, hover, paint, lasso
+// ═══════════════════════════════════════════════════════════════
+var canvasWrap = document.getElementById('canvas-wrap');
+var tooltip = document.getElementById('tooltip');
+
+function resizeCanvas() { canvas.width = canvasWrap.clientWidth; canvas.height = canvasWrap.clientHeight; draw(); }
+
+function screenToGrid(mx, my) {
+  var cp = cellPx();
+  return { x: Math.floor((mx - VIEW.panX) / cp), y: Math.floor((my - VIEW.panY) / cp) };
+}
+
+canvasWrap.addEventListener('mousedown', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var g = screenToGrid(mx, my);
+
+  // Lasso tool
+  if (EDIT.active && EDIT.tool === 'lasso' && e.button === 0 && !e.shiftKey) {
+    lassoStartSelect(g.x, g.y);
+    return;
+  }
+
+  // Paint tool
+  if (EDIT.active && EDIT.tool === 'paint' && e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+    EDIT.painting = true;
+    paintCell(g.x, g.y);
+    return;
+  }
+
+  // Pan: left click (non-edit), shift+left, or middle button
+  if (e.button === 1 || (e.button === 0 && !EDIT.active) || (e.button === 0 && e.shiftKey)) {
+    VIEW.dragging = true;
+    VIEW.dragStartX = e.clientX; VIEW.dragStartY = e.clientY;
+    VIEW.panStartX = VIEW.panX; VIEW.panStartY = VIEW.panY;
+    canvasWrap.style.cursor = 'grabbing';
+  }
+});
+
+window.addEventListener('mousemove', function(e) {
+  if (VIEW.dragging) {
+    VIEW.panX = VIEW.panStartX + (e.clientX - VIEW.dragStartX);
+    VIEW.panY = VIEW.panStartY + (e.clientY - VIEW.dragStartY);
+    draw();
+    return;
+  }
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var g = screenToGrid(mx, my);
+
+  if (EDIT.painting) {
+    paintCell(g.x, g.y);
+    return;
+  }
+  if (LASSO.selecting) {
+    lassoUpdateSelect(g.x, g.y);
+    return;
+  }
+  if (LASSO.dragging) {
+    lassoUpdateDrag(g.x, g.y);
+    return;
+  }
+});
+
+window.addEventListener('mouseup', function() {
+  VIEW.dragging = false;
+  EDIT.painting = false;
+  if (LASSO.selecting) lassoEndSelect();
+  if (LASSO.dragging) lassoEndDrag();
+  updateCursor();
+});
+
+function updateCursor() {
+  if (EDIT.active) {
+    canvasWrap.style.cursor = EDIT.tool === 'lasso' ? 'crosshair' : 'cell';
+  } else {
+    canvasWrap.style.cursor = 'crosshair';
+  }
+}
+
+// Zoom
+canvasWrap.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var oldZoom = VIEW.zoom;
+  VIEW.zoom = Math.max(0.2, Math.min(5.0, VIEW.zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+  VIEW.panX = mx - (mx - VIEW.panX) * (VIEW.zoom / oldZoom);
+  VIEW.panY = my - (my - VIEW.panY) * (VIEW.zoom / oldZoom);
+  document.getElementById('zoom-display').textContent = VIEW.zoom.toFixed(1) + 'x';
+  draw();
+}, { passive: false });
+
+// Right-click: eyedropper in edit mode
+canvasWrap.addEventListener('contextmenu', function(e) {
+  if (!EDIT.active) return;
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var g = screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
+  if (!currentFloor || !currentFloor.grid) return;
+  var grid = currentFloor.grid;
+  if (g.y >= 0 && g.y < grid.length && g.x >= 0 && g.x < grid[g.y].length) {
+    EDIT.paintTile = grid[g.y][g.x];
+    updateEditUI();
+    buildTilePicker();
+  }
+});
+
+// Hover tooltip
+canvasWrap.addEventListener('mousemove', function(e) {
+  if (VIEW.dragging || EDIT.painting || LASSO.selecting || LASSO.dragging) { tooltip.style.display = 'none'; return; }
+  if (!currentFloor || !currentFloor.grid) return;
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var g = screenToGrid(mx, my);
+  document.getElementById('ib-pos').textContent = g.x + ', ' + g.y;
+  var grid = currentFloor.grid;
+  if (g.y < 0 || g.y >= grid.length || g.x < 0 || !grid[g.y] || g.x >= grid[g.y].length) {
+    tooltip.style.display = 'none'; document.getElementById('ib-tile').textContent = '--'; return;
+  }
+  var tile = grid[g.y][g.x];
+  var schema = TILE_SCHEMA[tile] || { name:'UNKNOWN', cat:'?', walk:false, opq:false };
+  document.getElementById('ib-tile').textContent = schema.name + ' (' + tile + ')';
+  var html = '<span class="tt-coord">(' + g.x + ', ' + g.y + ')</span>  <span class="tt-tile">' + schema.name + '</span> [' + tile + ']\n';
+  html += '<span class="tt-prop">Category:</span> ' + (CAT_LABELS[schema.cat] || schema.cat) + '\n';
+  html += '<span class="tt-prop">Walkable:</span> ' + (schema.walk?'yes':'no') + '  <span class="tt-prop">Opaque:</span> ' + (schema.opq?'yes':'no');
+  if (currentFloor.doorTargets) { var key=g.x+','+g.y; if (currentFloor.doorTargets[key]) html+='\n<span class="tt-door">Door > Floor "'+currentFloor.doorTargets[key]+'"</span>'; }
+  if (currentFloor.doorFaces) { var key=g.x+','+g.y; if (currentFloor.doorFaces[key]!==undefined) { var dirs=['EAST','SOUTH','WEST','NORTH']; html+='\n<span class="tt-prop">Exterior face:</span> '+dirs[currentFloor.doorFaces[key]]; } }
+  if (currentFloor.rooms) { currentFloor.rooms.forEach(function(r,i){ if(g.x>=r.x&&g.x<r.x+r.w&&g.y>=r.y&&g.y<r.y+r.h) html+='\n<span class="tt-prop">Room '+i+':</span> '+r.w+'x'+r.h+' at ('+r.x+','+r.y+')'; }); }
+  if (EDIT.originalGrid && EDIT.originalGrid[g.y] && grid[g.y][g.x] !== EDIT.originalGrid[g.y][g.x]) {
+    var origTile = EDIT.originalGrid[g.y][g.x];
+    var origSchema = TILE_SCHEMA[origTile] || { name: 'UNKNOWN' };
+    html += '\n<span class="tt-edit">Was: ' + origSchema.name + ' [' + origTile + ']</span>';
+  }
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  var tx = e.clientX-rect.left+16, ty = e.clientY-rect.top-10;
+  if (tx+tooltip.offsetWidth > canvas.width-8) tx = e.clientX-rect.left-tooltip.offsetWidth-8;
+  if (ty+tooltip.offsetHeight > canvas.height-8) ty = canvas.height-tooltip.offsetHeight-8;
+  if (ty < 4) ty = 4;
+  tooltip.style.left = tx+'px'; tooltip.style.top = ty+'px';
+});
+canvasWrap.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+
+// ═══════════════════════════════════════════════════════════════
+//  TILE PICKER — ALL 77 tiles, always visible
+// ═══════════════════════════════════════════════════════════════
+function buildTilePicker() {
+  var el = document.getElementById('tile-picker');
+  if (!EDIT.active) { el.style.display = 'none'; return; }
+
+  // Group ALL tiles by category — no filtering
+  var groups = {};
+  for (var id in TILE_SCHEMA) {
+    var s = TILE_SCHEMA[id];
+    if (!groups[s.cat]) groups[s.cat] = [];
+    groups[s.cat].push(parseInt(id));
+  }
+
+  var html = '';
+  CAT_ORDER.forEach(function(cat) {
+    if (!groups[cat]) return;
+    groups[cat].sort(function(a,b){return a-b;});
+    html += '<span class="tp-row"><span class="tp-cat">' + (CAT_LABELS[cat] || cat) + '</span>';
+    groups[cat].forEach(function(id) {
+      var s = TILE_SCHEMA[id];
+      var sel = id === EDIT.paintTile ? ' selected' : '';
+      html += '<span class="tp-tile' + sel + '" data-tile="' + id + '" style="background:' + s.color + '" title="' + s.name + ' [' + id + ']"><span class="tp-label">' + s.name + '</span></span>';
+    });
+    html += '</span>';
+  });
+  el.innerHTML = html;
+  el.style.display = 'block';
+
+  el.querySelectorAll('.tp-tile').forEach(function(tile) {
+    tile.addEventListener('click', function() {
+      EDIT.paintTile = parseInt(this.dataset.tile);
+      updateEditUI();
+      buildTilePicker();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LEGEND
+// ═══════════════════════════════════════════════════════════════
+function buildLegend() {
+  var panel = document.getElementById('legend-panel');
+  if (!currentFloor || !currentFloor.grid) { panel.innerHTML = ''; return; }
+  var used = {};
+  var grid = currentFloor.grid;
+  for (var y = 0; y < grid.length; y++) { if (!grid[y]) continue; for (var x = 0; x < grid[y].length; x++) used[grid[y][x]] = true; }
+  var groups = {};
+  for (var id in used) { var s = TILE_SCHEMA[id]; if (!s) continue; if (!groups[s.cat]) groups[s.cat] = []; groups[s.cat].push({ id: parseInt(id), schema: s }); }
+  var html = '<div style="color:#e8c547;margin-bottom:6px;font-weight:bold">Tiles on this floor</div>';
+  CAT_ORDER.forEach(function(cat) {
+    if (!groups[cat]) return;
+    html += '<div style="color:#888;margin-top:6px;margin-bottom:2px;font-size:9px;text-transform:uppercase">' + (CAT_LABELS[cat]||cat) + '</div>';
+    groups[cat].sort(function(a,b){return a.id-b.id;});
+    groups[cat].forEach(function(t) {
+      var sel = EDIT.active && t.id === EDIT.paintTile ? ' selected' : '';
+      html += '<div class="legend-row' + sel + '" data-tile="' + t.id + '"><div class="legend-swatch" style="background:' + t.schema.color + '"></div><span>' + t.id + ' ' + t.schema.name + '</span></div>';
+    });
+  });
+  panel.innerHTML = html;
+  panel.querySelectorAll('.legend-row').forEach(function(row) {
+    row.addEventListener('click', function() {
+      if (!EDIT.active) return;
+      EDIT.paintTile = parseInt(this.dataset.tile);
+      updateEditUI();
+      buildLegend();
+      buildTilePicker();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FLOOR SELECTION
+// ═══════════════════════════════════════════════════════════════
+var FLOOR_NAMES = {
+  '0':'The Approach','1':'The Promenade','1.1':'Coral Bazaar','1.2':'Driftwood Inn',
+  '1.3':'Cellar Entrance','1.6':"Gleaner's Home",'1.3.1':'Soft Cellar',
+  '2':'Lantern Row','2.1':"Dispatcher's Office",'2.2':"Watchman's Post",
+  '2.2.1':"Hero's Wake B1",'2.2.2':"Hero's Wake B2",'2.3':"Armorer's Workshop",
+  '2.4':"Chandler's Shop",'2.5':'The Apothecary','2.6':'The Cartographer',
+  '2.7':'The Tea House','3':'The Garrison','3.1':'Armory/Barracks','3.2':"Quartermaster's Shop"
+};
+
+function sortFloorIds(ids) {
+  return ids.sort(function(a,b) {
+    var pa=a.split('.').map(Number), pb=b.split('.').map(Number);
+    for (var i=0; i<Math.max(pa.length,pb.length); i++) { var va=pa[i]||0, vb=pb[i]||0; if (va!==vb) return va-vb; }
+    return 0;
+  });
+}
+
+function populateFloorSelect() {
+  var sel = document.getElementById('floor-select');
+  sel.innerHTML = '';
+  var ids = sortFloorIds(Object.keys(FLOORS));
+  ids.forEach(function(id) {
+    var opt = document.createElement('option');
+    opt.value = id;
+    var depth = id.split('.').length;
+    var prefix = depth===1?'':depth===2?'  ':'    ';
+    opt.textContent = prefix + '"' + id + '" - ' + (FLOOR_NAMES[id]||id);
+    sel.appendChild(opt);
+  });
+  selectFloor(ids[0]);
+}
+
+function selectFloor(id) {
+  currentFloorId = id;
+  currentFloor = FLOORS[id];
+  if (!currentFloor) return;
+  document.getElementById('floor-select').value = id;
+
+  EDIT.originalGrid = snapshotGrid(currentFloor.grid);
+  EDIT.undoStack = [];
+  clearLasso();
+
+  var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+  var gh = currentFloor.grid.length;
+  currentFloor.gridW = gw;
+  currentFloor.gridH = gh;
+  document.getElementById('ib-grid').textContent = gw + ' x ' + gh;
+  document.getElementById('ib-floor').textContent = '"' + id + '" ' + (FLOOR_NAMES[id] || '');
+
+  var cw = canvas.width, ch = canvas.height;
+  VIEW.zoom = Math.max(0.3, Math.min(3.0, Math.min((cw*.85)/(gw*VIEW.cellSize), (ch*.85)/(gh*VIEW.cellSize))));
+  var cp = cellPx();
+  VIEW.panX = (cw - gw*cp)/2; VIEW.panY = (ch - gh*cp)/2;
+  document.getElementById('zoom-display').textContent = VIEW.zoom.toFixed(1) + 'x';
+
+  updateEditUI();
+  buildLegend();
+  buildTilePicker();
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TOOLBAR EVENTS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('floor-select').addEventListener('change', function() { selectFloor(this.value); });
+
+document.getElementById('btn-edit').addEventListener('click', function() {
+  EDIT.active = !EDIT.active;
+  this.classList.toggle('edit-active', EDIT.active);
+  this.textContent = EDIT.active ? 'Edit ON' : 'Edit';
+  if (!EDIT.active) { EDIT.tool = 'paint'; clearLasso(); }
+  updateCursor();
+  buildTilePicker();
+  updateEditUI();
+  draw();
+});
+
+document.getElementById('btn-lasso').addEventListener('click', function() {
+  if (EDIT.tool === 'lasso') {
+    // Commit any floating, switch back to paint
+    if (LASSO.floating) lassoCommit();
+    EDIT.tool = 'paint';
+    clearLasso();
+  } else {
+    EDIT.tool = 'lasso';
+  }
+  updateEditUI();
+  updateCursor();
+  draw();
+});
+
+document.getElementById('btn-undo').addEventListener('click', undoLast);
+document.getElementById('btn-revert').addEventListener('click', function() {
+  if (confirm('Revert all changes on this floor?')) revertAll();
+});
+document.getElementById('btn-copy-full').addEventListener('click', doCopyFull);
+document.getElementById('btn-copy-diff').addEventListener('click', doCopyDiff);
+
+function toggleBtn(id, prop) {
+  var btn = document.getElementById(id);
+  btn.addEventListener('click', function() {
+    VIEW[prop] = !VIEW[prop];
+    btn.classList.toggle('active', VIEW[prop]);
+    if (prop === 'showLegend') document.getElementById('legend-panel').style.display = VIEW.showLegend ? 'block' : 'none';
+    draw();
+  });
+}
+toggleBtn('btn-grid','showGrid'); toggleBtn('btn-rooms','showRooms');
+toggleBtn('btn-doors','showDoors'); toggleBtn('btn-ids','showIDs');
+toggleBtn('btn-legend','showLegend');
+
+// Resize buttons
+['col-shrink-l','col-add-l','col-add-r','col-shrink-r','row-shrink-t','row-add-t','row-add-b','row-shrink-b'].forEach(function(id) {
+  var parts = id.split('-');
+  var action = parts[0] === 'col' ? parts[1] : parts[1]; // add or shrink
+  var side = parts[0] + '-' + parts[2]; // col-l, col-r, row-t, row-b
+  document.getElementById('btn-' + id).addEventListener('click', function() {
+    resizeGrid(side, action);
+  });
+});
+
+// Keyboard shortcuts
+window.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'g') document.getElementById('btn-grid').click();
+  if (e.key === 'r') document.getElementById('btn-rooms').click();
+  if (e.key === 'd') document.getElementById('btn-doors').click();
+  if (e.key === 'i') document.getElementById('btn-ids').click();
+  if (e.key === 'l' && !EDIT.active) document.getElementById('btn-legend').click();
+  if (e.key === 'l' && EDIT.active) document.getElementById('btn-lasso').click();
+  if (e.key === 'e') document.getElementById('btn-edit').click();
+  if (e.key === 'f') { if (currentFloor) selectFloor(currentFloorId); }
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undoLast(); }
+  if (e.key === 'Escape') {
+    if (LASSO.floating) { lassoCommit(); draw(); }
+    else if (LASSO.sel) { clearLasso(); draw(); }
+  }
+  if (e.key === 'Enter' && LASSO.floating) { lassoCommit(); draw(); }
+  // Number keys 0-9 for quick tile select in edit mode
+  if (EDIT.active && e.key >= '0' && e.key <= '9' && !e.ctrlKey && !e.metaKey) {
+    var quickTiles = [0, 1, 2, 21, 22, 32, 33, 34, 35, 10];
+    EDIT.paintTile = quickTiles[parseInt(e.key)];
+    updateEditUI();
+    buildTilePicker();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+populateResizeFill();
+loadAllFloors();
+</script>
+</body>
+</html>

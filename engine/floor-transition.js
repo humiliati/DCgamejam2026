@@ -264,7 +264,7 @@ var FloorTransition = (function () {
     var currentId = FloorManager.getFloor();
 
     // Only log for door-type tiles to reduce console noise
-    if (TILES.isDoor(tile) || tile === TILES.LOCKED_DOOR) {
+    if (TILES.isDoor(tile) || tile === TILES.LOCKED_DOOR || tile === TILES.ARCH_DOORWAY) {
       console.log('[FloorTransition] tryInteractDoor(' + fx + ',' + fy + ') tile=' + tile + ' floorId=' + currentId);
     }
 
@@ -276,7 +276,7 @@ var FloorTransition = (function () {
       return true;  // Always consumed — either unlocks or shows rejection
     }
 
-    if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR || tile === TILES.DOOR_FACADE) {
+    if (tile === TILES.DOOR || tile === TILES.BOSS_DOOR || tile === TILES.DOOR_FACADE || tile === TILES.ARCH_DOORWAY) {
       if (tile === TILES.BOSS_DOOR && !_tryUnlockDoor(fx, fy, currentId)) {
         return true;  // Consumed the interaction (showed locked dialog)
       }
@@ -285,6 +285,10 @@ var FloorTransition = (function () {
       var key = fx + ',' + fy;
       if (floorData.doorTargets && floorData.doorTargets[key]) {
         targetId = floorData.doorTargets[key];
+      } else if (tile === TILES.ARCH_DOORWAY) {
+        // ARCH_DOORWAY only transitions with explicit doorTargets —
+        // decorative arches (no doorTarget) are non-functional portals.
+        return false;
       } else {
         // Convention: DOOR advances one depth level
         targetId = FloorManager.childId(currentId, '1');

@@ -127,6 +127,9 @@ var Game = (function () {
     if (typeof DoorAnimator !== 'undefined') DoorAnimator.init();
     Skybox.init();
     Raycaster.init(_canvas);
+    if (typeof SpriteLayer !== 'undefined') {
+      SpriteLayer.init(_canvas.parentElement);
+    }
     InputManager.init();
     InputManager.initPointer(_canvas);
     AudioSystem.init();
@@ -1147,6 +1150,7 @@ var Game = (function () {
     // Interact prompt + door/crate/chest/puzzle peek
     InteractPrompt.init();
     if (typeof DoorPeek        !== 'undefined') DoorPeek.init();
+    if (typeof ArchPeek       !== 'undefined') ArchPeek.init();
     if (typeof LockedDoorPeek !== 'undefined') LockedDoorPeek.init();
     if (typeof CratePeek      !== 'undefined') CratePeek.init();
     if (typeof ChestPeek     !== 'undefined') ChestPeek.init();
@@ -1510,6 +1514,7 @@ var Game = (function () {
         if (typeof BreakableSpawner !== 'undefined') BreakableSpawner.init();
         if (typeof Shop !== 'undefined') Shop.reset();
         if (typeof DeathAnim !== 'undefined') DeathAnim.clear();
+        if (typeof SpriteLayer !== 'undefined') SpriteLayer.clear();
 
         // Re-wire MC callbacks — generateCurrentFloor() inits MC with null
         // callbacks (comment: "Wired by Game orchestrator"). This is where
@@ -1916,6 +1921,18 @@ var Game = (function () {
             CobwebSystem.install(_cw.x, _cw.y, floorId, 'standalone');
           }
         }
+      }
+    }
+
+    // Register CSS dragonfire overlays for bonfire/hearth tiles on the new floor.
+    // SpriteLayer.clear() already ran in the onAfter callback (or this is the
+    // initial floor where no prior sprites exist). buildSprites populates the
+    // tile coordinate cache; registerDOMSprites pushes them to the DOM layer.
+    if (typeof BonfireSprites !== 'undefined' && typeof SpriteLayer !== 'undefined') {
+      var _dfFd = FloorManager.getFloorData();
+      if (_dfFd && _dfFd.grid) {
+        BonfireSprites.buildSprites(floorId, _dfFd.grid, _dfFd.gridW, _dfFd.gridH);
+        BonfireSprites.registerDOMSprites();
       }
     }
 
@@ -3332,6 +3349,7 @@ var Game = (function () {
       // C2: Readiness HUD bar (dungeon floors only)
       HUD.renderReadinessBar(ctx, _canvas.width, _canvas.height, FloorManager.getCurrentFloorId());
       if (typeof DoorPeek        !== 'undefined') DoorPeek.update(frameDt);
+      if (typeof ArchPeek       !== 'undefined') ArchPeek.update(frameDt);
       if (typeof LockedDoorPeek !== 'undefined') LockedDoorPeek.update(frameDt);
       if (typeof CratePeek     !== 'undefined') CratePeek.update(frameDt);
       if (typeof ChestPeek    !== 'undefined') ChestPeek.update(frameDt);
@@ -3645,6 +3663,9 @@ var Game = (function () {
       BonfireSprites.animate(now);
       for (var bfi = 0; bfi < bonfireSprites.length; bfi++) {
         var bfs = bonfireSprites[bfi];
+        // Skip emoji billboard for tiles that have a CSS DOM overlay
+        // (SpriteLayer renders the dragonfire instead)
+        if (bfs.domSprite) continue;
         _sprites.push({
           x: bfs.x + (bfs._swayX || 0),
           y: bfs.y,
@@ -3825,6 +3846,11 @@ var Game = (function () {
     );
 
     if (combatZoom !== 1) ctx.restore();
+
+    // DOM sprite overlay (CSS flame/particle sprites anchored in world)
+    if (typeof SpriteLayer !== 'undefined' && SpriteLayer.count() > 0) {
+      SpriteLayer.tick(renderPos.x, renderPos.y, renderPos.angle + p.lookOffset + shakeOffset);
+    }
 
     // Cobweb rendering (after raycaster, before minimap)
     var _cobFloorId = FloorManager.getCurrentFloorId();

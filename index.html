@@ -2148,6 +2148,115 @@
       #dpad-back    { top: 52px; left: 52px; }
       #dpad-str-r   { top: 52px; left: 104px; }
     }
+
+    /* ═══ DRAGONFIRE — SpriteLayer CSS flame for bonfire/hearth tiles ═══ */
+    /* From Uiverse.io by 0x-maker (warm-fly-82) — namespaced df- */
+    .sl-sprite.dragonfire {
+      --df-body-color: #e5f295;
+      --df-eye-bg: #efffc8;
+      --df-glow-color: #5beebd;
+      /* Emotion-driven (set by JS for narrator states) */
+      --df-pupil-w: 1rem;
+      --df-float-dur: 3s;
+      --df-eye-float-dur: 5s;
+      --df-blink-dur: 4s;
+    }
+    .sl-sprite.dragonfire .df-flame {
+      display: flex;
+      width: 8rem; height: 8rem;
+      justify-content: center;
+      align-items: center;
+      position: absolute;
+      left: 50%; top: 50%;
+      transform-origin: center center;
+      /* SpriteLayer sets --sl-scale on the parent .sl-sprite wrapper.
+         The scale maps the 8rem authoring frame to the projected
+         pixel dimensions. translate(-50%,-50%) centers in container. */
+      transform: translate(-50%, -50%) scale(var(--sl-scale, 1));
+    }
+    .sl-sprite.dragonfire .df-head {
+      width: 100%; height: 100%;
+      background-color: var(--df-body-color);
+      border-radius: 50%;
+      animation: df-float var(--df-float-dur) ease-in-out infinite;
+      box-shadow: 0 1rem 1rem var(--df-glow-color);
+      filter: blur(0.3rem);
+      z-index: 1;
+    }
+    .sl-sprite.dragonfire .df-eye {
+      display: flex;
+      position: absolute;
+      width: 4rem; height: 4rem;
+      background-color: var(--df-eye-bg);
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      box-shadow: 0 0 1rem #000000;
+      animation: df-float var(--df-eye-float-dur) ease-in-out alternate infinite;
+    }
+    .sl-sprite.dragonfire .df-eye::before {
+      content: "";
+      display: flex;
+      width: var(--df-pupil-w); height: 2rem;
+      background-color: #000;
+      border-radius: 50%;
+      animation: df-blink var(--df-blink-dur) ease-in-out alternate infinite;
+    }
+    .sl-sprite.dragonfire .df-flames {
+      display: flex;
+      position: absolute;
+      z-index: 0;
+    }
+    .sl-sprite.dragonfire .df-particle {
+      display: flex;
+      position: absolute;
+      background-color: var(--df-body-color);
+      border-radius: 50%;
+      filter: blur(0.3rem);
+      border-top: 5px solid var(--df-body-color);
+      border-left: 5px solid var(--df-body-color);
+    }
+    .sl-sprite.dragonfire .df-flames::before {
+      content: "";
+      position: absolute;
+      width: 8rem; height: 8rem;
+      background: var(--df-body-color);
+      filter: blur(5rem);
+      opacity: 0.5;
+      border-radius: 50%;
+      top: -8rem; left: -4rem;
+      z-index: 4;
+      animation: df-pulse 3s linear infinite;
+    }
+    .sl-sprite.dragonfire .df-particle:nth-child(1) { width: 4rem; height: 4rem; top: -6rem; animation: df-move 7s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(2) { width: 1.5rem; height: 1.5rem; top: -8rem; left: -5rem; animation: df-move 1.5s ease-in-out reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(3) { width: 4rem; height: 4rem; top: -5rem; left: -4rem; animation: df-move 8s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(4) { width: 3rem; height: 3rem; top: -7.5rem; animation: df-move 4s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(5) { width: 2rem; height: 2rem; top: -9rem; left: 1rem; animation: df-move 2.5s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(6) { width: 2rem; height: 2rem; top: -6.8rem; left: -1.5rem; animation: df-move 5s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(7) { width: 1rem; height: 1rem; top: -10rem; left: -1rem; animation: df-move 1.2s alternate-reverse infinite; }
+    .sl-sprite.dragonfire .df-particle:nth-child(8) { width: 1.3rem; height: 1.3rem; top: -7.5rem; left: -2rem; animation: df-move 2.5s alternate-reverse infinite; }
+    @keyframes df-move {
+      0%   { transform: translateY(0) rotate(0deg); }
+      50%  { transform: translateY(-1rem) rotate(180deg); }
+      100% { transform: translateY(0) rotate(360deg); }
+    }
+    @keyframes df-float {
+      0%   { transform: translateY(0); }
+      50%  { transform: translateY(-1rem); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes df-blink {
+      0%  { transform: scaleX(1); }
+      10% { transform: scaleX(0.1); }
+      20% { transform: scaleX(1); }
+    }
+    @keyframes df-pulse {
+      0%   { opacity: 0.5; transform: scale(1); }
+      50%  { opacity: 0.8; transform: scale(1.1); }
+      100% { opacity: 0.5; transform: scale(1); }
+    }
   </style>
   <link rel="stylesheet" href="css/inventory-drag.css">
 </head>
@@ -2398,6 +2507,7 @@
   <script src="engine/door-animator.js"></script>
   <script src="engine/skybox.js"></script>
   <script src="engine/raycaster.js"></script>
+  <script src="engine/sprite-layer.js"></script>
   <script src="engine/cobweb-renderer.js"></script>
   <script src="engine/minimap.js"></script>
   <script src="engine/hud.js"></script>
@@ -2468,6 +2578,7 @@
   <script src="engine/interact-prompt.js"></script>
   <script src="engine/dpad.js"></script>
   <script src="engine/door-peek.js"></script>
+  <script src="engine/arch-peek.js"></script>
   <script src="engine/locked-door-peek.js"></script>
   <script src="engine/crate-peek.js"></script>
   <script src="engine/chest-peek.js"></script>

@@ -227,7 +227,22 @@ var SpatialContract = (function () {
         //     carrying the load above the opening. Dominates the facade
         //     silhouette so the window reads as a small cut-out in a
         //     full wall rather than half the building.
-        73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior' }),
+        73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior', zBypassMode: 'depth' }),
+        // WINDOW_SHOP — commercial storefront. Large plate glass with thin
+        // iron bars. Slight inset (recessD: 0.10) so glass sits behind the
+        // wall face. Same slot geometry as WINDOW_TAVERN (0.40→1.15 glass).
+        // zBypassMode:'depth' writes perpDist+1.0 to z-buffer so vignette
+        // emoji renders behind glass and iron bars with real depth.
+        77: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
+        // WINDOW_BAY — residential bay window. Projects 0.20 units OUTWARD
+        // from the wall (negative recessD). Smaller, higher slot (0.55→1.00,
+        // 0.45 tall) for a cozy residential look. Beveled side jambs render
+        // in building wallTexture via the recess jamb path.
+        78: Object.freeze({ hUpper: 2.50, hLower: 0.55, fillGap: 'window_bay_interior', recessD: -0.20, zBypassMode: 'depth' }),
+        // WINDOW_SLIT — institutional fortress slit. Narrow opening, single
+        // iron bar. Higher slot (0.50→1.70, 1.20 tall) — tall and narrow.
+        // Moderate inset (0.15) for thick fortress wall depth.
+        79: Object.freeze({ hUpper: 1.80, hLower: 0.50, fillGap: 'window_slit_interior', recessD: 0.15, zBypassMode: 'depth' }),
         69: Object.freeze({ hUpper: 0.80, hLower: 0.50, fillGap: 'city_bonfire_fire' }),
         // PERGOLA_BEAM sits at the TOP of the 2.0-unit column as a
         // thin canopy strip — 0.20 world units, roughly one quarter
@@ -278,8 +293,8 @@ var SpatialContract = (function () {
         4:  'door_wood',       // DOOR_EXIT
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
-        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
-        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
+        75: 'trapdoor_lid',    // TRAPDOOR_DN — planked hatch lid with iron hardware
+        76: 'trapdoor_lid',    // TRAPDOOR_UP — planked hatch lid with iron hardware
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron gate
         18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
@@ -313,6 +328,10 @@ var SpatialContract = (function () {
                                //   painted by the 'window_tavern_interior' gap
                                //   filler (amber tint over back layers), not by
                                //   this texture.
+        77: 'brick_red',       // WINDOW_SHOP — default brick surround (per-tile
+                               //   override via WindowSprites.getWallTexture())
+        78: 'wood_dark',       // WINDOW_BAY — default dark wood surround
+        79: 'stone_rough',     // WINDOW_SLIT — default rough stone surround
         74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
                                //   above the door opening. Per-tile override via
                                //   DoorSprites.getWallTexture() replaces this with
@@ -348,6 +367,9 @@ var SpatialContract = (function () {
         71: 'floor_stone',       // ARCH_DOORWAY — stone threshold under the arch
         72: 'floor_cobble',      // PORTHOLE — cobblestones below the porthole wall
         73: 'floor_cobble',      // WINDOW_TAVERN — street cobblestones outside the facade
+        77: 'floor_cobble',      // WINDOW_SHOP — street cobblestones outside shopfront
+        78: 'floor_cobble',      // WINDOW_BAY — street cobblestones under protruding bay
+        79: 'floor_cobble',      // WINDOW_SLIT — street cobblestones outside fortress
         74: 'floor_stone'       // DOOR_FACADE — stone threshold under the door
       }, opts.tileFloorTextures),
 
@@ -389,6 +411,9 @@ var SpatialContract = (function () {
         71: 3.5,    // ARCH_DOORWAY — full building facade height (matches WALL)
         72: 3.5,    // PORTHOLE — full building facade height (matches WALL)
         74: 3.5,    // DOOR_FACADE — full building facade height (matches WALL)
+        77: 3.5,    // WINDOW_SHOP — full building facade (matches WALL)
+        78: 3.5,    // WINDOW_BAY — full building facade (matches WALL)
+        79: 3.5,    // WINDOW_SLIT — full building facade (matches WALL)
         73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
                     //   on all exterior biomes so the window cuts into the
                     //   wall plane without creating a notch). Freeform path
@@ -485,10 +510,14 @@ var SpatialContract = (function () {
         // DOOR_FACADE on interior floors: 1.30-unit door opening in a
         // 2.0-unit wall. hUpper = 0.70 (lintel above door).
         74: Object.freeze({ hUpper: 0.70, hLower: 0.00, fillGap: 'facade_door' }),
-        // TRAPDOOR_DN: 0.50-unit hatch cavity at bottom of 2.0 wall
-        75: Object.freeze({ hUpper: 1.50, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
-        // TRAPDOOR_UP: 0.50-unit hatch cavity at top of 2.0 wall
-        76: Object.freeze({ hUpper: 0.00, hLower: 1.50, fillGap: 'trapdoor_shaft' })
+        // TRAPDOOR_DN: generous shaft cavity at bottom. 0.40 wood lip on top,
+        // gap fills the rest of the 2.0 wall (1.60 cavity). Player looks DOWN
+        // into the shaft — the lip is the hatch frame / rim you peer over.
+        75: Object.freeze({ hUpper: 0.40, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
+        // TRAPDOOR_UP: generous shaft cavity at top. 0.40 wood lip on bottom,
+        // gap fills the rest (1.60 cavity). Player looks UP into the shaft —
+        // the lip is the floor-level hatch frame beneath the opening.
+        76: Object.freeze({ hUpper: 0.00, hLower: 0.40, fillGap: 'trapdoor_shaft' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -501,8 +530,8 @@ var SpatialContract = (function () {
         74: 'wood_plank',      // DOOR_FACADE — lintel texture (interior wood)
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
-        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
-        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
+        75: 'trapdoor_lid',    // TRAPDOOR_DN — planked hatch lid with iron hardware
+        76: 'trapdoor_lid',    // TRAPDOOR_UP — planked hatch lid with iron hardware
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron archway
         18: 'bonfire_ring',    // BONFIRE — stone ring (interior hearth variant)
@@ -619,10 +648,12 @@ var SpatialContract = (function () {
       // ── Freeform tile config ──
       tileFreeform: _mergeTileTable({
         29: Object.freeze({ hUpper: 0.40, hLower: 0.20, fillGap: 'hearth_fire' }),
-        // TRAPDOOR_DN: 0.20-unit hatch in a 1.2 dungeon wall (bottom cavity)
-        75: Object.freeze({ hUpper: 1.00, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
-        // TRAPDOOR_UP: 0.20-unit hatch in a 1.2 dungeon wall (top cavity)
-        76: Object.freeze({ hUpper: 0.00, hLower: 1.00, fillGap: 'trapdoor_shaft' })
+        // TRAPDOOR_DN: shaft cavity at bottom of 1.2 dungeon wall. 0.30 wood
+        // lip on top (hatch rim), 0.90 cavity below. Looking down into hole.
+        75: Object.freeze({ hUpper: 0.30, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
+        // TRAPDOOR_UP: shaft cavity at top of 1.2 dungeon wall. 0.30 wood
+        // lip on bottom (floor frame), 0.90 cavity above. Looking up at lid.
+        76: Object.freeze({ hUpper: 0.00, hLower: 0.30, fillGap: 'trapdoor_shaft' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -633,8 +664,8 @@ var SpatialContract = (function () {
         4:  'door_wood',       // DOOR_EXIT
         5:  'stairs_down',     // STAIRS_DN — directional indicator
         6:  'stairs_up',       // STAIRS_UP — directional indicator
-        75: 'wood_plank',      // TRAPDOOR_DN — wood hatch frame
-        76: 'wood_plank',      // TRAPDOOR_UP — wood hatch frame
+        75: 'trapdoor_lid',    // TRAPDOOR_DN — planked hatch lid with iron hardware
+        76: 'trapdoor_lid',    // TRAPDOOR_UP — planked hatch lid with iron hardware
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron chamber door
         18: 'bonfire_ring',    // BONFIRE — dungeon rest point
