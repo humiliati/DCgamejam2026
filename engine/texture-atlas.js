@@ -732,6 +732,27 @@ var TextureAtlas = (function () {
       hiR: 105, hiG: 100, hiB: 95                 // Worn highlight
     });
 
+    // Moss patch — green organic growth on dungeon walls
+    _genMoss('decor_moss', {
+      baseR: 35, baseG: 65, baseB: 28,            // Dark moss base
+      hiR: 50, hiG: 90, hiB: 38,                  // Bright moss highlights
+      rootR: 28, rootG: 45, rootB: 20             // Dark root tendrils
+    });
+
+    // Water stain — mineral deposit / damp streak down wall
+    _genWaterStain('decor_water_stain', {
+      stainR: 55, stainG: 60, stainB: 65,         // Blue-grey mineral deposit
+      wetR: 40, wetG: 45, wetB: 50,               // Dark wet stone
+      dripR: 70, dripG: 75, dripB: 82             // Bright mineral edge
+    });
+
+    // Iron hook — wall-mounted utility/meat hook
+    _genHook('decor_hook', {
+      ironR: 80, ironG: 75, ironB: 70,            // Aged iron
+      hiR: 110, hiG: 105, hiB: 98,               // Worn highlight
+      plateR: 60, plateG: 55, plateB: 50          // Mounting plate
+    });
+
     // ── A6 textures (torch tiles) ──────────────────────────────────
 
     // Lit torch wall — stone wall with iron bracket and flame
@@ -835,6 +856,32 @@ var TextureAtlas = (function () {
       stoneR: 65, stoneG: 63, stoneB: 60,          // Smooth worked stone
       lineR: 90, lineG: 85, lineB: 75,             // Carved groove highlights
       glyphR: 50, glyphG: 55, glyphB: 70            // Blue-tinted arcane runes
+    });
+
+    // ── Dungeon variety floor textures ─────────────────────────────
+
+    // Mossy stone — catacomb/cellar stone with green organic patches
+    _genFloorStoneMossy('floor_stone_mossy', {
+      baseR: 52, baseG: 50, baseB: 48,              // Dark stone base
+      mossR: 40, mossG: 72, mossB: 30,              // Dark moss patches
+      mossHiR: 55, mossHiG: 95, mossHiB: 40,        // Moss highlights
+      variance: 10
+    });
+
+    // Cracked stone — worn/damaged stone flags for deeper dungeon levels
+    _genFloorStoneCracked('floor_stone_cracked', {
+      baseR: 50, baseG: 48, baseB: 45,              // Weathered dark stone
+      crackR: 25, crackG: 22, crackB: 20,           // Deep crack shadows
+      edgeR: 70, edgeG: 65, edgeB: 60,              // Exposed crack edges
+      variance: 14
+    });
+
+    // Flagstone — large irregular slabs for foundry/industrial dungeons
+    _genFloorFlagstone('floor_flagstone', {
+      baseR: 58, baseG: 52, baseB: 48,              // Warm grey slab
+      mortarR: 30, mortarG: 26, mortarB: 22,         // Dark mortar joints
+      stainR: 48, stainG: 38, stainB: 30,           // Oil/rust stain patches
+      variance: 16
     });
 
     // ── Living infrastructure wall textures ────────────────────────
@@ -2787,6 +2834,178 @@ var TextureAtlas = (function () {
     });
   }
 
+  // ── Floor: mossy stone (catacomb/cellar — stone flags with moss patches) ──
+
+  function _genFloorStoneMossy(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Same stone flag structure as floor_stone
+      var blockW = 16, blockH = 12;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? 8 : 0;
+      var localX = (x + ox) % blockW;
+      var localY = y % blockH;
+
+      // Mortar lines
+      if (localX < 1 || localY < 1) {
+        // Green-tinted mortar (moss grows in cracks)
+        var mn = (_hash(x + 8100, y + 8200) - 0.5) * 4;
+        return {
+          r: _clamp(p.baseR * 0.3 + p.mossR * 0.15 + mn),
+          g: _clamp(p.baseG * 0.3 + p.mossG * 0.2 + mn),
+          b: _clamp(p.baseB * 0.3 + p.mossB * 0.1 + mn)
+        };
+      }
+
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var blockNoise = (_hash(blockId, row + 8300) - 0.5) * p.variance * 2;
+      var pn = (_hash(x + 8400, y + 8500) - 0.5) * 8;
+
+      // Moss patches: ~30% of blocks get moss overlay
+      var mossSeed = _hash(blockId + 8600, row + 8700);
+      if (mossSeed > 0.7) {
+        // Distance from block centre → radial moss coverage
+        var bCx = (Math.floor((x + ox) / blockW) * blockW + blockW / 2) - ox;
+        var bCy = row * blockH + blockH / 2;
+        var mDx = x - bCx, mDy = y - bCy;
+        var mDist = Math.sqrt(mDx * mDx + mDy * mDy);
+        var mMax = Math.min(blockW, blockH) * 0.6;
+        if (mDist < mMax) {
+          var mFalloff = 1.0 - mDist / mMax;
+          var mN = _hash(x * 3 + 8800, y * 3 + 8900);
+          var isHi = mN > 0.6;
+          return {
+            r: _clamp((isHi ? p.mossHiR : p.mossR) + pn * 0.3),
+            g: _clamp((isHi ? p.mossHiG : p.mossG) + pn * 0.6),
+            b: _clamp((isHi ? p.mossHiB : p.mossB) + pn * 0.2),
+          };
+        }
+      }
+
+      // Plain stone
+      return {
+        r: _clamp(p.baseR + blockNoise + pn),
+        g: _clamp(p.baseG + blockNoise + pn),
+        b: _clamp(p.baseB + blockNoise + pn * 0.9)
+      };
+    });
+  }
+
+  // ── Floor: cracked stone (deeper cellars — worn flags with fracture lines) ──
+
+  function _genFloorStoneCracked(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Same stone flag structure as floor_stone
+      var blockW = 16, blockH = 12;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? 8 : 0;
+      var localX = (x + ox) % blockW;
+      var localY = y % blockH;
+
+      // Mortar lines
+      if (localX < 1 || localY < 1) {
+        return {
+          r: _clamp(p.baseR * 0.35),
+          g: _clamp(p.baseG * 0.35),
+          b: _clamp(p.baseB * 0.35)
+        };
+      }
+
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var blockNoise = (_hash(blockId, row + 9100) - 0.5) * p.variance * 2;
+      var pn = (_hash(x + 9200, y + 9300) - 0.5) * 8;
+
+      // Crack lines: jagged paths across blocks (deterministic per block)
+      var crackSeed = _hash(blockId + 9400, row + 9500);
+      if (crackSeed > 0.55) {
+        // Diagonal crack from corner to corner with jitter
+        var crackX = localX;
+        var crackY = localY;
+        var crackLine = blockW * (crackY / blockH);
+        if (crackSeed > 0.75) crackLine = blockW - crackLine;  // Flip direction
+        var jitter = (_hash(Math.floor(localY / 2) + blockId * 17 + 9600, 0) - 0.5) * 3;
+        var dist = Math.abs(crackX - crackLine - jitter);
+
+        if (dist < 2.5 && localY > 1 && localY < blockH - 1) {
+          if (dist < 1.0) {
+            // Deep crack shadow
+            return {
+              r: _clamp(p.crackR),
+              g: _clamp(p.crackG),
+              b: _clamp(p.crackB)
+            };
+          }
+          // Exposed edge
+          var eFall = (dist - 1.0) / 1.5;
+          return {
+            r: _clamp(p.edgeR * (1.0 - eFall) + (p.baseR + blockNoise) * eFall),
+            g: _clamp(p.edgeG * (1.0 - eFall) + (p.baseG + blockNoise) * eFall),
+            b: _clamp(p.edgeB * (1.0 - eFall) + (p.baseB + blockNoise) * eFall)
+          };
+        }
+      }
+
+      // Plain stone
+      return {
+        r: _clamp(p.baseR + blockNoise + pn),
+        g: _clamp(p.baseG + blockNoise + pn),
+        b: _clamp(p.baseB + blockNoise + pn * 0.9)
+      };
+    });
+  }
+
+  // ── Floor: flagstone (foundry — large irregular slabs with oil stains) ──
+
+  function _genFloorFlagstone(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Larger irregular slabs than floor_stone
+      var blockW = 20, blockH = 16;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? 10 : 0;
+      var localX = (x + ox) % blockW;
+      var localY = y % blockH;
+
+      // Wide mortar joints (industrial grout)
+      if (localX < 2 || localY < 2) {
+        var mn = (_hash(x + 9700, y + 9800) - 0.5) * 4;
+        return {
+          r: _clamp(p.mortarR + mn),
+          g: _clamp(p.mortarG + mn),
+          b: _clamp(p.mortarB + mn)
+        };
+      }
+
+      var blockId = row * 4 + Math.floor((x + ox) / blockW);
+      var blockNoise = (_hash(blockId, row + 9900) - 0.5) * p.variance * 2;
+      var pn = (_hash(x + 10000, y + 10100) - 0.5) * 8;
+
+      // Oil/rust stain patches: ~20% of slabs
+      var stainSeed = _hash(blockId + 10200, row + 10300);
+      if (stainSeed > 0.8) {
+        var sCx = (Math.floor((x + ox) / blockW) * blockW + blockW / 2) - ox;
+        var sCy = row * blockH + blockH / 2;
+        var sDx = x - sCx, sDy = y - sCy;
+        var sDist = Math.sqrt(sDx * sDx + sDy * sDy);
+        var nDist = sDist + (_hash(x + 10400, y + 10401) - 0.5) * 5;
+        var sMax = Math.min(blockW, blockH) * 0.4;
+        if (nDist < sMax) {
+          var sFall = 1.0 - nDist / sMax;
+          return {
+            r: _clamp(p.stainR + pn * 0.5 + blockNoise * sFall),
+            g: _clamp(p.stainG + pn * 0.4 + blockNoise * sFall),
+            b: _clamp(p.stainB + pn * 0.3 + blockNoise * sFall)
+          };
+        }
+      }
+
+      // Plain slab
+      return {
+        r: _clamp(p.baseR + blockNoise + pn),
+        g: _clamp(p.baseG + blockNoise + pn),
+        b: _clamp(p.baseB + blockNoise + pn * 0.8)
+      };
+    });
+  }
+
   // ── Tree trunk (exterior trees — brown bark bottom, green canopy top) ──
   //
   // At 2x wall height, bottom half = bark with vertical crevices,
@@ -4594,6 +4813,119 @@ var TextureAtlas = (function () {
           b: _clamp((oDist < 0.65 ? p.hiB : p.linkB) * edge + ln),
           a: 255
         };
+      }
+      return { r: 0, g: 0, b: 0, a: 0 };
+    });
+  }
+
+  // Moss patch — organic green growth on dungeon walls.
+  // Irregular patch shape using noise-modulated radius from centre.
+  function _genMoss(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S * 0.5, cy = S * 0.55;  // Slightly bottom-weighted
+      var dx = x - cx, dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      // Organic edge — noise-modulated boundary
+      var noiseDist = dist + (_hash(x + 16100, y + 16101) - 0.5) * 7;
+      var maxR = S * 0.38;
+      if (noiseDist > maxR) return { r: 0, g: 0, b: 0, a: 0 };
+      var falloff = 1.0 - noiseDist / maxR;
+      // Root tendrils reaching outward
+      var angle = Math.atan2(dy, dx);
+      var tendril = Math.abs(Math.sin(angle * 5 + dist * 0.4));
+      if (tendril > 0.85 && dist > maxR * 0.5) {
+        var ta = falloff * 0.5;
+        return { r: _clamp(p.rootR), g: _clamp(p.rootG), b: _clamp(p.rootB), a: _clamp(200 * ta) };
+      }
+      // Highlight clumps
+      var n = _hash(x * 3 + 16200, y * 3 + 16201);
+      var isHi = n > 0.7;
+      var pn = (_hash(x + 16300, y + 16301) - 0.5) * 8;
+      return {
+        r: _clamp((isHi ? p.hiR : p.baseR) + pn * 0.5),
+        g: _clamp((isHi ? p.hiG : p.baseG) + pn),
+        b: _clamp((isHi ? p.hiB : p.baseB) + pn * 0.3),
+        a: _clamp(220 * falloff)
+      };
+    });
+  }
+
+  // Water stain — vertical mineral deposit streak down a dungeon wall.
+  // Widest at top (source), tapering to a drip line at bottom.
+  function _genWaterStain(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S * 0.5;
+      // Main stain — widens at top (source), narrows at bottom
+      var progress = y / S;
+      var width = (1.0 - progress * 0.6) * S * 0.3;
+      var jitter = (_hash(Math.floor(y / 3) + 16400, 0) - 0.5) * 3;
+      var dist = Math.abs(x - cx - jitter);
+      if (dist > width) return { r: 0, g: 0, b: 0, a: 0 };
+      var edge = dist / width;
+      // Bright mineral edge at boundary
+      if (edge > 0.6) {
+        var ea = (1.0 - edge) / 0.4 * (1.0 - progress * 0.3);
+        return { r: _clamp(p.dripR), g: _clamp(p.dripG), b: _clamp(p.dripB), a: _clamp(160 * ea) };
+      }
+      // Dark wet centre
+      var pn = (_hash(x + 16500, y + 16501) - 0.5) * 6;
+      var mix = progress * 0.4;  // Gets lighter toward bottom
+      return {
+        r: _clamp(p.wetR + (p.stainR - p.wetR) * mix + pn),
+        g: _clamp(p.wetG + (p.stainG - p.wetG) * mix + pn),
+        b: _clamp(p.wetB + (p.stainB - p.wetB) * mix + pn),
+        a: _clamp(180 * (1.0 - edge * 0.5) * (1.0 - progress * 0.2))
+      };
+    });
+  }
+
+  // Iron hook — wall-mounted utility hook on a small mounting plate.
+  // Plate at top, curved hook prong below.
+  function _genHook(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+      // Mounting plate: small rectangle at top-centre
+      var plateW = 6, plateH = 5;
+      var plateX = cx - plateW / 2, plateY = S * 0.15;
+      if (x >= plateX && x < plateX + plateW && y >= plateY && y < plateY + plateH) {
+        var pe = (x === Math.floor(plateX) || x === Math.floor(plateX + plateW - 1) ||
+                  y === Math.floor(plateY) || y === Math.floor(plateY + plateH - 1));
+        var pn = (_hash(x + 16600, y + 16601) - 0.5) * 5;
+        if (pe) {
+          return { r: _clamp(p.hiR + pn), g: _clamp(p.hiG + pn), b: _clamp(p.hiB + pn), a: 255 };
+        }
+        return { r: _clamp(p.plateR + pn), g: _clamp(p.plateG + pn), b: _clamp(p.plateB + pn), a: 255 };
+      }
+      // Hook stem: vertical line from plate bottom
+      var stemTop = plateY + plateH;
+      var stemBot = S * 0.55;
+      if (Math.abs(x - cx) < 1.5 && y >= stemTop && y <= stemBot) {
+        var ln = (_hash(x + 16700, y + 16701) - 0.5) * 5;
+        return { r: _clamp(p.ironR + ln), g: _clamp(p.ironG + ln), b: _clamp(p.ironB + ln), a: 255 };
+      }
+      // Hook curve: quarter-circle curving right then up
+      var hookCX = cx + 3;
+      var hookCY = stemBot;
+      var hookR = 5;
+      var hDx = x - hookCX, hDy = y - hookCY;
+      var hDist = Math.sqrt(hDx * hDx + hDy * hDy);
+      // Ring: draw only the lower-right quadrant arc
+      if (hDist > hookR - 2 && hDist < hookR + 1.5 && hDy >= -1 && hDx >= -3) {
+        var edge = Math.abs(hDist - hookR);
+        var ln2 = (_hash(x + 16800, y + 16801) - 0.5) * 4;
+        if (edge < 1) {
+          return { r: _clamp(p.hiR + ln2), g: _clamp(p.hiG + ln2), b: _clamp(p.hiB + ln2), a: 255 };
+        }
+        return { r: _clamp(p.ironR + ln2), g: _clamp(p.ironG + ln2), b: _clamp(p.ironB + ln2), a: _clamp(200) };
+      }
+      // Hook tip: pointed end curving upward
+      var tipX = hookCX + hookR - 1;
+      var tipY = hookCY - 1;
+      if (Math.abs(x - tipX) < 1.5 && y >= tipY - 3 && y <= tipY) {
+        return { r: _clamp(p.hiR), g: _clamp(p.hiG), b: _clamp(p.hiB), a: 240 };
       }
       return { r: 0, g: 0, b: 0, a: 0 };
     });

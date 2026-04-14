@@ -788,7 +788,7 @@ var FloorManager = (function () {
             29: 'hearth_riverrock'
           }),
           tileWallHeights: Object.freeze({ 7: 0.65, 11: 0.6, 29: 0.5 }),
-          floorTexture: 'floor_stone',
+          floorTexture: 'floor_stone_mossy',
           fogColor: { r: 6, g: 4, b: 8 },
           stepColor: '#140e18'
         };
@@ -810,7 +810,7 @@ var FloorManager = (function () {
             7: 0.65, 11: 0.6, 29: 0.5,
             50: 0.3, 51: 0.5
           }),
-          floorTexture: 'floor_dirt'
+          floorTexture: 'floor_stone_cracked'
         };
       case 'foundry':
         // Dark metal walls ↔ warm dirt floor — industrial contrast
@@ -831,7 +831,7 @@ var FloorManager = (function () {
             46: 1.0,                 // SWITCHBOARD — full-height panel
             50: 0.3, 51: 0.5, 53: 0.8
           }),
-          floorTexture: 'floor_dirt',
+          floorTexture: 'floor_flagstone',
           fogColor: { r: 12, g: 6, b: 3 },    // Warm furnace tint
           stepColor: '#1a1210'
         };
@@ -1830,6 +1830,94 @@ var FloorManager = (function () {
           anchorV: 0.65,
           scale: 0.28
         });
+      }
+    }
+
+    // ── Dungeon wall embellishments (moss, water stains, hooks, etc.) ──
+    // Additional pass for dungeon biomes: places atmosphere decor on walls
+    // that weren't selected for torches/banners. Uses a second hash seed
+    // so placement is independent of the torch pass above.
+    var _isDungeon = (biome === 'cellar' || biome === 'catacomb' ||
+                      biome === 'foundry' || biome === 'sealab');
+    if (_isDungeon) {
+      // Biome-specific decor pools with weights
+      var _decorPool;
+      if (biome === 'catacomb') {
+        _decorPool = [
+          { id: 'decor_moss',         w: 0.30, v: 0.40, s: 0.30 },
+          { id: 'decor_cobweb',       w: 0.25, v: 0.80, s: 0.25 },
+          { id: 'decor_crack',        w: 0.20, v: 0.50, s: 0.25 },
+          { id: 'decor_water_stain',  w: 0.15, v: 0.60, s: 0.28 },
+          { id: 'decor_chain',        w: 0.10, v: 0.55, s: 0.30 }
+        ];
+      } else if (biome === 'cellar') {
+        _decorPool = [
+          { id: 'decor_crack',        w: 0.25, v: 0.50, s: 0.25 },
+          { id: 'decor_moss',         w: 0.25, v: 0.40, s: 0.28 },
+          { id: 'decor_water_stain',  w: 0.20, v: 0.60, s: 0.26 },
+          { id: 'decor_cobweb',       w: 0.15, v: 0.80, s: 0.22 },
+          { id: 'decor_hook',         w: 0.15, v: 0.65, s: 0.22 }
+        ];
+      } else if (biome === 'foundry') {
+        _decorPool = [
+          { id: 'decor_chain',        w: 0.30, v: 0.55, s: 0.32 },
+          { id: 'decor_hook',         w: 0.25, v: 0.65, s: 0.24 },
+          { id: 'decor_scorch',       w: 0.25, v: 0.45, s: 0.28 },
+          { id: 'decor_crack',        w: 0.20, v: 0.50, s: 0.24 }
+        ];
+      } else {
+        // sealab
+        _decorPool = [
+          { id: 'decor_water_stain',  w: 0.35, v: 0.60, s: 0.28 },
+          { id: 'decor_crack',        w: 0.25, v: 0.50, s: 0.24 },
+          { id: 'decor_moss',         w: 0.20, v: 0.40, s: 0.26 },
+          { id: 'decor_cobweb',       w: 0.20, v: 0.78, s: 0.22 }
+        ];
+      }
+
+      // Build cumulative weight table for selection
+      var _cumW = [];
+      var _totalW = 0;
+      for (var _pi = 0; _pi < _decorPool.length; _pi++) {
+        _totalW += _decorPool[_pi].w;
+        _cumW[_pi] = _totalW;
+      }
+
+      for (var ey = 1; ey < H - 1; ey++) {
+        for (var ex = 1; ex < W - 1; ex++) {
+          if (grid[ey][ex] !== T.WALL) continue;
+          // Skip walls that already got torch/banner decor
+          if (decor[ey][ex]) continue;
+
+          // Find walkable-adjacent faces
+          var eFaces = [];
+          if (grid[ey - 1][ex] === T.EMPTY) eFaces.push('n');
+          if (ey < H - 1 && grid[ey + 1][ex] === T.EMPTY) eFaces.push('s');
+          if (grid[ey][ex - 1] === T.EMPTY) eFaces.push('w');
+          if (ex < W - 1 && grid[ey][ex + 1] === T.EMPTY) eFaces.push('e');
+          if (eFaces.length === 0) continue;
+
+          // Sparse placement: ~12% of remaining eligible walls
+          var eh = ((ex * 529853 + ey * 913967) & 0x7fffffff) / 0x7fffffff;
+          if (eh > 0.12) continue;
+
+          var eFace = eFaces[Math.floor(eh * 100 * eFaces.length) % eFaces.length];
+
+          // Select decor type from weighted pool
+          var eRoll = ((ex * 198491 + ey * 743201) & 0x7fffffff) / 0x7fffffff * _totalW;
+          var eDecor = _decorPool[0];
+          for (var _si = 0; _si < _cumW.length; _si++) {
+            if (eRoll <= _cumW[_si]) { eDecor = _decorPool[_si]; break; }
+          }
+
+          decor[ey][ex] = { n: [], s: [], e: [], w: [] };
+          decor[ey][ex][eFace].push({
+            spriteId: eDecor.id,
+            anchorU: 0.5,
+            anchorV: eDecor.v,
+            scale: eDecor.s
+          });
+        }
       }
     }
 
