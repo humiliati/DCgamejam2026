@@ -2,7 +2,7 @@
 
 > **DOC-17** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-04-11 | Updated: 2026-04-13
 >
-> **Status**: Phase 0 ✅, Phase 1 ✅, **Phase 2 next** (Z-depth fix + 3 window types: SHOP/BAY/SLIT)
+> **Status**: Phase 0 ✅, Phase 1 ✅, Phase 2 ✅ (SHOP/BAY/SLIT + ALCOVE + COMMERCIAL), **Phase 2.5 ✅** (corner-window bitmask refactor + dungeon apertures: ARROWSLIT + MURDERHOLE). **Next**: beveled corners (→ round pillars, round trees), crumbled-gap variant, Phase 3 patron NPCs.
 >
 > Companion to `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` (Phase 4: WINDOW_TAVERN tile), `COZY_INTERIORS_DESIGN.md`, and `DOOR_ARCHITECTURE_ROADMAP.md` (recess tech adapted for window depth). Defines the contract that turns a raycast window from "a hole in the wall with a floating emoji" into a believable view into a lived-in interior — per-building window types with real depth, iron-bar commercial storefronts, protruding residential bays, and narrow fortress slits.
 
@@ -530,16 +530,23 @@ The fortress slit. Narrow, cold, minimal.
 | `engine/building-registry.js` | **new** — Layer 0 frozen building records (6 buildings), `VIGNETTES` table, `MULLION_STYLES` table, `isOpen()` with wrap-around hours |
 | `index.html` | `<script src="engine/building-registry.js">` at Layer 0 |
 
-### Remaining (Phase 2 — Z-Depth + Window Types)
+### Shipped (Phase 2 — Z-Depth + Window Types)
 | File | Change |
 |---|---|
-| `engine/tiles.js` | Add `WINDOW_SHOP: 77`, `WINDOW_BAY: 78`, `WINDOW_SLIT: 79`; extend `isFreeform()` |
-| `engine/spatial-contract.js` | Freeform configs for 77/78/79 with `recessD` + `zBypassMode: 'depth'`; update tile 73 config with `zBypassMode: 'depth'` |
-| `engine/raycaster.js` | Replace blanket `_zBypass` z-buffer write with `zBypassMode`-driven conditional (~line 1302); support negative `recessD` for bay window protrusion |
-| `engine/window-sprites.js` | Three new gap fillers: `_windowShopFiller`, `_windowBayFiller`, `_windowSlitFiller`; lazy registration for all three |
-| `engine/texture-atlas.js` | Optional: `window_shop_iron`, `window_slit_iron`, `window_bay_wood` textures (64×64) |
-| `engine/floor-manager.js` | Convert Promenade WINDOW_TAVERN tiles (73→77); add WINDOW_BAY to Gleaner's Home; add WINDOW_SLIT to Storm Shelter; update `windowScenes` + `windowFaces` |
-| `engine/building-registry.js` | Add `windowType` field per building record (`'shop'`, `'bay'`, `'slit'`) |
+| `engine/tiles.js` | Added `WINDOW_SHOP: 77`, `WINDOW_BAY: 78`, `WINDOW_SLIT: 79`, `WINDOW_ALCOVE: 80`, `WINDOW_COMMERCIAL: 81`; extended `isFreeform()` + `isOpaque()` + `isWindow()` |
+| `engine/spatial-contract.js` | Freeform configs for 77/78/79/80/81 with `recessD` (positive = inset; bay uses negative for protrusion) + `zBypassMode: 'depth'`; per-tile textures |
+| `engine/raycaster.js` | `zBypassMode`-driven conditional z-buffer write; negative `recessD` protrusion support |
+| `engine/window-sprites.js` | Five gap fillers shipped: `_windowShopFiller`, `_windowBayFiller`, `_windowSlitFiller`, `_windowAlcoveFiller`, `_windowCommercialFiller`; per-tile `yAlt` overrides for SHOP (0.125) and COMMERCIAL (1.125) vignette centering |
+| `engine/floor-manager.js` | Promenade tile placement, WINDOW_BAY on residential buildings, WINDOW_ALCOVE on Gleaner's Home corners, `windowFaces` map (single index + array for corner tiles), `windowScenes` per building |
+
+### Shipped (Phase 2.5 — Corner-Window Bitmask + Dungeon Apertures)
+| File | Change |
+|---|---|
+| `engine/window-sprites.js` | `_exteriorFaces` now stores a **bitmask** (1=E, 2=S, 4=W, 8=N) instead of a single face index. `buildSprites` accepts `windowFaces[key]` as either a number (single face) or array (multi-face → OR'd bitmask). `_detectExteriorFace` rewritten: street scoring accumulates *all* positive-scoring directions; symmetric walkable-pair fallback handles dungeon slits between two walkable rooms (both sides flagged exterior). `isGlass`/`isBack` hit classification via `(extMask & hitBit)` / `(extMask & oppBit)`. Billboard sprite emission skipped for dungeon aperture tiles (no amber vignette leakage). |
+| `engine/tiles.js` | Added `WINDOW_ARROWSLIT: 82`, `WINDOW_MURDERHOLE: 83`; extended `isOpaque()`, `isFreeform()`, `isWindow()` |
+| `engine/spatial-contract.js` | Freeform configs + textures (`stone_rough`) on **both** `interior()` and `nestedDungeon()`. Interior: slit `hUpper=0.10 hLower=0.10 recessD=0.08`, murderhole `hUpper=0.30 hLower=1.35 recessD=0.08`. Nested (shorter walls): slit `0.05/0.05 recessD=0.06`, murderhole `0.25/0.70 recessD=0.06` |
+| `engine/window-sprites.js` | Two new fillers: `_windowArrowslitFiller` (stone masonry outside wallX [0.45, 0.55], 1px darker edge beads, transparent aperture; base `rgb(70,66,60)`) and `_windowMurderholeFiller` (stone outside [0.40, 0.60] with 1px rim top/bottom + vertical edges; base `rgb(68,64,58)`). Both fog-aware + brightness-adjusted. |
+| `engine/floor-manager.js` | Gleaner's Home alcove corner tile `'23,27'` uses array syntax `[3, 0]` → bitmask N+E for the NE corner window face pair. |
 
 ### Remaining (Phases 3–5)
 | File | Change |
@@ -553,6 +560,28 @@ The fortress slit. Narrow, cold, minimal.
 | `docs/LIVING_WINDOWS_ROADMAP.md` | this file |
 
 ---
+
+## 10.5 Where we're going next
+
+**Near-term (unblocks multiple features)**:
+
+1. **Beveled corners for round tile rendering** — higher priority than further window variants. Unlocks:
+   - Round stone pillars in dungeon foyers (floor N.N / N.N.N).
+   - Round tree trunks on exterior floors (currently blocky squares).
+   - True round portholes (tile 72 exists as an alpha-mask freeform but needs beveled corners to read as circular rather than octagonal).
+   The raycaster DDA works column-by-column on axis-aligned tile edges. A bevel pass needs either (a) a per-tile corner-clip mask evaluated against the ray's intra-tile wallX/wallY crossing, or (b) a sub-tile geometry hint in the freeform config that tells the column where to truncate. Approach TBD — prototype after dungeon aperture placement work settles.
+
+2. **Crumbled-gap irregular-slice dungeon aperture** — third dungeon window variant to complement the orderly arrowslit and murderhole. Jagged edges, asymmetric, reads as structural damage rather than designed opening. Likely a stone-texture filler with a procedural per-column noise mask on the aperture boundary.
+
+3. **Dungeon aperture placement** — ARROWSLIT + MURDERHOLE shipped with full rendering but not yet placed on any floor. Candidate locations: Hero's Wake B1/B2 (murder holes looking into corpse chambers), Soft Cellar (arrow slits framing the tutorial trap).
+
+**Medium-term**:
+
+4. **Phase 3 — patron NPCs** (`engine/window-patron.js`) — static billboards ship today via `windowScenes`, but lively patrons walking a 2–3 tile patrol behind the glass are the Layer 3 payoff of the whole depth contract (see §4.1).
+
+5. **Phase 4 — business hours + open/closed state** — `BuildingRegistry.isOpen()` already exists; hook into DayCycle hour rollover + vignette swap.
+
+6. **Window-back face texture** — the interior (back) face currently paints a static dark wash. A cheap win: reuse `TextureAtlas` stone/wood samples so the back of the window reads as an actual inside wall.
 
 ## 11. Open questions
 

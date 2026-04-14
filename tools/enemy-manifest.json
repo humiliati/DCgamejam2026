@@ -1,0 +1,308 @@
+{
+  "generated": "2026-04-14T04:25:15.564Z",
+  "source": "data/enemies.json",
+  "enemyCount": 27,
+  "enemies": [
+    {
+      "id": "ENM-001",
+      "name": "Cobweb Crawler",
+      "emoji": "🕷️",
+      "tier": "standard",
+      "hp": 20,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-002",
+      "name": "Shambling Corpse",
+      "emoji": "🧟",
+      "tier": "standard",
+      "hp": 24,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-003",
+      "name": "Dungeon Rat",
+      "emoji": "🐀",
+      "tier": "standard",
+      "hp": 4,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-004",
+      "name": "Bone Guard",
+      "emoji": "💀",
+      "tier": "standard",
+      "hp": 22,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-005",
+      "name": "Mold Wraith",
+      "emoji": "👻",
+      "tier": "standard",
+      "hp": 20,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-006",
+      "name": "Cave Toad",
+      "emoji": "🐸",
+      "tier": "standard",
+      "hp": 22,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-007",
+      "name": "Rot Hound",
+      "emoji": "🐕",
+      "tier": "elite",
+      "hp": 30,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-008",
+      "name": "Bone Sovereign",
+      "emoji": "👑",
+      "tier": "boss",
+      "hp": 52,
+      "biomes": [
+        "cellar"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-010",
+      "name": "Soot Imp",
+      "emoji": "👺",
+      "tier": "standard",
+      "hp": 24,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-011",
+      "name": "Iron Golem",
+      "emoji": "🤖",
+      "tier": "standard",
+      "hp": 32,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-012",
+      "name": "Slag Hound",
+      "emoji": "🐺",
+      "tier": "standard",
+      "hp": 24,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-013",
+      "name": "Clockwork Guard",
+      "emoji": "⚙️",
+      "tier": "standard",
+      "hp": 26,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-014",
+      "name": "Ember Sprite",
+      "emoji": "✨",
+      "tier": "standard",
+      "hp": 16,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-015",
+      "name": "Scrap Brute",
+      "emoji": "🦾",
+      "tier": "elite",
+      "hp": 38,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-016",
+      "name": "Smelt Master",
+      "emoji": "🔨",
+      "tier": "elite",
+      "hp": 34,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-017",
+      "name": "The Amalgam",
+      "emoji": "🏭",
+      "tier": "boss",
+      "hp": 62,
+      "biomes": [
+        "foundry"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-020",
+      "name": "Tide Stalker",
+      "emoji": "🦈",
+      "tier": "standard",
+      "hp": 30,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-021",
+      "name": "Shock Eel",
+      "emoji": "🐍",
+      "tier": "standard",
+      "hp": 26,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-022",
+      "name": "Lab Drone",
+      "emoji": "🔬",
+      "tier": "standard",
+      "hp": 28,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-023",
+      "name": "Deep Crawler",
+      "emoji": "🦀",
+      "tier": "standard",
+      "hp": 34,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-024",
+      "name": "Brine Wraith",
+      "emoji": "👻",
+      "tier": "standard",
+      "hp": 30,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-025",
+      "name": "Bio-Hazard Slime",
+      "emoji": "💧",
+      "tier": "standard",
+      "hp": 8,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-026",
+      "name": "Admiralty Enforcer",
+      "emoji": "⚓",
+      "tier": "elite",
+      "hp": 44,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-027",
+      "name": "Cryo-Brute",
+      "emoji": "🧊",
+      "tier": "elite",
+      "hp": 46,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-028",
+      "name": "The Archivist",
+      "emoji": "🌊",
+      "tier": "boss",
+      "hp": 74,
+      "biomes": [
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-090",
+      "name": "Hero's Shadow",
+      "emoji": "👤",
+      "tier": "elite",
+      "hp": 30,
+      "biomes": [
+        "cellar",
+        "foundry",
+        "sealab"
+      ],
+      "family": null
+    },
+    {
+      "id": "ENM-091",
+      "name": "Wandering Vendor",
+      "emoji": "🛒",
+      "tier": "standard",
+      "hp": 4,
+      "biomes": [
+        "cellar",
+        "foundry",
+        "sealab"
+      ],
+      "family": null
+    }
+  ]
+}

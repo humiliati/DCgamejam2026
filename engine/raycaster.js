@@ -779,6 +779,20 @@ var Raycaster = (function () {
     var _dbgSampleStep = Math.max(1, Math.floor(w / 24));
     var _dbgCenterCol = w >> 1;
 
+    // ── Round-tile support ──────────────────────────────────────────
+    // Pre-compute the player's forward-vector cosines so circle-tile
+    // hits can convert Euclidean ray-parameter t into camera-plane
+    // perpDist without re-calling Math.cos/sin per column. Circle
+    // tiles (e.g. TREE) use an inscribed-circle hit test instead of
+    // the tile's axis-aligned bounds; see the DDA hit branch below.
+    var _pdCos = Math.cos(pDir);
+    var _pdSin = Math.sin(pDir);
+    // Inscribed-circle radius for 'circle' shape tiles. Slightly under
+    // 0.5 leaves a visible corner gap between adjacent round tiles so
+    // the player can peek between trunks — the whole point of doing
+    // this. If you need them to visibly touch, raise toward 0.5.
+    var _CIRCLE_R = 0.45;
+
     for (var col = 0; col < w; col++) {
       var cameraX = (2 * col / w) - 1;
       var rayAngle = pDir + Math.atan(cameraX * Math.tan(halfFov));
@@ -802,6 +816,12 @@ var Raycaster = (function () {
       var side = 0;
       var hitTile = TILES.WALL;
       var depth = 0;
+
+      // Round-tile hit state: populated when the DDA accepts a circle
+      // intersection instead of an axis-aligned tile boundary. The
+      // perpDist + wallX + side overrides fire after the DDA loop.
+      var _circleHit = false;
+      var _circleHX = 0, _circleHY = 0, _circleCX = 0, _circleCY = 0;
 
       // Perpendicular-distance budget: same fix as the back-layer
       // loop. `depth` alone is a DDA step count that under-shoots
@@ -835,7 +855,46 @@ var Raycaster = (function () {
             if (tile === TILES.ROOF_CRENEL && !_crenelFaceVisible(mapX, mapY, side)) {
               // Skip — let DDA continue through this cell
             } else {
-              hit = true; hitTile = tile;
+              // Round-tile hit test: if this tile has a 'circle' shape,
+              // ray must intersect the inscribed circle to count as a
+              // hit. Misses let the DDA walk past the tile (so you can
+              // see between trunks through the corner gaps). On hit,
+              // stash the intersection point so we can override
+              // perpDist/wallX/side after the loop.
+              var _shape = (_contract && SpatialContract.getTileShape)
+                ? SpatialContract.getTileShape(_contract, tile) : null;
+              if (_shape === 'circle') {
+                var _cX = mapX + 0.5;
+                var _cY = mapY + 0.5;
+                var _bX = px - _cX;
+                var _bY = py - _cY;
+                var _B = _bX * rayDirX + _bY * rayDirY;
+                var _C = _bX * _bX + _bY * _bY - _CIRCLE_R * _CIRCLE_R;
+                var _disc = _B * _B - _C;
+                if (_disc >= 0) {
+                  var _sqrtD = Math.sqrt(_disc);
+                  var _t = -_B - _sqrtD;
+                  if (_t > 0) {
+                    var _hX = px + _t * rayDirX;
+                    var _hY = py + _t * rayDirY;
+                    // Clamp acceptance to this tile's footprint — the
+                    // ray may graze a neighbouring circle on its way
+                    // through, but the DDA will visit that neighbour
+                    // on its own step. Treat out-of-tile hits as a
+                    // miss here so cells can't steal each other's
+                    // contributions.
+                    if (Math.floor(_hX) === mapX && Math.floor(_hY) === mapY) {
+                      hit = true; hitTile = tile;
+                      _circleHit = true;
+                      _circleHX = _hX; _circleHY = _hY;
+                      _circleCX = _cX; _circleCY = _cY;
+                    }
+                  }
+                }
+                // else: miss — DDA continues
+              } else {
+                hit = true; hitTile = tile;
+              }
             }
           } else if (TILES.isDoor(tile)) {
             hit = true; hitTile = tile;
@@ -934,14 +993,19 @@ var Raycaster = (function () {
           // The back face re-runs freeform rendering, so its cavity
           // is transparent and the glowing coals behind it show.
           //
-          // EXCEPTION: WINDOW_TAVERN — the window is a thin glass
-          // pane on the building facade. No back face: the cavity is
-          // fully see-through and the lintel/sill bands should not
-          // render on the interior side (that would make the wall
-          // look hollow when viewed up close). The N-layer collector
-          // still gathers walls BEHIND the window tile because
+          // EXCEPTION: every WINDOW_* variant (TAVERN, SHOP, BAY,
+          // SLIT) — the window is a thin glass pane on the building
+          // facade. No back face: the cavity is fully see-through
+          // and the lintel/sill bands should not render on the
+          // interior side (that would make the wall look hollow
+          // when viewed up close, and paint solid masonry over the
+          // back-layer skybox so the gap reads as an opaque black
+          // stripe instead of glass). The N-layer collector still
+          // gathers walls BEHIND the window tile because
           // _fgIsFreeformSeeThrough sets _maxTop = 0.
-          (_fgIsFreeformSeeThrough && hitTile !== TILES.WINDOW_TAVERN && hitTile !== TILES.DOOR_FACADE)
+          (_fgIsFreeformSeeThrough &&
+           !(TILES.isWindow && TILES.isWindow(hitTile)) &&
+           hitTile !== TILES.DOOR_FACADE)
         );
 
         // Continue DDA to collect up to MAX_LAYERS total hits.
@@ -1054,7 +1118,7 @@ var Raycaster = (function () {
             // the building facade. But doors behind short tiles (e.g.
             // MAILBOX) must collect normally — they're the building
             // entrance visible above the short obstacle.
-            if (TILES.isDoor(_cT) && hitTile === TILES.WINDOW_TAVERN) {
+            if (TILES.isDoor(_cT) && TILES.isWindow && TILES.isWindow(hitTile)) {
               _safety++;
               continue;
             }
@@ -1208,7 +1272,24 @@ var Raycaster = (function () {
 
       // Perpendicular distance (avoids fisheye)
       var perpDist;
-      if (side === 0) {
+      if (_circleHit) {
+        // Circle hit: perpDist is the hit point's projection onto the
+        // player's forward axis (camera-plane-perpendicular). Using
+        // player forward rather than the ray direction preserves the
+        // raycaster's standard fisheye-free convention.
+        perpDist = (_circleHX - px) * _pdCos + (_circleHY - py) * _pdSin;
+        if (perpDist < 0) perpDist = 0;
+        // Derive side from the hit-point normal (from centre → hit).
+        // The horizontal/vertical dominance of the normal controls
+        // which wall-shading branch (E/W vs N/S) the downstream code
+        // picks, and which axis wallX texture-wraps around. For a
+        // circle, an angle-based wrap reads better than square-face
+        // shading, but we still need a valid side so the wall-height
+        // and freeform paths find their bearings.
+        var _ndX = _circleHX - _circleCX;
+        var _ndY = _circleHY - _circleCY;
+        side = (Math.abs(_ndX) > Math.abs(_ndY)) ? 0 : 1;
+      } else if (side === 0) {
         perpDist = (mapX - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
       } else {
         perpDist = (mapY - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
@@ -1523,7 +1604,7 @@ var Raycaster = (function () {
 
       // Per-tile window texture override: building-specific wall material
       // for the freeform sill + lintel bands (brick, wood, stone, etc.)
-      if (hitTile === TILES.WINDOW_TAVERN &&
+      if (TILES.isWindow && TILES.isWindow(hitTile) &&
           typeof WindowSprites !== 'undefined' &&
           WindowSprites.getWallTexture) {
         var winTex = WindowSprites.getWallTexture(mapX, mapY);
@@ -1548,16 +1629,29 @@ var Raycaster = (function () {
       // Compute wall-hit UV (0..1 along the face) — needed by both
       // the normal texture path and DoorAnimator
       var wallX;
-      if (side === 0) {
+      if (_circleHit) {
+        // Circle hit: wrap the texture around the trunk by the hit
+        // point's angle relative to tile centre. atan2 ∈ [−π, π] maps
+        // to wallX ∈ [0, 1]. This sends the trunk texture around the
+        // full circumference once, so vertical bark grooves read as
+        // curved around the trunk instead of as a flat billboard.
+        var _dxC = _circleHX - _circleCX;
+        var _dyC = _circleHY - _circleCY;
+        wallX = (Math.atan2(_dyC, _dxC) + Math.PI) / (2 * Math.PI);
+        if (wallX < 0) wallX = 0;
+        if (wallX >= 1) wallX -= 1;
+      } else if (side === 0) {
         wallX = py + perpDist * rayDirY;
       } else {
         wallX = px + perpDist * rayDirX;
       }
-      wallX = wallX - Math.floor(wallX);
+      if (!_circleHit) {
+        wallX = wallX - Math.floor(wallX);
 
-      // Flip for consistent left-to-right on both face orientations
-      if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-        wallX = 1 - wallX;
+        // Flip for consistent left-to-right on both face orientations
+        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+          wallX = 1 - wallX;
+        }
       }
 
       // ── Door-open animation override ──────────────────────────
@@ -2404,7 +2498,15 @@ var Raycaster = (function () {
       _gapInfo.hitFace = _isBackFace ? ((_hitFace + 2) % 4) : _hitFace;
 
       var fillerKey = ff.fillGap || '_default';
-      var filler    = _gapFillers[fillerKey] || _gapFillers._default;
+      var filler    = _gapFillers[fillerKey];
+      if (!filler) {
+        if (!_gapFillers.__warned) _gapFillers.__warned = {};
+        if (!_gapFillers.__warned[fillerKey]) {
+          _gapFillers.__warned[fillerKey] = true;
+          try { console.warn('[Raycaster] missing freeform gap filler for key:', fillerKey, 'tile=', _gapInfo.hitTile); } catch (e) {}
+        }
+        filler = _gapFillers._default;
+      }
       filler(ctx, col, gapStart, gapH, _gapInfo);
     }
   }
@@ -2945,7 +3047,7 @@ var Raycaster = (function () {
     var texId = SpatialContract.getTexture(_contract, L.tile);
 
     // Per-tile window texture override (back-layer mirror of foreground hook)
-    if (L.tile === TILES.WINDOW_TAVERN &&
+    if (TILES.isWindow && TILES.isWindow(L.tile) &&
         typeof WindowSprites !== 'undefined' &&
         WindowSprites.getWallTexture) {
       var _blWinTex = WindowSprites.getWallTexture(L.mx, L.my);

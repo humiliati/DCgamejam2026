@@ -3758,6 +3758,7 @@ var Game = (function () {
           emojiOverlay: wss.emojiOverlay || null,
           scale: wss.scale,
           bobY: wss.bobY || 0,
+          yAlt: wss.yAlt || 0,
           glow: wss.glow || null,
           glowRadius: wss.glowRadius || 0,
           groundLevel: wss.groundLevel === true,

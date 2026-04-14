@@ -228,12 +228,13 @@ var SpatialContract = (function () {
         //     silhouette so the window reads as a small cut-out in a
         //     full wall rather than half the building.
         73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior', zBypassMode: 'depth' }),
-        // WINDOW_SHOP — commercial storefront. Large plate glass with thin
-        // iron bars. Slight inset (recessD: 0.10) so glass sits behind the
-        // wall face. Same slot geometry as WINDOW_TAVERN (0.40→1.15 glass).
-        // zBypassMode:'depth' writes perpDist+1.0 to z-buffer so vignette
-        // emoji renders behind glass and iron bars with real depth.
-        77: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
+        // WINDOW_SHOP — ground-floor storefront. Plate glass confined to
+        // the first tile of the facade (0.25→1.00 world units, 0.75 tall).
+        // Divided into 3 panels by 2 vertical mullions at wallX ≈ 1/3, 2/3
+        // — no horizontal bar. For WINDOW_COMMERCIAL (tile 81) the same
+        // filler is applied to a tall 2.75-unit cavity.
+        // Slight inset (recessD: 0.10) so glass sits behind the wall face.
+        77: Object.freeze({ hUpper: 2.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
         // WINDOW_BAY — residential bay window. Projects 0.20 units OUTWARD
         // from the wall (negative recessD). Mid-height slot (0.55→1.30,
         // 0.75 tall) — tall enough that the glass reads as a real pane
@@ -244,6 +245,14 @@ var SpatialContract = (function () {
         // iron bar. Higher slot (0.50→1.70, 1.20 tall) — tall and narrow.
         // Moderate inset (0.15) for thick fortress wall depth.
         79: Object.freeze({ hUpper: 1.80, hLower: 0.50, fillGap: 'window_slit_interior', recessD: 0.15, zBypassMode: 'depth' }),
+        // WINDOW_ALCOVE — like BAY but with a mild inset (not a protrusion)
+        // and a narrower glass cavity. For facades adjacent to doors or
+        // corners where BAY's outward push reads awkwardly.
+        80: Object.freeze({ hUpper: 2.45, hLower: 0.55, fillGap: 'window_alcove_interior', recessD: 0.12, zBypassMode: 'depth' }),
+        // WINDOW_COMMERCIAL — gas-station / car-dealership storefront. Full
+        // facade-height glass (0.25→3.00 world units) divided into 3 tall
+        // panels. Shares the shop filler — just a larger cavity.
+        81: Object.freeze({ hUpper: 0.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
         69: Object.freeze({ hUpper: 0.80, hLower: 0.50, fillGap: 'city_bonfire_fire' }),
         // PERGOLA_BEAM sits at the TOP of the 2.0-unit column as a
         // thin canopy strip — 0.20 world units, roughly one quarter
@@ -282,6 +291,30 @@ var SpatialContract = (function () {
         // WINDOW_TAVERN's three-face treatment).
         74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door', recessD: 0.25 })
       }, opts.tileFreeform),
+
+      // ── Per-tile shape overrides ──
+      // Tiles listed here deviate from the default axis-aligned square
+      // footprint. The raycaster consults this table inside the DDA hit
+      // loop: if a shape is registered, it performs the shape-specific
+      // ray-hit test and either accepts the hit (overriding perpDist +
+      // wallX from the shape's geometry) or lets the ray continue when
+      // the shape misses even though the tile is opaque.
+      //
+      // Supported shapes:
+      //   'circle' — inscribed circle, radius _CIRCLE_R (0.45 world units)
+      //              centered on the tile. Corner gaps are see-through:
+      //              the ray walks past the tile and continues the DDA
+      //              when it misses the circle, so you can peek between
+      //              round trees the way you can't between square ones.
+      //              wallX maps the circumference angle [−π, π] → [0, 1].
+      //
+      // Biomes extend via opts.tileShapes — nothing here by default means
+      // square tiles everywhere. First use: exterior() TREE (21) so trees
+      // read as trunks, not cubes. Round stone pillars, porthole frames,
+      // and other cylindrical tiles can opt in by adding an entry.
+      tileShapes: _mergeTileTable({
+        21: 'circle'  // TREE — round trunk silhouette
+      }, opts.tileShapes),
 
       // ── Wall textures ──
       // Keyed by TILES constant value → TextureAtlas texture ID.
@@ -333,6 +366,8 @@ var SpatialContract = (function () {
                                //   override via WindowSprites.getWallTexture())
         78: 'wood_dark',       // WINDOW_BAY — default dark wood surround
         79: 'stone_rough',     // WINDOW_SLIT — default rough stone surround
+        80: 'wood_dark',       // WINDOW_ALCOVE — default dark wood surround (like BAY)
+        81: 'brick_red',       // WINDOW_COMMERCIAL — default brick surround (like SHOP)
         74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
                                //   above the door opening. Per-tile override via
                                //   DoorSprites.getWallTexture() replaces this with
@@ -371,6 +406,8 @@ var SpatialContract = (function () {
         77: 'floor_cobble',      // WINDOW_SHOP — street cobblestones outside shopfront
         78: 'floor_cobble',      // WINDOW_BAY — street cobblestones under protruding bay
         79: 'floor_cobble',      // WINDOW_SLIT — street cobblestones outside fortress
+        80: 'floor_cobble',      // WINDOW_ALCOVE — street cobblestones outside facade
+        81: 'floor_cobble',      // WINDOW_COMMERCIAL — street cobblestones outside storefront
         74: 'floor_stone'       // DOOR_FACADE — stone threshold under the door
       }, opts.tileFloorTextures),
 
@@ -415,6 +452,8 @@ var SpatialContract = (function () {
         77: 3.5,    // WINDOW_SHOP — full building facade (matches WALL)
         78: 3.5,    // WINDOW_BAY — full building facade (matches WALL)
         79: 3.5,    // WINDOW_SLIT — full building facade (matches WALL)
+        80: 3.5,    // WINDOW_ALCOVE — full building facade (matches WALL)
+        81: 3.5,    // WINDOW_COMMERCIAL — full building facade (matches WALL)
         73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
                     //   on all exterior biomes so the window cuts into the
                     //   wall plane without creating a notch). Freeform path
@@ -518,7 +557,19 @@ var SpatialContract = (function () {
         // TRAPDOOR_UP: generous shaft cavity at top. 0.40 wood lip on bottom,
         // gap fills the rest (1.60 cavity). Player looks UP into the shaft —
         // the lip is the floor-level hatch frame beneath the opening.
-        76: Object.freeze({ hUpper: 0.00, hLower: 0.40, fillGap: 'trapdoor_shaft' })
+        76: Object.freeze({ hUpper: 0.00, hLower: 0.40, fillGap: 'trapdoor_shaft' }),
+        // WINDOW_ARROWSLIT — tall narrow aperture cut through the wall.
+        // Cavity spans almost the full 2.0-unit wall (0.10 → 1.90) so the
+        // slit reads from floor to lintel. The filler masks out everything
+        // outside wallX ∈ [0.45, 0.55] with solid masonry; the central 10%
+        // stripe is transparent so the back layer (adjacent room) shows
+        // through. No glass, no amber vignette — raw stone peephole.
+        82: Object.freeze({ hUpper: 0.10, hLower: 0.10, fillGap: 'window_arrowslit_interior', recessD: 0.08 }),
+        // WINDOW_MURDERHOLE — small high square peephole. Cavity is a
+        // narrow high horizontal band (1.35 → 1.70) and the filler
+        // confines the aperture to wallX ∈ [0.40, 0.60]. Player has to
+        // crane up to see through — classic guard-room feature.
+        83: Object.freeze({ hUpper: 0.30, hLower: 1.35, fillGap: 'window_murderhole_interior', recessD: 0.08 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -538,7 +589,9 @@ var SpatialContract = (function () {
         18: 'bonfire_ring',    // BONFIRE — stone ring (interior hearth variant)
         30: 'torch_bracket_lit',   // TORCH_LIT — interior wall torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — extinguished
-        36: 'terminal_screen'  // TERMINAL — CRT desk (retro-futuristic)
+        36: 'terminal_screen', // TERMINAL — CRT desk (retro-futuristic)
+        82: 'stone_rough',     // WINDOW_ARROWSLIT — raw stone around the slit
+        83: 'stone_rough'      // WINDOW_MURDERHOLE — raw stone around the hole
       }), opts.textures),
 
       // ── Floor texture ──
@@ -556,7 +609,9 @@ var SpatialContract = (function () {
         71: 'floor_stone',      // ARCH_DOORWAY — stone threshold
         74: 'floor_stone',      // DOOR_FACADE — stone threshold
         75: 'floor_stone',      // TRAPDOOR_DN — stone around hatch
-        76: 'floor_stone'       // TRAPDOOR_UP — stone around hatch
+        76: 'floor_stone',      // TRAPDOOR_UP — stone around hatch
+        82: 'floor_stone',      // WINDOW_ARROWSLIT — stone at the slit base
+        83: 'floor_stone'       // WINDOW_MURDERHOLE — stone at the wall base
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -567,7 +622,9 @@ var SpatialContract = (function () {
         71: 2.5,    // ARCH_DOORWAY — match interior WALL height
         74: 2.5,    // DOOR_FACADE — match interior WALL height
         75: 2.0,    // TRAPDOOR_DN — full interior wall height
-        76: 2.0     // TRAPDOOR_UP — full interior wall height
+        76: 2.0,    // TRAPDOOR_UP — full interior wall height
+        82: 2.0,    // WINDOW_ARROWSLIT — matches interior wall
+        83: 2.0     // WINDOW_MURDERHOLE — matches interior wall
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -654,7 +711,15 @@ var SpatialContract = (function () {
         75: Object.freeze({ hUpper: 0.30, hLower: 0.00, fillGap: 'trapdoor_shaft' }),
         // TRAPDOOR_UP: shaft cavity at top of 1.2 dungeon wall. 0.30 wood
         // lip on bottom (floor frame), 0.90 cavity above. Looking up at lid.
-        76: Object.freeze({ hUpper: 0.00, hLower: 0.30, fillGap: 'trapdoor_shaft' })
+        76: Object.freeze({ hUpper: 0.00, hLower: 0.30, fillGap: 'trapdoor_shaft' }),
+        // WINDOW_ARROWSLIT on nested dungeon walls (~1.2 tall). Cavity
+        // spans 0.05 → 1.15 so the slit runs nearly floor to ceiling.
+        // Filler masks outside wallX [0.45, 0.55] with stone masonry.
+        82: Object.freeze({ hUpper: 0.05, hLower: 0.05, fillGap: 'window_arrowslit_interior', recessD: 0.06 }),
+        // WINDOW_MURDERHOLE on dungeon walls. Short high band 0.70 → 0.95
+        // so the player looks up into the opening. Filler confines the
+        // aperture to wallX ∈ [0.40, 0.60].
+        83: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'window_murderhole_interior', recessD: 0.06 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -672,7 +737,9 @@ var SpatialContract = (function () {
         18: 'bonfire_ring',    // BONFIRE — dungeon rest point
         30: 'torch_bracket_lit',   // TORCH_LIT — dungeon wall torch
         31: 'torch_bracket_unlit', // TORCH_UNLIT — hero's mess
-        36: 'terminal_screen'  // TERMINAL — dungeon data terminal
+        36: 'terminal_screen', // TERMINAL — dungeon data terminal
+        82: 'stone_rough',     // WINDOW_ARROWSLIT — raw dungeon stone
+        83: 'stone_rough'      // WINDOW_MURDERHOLE — raw dungeon stone
       }), opts.textures),
 
       // ── Floor texture ──
@@ -688,7 +755,9 @@ var SpatialContract = (function () {
         23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
         39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
         75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
-        76: 'floor_stone'        // TRAPDOOR_UP — stone around hatch
+        76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch
+        82: 'floor_stone',       // WINDOW_ARROWSLIT — stone at the slit base
+        83: 'floor_stone'        // WINDOW_MURDERHOLE — stone at the wall base
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -696,7 +765,9 @@ var SpatialContract = (function () {
         18: 0.3,    // BONFIRE — low stone ring
         36: 0.6,    // TERMINAL — desk height
         75: 1.2,    // TRAPDOOR_DN — low dungeon wall around hatch
-        76: 1.2     // TRAPDOOR_UP — low dungeon wall around hatch
+        76: 1.2,    // TRAPDOOR_UP — low dungeon wall around hatch
+        82: 1.2,    // WINDOW_ARROWSLIT — matches dungeon wall
+        83: 1.2     // WINDOW_MURDERHOLE — matches dungeon wall
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -1113,6 +1184,21 @@ var SpatialContract = (function () {
   }
 
   /**
+   * Get the tile shape override, if any. Returns a string identifier
+   * ('circle', …) or null for default square tiles. Consulted by the
+   * raycaster DDA hit loop — a non-square shape lets the ray pass
+   * through the tile's corner gaps and may override perpDist/wallX.
+   *
+   * @param {Object} contract
+   * @param {number} tileType
+   * @returns {string|null}
+   */
+  function getTileShape(contract, tileType) {
+    if (!contract || !contract.tileShapes) return null;
+    return contract.tileShapes[tileType] || null;
+  }
+
+  /**
    * Get the floor texture ID for a contract.
    * Used by the raycaster's floor casting pass.
    *
@@ -1227,6 +1313,7 @@ var SpatialContract = (function () {
     getTileHeightOffset: getTileHeightOffset,
     getTexture: getTexture,
     getTileFreeform: getTileFreeform,
+    getTileShape: getTileShape,
     getFloorTexture: getFloorTexture
   };
 })();

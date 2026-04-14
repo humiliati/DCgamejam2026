@@ -87,26 +87,35 @@ var WindowSprites = (function () {
   // ── Helpers ─────────────────────────────────────────────────────
 
   /**
-   * Compute the exterior face index (0=E / 1=S / 2=W / 3=N) for a
-   * WINDOW_TAVERN tile at (x,y) on `grid`.
+   * Compute the exterior face BITMASK for a window tile at (x,y).
+   *
+   * Face bits follow CLAUDE.md direction convention:
+   *   1 = EAST   (bit 0)
+   *   2 = SOUTH  (bit 1)
+   *   4 = WEST   (bit 2)
+   *   8 = NORTH  (bit 3)
+   *
+   * A tile may have MULTIPLE exterior faces (corner windows sitting at
+   * a building corner where two adjacent faces both look onto streets).
+   * The filler uses the bitmask to decide, per-column:
+   *   - ray face ∈ mask          → paint glass
+   *   - ray face's OPPOSITE ∈ mask → transparent (back of a pane)
+   *   - otherwise                → opaque masonry side
    *
    * Primary signal: **street scoring.** Walk up to STREET_WALK_MAX
    * tiles in each cardinal direction (stopping at the first opaque
    * blocker) and count how many of the visited tiles are ROAD / PATH
-   * / GRASS. The direction with the highest street count is the
-   * outdoor side — streets are long open runs of paving, building
-   * interiors are walkable but typically EMPTY floor with no paving.
-   * This handles the common case where BOTH the interior (behind the
-   * facade wall) and the exterior (the street) are walkable empty
-   * tiles, which the pure "walkable neighbor" heuristic can't
-   * distinguish.
+   * / GRASS. ANY direction with a positive street score contributes
+   * its bit to the mask. Streets are long open runs of paving, while
+   * building interiors are walkable but typically EMPTY floor with no
+   * paving — so corner windows bordering two streets light up both.
    *
    * Fallback: if no direction has any street tiles, use the simpler
-   * "walkable pair" heuristic — axis where one side is walkable and
-   * the opposite is opaque wins, with N/S preferred over E/W.
+   * "walkable pair" heuristic — axes where one side is walkable and
+   * the opposite is opaque set that exterior bit.
    *
-   * Returns -1 only if no signal in any direction can be found; the
-   * filler treats -1 as "paint as solid wall on every face" so
+   * Returns -1 if no signal in any direction can be found; the filler
+   * treats -1 / 0 as "paint as solid wall on every face" so
    * unrecognized placements fail safe rather than leaking interior
    * content through all four sides.
    */
@@ -170,31 +179,46 @@ var WindowSprites = (function () {
       { dx:  0, dy: -1, face: 3 }
     ];
 
-    var bestFace = -1;
-    var bestScore = 0;
+    // Accumulate EVERY direction with a positive street score into
+    // the bitmask. Corner windows (two street-facing sides) end up
+    // with two bits set; typical mid-wall windows with one.
+    var mask = 0;
     for (var i = 0; i < dirs.length; i++) {
       var s = _scoreStreet(dirs[i].dx, dirs[i].dy);
-      if (s > bestScore) {
-        bestScore = s;
-        bestFace  = dirs[i].face;
-      }
+      if (s > 0) mask |= (1 << dirs[i].face);
     }
-    if (bestFace >= 0) return bestFace;
+    if (mask !== 0) return mask;
 
     // ── Fallback: walkable-pair heuristic ─────────────────────────
-    // Used for floors with no street tiles (interior scenes).
+    // Used for floors with no street tiles (interior scenes). Any
+    // face whose neighbor is walkable AND whose opposite neighbor is
+    // opaque is treated as exterior. If both sides of an axis are
+    // walkable we can't tell — skip that axis. If neither is
+    // walkable we have no signal — skip too.
     var eastWalkable  = _walkable(x + 1, y);
     var westWalkable  = _walkable(x - 1, y);
     var northWalkable = _walkable(x,     y - 1);
     var southWalkable = _walkable(x,     y + 1);
 
-    if (northWalkable && !southWalkable) return 3;
-    if (southWalkable && !northWalkable) return 1;
-    if (eastWalkable  && !westWalkable)  return 0;
-    if (westWalkable  && !eastWalkable)  return 2;
+    if (eastWalkable  && !westWalkable)  mask |= 1;  // E
+    if (southWalkable && !northWalkable) mask |= 2;  // S
+    if (westWalkable  && !eastWalkable)  mask |= 4;  // W
+    if (northWalkable && !southWalkable) mask |= 8;  // N
+    if (mask !== 0) return mask;
 
-    if (northWalkable || southWalkable) return southWalkable ? 1 : 3;
-    if (eastWalkable  || westWalkable)  return eastWalkable  ? 0 : 2;
+    // Symmetric case — both sides of an axis walkable (classic
+    // dungeon arrow-slit between two rooms, or a peephole in a
+    // corridor divider). Treat BOTH sides as aperture faces so the
+    // filler paints the cut on either approach and back-face logic
+    // stays consistent. This is the typical layout for dungeon
+    // peepholes where neither side is "the street side."
+    if (northWalkable && southWalkable) mask |= (2 | 8);   // S + N
+    if (eastWalkable  && westWalkable)  mask |= (1 | 4);   // E + W
+    if (mask !== 0) return mask;
+
+    // Last-ditch: one walkable side only.
+    if (northWalkable || southWalkable) return southWalkable ? 2 : 8;
+    if (eastWalkable  || westWalkable)  return eastWalkable  ? 1 : 4;
     return -1;
   }
 
@@ -242,18 +266,39 @@ var WindowSprites = (function () {
     // ── Pass 1: populate exterior-face cache for every window tile ──
     // The gap filler needs this on every column draw, regardless of
     // whether the sprite uses windowScenes or fallback placement.
+    // Register ALL window variants (WINDOW_TAVERN, WINDOW_SHOP,
+    // WINDOW_BAY, WINDOW_SLIT) — without an exterior face cached, the
+    // raycaster's recess block treats the tile as flush and the gap
+    // filler falls into the "side face" branch (opaque masonry).
     for (var gy = 0; gy < gridH; gy++) {
       if (!grid[gy]) continue;
       for (var gx = 0; gx < gridW; gx++) {
-        if (grid[gy][gx] !== winTile) continue;
+        var _gt = grid[gy][gx];
+        var _isWin = (typeof TILES !== 'undefined' && TILES.isWindow)
+          ? TILES.isWindow(_gt) : (_gt === winTile);
+        if (!_isWin) continue;
         var key = gx + ',' + gy;
-        var face;
-        if (explicitFaces && typeof explicitFaces[key] === 'number') {
-          face = explicitFaces[key];
+        var faceMask;
+        if (explicitFaces && explicitFaces[key] != null) {
+          // Accept either a single face index (0-3, legacy shape)
+          // or an array of face indices for corner windows. The
+          // stored value is ALWAYS a bitmask from here on out.
+          var _ef = explicitFaces[key];
+          if (typeof _ef === 'number') {
+            faceMask = (1 << _ef);
+          } else if (_ef && typeof _ef.length === 'number') {
+            faceMask = 0;
+            for (var _ei = 0; _ei < _ef.length; _ei++) {
+              if (typeof _ef[_ei] === 'number') faceMask |= (1 << _ef[_ei]);
+            }
+            if (faceMask === 0) faceMask = _detectExteriorFace(grid, gridW, gridH, gx, gy);
+          } else {
+            faceMask = _detectExteriorFace(grid, gridW, gridH, gx, gy);
+          }
         } else {
-          face = _detectExteriorFace(grid, gridW, gridH, gx, gy);
+          faceMask = _detectExteriorFace(grid, gridW, gridH, gx, gy);
         }
-        _exteriorFaces[key] = face;
+        _exteriorFaces[key] = faceMask;
       }
     }
 
@@ -273,6 +318,18 @@ var WindowSprites = (function () {
         var fx = scene.facade.x;
         var fy = scene.facade.y;
         _coveredFacades[fx + ',' + fy] = true;
+
+        // Dungeon apertures (ARROWSLIT, MURDERHOLE) are pure stone cuts
+        // with no interior billboard — skip sprite emission entirely.
+        // The gap filler handles everything visual. Marking the tile
+        // covered above keeps the TAVERN-only fallback loop from
+        // double-emitting a sprite if someone points a scene at one.
+        var _sceneTile = (grid && grid[fy] && typeof grid[fy][fx] !== 'undefined') ? grid[fy][fx] : 0;
+        if (typeof TILES !== 'undefined' &&
+            (_sceneTile === TILES.WINDOW_ARROWSLIT ||
+             _sceneTile === TILES.WINDOW_MURDERHOLE)) {
+          continue;
+        }
 
         // Resolve building material for this window's bands + mullion.
         var bldgId = scene.building || null;
@@ -312,10 +369,22 @@ var WindowSprites = (function () {
         // yAlt = slotCenter − eyeAlt. Positive lifts the sprite on
         // screen; the raycaster projects this with (h / dist) so the
         // vignette tracks the gap as the player approaches.
+        // Tile-type overrides windowType where present, so ALCOVE at a
+        // BAY-typed building still gets the correct gap center altitude.
         var wType = bldg ? bldg.windowType : null;
         var yAlt  = 0.275;                    // shop / tavern default
         if (wType === 'bay')  yAlt = 0.40;
         if (wType === 'slit') yAlt = 0.60;
+        var _facadeTile = (grid && grid[fy] && typeof grid[fy][fx] !== 'undefined') ? grid[fy][fx] : 0;
+        if (typeof TILES !== 'undefined' && _facadeTile === TILES.WINDOW_ALCOVE) {
+          yAlt = 0.30;                        // alcove: gap centered ~0.80 world
+        }
+        if (typeof TILES !== 'undefined' && _facadeTile === TILES.WINDOW_SHOP) {
+          yAlt = 0.125;                       // shop: gap 0.25→1.00, center 0.625, eye 0.5
+        }
+        if (typeof TILES !== 'undefined' && _facadeTile === TILES.WINDOW_COMMERCIAL) {
+          yAlt = 1.125;                       // commercial: gap 0.25→3.00, center 1.625, eye 0.5
+        }
 
         _cachedSprites.push({
           x: sprX,
@@ -388,8 +457,10 @@ var WindowSprites = (function () {
   }
 
   /**
-   * Returns the cached exterior face index for the window at (x,y),
-   * or -1 if the tile is unknown or had no clear exterior neighbor.
+   * Returns the cached exterior-face BITMASK for the window at (x,y).
+   *   1 = E bit, 2 = S bit, 4 = W bit, 8 = N bit.
+   * Returns -1 (or 0) if the tile is unknown or had no exterior
+   * neighbor. Corner windows return a two-bit mask (e.g. E|S = 3).
    */
   function getExteriorFace(x, y) {
     var key = x + ',' + y;
@@ -427,31 +498,26 @@ var WindowSprites = (function () {
   function _windowTavernInteriorFiller(ctx, col, gapStart, gapH, info) {
     if (gapH <= 0) return;
 
-    var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
-    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
-    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+    var hitFace  = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var extMask  = getExteriorFace(info.mapX, info.mapY);
+    var hitBit   = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit   = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass  = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack   = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
-    // Three face treatments:
-    //   Exterior face  → glass pane (mullion + amber wash + glint)
-    //   Interior face  → nothing (leave cavity transparent, see-through)
-    //   Side faces     → opaque wall masonry (close the tile edges)
+    // Three face treatments (bitmask-aware — corner windows have
+    // TWO glass faces, each with its opposite as a transparent back):
+    //   Glass face        → glass pane (mullion + amber wash + glint)
+    //   Back of a glass   → nothing (leave cavity transparent)
+    //   Side faces        → opaque wall masonry (close the tile edges)
 
-    // ── Interior face: leave transparent ─────────────────────────
-    // The back of the glass pane is open — the cavity stays clear
-    // so back-layer geometry (sky, far walls) shows through. No
-    // fill, no mullion. The player looking in from the street sees
-    // through the glass; the window reads as a thin pane, not a
-    // full-tile-depth cube.
-    if (exteriorFace >= 0 && hitFace === interiorFace) {
+    // ── Back-of-glass face: leave transparent ────────────────────
+    if (isBack) {
       return;
     }
 
     // ── Side faces: paint as solid wall ──────────────────────────
-    // The two perpendicular faces (tile edges visible when looking
-    // at the window edge-on) fill with opaque wall-colored masonry
-    // so the freeform cavity doesn't leak. Color is derived from
-    // the tile's texture brightness + fog to match adjacent bands.
-    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+    if (!isGlass) {
       var bAdjW = info.brightness;
       var wR = Math.round(70 * bAdjW);
       var wG = Math.round(55 * bAdjW);
@@ -574,22 +640,25 @@ var WindowSprites = (function () {
   }
 
   // ── WINDOW_SHOP gap filler ─────────────────────────────────────
-  // Commercial storefront — large plate glass with thin iron muntins.
-  // The glass dominates; the bars are minimal 1px verticals at
-  // wallX ≈ 0.25, 0.50, 0.75 with iron-grey color. Same three-face
-  // model as TAVERN (exterior=glass, interior=transparent, sides=masonry).
+  // Commercial storefront — plate glass with a classic wood mullion
+  // cross (matches tavern aesthetic). Brighter amber wash than tavern
+  // (lit display case). Same three-face model as TAVERN
+  // (exterior=glass, interior=transparent, sides=masonry).
   function _windowShopFiller(ctx, col, gapStart, gapH, info) {
     if (gapH <= 0) return;
 
     var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
-    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
-    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
     // Interior face: transparent (see-through)
-    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+    if (isBack) return;
 
     // Side faces: opaque masonry
-    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+    if (!isGlass) {
       var bAdjW = info.brightness;
       var wR = Math.round(70 * bAdjW);
       var wG = Math.round(55 * bAdjW);
@@ -644,33 +713,37 @@ var WindowSprites = (function () {
       }
     }
 
-    // 3. Iron bars — 3 thin vertical muntins at wallX ≈ 0.25, 0.50, 0.75.
-    //    1px each, iron grey. These are thin enough to read as "mostly glass."
-    var barHalfW = 0.02 + 0.01 / Math.max(0.6, info.perpDist);
-    var isBar = (wallX >= 0.25 - barHalfW && wallX <= 0.25 + barHalfW) ||
-                (wallX >= 0.50 - barHalfW && wallX <= 0.50 + barHalfW) ||
-                (wallX >= 0.75 - barHalfW && wallX <= 0.75 + barHalfW);
+    // 3. Two vertical mullions at wallX ≈ 1/3 and 2/3 — divide the
+    //    glass into 3 equal-width panels. No horizontal bar
+    //    (gas-station storefront aesthetic).
+    var mullionHalfW2 = 0.025 + 0.015 / Math.max(0.6, info.perpDist);
+    var _onMullion2 = (wallX >= (1/3) - mullionHalfW2 && wallX <= (1/3) + mullionHalfW2) ||
+                      (wallX >= (2/3) - mullionHalfW2 && wallX <= (2/3) + mullionHalfW2);
 
-    // Iron color — always cold grey regardless of building mullion style.
-    var iR = Math.round(70 * bAdj);
-    var iG = Math.round(72 * bAdj);
-    var iB = Math.round(78 * bAdj);
+    var mRGB2 = _windowMullions[info.mapX + ',' + info.mapY] || null;
+    var mR2 = mRGB2 ? mRGB2.r : 60;   // slightly warmer than default wood
+    var mG2 = mRGB2 ? mRGB2.g : 50;
+    var mB2 = mRGB2 ? mRGB2.b : 42;
+    mR2 = Math.round(mR2 * bAdj);
+    mG2 = Math.round(mG2 * bAdj);
+    mB2 = Math.round(mB2 * bAdj);
     var fF2 = info.fogFactor;
     if (fF2 > 0) {
-      iR = Math.round(iR * (1 - fF2) + info.fogColor.r * fF2);
-      iG = Math.round(iG * (1 - fF2) + info.fogColor.g * fF2);
-      iB = Math.round(iB * (1 - fF2) + info.fogColor.b * fF2);
+      mR2 = Math.round(mR2 * (1 - fF2) + info.fogColor.r * fF2);
+      mG2 = Math.round(mG2 * (1 - fF2) + info.fogColor.g * fF2);
+      mB2 = Math.round(mB2 * (1 - fF2) + info.fogColor.b * fF2);
     }
+    var mullionColor2 = 'rgb(' + mR2 + ',' + mG2 + ',' + mB2 + ')';
 
-    if (isBar) {
-      ctx.fillStyle = 'rgb(' + iR + ',' + iG + ',' + iB + ')';
+    if (_onMullion2) {
+      ctx.fillStyle = mullionColor2;
       ctx.fillRect(col, gapStart, 1, gapH);
     }
 
-    // 4. Top + bottom iron frame — 2px each.
-    var frR = Math.round(iR * 0.7);
-    var frG = Math.round(iG * 0.7);
-    var frB = Math.round(iB * 0.7);
+    // 4. Top + bottom frame — 2px bands at head/sill (solid stop bead).
+    var frR = Math.round(mR2 * 0.65);
+    var frG = Math.round(mG2 * 0.65);
+    var frB = Math.round(mB2 * 0.65);
     ctx.fillStyle = 'rgb(' + frR + ',' + frG + ',' + frB + ')';
     ctx.fillRect(col, gapStart, 1, Math.min(2, gapH));
     if (gapH > 2) ctx.fillRect(col, gapStart + gapH - 2, 1, 2);
@@ -685,15 +758,18 @@ var WindowSprites = (function () {
     if (gapH <= 0) return;
 
     var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
-    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
-    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
     // Interior face: transparent
-    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+    if (isBack) return;
 
     // Side faces: building wall texture masonry (the beveled jambs).
     // Use a warmer brown for residential wood.
-    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+    if (!isGlass) {
       var bAdjW = info.brightness;
       var wR = Math.round(58 * bAdjW);
       var wG = Math.round(38 * bAdjW);
@@ -792,14 +868,17 @@ var WindowSprites = (function () {
     if (gapH <= 0) return;
 
     var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
-    var exteriorFace = getExteriorFace(info.mapX, info.mapY);
-    var interiorFace = (exteriorFace >= 0) ? ((exteriorFace + 2) % 4) : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
     // Interior face: transparent
-    if (exteriorFace >= 0 && hitFace === interiorFace) return;
+    if (isBack) return;
 
     // Side faces: opaque masonry
-    if (exteriorFace < 0 || hitFace !== exteriorFace) {
+    if (!isGlass) {
       var bAdjW = info.brightness;
       var wR = Math.round(65 * bAdjW);
       var wG = Math.round(60 * bAdjW);
@@ -883,6 +962,246 @@ var WindowSprites = (function () {
     }
   }
 
+  // ── WINDOW_ALCOVE gap filler ──────────────────────────────────
+  // Residential alcove window — mild inset (not a protrusion like
+  // BAY), narrower glass cavity, warm colonial cross mullion. Used
+  // on facades directly adjacent to doors or corners, where a BAY's
+  // outward protrusion reads awkwardly. Same three-face model.
+  function _windowAlcoveFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace      = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
+
+    if (isBack) return;
+
+    if (!isGlass) {
+      var bAdjW = info.brightness;
+      var wR = Math.round(62 * bAdjW);
+      var wG = Math.round(42 * bAdjW);
+      var wB = Math.round(26 * bAdjW);
+      var fFW = info.fogFactor;
+      if (fFW > 0) {
+        wR = Math.round(wR * (1 - fFW) + info.fogColor.r * fFW);
+        wG = Math.round(wG * (1 - fFW) + info.fogColor.g * fFW);
+        wB = Math.round(wB * (1 - fFW) + info.fogColor.b * fFW);
+      }
+      ctx.fillStyle = 'rgb(' + wR + ',' + wG + ',' + wB + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    var bAdj    = info.brightness;
+    var fogFade = 1 - Math.min(0.85, info.fogFactor);
+    var wallX   = info.wallX;
+
+    // Warm amber wash (same intensity as bay — cozy residential).
+    var warmA = 0.22 * bAdj * fogFade;
+    if (warmA > 0.01) {
+      ctx.fillStyle = 'rgba(255, 170, 50, ' + warmA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // Subtle glint.
+    if (gapH >= 4) {
+      var _rotA   = (_glintClock % GLINT_PERIOD) / GLINT_PERIOD;
+      var _slopeA = Math.sin(_rotA * Math.PI * 2);
+      var _yNormA = 0.5 + (wallX - 0.5) * _slopeA * 0.25;
+      if (_yNormA < 0.15) _yNormA = 0.15;
+      if (_yNormA > 0.85) _yNormA = 0.85;
+      var _glintYA = gapStart + Math.floor(_yNormA * gapH);
+      var _xDistA  = Math.abs(wallX - 0.40);
+      var _glintAA = Math.max(0, 1 - _xDistA * 4) * 0.28 * bAdj * fogFade;
+      if (_glintAA > 0.02) {
+        var _gHA = Math.min(4, gapH - (_glintYA - gapStart));
+        if (_gHA > 0) {
+          ctx.fillStyle = 'rgba(255, 255, 240, ' + _glintAA.toFixed(3) + ')';
+          ctx.fillRect(col, _glintYA, 1, _gHA);
+        }
+      }
+    }
+
+    // Single horizontal mullion at gap midpoint — splits glass into
+    // two stacked panes. Distinct from the other window types (no
+    // vertical divider).
+    var mRGBA = _windowMullions[info.mapX + ',' + info.mapY] || null;
+    var mRA = mRGBA ? mRGBA.r : 48;
+    var mGA = mRGBA ? mRGBA.g : 28;
+    var mBA = mRGBA ? mRGBA.b : 14;
+    mRA = Math.round(mRA * bAdj);
+    mGA = Math.round(mGA * bAdj);
+    mBA = Math.round(mBA * bAdj);
+    var fFA = info.fogFactor;
+    if (fFA > 0) {
+      mRA = Math.round(mRA * (1 - fFA) + info.fogColor.r * fFA);
+      mGA = Math.round(mGA * (1 - fFA) + info.fogColor.g * fFA);
+      mBA = Math.round(mBA * (1 - fFA) + info.fogColor.b * fFA);
+    }
+    var mullionColorA = 'rgb(' + mRA + ',' + mGA + ',' + mBA + ')';
+
+    var midYA = gapStart + Math.floor(gapH * 0.5);
+    var hThickA = Math.max(2, Math.floor(info.lineH / info.wallHeightMult * 0.06));
+    var hmTopA = midYA - Math.floor(hThickA / 2);
+    if (hmTopA >= gapStart && hmTopA + hThickA <= gapStart + gapH) {
+      ctx.fillStyle = mullionColorA;
+      ctx.fillRect(col, hmTopA, 1, hThickA);
+    }
+
+    // Frame — darker stop bead top/bottom.
+    var frRA = Math.round(mRA * 0.55);
+    var frGA = Math.round(mGA * 0.55);
+    var frBA = Math.round(mBA * 0.55);
+    ctx.fillStyle = 'rgb(' + frRA + ',' + frGA + ',' + frBA + ')';
+    ctx.fillRect(col, gapStart, 1, 1);
+    ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
+  }
+
+  // ── WINDOW_ARROWSLIT gap filler (dungeon / interior peephole) ──
+  // Tall narrow vertical aperture cut through raw stone — no glass,
+  // no warm vignette. The cavity spans nearly the full wall height,
+  // but the filler confines the actual opening to a 10% wallX stripe
+  // centered at 0.5. Outside that stripe, the filler paints stone
+  // masonry so the slit reads as a narrow vertical cut rather than
+  // a wide horizontal band. Inside the stripe, the filler paints
+  // nothing — back-layer geometry (the adjacent room) shows through.
+  //
+  // A single 1px darker bead frames each long edge (wallX ≈ 0.45 /
+  // 0.55) to sell the depth of the cut. Usable on both interior
+  // (N.N) and nested dungeon (N.N.N) floors — the contract's fog
+  // mode (CLAMP vs DARKNESS) decides how legible the back side is.
+  function _windowArrowslitFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
+
+    // Shared stone-flank color (muted, fog-aware). Used for BOTH
+    // the masonry flanks on the aperture face AND the side faces,
+    // so the tile reads as one continuous block of dungeon stone.
+    var bAdjS = info.brightness;
+    var sR = Math.round(70 * bAdjS);
+    var sG = Math.round(66 * bAdjS);
+    var sB = Math.round(60 * bAdjS);
+    var fFS = info.fogFactor;
+    if (fFS > 0) {
+      sR = Math.round(sR * (1 - fFS) + info.fogColor.r * fFS);
+      sG = Math.round(sG * (1 - fFS) + info.fogColor.g * fFS);
+      sB = Math.round(sB * (1 - fFS) + info.fogColor.b * fFS);
+    }
+    var stoneRGB = 'rgb(' + sR + ',' + sG + ',' + sB + ')';
+
+    // Back-face: transparent (see through the slit to whatever is
+    // on the other side). Same early-return as the facade windows.
+    if (isBack) return;
+
+    // Side faces: solid masonry.
+    if (!isGlass) {
+      ctx.fillStyle = stoneRGB;
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // ── Aperture face ────────────────────────────────────────────
+    // Outside the 10% center stripe: paint masonry (the rest of the
+    // wall face). Inside the stripe: skip fill to show back layers.
+    var wallX = info.wallX;
+    if (wallX < 0.45 || wallX > 0.55) {
+      ctx.fillStyle = stoneRGB;
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // Darker 1px bead on the two long edges of the cut, so the slit
+    // reads as a recessed stone gouge rather than a painted stripe.
+    // wallX 0.45 / 0.55 land exactly on the transition columns.
+    var edgeSlack = 0.005;
+    var onEdge = (wallX <= 0.45 + edgeSlack) || (wallX >= 0.55 - edgeSlack);
+    if (onEdge) {
+      ctx.fillStyle = 'rgb(' +
+        Math.round(sR * 0.45) + ',' +
+        Math.round(sG * 0.45) + ',' +
+        Math.round(sB * 0.45) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+    // Inside the aperture — leave transparent (no fill).
+  }
+
+  // ── WINDOW_MURDERHOLE gap filler (small high square peephole) ──
+  // A short horizontal cavity high up on the wall (defined by the
+  // freeform hUpper/hLower in SpatialContract), with the filler
+  // further confining the aperture to wallX ∈ [0.40, 0.60]. The
+  // result is a small square opening roughly at head height (in
+  // dungeon wall terms) that the player has to crane up through to
+  // glimpse the adjacent room.
+  function _windowMurderholeFiller(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var hitFace = (typeof info.hitFace === 'number') ? info.hitFace : -1;
+    var extMask = getExteriorFace(info.mapX, info.mapY);
+    var hitBit  = (hitFace >= 0) ? (1 << hitFace) : 0;
+    var oppBit  = (hitFace >= 0) ? (1 << ((hitFace + 2) % 4)) : 0;
+    var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
+    var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
+
+    var bAdjS = info.brightness;
+    var sR = Math.round(68 * bAdjS);
+    var sG = Math.round(64 * bAdjS);
+    var sB = Math.round(58 * bAdjS);
+    var fFS = info.fogFactor;
+    if (fFS > 0) {
+      sR = Math.round(sR * (1 - fFS) + info.fogColor.r * fFS);
+      sG = Math.round(sG * (1 - fFS) + info.fogColor.g * fFS);
+      sB = Math.round(sB * (1 - fFS) + info.fogColor.b * fFS);
+    }
+    var stoneRGB = 'rgb(' + sR + ',' + sG + ',' + sB + ')';
+
+    if (isBack) return;
+
+    if (!isGlass) {
+      ctx.fillStyle = stoneRGB;
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // Aperture face: 20% center stripe is the hole, flanks are stone.
+    var wallX = info.wallX;
+    if (wallX < 0.40 || wallX > 0.60) {
+      ctx.fillStyle = stoneRGB;
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // Darker 1px rim at the four edges of the square (top/bottom
+    // rendered as gap edges; left/right at wallX ≈ 0.40 / 0.60).
+    var darkR = Math.round(sR * 0.45);
+    var darkG = Math.round(sG * 0.45);
+    var darkB = Math.round(sB * 0.45);
+    var darkRGB = 'rgb(' + darkR + ',' + darkG + ',' + darkB + ')';
+
+    var edgeSlack = 0.008;
+    var onVertEdge = (wallX <= 0.40 + edgeSlack) || (wallX >= 0.60 - edgeSlack);
+    if (onVertEdge) {
+      ctx.fillStyle = darkRGB;
+      ctx.fillRect(col, gapStart, 1, gapH);
+      return;
+    }
+
+    // Top + bottom 1px rim lines to complete the square frame.
+    ctx.fillStyle = darkRGB;
+    ctx.fillRect(col, gapStart, 1, 1);
+    if (gapH > 1) ctx.fillRect(col, gapStart + gapH - 1, 1, 1);
+    // Interior of the hole — leave transparent.
+  }
+
   // ── Filler registration ─────────────────────────────────────────
   // This module currently loads in Layer 1 in index.html (alongside
   // bonfire-sprites / dump-truck-sprites), which is BEFORE the
@@ -895,22 +1214,13 @@ var WindowSprites = (function () {
     if (_registered) return;
     if (typeof Raycaster !== 'undefined' &&
         typeof Raycaster.registerFreeformGapFiller === 'function') {
-      Raycaster.registerFreeformGapFiller(
-        'window_tavern_interior',
-        _windowTavernInteriorFiller
-      );
-      Raycaster.registerFreeformGapFiller(
-        'window_shop_interior',
-        _windowShopFiller
-      );
-      Raycaster.registerFreeformGapFiller(
-        'window_bay_interior',
-        _windowBayFiller
-      );
-      Raycaster.registerFreeformGapFiller(
-        'window_slit_interior',
-        _windowSlitFiller
-      );
+      Raycaster.registerFreeformGapFiller('window_tavern_interior', _windowTavernInteriorFiller);
+      Raycaster.registerFreeformGapFiller('window_shop_interior',   _windowShopFiller);
+      Raycaster.registerFreeformGapFiller('window_bay_interior',    _windowBayFiller);
+      Raycaster.registerFreeformGapFiller('window_slit_interior',   _windowSlitFiller);
+      Raycaster.registerFreeformGapFiller('window_alcove_interior', _windowAlcoveFiller);
+      Raycaster.registerFreeformGapFiller('window_arrowslit_interior',  _windowArrowslitFiller);
+      Raycaster.registerFreeformGapFiller('window_murderhole_interior', _windowMurderholeFiller);
       _registered = true;
     }
   }
@@ -949,12 +1259,12 @@ var WindowSprites = (function () {
    * @returns {boolean}
    */
   function isExteriorHit(x, y, hitSide, stepX, stepY) {
-    var extFace = getExteriorFace(x, y);
-    if (extFace < 0) return false;
+    var extMask = getExteriorFace(x, y);
+    if (extMask <= 0) return false;
     var hitFace = (hitSide === 0)
       ? (stepX > 0 ? 2 : 0)
       : (stepY > 0 ? 3 : 1);
-    return hitFace === extFace;
+    return (extMask & (1 << hitFace)) !== 0;
   }
 
   return Object.freeze({

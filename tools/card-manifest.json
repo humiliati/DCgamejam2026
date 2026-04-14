@@ -1,0 +1,1573 @@
+{
+  "generated": "2026-04-14T04:25:15.542Z",
+  "source": "data/cards.json",
+  "cardCount": 120,
+  "bySuit": {
+    "spade": 34,
+    "heart": 21,
+    "diamond": 29,
+    "club": 36
+  },
+  "cards": [
+    {
+      "id": "ACT-001",
+      "name": "Slash",
+      "emoji": "⚔️",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": true,
+      "description": "A basic sword strike. Everyone knows this one."
+    },
+    {
+      "id": "ACT-002",
+      "name": "Block",
+      "emoji": "🛡️",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": true,
+      "description": "2 temp HP. Absorbs the next hit."
+    },
+    {
+      "id": "ACT-003",
+      "name": "Mend",
+      "emoji": "💚",
+      "suit": "heart",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": true,
+      "description": "Restore 3 HP. Good in a pinch."
+    },
+    {
+      "id": "ACT-004",
+      "name": "Cinder Strike",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": true,
+      "description": "A burning strike. ♠ enemies take ×1.5."
+    },
+    {
+      "id": "ACT-005",
+      "name": "Frost Shard",
+      "emoji": "❄️",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "A shard of ice. ♣ enemies take ×1.5."
+    },
+    {
+      "id": "ACT-006",
+      "name": "Arc Bolt",
+      "emoji": "⚡",
+      "suit": "club",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": true,
+      "description": "A bolt of lightning. ♦ enemies take ×1.5."
+    },
+    {
+      "id": "ACT-007",
+      "name": "Embers",
+      "emoji": "✨",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "2 damage + burn (1 DOT). The damage keeps giving."
+    },
+    {
+      "id": "ACT-008",
+      "name": "Glacial Guard",
+      "emoji": "🧊",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "3 temp HP. Solid frost defense."
+    },
+    {
+      "id": "ACT-009",
+      "name": "Thunder Clap",
+      "emoji": "🌩️",
+      "suit": "club",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "4 ♣ damage. Loud. Effective."
+    },
+    {
+      "id": "ACT-010",
+      "name": "Rummage",
+      "emoji": "📦",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": true,
+      "description": "Draw 1 extra card this combat."
+    },
+    {
+      "id": "ACT-020",
+      "name": "Bonepick",
+      "emoji": "🦴",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "A harvested bone used as a weapon. Biologically efficient."
+    },
+    {
+      "id": "ACT-021",
+      "name": "Grave Chill",
+      "emoji": "☁️",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 ♠ damage + stun (1 turn). The cold settles in."
+    },
+    {
+      "id": "ACT-022",
+      "name": "Corpse Gas",
+      "emoji": "💨",
+      "suit": "club",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "2 ♣ damage + poison. Smells awful. Works great."
+    },
+    {
+      "id": "ACT-023",
+      "name": "Mold Web",
+      "emoji": "🕸️",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "4 def + root enemy (skip action). Good for emergencies."
+    },
+    {
+      "id": "ACT-024",
+      "name": "Rat Swarm",
+      "emoji": "🐀",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 hits of 1 damage. Each hit triggers on-hit effects separately."
+    },
+    {
+      "id": "ACT-025",
+      "name": "Amber Lock",
+      "emoji": "🔒",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Freeze enemy for 2 turns. Zero damage. Pure control."
+    },
+    {
+      "id": "ACT-026",
+      "name": "Dead Weight",
+      "emoji": "💀",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "6 damage. Slow swing, huge impact."
+    },
+    {
+      "id": "ACT-027",
+      "name": "Bone Shard",
+      "emoji": "🦷",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 damage + bleed (1 DOT). Pierces light armor."
+    },
+    {
+      "id": "ACT-028",
+      "name": "Undying Will",
+      "emoji": "❤️‍🔥",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+5 HP (only if below half health). The will to survive."
+    },
+    {
+      "id": "ACT-029",
+      "name": "Crypt Shroud",
+      "emoji": "👻",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 def + regen (2 HP/turn × 2). Frost armor that heals."
+    },
+    {
+      "id": "ACT-040",
+      "name": "Slag Toss",
+      "emoji": "🌋",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Hurl molten slag. 3 ♦ damage."
+    },
+    {
+      "id": "ACT-041",
+      "name": "Furnace Breath",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 ♦ damage + burn. The furnace doesn't stop."
+    },
+    {
+      "id": "ACT-042",
+      "name": "Iron Wall",
+      "emoji": "🔩",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 temp HP. Riveted steel. Simple."
+    },
+    {
+      "id": "ACT-043",
+      "name": "Pressure Burst",
+      "emoji": "💥",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 ♣ damage. Pressurized steam explosion."
+    },
+    {
+      "id": "ACT-044",
+      "name": "Scrap Shield",
+      "emoji": "🛡️",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "6 def + reflect (1 dmg returned on hit). Forged from enemy scrap."
+    },
+    {
+      "id": "ACT-045",
+      "name": "Forge Strike",
+      "emoji": "🔨",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "6 ♦ damage. Heavy hammer, hotter flame."
+    },
+    {
+      "id": "ACT-046",
+      "name": "Overclock",
+      "emoji": "⚙️",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Restore 2 energy immediately. Then do something else."
+    },
+    {
+      "id": "ACT-047",
+      "name": "Meltdown",
+      "emoji": "🌊",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "8 ♦ damage + burn (2 stacks). The foundry goes critical."
+    },
+    {
+      "id": "ACT-048",
+      "name": "Rivet Shot",
+      "emoji": "🔧",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 damage + stun (1 turn). A rivet, fired at high speed."
+    },
+    {
+      "id": "ACT-049",
+      "name": "Ember Ward",
+      "emoji": "🛡️",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 def + burn reflect (attackers take burn on hit)."
+    },
+    {
+      "id": "ACT-050",
+      "name": "Cinder Bloom",
+      "emoji": "🌸",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "3 dmg + burn, twice. Two applications of everything."
+    },
+    {
+      "id": "ACT-060",
+      "name": "Cryo Bolt",
+      "emoji": "🔵",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "6 ♠ damage + stun. Deep-water cold."
+    },
+    {
+      "id": "ACT-061",
+      "name": "Shock Net",
+      "emoji": "🕸️",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "4 storm + shock (drain 1 enemy energy). Electric fishing."
+    },
+    {
+      "id": "ACT-062",
+      "name": "Deep Freeze",
+      "emoji": "🧊",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 def + freeze enemy (1 turn). Both offensive and defensive."
+    },
+    {
+      "id": "ACT-063",
+      "name": "Bio Surge",
+      "emoji": "💧",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 storm + drain 1 energy. Bioluminescent discharge."
+    },
+    {
+      "id": "ACT-064",
+      "name": "Pressure Wave",
+      "emoji": "💫",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 damage. Concussive burst from depth charges."
+    },
+    {
+      "id": "ACT-065",
+      "name": "Brine Hex",
+      "emoji": "🌊",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "3 frost + freeze for 2 turns. Salt and ice."
+    },
+    {
+      "id": "ACT-066",
+      "name": "Current Charge",
+      "emoji": "⚡",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "6 ♣ damage. Costs 1 battery instead of energy. Lab equipment."
+    },
+    {
+      "id": "ACT-067",
+      "name": "Archivist's Copy",
+      "emoji": "📋",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Repeat the last card played, targeting this enemy."
+    },
+    {
+      "id": "ACT-068",
+      "name": "Cryo Cocoon",
+      "emoji": "❄️",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "10 def + regen (3 HP/turn × 2). Encased in ice. Protected."
+    },
+    {
+      "id": "ACT-080",
+      "name": "Scale Coat",
+      "emoji": "🐉",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 def + regen. Dragon scale armor. Tide Council standard issue."
+    },
+    {
+      "id": "ACT-081",
+      "name": "Tidal Surge",
+      "emoji": "🌊",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "7 ♠ damage + stun. The tide doesn't ask permission."
+    },
+    {
+      "id": "ACT-082",
+      "name": "Dragon's Roar",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "9 ♦ damage. A frost faction card that uses fire. Dragons make their own rules."
+    },
+    {
+      "id": "ACT-083",
+      "name": "Sea Witch's Hex",
+      "emoji": "🔮",
+      "suit": "club",
+      "rarity": "epic",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Drain 3 enemy energy + 5 ♣ damage. The hex compounds."
+    },
+    {
+      "id": "ACT-084",
+      "name": "Tide's Blessing",
+      "emoji": "💧",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+4 HP + draw 1 card. The council looks after its own."
+    },
+    {
+      "id": "ACT-085",
+      "name": "Forge Mastery",
+      "emoji": "⚒️",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "5 ♦ damage + 2 armor. Attack and defend simultaneously."
+    },
+    {
+      "id": "ACT-086",
+      "name": "Smelter's Fury",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "4 damage twice. Two swings from the forge hammer."
+    },
+    {
+      "id": "ACT-087",
+      "name": "Iron Resolve",
+      "emoji": "🛡️",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "7 temp HP. The foundry doesn't bend."
+    },
+    {
+      "id": "ACT-088",
+      "name": "Magma Core",
+      "emoji": "🌋",
+      "suit": "diamond",
+      "rarity": "epic",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "10 flame + burn (3 stacks). The core breaches containment."
+    },
+    {
+      "id": "ACT-089",
+      "name": "Scrap Salvo",
+      "emoji": "🔩",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Fire 3 chunks of scrap. 2 damage each."
+    },
+    {
+      "id": "ACT-090",
+      "name": "Signal Flare",
+      "emoji": "🚨",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 ♣ damage + restore 1 energy. Efficient use of resources."
+    },
+    {
+      "id": "ACT-091",
+      "name": "Court Order",
+      "emoji": "📜",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "All card costs reduced by 1 energy for 3 turns. The order is law."
+    },
+    {
+      "id": "ACT-092",
+      "name": "Thunder Protocol",
+      "emoji": "⚡",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "8 ♣ damage + stun. The protocol authorizes lethal force."
+    },
+    {
+      "id": "ACT-093",
+      "name": "Brine Blade",
+      "emoji": "🗡️",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 ♠ damage + bleed. Salt in the wound is still water."
+    },
+    {
+      "id": "ACT-094",
+      "name": "Final Decree",
+      "emoji": "🌊",
+      "suit": "club",
+      "rarity": "epic",
+      "cost": {
+        "type": "energy",
+        "value": 3
+      },
+      "starter": false,
+      "description": "14 ♣ damage. No appeal process."
+    },
+    {
+      "id": "ACT-100",
+      "name": "Elemental Echo",
+      "emoji": "🌀",
+      "suit": "heart",
+      "rarity": "epic",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "5 damage matching the element of the last card played."
+    },
+    {
+      "id": "ACT-101",
+      "name": "Blood Price",
+      "emoji": "🩸",
+      "suit": "heart",
+      "rarity": "epic",
+      "cost": {
+        "type": "hp",
+        "value": 3
+      },
+      "starter": false,
+      "description": "9 damage. Costs 3 HP instead of energy. Pay with what you have."
+    },
+    {
+      "id": "ACT-102",
+      "name": "Gleaner's Gambit",
+      "emoji": "🎲",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Next card played deals double damage."
+    },
+    {
+      "id": "ACT-103",
+      "name": "Chain Fire",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "epic",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "4 damage + burn ×2, chaining to adjacent targets if present."
+    },
+    {
+      "id": "ACT-104",
+      "name": "Frost Nova",
+      "emoji": "❄️",
+      "suit": "spade",
+      "rarity": "epic",
+      "cost": {
+        "type": "energy",
+        "value": 3
+      },
+      "starter": false,
+      "description": "6 frost + freeze for 3 turns. Time stops for them."
+    },
+    {
+      "id": "ACT-105",
+      "name": "Arc Storm",
+      "emoji": "🌩️",
+      "suit": "club",
+      "rarity": "epic",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "6 storm + drain 2 enemy energy. The storm has a memory."
+    },
+    {
+      "id": "ACT-106",
+      "name": "Second Wind",
+      "emoji": "🌬️",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+6 HP + restore 1 energy. One more round."
+    },
+    {
+      "id": "ACT-107",
+      "name": "Void Strike",
+      "emoji": "🌑",
+      "suit": "diamond",
+      "rarity": "epic",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "12 damage. Costs 2 battery. No suit — ignores RPS."
+    },
+    {
+      "id": "ACT-110",
+      "name": "Life Ward",
+      "emoji": "💗",
+      "suit": "heart",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 defense. A gentle ward of living energy."
+    },
+    {
+      "id": "ACT-111",
+      "name": "Blood Barrier",
+      "emoji": "🩸",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Pay 2 HP → 6 defense + regen 1. Your blood hardens into a shield."
+    },
+    {
+      "id": "ACT-112",
+      "name": "Vital Surge",
+      "emoji": "💓",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Pay 1 HP → restore 4 HP and draw 1. Adrenaline focus."
+    },
+    {
+      "id": "ACT-113",
+      "name": "Heartblood Thorns",
+      "emoji": "🌹",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 3
+      },
+      "starter": false,
+      "description": "Pay 3 HP → 5 defense + reflect 2. Thorns grow from your wounds."
+    },
+    {
+      "id": "ACT-114",
+      "name": "Martyr's Embrace",
+      "emoji": "🕊️",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 4
+      },
+      "starter": false,
+      "description": "Pay 4 HP → 10 defense + regen 2. Embrace the pain, outlast."
+    },
+    {
+      "id": "ACT-115",
+      "name": "Crimson Counter",
+      "emoji": "⚔️",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Pay 2 HP → 4 defense + 4 damage. Brace and strike."
+    },
+    {
+      "id": "ACT-116",
+      "name": "Transfusion",
+      "emoji": "💉",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Heal 2 HP. Enemy bleeds 1. Take theirs, keep yours."
+    },
+    {
+      "id": "ACT-117",
+      "name": "Final Stand",
+      "emoji": "💗",
+      "suit": "heart",
+      "rarity": "epic",
+      "cost": {
+        "type": "hp",
+        "value": 5
+      },
+      "starter": false,
+      "description": "Pay 5 HP → 15 defense + regen 3 + reflect 2. Your last heartbeat is a fortress."
+    },
+    {
+      "id": "ACT-120",
+      "name": "Static Field",
+      "emoji": "⚡",
+      "suit": "club",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 energy → 3 defense + shock 1. Zap anything that gets close."
+    },
+    {
+      "id": "ACT-121",
+      "name": "Energy Shield",
+      "emoji": "🔷",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 7 defense. Pure energy barrier, no frills."
+    },
+    {
+      "id": "ACT-122",
+      "name": "Pulse Guard",
+      "emoji": "📡",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 energy → 4 defense + draw 1. Scan, guard, adapt."
+    },
+    {
+      "id": "ACT-123",
+      "name": "Neural Brace",
+      "emoji": "🧠",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 5 defense + stun 2. Lock their brain, lock their attack."
+    },
+    {
+      "id": "ACT-124",
+      "name": "Feedback Loop",
+      "emoji": "🔄",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 6 defense + reflect 2 + shock 1. Attack me? Feel it twice."
+    },
+    {
+      "id": "ACT-125",
+      "name": "EMP Dome",
+      "emoji": "💠",
+      "suit": "club",
+      "rarity": "epic",
+      "cost": {
+        "type": "energy",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 energy → 12 defense + shock 3 + stun 1. Everything stops."
+    },
+    {
+      "id": "ACT-126",
+      "name": "Countershock",
+      "emoji": "🫲",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 energy → 3 defense + 3 damage. Block and counterpunch."
+    },
+    {
+      "id": "ACT-130",
+      "name": "Tempered Plate",
+      "emoji": "🪖",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 8 defense. Forge-hardened plating."
+    },
+    {
+      "id": "ACT-131",
+      "name": "Slag Armor",
+      "emoji": "🔶",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 6 defense + burn 2. Molten metal clings to whoever strikes you."
+    },
+    {
+      "id": "ACT-132",
+      "name": "Forge Brace",
+      "emoji": "🔨",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 4 defense + 3 damage. Hammer meets shield."
+    },
+    {
+      "id": "ACT-133",
+      "name": "Crucible Shell",
+      "emoji": "🛡️",
+      "suit": "diamond",
+      "rarity": "epic",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 battery → 14 defense + burn 2 + regen 1. The furnace protects its master."
+    },
+    {
+      "id": "ACT-135",
+      "name": "Venom Drip",
+      "emoji": "🐍",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "2 damage + poison 2. Slow death, guaranteed."
+    },
+    {
+      "id": "ACT-136",
+      "name": "Tangle Root",
+      "emoji": "🌿",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "Root 2 + 2 defense. Vines snare and shield."
+    },
+    {
+      "id": "ACT-137",
+      "name": "Serrated Edge",
+      "emoji": "🗡️",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "3 damage + bleed 2. Jagged wounds don't close."
+    },
+    {
+      "id": "ACT-138",
+      "name": "Corrosive Splash",
+      "emoji": "🧪",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "3 damage + poison 2 + burn 1. Acid eats through everything."
+    },
+    {
+      "id": "ACT-139",
+      "name": "Briar Trap",
+      "emoji": "🪤",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "4 defense + root 2 + bleed 1. Step on this. I dare you."
+    },
+    {
+      "id": "ACT-140",
+      "name": "Toxic Cloud",
+      "emoji": "☁️",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Poison 3 + root 1. Choking fumes pin them in place."
+    },
+    {
+      "id": "ACT-141",
+      "name": "Hemorrhage",
+      "emoji": "💀",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Pay 2 HP → 5 damage + bleed 3. Spill your blood to spill theirs."
+    },
+    {
+      "id": "ACT-142",
+      "name": "Constrict",
+      "emoji": "🐙",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "2 damage + root 2 + stun 1. Tentacles hold. You don't."
+    },
+    {
+      "id": "ACT-200",
+      "name": "Battery Pack",
+      "emoji": "🔋",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+2 battery. Standard recharge cell."
+    },
+    {
+      "id": "ACT-201",
+      "name": "Power Cell",
+      "emoji": "⚡",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+1 battery, +1 energy. Dual-charge capacitor."
+    },
+    {
+      "id": "ACT-202",
+      "name": "Overcharge",
+      "emoji": "🔌",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Spend 1 energy → +3 battery. Convert power to charge."
+    },
+    {
+      "id": "ACT-203",
+      "name": "Salvage Core",
+      "emoji": "🧲",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Spend 2 HP → +3 battery. Rip wiring from your own flesh."
+    },
+    {
+      "id": "ACT-204",
+      "name": "Adrenaline Surge",
+      "emoji": "💪",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Spend 2 HP → +3 energy. Pain fuels focus."
+    },
+    {
+      "id": "ACT-205",
+      "name": "Quick Reload",
+      "emoji": "📎",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "free",
+        "value": 0
+      },
+      "starter": false,
+      "description": "+1 energy + draw 1. Check your pockets."
+    },
+    {
+      "id": "ACT-206",
+      "name": "Coffee Break",
+      "emoji": "☕",
+      "suit": "diamond",
+      "rarity": "common",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Spend 1 battery → +3 energy. Heat up a quick brew."
+    },
+    {
+      "id": "ACT-207",
+      "name": "Medical Kit",
+      "emoji": "🏥",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "Spend 2 energy → +6 HP. Field surgery."
+    },
+    {
+      "id": "ACT-208",
+      "name": "Stim Pack",
+      "emoji": "💉",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Spend 1 battery → +4 HP. Automated med-injector."
+    },
+    {
+      "id": "ACT-209",
+      "name": "Rations",
+      "emoji": "🍖",
+      "suit": "spade",
+      "rarity": "common",
+      "cost": {
+        "type": "energy",
+        "value": 1
+      },
+      "starter": false,
+      "description": "Spend 1 energy → +3 HP, +1 energy back. A quick meal."
+    },
+    {
+      "id": "ACT-210",
+      "name": "EMP Blast",
+      "emoji": "💻",
+      "suit": "diamond",
+      "rarity": "rare",
+      "cost": {
+        "type": "battery",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 battery → 8 damage + stun 2. Fry everything nearby."
+    },
+    {
+      "id": "ACT-211",
+      "name": "System Crash",
+      "emoji": "🔥",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 battery → 5 damage + burn 2. Overheat their circuits."
+    },
+    {
+      "id": "ACT-212",
+      "name": "Smoke Screen",
+      "emoji": "💨",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 4 defense + stealth 2. Vanish in the haze."
+    },
+    {
+      "id": "ACT-213",
+      "name": "Grenade",
+      "emoji": "💣",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 6 damage. Pull pin, throw, duck."
+    },
+    {
+      "id": "ACT-214",
+      "name": "Explosive Shot",
+      "emoji": "🎯",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 energy → 8 damage. One shot, big boom."
+    },
+    {
+      "id": "ACT-215",
+      "name": "Execute",
+      "emoji": "⚔️",
+      "suit": "spade",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 energy → 10 damage. Make it count."
+    },
+    {
+      "id": "ACT-216",
+      "name": "Thermal Scan",
+      "emoji": "🔭",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 3 damage + expose 2. Nowhere to hide."
+    },
+    {
+      "id": "ACT-217",
+      "name": "Jammer",
+      "emoji": "📡",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 battery → 3 defense + disrupt 2. Scramble their signals."
+    },
+    {
+      "id": "ACT-218",
+      "name": "Ghost Protocol",
+      "emoji": "👻",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 battery → 5 defense + stealth 3. You were never here."
+    },
+    {
+      "id": "ACT-219",
+      "name": "Predator Focus",
+      "emoji": "👁️",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 4 damage + accuracy 2. Lock on."
+    },
+    {
+      "id": "ACT-220",
+      "name": "Blood Strike",
+      "emoji": "🩸",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 HP → 7 damage. Your blood, their problem."
+    },
+    {
+      "id": "ACT-221",
+      "name": "Last Stand",
+      "emoji": "🛡️",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 4
+      },
+      "starter": false,
+      "description": "4 HP → 8 defense + invulnerable 1. Not today."
+    },
+    {
+      "id": "ACT-222",
+      "name": "Panic Dodge",
+      "emoji": "😱",
+      "suit": "heart",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "hp",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 HP → 5 defense. Stumble out of the way, bleeding."
+    },
+    {
+      "id": "ACT-223",
+      "name": "Berserker Rage",
+      "emoji": "😡",
+      "suit": "heart",
+      "rarity": "rare",
+      "cost": {
+        "type": "hp",
+        "value": 3
+      },
+      "starter": false,
+      "description": "3 HP → 5 damage + frenzy 2. Rage is a resource."
+    },
+    {
+      "id": "ACT-224",
+      "name": "Charged Shot",
+      "emoji": "⚡",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 4 damage + draw 1. Efficient ordnance."
+    },
+    {
+      "id": "ACT-225",
+      "name": "Chain Lightning",
+      "emoji": "⛓️",
+      "suit": "club",
+      "rarity": "rare",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 6 damage + 1 battery. Lightning feeds the grid."
+    },
+    {
+      "id": "ACT-226",
+      "name": "Virus",
+      "emoji": "🦠",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 2 damage + poison 3. Slow death."
+    },
+    {
+      "id": "ACT-227",
+      "name": "Fragment Shower",
+      "emoji": "💫",
+      "suit": "diamond",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 battery → 3 damage + 3 defense. Shrapnel shield."
+    },
+    {
+      "id": "ACT-228",
+      "name": "Incendiary",
+      "emoji": "🧨",
+      "suit": "spade",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "energy",
+        "value": 2
+      },
+      "starter": false,
+      "description": "2 energy → 4 damage + burn 3. Light 'em up."
+    },
+    {
+      "id": "ACT-229",
+      "name": "Cryo Trap",
+      "emoji": "🧊",
+      "suit": "club",
+      "rarity": "uncommon",
+      "cost": {
+        "type": "battery",
+        "value": 1
+      },
+      "starter": false,
+      "description": "1 battery → 3 defense + freeze 2. Ice cage."
+    }
+  ]
+}

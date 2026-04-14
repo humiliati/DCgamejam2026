@@ -1580,7 +1580,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
     [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  DUMP_TRUCK(30,26) — parked in SE pod
-    [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,78,74,78,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_BAY(21,27)(23,27) + SE well
+    [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,80,74,80,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_ALCOVE(21,27)(23,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //30
@@ -1649,8 +1649,8 @@ var FloorManager = (function () {
         '23,8': 1,   // Inn right window    → facing SOUTH
         '9,27':  3,  // Storm Shelter left slit  → facing NORTH (the promenade)
         '11,27': 3,  // Storm Shelter right slit → facing NORTH
-        '21,27': 3,  // Gleaner's Home left bay  → facing NORTH
-        '23,27': 3   // Gleaner's Home right bay → facing NORTH
+        '21,27': 3,        // Gleaner's Home left alcove  → N only (E=door, W=wall)
+        '23,27': [3, 0]    // Gleaner's Home right alcove → NE corner (N + E street)
       },
       // Explicit exterior-face declarations for DOOR_FACADE tiles.
       // Same contract: "x,y" → face index (0=E, 1=S, 2=W, 3=N).

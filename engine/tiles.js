@@ -199,11 +199,40 @@ var TILES = (function () {
                            //   building wallTexture. 2×2 wood mullion cross (colonial).
                            //   Buildings: Gleaner's Home, private residences.
                            //   Gap filler: 'window_bay_interior'.
-    WINDOW_SLIT:      79   // Institutional fortress slit — narrow vertical opening
+    WINDOW_SLIT:      79,  // Institutional fortress slit — narrow vertical opening
                            //   (center 30% of tile width). Single iron bar. Cold
                            //   blue-grey wash. Masonry flanks on wallX < 0.35 / > 0.65.
                            //   Buildings: Storm Shelter, Watchman's Post, Dispatcher's.
                            //   Gap filler: 'window_slit_interior'.
+    WINDOW_ALCOVE:    80,  // Residential alcove window — mild inset (recessD 0.12),
+                           //   narrower glass cavity than BAY, single horizontal
+                           //   mullion band. Used where BAY's protrusion is
+                           //   awkward (corners, walls flanking a door).
+                           //   Gap filler: 'window_alcove_interior'.
+    WINDOW_COMMERCIAL: 81, // Commercial storefront — almost full-building-facade
+                           //   glass (0.25→3.00 world units, 2.75 tall) divided
+                           //   into 3 tall panels by 2 vertical mullions only.
+                           //   Gas-station / car-dealership look. Same 2-mullion
+                           //   filler as WINDOW_SHOP, just a larger cavity.
+                           //   Gap filler: 'window_shop_interior'.
+
+    // -- Living Windows §5: dungeon / interior architectural peepholes --
+    //    No glass, no warm interior vignette. These are cuts through stone:
+    //    the filler paints masonry outside the aperture and leaves the
+    //    aperture itself transparent so back-layer geometry (the adjacent
+    //    room) shows through. Usable on both interior (N.N) and nested
+    //    dungeon (N.N.N) floors — the fog mode of the current contract
+    //    (CLAMP vs DARKNESS) governs how legible the far side is.
+    WINDOW_ARROWSLIT: 82,  // Arrow slit — tall narrow vertical aperture, ~10%
+                           //   of tile width centered at wallX=0.5. Full-height
+                           //   cavity so the slit reads from floor to lintel.
+                           //   Defensive / gaolhouse aesthetic.
+                           //   Gap filler: 'window_arrowslit_interior'.
+    WINDOW_MURDERHOLE: 83  // Murder hole / peephole — small high square opening.
+                           //   Narrow wallX band (~20%) at high elevation so the
+                           //   player has to crane up to see through. Classic
+                           //   dungeon guard-room feature.
+                           //   Gap filler: 'window_murderhole_interior'.
   };
 
   /** Check if a tile blocks movement */
@@ -243,6 +272,8 @@ var TILES = (function () {
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
            tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
            tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
+           tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
+           tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE ||
            tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
@@ -354,14 +385,18 @@ var TILES = (function () {
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
            tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
            tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
+           tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
+           tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE ||
            tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
-  /** Check if tile is any window type (TAVERN, SHOP, BAY, SLIT) */
+  /** Check if tile is any window type (facade glass + dungeon apertures) */
   T.isWindow = function (tile) {
     return tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
-           tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT;
+           tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
+           tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
+           tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE;
   };
 
   return T;
