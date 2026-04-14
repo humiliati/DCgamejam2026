@@ -2876,7 +2876,7 @@ var TextureAtlas = (function () {
           return {
             r: _clamp((isHi ? p.mossHiR : p.mossR) + pn * 0.3),
             g: _clamp((isHi ? p.mossHiG : p.mossG) + pn * 0.6),
-            b: _clamp((isHi ? p.mossHiB : p.mossB) + pn * 0.2),
+            b: _clamp((isHi ? p.mossHiB : p.mossB) + pn * 0.2)
           };
         }
       }
