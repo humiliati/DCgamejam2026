@@ -767,6 +767,84 @@ var DebugPerfMonitor = (function () {
     return wrapped;
   }
 
+  // ── Manual span probe API (P1) ──────────────────────────────────────
+  //
+  // For hotpath call sites that can't be shim-wrapped — e.g. raycaster.js
+  // core captures sub-module aliases at IIFE-parse time, so swapping
+  // window.RaycasterSprites doesn't rewire the alias. Instead, call sites
+  // gate timing around themselves:
+  //
+  //     var _probe = (typeof DebugPerfMonitor !== 'undefined')
+  //         ? DebugPerfMonitor.probe : null;
+  //     if (_probe) _probe.begin('Raycaster.floorPhase');
+  //     _renderFloor(ctx);
+  //     if (_probe) _probe.end('Raycaster.floorPhase');
+  //
+  // Inactive mode: `_probe` is still defined (the module is always loaded)
+  // but `_running === false`, so begin/end short-circuit on the very first
+  // branch. Overhead when monitor is off: ~5 null checks + one boolean
+  // read per gate. When on: one performance.now() pair per gate.
+  //
+  // Stack-based to support nested spans on the same frame. If end() is
+  // called with a mismatched label the sample is discarded and a one-shot
+  // warning logged (prevents silent accounting drift from a missing gate).
+
+  var _spanStack = [];
+  var _spanWarned = false;
+
+  function _probeBegin(label) {
+    if (!_running) return;
+    _spanStack.push({ label: label, t0: performance.now() });
+  }
+
+  function _probeEnd(label) {
+    if (!_running) return;
+    if (_spanStack.length === 0) return;
+    var top = _spanStack[_spanStack.length - 1];
+    if (top.label !== label) {
+      if (!_spanWarned) {
+        console.warn('[DebugPerfMonitor] probe.end("' + label +
+          '") did not match top of stack ("' + top.label +
+          '") — check for a missing probe.end call. Further mismatches ' +
+          'will be silenced.');
+        _spanWarned = true;
+      }
+      return;
+    }
+    _spanStack.pop();
+    var dt = performance.now() - top.t0;
+    var probe = _ensureProbe(label);
+    probe.calls++;
+    probe.totalMs += dt;
+    probe.pendingCalls++;
+    probe.pendingMs += dt;
+    if (dt > probe.maxMs) probe.maxMs = dt;
+  }
+
+  function _probeCount(label, n) {
+    if (!_running) return;
+    var probe = _ensureProbe(label);
+    var inc = (typeof n === 'number') ? n : 1;
+    probe.calls += inc;
+    probe.pendingCalls += inc;
+  }
+
+  // Convenience: wrap a fn invocation in begin/end. Useful when the call
+  // site is a single expression; otherwise prefer begin/end around blocks.
+  function _probeSpan(label, fn) {
+    if (!_running) return fn();
+    _probeBegin(label);
+    try { return fn(); }
+    finally { _probeEnd(label); }
+  }
+
+  var _probeApi = {
+    begin: _probeBegin,
+    end:   _probeEnd,
+    count: _probeCount,
+    span:  _probeSpan
+  };
+
   // Monkey patch a method on an object in place. Returns true on success,
   // false if the target object is frozen (TypeError swallowed).
   function instrument(obj, method, label) {
@@ -811,6 +889,21 @@ var DebugPerfMonitor = (function () {
   // is silently skipped; reinstrument() picks up late-loaded modules.
   var _TARGETS = [
     { name: 'Raycaster',          methods: ['render','draw','cast','castFrame','drawFrame'] },
+    // Raycaster sub-modules (post Phase 1–3 split).
+    // CAVEAT: raycaster.js core captures aliases at IIFE-parse time
+    // (e.g. `var _renderSprites = RaycasterSprites.renderSprites`), so
+    // shim-replacing the global here does NOT rewire the core's hotpath
+    // calls — only EXTERNAL callers get probed. For true per-subsystem
+    // timing from within the render() hotpath, in-module instrumentation
+    // gates are needed (see docs/TEST_HARNESS_ROADMAP.md §2).
+    { name: 'RaycasterFloor',     methods: ['renderFloor','renderParallax','renderWeatherVeil'] },
+    { name: 'RaycasterSprites',   methods: ['renderSprites','renderWallDecor','updateAndRenderParticles'] },
+    // RaycasterWalls.drawTiledColumn is called ~960×/frame — wrapping adds
+    // meaningful overhead. Left out intentionally; wall phase is probed
+    // coarsely via Raycaster.render above. Phase 4 may add a column-batch
+    // probe.
+    // RaycasterLighting/Textures/Projection are cold (init / tool / registry
+    // helpers), not per-frame hotpath — not instrumented.
     { name: 'Skybox',             methods: ['draw','render','tick','update'] },
     { name: 'Minimap',            methods: ['draw','render','refresh','paint','update'] },
     { name: 'HUD',                methods: ['draw','render','refresh','paint','update','tick'] },
@@ -988,6 +1081,7 @@ var DebugPerfMonitor = (function () {
     _running = false;
     if (_rafHandle) cancelAnimationFrame(_rafHandle);
     _rafHandle = 0;
+    _spanStack.length = 0;
   }
 
   function reset() {
@@ -1010,6 +1104,8 @@ var DebugPerfMonitor = (function () {
     _lastKnownFloor = null;
     _prevCounts = null;
     _countDeltas = { enemies: 0, particles: 0, dom: 0 };
+    _spanStack.length = 0;
+    _spanWarned = false;
     for (var k in _eventCounts) {
       if (_eventCounts.hasOwnProperty(k)) _eventCounts[k] = 0;
     }
@@ -1170,19 +1266,21 @@ var DebugPerfMonitor = (function () {
   // ── Public API ─────────────────────────────────────────────────────
 
   return {
-    show:            show,
-    hide:            hide,
-    toggle:          toggle,
-    start:           start,
-    stop:            stop,
-    reset:           reset,
-    snapshot:        snapshot,
-    copyReport:      copyReport,
-    instrument:      instrument,
+    show:             show,
+    hide:             hide,
+    toggle:           toggle,
+    toggleCollapsed:  toggleCollapsed,
+    start:            start,
+    stop:             stop,
+    reset:            reset,
+    snapshot:         snapshot,
+    copyReport:       copyReport,
+    instrument:       instrument,
     instrumentEngine: instrumentEngine,
-    reinstrument:    reinstrument,
-    uninstrument:    uninstrument,
-    probeSummary:    _probeSummary,
-    getProbes:       function () { return _probes; }
+    reinstrument:     reinstrument,
+    uninstrument:     uninstrument,
+    probeSummary:     _probeSummary,
+    getProbes:        function () { return _probes; },
+    probe:            _probeApi
   };
 })();

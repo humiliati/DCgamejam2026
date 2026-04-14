@@ -99,13 +99,13 @@ Explicit `doorTargets` are required for sibling-depth transitions (e.g. Promenad
 
 ## Module architecture
 
-63 modules in `engine/`, organized in 7 load layers:
+Modules in `engine/`, organized in 7 load layers (Layer 2 now includes 6 raycaster sub-modules plus the core):
 
 | Layer | Purpose | Modules |
 |---|---|---|
 | 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem`, `DoorSprites` |
 | 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
-| 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `Raycaster`, `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
+| 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `RaycasterLighting`, `RaycasterTextures`, `RaycasterProjection`, `RaycasterFloor`, `RaycasterWalls`, `RaycasterSprites`, `Raycaster` (core), `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
 | 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
 | 3.5 | Extracted game helpers | `GameActions`, `WeekStrip`, `EquipActions`, `QuickFill`, `DeckActions`, `Incinerator`, `PickupActions`, `ShopActions`, `HomeEvents`, `HeroWake`, `CorpseActions`, `DispatcherChoreography`, `QuestWaypoint` |
 | 4 | Orchestrator | `Game` |
@@ -138,6 +138,8 @@ Layer 3.5 modules were extracted from `game.js` in three phases (see `docs/GAME_
 **FloorTransition** — State machine that orchestrates: cancel movement → play door SFX → pre-fade delay → show overlay → generate floor → fade in. Manages the Minimap floor cache stack (push on descend, pop on ascend).
 
 **TextureAtlas** — Procedural texture generation and caching for wall rendering. Generates 64×64 pixel textures at init (brick, stone, wood, concrete, iron, pillar patterns). Each texture is an offscreen canvas + raw pixel data. SpatialContract maps tile types to texture IDs; the raycaster samples 1px-wide columns via `ctx.drawImage()`. When `getTexture()` returns null, the raycaster falls back to flat color (backward compatible). See `docs/TEXTURE_ROADMAP.md` for the 3-layer visual upgrade plan.
+
+**Raycaster (split)** — The raycaster is 7 IIFEs loaded in Layer 2: `RaycasterLighting` (fog/tint helpers), `RaycasterTextures` (gap fillers + alpha cache), `RaycasterProjection` (editor/tool screen-space APIs), `RaycasterFloor` (floor/parallax/weather), `RaycasterWalls` (column drawing + face tests), `RaycasterSprites` (sprites, particles, wall decor), and `Raycaster` core (DDA, freeform, back-layer, orchestration, ~2,758 lines). Sub-modules own their own state and read the core's z-buffer/pedestal-occlusion arrays + contract + wall-decor map via `bind({getters})` called once near the end of core's IIFE. Core exposes aliases at its top (e.g. `var _renderSprites = RaycasterSprites.renderSprites;`) so hotpath call sites stay cheap. See `docs/RAYCASTER_EXTRACTION_ROADMAP.md`; Phase 4 (splitting the per-column DDA hotpath) is deferred until after post-Jam voting and gated on ≤2% framerate regression.
 
 **Minimap** — 160x160 canvas with per-floor fog-of-war caching. `_floorCache` maps floor IDs to explored tile hashes. `_floorStack` tracks the breadcrumb path from surface to current depth. Stairs render as colored tiles with directional chevrons.
 

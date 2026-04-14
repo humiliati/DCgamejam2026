@@ -44,6 +44,130 @@ body {
 #toolbar button.copy-btn { background: #2a4a6a; border-color: #49a; }
 #toolbar button.copy-btn:hover { background: #3a5a7a; }
 #toolbar button.copy-btn.flash { background: #2a6a2a; border-color: #4a4; transition: background 0.1s; }
+#toolbar button.save-btn { background: #2a6a2a; border-color: #4a4; color: #eff; }
+#toolbar button.save-btn:hover { background: #3a7a3a; }
+#toolbar button.save-btn.needs-dir { background: #6a4a2a; border-color: #a74; }
+#save-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999;
+  display: none; align-items: center; justify-content: center;
+}
+#save-modal.open { display: flex; }
+#save-modal-inner {
+  background: #1a1d22; border: 1px solid #445; border-radius: 8px;
+  width: 80%; max-width: 900px; max-height: 80vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#save-modal-inner h3 { margin: 0; padding: 14px 18px; border-bottom: 1px solid #334;
+  color: #cfe; font-family: Consolas, monospace; font-size: 13px; }
+#save-diff { flex: 1; overflow: auto; padding: 12px 18px; font-family: Consolas, monospace;
+  font-size: 11px; line-height: 1.45; white-space: pre; color: #bcd; background: #0f1114; }
+#save-diff .diff-add { color: #7f7; background: #0e2a0e; display: block; }
+#save-diff .diff-del { color: #f88; background: #2a0e0e; display: block; }
+#save-diff .diff-hunk { color: #8af; display: block; }
+#save-diff .diff-meta { color: #789; display: block; }
+#save-modal-actions { padding: 12px 18px; border-top: 1px solid #334;
+  display: flex; justify-content: flex-end; gap: 8px; }
+#save-modal-actions button { padding: 6px 14px; font-family: Consolas, monospace; font-size: 12px;
+  cursor: pointer; border-radius: 4px; }
+#save-modal-actions .primary { background: #2a6a2a; border: 1px solid #4a4; color: #eff; }
+#save-modal-actions .primary:hover { background: #3a7a3a; }
+#save-modal-actions .secondary { background: #333; border: 1px solid #556; color: #bcd; }
+
+/* Validation modal */
+#validate-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999;
+  display: none; align-items: center; justify-content: center;
+}
+#validate-modal.open { display: flex; }
+#validate-modal-inner {
+  background: #1a1d22; border: 1px solid #445; border-radius: 8px;
+  width: 80%; max-width: 980px; max-height: 82vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#validate-modal-inner h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid #334;
+  color: #cfe; font-family: Consolas, monospace; font-size: 13px; display:flex; align-items:center; gap:10px; }
+#validate-modal-inner h3 .vm-sub { color:#789; font-size:10px; font-weight:normal; margin-left:auto; }
+#validate-tabs { display:flex; gap:0; border-bottom:1px solid #334; background:#14171c; flex-shrink:0; }
+#validate-tabs button { flex:1; padding:8px 12px; background:transparent; color:#789;
+  border:none; border-bottom:2px solid transparent; font-family:Consolas,monospace;
+  font-size:11px; cursor:pointer; }
+#validate-tabs button:hover { color:#bcd; background:#1c2028; }
+#validate-tabs button.active { color:#cfe; border-bottom-color:#6ab0e8; background:#1c2028; }
+#validate-summary { padding:10px 16px; border-bottom:1px solid #334; background:#14171c;
+  color:#bcd; font-family:Consolas,monospace; font-size:11px; display:flex; gap:18px; align-items:center; }
+#validate-summary .pill { padding:2px 8px; border-radius:10px; font-size:10px; }
+#validate-summary .pill.err { background:#3a1414; color:#f88; border:1px solid #833; }
+#validate-summary .pill.warn { background:#3a2a14; color:#fc8; border:1px solid #a73; }
+#validate-summary .pill.ok { background:#143a1a; color:#7f7; border:1px solid #383; }
+#validate-list { flex:1; overflow:auto; padding:0; font-family:Consolas,monospace; font-size:11px;
+  background:#0f1114; }
+#validate-list .vrow { display:flex; align-items:center; gap:10px; padding:8px 16px;
+  border-bottom:1px solid #222; cursor:pointer; color:#bcd; }
+#validate-list .vrow:hover { background:#1c2028; }
+#validate-list .vrow.selected { background:#233040; color:#cfe; }
+#validate-list .vrow .vsev { width:56px; font-size:10px; padding:2px 6px; border-radius:3px; text-align:center; flex-shrink:0; }
+#validate-list .vrow .vsev.err  { background:#3a1414; color:#f88; border:1px solid #833; }
+#validate-list .vrow .vsev.warn { background:#3a2a14; color:#fc8; border:1px solid #a73; }
+#validate-list .vrow .vsev.info { background:#14283a; color:#8cf; border:1px solid #357; }
+#validate-list .vrow .vfloor { color:#8af; width:70px; flex-shrink:0; }
+#validate-list .vrow .vkind { color:#cfa; width:140px; flex-shrink:0; }
+#validate-list .vrow .vmsg { flex:1; color:#bcd; }
+#validate-list .vrow .vcells { color:#789; font-size:10px; flex-shrink:0; }
+#validate-list .vempty { padding:24px 16px; text-align:center; color:#6a7; }
+#validate-modal-actions { padding:10px 16px; border-top:1px solid #334;
+  display:flex; justify-content:flex-end; gap:8px; }
+#validate-modal-actions button { padding:5px 12px; font-family:Consolas,monospace; font-size:11px;
+  cursor:pointer; border-radius:4px; }
+#validate-modal-actions .primary { background:#2a6a2a; border:1px solid #4a4; color:#eff; }
+#validate-modal-actions .secondary { background:#333; border:1px solid #556; color:#bcd; }
+
+#toolbar button.validate-btn { background:#4a3a6a; border:1px solid #75a; color:#eff; }
+#toolbar button.validate-btn:hover { background:#5a4a8a; }
+#toolbar button.validate-btn.has-errors { background:#6a2a2a; border-color:#a44; }
+#toolbar button.validate-btn.has-warnings { background:#6a4a2a; border-color:#a74; }
+#toolbar button.validate-btn.clean { background:#2a6a2a; border-color:#4a4; }
+
+/* Tier 3 metadata panel — right-side overlay mirroring #windows-panel */
+#metadata-panel {
+  position:absolute; top:10px; right:10px; z-index:12;
+  background:rgba(18,22,28,0.94); border:1px solid #445; border-radius:6px;
+  color:#cfe; font-family:Consolas,monospace; font-size:11px;
+  max-height:70vh; overflow:auto; min-width:240px; max-width:320px;
+  box-shadow:0 6px 22px rgba(0,0,0,0.55);
+  display:none;
+}
+#metadata-panel.open { display:block; }
+#metadata-panel .mp-header { padding:8px 12px; border-bottom:1px solid #334;
+  color:#cfe; background:#1c2028; display:flex; align-items:center; gap:8px; }
+#metadata-panel .mp-header .mp-title { flex:1; font-weight:bold; color:#ffd7; }
+#metadata-panel .mp-header button { padding:2px 8px; font-family:Consolas,monospace;
+  font-size:10px; background:#333; border:1px solid #556; color:#bcd; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-header button:hover { background:#444; }
+#metadata-panel .mp-section-title { padding:6px 12px; color:#789; font-size:10px;
+  text-transform:uppercase; letter-spacing:0.5px; background:#14171c; border-bottom:1px solid #222; }
+#metadata-panel .mp-row { padding:6px 12px; border-bottom:1px solid #222;
+  display:flex; align-items:center; gap:8px; }
+#metadata-panel .mp-row:hover { background:#1c2028; }
+#metadata-panel .mp-tileswatch { width:14px; height:14px; border:1px solid #555; flex-shrink:0; border-radius:2px; }
+#metadata-panel .mp-row .mp-label { color:#bcd; flex:1; }
+#metadata-panel .mp-row .mp-coords { color:#789; font-size:10px; }
+#metadata-panel .mp-row select { background:#222; border:1px solid #556; color:#cfe;
+  font-family:Consolas,monospace; font-size:10px; padding:2px 4px; border-radius:3px; min-width:80px; }
+#metadata-panel .mp-row button.mp-move { padding:2px 8px; background:#3a5a7a; border:1px solid #578;
+  color:#cfe; font-family:Consolas,monospace; font-size:10px; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-row button.mp-move:hover { background:#4a6a8a; }
+#metadata-panel .mp-row button.mp-move.placing { background:#8a6a2a; border-color:#c94; color:#ffd; }
+#metadata-panel .mp-empty { padding:14px 12px; color:#6a7; text-align:center; font-style:italic; }
+#metadata-panel .mp-actions { padding:8px 12px; border-top:1px solid #334;
+  display:flex; gap:6px; background:#14171c; }
+#metadata-panel .mp-actions button { flex:1; padding:4px 8px; font-family:Consolas,monospace;
+  font-size:10px; background:#333; border:1px solid #556; color:#bcd; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-actions button:hover { background:#444; }
+#metadata-panel .mp-actions button.primary { background:#2a6a2a; border-color:#4a4; color:#eff; }
+#metadata-panel .mp-actions button.primary:hover { background:#3a7a3a; }
+#toolbar button.meta-btn { background:#4a2a6a; border:1px solid #85a; color:#eff; }
+#toolbar button.meta-btn:hover { background:#5a3a8a; }
+#toolbar button.meta-btn.active { background:#6a3a9a; border-color:#a8d; }
 #toolbar .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
 #toolbar .spacer { flex: 1; }
 #toolbar .title { font-size: 13px; font-weight: bold; color: #e8c547; letter-spacing: 1px; }
@@ -98,8 +222,97 @@ canvas { display: block; }
 #tooltip .tt-tile { color: #e8c547; font-weight: bold; }
 #tooltip .tt-coord { color: #888; }
 #tooltip .tt-prop { color: #6ab0e8; }
+
+/* Custom hover tooltip for [title] UI elements (toolbar buttons, dropdowns, etc.) */
+#ui-tooltip {
+  position: fixed;
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  color: #ddd;
+  padding: 5px 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-family: Consolas, monospace;
+  pointer-events: none;
+  display: none;
+  z-index: 9999;
+  max-width: 300px;
+  white-space: pre-line;
+  box-shadow: 0 2px 8px #000a;
+}
+#ui-tooltip .tt-key {
+  color: #e8c547;
+  font-weight: bold;
+}
 #tooltip .tt-door { color: #e86a6a; }
 #tooltip .tt-edit { color: #e86a6a; font-style: italic; }
+
+/* ── Windows panel (Tier 4 — window-scene editor) ──────────── */
+#windows-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #1a1a1acc;
+  border: 1px solid #446;
+  padding: 6px 10px;
+  font-size: 10px;
+  line-height: 1.6;
+  max-height: 45%;
+  overflow-y: auto;
+  z-index: 5;
+  display: none;
+  min-width: 170px;
+}
+#windows-panel.has-windows { display: block; }
+#windows-panel .wp-title { color: #9cf; font-weight: bold; margin-bottom: 4px; letter-spacing: 1px; }
+#windows-panel .wp-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer;
+  border-radius: 2px;
+}
+#windows-panel .wp-row:hover { background: #ffffff1a; }
+#windows-panel .wp-swatch {
+  width: 10px; height: 10px; border: 1px solid #666; flex-shrink: 0;
+}
+#windows-panel .wp-coord { color: #bcd; min-width: 46px; }
+#windows-panel .wp-name  { color: #889; font-size: 9px; }
+#windows-panel .wp-has-scene { color: #9e9; }
+#windows-panel .wp-empty { color: #666; font-style: italic; padding: 2px 0; }
+
+/* ── Scene editor modal ────────────────────────────────────── */
+#scene-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 998;
+  display: none; align-items: center; justify-content: center;
+}
+#scene-modal.open { display: flex; }
+#scene-modal-inner {
+  background: #14161a; border: 1px solid #446; border-radius: 8px;
+  width: 720px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#scene-modal-inner h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid #334;
+  color: #9cf; font-family: Consolas, monospace; font-size: 13px;
+  display: flex; justify-content: space-between; align-items: center; }
+#scene-modal-inner h3 .sm-sub { color: #789; font-size: 10px; font-weight: normal; }
+#scene-body { padding: 12px 16px; display: flex; gap: 14px; flex: 1; overflow: auto; }
+#scene-canvas-wrap { flex: 0 0 auto; }
+#scene-canvas { background: #0b0c10; border: 1px solid #445; display: block; cursor: crosshair; image-rendering: pixelated; }
+#scene-meta { flex: 1; font-family: Consolas, monospace; font-size: 11px; color: #bcd;
+  display: flex; flex-direction: column; gap: 10px; }
+#scene-meta .sm-section { border: 1px solid #334; padding: 8px 10px; border-radius: 4px; }
+#scene-meta .sm-section-title { color: #9cf; font-size: 10px; letter-spacing: 1px; margin-bottom: 4px; }
+#scene-meta button { font-family: inherit; font-size: 10px; cursor: pointer; padding: 3px 8px;
+  background: #2a2d35; color: #ddd; border: 1px solid #556; border-radius: 3px; margin-right: 4px; }
+#scene-meta button:hover { background: #3a3d45; border-color: #778; }
+#scene-meta button.primary { background: #2a4a6a; border-color: #49a; }
+#scene-meta button.primary:hover { background: #3a5a7a; }
+#scene-meta .sm-tile-info { color: #889; font-size: 10px; }
+#scene-meta .sm-paint-hint { color: #666; font-size: 10px; font-style: italic; }
+#scene-modal-actions { padding: 10px 16px; border-top: 1px solid #334;
+  display: flex; justify-content: flex-end; gap: 6px; }
+#scene-modal-actions button { padding: 5px 12px; font-family: Consolas, monospace; font-size: 11px;
+  cursor: pointer; border-radius: 4px; }
+#scene-modal-actions .primary { background: #2a6a2a; border: 1px solid #4a4; color: #eff; }
+#scene-modal-actions .secondary { background: #333; border: 1px solid #556; color: #bcd; }
 
 /* ── Legend panel ─────────────────────────────────────────── */
 #legend-panel {
@@ -209,9 +422,9 @@ canvas { display: block; }
   <span class="title">BLOCKOUT VISUALIZER</span>
   <div class="sep"></div>
   <label>Floor:</label>
-  <select id="floor-select"></select>
+  <select id="floor-select" title="Select floor to view / edit"></select>
   <div class="sep"></div>
-  <button id="btn-edit">Edit</button>
+  <button id="btn-edit" title="Toggle edit mode (E)">Edit</button>
   <span id="tool-row" style="display:none">
     <button id="btn-tool-paint"   class="tool-active" title="Paint brush (P)">Paint</button>
     <button id="btn-tool-rect"    title="Rectangle (R) — hold Shift for outline">Rect</button>
@@ -227,19 +440,33 @@ canvas { display: block; }
       <option value="1">1×1</option><option value="2">2×2</option>
       <option value="3">3×3</option><option value="5">5×5</option>
     </select>
+    <span id="clipboard-badge" title="Clipboard — click to jump to source floor"
+          style="display:none; margin-left:12px; padding:2px 8px; border-radius:10px;
+                 background:#2a4a6a; color:#cfe; font-size:11px; cursor:pointer;
+                 font-family:Consolas,monospace; vertical-align:middle;">
+      <canvas id="clipboard-thumb" width="28" height="28"
+              style="vertical-align:middle; margin-right:6px; background:#111; border:1px solid #44668a;"></canvas>
+      <span id="clipboard-badge-text">—</span>
+    </span>
   </span>
-  <button id="btn-undo" style="display:none">Undo</button>
-  <button id="btn-revert" style="display:none">Revert</button>
+  <button id="btn-undo" style="display:none" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="btn-redo" style="display:none" title="Redo (Ctrl+Shift+Z / Ctrl+Y)">Redo</button>
+  <button id="btn-revert" style="display:none" title="Revert all edits on this floor (confirms first)">Revert</button>
   <span id="edit-count"></span>
   <div class="sep"></div>
-  <button id="btn-copy-full" class="copy-btn">Copy Full</button>
-  <button id="btn-copy-diff" class="copy-btn">Copy Diff</button>
+  <button id="btn-copy-full" class="copy-btn" title="Copy the whole grid as a JS array literal — paste into a floor builder">Copy Full</button>
+  <button id="btn-copy-diff" class="copy-btn" title="Copy only changed cells (unchanged = `..`) — good for code review">Copy Diff</button>
+  <button id="btn-meta" class="meta-btn" title="Metadata panel — edit spawn, door targets (Tier 3)">Meta</button>
+  <button id="btn-validate" class="validate-btn" title="Validate floor (walkability, door contracts, spawn, required tiles)">Validate</button>
+  <button id="btn-save" class="save-btn" title="Save to file (Ctrl+S) — writes to engine/floor-blockout-*.js">Save</button>
+  <button id="btn-save-dir" class="save-btn needs-dir" style="display:none"
+          title="Pick the engine/ folder to enable direct writes">Pick engine/…</button>
   <div class="spacer"></div>
-  <button id="btn-legend">Legend</button>
-  <button id="btn-rooms" class="active">Rooms</button>
-  <button id="btn-doors" class="active">Doors</button>
-  <button id="btn-grid">Grid</button>
-  <button id="btn-ids">IDs</button>
+  <button id="btn-legend" title="Toggle legend panel (L in view mode)">Legend</button>
+  <button id="btn-rooms" class="active" title="Toggle room overlays (R in view mode)">Rooms</button>
+  <button id="btn-doors" class="active" title="Toggle door-target overlays (D)">Doors</button>
+  <button id="btn-grid" title="Toggle grid lines (G)">Grid</button>
+  <button id="btn-ids" title="Toggle tile IDs / glyphs (I)">IDs</button>
   <span id="zoom-display">1.0x</span>
 </div>
 
@@ -260,13 +487,15 @@ canvas { display: block; }
   <button id="btn-row-shrink-b" title="Remove row from bottom">-B</button>
   <span class="rsep"></span>
   <label>Fill tile:</label>
-  <select id="resize-fill-tile"></select>
+  <select id="resize-fill-tile" title="Tile used when growing the grid (added cells)"></select>
 </div>
 
 <div id="canvas-wrap">
   <canvas id="cv"></canvas>
   <div id="tooltip"></div>
   <div id="legend-panel"></div>
+  <div id="windows-panel"></div>
+  <div id="metadata-panel"></div>
   <div id="tile-picker"></div>
   <div id="lasso-rect"></div>
 </div>
@@ -433,6 +662,7 @@ var EDIT = {
   paintTile: 1,
   originalGrid: null,
   undoStack: [],        // entries: {type:'paint'|'bulk'|'resize'|'lasso-move', ...}
+  redoStack: [],        // same shape as undoStack; cleared on any new edit
   dirtyCount: 0,
   painting: false,
   tool: 'paint',        // 'paint' | 'rect' | 'line' | 'bucket' | 'replace' | 'lasso'
@@ -455,10 +685,16 @@ var LASSO = {
 var CLIPBOARD = {
   tiles: null,       // 2D array [y][x] of tile ids, or null if empty
   w: 0, h: 0,
-  source: null       // 'lasso'|'grid' for the toast
+  source: null,      // 'lasso'|'lasso-floating'|'cut'
+  sourceFloorId: null,      // floor id the block was copied from
+  sourceFloorName: null     // human-readable floor name (for the status badge)
 };
 // Track last hovered grid cell so paste ghost follows the cursor.
 var HOVER = { gx: 0, gy: 0 };
+
+// Per-floor history — {floorId: {undo:[], redo:[], originalGrid:[][]}}
+// Lets the designer hop between floors without losing their undo chain.
+var FLOOR_HISTORY = {};
 
 function snapshotGrid(grid) {
   return grid.map(function(row) { return row.slice(); });
@@ -484,10 +720,24 @@ function updateEditUI() {
   if (EDIT.dirtyCount > 0) { el.textContent = EDIT.dirtyCount + ' changed'; el.style.display = 'inline'; }
   else { el.style.display = 'none'; }
 
-  document.getElementById('btn-undo').style.display = EDIT.active ? 'inline-block' : 'none';
+  var undoBtn = document.getElementById('btn-undo');
+  var redoBtn = document.getElementById('btn-redo');
+  undoBtn.style.display = EDIT.active ? 'inline-block' : 'none';
+  redoBtn.style.display = EDIT.active ? 'inline-block' : 'none';
+  undoBtn.disabled = EDIT.undoStack.length === 0;
+  redoBtn.disabled = EDIT.redoStack.length === 0;
+  undoBtn.style.opacity = undoBtn.disabled ? '0.4' : '1';
+  redoBtn.style.opacity = redoBtn.disabled ? '0.4' : '1';
   document.getElementById('tool-row').style.display = EDIT.active ? 'inline' : 'none';
   document.getElementById('btn-revert').style.display = (EDIT.active && EDIT.dirtyCount > 0) ? 'inline-block' : 'none';
-  document.getElementById('resize-bar').style.display = EDIT.active ? 'flex' : 'none';
+  var rb = document.getElementById('resize-bar');
+  var wasShown = rb.style.display === 'flex';
+  rb.style.display = EDIT.active ? 'flex' : 'none';
+  // Toggling the resize bar changes canvas-wrap height — re-size the
+  // canvas so the grid doesn't stay squished or float over empty space.
+  if (wasShown !== (EDIT.active === true) && typeof resizeCanvas === 'function') {
+    requestAnimationFrame(resizeCanvas);
+  }
 
   var ps = TILE_SCHEMA[EDIT.paintTile];
   document.getElementById('ib-paint').textContent = EDIT.active ? (ps ? ps.name + ' (' + EDIT.paintTile + ')' : String(EDIT.paintTile)) : '--';
@@ -572,7 +822,7 @@ function paintCell(gx, gy) {
 
 function flushStroke() {
   if (EDIT.stroke && EDIT.stroke.cells.length) {
-    EDIT.undoStack.push({ type: 'bulk', cells: EDIT.stroke.cells, newTile: EDIT.paintTile });
+    pushUndo({ type: 'bulk', cells: EDIT.stroke.cells, newTile: EDIT.paintTile });
   }
   EDIT.stroke = null;
 }
@@ -656,29 +906,59 @@ function commitBulk(cells) {
   // Apply cells with EDIT.paintTile, push a single undo entry, refresh UI.
   var changed = applyCellsToGrid(cells, EDIT.paintTile);
   if (changed.length) {
-    EDIT.undoStack.push({ type: 'bulk', cells: changed, newTile: EDIT.paintTile });
+    pushUndo({ type: 'bulk', cells: changed, newTile: EDIT.paintTile });
     updateEditUI();
     draw();
+  }
+}
+
+// Every edit funnels through pushUndo so redo can replay it.
+function pushUndo(entry) {
+  EDIT.undoStack.push(entry);
+  EDIT.redoStack.length = 0;  // any new edit invalidates redo
+}
+
+function applyEntry(entry, phase) {
+  // phase: 'undo' restores old state, 'redo' restores new state.
+  if (entry.type === 'paint') {
+    var t = (phase === 'undo') ? entry.oldTile : entry.newTile;
+    if (currentFloor.grid[entry.y]) currentFloor.grid[entry.y][entry.x] = t;
+  } else if (entry.type === 'bulk') {
+    for (var i = 0; i < entry.cells.length; i++) {
+      var c = entry.cells[i];
+      if (!currentFloor.grid[c.y]) continue;
+      if (phase === 'undo') {
+        currentFloor.grid[c.y][c.x] = c.oldTile;
+      } else {
+        // Prefer per-cell newTile (heterogeneous paste); fall back to uniform newTile.
+        var nt = (c.newTile != null) ? c.newTile : entry.newTile;
+        if (nt != null) currentFloor.grid[c.y][c.x] = nt;
+      }
+    }
+  } else if (entry.type === 'resize' || entry.type === 'lasso-move') {
+    var g = (phase === 'undo') ? entry.oldGrid : entry.newGrid;
+    if (!g) return;
+    currentFloor.grid = snapshotGrid(g);
+    currentFloor.gridW = g[0] ? g[0].length : 0;
+    currentFloor.gridH = g.length;
   }
 }
 
 function undoLast() {
   if (EDIT.undoStack.length === 0) return;
   var entry = EDIT.undoStack.pop();
-  if (entry.type === 'paint') {
-    currentFloor.grid[entry.y][entry.x] = entry.oldTile;
-  } else if (entry.type === 'bulk') {
-    for (var i = 0; i < entry.cells.length; i++) {
-      var c = entry.cells[i];
-      if (currentFloor.grid[c.y]) currentFloor.grid[c.y][c.x] = c.oldTile;
-    }
-  } else if (entry.type === 'resize') {
-    currentFloor.grid = entry.oldGrid;
-    currentFloor.gridW = entry.oldGrid[0] ? entry.oldGrid[0].length : 0;
-    currentFloor.gridH = entry.oldGrid.length;
-  } else if (entry.type === 'lasso-move') {
-    currentFloor.grid = entry.oldGrid;
-  }
+  applyEntry(entry, 'undo');
+  EDIT.redoStack.push(entry);
+  clearLasso();
+  updateEditUI();
+  draw();
+}
+
+function redoLast() {
+  if (EDIT.redoStack.length === 0) return;
+  var entry = EDIT.redoStack.pop();
+  applyEntry(entry, 'redo');
+  EDIT.undoStack.push(entry);
   clearLasso();
   updateEditUI();
   draw();
@@ -690,6 +970,7 @@ function revertAll() {
   currentFloor.gridW = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
   currentFloor.gridH = currentFloor.grid.length;
   EDIT.undoStack = [];
+  EDIT.redoStack = [];
   clearLasso();
   updateEditUI();
   draw();
@@ -737,7 +1018,7 @@ function resizeGrid(side, action) {
 
   currentFloor.gridW = grid[0] ? grid[0].length : 0;
   currentFloor.gridH = grid.length;
-  EDIT.undoStack.push({ type: 'resize', oldGrid: oldGrid });
+  pushUndo({ type: 'resize', oldGrid: oldGrid, newGrid: snapshotGrid(currentFloor.grid) });
   clearLasso();
   updateEditUI();
   draw();
@@ -859,7 +1140,7 @@ function lassoCommit() {
       }
     }
   }
-  EDIT.undoStack.push({ type: 'lasso-move', oldGrid: oldGrid });
+  pushUndo({ type: 'lasso-move', oldGrid: oldGrid, newGrid: snapshotGrid(currentFloor.grid) });
   LASSO.floating = null;
   updateEditUI();
   draw();
@@ -899,6 +1180,40 @@ function readTilesFromSelection(sel) {
   return out;
 }
 
+function updateClipboardBadge() {
+  var badge = document.getElementById('clipboard-badge');
+  var txt   = document.getElementById('clipboard-badge-text');
+  var cnv   = document.getElementById('clipboard-thumb');
+  if (!CLIPBOARD.tiles) {
+    badge.style.display = 'none';
+    return;
+  }
+  badge.style.display = 'inline-block';
+  var crossFloor = CLIPBOARD.sourceFloorId && CLIPBOARD.sourceFloorId !== currentFloorId;
+  badge.style.background = crossFloor ? '#6a4a2a' : '#2a4a6a';
+  badge.style.color      = crossFloor ? '#ffd' : '#cfe';
+  badge.title = crossFloor
+    ? 'Clipboard from floor "' + CLIPBOARD.sourceFloorId + '" — click to jump there'
+    : 'Clipboard from this floor — click to jump to source';
+  txt.textContent = CLIPBOARD.w + '×' + CLIPBOARD.h + '  "' + (CLIPBOARD.sourceFloorId || '?') + '"';
+
+  // Thumbnail: fit clipboard into 28×28 canvas at integer cell size.
+  var ctx2 = cnv.getContext('2d');
+  ctx2.fillStyle = '#111';
+  ctx2.fillRect(0, 0, cnv.width, cnv.height);
+  var cell = Math.max(1, Math.floor(Math.min(cnv.width / CLIPBOARD.w, cnv.height / CLIPBOARD.h)));
+  var offX = Math.floor((cnv.width  - cell * CLIPBOARD.w) / 2);
+  var offY = Math.floor((cnv.height - cell * CLIPBOARD.h) / 2);
+  for (var y = 0; y < CLIPBOARD.h; y++) {
+    for (var x = 0; x < CLIPBOARD.w; x++) {
+      var t = CLIPBOARD.tiles[y][x];
+      var schema = TILE_SCHEMA[t];
+      ctx2.fillStyle = schema ? schema.color : '#ff00ff';
+      ctx2.fillRect(offX + x * cell, offY + y * cell, cell, cell);
+    }
+  }
+}
+
 function doCopySelection() {
   var sel = getSelectionRect();
   if (!sel || !currentFloor) {
@@ -909,7 +1224,10 @@ function doCopySelection() {
   CLIPBOARD.w = sel.w;
   CLIPBOARD.h = sel.h;
   CLIPBOARD.source = sel.floating ? 'lasso-floating' : 'lasso';
-  showCopyToast('Copied ' + sel.w + '×' + sel.h + ' (' + (sel.w * sel.h) + ' cells)');
+  CLIPBOARD.sourceFloorId = currentFloorId;
+  CLIPBOARD.sourceFloorName = FLOOR_NAMES[currentFloorId] || currentFloorId;
+  updateClipboardBadge();
+  showCopyToast('Copied ' + sel.w + '×' + sel.h + ' from floor "' + currentFloorId + '"');
 }
 
 function doCutSelection() {
@@ -922,6 +1240,9 @@ function doCutSelection() {
   CLIPBOARD.w = sel.w;
   CLIPBOARD.h = sel.h;
   CLIPBOARD.source = 'cut';
+  CLIPBOARD.sourceFloorId = currentFloorId;
+  CLIPBOARD.sourceFloorName = FLOOR_NAMES[currentFloorId] || currentFloorId;
+  updateClipboardBadge();
 
   // If floating, just drop the lifted tiles (source area is already cleared).
   if (sel.floating && LASSO.floating) {
@@ -930,7 +1251,7 @@ function doCutSelection() {
     // Record the clear-at-source that happened when the lasso lifted.
     // lassoStartDrag already mutated the grid; push a snapshot so undo restores it.
     // We snapshot the *current* grid (post-lift) — that's effectively the cut result.
-    EDIT.undoStack.push({ type: 'lasso-move', oldGrid: snapshotGrid(currentFloor.grid) });
+    pushUndo({ type: 'lasso-move', oldGrid: snapshotGrid(currentFloor.grid), newGrid: snapshotGrid(currentFloor.grid) });
   } else {
     // Static selection — clear source area to fill tile via a bulk undo entry.
     var grid = currentFloor.grid;
@@ -946,7 +1267,7 @@ function doCutSelection() {
       }
     }
     if (cells.length) {
-      EDIT.undoStack.push({ type: 'bulk', cells: cells, newTile: fill });
+      pushUndo({ type: 'bulk', cells: cells, newTile: fill });
     }
     LASSO.sel = null;
   }
@@ -966,16 +1287,20 @@ function stampClipboardAt(gx, gy) {
       if (ty < 0 || ty >= grid.length || tx < 0 || tx >= grid[ty].length) continue;
       var t = CLIPBOARD.tiles[dy][dx];
       if (grid[ty][tx] !== t) {
-        cells.push({ x: tx, y: ty, oldTile: grid[ty][tx] });
+        cells.push({ x: tx, y: ty, oldTile: grid[ty][tx], newTile: t });
         grid[ty][tx] = t;
       }
     }
   }
   if (cells.length) {
-    EDIT.undoStack.push({ type: 'bulk', cells: cells, newTile: null });
+    pushUndo({ type: 'bulk', cells: cells, newTile: null });
   }
   updateEditUI();
   draw();
+  // Cross-floor toast: remind the designer where this block came from.
+  if (CLIPBOARD.sourceFloorId && CLIPBOARD.sourceFloorId !== currentFloorId) {
+    showCopyToast('Pasted ' + CLIPBOARD.w + '×' + CLIPBOARD.h + ' from floor "' + CLIPBOARD.sourceFloorId + '"');
+  }
 }
 
 function doPasteAtHover() {
@@ -985,6 +1310,228 @@ function doPasteAtHover() {
   }
   // Enter paste tool so the user can see the ghost and stamp with a click.
   selectTool('paste');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DIRECT FILE WRITE (File System Access API, with download fallback)
+// ═══════════════════════════════════════════════════════════════
+var ENGINE_DIR_HANDLE = null;   // cached FileSystemDirectoryHandle for engine/
+var FS_API_AVAILABLE = (typeof window !== 'undefined' &&
+                        typeof window.showDirectoryPicker === 'function');
+
+function floorBlockoutFileName(floorId) {
+  // Floor id "1.1.1" → "floor-blockout-1-1-1.js"
+  return 'floor-blockout-' + String(floorId).replace(/\./g, '-') + '.js';
+}
+
+function formatGridLiteral(grid) {
+  // Emit `var GRID = [ ... ];` body with each row on one line, 2-space indent,
+  // trailing `// yNN` row labels so hand-editing remains readable.
+  var pad2 = function(n){ return (n < 10 ? ' ' : '') + n; };
+  var maxW = 0;
+  for (var y = 0; y < grid.length; y++) maxW = Math.max(maxW, grid[y].length);
+  var cellW = String(Math.max.apply(null, [0].concat(grid.flat ? grid.flat() : []))).length;
+  if (!cellW) cellW = 1;
+  var lines = ['  var GRID = ['];
+  for (var y = 0; y < grid.length; y++) {
+    var row = grid[y];
+    var cells = [];
+    for (var x = 0; x < row.length; x++) {
+      var s = String(row[x]);
+      cells.push(' '.repeat(Math.max(0, cellW - s.length)) + s);
+    }
+    var comma = (y < grid.length - 1) ? ',' : '';
+    lines.push('    [' + cells.join(',') + ']' + comma + ' // y' + pad2(y));
+  }
+  lines.push('  ];');
+  return lines.join('\n');
+}
+
+function patchGridInSource(source, grid) {
+  // Replace the first `var GRID = [ ... ];` block (robust to whitespace, newlines, comments).
+  var re = /(^|\n)([ \t]*var\s+GRID\s*=\s*\[)[\s\S]*?\n[ \t]*\];/;
+  var m = source.match(re);
+  if (!m) return null;
+  var replacement = formatGridLiteral(grid);
+  return source.replace(re, '\n' + replacement);
+}
+
+function makeUnifiedDiff(oldText, newText, contextLines) {
+  contextLines = contextLines == null ? 3 : contextLines;
+  var a = oldText.split('\n'), b = newText.split('\n');
+  // Naive LCS-based diff — grids are small, this is fine.
+  var n = a.length, m = b.length;
+  var dp = [];
+  for (var i = 0; i <= n; i++) {
+    dp.push(new Int32Array(m + 1));
+  }
+  for (var i = n - 1; i >= 0; i--) {
+    for (var j = m - 1; j >= 0; j--) {
+      if (a[i] === b[j]) dp[i][j] = dp[i+1][j+1] + 1;
+      else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  var ops = [];
+  var i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({op:'=', line:a[i]}); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) { ops.push({op:'-', line:a[i]}); i++; }
+    else { ops.push({op:'+', line:b[j]}); j++; }
+  }
+  while (i < n) { ops.push({op:'-', line:a[i++]}); }
+  while (j < m) { ops.push({op:'+', line:b[j++]}); }
+  // Compress into hunks with `contextLines` of context around changes.
+  var hunks = [];
+  var k = 0;
+  while (k < ops.length) {
+    if (ops[k].op === '=') { k++; continue; }
+    var start = Math.max(0, k - contextLines);
+    var end = k;
+    while (end < ops.length && (ops[end].op !== '=' || end - k < contextLines * 2)) {
+      if (ops[end].op !== '=') k = end;
+      end++;
+    }
+    end = Math.min(ops.length, k + contextLines + 1);
+    hunks.push(ops.slice(start, end));
+    k = end;
+  }
+  return hunks;
+}
+
+function renderDiffHTML(hunks, fileName) {
+  if (hunks.length === 0) return '<span class="diff-meta">No changes to write.</span>';
+  var esc = function(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var out = ['<span class="diff-meta">--- a/' + esc(fileName) + '</span>',
+             '<span class="diff-meta">+++ b/' + esc(fileName) + '</span>'];
+  for (var h = 0; h < hunks.length; h++) {
+    out.push('<span class="diff-hunk">@@ hunk ' + (h+1) + ' @@</span>');
+    var ops = hunks[h];
+    for (var i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      var prefix = o.op === '+' ? '+' : o.op === '-' ? '-' : ' ';
+      var cls = o.op === '+' ? 'diff-add' : o.op === '-' ? 'diff-del' : '';
+      var ln = esc(prefix + o.line);
+      out.push(cls ? '<span class="' + cls + '">' + ln + '</span>' : ln);
+    }
+  }
+  return out.join('\n');
+}
+
+// — State held by the save modal while the user confirms the diff.
+var SAVE_PENDING = null;   // {fileName, oldText, newText, fileHandle}
+
+async function requestEngineDir() {
+  if (!FS_API_AVAILABLE) {
+    showCopyToast('Direct write not supported — use Download fallback');
+    return null;
+  }
+  try {
+    var handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    ENGINE_DIR_HANDLE = handle;
+    document.getElementById('btn-save-dir').style.display = 'none';
+    showCopyToast('Linked to "' + handle.name + '/" — direct writes enabled');
+    return handle;
+  } catch (err) {
+    if (err && err.name === 'AbortError') return null;
+    console.warn('Directory pick failed:', err);
+    showCopyToast('Directory pick cancelled or denied');
+    return null;
+  }
+}
+
+async function readFloorFileViaHandle(floorId) {
+  if (!ENGINE_DIR_HANDLE) return null;
+  var name = floorBlockoutFileName(floorId);
+  try {
+    var fh = await ENGINE_DIR_HANDLE.getFileHandle(name);
+    var f = await fh.getFile();
+    return { fileName: name, fileHandle: fh, text: await f.text() };
+  } catch (err) {
+    console.warn('[save] read failed for', name, err);
+    return null;
+  }
+}
+
+async function prepareSaveCurrentFloor() {
+  if (!currentFloor || !currentFloorId) return;
+  var fileName = floorBlockoutFileName(currentFloorId);
+  var oldText = null, fileHandle = null;
+
+  if (FS_API_AVAILABLE && ENGINE_DIR_HANDLE) {
+    var read = await readFloorFileViaHandle(currentFloorId);
+    if (read) { oldText = read.text; fileHandle = read.fileHandle; }
+  }
+
+  if (oldText == null) {
+    // Fallback: fetch the file via its relative URL (works on both file:// and http(s)).
+    try {
+      var resp = await fetch('../engine/' + fileName);
+      if (resp.ok) oldText = await resp.text();
+    } catch (err) { /* fall through */ }
+  }
+
+  if (oldText == null) {
+    showCopyToast('Could not read ' + fileName + ' — click "Pick engine/…" first');
+    document.getElementById('btn-save-dir').style.display = 'inline-block';
+    return;
+  }
+
+  var newText = patchGridInSource(oldText, currentFloor.grid);
+  if (newText == null) {
+    showCopyToast('Could not locate `var GRID = [...]` block in ' + fileName);
+    return;
+  }
+  if (newText === oldText) {
+    showCopyToast('No changes to write — ' + fileName + ' is already up-to-date');
+    return;
+  }
+
+  var hunks = makeUnifiedDiff(oldText, newText, 3);
+  document.getElementById('save-diff').innerHTML = renderDiffHTML(hunks, fileName);
+  SAVE_PENDING = { fileName: fileName, oldText: oldText, newText: newText, fileHandle: fileHandle };
+  document.getElementById('save-modal').classList.add('open');
+}
+
+function closeSaveModal() {
+  document.getElementById('save-modal').classList.remove('open');
+  SAVE_PENDING = null;
+}
+
+async function confirmSaveWrite() {
+  if (!SAVE_PENDING) return;
+  var p = SAVE_PENDING;
+  if (p.fileHandle) {
+    try {
+      var writable = await p.fileHandle.createWritable();
+      await writable.write(p.newText);
+      await writable.close();
+      showCopyToast('Wrote ' + p.fileName);
+      // Re-baseline originalGrid so the dirty counter resets without losing undo history.
+      EDIT.originalGrid = snapshotGrid(currentFloor.grid);
+      updateEditUI();
+      closeSaveModal();
+      return;
+    } catch (err) {
+      console.warn('[save] write failed:', err);
+      showCopyToast('Write failed — falling back to download');
+    }
+  }
+  downloadPendingSave();
+}
+
+function downloadPendingSave() {
+  if (!SAVE_PENDING) return;
+  var p = SAVE_PENDING;
+  var blob = new Blob([p.newText], { type: 'text/javascript' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = p.fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  showCopyToast('Downloaded ' + p.fileName + ' — drop into engine/');
+  EDIT.originalGrid = snapshotGrid(currentFloor.grid);
+  updateEditUI();
+  closeSaveModal();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1187,6 +1734,9 @@ function draw() {
     });
   }
 
+  // Validation highlight overlay (red/amber/blue borders on flagged cells)
+  if (typeof drawValidationHighlight === 'function') drawValidationHighlight();
+
   // Lasso selection rect
   if (LASSO.sel && EDIT.tool === 'lasso') {
     var s = LASSO.sel;
@@ -1272,7 +1822,35 @@ function draw() {
 var canvasWrap = document.getElementById('canvas-wrap');
 var tooltip = document.getElementById('tooltip');
 
-function resizeCanvas() { canvas.width = canvasWrap.clientWidth; canvas.height = canvasWrap.clientHeight; draw(); }
+function resizeCanvas() {
+  // Canvas with no width/height attribute defaults to 300×150 — if we
+  // never size it to the wrap, the grid renders into a tiny box in the
+  // top-left. Call this on startup, on window resize, and after any
+  // layout change (e.g. toggling the resize bar).
+  canvas.width  = canvasWrap.clientWidth  || 800;
+  canvas.height = canvasWrap.clientHeight || 600;
+  // Re-fit zoom/pan to the freshly-sized canvas so the grid recenters.
+  if (currentFloor && currentFloor.grid) {
+    var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+    var gh = currentFloor.grid.length;
+    if (gw && gh) {
+      VIEW.zoom = Math.max(0.3, Math.min(3.0,
+        Math.min((canvas.width  * 0.85) / (gw * VIEW.cellSize),
+                 (canvas.height * 0.85) / (gh * VIEW.cellSize))));
+      var cp = cellPx();
+      VIEW.panX = (canvas.width  - gw * cp) / 2;
+      VIEW.panY = (canvas.height - gh * cp) / 2;
+      var zd = document.getElementById('zoom-display');
+      if (zd) zd.textContent = VIEW.zoom.toFixed(1) + 'x';
+    }
+  }
+  draw();
+}
+// Size the canvas once the wrap has real dimensions, and keep it in
+// sync with window resizes. RequestAnimationFrame lets the browser
+// compute layout before we read clientWidth/Height.
+requestAnimationFrame(resizeCanvas);
+window.addEventListener('resize', resizeCanvas);
 
 function screenToGrid(mx, my) {
   var cp = cellPx();
@@ -1283,6 +1861,9 @@ canvasWrap.addEventListener('mousedown', function(e) {
   var rect = canvas.getBoundingClientRect();
   var mx = e.clientX - rect.left, my = e.clientY - rect.top;
   var g = screenToGrid(mx, my);
+
+  // Metadata placement mode (spawn drag) preempts all other mouse handling.
+  if (typeof metaInterceptMousedown === 'function' && metaInterceptMousedown(e, g)) return;
 
   if (EDIT.active && e.button === 0 && !e.ctrlKey && !e.altKey) {
     // Shift+click on Paint panels to the pan (keep original shortcut) — all other
@@ -1556,13 +2137,30 @@ function populateFloorSelect() {
 }
 
 function selectFloor(id) {
+  // Park the outgoing floor's history under its ID before switching.
+  if (currentFloorId && currentFloor) {
+    FLOOR_HISTORY[currentFloorId] = {
+      undo: EDIT.undoStack,
+      redo: EDIT.redoStack,
+      originalGrid: EDIT.originalGrid
+    };
+  }
   currentFloorId = id;
   currentFloor = FLOORS[id];
   if (!currentFloor) return;
   document.getElementById('floor-select').value = id;
 
-  EDIT.originalGrid = snapshotGrid(currentFloor.grid);
-  EDIT.undoStack = [];
+  // Restore this floor's history, or initialize fresh.
+  var h = FLOOR_HISTORY[id];
+  if (h) {
+    EDIT.undoStack = h.undo;
+    EDIT.redoStack = h.redo;
+    EDIT.originalGrid = h.originalGrid;
+  } else {
+    EDIT.originalGrid = snapshotGrid(currentFloor.grid);
+    EDIT.undoStack = [];
+    EDIT.redoStack = [];
+  }
   clearLasso();
 
   var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
@@ -1571,6 +2169,7 @@ function selectFloor(id) {
   currentFloor.gridH = gh;
   document.getElementById('ib-grid').textContent = gw + ' x ' + gh;
   document.getElementById('ib-floor').textContent = '"' + id + '" ' + (FLOOR_NAMES[id] || '');
+  updateClipboardBadge();
 
   var cw = canvas.width, ch = canvas.height;
   VIEW.zoom = Math.max(0.3, Math.min(3.0, Math.min((cw*.85)/(gw*VIEW.cellSize), (ch*.85)/(gh*VIEW.cellSize))));
@@ -1612,10 +2211,13 @@ function selectTool(tool) {
   draw();
 }
 
-['paint','rect','line','bucket','replace'].forEach(function(t) {
+['paint','rect','line','bucket','replace','paste'].forEach(function(t) {
   var btn = document.getElementById('btn-tool-' + t);
   if (btn) btn.addEventListener('click', function() { selectTool(t); });
 });
+
+// Populate the resize-bar Fill tile dropdown (defined earlier, called here once on load).
+if (typeof populateResizeFill === 'function') populateResizeFill();
 
 document.getElementById('btn-lasso').addEventListener('click', function() {
   if (EDIT.tool === 'lasso') {
@@ -1632,13 +2234,40 @@ document.getElementById('brush-size').addEventListener('change', function() {
 });
 
 document.getElementById('btn-undo').addEventListener('click', undoLast);
+document.getElementById('btn-redo').addEventListener('click', redoLast);
 document.getElementById('btn-revert').addEventListener('click', function() {
   if (confirm('Revert all changes on this floor?')) revertAll();
 });
 document.getElementById('btn-copy').addEventListener('click', doCopySelection);
+document.getElementById('clipboard-badge').addEventListener('click', function() {
+  if (CLIPBOARD.sourceFloorId && FLOORS[CLIPBOARD.sourceFloorId]) {
+    selectFloor(CLIPBOARD.sourceFloorId);
+  }
+});
 document.getElementById('btn-cut').addEventListener('click', doCutSelection);
 document.getElementById('btn-copy-full').addEventListener('click', doCopyFull);
 document.getElementById('btn-copy-diff').addEventListener('click', doCopyDiff);
+document.getElementById('btn-save').addEventListener('click', prepareSaveCurrentFloor);
+document.getElementById('btn-save-dir').addEventListener('click', requestEngineDir);
+// Save-modal markup lives AFTER the closing script tag — wire its
+// buttons on DOMContentLoaded (or immediately if already parsed).
+function wireSaveModal() {
+  var c  = document.getElementById('save-cancel');
+  var w  = document.getElementById('save-confirm');
+  var dl = document.getElementById('save-download');
+  if (c)  c.addEventListener('click',  closeSaveModal);
+  if (w)  w.addEventListener('click',  confirmSaveWrite);
+  if (dl) dl.addEventListener('click', downloadPendingSave);
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', wireSaveModal);
+} else {
+  wireSaveModal();
+}
+// Show the directory-pick button up-front if the API is supported but no handle yet.
+if (FS_API_AVAILABLE) {
+  document.getElementById('btn-save-dir').style.display = ENGINE_DIR_HANDLE ? 'none' : 'inline-block';
+}
 
 function toggleBtn(id, prop) {
   var btn = document.getElementById(id);
@@ -1672,10 +2301,13 @@ window.addEventListener('keydown', function(e) {
   if (e.key === 'i' && !EDIT.active) document.getElementById('btn-ids').click();
   if (e.key === 'l' && !EDIT.active) document.getElementById('btn-legend').click();
   if (e.key === 'e') { EDIT.active = !EDIT.active; if (EDIT.active && currentFloor) EDIT.originalGrid = snapshotGrid(currentFloor.grid); updateEditUI(); draw(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoLast(); }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); prepareSaveCurrentFloor(); }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undoLast(); }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y' || (e.shiftKey && (e.key === 'z' || e.key === 'Z')))) { e.preventDefault(); redoLast(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'c' && EDIT.active) { e.preventDefault(); doCopySelection(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'x' && EDIT.active) { e.preventDefault(); doCutSelection(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'v' && EDIT.active) { e.preventDefault(); doPasteAtHover(); }
+  if (e.key === 'Escape' && document.getElementById('save-modal').classList.contains('open')) { closeSaveModal(); return; }
   if (e.key === 'Escape' && LASSO.floating) { clearLasso(); draw(); }
   if (e.key === 'Enter' && LASSO.floating) { lassoCommit(); draw(); }
   // Tool shortcuts (edit mode only — override base-view bindings like 'r' for Rooms).
@@ -1702,7 +2334,2150 @@ window.addEventListener('keydown', function(e) {
   }
 });
 
+// Dev-only smoke test: verifies copy → floor switch → paste.
+// Usage from devtools: __clipboardSmokeTest('1', '1.3.1')
+window.__clipboardSmokeTest = function(srcId, dstId) {
+  srcId = srcId || Object.keys(FLOORS)[0];
+  var dstCandidates = Object.keys(FLOORS).filter(function(k){ return k !== srcId; });
+  dstId = dstId || dstCandidates[0];
+  if (!FLOORS[srcId] || !FLOORS[dstId]) { console.error('bad floor ids'); return false; }
+  selectFloor(srcId);
+  EDIT.active = true;
+  LASSO.sel = { x:0, y:0, w:2, h:2 };
+  var srcTiles = [
+    [FLOORS[srcId].grid[0][0], FLOORS[srcId].grid[0][1]],
+    [FLOORS[srcId].grid[1][0], FLOORS[srcId].grid[1][1]]
+  ];
+  doCopySelection();
+  console.log('[smoke] copied from', srcId, 'dims', CLIPBOARD.w+'x'+CLIPBOARD.h, 'source:', CLIPBOARD.sourceFloorId);
+  selectFloor(dstId);
+  console.log('[smoke] switched to', dstId, '— clipboard still present:', !!CLIPBOARD.tiles);
+  stampClipboardAt(0, 0);
+  var match = true;
+  for (var y = 0; y < 2; y++) for (var x = 0; x < 2; x++) {
+    if (FLOORS[dstId].grid[y][x] !== srcTiles[y][x]) match = false;
+  }
+  console.log('[smoke] paste', match ? 'OK — cells match source' : 'FAILED');
+  undoLast(); // clean up the smoke-test stamp
+  return match;
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  TIER 4 — WINDOW-SCENE EDITOR
+//  Detect WINDOW_* / PORTHOLE / ARCH_DOORWAY tiles on the current
+//  floor, list them in a side panel, and open a sub-grid scene
+//  editor for each. Scenes are kept in-memory (WINDOW_SCENES) and
+//  can be exported to a sidecar JSON for the engine to consume
+//  later. Same clipboard mechanism as Tier 1 paste — designers
+//  copy a region on the parent exterior floor and stamp it into
+//  the window's sub-grid.
+// ═══════════════════════════════════════════════════════════════
+var WINDOW_SCENES = {};   // key "floorId|x,y" → {w,h,tiles:[[...]],parentFloorId,tileId,facing}
+var SCENE_DEFAULT_W = 8;
+var SCENE_DEFAULT_H = 6;
+var SCENE_EDIT = { open:false, key:null, floorId:null, x:0, y:0, tileId:0, painting:false };
+
+function isWindowLikeTile(tileId) {
+  var info = TILE_SCHEMA[tileId];
+  if (!info) return false;
+  // Prefer schema predicate if loaded from tile-schema.json
+  if (info.isWindow === true) return true;
+  var n = (info.name || '').toUpperCase();
+  return n.indexOf('WINDOW_') === 0 || n === 'PORTHOLE' || n === 'ARCH_DOORWAY';
+}
+
+function parentFloorIdOf(floorId) {
+  if (!floorId) return null;
+  var i = floorId.lastIndexOf('.');
+  return i < 0 ? null : floorId.substring(0, i);
+}
+
+function windowSceneKey(floorId, x, y) { return floorId + '|' + x + ',' + y; }
+
+function listWindowsOnFloor(floor, floorId) {
+  var out = [];
+  if (!floor || !floor.grid) return out;
+  var g = floor.grid;
+  for (var y = 0; y < g.length; y++) {
+    var row = g[y]; if (!row) continue;
+    for (var x = 0; x < row.length; x++) {
+      var t = row[x];
+      if (isWindowLikeTile(t)) out.push({ x:x, y:y, tileId:t, key:windowSceneKey(floorId, x, y) });
+    }
+  }
+  return out;
+}
+
+function getOrCreateWindowScene(floorId, x, y, tileId) {
+  var key = windowSceneKey(floorId, x, y);
+  if (WINDOW_SCENES[key]) return WINDOW_SCENES[key];
+  var w = SCENE_DEFAULT_W, h = SCENE_DEFAULT_H;
+  var tiles = [];
+  for (var iy = 0; iy < h; iy++) {
+    var row = []; for (var ix = 0; ix < w; ix++) row.push(0);
+    tiles.push(row);
+  }
+  WINDOW_SCENES[key] = {
+    w: w, h: h, tiles: tiles,
+    parentFloorId: parentFloorIdOf(floorId),
+    tileId: tileId,
+    facing: null   // populated later once engine consumes scenes
+  };
+  return WINDOW_SCENES[key];
+}
+
+function buildWindowsPanel() {
+  var el = document.getElementById('windows-panel');
+  if (!el) return;
+  if (!currentFloor || !currentFloorId) { el.className = ''; el.innerHTML = ''; return; }
+  var windows = listWindowsOnFloor(currentFloor, currentFloorId);
+  if (!windows.length) { el.className = ''; el.innerHTML = ''; return; }
+  el.className = 'has-windows';
+  var depth = currentFloorId.split('.').length;
+  var parts = ['<div class="wp-title">WINDOWS (' + windows.length + ')</div>'];
+  parts.push('<div class="wp-empty">depth ' + depth + (depth >= 2 ? ' — interior' : ' — exterior (facades)') + '</div>');
+  windows.forEach(function(w) {
+    var info = TILE_SCHEMA[w.tileId] || {};
+    var hasScene = !!WINDOW_SCENES[w.key];
+    parts.push(
+      '<div class="wp-row" data-key="' + w.key + '" data-x="' + w.x + '" data-y="' + w.y + '" data-tile="' + w.tileId + '">' +
+        '<div class="wp-swatch" style="background:' + (info.color || '#999') + '"></div>' +
+        '<div class="wp-coord">(' + w.x + ',' + w.y + ')</div>' +
+        '<div class="wp-name' + (hasScene ? ' wp-has-scene' : '') + '">' + (info.name || '?') + (hasScene ? ' ●' : '') + '</div>' +
+      '</div>'
+    );
+  });
+  el.innerHTML = parts.join('');
+  // Wire clicks
+  var rows = el.querySelectorAll('.wp-row');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].addEventListener('click', function(ev) {
+      var row = ev.currentTarget;
+      openSceneEditor(currentFloorId,
+        parseInt(row.getAttribute('data-x'), 10),
+        parseInt(row.getAttribute('data-y'), 10),
+        parseInt(row.getAttribute('data-tile'), 10));
+    });
+  }
+}
+
+function openSceneEditor(floorId, x, y, tileId) {
+  var scene = getOrCreateWindowScene(floorId, x, y, tileId);
+  SCENE_EDIT.open = true;
+  SCENE_EDIT.key = windowSceneKey(floorId, x, y);
+  SCENE_EDIT.floorId = floorId;
+  SCENE_EDIT.x = x; SCENE_EDIT.y = y; SCENE_EDIT.tileId = tileId;
+  var info = TILE_SCHEMA[tileId] || {};
+  document.getElementById('sm-heading').textContent = 'Window scene — ' + (info.name || 'window');
+  document.getElementById('sm-sub').textContent =
+    'floor "' + floorId + '" @ (' + x + ',' + y + ')';
+  document.getElementById('scene-modal').classList.add('open');
+  refreshSceneEditor();
+}
+
+function closeSceneEditor() {
+  SCENE_EDIT.open = false;
+  document.getElementById('scene-modal').classList.remove('open');
+  // Rebuild panel to reflect "has scene" indicator
+  buildWindowsPanel();
+}
+
+function refreshSceneEditor() {
+  if (!SCENE_EDIT.open) return;
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene) return;
+  document.getElementById('sm-dims').textContent = scene.w + ' × ' + scene.h;
+  var pi = TILE_SCHEMA[EDIT.paintTile] || {};
+  document.getElementById('sm-paint-info').innerHTML =
+    '<span style="display:inline-block;width:10px;height:10px;vertical-align:middle;' +
+    'background:' + (pi.color||'#999') + ';border:1px solid #555;margin-right:4px;"></span>' +
+    (pi.name || '?') + ' (' + EDIT.paintTile + ')';
+  var parentLabel = scene.parentFloorId
+    ? '"' + scene.parentFloorId + '" ' + (FLOOR_NAMES[scene.parentFloorId] || '(missing)')
+    : '(none — this floor has no parent)';
+  document.getElementById('sm-parent-info').textContent = parentLabel;
+  document.getElementById('sm-jump-parent').disabled = !scene.parentFloorId || !FLOORS[scene.parentFloorId];
+  var clipLabel = CLIPBOARD.tiles
+    ? CLIPBOARD.w + '×' + CLIPBOARD.h + ' from floor "' + (CLIPBOARD.sourceFloorId || '?') + '"'
+    : '(empty — copy a region first with lasso + Ctrl+C)';
+  document.getElementById('sm-clip-info').textContent = clipLabel;
+  document.getElementById('sm-stamp-clip').disabled = !CLIPBOARD.tiles;
+  renderSceneCanvas();
+}
+
+function renderSceneCanvas() {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene) return;
+  var cv = document.getElementById('scene-canvas');
+  var ctx = cv.getContext('2d');
+  // Fit cell to canvas
+  var cs = Math.floor(Math.min(cv.width / scene.w, cv.height / scene.h));
+  ctx.fillStyle = '#0b0c10';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  var ox = Math.floor((cv.width  - cs * scene.w) / 2);
+  var oy = Math.floor((cv.height - cs * scene.h) / 2);
+  for (var y = 0; y < scene.h; y++) {
+    for (var x = 0; x < scene.w; x++) {
+      var t = scene.tiles[y][x];
+      var info = TILE_SCHEMA[t] || { color: '#222' };
+      ctx.fillStyle = info.color;
+      ctx.fillRect(ox + x*cs, oy + y*cs, cs, cs);
+      ctx.strokeStyle = '#0008';
+      ctx.strokeRect(ox + x*cs + 0.5, oy + y*cs + 0.5, cs-1, cs-1);
+    }
+  }
+  // Store draw origin for click mapping
+  cv._origin = { ox: ox, oy: oy, cs: cs, w: scene.w, h: scene.h };
+}
+
+function sceneCellAt(mx, my) {
+  var cv = document.getElementById('scene-canvas');
+  if (!cv._origin) return null;
+  var r = cv.getBoundingClientRect();
+  var px = (mx - r.left) * (cv.width / r.width);
+  var py = (my - r.top)  * (cv.height / r.height);
+  var o = cv._origin;
+  var gx = Math.floor((px - o.ox) / o.cs);
+  var gy = Math.floor((py - o.oy) / o.cs);
+  if (gx < 0 || gy < 0 || gx >= o.w || gy >= o.h) return null;
+  return { x: gx, y: gy };
+}
+
+function scenePaint(mx, my, erase) {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene) return;
+  var c = sceneCellAt(mx, my);
+  if (!c) return;
+  var t = erase ? 0 : EDIT.paintTile;
+  if (scene.tiles[c.y][c.x] === t) return;
+  scene.tiles[c.y][c.x] = t;
+  renderSceneCanvas();
+}
+
+function sceneResize(dw, dh) {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene) return;
+  var nw = Math.max(1, Math.min(24, scene.w + dw));
+  var nh = Math.max(1, Math.min(24, scene.h + dh));
+  if (nw === scene.w && nh === scene.h) return;
+  var newTiles = [];
+  for (var y = 0; y < nh; y++) {
+    var row = [];
+    for (var x = 0; x < nw; x++) {
+      row.push((y < scene.h && x < scene.w) ? scene.tiles[y][x] : 0);
+    }
+    newTiles.push(row);
+  }
+  scene.tiles = newTiles;
+  scene.w = nw; scene.h = nh;
+  refreshSceneEditor();
+}
+
+function sceneStampFromClipboard() {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene || !CLIPBOARD.tiles) return;
+  var copied = 0;
+  for (var y = 0; y < CLIPBOARD.h && y < scene.h; y++) {
+    for (var x = 0; x < CLIPBOARD.w && x < scene.w; x++) {
+      scene.tiles[y][x] = CLIPBOARD.tiles[y][x];
+      copied++;
+    }
+  }
+  renderSceneCanvas();
+  showCopyToast('Stamped ' + copied + ' cells from clipboard');
+}
+
+function sceneClear() {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene) return;
+  for (var y = 0; y < scene.h; y++)
+    for (var x = 0; x < scene.w; x++)
+      scene.tiles[y][x] = 0;
+  renderSceneCanvas();
+}
+
+function sceneJumpToParent() {
+  var scene = WINDOW_SCENES[SCENE_EDIT.key];
+  if (!scene || !scene.parentFloorId || !FLOORS[scene.parentFloorId]) return;
+  // Keep scene modal open so designer can see the sub-grid while
+  // lassoing on the parent floor. Re-bind the panel to the new floor.
+  var savedKey = SCENE_EDIT.key;
+  var savedFloorId = SCENE_EDIT.floorId;
+  selectFloor(scene.parentFloorId);
+  SCENE_EDIT.key = savedKey;
+  SCENE_EDIT.floorId = savedFloorId;
+  refreshSceneEditor();
+  showCopyToast('Jumped to parent floor "' + scene.parentFloorId + '" — lasso + Ctrl+C, then Stamp clipboard');
+}
+
+function exportWindowScenes() {
+  var out = { generated: new Date().toISOString(), scenes: {} };
+  Object.keys(WINDOW_SCENES).forEach(function(k) {
+    var s = WINDOW_SCENES[k];
+    out.scenes[k] = {
+      floorId: k.split('|')[0],
+      at: k.split('|')[1],
+      tileId: s.tileId,
+      parentFloorId: s.parentFloorId,
+      w: s.w, h: s.h,
+      tiles: s.tiles
+    };
+  });
+  var json = JSON.stringify(out, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'window-scenes.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+}
+
+// ── Scene modal wiring ──
+// The #scene-modal DOM lives AFTER the closing script tag in the
+// document, so we cannot wire its listeners synchronously — the
+// elements don't exist yet at script-parse time. Defer to
+// DOMContentLoaded (or run immediately if already parsed).
+function wireSceneModal() {
+  var cv = document.getElementById('scene-canvas');
+  if (!cv) { console.warn('scene-modal DOM missing — Tier 4 window-scene editor disabled'); return; }
+  cv.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  cv.addEventListener('mousedown', function(e) {
+    SCENE_EDIT.painting = true;
+    scenePaint(e.clientX, e.clientY, e.button === 2);
+  });
+  cv.addEventListener('mousemove', function(e) {
+    if (SCENE_EDIT.painting) scenePaint(e.clientX, e.clientY, (e.buttons & 2) !== 0);
+  });
+  window.addEventListener('mouseup', function() { SCENE_EDIT.painting = false; });
+  var byId = function(id) { return document.getElementById(id); };
+  var attach = function(id, fn) { var el = byId(id); if (el) el.addEventListener('click', fn); };
+  attach('sm-close',        closeSceneEditor);
+  attach('sm-clear',        sceneClear);
+  attach('sm-w-inc',        function() { sceneResize(+1, 0); });
+  attach('sm-w-dec',        function() { sceneResize(-1, 0); });
+  attach('sm-h-inc',        function() { sceneResize(0, +1); });
+  attach('sm-h-dec',        function() { sceneResize(0, -1); });
+  attach('sm-stamp-clip',   sceneStampFromClipboard);
+  attach('sm-jump-parent',  sceneJumpToParent);
+  attach('sm-export-json',  exportWindowScenes);
+  // ESC closes
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && SCENE_EDIT.open) { closeSceneEditor(); }
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', wireSceneModal);
+} else {
+  wireSceneModal();
+}
+
+// Expose for dev smoke-testing.
+window.__windowSceneSmokeTest = function(floorId) {
+  floorId = floorId || currentFloorId;
+  var windows = listWindowsOnFloor(FLOORS[floorId], floorId);
+  console.log('[scene-smoke] floor', floorId, 'windows:', windows.length);
+  windows.slice(0, 3).forEach(function(w) {
+    console.log('  ', w.x + ',' + w.y, (TILE_SCHEMA[w.tileId]||{}).name);
+  });
+  return windows;
+};
+
+// Patch selectFloor to refresh the windows panel — via a post-hook.
+(function patchSelectFloorForWindows() {
+  var original = selectFloor;
+  selectFloor = function(id) {
+    original.apply(this, arguments);
+    buildWindowsPanel();
+    if (SCENE_EDIT.open) refreshSceneEditor();
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  TIER 2 — VALIDATION
+//  Per-floor: walkability (BFS from spawn), door-target sanity,
+//  spawn validity, required tiles for depth-1 exterior floors.
+//  Cross-floor: target floor exists; inbound back-door reciprocity.
+//  Results render in #validate-modal; clicking a row jumps the
+//  camera, highlights the cells in red, and persists the highlight
+//  as a canvas overlay until the selection changes or modal closes.
+// ═══════════════════════════════════════════════════════════════
+var VALIDATE = {
+  lastResults: null,     // array of issue objects
+  scope: 'current',      // 'current' | 'all'
+  selectedIdx: -1,
+  highlightCells: null   // {floorId, cells:[{x,y}], color}
+};
+
+// Names we recognize as door-like tiles by schema name. The schema's
+// `isDoor` predicate covers the standard doors; we also tag door-like
+// transition tiles by name so STAIRS_* and DOOR_BACK/DOOR_EXIT are
+// picked up regardless of how tiles.js categorizes them.
+var DOOR_NAME_RE = /^(DOOR(_EXIT|_BACK|_FACADE)?|STAIRS_(UP|DN))$/;
+
+function isDoorLikeTileId(tileId) {
+  var s = TILE_SCHEMA[tileId]; if (!s) return false;
+  if (s.isDoor) return true;
+  return DOOR_NAME_RE.test(s.name || '');
+}
+
+function depthOfFloorId(id) {
+  if (!id) return 0;
+  return String(id).split('.').length;
+}
+
+function forEachCell(grid, fn) {
+  for (var y = 0; y < grid.length; y++) {
+    var row = grid[y]; if (!row) continue;
+    for (var x = 0; x < row.length; x++) fn(x, y, row[x]);
+  }
+}
+
+function tileNameAt(grid, x, y) {
+  var row = grid[y]; if (!row) return '?';
+  var s = TILE_SCHEMA[row[x]];
+  return s ? s.name : String(row[x]);
+}
+
+// Flood-fill reachable cells starting from `sx,sy`. Walkable predicate
+// per the schema. Returns a Set-like object keyed by "x,y".
+function reachableFrom(grid, sx, sy) {
+  var reached = {};
+  if (!grid || !grid[sy] || grid[sy][sx] === undefined) return reached;
+  var startSchema = TILE_SCHEMA[grid[sy][sx]];
+  if (!startSchema || !startSchema.walk) return reached;  // spawn itself blocked
+  var stack = [{x:sx, y:sy}];
+  reached[sx+','+sy] = true;
+  while (stack.length) {
+    var c = stack.pop();
+    var neigh = [{x:c.x+1,y:c.y},{x:c.x-1,y:c.y},{x:c.x,y:c.y+1},{x:c.x,y:c.y-1}];
+    for (var i = 0; i < neigh.length; i++) {
+      var n = neigh[i];
+      if (n.y < 0 || n.y >= grid.length) continue;
+      var row = grid[n.y]; if (!row) continue;
+      if (n.x < 0 || n.x >= row.length) continue;
+      var k = n.x+','+n.y; if (reached[k]) continue;
+      var s = TILE_SCHEMA[row[n.x]]; if (!s || !s.walk) continue;
+      reached[k] = true;
+      stack.push(n);
+    }
+  }
+  return reached;
+}
+
+// Per-floor validators. Emits issues keyed to the floor. Cross-floor
+// checks live in validateCrossFloor() below.
+function validateFloor(floorId, floor) {
+  var issues = [];
+  if (!floor || !floor.grid) {
+    issues.push({severity:'err', floorId:floorId, kind:'missing-data',
+                 msg:'Floor data missing or has no grid', cells:[]});
+    return issues;
+  }
+  var grid = floor.grid;
+  var gh = grid.length;
+  var gw = grid[0] ? grid[0].length : 0;
+
+  // ── Spawn check ──
+  var sp = floor.spawn;
+  if (!sp && floorId === '0') sp = {x:4, y:17};  // legacy fallback used by the renderer
+  if (!sp) {
+    issues.push({severity:'err', floorId:floorId, kind:'spawn-missing',
+                 msg:'No spawn defined for this floor', cells:[]});
+  } else {
+    if (sp.x < 0 || sp.x >= gw || sp.y < 0 || sp.y >= gh) {
+      issues.push({severity:'err', floorId:floorId, kind:'spawn-oob',
+                   msg:'Spawn ('+sp.x+','+sp.y+') is outside the grid ('+gw+'×'+gh+')',
+                   cells:[{x:sp.x,y:sp.y}]});
+    } else {
+      var spTile = grid[sp.y][sp.x];
+      var spSchema = TILE_SCHEMA[spTile];
+      if (!spSchema || !spSchema.walk) {
+        issues.push({severity:'err', floorId:floorId, kind:'spawn-blocked',
+                     msg:'Spawn at ('+sp.x+','+sp.y+') lands on non-walkable tile '+(spSchema?spSchema.name:spTile),
+                     cells:[{x:sp.x,y:sp.y}]});
+      }
+    }
+  }
+
+  // ── Walkability reachability ──
+  if (sp && sp.x >= 0 && sp.x < gw && sp.y >= 0 && sp.y < gh) {
+    var reached = reachableFrom(grid, sp.x, sp.y);
+    var orphaned = [];
+    forEachCell(grid, function(x, y, tile) {
+      var s = TILE_SCHEMA[tile]; if (!s || !s.walk) return;
+      if (!reached[x+','+y]) orphaned.push({x:x, y:y});
+    });
+    if (orphaned.length) {
+      // Group into a single issue so the list doesn't explode.
+      issues.push({severity:'warn', floorId:floorId, kind:'unreachable',
+                   msg:orphaned.length+' walkable cells unreachable from spawn',
+                   cells:orphaned});
+    }
+  }
+
+  // ── Door-tile target checks ──
+  var doorTargets = floor.doorTargets || {};
+  var hasFacadeArch = false, hasAnyDoor = false;
+  forEachCell(grid, function(x, y, tile) {
+    var s = TILE_SCHEMA[tile]; if (!s) return;
+    if (s.name === 'ARCH_DOORWAY') hasFacadeArch = true;
+    if (!isDoorLikeTileId(tile)) return;
+    hasAnyDoor = true;
+    var key = x+','+y;
+    var target = doorTargets[key];
+    if (!target) {
+      // Fallback is handled by the engine via parent/child convention; flag as info.
+      issues.push({severity:'info', floorId:floorId, kind:'door-fallback',
+                   msg:s.name+' at ('+x+','+y+') has no explicit doorTargets entry (engine will use parent/child fallback)',
+                   cells:[{x:x,y:y}]});
+    }
+  });
+
+  // ── Required tiles by depth ──
+  var depth = depthOfFloorId(floorId);
+  if (floorId === '0' && !sp) {
+    // Already reported above as spawn-missing.
+  }
+  if (depth === 1 && !hasFacadeArch && !hasAnyDoor && gw && gh) {
+    issues.push({severity:'warn', floorId:floorId, kind:'exterior-no-entry',
+                 msg:'Exterior floor has no ARCH_DOORWAY or door tile — nothing to enter',
+                 cells:[]});
+  }
+
+  return issues;
+}
+
+// Cross-floor checks. Requires all issues from per-floor validation so
+// we can stitch together referential problems without re-scanning grids.
+function validateCrossFloor() {
+  var issues = [];
+  var ids = Object.keys(FLOORS);
+
+  // 1. Every doorTargets entry must point to a floor we know about.
+  ids.forEach(function(floorId) {
+    var f = FLOORS[floorId]; if (!f) return;
+    var targets = f.doorTargets || {};
+    Object.keys(targets).forEach(function(key) {
+      var tgt = targets[key];
+      var parts = key.split(','), x = parseInt(parts[0]), y = parseInt(parts[1]);
+      if (!FLOORS[tgt]) {
+        issues.push({severity:'err', floorId:floorId, kind:'door-target-missing',
+                     msg:'Door at ('+x+','+y+') points to floor "'+tgt+'" which does not exist',
+                     cells:[{x:x,y:y}]});
+      }
+    });
+  });
+
+  // 2. Reciprocity: if A.doorTargets points to B, B should have at least
+  //    one door somewhere (so the player can get back). This is a soft
+  //    warning — some floors are one-way on purpose.
+  ids.forEach(function(floorId) {
+    var f = FLOORS[floorId]; if (!f) return;
+    var targets = f.doorTargets || {};
+    Object.keys(targets).forEach(function(key) {
+      var tgt = targets[key];
+      var tf = FLOORS[tgt]; if (!tf || !tf.grid) return;
+      var hasDoor = false;
+      forEachCell(tf.grid, function(x, y, tile) {
+        if (hasDoor) return;
+        if (isDoorLikeTileId(tile)) hasDoor = true;
+      });
+      if (!hasDoor) {
+        var parts = key.split(','), x = parseInt(parts[0]), y = parseInt(parts[1]);
+        issues.push({severity:'warn', floorId:floorId, kind:'no-return-door',
+                     msg:'Floor "'+tgt+'" (target of door at '+x+','+y+') has no door tiles — one-way transition',
+                     cells:[{x:x,y:y}]});
+      }
+    });
+  });
+
+  return issues;
+}
+
+function runValidation(scope) {
+  VALIDATE.scope = scope || 'current';
+  var issues = [];
+  if (VALIDATE.scope === 'current') {
+    if (currentFloorId && FLOORS[currentFloorId]) {
+      issues = issues.concat(validateFloor(currentFloorId, FLOORS[currentFloorId]));
+    }
+  } else {
+    Object.keys(FLOORS).forEach(function(id) {
+      issues = issues.concat(validateFloor(id, FLOORS[id]));
+    });
+    issues = issues.concat(validateCrossFloor());
+  }
+  VALIDATE.lastResults = issues;
+  VALIDATE.selectedIdx = -1;
+  VALIDATE.highlightCells = null;
+  renderValidationResults();
+  updateValidateButtonBadge();
+  draw();
+}
+
+function updateValidateButtonBadge() {
+  var btn = document.getElementById('btn-validate');
+  if (!btn) return;
+  btn.classList.remove('has-errors','has-warnings','clean');
+  if (!VALIDATE.lastResults) return;
+  var nErr = 0, nWarn = 0;
+  VALIDATE.lastResults.forEach(function(i) {
+    if (i.severity === 'err') nErr++;
+    else if (i.severity === 'warn') nWarn++;
+  });
+  if (nErr) btn.classList.add('has-errors');
+  else if (nWarn) btn.classList.add('has-warnings');
+  else btn.classList.add('clean');
+}
+
+function renderValidationResults() {
+  var list = document.getElementById('validate-list');
+  var sub = document.getElementById('validate-subtitle');
+  var sumErr = document.getElementById('vsum-err');
+  var sumWarn = document.getElementById('vsum-warn');
+  var sumOk = document.getElementById('vsum-ok');
+  if (!list) return;
+  var issues = VALIDATE.lastResults || [];
+  var nErr = 0, nWarn = 0, nInfo = 0;
+  issues.forEach(function(i) {
+    if (i.severity === 'err') nErr++;
+    else if (i.severity === 'warn') nWarn++;
+    else nInfo++;
+  });
+  sumErr.textContent  = nErr + ' error' + (nErr === 1 ? '' : 's');
+  sumWarn.textContent = nWarn + ' warning' + (nWarn === 1 ? '' : 's');
+  if (nErr === 0 && nWarn === 0) {
+    sumOk.style.display = '';
+    sumOk.textContent = nInfo ? nInfo + ' info · clean' : 'all checks passed';
+  } else {
+    sumOk.style.display = 'none';
+  }
+  sub.textContent = VALIDATE.scope === 'all'
+    ? Object.keys(FLOORS).length + ' floors scanned'
+    : 'floor "' + (currentFloorId || '?') + '"';
+
+  // Sort: errors first, then warnings, then info; stable by floorId.
+  var order = {err:0, warn:1, info:2};
+  issues = issues.slice().sort(function(a, b) {
+    var d = order[a.severity] - order[b.severity]; if (d) return d;
+    return (a.floorId||'').localeCompare(b.floorId||'');
+  });
+  VALIDATE.lastResults = issues;
+
+  list.innerHTML = '';
+  if (!issues.length) {
+    var e = document.createElement('div');
+    e.className = 'vempty';
+    e.textContent = '✓ No issues found';
+    list.appendChild(e);
+    return;
+  }
+  issues.forEach(function(iss, idx) {
+    var row = document.createElement('div');
+    row.className = 'vrow' + (idx === VALIDATE.selectedIdx ? ' selected' : '');
+    row.innerHTML =
+      '<span class="vsev ' + iss.severity + '">' + iss.severity.toUpperCase() + '</span>' +
+      '<span class="vfloor">' + (iss.floorId || '—') + '</span>' +
+      '<span class="vkind">' + iss.kind + '</span>' +
+      '<span class="vmsg"></span>' +
+      '<span class="vcells">' + (iss.cells && iss.cells.length ? iss.cells.length + ' cell' + (iss.cells.length===1?'':'s') : '') + '</span>';
+    row.querySelector('.vmsg').textContent = iss.msg;
+    row.addEventListener('click', function() { selectValidationIssue(idx); });
+    list.appendChild(row);
+  });
+}
+
+function selectValidationIssue(idx) {
+  var issues = VALIDATE.lastResults || [];
+  var iss = issues[idx]; if (!iss) return;
+  VALIDATE.selectedIdx = idx;
+  // Jump to the target floor if needed.
+  if (iss.floorId && iss.floorId !== currentFloorId && FLOORS[iss.floorId]) {
+    selectFloor(iss.floorId);
+  }
+  // Install highlight overlay.
+  VALIDATE.highlightCells = (iss.cells && iss.cells.length)
+    ? { floorId: iss.floorId, cells: iss.cells, severity: iss.severity }
+    : null;
+  // Center camera on the first problem cell.
+  if (iss.cells && iss.cells.length) {
+    var c = iss.cells[0];
+    var cp = cellPx();
+    VIEW.panX = canvas.width/2  - (c.x + 0.5) * cp;
+    VIEW.panY = canvas.height/2 - (c.y + 0.5) * cp;
+  }
+  // Re-render row highlight.
+  var rows = document.querySelectorAll('#validate-list .vrow');
+  rows.forEach(function(r, i) { r.classList.toggle('selected', i === idx); });
+  draw();
+}
+
+function openValidateModal() {
+  runValidation(VALIDATE.scope);
+  document.getElementById('validate-modal').classList.add('open');
+}
+function closeValidateModal() {
+  document.getElementById('validate-modal').classList.remove('open');
+  VALIDATE.highlightCells = null;
+  draw();
+}
+
+function drawValidationHighlight() {
+  // Called from draw() — renders red borders on flagged cells of the
+  // currently viewed floor.
+  var h = VALIDATE.highlightCells; if (!h) return;
+  if (h.floorId && h.floorId !== currentFloorId) return;
+  if (!canvas || !ctx) return;
+  var cp = cellPx();
+  var color = h.severity === 'err' ? '#ff4466'
+            : h.severity === 'warn' ? '#ffaa44'
+            : '#66aaff';
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, cp * 0.08);
+  for (var i = 0; i < h.cells.length; i++) {
+    var c = h.cells[i];
+    var px = VIEW.panX + c.x * cp;
+    var py = VIEW.panY + c.y * cp;
+    ctx.strokeRect(px + 1, py + 1, cp - 2, cp - 2);
+  }
+  // Pulse fill on the first cell for visibility.
+  var first = h.cells[0];
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = color;
+  ctx.fillRect(VIEW.panX + first.x * cp, VIEW.panY + first.y * cp, cp, cp);
+  ctx.restore();
+}
+
+function wireValidateModal() {
+  var btn = document.getElementById('btn-validate');
+  if (btn) btn.addEventListener('click', openValidateModal);
+  var close = document.getElementById('validate-close');
+  if (close) close.addEventListener('click', closeValidateModal);
+  var rerun = document.getElementById('validate-rerun');
+  if (rerun) rerun.addEventListener('click', function() { runValidation(VALIDATE.scope); });
+  ['vtab-current','vtab-all'].forEach(function(id) {
+    var t = document.getElementById(id); if (!t) return;
+    t.addEventListener('click', function() {
+      var scope = t.getAttribute('data-scope');
+      document.getElementById('vtab-current').classList.toggle('active', scope === 'current');
+      document.getElementById('vtab-all').classList.toggle('active', scope === 'all');
+      runValidation(scope);
+    });
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', wireValidateModal);
+} else {
+  wireValidateModal();
+}
+
+// Escape closes validate modal, matching save/scene modal convention.
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('validate-modal').classList.contains('open')) {
+    closeValidateModal();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  TIER 3 — PER-FLOOR METADATA EDITOR
+//  Spawn drag-to-place + door-target dropdown editing. Edits mutate
+//  FLOORS[id] in memory; file patching for metadata is deferred to
+//  a follow-up (the save patcher currently only rewrites the GRID
+//  literal). Export JSON snippet via the "Copy meta" button; paste
+//  into the floor-blockout-*.js file's registerFloorBuilder entry.
+// ═══════════════════════════════════════════════════════════════
+var META = {
+  open: false,             // panel visible
+  placingSpawn: false,     // next canvas click places spawn
+  dirtyPerFloor: {}        // { floorId: count } — bumped on each meta edit
+};
+
+function metaIsDirty(floorId) {
+  return !!(floorId && META.dirtyPerFloor[floorId]);
+}
+function bumpMetaDirty(floorId) {
+  if (!floorId) return;
+  META.dirtyPerFloor[floorId] = (META.dirtyPerFloor[floorId] || 0) + 1;
+}
+
+// Undo support for metadata edits. Reuses the existing pushUndo() plumbing
+// but introduces a new entry type 'meta' handled in applyEntry() below.
+function pushMetaUndo(entry) {
+  entry.type = 'meta';
+  pushUndo(entry);
+}
+
+// Extend applyEntry() by monkey-patching: keep the original for the four
+// existing types, and route 'meta' through our own applier.
+(function patchApplyEntryForMeta() {
+  if (typeof applyEntry !== 'function') return;
+  var origApply = applyEntry;
+  applyEntry = function(entry, direction) {
+    if (entry && entry.type === 'meta') {
+      applyMetaEntry(entry, direction);
+      return;
+    }
+    return origApply.apply(this, arguments);
+  };
+})();
+
+function applyMetaEntry(entry, direction) {
+  // direction: 'undo' restores oldValue, 'redo' restores newValue.
+  var use = direction === 'undo' ? entry.oldValue : entry.newValue;
+  var f = FLOORS[entry.floorId]; if (!f) return;
+  if (entry.kind === 'spawn') {
+    f.spawn = use ? { x: use.x, y: use.y } : null;
+  } else if (entry.kind === 'doorTarget') {
+    f.doorTargets = f.doorTargets || {};
+    if (use == null || use === '') {
+      delete f.doorTargets[entry.key];
+    } else {
+      f.doorTargets[entry.key] = use;
+    }
+  }
+  if (currentFloorId === entry.floorId) {
+    buildMetadataPanel();
+    draw();
+  }
+}
+
+// Derive a concise list of door-like cells on the current floor. Each
+// entry: { x, y, tileId, schema, currentTarget }.
+function listDoorCellsOnFloor(floor) {
+  if (!floor || !floor.grid) return [];
+  var out = [];
+  var targets = floor.doorTargets || {};
+  forEachCell(floor.grid, function(x, y, tile) {
+    if (!isDoorLikeTileId(tile)) return;
+    out.push({
+      x: x, y: y, tileId: tile,
+      schema: TILE_SCHEMA[tile],
+      currentTarget: targets[x+','+y] || ''
+    });
+  });
+  return out;
+}
+
+// Sorted list of floor IDs for the target dropdown. Puts '(fallback)'
+// at the top — selecting it deletes the explicit doorTargets entry.
+function allFloorIdsSorted() {
+  return Object.keys(FLOORS).sort(function(a, b) {
+    // Natural sort on dotted floor ids: split and compare numerically.
+    var A = a.split('.').map(Number), B = b.split('.').map(Number);
+    for (var i = 0; i < Math.max(A.length, B.length); i++) {
+      var av = A[i]||0, bv = B[i]||0;
+      if (av !== bv) return av - bv;
+    }
+    return 0;
+  });
+}
+
+function buildMetadataPanel() {
+  var panel = document.getElementById('metadata-panel');
+  if (!panel) return;
+  if (!META.open) { panel.classList.remove('open'); return; }
+  panel.classList.add('open');
+  panel.innerHTML = '';
+
+  var header = document.createElement('div');
+  header.className = 'mp-header';
+  var dirtyMark = metaIsDirty(currentFloorId) ? ' <span style="color:#fc8">●</span>' : '';
+  header.innerHTML = '<span class="mp-title">Metadata — floor "'+(currentFloorId||'?')+'"'+dirtyMark+'</span>';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.title = 'Close (M)';
+  closeBtn.addEventListener('click', function() { toggleMetaPanel(false); });
+  header.appendChild(closeBtn);
+  panel.appendChild(header);
+
+  if (!currentFloor || !currentFloor.grid) {
+    var empty = document.createElement('div');
+    empty.className = 'mp-empty';
+    empty.textContent = 'No floor loaded';
+    panel.appendChild(empty);
+    return;
+  }
+
+  // ── Spawn row ──
+  var spawnTitle = document.createElement('div');
+  spawnTitle.className = 'mp-section-title';
+  spawnTitle.textContent = 'SPAWN';
+  panel.appendChild(spawnTitle);
+
+  var sp = currentFloor.spawn;
+  var spawnRow = document.createElement('div');
+  spawnRow.className = 'mp-row';
+  var sw = document.createElement('div');
+  sw.className = 'mp-tileswatch';
+  sw.style.background = '#ff44ff';
+  spawnRow.appendChild(sw);
+  var lbl = document.createElement('div');
+  lbl.className = 'mp-label';
+  lbl.innerHTML = sp ? '('+sp.x+', '+sp.y+')' : '<em style="color:#f88">not set</em>';
+  spawnRow.appendChild(lbl);
+  var moveBtn = document.createElement('button');
+  moveBtn.className = 'mp-move' + (META.placingSpawn ? ' placing' : '');
+  moveBtn.textContent = META.placingSpawn ? 'Click grid…' : (sp ? 'Move' : 'Place');
+  moveBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    META.placingSpawn = !META.placingSpawn;
+    updateCursor();
+    buildMetadataPanel();
+  });
+  spawnRow.appendChild(moveBtn);
+  panel.appendChild(spawnRow);
+
+  // ── Doors ──
+  var doors = listDoorCellsOnFloor(currentFloor);
+  var doorsTitle = document.createElement('div');
+  doorsTitle.className = 'mp-section-title';
+  doorsTitle.textContent = 'DOOR TARGETS (' + doors.length + ')';
+  panel.appendChild(doorsTitle);
+
+  if (!doors.length) {
+    var emp = document.createElement('div');
+    emp.className = 'mp-empty';
+    emp.textContent = 'No door tiles on this floor';
+    panel.appendChild(emp);
+  } else {
+    var floorIds = allFloorIdsSorted();
+    doors.forEach(function(d) {
+      var row = document.createElement('div');
+      row.className = 'mp-row';
+      var sw2 = document.createElement('div');
+      sw2.className = 'mp-tileswatch';
+      sw2.style.background = d.schema ? d.schema.color : '#ff00ff';
+      row.appendChild(sw2);
+      var nm = document.createElement('div');
+      nm.className = 'mp-label';
+      nm.innerHTML = (d.schema ? d.schema.name : d.tileId) +
+                     ' <span class="mp-coords">('+d.x+','+d.y+')</span>';
+      row.appendChild(nm);
+      var sel = document.createElement('select');
+      var optFb = document.createElement('option');
+      optFb.value = '';
+      optFb.textContent = '(fallback)';
+      sel.appendChild(optFb);
+      floorIds.forEach(function(fid) {
+        var o = document.createElement('option');
+        o.value = fid;
+        o.textContent = fid;
+        sel.appendChild(o);
+      });
+      sel.value = d.currentTarget || '';
+      sel.addEventListener('change', function() {
+        setDoorTarget(d.x, d.y, sel.value);
+      });
+      // Jump-to button — center camera on the door cell.
+      var jmp = document.createElement('button');
+      jmp.className = 'mp-move';
+      jmp.style.marginLeft = '4px';
+      jmp.textContent = '→';
+      jmp.title = 'Center camera on this door';
+      jmp.addEventListener('click', function() {
+        var cp = cellPx();
+        VIEW.panX = canvas.width/2  - (d.x + 0.5) * cp;
+        VIEW.panY = canvas.height/2 - (d.y + 0.5) * cp;
+        draw();
+      });
+      row.appendChild(sel);
+      row.appendChild(jmp);
+      panel.appendChild(row);
+    });
+  }
+
+  // ── Actions ──
+  var actions = document.createElement('div');
+  actions.className = 'mp-actions';
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'primary';
+  copyBtn.textContent = 'Copy meta JSON';
+  copyBtn.title = 'Copy {spawn, doorTargets} snippet to clipboard — paste into registerFloorBuilder';
+  copyBtn.addEventListener('click', copyFloorMetaJson);
+  actions.appendChild(copyBtn);
+  var revertBtn = document.createElement('button');
+  revertBtn.textContent = 'Revert meta';
+  revertBtn.title = 'Drop unsaved metadata edits for this floor (reloads floor-data.json)';
+  revertBtn.addEventListener('click', revertFloorMeta);
+  actions.appendChild(revertBtn);
+  panel.appendChild(actions);
+}
+
+function toggleMetaPanel(force) {
+  META.open = (force === undefined) ? !META.open : !!force;
+  META.placingSpawn = false;
+  var btn = document.getElementById('btn-meta');
+  if (btn) btn.classList.toggle('active', META.open);
+  buildMetadataPanel();
+  updateCursor();
+}
+
+function setSpawn(x, y) {
+  if (!currentFloor || !currentFloorId) return;
+  var gw = currentFloor.grid[0] ? currentFloor.grid[0].length : 0;
+  var gh = currentFloor.grid.length;
+  if (x < 0 || x >= gw || y < 0 || y >= gh) return;
+  var oldSpawn = currentFloor.spawn ? { x: currentFloor.spawn.x, y: currentFloor.spawn.y } : null;
+  var newSpawn = { x: x, y: y };
+  currentFloor.spawn = newSpawn;
+  pushMetaUndo({
+    floorId: currentFloorId, kind: 'spawn',
+    oldValue: oldSpawn, newValue: newSpawn
+  });
+  bumpMetaDirty(currentFloorId);
+  META.placingSpawn = false;
+  buildMetadataPanel();
+  updateCursor();
+  draw();
+  showCopyToast('Spawn moved to (' + x + ', ' + y + ')');
+}
+
+function setDoorTarget(x, y, newTarget) {
+  if (!currentFloor || !currentFloorId) return;
+  var key = x + ',' + y;
+  currentFloor.doorTargets = currentFloor.doorTargets || {};
+  var oldValue = currentFloor.doorTargets[key] || '';
+  if (oldValue === newTarget) return;
+  if (newTarget === '' || newTarget == null) {
+    delete currentFloor.doorTargets[key];
+  } else {
+    currentFloor.doorTargets[key] = newTarget;
+  }
+  pushMetaUndo({
+    floorId: currentFloorId, kind: 'doorTarget',
+    key: key, oldValue: oldValue, newValue: newTarget
+  });
+  bumpMetaDirty(currentFloorId);
+  draw();
+}
+
+function copyFloorMetaJson() {
+  if (!currentFloor || !currentFloorId) return;
+  var snippet = {
+    floorId: currentFloorId,
+    spawn: currentFloor.spawn || null,
+    doorTargets: currentFloor.doorTargets || {}
+  };
+  var txt = JSON.stringify(snippet, null, 2);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function() {
+      showCopyToast('Meta JSON copied (' + Object.keys(snippet.doorTargets).length + ' doorTargets)');
+    }, function() {
+      fallbackCopy(txt);
+    });
+  } else {
+    fallbackCopy(txt);
+  }
+  function fallbackCopy(t) {
+    var ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    showCopyToast('Meta JSON copied (fallback)');
+  }
+}
+
+function revertFloorMeta() {
+  if (!currentFloorId) return;
+  if (!confirm('Drop unsaved metadata edits for floor "' + currentFloorId + '"?\n\nThis re-fetches floor-data.json — any unsaved doorTargets / spawn edits on this floor will be lost. Grid edits are NOT affected.')) return;
+  // Re-fetch floor-data.json and overwrite just this floor's metadata.
+  fetch('floor-data.json').then(function(r) { return r.json(); }).then(function(data) {
+    var fresh = data.floors && data.floors[currentFloorId];
+    if (!fresh) { showCopyToast('Floor not in data on disk'); return; }
+    currentFloor.spawn = fresh.spawn ? { x: fresh.spawn.x, y: fresh.spawn.y } : null;
+    currentFloor.doorTargets = fresh.doorTargets ? JSON.parse(JSON.stringify(fresh.doorTargets)) : {};
+    META.dirtyPerFloor[currentFloorId] = 0;
+    buildMetadataPanel();
+    draw();
+    showCopyToast('Metadata reverted to disk state');
+  }).catch(function(e) { showCopyToast('Revert failed: ' + e.message); });
+}
+
+// Canvas-click interception — fires BEFORE the edit-tool branch when
+// META.placingSpawn is true. Wired into the existing mousedown listener
+// via a named hook so we don't rewrite that handler wholesale.
+function metaInterceptMousedown(e, gridPos) {
+  if (META.placingSpawn && e.button === 0) {
+    e.preventDefault();
+    setSpawn(gridPos.x, gridPos.y);
+    return true;
+  }
+  return false;
+}
+
+// Patch updateCursor so metadata placement mode gets a crosshair.
+(function patchUpdateCursorForMeta() {
+  if (typeof updateCursor !== 'function') return;
+  var orig = updateCursor;
+  updateCursor = function() {
+    if (META.placingSpawn) {
+      if (canvasWrap) canvasWrap.style.cursor = 'crosshair';
+      return;
+    }
+    return orig.apply(this, arguments);
+  };
+})();
+
+// Hook selectFloor so the panel reflects the new floor. Chains after the
+// earlier windows-panel hook.
+(function patchSelectFloorForMeta() {
+  var original = selectFloor;
+  selectFloor = function(id) {
+    original.apply(this, arguments);
+    META.placingSpawn = false;
+    if (META.open) buildMetadataPanel();
+  };
+})();
+
+function wireMetaButton() {
+  var btn = document.getElementById('btn-meta');
+  if (btn) btn.addEventListener('click', function() { toggleMetaPanel(); });
+  // Keyboard shortcut: M toggles the panel (edit mode OR view mode).
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'm' || e.key === 'M') {
+      if (document.getElementById('validate-modal').classList.contains('open')) return;
+      if (document.getElementById('save-modal').classList.contains('open')) return;
+      if (document.getElementById('scene-modal').classList.contains('open')) return;
+      e.preventDefault();
+      toggleMetaPanel();
+    }
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', wireMetaButton);
+} else {
+  wireMetaButton();
+}
+
+window.__metaSmokeTest = function() {
+  console.log('[meta-smoke] floor=' + currentFloorId);
+  var doors = listDoorCellsOnFloor(currentFloor);
+  console.log('  doors:', doors.length, 'spawn:', currentFloor && currentFloor.spawn);
+  doors.slice(0, 6).forEach(function(d) {
+    console.log('  ', d.schema.name, '('+d.x+','+d.y+')', '→', d.currentTarget || '(fallback)');
+  });
+  return { floor: currentFloorId, doors: doors.length, spawn: currentFloor && currentFloor.spawn };
+};
+
+window.__validateSmokeTest = function(scope) {
+  runValidation(scope || 'all');
+  console.log('[validate-smoke] scope=' + (scope||'all') + ' issues:', VALIDATE.lastResults.length);
+  VALIDATE.lastResults.slice(0, 8).forEach(function(i) {
+    console.log('  [' + i.severity + '] ' + i.floorId + ' ' + i.kind + ' — ' + i.msg);
+  });
+  return VALIDATE.lastResults;
+};
+
+// ═════════════════════════════════════════════════════════════════
+// Custom UI tooltip — styled hover popover for any element with a
+// `title` attribute. Strips the native title to `data-tt` so the
+// browser's OS-default tooltip doesn't also fire, then shows a dark-
+// themed popover near the cursor. Uses event delegation so buttons
+// added dynamically (metadata panel, windows panel, tile picker) also
+// get styled tooltips.
+// ═════════════════════════════════════════════════════════════════
+(function() {
+  var tip = document.createElement('div');
+  tip.id = 'ui-tooltip';
+  document.body.appendChild(tip);
+
+  var currentEl = null;
+  var hideTimer = null;
+
+  function readTitle(el) {
+    // Migrate title → data-tt so the native tooltip is suppressed.
+    if (el.hasAttribute('title')) {
+      var t = el.getAttribute('title');
+      if (t) {
+        el.setAttribute('data-tt', t);
+        el.removeAttribute('title');
+      }
+    }
+    return el.getAttribute('data-tt') || '';
+  }
+
+  function highlightKeys(text) {
+    // Wrap (X) or (Ctrl+Z) style key hints in a colored span, and
+    // escape any HTML to be safe.
+    var esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return esc.replace(/\(([A-Za-z0-9+\/\s\-]+)\)/g, '(<span class="tt-key">$1</span>)');
+  }
+
+  function showFor(el, clientX, clientY) {
+    var text = readTitle(el);
+    if (!text) { hide(); return; }
+    currentEl = el;
+    tip.innerHTML = highlightKeys(text);
+    tip.style.display = 'block';
+    // Position below-right of cursor, clamped to viewport.
+    var pad = 12;
+    var w = tip.offsetWidth;
+    var h = tip.offsetHeight;
+    var x = clientX + pad;
+    var y = clientY + pad;
+    if (x + w > window.innerWidth - 4) x = clientX - w - pad;
+    if (y + h > window.innerHeight - 4) y = clientY - h - pad;
+    if (x < 4) x = 4;
+    if (y < 4) y = 4;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }
+
+  function hide() {
+    tip.style.display = 'none';
+    currentEl = null;
+  }
+
+  function findTipTarget(el) {
+    // Walk up until we find an element with data-tt or title, or we
+    // leave the toolbar/panel region.
+    while (el && el !== document.body) {
+      if (el.hasAttribute && (el.hasAttribute('data-tt') || el.hasAttribute('title'))) {
+        return el;
+      }
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  document.addEventListener('mouseover', function(e) {
+    var t = findTipTarget(e.target);
+    if (!t) { hide(); return; }
+    // Skip the canvas — it has its own tile-hover tooltip (#tooltip).
+    if (t.id === 'cv') { hide(); return; }
+    if (t !== currentEl) showFor(t, e.clientX, e.clientY);
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!currentEl) return;
+    // Reposition to follow the cursor gently.
+    var pad = 12;
+    var w = tip.offsetWidth;
+    var h = tip.offsetHeight;
+    var x = e.clientX + pad, y = e.clientY + pad;
+    if (x + w > window.innerWidth - 4) x = e.clientX - w - pad;
+    if (y + h > window.innerHeight - 4) y = e.clientY - h - pad;
+    if (x < 4) x = 4; if (y < 4) y = 4;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    // Only hide when leaving to outside the window or a non-tip target.
+    if (!e.relatedTarget || e.relatedTarget === document.body) hide();
+  });
+
+  // Hide on any click / keypress so tooltips never linger in front of
+  // a modal or menu.
+  document.addEventListener('mousedown', hide, true);
+  document.addEventListener('keydown', hide, true);
+  window.addEventListener('blur', hide);
+})();
+
+// ═════════════════════════════════════════════════════════════════
+// Tier 6 — Pass 1: window.BO headless command surface
+// ═════════════════════════════════════════════════════════════════
+// A JSON-in / JSON-out router over the existing internal editor
+// primitives. Every action resolves to an existing function already
+// used by the GUI, so agent-driven edits are indistinguishable from
+// human ones — undo/redo, validation overlays, and dirty counts all
+// work identically.
+//
+// Entry point: window.BO.run({ action, ...args })
+// Returns:     { ok: true,  result: <action-specific> }
+//              { ok: false, error: <message>, action: <name> }
+//
+// Optional postValidate:'current'|'all' on any command runs
+// validation after the mutation and attaches results to the response.
+// ═════════════════════════════════════════════════════════════════
+(function() {
+  function resolveTileRef(ref) {
+    // Accepts numeric tile ID or case-insensitive schema name.
+    if (ref == null) return null;
+    if (typeof ref === 'number') return ref|0;
+    if (typeof ref === 'string') {
+      if (/^-?\d+$/.test(ref)) return parseInt(ref, 10);
+      var u = ref.toUpperCase();
+      for (var id in TILE_SCHEMA) {
+        var s = TILE_SCHEMA[id];
+        if (s && s.name && s.name.toUpperCase() === u) return +id;
+      }
+    }
+    return null;
+  }
+
+  function ensureFloor(id) {
+    // Switches the editor to `id` if needed. Falls back to the
+    // currently-loaded floor when no id is passed.
+    if (!id) {
+      if (!currentFloor || !currentFloorId) return null;
+      return { id: currentFloorId, floor: currentFloor };
+    }
+    if (!FLOORS[id]) return null;
+    if (id !== currentFloorId) selectFloor(id);
+    return { id: id, floor: FLOORS[id] };
+  }
+
+  function currentFloorSnapshot() {
+    if (!currentFloor) return null;
+    var g = currentFloor.grid || [];
+    return {
+      id: currentFloorId,
+      w: g[0] ? g[0].length : 0,
+      h: g.length,
+      spawn: currentFloor.spawn || null,
+      doorTargets: currentFloor.doorTargets || {}
+    };
+  }
+
+  function withPaintTile(tile, fn) {
+    // floodFillCells / replaceAllOfType short-circuit when the seed
+    // equals EDIT.paintTile — temp-set the brush so they compute the
+    // correct cell list for this action's target tile.
+    var saved = EDIT.paintTile;
+    EDIT.paintTile = tile;
+    try { return fn(); } finally { EDIT.paintTile = saved; }
+  }
+
+  function applyAndPush(cells, tile) {
+    var changed = applyCellsToGrid(cells, tile);
+    if (changed.length) pushUndo({ type: 'bulk', cells: changed, newTile: tile });
+    return changed;
+  }
+
+  // Pass 4: heterogeneous mutations (stamp actions).
+  // Writes a per-cell tile list and pushes a single bulk-undo entry with
+  // per-cell newTile (same shape paste uses).
+  function applyHeteroAndPush(heteroCells) {
+    if (!currentFloor || !currentFloor.grid) throw new Error('no floor loaded');
+    var grid = currentFloor.grid;
+    var changed = [];
+    for (var i = 0; i < heteroCells.length; i++) {
+      var c = heteroCells[i];
+      if (c.y < 0 || c.y >= grid.length) continue;
+      if (c.x < 0 || c.x >= grid[c.y].length) continue;
+      var oldTile = grid[c.y][c.x];
+      if (oldTile === c.tile) continue;
+      grid[c.y][c.x] = c.tile;
+      changed.push({ x: c.x, y: c.y, oldTile: oldTile, newTile: c.tile });
+    }
+    if (changed.length) {
+      pushUndo({ type: 'bulk', cells: changed, newTile: null });
+      if (typeof updateEditUI === 'function') updateEditUI();
+      if (typeof draw === 'function') draw();
+    }
+    return changed;
+  }
+
+  // Pass 4: stamp grid transforms.
+  function rotateCW(grid) {
+    if (!grid.length || !grid[0].length) return grid.slice();
+    var h = grid.length, w = grid[0].length, out = [];
+    for (var y=0; y<w; y++) { var row = []; for (var x=0; x<h; x++) row.push(grid[h-1-x][y]); out.push(row); }
+    return out;
+  }
+  function rotateCCW(grid) {
+    if (!grid.length || !grid[0].length) return grid.slice();
+    var h = grid.length, w = grid[0].length, out = [];
+    for (var y=0; y<w; y++) { var row = []; for (var x=0; x<h; x++) row.push(grid[x][w-1-y]); out.push(row); }
+    return out;
+  }
+  function rotate180(grid) {
+    return grid.slice().reverse().map(function(r){ return r.slice().reverse(); });
+  }
+
+  // Pass 4: in-memory stamp registry. Persists across floor switches but
+  // resets on reload. Use exportStamps / importStamps (or the CLI side-car
+  // tools/stamps.json) for cross-session carry-over.
+  var STAMPS = {};
+
+  // ── Action map — each one maps 1:1 to an existing editor primitive.
+  var ACTIONS = {
+    listFloors: function() {
+      return sortFloorIds(Object.keys(FLOORS)).map(function(id) {
+        var f = FLOORS[id]; var g = f && f.grid;
+        return {
+          id: id,
+          depth: id.split('.').length,
+          w: g && g[0] ? g[0].length : 0,
+          h: g ? g.length : 0,
+          spawn: f && f.spawn || null,
+          biome: f && f.biome || null
+        };
+      });
+    },
+
+    getFloor: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not found: ' + (a.floor || '(current)'));
+      return {
+        id: fm.id,
+        grid: fm.floor.grid.map(function(r) { return r.slice(); }),
+        spawn: fm.floor.spawn || null,
+        doorTargets: fm.floor.doorTargets || {},
+        rooms: fm.floor.rooms || [],
+        biome: fm.floor.biome || null
+      };
+    },
+
+    selectFloor: function(a) {
+      if (!FLOORS[a.floor]) throw new Error('no such floor: ' + a.floor);
+      selectFloor(a.floor);
+      return currentFloorSnapshot();
+    },
+
+    paint: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var tile = resolveTileRef(a.tile);
+      if (tile == null) throw new Error('bad tile: ' + a.tile);
+      var cells = a.cells || (a.at ? [a.at] : []);
+      if (!cells.length) throw new Error('no cells supplied');
+      var changed = applyAndPush(cells, tile);
+      draw();
+      return { changed: changed.length };
+    },
+
+    paintRect: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var tile = resolveTileRef(a.tile);
+      if (tile == null) throw new Error('bad tile: ' + a.tile);
+      var x0, y0, x1, y1;
+      if (a.at && a.size) {
+        x0 = a.at.x|0; y0 = a.at.y|0;
+        x1 = x0 + ((a.size.w|0) - 1); y1 = y0 + ((a.size.h|0) - 1);
+      } else {
+        x0 = a.x0|0; y0 = a.y0|0; x1 = a.x1|0; y1 = a.y1|0;
+      }
+      var cells = cellsInRect(x0, y0, x1, y1, !!a.outline);
+      var changed = applyAndPush(cells, tile);
+      draw();
+      return { changed: changed.length, rect: { x0:x0, y0:y0, x1:x1, y1:y1 } };
+    },
+
+    paintLine: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var tile = resolveTileRef(a.tile);
+      if (tile == null) throw new Error('bad tile: ' + a.tile);
+      if (!a.from || !a.to) throw new Error('paintLine needs {from, to}');
+      var cells = cellsInLine(a.from.x|0, a.from.y|0, a.to.x|0, a.to.y|0);
+      var changed = applyAndPush(cells, tile);
+      draw();
+      return { changed: changed.length };
+    },
+
+    floodFill: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var tile = resolveTileRef(a.tile);
+      if (tile == null) throw new Error('bad tile: ' + a.tile);
+      if (!a.at) throw new Error('floodFill needs {at:{x,y}}');
+      var cells = withPaintTile(tile, function() {
+        return floodFillCells(a.at.x|0, a.at.y|0);
+      });
+      var changed = applyAndPush(cells, tile);
+      draw();
+      return { changed: changed.length };
+    },
+
+    replaceAllOfType: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var tile = resolveTileRef(a.tile);
+      if (tile == null) throw new Error('bad tile: ' + a.tile);
+      if (!a.at) throw new Error('replaceAllOfType needs {at:{x,y}} (seeds target tile)');
+      var cells = withPaintTile(tile, function() {
+        return replaceAllOfType(a.at.x|0, a.at.y|0);
+      });
+      var changed = applyAndPush(cells, tile);
+      draw();
+      return { changed: changed.length };
+    },
+
+    resize: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.side || !a.action) throw new Error('resize needs {side, action}');
+      resizeGrid(a.side, a.action);
+      return currentFloorSnapshot();
+    },
+
+    setSpawn: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.at) throw new Error('setSpawn needs {at:{x,y}}');
+      setSpawn(a.at.x|0, a.at.y|0);
+      return { spawn: fm.floor.spawn || null };
+    },
+
+    setDoorTarget: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.at) throw new Error('setDoorTarget needs {at:{x,y}, target}');
+      setDoorTarget(a.at.x|0, a.at.y|0, a.target || '');
+      return { doorTargets: fm.floor.doorTargets || {} };
+    },
+
+    stampClipboard: function(a) {
+      if (!CLIPBOARD || !CLIPBOARD.cells) throw new Error('clipboard is empty');
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.at) throw new Error('stampClipboard needs {at:{x,y}}');
+      stampClipboardAt(a.at.x|0, a.at.y|0);
+      return { pasted: CLIPBOARD.cells.length };
+    },
+
+    validate: function(a) {
+      runValidation(a.scope || 'current');
+      return (VALIDATE.lastResults || []).map(function(i) {
+        return {
+          severity: i.severity, kind: i.kind, floorId: i.floorId, msg: i.msg,
+          cells: i.cells ? i.cells.slice(0, 32) : null
+        };
+      });
+    },
+
+    save: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      // Opens the save-confirm modal; the human still clicks Write/Download.
+      // Agent flow: call `save`, then trigger the DOM save-confirm button
+      // via a follow-up command (or script the click in the page driver).
+      prepareSaveCurrentFloor();
+      return { queued: true, floor: fm.id, note: 'Save modal opened — confirm or Download via UI' };
+    },
+
+    undo: function() { undoLast(); draw(); return { ok: true }; },
+    redo: function() { redoLast(); draw(); return { ok: true }; },
+
+    // ── Pass 2: Perception tools ──────────────────────────────────
+    // renderAscii({floor, viewport?}) → ASCII glyph grid + legend.
+    // Agents without vision consume this to "see" the floor. The
+    // viewport param clips to {x, y, w, h} so large floors can be
+    // paginated.
+    renderAscii: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      var grid = fm.floor.grid;
+      var gw = grid[0] ? grid[0].length : 0, gh = grid.length;
+      var vp = a.viewport || { x: 0, y: 0, w: gw, h: gh };
+      var x0 = Math.max(0, vp.x|0), y0 = Math.max(0, vp.y|0);
+      var x1 = Math.min(gw, x0 + (vp.w|0 || gw));
+      var y1 = Math.min(gh, y0 + (vp.h|0 || gh));
+      var used = {};
+      var rows = [];
+      for (var y = y0; y < y1; y++) {
+        var row = '';
+        for (var x = x0; x < x1; x++) {
+          var t = grid[y][x];
+          var s = TILE_SCHEMA[t];
+          var g = (s && s.glyph) ? s.glyph : '?';
+          row += g;
+          if (!used[g]) used[g] = {};
+          used[g][t] = (s && s.name) || ('TILE_' + t);
+        }
+        rows.push(row);
+      }
+      // Flatten used into a legend array. Duplicate glyphs surface
+      // all tile IDs sharing that glyph so the caller can see
+      // ambiguity in the schema.
+      var legend = [];
+      Object.keys(used).sort().forEach(function(g) {
+        Object.keys(used[g]).forEach(function(id) {
+          legend.push({ glyph: g, tileId: +id, name: used[g][id] });
+        });
+      });
+      // Overlay spawn marker if visible in viewport.
+      var sp = fm.floor.spawn;
+      var spawnOverlay = null;
+      if (sp && sp.x >= x0 && sp.x < x1 && sp.y >= y0 && sp.y < y1) {
+        spawnOverlay = { x: sp.x, y: sp.y, relX: sp.x - x0, relY: sp.y - y0 };
+      }
+      return {
+        floor: fm.id,
+        w: x1 - x0, h: y1 - y0,
+        viewport: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+        glyphs: rows.join('\n'),
+        legend: legend,
+        spawn: spawnOverlay
+      };
+    },
+
+    // diffAscii({floor, before}) → changes between current grid and
+    // a prior snapshot. `before` accepts either a 2D array or a
+    // prior `getFloor` result (`{grid}`). Unchanged cells render as
+    // `.`; changed cells show the NEW glyph. Also returns a full
+    // change list for programmatic use.
+    diffAscii: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.before) throw new Error('diffAscii needs {before} (grid or getFloor result)');
+      var beforeGrid = a.before.grid || a.before;
+      if (!Array.isArray(beforeGrid) || !Array.isArray(beforeGrid[0])) {
+        throw new Error('before must be a 2D grid');
+      }
+      var grid = fm.floor.grid;
+      var gh = grid.length, gw = grid[0] ? grid[0].length : 0;
+      var rows = [], changes = [];
+      for (var y = 0; y < gh; y++) {
+        var row = '';
+        for (var x = 0; x < gw; x++) {
+          var cur = grid[y][x];
+          var prev = (beforeGrid[y] && beforeGrid[y][x] != null) ? beforeGrid[y][x] : null;
+          if (prev === cur) {
+            row += '.';
+          } else {
+            var s = TILE_SCHEMA[cur];
+            row += (s && s.glyph) ? s.glyph : '?';
+            changes.push({ x: x, y: y, before: prev, after: cur });
+          }
+        }
+        rows.push(row);
+      }
+      return {
+        floor: fm.id, w: gw, h: gh,
+        diff: rows.join('\n'),
+        changes: changes,
+        changeCount: changes.length
+      };
+    },
+
+    // describeCell({floor, at}) → structured tooltip payload: tile,
+    // walk/opq, category, room membership, door target/face, and a
+    // before-snapshot if the cell has been edited since load.
+    describeCell: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      if (!a.at) throw new Error('describeCell needs {at:{x,y}}');
+      var x = a.at.x|0, y = a.at.y|0;
+      var grid = fm.floor.grid;
+      if (y < 0 || y >= grid.length || !grid[y] || x < 0 || x >= grid[y].length) {
+        throw new Error('cell ('+x+','+y+') out of bounds');
+      }
+      var t = grid[y][x];
+      var s = TILE_SCHEMA[t] || {};
+      var key = x + ',' + y;
+      var doorTarget = (fm.floor.doorTargets || {})[key] || null;
+      var dirs = ['EAST','SOUTH','WEST','NORTH'];
+      var doorFace = (fm.floor.doorFaces && fm.floor.doorFaces[key] != null)
+        ? dirs[fm.floor.doorFaces[key]] : null;
+      var rooms = [];
+      (fm.floor.rooms || []).forEach(function(r, i) {
+        if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
+          rooms.push({ index: i, x: r.x, y: r.y, w: r.w, h: r.h });
+        }
+      });
+      var wasTile = null;
+      if (EDIT.originalGrid && EDIT.originalGrid[y] && EDIT.originalGrid[y][x] !== t) {
+        var origT = EDIT.originalGrid[y][x];
+        wasTile = { tileId: origT, name: (TILE_SCHEMA[origT] || {}).name || null };
+      }
+      return {
+        floor: fm.id, at: { x: x, y: y },
+        tileId: t,
+        name: s.name || ('TILE_' + t),
+        category: s.cat || null,
+        glyph: s.glyph || null,
+        walk: s.walk === true,
+        opaque: s.opq === true,
+        color: s.color || null,
+        doorTarget: doorTarget,
+        exteriorFace: doorFace,
+        rooms: rooms,
+        wasTile: wasTile,
+        isSpawn: !!(fm.floor.spawn && fm.floor.spawn.x === x && fm.floor.spawn.y === y)
+      };
+    },
+
+    // reportValidation({scope}) → alias for `validate` that matches
+    // the Pass 2 naming convention. Identical return shape; provided
+    // so agents can reach for either name.
+    reportValidation: function(a) {
+      runValidation(a.scope || 'current');
+      return (VALIDATE.lastResults || []).map(function(i) {
+        return {
+          severity: i.severity, kind: i.kind, floorId: i.floorId, msg: i.msg,
+          cells: i.cells ? i.cells.slice(0, 32) : null
+        };
+      });
+    },
+
+    // captureFloor({floor, format?}) → base64 PNG of the current
+    // canvas view of the floor. For vision-capable agents. Always
+    // captures the currently-rendered canvas (switches floor first
+    // if `floor` differs from currentFloorId).
+    captureFloor: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('floor not loaded');
+      // Force a fresh render before grabbing the frame.
+      draw();
+      var dataUrl;
+      try { dataUrl = canvas.toDataURL((a.format === 'jpeg') ? 'image/jpeg' : 'image/png'); }
+      catch (e) { throw new Error('canvas.toDataURL failed: ' + e.message); }
+      return {
+        floor: fm.id,
+        width: canvas.width, height: canvas.height,
+        format: (a.format === 'jpeg') ? 'image/jpeg' : 'image/png',
+        dataUrl: dataUrl
+      };
+    },
+
+    // ── Pass 3: tile semantic lookup ─────────────────────────
+    tile: function(a) {
+      // Name (or numeric id) → tile id. Throws on unknown reference.
+      var ref = a.name != null ? a.name : a.ref;
+      if (ref == null) throw new Error('tile: missing "name" or "ref"');
+      var id = resolveTileRef(ref);
+      if (id == null || !TILE_SCHEMA[id]) throw new Error('unknown tile: ' + ref);
+      return id;
+    },
+
+    tileName: function(a) {
+      // Numeric id → canonical name.
+      var id = a.id != null ? (a.id|0) : resolveTileRef(a.ref);
+      if (id == null) throw new Error('tileName: missing "id" or "ref"');
+      var s = TILE_SCHEMA[id];
+      if (!s) throw new Error('unknown tile id: ' + id);
+      return s.name || ('TILE_' + id);
+    },
+
+    tileSchema: function(a) {
+      // id or name → full schema entry with id attached. If no arg, returns full table.
+      if (a && (a.ref != null || a.name != null || a.id != null)) {
+        var id = a.id != null ? (a.id|0) : resolveTileRef(a.ref != null ? a.ref : a.name);
+        if (id == null || !TILE_SCHEMA[id]) throw new Error('unknown tile: ' + (a.ref||a.name||a.id));
+        var s = TILE_SCHEMA[id];
+        return Object.assign({ id: id }, s);
+      }
+      // No args → dump the whole schema.
+      var all = [];
+      Object.keys(TILE_SCHEMA).forEach(function(id) {
+        all.push(Object.assign({ id: +id }, TILE_SCHEMA[id]));
+      });
+      all.sort(function(a,b){ return a.id - b.id; });
+      return all;
+    },
+
+    findTiles: function(a) {
+      // Filter predicate. AND semantics across all provided fields.
+      a = a || {};
+      var nameQ = a.name != null ? String(a.name) : null;
+      var nameRe = null;
+      if (nameQ) {
+        var m = nameQ.match(/^\/(.+)\/([imsu]*)$/);
+        if (m) { try { nameRe = new RegExp(m[1], m[2] || 'i'); } catch (e) { throw new Error('bad name regex: ' + nameQ); } }
+      }
+      var cat = a.category != null ? String(a.category) : (a.cat != null ? String(a.cat) : null);
+      var flagKeys = ['walk','opq','opaque','hazard','isDoor','isFreeform','isFloating','isCrenellated','isFloatingMoss','isFloatingLid','isFloatingBackFace','isWindow','isTorch'];
+      var flags = {};
+      flagKeys.forEach(function(k) {
+        // Alias "opaque" → "opq" on schema.
+        var src = (k === 'opaque') ? 'opq' : k;
+        if (a[k] != null) flags[src] = !!a[k];
+      });
+      var glyph = a.glyph != null ? String(a.glyph) : null;
+
+      var out = [];
+      Object.keys(TILE_SCHEMA).forEach(function(id) {
+        var s = TILE_SCHEMA[id]; if (!s) return;
+        var name = s.name || '';
+        if (nameRe) { if (!nameRe.test(name)) return; }
+        else if (nameQ) {
+          if (String(name).toUpperCase().indexOf(nameQ.toUpperCase()) < 0) return;
+        }
+        if (cat != null) {
+          var sc = s.category || s.cat;
+          if (String(sc) !== cat) return;
+        }
+        for (var k in flags) {
+          if (!!s[k] !== flags[k]) return;
+        }
+        if (glyph != null && s.glyph !== glyph) return;
+        out.push({
+          id: +id,
+          name: s.name || null,
+          category: s.category || s.cat || null,
+          glyph: s.glyph || null,
+          walk: s.walk === true,
+          opaque: s.opq === true,
+          hazard: s.hazard === true,
+          isDoor: s.isDoor === true,
+          isFreeform: s.isFreeform === true,
+          isFloating: s.isFloating === true,
+          isWindow: s.isWindow === true,
+          isTorch: s.isTorch === true,
+          color: s.color || null
+        });
+      });
+      out.sort(function(a,b){ return a.id - b.id; });
+      return out;
+    },
+
+    // ── Pass 4: parametric stamps ────────────────────────────
+    stampRoom: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampRoom: no floor loaded');
+      var at = a.at || {};
+      var size = a.size || {};
+      var w = (a.w != null ? a.w : size.w)|0;
+      var h = (a.h != null ? a.h : size.h)|0;
+      if (w < 2 || h < 2) throw new Error('stampRoom: w,h must both be >=2');
+      var wallTile = resolveTileRef(a.wallTile != null ? a.wallTile : 'WALL');
+      var floorTile = resolveTileRef(a.floorTile != null ? a.floorTile : (a.fillTile != null ? a.fillTile : 0));
+      if (wallTile == null) throw new Error('stampRoom: unknown wallTile ' + a.wallTile);
+      if (floorTile == null) throw new Error('stampRoom: unknown floorTile ' + a.floorTile);
+      var x0 = at.x|0, y0 = at.y|0, x1 = x0 + w - 1, y1 = y0 + h - 1;
+      var cells = [];
+      for (var y = y0; y <= y1; y++) {
+        for (var x = x0; x <= x1; x++) {
+          var onEdge = (x === x0 || x === x1 || y === y0 || y === y1);
+          cells.push({ x: x, y: y, tile: onEdge ? wallTile : floorTile });
+        }
+      }
+      var changed = applyHeteroAndPush(cells);
+      return { changed: changed.length, at: {x:x0,y:y0}, w:w, h:h, wallTile:wallTile, floorTile:floorTile };
+    },
+
+    stampCorridor: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampCorridor: no floor loaded');
+      if (!a.from || !a.to) throw new Error('stampCorridor: needs from and to');
+      var floorTile = resolveTileRef(a.floorTile != null ? a.floorTile : (a.tile != null ? a.tile : 'EMPTY'));
+      if (floorTile == null) throw new Error('stampCorridor: unknown floorTile');
+      var wallTile = a.wallTile != null ? resolveTileRef(a.wallTile) : null;
+      if (a.wallTile != null && wallTile == null) throw new Error('stampCorridor: unknown wallTile');
+      var width = Math.max(1, (a.width|0) || 1);
+      var x0 = a.from.x|0, y0 = a.from.y|0, x1 = a.to.x|0, y1 = a.to.y|0;
+      var pathCells = [];
+      var dxAbs = Math.abs(x1-x0), dyAbs = Math.abs(y1-y0);
+      var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      var err = dxAbs - dyAbs, x = x0, y = y0;
+      while (true) {
+        pathCells.push({x:x,y:y});
+        if (x === x1 && y === y1) break;
+        var e2 = 2*err;
+        if (e2 > -dyAbs) { err -= dyAbs; x += sx; }
+        if (e2 <  dxAbs) { err += dxAbs; y += sy; }
+        if (pathCells.length > 5000) break;
+      }
+      var wide = {};
+      var hw = Math.floor((width-1)/2), hw2 = Math.ceil((width-1)/2);
+      pathCells.forEach(function(p) {
+        for (var oy = -hw; oy <= hw2; oy++)
+          for (var ox = -hw; ox <= hw2; ox++)
+            wide[(p.x+ox)+','+(p.y+oy)] = 'floor';
+      });
+      if (wallTile != null) {
+        var keys = Object.keys(wide);
+        keys.forEach(function(k) {
+          var parts = k.split(','), cx = +parts[0], cy = +parts[1];
+          [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function(d) {
+            var nk = (cx+d[0]) + ',' + (cy+d[1]);
+            if (!wide[nk]) wide[nk] = 'wall';
+          });
+        });
+      }
+      var cells = Object.keys(wide).map(function(k) {
+        var parts = k.split(','); var type = wide[k];
+        return { x: +parts[0], y: +parts[1], tile: (type === 'wall') ? wallTile : floorTile };
+      });
+      var changed = applyHeteroAndPush(cells);
+      return { changed: changed.length, pathLength: pathCells.length, width: width, hasWalls: wallTile != null };
+    },
+
+    stampTorchRing: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampTorchRing: no floor loaded');
+      var at = a.at || {};
+      var cx = at.x|0, cy = at.y|0;
+      var radius = Math.max(1, (a.radius|0) || 2);
+      var torchTile = resolveTileRef(a.torchTile != null ? a.torchTile : 'TORCH_LIT');
+      if (torchTile == null) throw new Error('stampTorchRing: unknown torchTile');
+      var step = Math.max(1, (a.step|0) || 1);
+      var cells = [];
+      var x0 = cx - radius, x1 = cx + radius;
+      var y0 = cy - radius, y1 = cy + radius;
+      var i;
+      i = 0; for (var x = x0; x <= x1; x++) { if ((i++ % step) === 0) cells.push({x:x, y:y0, tile:torchTile}); }
+      i = 0; for (var x2 = x0; x2 <= x1; x2++) { if ((i++ % step) === 0) cells.push({x:x2, y:y1, tile:torchTile}); }
+      i = 0; for (var y = y0+1; y <= y1-1; y++) { if ((i++ % step) === 0) cells.push({x:x0, y:y, tile:torchTile}); }
+      i = 0; for (var y2 = y0+1; y2 <= y1-1; y2++) { if ((i++ % step) === 0) cells.push({x:x1, y:y2, tile:torchTile}); }
+      var changed = applyHeteroAndPush(cells);
+      return { changed: changed.length, at: {x:cx,y:cy}, radius: radius, torchTile: torchTile, step: step };
+    },
+
+    // ── Pass 4: stamp registry (named patterns) ──────────────
+    saveStamp: function(a) {
+      if (!a.name) throw new Error('saveStamp: needs name');
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('saveStamp: no floor loaded');
+      var grid = fm.floor.grid;
+      var at = a.at || { x: 0, y: 0 };
+      var size = a.size || {};
+      var w = (a.w != null ? a.w : size.w)|0;
+      var h = (a.h != null ? a.h : size.h)|0;
+      if (w < 1 || h < 1) throw new Error('saveStamp: needs w,h (>=1)');
+      var rows = [];
+      for (var dy = 0; dy < h; dy++) {
+        var row = [];
+        for (var dx = 0; dx < w; dx++) {
+          var ty = (at.y|0) + dy, tx = (at.x|0) + dx;
+          var t = (ty >= 0 && ty < grid.length && tx >= 0 && tx < grid[ty].length) ? grid[ty][tx] : 0;
+          row.push(t);
+        }
+        rows.push(row);
+      }
+      STAMPS[a.name] = {
+        w: w, h: h, cells: rows,
+        meta: { sourceFloor: fm.id, at: { x: at.x|0, y: at.y|0 }, createdAt: new Date().toISOString() }
+      };
+      return { name: a.name, w: w, h: h, sourceFloor: fm.id };
+    },
+
+    applyStamp: function(a) {
+      if (!a.name) throw new Error('applyStamp: needs name');
+      var s = STAMPS[a.name];
+      if (!s) throw new Error('applyStamp: unknown stamp "' + a.name + '"');
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('applyStamp: no floor loaded');
+      var at = a.at || { x: 0, y: 0 };
+      var rot = ((a.rotate|0) % 360 + 360) % 360;
+      var flipH = !!a.flipH, flipV = !!a.flipV;
+      var cells = s.cells;
+      if (rot === 90)  cells = rotateCW(cells);
+      else if (rot === 180) cells = rotate180(cells);
+      else if (rot === 270) cells = rotateCCW(cells);
+      if (flipH) cells = cells.map(function(r){ return r.slice().reverse(); });
+      if (flipV) cells = cells.slice().reverse();
+      var hetero = [];
+      for (var dy = 0; dy < cells.length; dy++)
+        for (var dx = 0; dx < cells[dy].length; dx++)
+          hetero.push({ x: (at.x|0) + dx, y: (at.y|0) + dy, tile: cells[dy][dx] });
+      var changed = applyHeteroAndPush(hetero);
+      return { changed: changed.length, name: a.name, at: { x: at.x|0, y: at.y|0 }, rotate: rot, flipH: flipH, flipV: flipV };
+    },
+
+    listStamps: function() {
+      return Object.keys(STAMPS).sort().map(function(name) {
+        var s = STAMPS[name];
+        return { name: name, w: s.w, h: s.h, sourceFloor: (s.meta && s.meta.sourceFloor) || null };
+      });
+    },
+
+    deleteStamp: function(a) {
+      if (!a.name) throw new Error('deleteStamp: needs name');
+      if (!STAMPS[a.name]) throw new Error('deleteStamp: unknown stamp "' + a.name + '"');
+      delete STAMPS[a.name];
+      return { name: a.name, deleted: true, remaining: Object.keys(STAMPS).length };
+    },
+
+    exportStamps: function() {
+      return JSON.parse(JSON.stringify(STAMPS));
+    },
+
+    importStamps: function(a) {
+      if (!a || !a.stamps || typeof a.stamps !== 'object') throw new Error('importStamps: needs stamps:{...}');
+      var merge = a.merge !== false;
+      if (!merge) STAMPS = {};
+      var added = 0;
+      Object.keys(a.stamps).forEach(function(name) {
+        var s = a.stamps[name];
+        if (!s || !Array.isArray(s.cells) || !Array.isArray(s.cells[0])) return;
+        STAMPS[name] = {
+          w: s.w || s.cells[0].length,
+          h: s.h || s.cells.length,
+          cells: s.cells.map(function(r){ return r.slice(); }),
+          meta: s.meta || {}
+        };
+        added++;
+      });
+      return { added: added, total: Object.keys(STAMPS).length, merge: merge };
+    },
+
+    // Diagnostic — useful for agents probing their own state.
+    describe: function() {
+      return {
+        currentFloor: currentFloorId || null,
+        floorCount: Object.keys(FLOORS).length,
+        editActive: !!EDIT.active,
+        tool: EDIT.tool,
+        paintTile: EDIT.paintTile,
+        paintTileName: (TILE_SCHEMA[EDIT.paintTile] || {}).name || null,
+        brushSize: EDIT.brushSize,
+        clipboard: CLIPBOARD && CLIPBOARD.cells ? {
+          w: CLIPBOARD.w, h: CLIPBOARD.h, sourceFloor: CLIPBOARD.sourceFloorId
+        } : null
+      };
+    }
+  };
+
+  function run(cmd) {
+    cmd = cmd || {};
+    var name = cmd.action;
+    try {
+      if (!name) throw new Error('missing action');
+      var fn = ACTIONS[name];
+      if (!fn) throw new Error('unknown action: ' + name);
+      var result = fn(cmd);
+      var resp = { ok: true, action: name, result: result };
+      if (cmd.postValidate) {
+        runValidation(cmd.postValidate === 'all' ? 'all' : 'current');
+        resp.validation = (VALIDATE.lastResults || []).map(function(i) {
+          return { severity: i.severity, kind: i.kind, floorId: i.floorId, msg: i.msg };
+        });
+      }
+      return resp;
+    } catch (e) {
+      return { ok: false, action: name || null, error: String((e && e.message) || e) };
+    }
+  }
+
+  window.BO = {
+    run: run,
+    actions: Object.keys(ACTIONS).sort(),
+    version: '0.3.0',
+    // ── Pass 3: direct helpers (no router wrap) ────────────────
+    tile:       function(name)       { return ACTIONS.tile({ name: name }); },
+    tileName:   function(id)         { return ACTIONS.tileName({ id: id }); },
+    tileSchema: function(ref)        { return ACTIONS.tileSchema(ref != null ? { ref: ref } : {}); },
+    findTiles:  function(filter)     { return ACTIONS.findTiles(filter || {}); },
+    // ── Pass 4: stamp helpers ──────────────────────────────────
+    listStamps: function()           { return ACTIONS.listStamps({}); },
+    exportStamps: function()         { return ACTIONS.exportStamps({}); },
+    importStamps: function(st, merge) { return ACTIONS.importStamps({ stamps: st, merge: merge !== false }); }
+  };
+  Object.defineProperty(window.BO, 'currentFloorId', { get: function() { return currentFloorId; } });
+  Object.defineProperty(window.BO, 'floors',         { get: function() { return Object.keys(FLOORS); } });
+})();
+
+// Smoke test: paints a 3×3 WALL rect, validates, and undoes. Run in
+// the console after floors load: __boSmokeTest().
+window.__boSmokeTest = function(floorId) {
+  var fid = floorId || Object.keys(FLOORS)[0];
+  if (!fid) { console.warn('[bo-smoke] no floors loaded'); return; }
+  console.log('[bo-smoke] actions:', window.BO.actions.join(', '));
+  var r1 = window.BO.run({ action: 'selectFloor', floor: fid });
+  console.log('[bo-smoke] selectFloor →', r1);
+  var r2 = window.BO.run({ action: 'paintRect', at: {x:2,y:2}, size:{w:3,h:3}, tile:'WALL' });
+  console.log('[bo-smoke] paintRect →', r2);
+  var r3 = window.BO.run({ action: 'validate', scope: 'current' });
+  console.log('[bo-smoke] validate →', r3.result.length, 'issues');
+  var r4 = window.BO.run({ action: 'renderAscii', viewport:{x:0,y:0,w:20,h:10} });
+  console.log('[bo-smoke] renderAscii →\n' + r4.result.glyphs);
+  var r5 = window.BO.run({ action: 'describeCell', at:{x:2,y:2} });
+  console.log('[bo-smoke] describeCell →', r5.result);
+  var r6 = window.BO.run({ action: 'undo' });
+  console.log('[bo-smoke] undo →', r6);
+  // Pass 3 checks
+  var r7 = window.BO.tile('WALL');
+  console.log('[bo-smoke] BO.tile("WALL") →', r7);
+  var r8 = window.BO.findTiles({ isDoor: true });
+  console.log('[bo-smoke] findTiles({isDoor:true}) →', r8.length, 'tiles');
+  var r9 = window.BO.run({ action: 'tileSchema', name: 'WALL' });
+  console.log('[bo-smoke] tileSchema(WALL) →', r9.result);
+  // Pass 4 — stamps
+  var rA = window.BO.run({ action: 'stampRoom', at:{x:6,y:6}, w:4, h:4, wallTile:'WALL', floorTile:'EMPTY' });
+  console.log('[bo-smoke] stampRoom 4×4 →', rA);
+  var rB = window.BO.run({ action: 'saveStamp', name:'smoke-room', at:{x:6,y:6}, w:4, h:4 });
+  console.log('[bo-smoke] saveStamp →', rB);
+  var rC = window.BO.run({ action: 'applyStamp', name:'smoke-room', at:{x:12,y:12}, rotate:90 });
+  console.log('[bo-smoke] applyStamp (rot 90) →', rC);
+  var rD = window.BO.listStamps();
+  console.log('[bo-smoke] listStamps →', rD);
+  // Undo the stamps we just dropped so the smoke test leaves no trace.
+  window.BO.run({ action: 'undo' });
+  window.BO.run({ action: 'undo' });
+  return { r1:r1, r2:r2, r3:r3, r4:r4, r5:r5, r6:r6, r7:r7, r8:r8, r9:r9, rA:rA, rB:rB, rC:rC, rD:rD };
+};
+
 loadAllFloors();
 </script>
+<div id="validate-modal" role="dialog" aria-modal="true" aria-labelledby="validate-modal-title">
+  <div id="validate-modal-inner">
+    <h3 id="validate-modal-title">
+      Validation report
+      <span class="vm-sub" id="validate-subtitle">—</span>
+    </h3>
+    <div id="validate-tabs">
+      <button id="vtab-current" class="active" data-scope="current" title="Validate only the floor currently in view">Current floor</button>
+      <button id="vtab-all" data-scope="all" title="Validate every floor plus cross-floor door references">All floors</button>
+    </div>
+    <div id="validate-summary">
+      <span class="pill err"  id="vsum-err">0 errors</span>
+      <span class="pill warn" id="vsum-warn">0 warnings</span>
+      <span class="pill ok"   id="vsum-ok">checks passed</span>
+      <span style="margin-left:auto; color:#789;">Click any row to jump &amp; highlight</span>
+    </div>
+    <div id="validate-list"></div>
+    <div id="validate-modal-actions">
+      <button class="secondary" id="validate-rerun" title="Re-run validation with current scope">Re-run</button>
+      <button class="secondary" id="validate-close" title="Close report (Esc)">Close</button>
+    </div>
+  </div>
+</div>
+<div id="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
+  <div id="save-modal-inner">
+    <h3 id="save-modal-title">Save floor — confirm diff</h3>
+    <div id="save-diff"></div>
+    <div id="save-modal-actions">
+      <button class="secondary" id="save-cancel" title="Cancel — no file written">Cancel</button>
+      <button class="secondary" id="save-download" title="Download the patched file as a Blob instead of writing in place">Download instead</button>
+      <button class="primary"   id="save-confirm" title="Write the patched file to engine/floor-blockout-*.js">Write to file</button>
+    </div>
+  </div>
+</div>
+<div id="scene-modal" role="dialog" aria-modal="true" aria-labelledby="scene-modal-title">
+  <div id="scene-modal-inner">
+    <h3 id="scene-modal-title">
+      <span id="sm-heading">Window scene</span>
+      <span class="sm-sub" id="sm-sub">—</span>
+    </h3>
+    <div id="scene-body">
+      <div id="scene-canvas-wrap">
+        <canvas id="scene-canvas" width="384" height="288"></canvas>
+        <div class="sm-paint-hint" style="margin-top:6px;">Click to paint with current brush tile. Right-click erases (tile 0).</div>
+      </div>
+      <div id="scene-meta">
+        <div class="sm-section">
+          <div class="sm-section-title">DIMENSIONS</div>
+          <div id="sm-dims">8 × 6</div>
+          <div style="margin-top:6px;">
+            <button id="sm-w-dec" title="Remove rightmost column">W−</button><button id="sm-w-inc" title="Add column to right">W+</button>
+            <button id="sm-h-dec" title="Remove bottom row">H−</button><button id="sm-h-inc" title="Add row to bottom">H+</button>
+          </div>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">PAINT TILE</div>
+          <div id="sm-paint-info" class="sm-tile-info">—</div>
+          <div class="sm-paint-hint">Uses the main editor's selected brush tile. Close modal to change it.</div>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">PARENT EXTERIOR</div>
+          <div id="sm-parent-info" class="sm-tile-info">—</div>
+          <button id="sm-jump-parent" title="Switch main view to the parent exterior floor (keeps modal bound)">Jump to parent floor</button>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">CLIPBOARD</div>
+          <div id="sm-clip-info" class="sm-tile-info">—</div>
+          <button id="sm-stamp-clip" class="primary" title="Paste the main clipboard into this scene sub-grid starting at (0,0)">Stamp clipboard at (0,0)</button>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">EXPORT</div>
+          <button id="sm-export-json" title="Dump all window scenes across all floors as sidecar JSON">Download window-scenes.json</button>
+          <div class="sm-paint-hint" style="margin-top:4px;">All scenes on all floors dumped to sidecar JSON.</div>
+        </div>
+      </div>
+    </div>
+    <div id="scene-modal-actions">
+      <button class="secondary" id="sm-clear" title="Reset all cells in this scene to EMPTY">Clear scene</button>
+      <button class="secondary" id="sm-close" title="Close scene editor (Esc)">Close</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

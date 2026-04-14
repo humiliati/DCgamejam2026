@@ -268,6 +268,179 @@ no elevated floor plane. The visual reads as "raised ground" rather than
 "freestanding platform." This is acceptable for stoops and porches but
 would not convincingly render a second-story balcony.
 
+### Status (2026-04-14)  Shipped with curb tuning and top-plane cap
+
+Phase 3 landed in three passes driven by in-browser playtests.
+
+**Tile IDs.** `STOOP = 86`, `DECK = 87` (the planned 66/67 slots were
+taken by the time we shipped  no behavioural change from the roadmap
+spec). Both are `T.isWalkable` and participate in a new
+`T.isStep` predicate used by the raycaster.
+
+**Walkable hit test.** Walkable non-opaque tiles were being skipped
+entirely by the DDA (only opaque tiles and `isDoor` tiles registered
+as hits), so the roadmap's "thin lip" never produced a visible
+silhouette  the floor-texture override rendered but no vertical column
+drew. Added a third branch to the front-hit loop in `raycaster.js`:
+`else if (TILES.isStep && TILES.isStep(tile)) { hit = true; ... }`.
+Step tiles now produce a proper wall column with the contract's short
+wallHeight + positive heightOffset.
+
+**Curb sizing.** The roadmap's 0.08 × 0.10 values produced a stoop
+that sat taller than the player's stride  reading as "stair" rather
+than "sidewalk curb"  and required a head-raise on step-on that we
+weren't implementing. Halved both values: `tileWallHeights[86/87] =
+0.04`, `tileHeightOffsets[86/87] = 0.04`. The slab now spans world
+0.02  0.06, matching the skirt-band thickness beneath it and reading
+as a kerb.
+
+**Textures.** Assigned `textures[86] = 'stone_rough'`,
+`textures[87] = 'wood_plank'` on the exterior contract. The lip face
+now samples a real tiled wall texture via `drawImage` instead of
+rendering as a flat `stepColor` band.
+
+**Top-plane cap.** The naive cap attempt (fillRect from horizon to
+drawStart, sampled by `wallX`) produced vertical-stripe artifacts
+because `wallX` is a 1D U along the hit face, not a parametrisation of
+a horizontal surface. Replaced with a per-row floor projection mirrored
+from `RaycasterFloor`: for each screen row between the horizon and
+drawStart, `rowDist = trueHalfH * (baseWallH - 2*topElev) / rowFromCenter`
+(same formula with eye-above-surface reduced by `topElev`), project
+into world (floorX, floorY), footprint-test against `TILES.isStep`,
+sample the tile's floor texture at `floorX*texW mod texW`. Distance-lit
+with a slightly lifted falloff so horizontal tops read a touch brighter
+than the ground.
+
+**Placement.** 3-tile landing on Floor 1 Promenade at row 26, cols
+2123, in front of the Gleaner's Home DOOR_FACADE. Documented in
+`BLOCKOUT_REFRESH_PLAN.docx §1.2`.
+
+### Known quirks (deferred)
+
+These are tracked but not blockers for the stoop shipping:
+
+1. **Lip face brick texture reads as micro-bricks.** `stone_rough` at
+   0.04 world units tall samples only the top sliver of a 64×64
+   texture; the repeating brick/joint pattern at that scale looks like
+   a noise band. At curb thickness the face wants a single horizontal
+   seam (stone) or a single horizontal board edge (wood), not a full
+   brick wall. **Fix:** short-tile texture variants
+   `stone_curb_lip` (one horizontal seam at 50% height, coarse stone
+   banding otherwise) and `wood_plank_edge` (single board edge, grain
+   parallel to seam). Register in `TextureAtlas` and point the contract
+   at them for step tiles  no renderer change needed.
+
+2. **Skirt band visible under the lip.** The Doom-rule step-fill
+   (`drawEnd+1`  `flatBottom` range filled with `stepColor` at 70%
+   brightness) still renders even though the cap + face read as a
+   complete curb. At curb thickness the skirt reads as a faint dark
+   band below the kerb and is actually a useful shadow cue  **keep
+   it**, but expose it as a tool (see follow-up #4 below).
+
+3. **Back-layer occlusion by SHRUB/FENCE.** When a STOOP sits behind a
+   half-height opaque tile (SHRUB 0.5×, FENCE 0.4×), the stoop lip
+   flattens out  its column never renders. Root cause: the back-layer
+   collection loop's `_cTSolid` test only accepts opaque + door tiles
+   (`TILES.isOpaque(_cT) || TILES.isDoor(_cT)`). Step tiles are
+   neither, so they're skipped as back layers even though they would
+   add visible pixels above the half-height foreground.
+   **Fix:** add `TILES.isStep(_cT)` to `_cTSolid` in `raycaster.js`
+   (~line 933). Same change should also guard the layer collector's
+   `_fgIsFreeformSeeThrough`/`_maxTop` logic so the lip silhouette
+   contributes correctly.
+
+### Follow-ups that unlock a wider tile family
+
+The curb work established the **thin-slab tile pattern** (walkable,
+short wallHeight, positive heightOffset, top-plane cap via per-row
+floor projection). The same pattern unlocks several short tiles we
+want:
+
+1. **Coffee table** (0.30× tall, +0.00 offset  or +0.15/+0.15 split
+   for a floating look; see follow-up #4). Sits below the 0.4 TABLE,
+   different silhouette.
+2. **Footstool / ottoman** (0.25× tall).
+3. **Floor cushion** (0.08× tall, sampled as fabric for the top cap).
+4. **Sidewalk plinth** (0.15× tall) for display pedestals.
+5. **Low planter wall** (0.20× tall, opaque  blocks movement,
+   non-step, but shares the top-cap pattern via `isFloatingLid`).
+
+Each is a tile-id + contract entry + one new texture, no renderer work
+after the back-layer-gate fix below.
+
+### Follow-up: legs / floating effect for existing short furnishings
+
+TABLE (0.4×), BED (0.6×), CHEST (0.65×), BAR_COUNTER (0.8×) currently
+read as solid blocks down to the floor because they have no
+heightOffset  the wall face meets the ground without a gap. Repurpose
+the step-fill skirt (already rendered for `heightOffset > 0` and
+`heightOffset < 0`) to simulate table legs and bed frames:
+
+- **Option A  heightOffset > 0 with reduced wallHeight.** Keep the
+  top at the same world height, shrink wallHeight, put the difference
+  into heightOffset. For TABLE: swap `(wallHeight 0.4, offset 0)` for
+  `(wallHeight 0.08, offset 0.36)`. The skirt fills from the bottom
+  of the wall (world 0.32) down to the ground (world 0) in `stepColor`
+   that band can be sampled to read as table legs (darker, narrower
+  visual) instead of the solid side we have today.
+- **Option B  skirt-aware "legs" texture.** Instead of a flat
+  `stepColor` fill, draw a procedural legs band: four vertical dark
+  strips per tile at leg positions, transparent between them. Requires
+  a new renderer branch in the skirt fill (`stepColor` replaced with a
+  sampled "legs" texture when the contract flags the tile as
+  `legsSkirt: true`).
+
+Option A is zero-renderer-change, just contract tuning; Option B is
+where the visual actually reads as "table on legs" rather than "block
+with a darker bottom." Start with A for BED and TABLE to validate the
+silhouette, then do B for CHEST and BAR_COUNTER which need distinct
+leg geometry.
+
+### Follow-up #4 shipped
+
+Interior furniture tiles now have explicit height entries in
+`SpatialContract.interior()`:
+
+- **CHEST (7):** `wallHeight 0.60`, no offset — chest-lid on the floor,
+  no legs (lids don't float).
+- **BAR_COUNTER (26):** `wallHeight 0.80`, no offset — solid bar with
+  kickplate, reads as counter-to-floor.
+- **BED (27):** `wallHeight 0.45`, `heightOffset +0.15` — mattress
+  floats above the floor; step-fill skirt paints the under-bed shadow
+  (bed-frame leg zone 0–0.15 world units).
+- **TABLE (28):** `wallHeight 0.35`, `heightOffset +0.30` — tabletop
+  hovers; step-fill skirt paints the under-table shadow (leg zone
+  0–0.30). The silhouette reads as "table on legs" at distance and as
+  "floating slab with shadow underneath" up close.
+
+The existing `heightOffset > 0` step-fill branch in `raycaster.js`
+(~line 1846) samples `tex.height - 1` (bottom edge of the wall
+texture) at 70% brightness, which naturally gives each tile a darker
+band matching its material (dark-wood legs under TABLE, stone-grey
+frame under BED).
+
+Known follow-ups (still deferred):
+
+- **Lip micro-brick.** The cap block at line 2062 samples via `wallX`
+  (1D U along hit face), producing faint vertical stripes on the
+  tabletop. Same fix as the stoop cap (per-row floor projection from
+  RaycasterFloor math) would clean this up but isn't jam-critical.
+- **True-leg geometry (Option B).** For distinct four-leg silhouettes
+  (CHEST on ball feet, BAR_COUNTER on turned posts), the renderer
+  would need a dedicated leg branch that drew N vertical strips of
+  skirt rather than a solid band. Still deferred per roadmap.
+
+### Follow-up summary (post-jam)
+
+| # | Task | Effort | Unblocks |
+|---|---|---|---|
+| 1 | Short-tile texture variants (`stone_curb_lip`, `wood_plank_edge`, fabric for cushion, etc.) | ~60 lines TextureAtlas | Cleaner lip face on all thin slabs |
+| 2 | Add `TILES.isStep` to back-layer `_cTSolid` gate | ~5 lines raycaster.js | Stoops behind shrubs/fences |
+| 3 | Coffee table, ottoman, cushion, plinth tile defs | ~30 lines tiles.js + contract | Thin-slab interior furniture |
+| 4 | ✅ Legs skirt for TABLE/BED (Option A tuning) | shipped — see note below | Furniture stops reading as blocks |
+| 5 | Legs skirt renderer branch (Option B for CHEST) | ~40 lines raycaster.js | CHEST/BAR_COUNTER leg silhouettes |
+| 6 | Window-vignette billboard bug (pre-existing, unrelated to curb work) | TBD  likely raycaster refactor regression | Windows render correctly at all ranges |
+
 ---
 
 ## Phase 4  Wall-Mounted Boxes (Texture Compositing)

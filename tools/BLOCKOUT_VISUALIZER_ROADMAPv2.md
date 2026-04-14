@@ -1,29 +1,156 @@
 # Blockout Visualizer — Engine Roadmap
 
-Current state (v0.2, April 2026): visualizer with paint, lasso, resize, full/diff export, all-tile picker.
+Current state (v0.13, April 2026): visualizer with full Tier 1 drawing tools (paint + brush sizes,
+rect, line, flood fill, replace-all-of-type), lasso select/move, copy/cut/paste clipboard with
+cross-floor persistence, per-floor undo/redo stacks, direct file write with confirmation diff
+(File System Access API + download fallback), **Tier 2 validation** (walkability BFS, door
+contract sanity, spawn checks, required-tile checks + cross-floor door-target reciprocity),
+**Tier 3 per-floor metadata editor** (spawn drag-place, door-target dropdowns per door tile,
+JSON-snippet clipboard export, meta undo entries), resize, full/diff export, all-tile picker,
+live schema extraction (tiles, cards, enemies, strings), **the Tier 4 window-scene editor
+first pass** — auto-detect window tiles per floor, per-window sub-grid editor with paint /
+resize / clipboard-stamp / jump-to-parent, in-memory scene store with JSON sidecar export —
+**and Tier 6 Passes 1 + 2 + 3 + 4** — the headless `window.BO.run({action,…})` command surface, the
+matching `tools/blockout-cli.js` Node CLI, the perception tools (`renderAscii`, `diffAscii`,
+`describeCell`, `reportValidation`, `captureFloor`), the tile semantic lookup layer
+(`tile`, `tileName`, `tileSchema`, `findTiles` — both as router actions and as direct
+`window.BO.*` methods, mirrored in the CLI), **and the stamp library** — parametric
+stamps (`stampRoom`, `stampCorridor`, `stampTorchRing`) plus a named registry
+(`saveStamp`, `applyStamp`, `listStamps`, `deleteStamp`, `exportStamps`, `importStamps`)
+with a `tools/stamps.json` sidecar for cross-session reuse and CLI/browser interop —
+so AI agents can drive the editor, observe world state without a canvas, resolve tile
+identities symbolically, AND compose floor geometry from reusable patterns (1:1 mapping
+to existing primitives; heterogeneous-bulk undo/redo/validation parity; Node CLI mirrors
+the vocabulary).
 Reference frame: what a level designer coming from Tiled, Ogmo, Unity Tilemaps, Unreal, or a AAA in-house
 editor would expect to find when they sit down at this tool.
 
-This document is organized by **designer expectation tier** — not by implementation difficulty. Tier 1 is
-"a working editor should obviously have this." Tier 4 is "this is specific to Dungeon Gleaner and
-differentiates us from a generic tile editor."
+**Planned next:** Pass 0 (modularization — split the ~4,000-line visualizer into `tools/js/bv-*.js`
+IIFEs + manifest + `tools/` code-review-graph + CI file-size budgets) is a prerequisite for
+Pass 5b's world-graph editor. Pass 5a (vanilla floor primitives) can land before or after Pass 0;
+Pass 5b explicitly depends on Pass 0 to avoid compounding the monolith problem. See the Tier 6
+section for details.
 
 ---
 
-## Phase 3 — Schema extraction (next up)
+## Progress snapshot (April 15, 2026)
 
-The immediate blocker before expanding the editor meaningfully. Right now the tool embeds a 77-entry
-TILE_SCHEMA copy-pasted from `engine/tiles.js`. Every time `tiles.js` changes, the visualizer drifts.
+Status legend: ✅ done · 🟡 partial · ⬜ not started
 
-- Parse `engine/tiles.js` in `extract-floors.js` and emit the schema into `floor-data.json`
-- Pull category, walkability, opacity, door/freeform/floating predicates from source
-- Include `isDoor()`, `isFreeform()`, `isFloating()` results so the editor can enforce constraints
-- Load `data/cards.json`, `data/strings/en.js` for entity and display name resolution
-  *(Decision: yes — emit as three separate schema sections: tile schema is mandatory; card manifest
-  and string index are lazy-loaded enrichment for entity and metadata panels)*
-- Surface builder metadata (`shops`, `spawn`, `doorTargets`, `doorFaces`, `biome`) as editable fields
+**Phase 3 — Schema extraction** ✅
+- `tools/tile-schema.json` — 84 tiles with predicates (was hardcoded 77 → now live-tracked)
+- `tools/card-manifest.json` — 120 cards, bucketed by suit
+- `tools/enemy-manifest.json` — 27 enemies
+- `tools/string-index.json` — 243 strings, 27 namespaces
+- `extract-floors.js` rebuilds all four side-cars on run
 
-Until this lands, any new tile added to the game is invisible to the tool.
+**Tier 1 drawing tools** ✅
+- Rect (drag + Shift for outline), Line (Bresenham), Fill (4-connected flood),
+  Replace-all-of-type, Brush sizes 1/2/3/5, Paint with stroke-coalesced undo
+- Bulk-undo: every tool writes a single `{type:'bulk'}` entry
+- Drag-preview rendering (filled cells + dashed bounding rect for rect)
+- Shortcuts P R N F X (edit mode only), `[` / `]` cycle brush size
+
+**Tier 1 selection + clipboard** 🟡
+- Lasso select, drag-to-move, ESC cancel / ENTER commit ✅
+- Copy / Cut / Paste (in-memory `CLIPBOARD`, single bulk undo per stamp) ✅
+- Paste tool with green ghost preview tracking cursor ✅
+- Shortcuts Ctrl+C / Ctrl+X / Ctrl+V / `V`, `L` ✅
+- **Cross-floor clipboard** ✅ — first-class workflow:
+  - `CLIPBOARD` tracks `sourceFloorId` + `sourceFloorName`, set on every copy/cut
+  - Clipboard status badge next to brush picker: miniature thumbnail + "W×H `floorId`"
+  - Badge color-shifts from blue → amber when source floor ≠ current floor
+  - Click badge to jump back to source floor
+  - Paste on a different floor shows a "Pasted N×M from floor X" toast
+  - Undo/redo honor per-floor stacks; pasting on floor B doesn't touch floor A's history
+  - Smoke-tested end-to-end: see `/tmp/clipboard_sim.js` harness and the in-browser
+    `window.__clipboardSmokeTest(srcId, dstId)` dev helper. All invariants verified:
+    copy persists across switch, paste lands correctly, undo restores, A's stack untouched.
+- Magic wand, select-by-tile, invert/grow/shrink, multi-rect-select ⬜
+
+**Tier 1 history** ✅
+- Undo (`Ctrl+Z` + button) ✅
+- Redo (`Ctrl+Shift+Z` / `Ctrl+Y` + button) ✅ — every edit funnels through `pushUndo()` which
+  clears the redo stack; `applyEntry(entry, 'undo'|'redo')` handles all four entry types
+  (paint / bulk / resize / lasso-move). Paste entries store per-cell `newTile` for heterogeneous
+  stamps; uniform ops keep a single `newTile` on the entry.
+- Per-floor undo/redo stacks ✅ — `FLOOR_HISTORY[floorId] = {undo, redo, originalGrid}`. On
+  `selectFloor`, the outgoing floor's stacks are parked under its ID and the incoming floor's
+  stacks are restored (or initialized fresh).
+- History panel, named checkpoints ⬜ — deferred to Tier 1 polish; not blocking.
+
+**Tier 1 view** ⬜
+- Minimap inset, jump-to-coords, bookmarks, measure tool, crosshair overlay,
+  shortcut cheatsheet (`?`) — none started
+
+**Tier 2 file integration (direct file write)** ✅
+- Save button (Ctrl+S) + "Pick engine/…" directory-handle request
+- Reads current `floor-blockout-<id>.js`, patches only the `var GRID = [...]` literal
+  via regex, preserves the rest of the file (W/H, ROOMS, build(), etc.)
+- Confirmation modal with color-coded unified diff (LCS-based, 3-line context hunks)
+- Write via File System Access API when available; graceful fallback to Blob download
+  when on `file://` or an unsupported browser
+- Post-write: re-baselines `EDIT.originalGrid` so the dirty counter resets without
+  clearing undo history — the designer can keep iterating and save again
+- Verified end-to-end: real `floor-blockout-1-1.js` → mutated tile (2,2) → patched
+  cleanly with valid JS output (Node sim in `/tmp/save_sim.js`)
+
+**Tier 4 window-scene editor (first pass)** 🟡
+- `isWindowLikeTile()` predicate honors the schema's `isWindow` flag and also matches
+  `WINDOW_*`, `PORTHOLE`, `ARCH_DOORWAY` by name — 9 tile IDs surface as windows
+- `#windows-panel` overlay (top-left of canvas) auto-lists every window tile on the
+  current floor: tile swatch + `(x,y)` + tile name + green `●` marker when a scene
+  already exists. Empty for floors without windows.
+- Click any row to open the scene editor modal (`#scene-modal`). Sub-grid defaults to
+  8×6, tiles default to EMPTY (0). Parent floor id inferred by stripping the last
+  segment of the current floor id (e.g. `"1.1"` → `"1"`).
+- Scene editor features:
+  - Paint mode (click / drag) using the main editor's `EDIT.paintTile` — no separate
+    tile picker, stays in sync with the main toolbar
+  - Right-click erases to tile 0
+  - Resize W/H buttons (1–24 range) preserve existing tiles, pad with EMPTY
+  - "Jump to parent floor" button — switches the main view to the parent exterior
+    so the designer can lasso + Ctrl+C a region, then returns via re-clicking the
+    window row. Scene modal state (which window) is preserved across the jump.
+  - "Stamp clipboard at (0,0)" — one-click paste from `CLIPBOARD` into the sub-grid,
+    clipped to scene bounds. Shows toast with cell count.
+  - "Clear scene" resets all cells to 0
+  - "Download window-scenes.json" exports every scene across every floor as a
+    sidecar JSON with `{floorId, at, tileId, parentFloorId, w, h, tiles}` per entry
+- `selectFloor()` is wrapped so the windows panel rebuilds on every floor switch.
+  Scene modal remains open if active (enables the parent-hop workflow).
+- Dev smoke-test: `window.__windowSceneSmokeTest('1')` lists windows on floor 1.
+- Not yet: engine consumption of `window-scenes.json`. `WindowSprites.buildSprites()`
+  and `floorData.windowScenes` (vignette system) are orthogonal and unchanged. A
+  follow-up will extend the engine to read `sceneGrid` per window for raycaster
+  through-rendering. Scenes currently live in memory only (lost on reload) until
+  a re-import loader is added.
+
+---
+
+This document is organized by **designer expectation tier** — not by implementation difficulty. Tier 1 is
+"a working editor should obviously have this." Tier 4 is "this is specific to Dungeon Gleaner and
+differentiates us from a generic tile editor." **Tier 6** is a separate axis — it's what the editor
+needs to be drivable by an AI agent rather than a human at a mouse.
+
+---
+
+## Phase 3 — Schema extraction ✅ (shipped)
+
+Was the immediate blocker before expanding the editor. The tool previously embedded a 77-entry
+TILE_SCHEMA copy-pasted from `engine/tiles.js`. Every time `tiles.js` changed, the visualizer drifted.
+
+- ✅ Parse `engine/tiles.js` in `extract-floors.js` and emit the schema into `tools/tile-schema.json` (84 tiles)
+- ✅ Category, walkability, opacity, door/freeform/floating predicates extracted from source
+- ✅ `isDoor()`, `isFreeform()`, `isFloating()`, `isWindow()`, `isTorch()`, `isHazard()` etc. captured
+- ✅ `data/cards.json` → `tools/card-manifest.json` (120 cards, suit-bucketed)
+- ✅ `data/enemies.json` → `tools/enemy-manifest.json` (27 enemies)
+- ✅ `data/strings/en.js` → `tools/string-index.json` (243 strings, 27 namespaces)
+- 🟡 Builder metadata (`shops`, `spawn`, `doorTargets`, `doorFaces`, `biome`) — emitted in `floor-data.json`
+  but not yet surfaced as editable fields (belongs to Tier 3 metadata editor)
+
+Next-tile drift is eliminated: adding a tile to `tiles.js` + re-running `extract-floors.js` lights it
+up in the visualizer's tile picker automatically.
 
 ---
 
@@ -33,44 +160,53 @@ What a designer will look for in the first ten minutes and be confused if it's m
 
 ### Drawing tools
 
-- **Rectangle fill** — drag a box, release to fill with the paint tile (solid or outline mode)
-- **Flood fill / bucket** — click a cell, fill all connected same-tile cells
-- **Line tool** — click-drag to paint a straight line between two cells (Bresenham)
-- **Brush size** — 1×1, 2×2, 3×3, 5×5 square brushes (modifier key or picker)
-- **Replace-all-of-type** — select a tile ID, one-click replace every instance on the floor
+- ✅ **Rectangle fill** — drag a box, release to fill with the paint tile (Shift = outline mode)
+- ✅ **Flood fill / bucket** — click a cell, fill all connected same-tile cells (4-connected)
+- ✅ **Line tool** — click-drag to paint a straight line between two cells (Bresenham, 5000-cell cap)
+- ✅ **Brush size** — 1×1, 2×2, 3×3, 5×5 square brushes (picker + `[` / `]` cycle)
+- ✅ **Replace-all-of-type** — click a cell, one-click swap every instance of that tile ID floor-wide
 
 ### Selection improvements
 
-- **Magic wand** — select all contiguous tiles of the same type (for moving a whole room, a whole path)
-- **Select-by-tile** — select every instance of a tile ID, floor-wide
-- **Invert selection**, **shrink/grow** by N cells, **select all**
-- **Multi-rectangle selection** (shift+drag adds to selection)
-- **Floating selection clipboard** — cut/copy/paste regions between floors
-- **Cross-floor copy-paste** — lasso or select a region on floor N, switch to floor N.N, paste the
+- ⬜ **Magic wand** — select all contiguous tiles of the same type (for moving a whole room, a whole path)
+- ⬜ **Select-by-tile** — select every instance of a tile ID, floor-wide
+- ⬜ **Invert selection**, **shrink/grow** by N cells, **select all**
+- ⬜ **Multi-rectangle selection** (shift+drag adds to selection)
+- ✅ **Floating selection clipboard** — Copy / Cut / Paste shipped (in-memory, bulk-undo).
+  `CLIPBOARD` persists across floor switches and is never reset by `selectFloor`.
+- ✅ **Cross-floor copy-paste** — lasso or select a region on floor N, switch to floor N.N, paste the
   captured tile group onto the target grid at an arbitrary position. The clipboard survives floor
-  switches. This is the primary workflow for building window-scene exteriors: copy the street / trees /
+  switches. A persistent toolbar badge (miniature thumbnail + `W×H "floorId"`) shows what's on the
+  clipboard; the badge shifts to an amber highlight when the source floor differs from the current
+  floor, and clicking it jumps back to the source floor. A "Pasted N×M from floor X" toast fires on
+  cross-floor stamps. Per-floor undo stacks mean the stamp writes to the destination floor's history
+  without disturbing the source floor's. Smoke-tested via the `window.__clipboardSmokeTest()` dev
+  helper and a standalone Node simulation (`/tmp/clipboard_sim.js`) — all invariants pass.
+  This is the primary workflow for building window-scene exteriors: copy the street / trees /
   buildings from the parent exterior floor and paste them into the sub-grid outside a building's
   window on the interior floor, instead of recreating the exterior by hand. See also the Tier 4
   window-scene editor for the dedicated panel variant of this workflow.
 
 ### History
 
-- **Redo** (Ctrl+Shift+Z / Ctrl+Y) — we only have undo right now
-- **History panel** — scrollable list of operations with timestamps, click any entry to jump to that state
-- **Named checkpoints** — manual save points the designer labels ("before door rework")
+- ✅ **Redo** (Ctrl+Shift+Z / Ctrl+Y + button) — every edit clears redo; all four entry types replay
+- ✅ **Per-floor undo/redo stacks** — `FLOOR_HISTORY` map keyed by floor ID, parked/restored on switch
+- ⬜ **History panel** — scrollable list of operations with timestamps, click any entry to jump to that state
+- ⬜ **Named checkpoints** — manual save points the designer labels ("before door rework")
 
 ### View
 
-- **Minimap** — small overview in a corner, click to jump, draggable viewport rect
-- **Jump to coordinates** — text input, tile-snap camera
-- **Bookmarks** — named camera positions per floor
-- **Measure tool** — click two cells, show grid distance and Manhattan distance
-- **Show cursor crosshair** across full row/column for alignment
+- ⬜ **Minimap** — small overview in a corner, click to jump, draggable viewport rect
+- ⬜ **Jump to coordinates** — text input, tile-snap camera
+- ⬜ **Bookmarks** — named camera positions per floor
+- ⬜ **Measure tool** — click two cells, show grid distance and Manhattan distance
+- ⬜ **Show cursor crosshair** across full row/column for alignment
 
 ### Keyboard discoverability
 
-- **Shortcut cheatsheet overlay** (press `?` to show)
-- **Customizable shortcuts** (probably defer — vanilla keymap is fine for now)
+- ⬜ **Shortcut cheatsheet overlay** (press `?` to show) — current shortcut set: P R N F X L V, `[`/`]`,
+  Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+Z, 0–9 quick-tiles, G / R / D / I / L (view toggles outside edit mode)
+- ⬜ **Customizable shortcuts** (probably defer — vanilla keymap is fine for now)
 
 ---
 
@@ -112,40 +248,59 @@ separate adjacent tiles, not stacked in the same cell.)*
 For DG this could encode patterns like: "if ARCH_DOORWAY is placed, auto-populate adjacent tiles with
 the required road, pillar stubs, and back-face tile."
 
-### Validation
+### Validation ✅ (first pass)
 
-- **Walkability check** — flood-fill from spawn, flag unreachable walkable tiles in red
-- **Door contract validation** — every DOOR has a `doorTargets` entry, target floor exists, target floor
-  has an inbound door
-- **Spawn validity** — spawn on a walkable tile, not blocked by entities
-- **Missing required tiles** — e.g. floor "0" must have a SPAWN, exterior floors must have ARCH_DOORWAY pairs
-- **Heatmaps**: distance from spawn, distance from nearest door, lighting coverage, line-of-sight
-  from key tiles
+- ✅ **Walkability check** — BFS from spawn, flags unreachable walkable tiles (grouped into one
+  issue, rendered with red/amber/blue border overlay and pulsing fill on the first cell)
+- ✅ **Door contract validation** — doors without explicit `doorTargets` raise `door-fallback` info;
+  `doorTargets` pointing to a non-existent floor raises `door-target-missing` error; target floor
+  with no door tiles anywhere raises `no-return-door` warning (one-way transition)
+- ✅ **Spawn validity** — missing / out-of-bounds / non-walkable spawn all flagged as errors
+- ✅ **Missing required tiles** — depth-1 exterior floor with no ARCH_DOORWAY or door tile flagged
+- ✅ **Validation modal** — two tabs (current floor / all floors), severity pills, click-to-jump,
+  persistent highlight overlay, Esc / Close clears. Dev helper: `window.__validateSmokeTest('all')`.
+- ⬜ **Heatmaps**: distance from spawn, distance from nearest door, lighting coverage, line-of-sight
+  from key tiles — deferred to a polish pass
 
 ### File integration
 
-- **Direct file write** — skip the copy-paste step; write directly to `floor-blockout-*.js` with a
-  confirmation diff preview
-- **Git diff preview panel** — see the pending change as a unified diff before committing
-- **Watch mode** — hot-reload `floor-data.json` on disk change
-- **Autosave** draft state to localStorage (with the caveat that CLAUDE.md rules out `localStorage` in
-  artifacts — but this is a dev tool, not an artifact, so it's fair game)
+- ✅ **Direct file write** — Ctrl+S / Save button writes directly to `engine/floor-blockout-*.js`.
+  Uses File System Access API (`showDirectoryPicker` + `createWritable`) when available, falls back
+  to a Blob download on `file://` or in browsers that don't support the API. The patch regex targets
+  only the `var GRID = [...]` literal so the rest of the file (W/H, ROOMS, build(), doorTargets)
+  is preserved byte-for-byte.
+- ✅ **Git-style diff preview panel** — confirmation modal shows a color-coded unified diff (LCS,
+  3-line context hunks, red/green per-line backgrounds) before anything is written. Cancel / Download
+  / Write to file are the three exit paths.
+- ⬜ **Watch mode** — hot-reload `floor-data.json` on disk change
+- ⬜ **Autosave** draft state to localStorage (CLAUDE.md rules out `localStorage` in artifacts — but
+  this is a dev tool, not an artifact, so it's fair game)
 
 ---
 
 ## Tier 3 — The difference between a tool and a platform
 
-### Per-floor metadata editor
+### Per-floor metadata editor 🟡
 
 All the fields around the grid — not just the grid itself.
 
-- **Rooms array editor** — draw a rect, name it, set `cx/cy`; optional tags (shop, bedroom, hall)
-- **Door targets map editor** — click a door tile, dropdown to pick target floor
-- **Door faces editor** — click a door tile, pick exterior face direction (N/E/S/W)
-- **Shops array editor** — position + shop type
-- **Spawn drag** — pick up the spawn marker and drop it somewhere new
-- **Biome picker** — per-floor biome assignment affecting texture atlas and fog config
-- **Spatial contract inspector** — read-only view of the frozen `SpatialContract.*` for this floor depth
+- ⬜ **Rooms array editor** — draw a rect, name it, set `cx/cy`; optional tags (shop, bedroom, hall)
+- ✅ **Door targets map editor** — Meta panel lists every door-like tile on the floor with a
+  target-floor dropdown. `(fallback)` deletes the explicit entry. Per-row `→` jump button centers
+  the camera on the door cell. Edits push to the per-floor undo stack (`type:'meta'`) and raise a
+  `●` dirty marker in the panel header.
+- ⬜ **Door faces editor** — click a door tile, pick exterior face direction (N/E/S/W)
+- ⬜ **Shops array editor** — position + shop type
+- ✅ **Spawn drag** — "Move" button in the Meta panel arms placement mode; next canvas click sets
+  the new spawn. Cursor switches to crosshair while armed. Undo-tracked.
+- ⬜ **Biome picker** — per-floor biome assignment affecting texture atlas and fog config
+- ⬜ **Spatial contract inspector** — read-only view of the frozen `SpatialContract.*` for this floor depth
+
+**File integration gap:** metadata edits are in-memory only. The save patcher currently only
+rewrites the `var GRID` literal. The Meta panel's **Copy meta JSON** button copies a
+`{floorId, spawn, doorTargets}` snippet to the clipboard so the designer can paste it into the
+floor's `registerFloorBuilder` entry manually. Extending the patcher to rewrite `spawn:` and
+`doorTargets:` inside the builder is a Tier 3 follow-up.
 
 ### Entity + decoration layer
 
@@ -269,6 +424,430 @@ From `STREET_CHRONICLES_NARRATIVE_OUTLINE.md`: conspiracy reveals are staged per
 
 ---
 
+## Tier 6 — Agent-facing toolkit
+
+Tiers 1–4 treat the visualizer as a tool a human designer drives through the GUI. Tier 6 treats it
+as a tool an **AI agent** drives programmatically. The GUI becomes a verification window; edits
+flow through JSON-in / JSON-out primitives. Current tools like `paintCell`, `applyCellsToGrid`,
+`setSpawn`, `setDoorTarget`, `runValidation`, `prepareSaveCurrentFloor` are all the right
+primitives — they just aren't callable from outside the page's script context.
+
+Structured as five passes, each dependent on the one before. The first pass unlocks everything
+downstream. Each pass is small enough to ship independently; none requires rewriting existing
+features.
+
+### Pass 1 — Headless command surface ✅ (shipped v0.10)
+
+Goal: the visualizer accepts and executes a structured command without a human click.
+
+Two delivery modes share the same underlying command router so we don't fork the execution path:
+
+- **In-page `window.BO` dispatch object.** Exposes `BO.run({action, ...args})` returning a
+  `{ok, result, error}` shape. Every action maps to an existing internal function (e.g.
+  `action:'paint'` → `applyCellsToGrid(cells, tile)`; `action:'setSpawn'` → `setSpawn(x, y)`).
+  An agent driving the browser (Claude-in-Chrome, Puppeteer, etc.) calls `BO.run(...)` via
+  `javascript_tool` / `page.evaluate` and reads the result.
+- **Node CLI: `tools/blockout-cli.js`.** Same action vocabulary, but mutates
+  `tools/floor-data.json` directly (or drives a headless Puppeteer session for actions that
+  need canvas rendering). Commands:
+  ```
+  node tools/blockout-cli.js paint-rect --floor 2.1 --at 5,5 --size 3x3 --tile WALL
+  node tools/blockout-cli.js set-spawn --floor 1.3.1 --at 4,8
+  node tools/blockout-cli.js set-door-target --floor 2.2 --at 12,4 --target 2.2.1
+  node tools/blockout-cli.js validate --scope all --out report.json
+  node tools/blockout-cli.js save --floor 2.1
+  ```
+
+Initial action set (matches existing internal calls one-to-one):
+`getFloor`, `listFloors`, `paint`, `paintRect`, `paintLine`, `floodFill`, `replaceAllOfType`,
+`stampClipboard`, `resize`, `setSpawn`, `setDoorTarget`, `validate`, `save`.
+
+Success criteria: an agent can create a 3-room floor end-to-end using only command calls, save
+the result to `engine/floor-blockout-*.js`, and load it successfully in the game — with no human
+interaction beyond the initial `request_access` prompt.
+
+### Pass 2 — Perception tools ✅ (shipped v0.11)
+
+Agents can't see a canvas. They need text-shaped observations of the world state.
+
+- **`BO.renderAscii(floorId, viewport?)`** — returns the grid as a text block using schema glyphs
+  (`.` floor, `#` wall, `D` door, `W` window, `·` empty, etc.). Optional viewport clips to a
+  rect. Returns `{glyphs: "...", legend: [{glyph:'#', tileId:1, name:'WALL'}, ...]}` so the
+  agent can round-trip glyphs back to tile IDs.
+- **`BO.diffAscii(floorId, beforeSnapshot)`** — renders the grid as ASCII with `+`/`-`/` `
+  markers at each cell that changed vs a prior snapshot. Use after each edit to self-verify.
+- **`BO.captureFloor(floorId)`** — returns a base64 PNG of the current canvas view of the floor.
+  For vision-capable agents. Uses existing `canvas.toDataURL()` — just needs to be wired to the
+  command router.
+- **`BO.describeCell(floorId, x, y)`** — returns the tooltip's data structurally: tile name, ID,
+  category, walkability, opacity, room membership, door target, exterior-face direction,
+  original tile (if modified). Same info as the hover tooltip, shaped for consumption.
+- **`BO.reportValidation(scope)`** — wraps `runValidation()` so the agent gets structured
+  feedback (`[{severity, kind, msg, cells, floorId}]`) after every edit without opening the modal.
+
+### Pass 3 — Tile semantic lookup ⬜
+
+Agents guess tile IDs wrong constantly. A query layer fixes this.
+
+- **`BO.findTiles(query)`** — returns tile IDs matching a predicate query.
+  ```
+  BO.findTiles({ predicate:'isWindow' })       // all window tiles
+  BO.findTiles({ category:'structure', walk:false })
+  BO.findTiles({ namePattern:/^WALL/ })
+  BO.findTiles({ biome:'coastal', role:'floor' })  // needs biome metadata, Tier 3 follow-up
+  ```
+- **`BO.tile(name)`** / **`BO.tileName(id)`** — case-insensitive lookup both ways.
+- **`BO.tileSchema()`** — returns the full schema (same as `tools/tile-schema.json` but from
+  the live in-memory copy, so edits to `tiles.js` picked up via `extract-floors` are reflected
+  without reloading the visualizer).
+
+### Pass 4 — Pattern / stamp library ✅ (shipped April 2026, v0.13)
+
+Compose primitives into named operations so an agent can say "build a room" instead of enumerating
+every cell. All mutations flow through the existing heterogeneous-bulk undo entry
+(`{type:'bulk', cells:[{x,y,oldTile,newTile}], newTile:null}`) so Ctrl+Z rolls back an entire stamp
+in one step.
+
+- ✅ **`BO.stampRoom({ at, size, wallTile, floorTile })`** — rectangular room with walls on the
+  perimeter, floor tile in the interior. Accepts tile names or numeric IDs.
+- ✅ **`BO.stampCorridor({ from, to, width, floorTile, wallTile? })`** — Bresenham path with
+  Manhattan-expanded width and optional wall decoration on the diagonal/orthogonal fringe.
+- ✅ **`BO.stampTorchRing({ at, radius, step, torchTile })`** — torches evenly spaced around a
+  square perimeter at `radius` with stride `step`.
+- ✅ **`BO.saveStamp({ name, at, size })`** / **`BO.applyStamp({ name, at, rotate?, flipH?, flipV? })`** —
+  capture a rectangle as a named grid slice in the in-memory registry; re-apply anywhere with
+  any of 8 orthogonal orientations (0/90/180/270 × optional H/V flip).
+- ✅ **`BO.listStamps()`** / **`BO.deleteStamp({name})`** — catalog management.
+- ✅ **`BO.exportStamps()`** / **`BO.importStamps(dump, {merge?})`** — JSON round-trip for cross-
+  session reuse and browser↔CLI interop. The CLI persists the same registry to
+  `tools/stamps.json` automatically on every save/delete.
+- ✅ **CLI mirror** in `tools/blockout-cli.js`: `stamp-room`, `stamp-corridor`,
+  `stamp-torch-ring`, `save-stamp`, `apply-stamp`, `list-stamps`, `delete-stamp`.
+
+Deferred to a later pass: ship default stamps derived from existing floors (building-corner-NE,
+stall-6x4, pergola-run, cathedral-window, bonfire-nook). These should be generated by a separate
+`tools/mine-stamps.js` script that crawls floor-data.json for recurring motifs rather than
+hand-authored.
+
+### Pass 0 — Modularization for agent crawlability ⬜
+
+**Prerequisite for Pass 5b.** The blockout visualizer has grown to ~4,000 lines in a single
+HTML file; `peek-workbench.html` is 7,643 and `boxforge.html` is 6,850. Practical agent context
+budget is **1,500–2,000 lines / 50–80 KB per Read** before accuracy falls off. Adding the world
+designer bridge on top of the current monolith pushes us well past 5,000 — every subsequent Pass 5b
+phase starts with "re-read the whole file" and new bugs come from "I didn't see that helper six
+sections up." Pass 0 fixes the substrate before we build on it. Scope: **~3 days**.
+
+**Goals**
+- Every primary dev-tool file readable in one pass.
+- Agents use a module manifest (~40 lines) to pick the 1–2 files they need, never the whole set.
+- `tools/` code-review-graph indexable so `semantic_search_nodes` / `query_graph` / `get_impact_radius`
+  give useful answers on the dev-tool codebase.
+- File-size budgets CI-enforced so regression is visible immediately.
+
+**0.1 — Extract inline `<script>` from `blockout-visualizer.html` into `tools/js/bv-*.js`** (1½ days)
+
+Mirror the engine's IIFE + load-layer pattern. Each module exposes a frozen global; load order
+defined in the HTML via ordered `<script>` tags. Proposed split — each file target ≤ 800 lines:
+
+```
+tools/js/
+  bv-tile-schema.js          # fallback TILE_SCHEMA + live schema loader
+  bv-edit-state.js           # EDIT, selection, per-floor history
+  bv-brush.js                # brush helpers, stroke accumulator
+  bv-primitives.js           # paintRect, paintLine, floodFill, replaceAll
+  bv-lasso.js                # lasso selection + marquee
+  bv-clipboard.js            # copy/cut/paste, cross-floor clipboard
+  bv-undo.js                 # pushUndo/applyEntry; stroke/bulk/meta types
+  bv-validation.js           # walkability, door contracts, spawn, required tiles
+  bv-save-patcher.js         # write back to engine/floor-blockout-*.js
+  bv-render.js               # canvas draw loop, hover/highlight overlays
+  bv-meta-editor.js          # Tier 3 spawn + doorTargets UI
+  bv-window-scenes.js        # Tier 4 window-scene editor
+  bv-bo-router.js            # BO.run({action,...}) — switch dispatcher, no logic
+  bv-bo-perception.js        # Pass 2 renderAscii/diffAscii/describeCell/captureFloor
+  bv-bo-tile-lookup.js       # Pass 3 tile/tileName/tileSchema/findTiles
+  bv-bo-stamps.js            # Pass 4 parametric + named-stamp registry
+  bv-bo-floor.js             # (Pass 5a) createFloor/setBiome/placeEntity
+  bv-bo-world.js             # (Pass 5b) exportWorldGraph/applyWorldDiff bridge
+```
+
+`blockout-visualizer.html` shrinks to ~500 lines — markup, `<link>` to a new stylesheet, and an
+ordered list of `<script src>` tags with a comment per layer.
+
+**0.2 — Extract inline `<style>` into `tools/css/blockout-visualizer.css`** (½ day)
+
+Two-page skim instead of sixty. Grouped with a table-of-contents header comment.
+
+**0.3 — Split `blockout-cli.js` into `tools/cli/`** (½ day)
+
+Currently 806 lines. Pass 5b's world-graph commands push it past 1,200. Split now:
+
+```
+tools/blockout-cli.js        # thin dispatcher (~100 lines); requires cli/*.js
+tools/cli/
+  shared.js                  # loadFloors, saveFloors, resolveTile, parseArgs, fail
+  commands-paint.js          # Pass 1: paint, paint-rect, paint-line, flood-fill, replace
+  commands-meta.js           # set-spawn, set-door-target, resize, list-floors, get-floor
+  commands-perception.js     # Pass 2: render-ascii, describe-cell, diff-ascii
+  commands-validation.js     # report-validation
+  commands-tile-lookup.js    # Pass 3: tile, tile-name, tile-schema, find-tiles
+  commands-stamps.js         # Pass 4: stamp-room/corridor/torch-ring, save/apply/list/delete-stamp
+  commands-floor.js          # (Pass 5a) create-floor, set-biome, place-entity
+  commands-world.js          # (Pass 5b) export-world-graph, apply-world-diff
+```
+
+Each command file 200–400 lines. Dispatcher registers via
+`Object.assign(COMMANDS, require('./cli/commands-stamps'))`. Per-file `node --check` smoke-testable.
+
+**0.4 — Module manifest (`tools/js/MODULES.md`)** (2 hours)
+
+One-line-per-file inventory so agents pick modules before reading code. Template:
+
+```
+bv-bo-router.js        exports: BO.run; switch dispatcher, zero logic
+                       depends on: bv-bo-perception, bv-bo-tile-lookup, bv-bo-stamps,
+                                   bv-bo-floor, bv-bo-world
+bv-bo-stamps.js        exports: stampRoom, stampCorridor, stampTorchRing, saveStamp,
+                                applyStamp, listStamps, deleteStamp, exportStamps, importStamps
+                       Pass 4; heterogeneous-bulk undo; in-memory stamp registry
+                       depends on: bv-edit-state, bv-undo
+bv-edit-state.js       exports: EDIT, FLOOR_HISTORY, getCurrentFloor, setCurrentFloor
+                       per-floor undo/redo stacks, lasso state, clipboard ref
+                       depends on: (none)
+...
+```
+
+Linked from top of `BO-V README.md` under a new "Module map" section.
+
+**0.5 — `tools/` code-review-graph** (2 hours)
+
+Run `python -m code_review_graph build` rooted at `tools/` (separate DB from the game-root and
+`raycast.js-master/` graphs). The `.claude/settings.json` auto-routes MCP queries based on cwd
+per CLAUDE.md's "When working in that subdirectory, the graph MCP server will serve its graph
+instead of the main Dungeon Gleaner graph" pattern. Verify with:
+- `semantic_search_nodes` — "find all functions named `paint*`" returns the 4 primitives.
+- `query_graph` — "callers of `pushUndo`" returns every Pass-1-through-4 mutation path.
+- `get_impact_radius` — "what breaks if I change `resolveTile`?" returns the router + all
+  stamp commands.
+
+None of these work meaningfully on the current monolith — the builder produces one giant node
+per file. The split is the prerequisite.
+
+**0.6 — File-size budgets + CI check** (2 hours)
+
+Add `scripts/check-file-sizes.sh` (and `.ps1`) run from CI:
+
+```
+max-html-lines:        500    # markup + script tags only
+max-js-module-lines:   800    # typical engine/ IIFE size
+max-cli-command-lines: 400    # one conceptual unit per file
+exempt:                       # tracked tech debt, split when next edited
+  - tools/peek-workbench.html
+  - tools/boxforge.html
+```
+
+Fails CI on regression. Soft fence — easy to raise the number — but override frequency becomes a
+visible maintenance signal.
+
+**Deferred (tracked tech debt, not blocking Pass 5):**
+- `peek-workbench.html` (7,643 lines) — split on next substantive edit.
+- `boxforge.html` (6,850 lines) — split on next substantive edit.
+- `engine/texture-atlas.js` (6,419 lines), `engine/menu-faces.js` (4,720) — game-side, separate
+  roadmap item. The existing Layer-2 raycaster extraction (`docs/RAYCASTER_EXTRACTION_ROADMAP.md`)
+  is the model.
+
+**What this unlocks**
+
+- Pass 5b bridge (`bv-bo-world.js` + `tools/js/wd-bridge.js`) lands as two new files, zero
+  re-edits to the 4,000-line visualizer.
+- Pass 5a's `createFloor` / `setBiome` / entities work lands as `bv-bo-floor.js` (new) without
+  bloating any existing module past its budget.
+- The world designer (`tools/world-designer.html`) can import *only* what it needs through the
+  postMessage bridge, never the whole editor UI.
+- Agent-driven work on dev tools stops starting with "re-read the whole file."
+
+---
+
+### Pass 5a — Floor semantics primitives ⬜
+
+The highest-leverage *single-floor* tool. One call takes an agent from zero to "a valid floor
+exists." Stays vanilla — no new runtime deps, ships inside `blockout-visualizer.html` and
+mirrored in the CLI. Scope: **3–4 days**.
+
+- **`BO.createFloor({ id, depth, name, biome, template? })`** — consults `Biome Plan.html`,
+  picks appropriate tiles for the biome, seeds a spawn, wires parent door targets back per
+  floor-ID convention, and generates the skeleton `engine/floor-blockout-*.js` with a valid
+  `registerFloorBuilder` entry. Optional `template` parameter picks a starter layout
+  ("single-room", "two-room-corridor", "cellar-3x3-grid", etc.).
+- **`BO.setBiome(floorId, biomeId)`** — swap a floor's biome; auto-substitute biome-equivalent
+  tiles (coastal stone → desert sandstone, etc.). Requires biome-tile mapping, defined in a
+  new `tools/biome-map.json` side-car.
+- **`BO.placeEntity(floorId, {type, at, props})`** — writes to the parallel entities array
+  (Tier 3 decision) without touching the grid. Types: `npc`, `enemy`, `loot`, `trigger`.
+- **`BO.gitSnapshot(label)`** / **`BO.gitDiff()`** — thin wrappers around `git add`/`git diff`
+  for `tools/floor-data.json` + `engine/floor-blockout-*.js`. Lets an agent session produce a
+  reviewable PR rather than a mystery diff on main. Not strictly necessary but closes the
+  review loop cleanly.
+
+Deliverables:
+1. `tools/biome-map.json` — biome → {wallTile, floorTile, ceilingTile, accentTiles[], torchTile,
+   breakableSet[]}. Seeded from `docs/Biome Plan.html` v5.
+2. `tools/templates/` — floor-shape starter JSON (`single-room.json`, `two-room-corridor.json`,
+   `cellar-3x3-grid.json`, etc.) reusable by `createFloor`.
+3. Entities array normalized to `floor.entities: [{id, type, at:{x,y}, props}]` in
+   `floor-data.json`; extraction pass updated in `extract-floors.js`.
+4. Save patcher extended to emit a `registerFloorBuilder` skeleton + write `engine/floor-blockout-<id>.js`.
+
+### Pass 5b — World graph editor (portal port) ⬜
+
+Port the EyesOnly jsPlumb-based world designer into `tools/` and point it at Dungeon Gleaner's
+schema. The graph becomes a **view** over `floor-data.json` with edit operations that fan out to
+the existing Pass 1/5a primitives — not a second source of truth. Scope: **~1.5 weeks**, shipped in
+six phases so we can land value incrementally.
+
+**Relaxed rule (dev-tool-only):** `tools/` may pull in dev-time dependencies (vendored or
+`node_modules/`) as long as the webOS build whitelist in `scripts/build-webos.*` never copies them
+into the ship bundle. The game itself (`engine/`, `index.html`, `data/`, `assets/`) stays vanilla
+and offline-capable. See "Design constraints for Tier 6" below.
+
+**Scaffold already in place** (copied from `EyesOnly/public/portal/` — April 2026):
+- `tools/world-designer.html`, `tools/unified-designer.html`
+- `tools/js/{world-designer,unified-designer,unified-data-manager}.js`
+- `tools/css/{asset-designer,map-designer,unified-designer}.css`
+- `tools/world-engine/{worlds,floors}/` (placeholder sample `test-world.json`)
+
+The scaffold is currently a verbatim copy — still references Eyes node types, the cdnjs jsPlumb
+URL, and Eyes' flat floor model. The phases below replace each of those.
+
+**Phase 5b.0 — Vendor + scaffold cleanup** (½ day)
+
+- Vendor jsPlumb Community Edition 2.15.6 into `tools/vendor/jsplumb/` (MIT license, ~180 KB). Swap
+  the `<script src="https://cdnjs.cloudflare.com/...">` in `world-designer.html` for the local
+  copy so the editor works offline.
+- Add `tools/.gitignore` entry for `node_modules/` and `tools/vendor/` build artifacts (keep the
+  vendor source committed for LG reproducibility).
+- Add `scripts/build-webos.sh` (and `.ps1`) that explicitly lists ship paths (`engine/`, `data/`,
+  `assets/`, `index.html`, `CLAUDE.md` stripped) — never globs `tools/`. Write a test that fails
+  CI if `dist/` contains anything under `tools/`, `node_modules/`, or `vendor/`.
+- Rename the Eyes-flavored file set so the DG vocabulary reads cleanly:
+  `world-designer.html` stays; `js/world-designer.js` gets a `'use strict'` top wrapper around a
+  fresh DG-specific rewrite rather than trying to diff Eyes' IIFE.
+
+**Phase 5b.1 — Read-only viewer** (1½ days)
+
+- Replace Eyes' `fetch('world-engine/worlds/test-world.json')` with `fetch('./floor-data.json')`.
+- Synthesize a graph from the real floor data: **one node per floor** (type = depth-based:
+  `exterior` | `interior` | `nested-dungeon`), **one edge per entry in every floor's `doorTargets`
+  map**. Edge `contractType` auto-derived from source/target depths (advance_retreat vs
+  building_entry vs sibling-exit).
+- Initial layout: depth on the Y axis (exterior top, nested-dungeon bottom), lexicographic
+  by floor ID on the X axis. User can drag; layout persists to `tools/world-layout.json`
+  (gitignored).
+- No writes yet. Palette sidebar and connection tools disabled/hidden. Goal: look at the 19
+  floors we already have and make sure the door-target reciprocity visually matches what the
+  validator reports.
+- Success criterion: every floor in `floor-data.json` appears; every directed edge has a reverse
+  or is flagged red (matches Pass 2's validator output).
+
+**Phase 5b.2 — Bridge to BO.run** (1 day)
+
+- Embed the blockout visualizer's `BO` router in the world designer (either as an iframe to
+  `blockout-visualizer.html` or by loading its `<script>` blocks directly — iframe is cleaner for
+  isolation, direct load is faster). Pick iframe; the designer posts `{action, ...}` messages and
+  the visualizer replies with `{ok, result}`.
+- All reads (load, refresh, re-diff) route through `BO.run({action:'loadFloorData'})`. The designer
+  never touches `floor-data.json` directly.
+- Add a "Refresh from disk" button + a "Highlight validation errors" toggle that colors edges red
+  for anything in `BO.run({action:'reportValidation'})`.
+
+**Phase 5b.3 — Edit mode** (2–3 days)
+
+- Enable the palette: dragging an `exterior` / `interior` / `nested-dungeon` node onto the canvas
+  opens a "New floor" dialog (id, depth inferred from position, biome dropdown, template).
+  OK calls `BO.run({action:'createFloor', ...})` (Pass 5a primitive).
+- Drawing an edge between two nodes opens a "Door contract" dialog: which wall on each floor, which
+  cell, contract type (auto-populated from node types). OK calls
+  `BO.run({action:'setDoorTarget', ...})` twice (both sides, for reciprocity).
+- Deleting a node prompts for confirmation + cascade options (delete children? just orphan?). Fans
+  out to `BO.run({action:'deleteFloor', ...})` — this is a new Pass 1 primitive we'll need to add.
+- Right-click a node → "Open in blockout editor" opens `blockout-visualizer.html?floor=<id>` in a
+  new tab for per-tile editing. The graph reflects the change on next refresh.
+
+**Phase 5b.4 — Diff-apply + agent API** (2 days)
+
+- **`BO.run({action:'exportWorldGraph'})`** — returns the current graph as JSON (nodes, edges,
+  layout). Agents call this to see the world.
+- **`BO.run({action:'applyWorldDiff', nodes:[...], edges:[...], deletes:[...]})`** — takes a graph
+  diff and fans out to `createFloor` / `deleteFloor` / `setDoorTarget` / `setBiome` in order.
+  Single transaction: validate all inputs first, then apply or rollback.
+- CLI mirror: `node tools/blockout-cli.js export-world-graph` / `apply-world-diff --input diff.json`.
+  Enables "here's a 3-floor dungeon arm — apply it" agent workflows without a browser open.
+- `Undo` in the world designer undoes the last batch (uses existing per-floor undo stacks + a new
+  world-level undo log that references the batched changeset).
+
+**Phase 5b.5 — Polish** (1–2 days)
+
+- Biome-tinted node backgrounds (uses `tools/biome-map.json` from Pass 5a).
+- Validation overlay: red outline on nodes with validation errors, red edges for broken
+  reciprocity, tooltip lists the issues.
+- Subgraph zoom: click a building node to zoom into its interior tree (children + grandchildren).
+- Node metadata surface: show first-line of NPC roster, loot tables, enemy count in the node body.
+- Export to PNG for design reviews (`canvas.toDataURL` on the jsPlumb container).
+
+**Deferred to later passes:**
+- Drag-to-reorganize entire subgraphs (move floor 2.2 + 2.2.1 + 2.2.2 as a unit).
+- Collaborative multi-cursor editing.
+- Procgen recipe nodes (see Pass 6).
+
+### Pass 6 — Procedural + live preview ⬜ (post-webOS, aspirational)
+
+The world graph makes procgen tractable — an agent says "grow a 3-level random cellar here" and
+the designer node expands into a subgraph with auto-generated floor data.
+
+- **Procgen recipe nodes** — a special node type in the world designer whose "content" is a
+  recipe (grid size, room count range, corridor style, enemy density, biome). On "Expand," the
+  node splits into N concrete floor nodes via an external procgen pass (likely `tools/procgen.js`,
+  Node-only, allowed to use dev deps).
+- **Live preview pane** — embedded mini raycaster view next to the node inspector. Select a floor,
+  see it rendered from its spawn point, walk around with arrow keys. Uses the actual game's
+  raycaster loaded as a module — requires a small refactor to let `Raycaster` init without
+  `ScreenManager`/`Game`.
+- **Playtest record/replay** — instrument the game to log `(floorId, x, y, dir, t)` tuples; replay
+  them as a heatmap overlay on the world graph. Great for post-launch "which floors did players
+  actually visit" analytics.
+- **Difficulty curve preview** — plot enemy power / loot value per floor along the player's
+  likely path through the graph; flag spikes and plateaus.
+
+Pass 6 is explicitly post-Winter 2026 launch. Listing it here so the world graph's schema choices
+in Pass 5b leave room for these extensions (e.g., don't bake "concrete floor" into the node type
+— leave it polymorphic for procgen nodes later).
+
+### Design constraints for Tier 6
+
+- **Ship bundle stays vanilla.** `engine/`, `index.html`, `data/`, and `assets/` must work with
+  zero build step and no runtime network calls — the webOS app is packaged as-is. Passes 1–5a
+  honor this strictly.
+- **Dev tools may take dev deps.** Starting with Pass 5b, `tools/` may pull in vendored or
+  `node_modules/` dependencies (jsPlumb, test runners, procgen libs). A `scripts/build-webos.*`
+  whitelist enforces that the ship bundle never includes `tools/`, `node_modules/`, or
+  `vendor/`. The whitelist is CI-enforced.
+- **GUI remains the source of truth for verification.** Every agent-callable action should be
+  observable in the GUI — an agent calls `paintRect`, the grid repaints, a human watching the
+  browser sees the change. This is the spec contract: if the GUI shows it, the agent did it.
+- **Single source of truth: `floor-data.json`.** The world designer is a *view* + *diff source*,
+  never state. Import computes the graph from disk; export fans out to Pass 1/5a primitives.
+  No graph-exclusive data.
+- **Undo/redo parity.** Every agent action flows through `pushUndo()` the same as a GUI click.
+  A human can review an agent's work and `Ctrl+Z` individual steps. Pass 5b batches world-level
+  edits so Ctrl+Z undoes an entire changeset.
+- **Validation is the default feedback loop.** Pass 1's router should optionally re-run
+  validation after each mutation and include the result in the `{ok, result, validation}`
+  response shape. Default off (fast path); opt in via `{postValidate:true}`. Pass 5b's diff-apply
+  always validates before committing.
+
+---
+
 ## Tier 5 — Aspirational / post-jam
 
 Things that would be lovely but aren't shipping before Winter 2026 webOS launch.
@@ -291,20 +870,83 @@ Things that would be lovely but aren't shipping before Winter 2026 webOS launch.
 
 Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
 
-1. **Phase 3 (schema extraction)** — 1–2 days. Unlocks everything downstream.
-2. **Tier 1 drawing tools** — rectangle fill, flood fill, line, brush size. 1–2 days.
-3. **Tier 1 selection + history + cross-floor clipboard** — magic wand, redo, history panel,
-   cross-floor copy-paste. 1–2 days. The clipboard surviving floor switches is the enabling
-   primitive for both general multi-floor editing and the Tier 4 window-scene workflow.
-4. **Direct file write** (Tier 2 file integration) — skip the copy-paste dance. Half a day.
-5. **Tier 4 window-scene editor** — the thing that motivated this conversation. 2–3 days. Now
-   that cross-floor clipboard exists, the window-scene panel can offer a guided "Paste from
-   parent floor" flow on top of the same mechanism.
-6. **Tier 2 validation** — walkability, door contracts, spawn check. 2 days.
-7. **Tier 3 metadata editor** — rooms, doorTargets, spawn drag. 2–3 days.
-8. **Tier 4 tile height offset editor** — 1–2 days.
-9. **Tier 2 layers** — significant refactor. Save for when the compositional needs are clear.
-10. **Tier 3 3D preview** — defer until the editor is otherwise mature; then it becomes the wow feature.
+1. ✅ **Phase 3 (schema extraction)** — done. Unlocked everything downstream.
+2. ✅ **Tier 1 drawing tools** — rect, flood fill, line, brush size, replace-all-of-type — all shipped.
+3. 🟡 **Tier 1 selection + history + cross-floor clipboard** — mostly done.
+   - ✅ Copy / Cut / Paste clipboard with bulk undo + ghost preview
+   - ✅ Redo + per-floor undo/redo stacks (`FLOOR_HISTORY` parks per-floor state on switch)
+   - ✅ Cross-floor clipboard persistence (code-verified)
+   - ⬜ Magic wand, select-by-tile, invert, grow/shrink (nice-to-have polish)
+   - ⬜ History panel + named checkpoints (deferred — core history already works)
+4. ✅ **Direct file write** (Tier 2 file integration) — shipped. Save button (Ctrl+S) with
+   confirmation diff modal, File System Access API + download fallback, patches only the GRID
+   literal so the rest of the floor file is preserved.
+5. 🟡 **Tier 4 window-scene editor** — first pass shipped (detect + panel + sub-grid editor +
+   clipboard stamp + parent jump + JSON export). Still needs: engine consumption (raycaster
+   reads `sceneGrid`), JSON re-import loader (rehydrate on reload), side-by-side "paste from
+   parent" view, facing/sightline alignment preview, auto-inherit tiles on first open.
+6. ✅ **Tier 2 validation** — shipped. Walkability BFS, door contract sanity (explicit + cross-floor
+   target exists + reciprocity), spawn validity, depth-1 required-tile check. Modal with two tabs,
+   severity pills, click-to-jump + red/amber/blue overlay. Heatmaps + line-of-sight still ⬜.
+7. 🟡 **Tier 3 metadata editor** — spawn drag + door-target dropdowns shipped with undo; JSON
+   clipboard export for paste-into-builder workflow. Still ⬜: rooms array editor, door faces,
+   shops, biome picker, and extending the save patcher to rewrite `spawn:` / `doorTargets:` in
+   the builder (no more manual paste).
+8. ⬜ **Tier 4 tile height offset editor** — 1–2 days.
+9. ⬜ **Tier 2 layers** — significant refactor. Save for when the compositional needs are clear.
+10. ⬜ **Tier 3 3D preview** — defer until the editor is otherwise mature; then it becomes the wow feature.
+
+### Tier 6 passes (agent-facing toolkit)
+
+11. ✅ **Pass 1 — Headless command surface.** `window.BO.run()` + `tools/blockout-cli.js`. Thin
+    dispatch over existing internal functions (`paintCell`, `applyCellsToGrid`, `setSpawn`,
+    `setDoorTarget`, `runValidation`, `prepareSaveCurrentFloor`). Unlocks all downstream Tier 6
+    work. Action set shipped: `listFloors`, `getFloor`, `selectFloor`, `paint`, `paintRect`,
+    `paintLine`, `floodFill`, `replaceAllOfType`, `resize`, `setSpawn`, `setDoorTarget`,
+    `stampClipboard`, `validate`, `save`, `undo`, `redo`, `describe`. CLI mirrors the same
+    vocabulary over `tools/floor-data.json`.
+12. ✅ **Pass 2 — Perception tools.** Shipped: `renderAscii` (glyph grid + legend + viewport
+    clip), `diffAscii` (compare to a prior `getFloor` snapshot, returns annotated diff grid +
+    changes array), `describeCell` (structured tooltip payload with rooms / door target /
+    exterior face / wasTile), `reportValidation` (validate alias matching Pass 2 naming), and
+    `captureFloor` (base64 PNG via `canvas.toDataURL`). All five mirrored in the Node CLI
+    except `captureFloor` (no canvas in CLI).
+13. ✅ **Pass 3 — Tile semantic lookup.** Shipped: `tile(name)`, `tileName(id)`,
+    `tileSchema(nameOrId?)`, `findTiles(query)` with AND-semantics filter (`name` substring
+    or `/regex/flags`, `category`, `glyph`, `walk`, `opaque`, `hazard`, + all `is*` flags).
+    Both as router actions and as direct `window.BO.*` helpers, mirrored in the CLI.
+14. ✅ **Pass 4 — Pattern / stamp library.** Shipped: parametric stamps (`stampRoom`,
+    `stampCorridor`, `stampTorchRing`) and the named registry (`saveStamp`, `applyStamp` with
+    rotate 0/90/180/270 + flipH/flipV, `listStamps`, `deleteStamp`, `exportStamps`,
+    `importStamps`). CLI persists the registry to `tools/stamps.json`; browser keeps it
+    in-memory and round-trips via `exportStamps` / `importStamps`. Heterogeneous-bulk undo
+    makes every stamp a single Ctrl+Z step. Default stamp mining (building-corner-NE etc.)
+    deferred to a later `tools/mine-stamps.js` pass.
+15. ⬜ **Pass 0 — Modularization for agent crawlability.** Prerequisite for Pass 5b. Split
+    `blockout-visualizer.html` inline `<script>` into `tools/js/bv-*.js` IIFEs (~16 modules,
+    each ≤ 800 lines), extract CSS, split `blockout-cli.js` into `tools/cli/commands-*.js`,
+    add `tools/js/MODULES.md` manifest, build a separate `tools/` code-review-graph, enforce
+    file-size budgets in CI. Defers `peek-workbench.html` and `boxforge.html` as tracked tech
+    debt. Unlocks every later pass landing as 1–2 new files instead of monolith edits.
+    Scope: ~3 days.
+16. ⬜ **Pass 5a — Floor semantics primitives.** `createFloor({id, biome, template})`,
+    `setBiome`, `placeEntity`, `gitSnapshot`. Depends on `tools/biome-map.json` (new side-car),
+    `tools/templates/` starter layouts, and the extended save patcher from item 7. Stays vanilla.
+    Lands as `bv-bo-floor.js` + `cli/commands-floor.js` post-Pass-0. Scope: 3–4 days.
+17. ⬜ **Pass 5b — World graph editor (portal port).** Port the EyesOnly jsPlumb world designer
+    into `tools/` and point it at `floor-data.json`. Six phases (0 vendor → 1 viewer → 2 BO bridge
+    → 3 edit → 4 diff-apply + agent API → 5 polish). Adds the `applyWorldDiff` action so agents
+    can describe whole dungeon arms in one call. **First pass that takes dev-time deps**
+    (vendored jsPlumb). Lands as `bv-bo-world.js` + `tools/js/wd-*.js` post-Pass-0. Scope: ~1.5 weeks.
+18. ⬜ **Pass 6 — Procedural + live preview (post-launch).** Procgen recipe nodes,
+    embedded raycaster preview, playtest replay heatmaps, difficulty-curve plotting. Depends on
+    Pass 5b's graph schema staying polymorphic. Scope: open-ended, post-Winter-2026.
+
+**Recommended next step:** Extend the save patcher to rewrite `spawn:` and `doorTargets:` inside
+the `registerFloorBuilder` call so the Meta panel's edits persist on Ctrl+S instead of via
+clipboard-paste. Alternative paths: Tier 4 window-scene engine consumption (raycaster reads
+`sceneGrid`, JSON re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance
+from spawn, lighting coverage).
 
 Items that are probably **never worth it** for DG's scope: collaborative editing, procedural recipe
 editor, history tree with branching, customizable shortcuts. A small team building one game doesn't

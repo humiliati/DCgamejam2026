@@ -141,10 +141,17 @@ var SpatialContract = (function () {
                       //   with plaza floor (no Doom-rule offset). Freeform path
                       //   suppresses heightOffset anyway when tileFreeform is active,
                       //   so this value is defensive / semantic only.
-        70: 0         // PERGOLA_BEAM — freeform cross-beam at chimney elevation.
+        70: 0,        // PERGOLA_BEAM — freeform cross-beam at chimney elevation.
                       //   Tall column (3.0 world units) with hLower = 0, so there
                       //   is nothing at plaza grade to offset. Same defensive-only
                       //   semantics as CITY_BONFIRE.
+        86: 0.04,     // STOOP — raised entry step (thin lip close to ground).
+                      //   Halved from 0.10 so the slab top sits ~0.06 in
+                      //   world units above the cobble plane — roughly the
+                      //   thickness of the skirt band, reading as a real
+                      //   sidewalk curb without the player needing a head
+                      //   boost to clear it.
+        87: 0.04      // DECK — raised multi-tile platform (same lip as STOOP).
       }), opts.tileHeightOffsets),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
@@ -313,7 +320,15 @@ var SpatialContract = (function () {
       // read as trunks, not cubes. Round stone pillars, porthole frames,
       // and other cylindrical tiles can opt in by adding an entry.
       tileShapes: _mergeTileTable({
-        21: 'circle'  // TREE — round trunk silhouette
+        10: 'circle',  // PILLAR — round architectural column / lamp-post shaft
+                       //   (lantern row, boardwalk promenade, plaza colonnades).
+                       //   TREE_SQ (85) stays square for treeline fills.
+        21: 'circle',  // TREE — round trunk silhouette
+        65: 'circle',  // CANOPY — round leaf pads above trunk (floating disc)
+        66: 'circle', // CANOPY_MOSS — round moss clumps above trunk
+        // CANOPY_MOSS_SQ (84) stays square — dungeon-beam variant
+        88: 'circle4'  // PILLAR_QUAD — 2×2 cluster of small round columns
+                       //   with diagonal sight-gaps between the four pillars.
       }, opts.tileShapes),
 
       // ── Wall textures ──
@@ -368,6 +383,15 @@ var SpatialContract = (function () {
         79: 'stone_rough',     // WINDOW_SLIT — default rough stone surround
         80: 'wood_dark',       // WINDOW_ALCOVE — default dark wood surround (like BAY)
         81: 'brick_red',       // WINDOW_COMMERCIAL — default brick surround (like SHOP)
+        85: 'tree_trunk',      // TREE_SQ — square-footprint tree variant (same
+                               //   trunk texture as TREE; no tileShapes entry
+                               //   → renders as a square cell for treeline fills)
+        88: 'stone_rough',     // PILLAR_QUAD — default 2×2 sub-pillar texture
+                               //   (biomes can override with pillar_stone, marble,
+                               //   etc. to match their colonnade style)
+        86: 'stone_rough',     // STOOP — rough cut-stone band for the raised step
+                               //   face (thin lip around the platform perimeter).
+        87: 'wood_plank',      // DECK — plank siding for the raised-boardwalk lip.
         74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
                                //   above the door opening. Per-tile override via
                                //   DoorSprites.getWallTexture() replaces this with
@@ -408,7 +432,9 @@ var SpatialContract = (function () {
         79: 'floor_cobble',      // WINDOW_SLIT — street cobblestones outside fortress
         80: 'floor_cobble',      // WINDOW_ALCOVE — street cobblestones outside facade
         81: 'floor_cobble',      // WINDOW_COMMERCIAL — street cobblestones outside storefront
-        74: 'floor_stone'       // DOOR_FACADE — stone threshold under the door
+        74: 'floor_stone',      // DOOR_FACADE — stone threshold under the door
+        86: 'floor_flagstone',  // STOOP — shaped stone paving on the step surface
+        87: 'floor_boardwalk'   // DECK — plank boardwalk on the raised platform
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -434,6 +460,9 @@ var SpatialContract = (function () {
         66: 0.25,   // CANOPY_MOSS — thin moss strip, floating high
         67: 0.50,   // ROOF_CRENEL — thick slab, solid bottom half + toothed top half
         68: 0.50,   // PERGOLA — same slab thickness as CRENEL (shares tooth generator)
+        88: 1.8,    // PILLAR_QUAD — 2×2 colonnade cluster, slightly taller than
+                    //   single PILLAR (1.5) so the grouped silhouette reads more
+                    //   monumental. Biomes can override.
         69: 2.0,    // CITY_BONFIRE — Olympic pyre (2x wall height). Freeform path
                     //   splits this into 0.50 pedestal + 0.70 narrow fire window +
                     //   0.80 chimney hood (greater-hearth silhouette; pergola beams
@@ -454,6 +483,12 @@ var SpatialContract = (function () {
         79: 3.5,    // WINDOW_SLIT — full building facade (matches WALL)
         80: 3.5,    // WINDOW_ALCOVE — full building facade (matches WALL)
         81: 3.5,    // WINDOW_COMMERCIAL — full building facade (matches WALL)
+        86: 0.04,   // STOOP — thin raised lip (0.04 unit strip above offset).
+                    //   Halved from 0.08 so the lip face matches the
+                    //   skirt-band thickness below it. Combined with
+                    //   heightOffset 0.04, the slab spans world 0.02 →
+                    //   0.06 — a sidewalk curb, not a stair.
+        87: 0.04,   // DECK  — same thin lip as STOOP for the platform edge.
         73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
                     //   on all exterior biomes so the window cuts into the
                     //   wall plane without creating a notch). Freeform path
@@ -523,6 +558,10 @@ var SpatialContract = (function () {
         5: -0.08,     // STAIRS_DN — trap door feel
         6:  0.06,     // STAIRS_UP — slight rise toward exit
         14: 0.12,     // BOSS_DOOR — elevated archway
+        27: 0.15,     // BED — raised frame; step-fill skirt paints the
+                      //   under-bed shadow (legs zone) from floor up to 0.15.
+        28: 0.30,     // TABLE — floating tabletop; step-fill skirt paints
+                      //   the under-table shadow that reads as four legs.
         29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
                       //   (legacy step-fill path; freeform path ignores this
                       //    offset when tileFreeform[29] is active)
@@ -530,6 +569,15 @@ var SpatialContract = (function () {
         76:  0.10     // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#151518',
+
+      // ── Tile shape overrides (see exterior() for protocol notes) ──
+      // Interior PILLARs are round marble columns / classical colonnades.
+      // Biomes can opt specific dungeon-brick pillars back to square via
+      // opts.tileShapes if the rough-hewn aesthetic requires it.
+      tileShapes: _mergeTileTable({
+        10: 'circle',  // PILLAR — round interior column (marble / stonework)
+        88: 'circle4'  // PILLAR_QUAD — 2×2 cluster of round sub-pillars
+      }, opts.tileShapes),
 
       // ── Freeform tile config (two-segment wall columns) ──────────
       // Opt-in per-tile upper/lower brick bands with a gap in between.
@@ -591,7 +639,8 @@ var SpatialContract = (function () {
         31: 'torch_bracket_unlit', // TORCH_UNLIT — extinguished
         36: 'terminal_screen', // TERMINAL — CRT desk (retro-futuristic)
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw stone around the slit
-        83: 'stone_rough'      // WINDOW_MURDERHOLE — raw stone around the hole
+        83: 'stone_rough',     // WINDOW_MURDERHOLE — raw stone around the hole
+        88: 'stone_rough'      // PILLAR_QUAD — 2×2 round sub-pillar cluster
       }), opts.textures),
 
       // ── Floor texture ──
@@ -617,14 +666,19 @@ var SpatialContract = (function () {
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({
         1:  2.5,    // WALL — extends above ceiling plane for close-up immersion
+        7:  0.60,   // CHEST — chest-lid height, sits on floor (no legs)
         18: 0.3,    // BONFIRE — low stone ring
+        26: 0.80,   // BAR_COUNTER — tall counter, solid kickplate to floor
+        27: 0.45,   // BED — mattress slab; frame gap below exposes "under-bed" skirt
+        28: 0.35,   // TABLE — tabletop slab; legs zone exposed by heightOffset
         36: 0.6,    // TERMINAL — desk height, CRT screen above
         71: 2.5,    // ARCH_DOORWAY — match interior WALL height
         74: 2.5,    // DOOR_FACADE — match interior WALL height
         75: 2.0,    // TRAPDOOR_DN — full interior wall height
         76: 2.0,    // TRAPDOOR_UP — full interior wall height
         82: 2.0,    // WINDOW_ARROWSLIT — matches interior wall
-        83: 2.0     // WINDOW_MURDERHOLE — matches interior wall
+        83: 2.0,    // WINDOW_MURDERHOLE — matches interior wall
+        88: 1.8     // PILLAR_QUAD — interior 2×2 sub-pillar cluster
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -699,7 +753,10 @@ var SpatialContract = (function () {
         14: 0.15,     // BOSS_DOOR — chamber entrance
         29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
         75: -0.10,    // TRAPDOOR_DN — sunken, hatch reads as hole in floor
-        76:  0.10     // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
+        76:  0.10,    // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
+        84:  0.85     // CANOPY_MOSS_SQ — dungeon ceiling moss. Slab spans 0.85–1.10,
+                      //   tucked against ceiling of a 1.2-tall dungeon wall. Square
+                      //   silhouette reads as moss clumps between stone beams.
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#111',
 
@@ -739,7 +796,8 @@ var SpatialContract = (function () {
         31: 'torch_bracket_unlit', // TORCH_UNLIT — hero's mess
         36: 'terminal_screen', // TERMINAL — dungeon data terminal
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw dungeon stone
-        83: 'stone_rough'      // WINDOW_MURDERHOLE — raw dungeon stone
+        83: 'stone_rough',     // WINDOW_MURDERHOLE — raw dungeon stone
+        84: 'canopy_moss'      // CANOPY_MOSS_SQ — hanging moss (reuse exterior texture)
       }), opts.textures),
 
       // ── Floor texture ──
@@ -767,7 +825,8 @@ var SpatialContract = (function () {
         75: 1.2,    // TRAPDOOR_DN — low dungeon wall around hatch
         76: 1.2,    // TRAPDOOR_UP — low dungeon wall around hatch
         82: 1.2,    // WINDOW_ARROWSLIT — matches dungeon wall
-        83: 1.2     // WINDOW_MURDERHOLE — matches dungeon wall
+        83: 1.2,    // WINDOW_MURDERHOLE — matches dungeon wall
+        84: 0.25    // CANOPY_MOSS_SQ — thin moss band (floats via tileHeightOffset)
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──

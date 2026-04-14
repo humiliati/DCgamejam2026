@@ -75,7 +75,9 @@ Each depth has its own spatial contract governing wall height, fog model, render
 
 **Layer 1** -- Core systems: GridGen, DoorContracts, Lighting, EnemyAI, CombatEngine, SynergyEngine, CardSystem, CardAuthority, CardTransfer, LootTables, WorldItems, InputManager, MovementController, Pathfind, SpatialContract, TextureAtlas, SessionStats, Salvage, BreakableSpawner, GrimeGrid, HoseState, ItemDB
 
-**Layer 2** -- Rendering + UI: UISprites, DoorAnimator, Skybox, Raycaster, Minimap, HUD, DialogBox, Toast, TransitionFX, CardFan, ScreenManager, MenuBox, AudioMusicManager, SplashScreen, GameLoop, SpraySystem, CleaningSystem
+**Layer 2** -- Rendering + UI: UISprites, DoorAnimator, Skybox, RaycasterLighting, RaycasterTextures, RaycasterProjection, RaycasterFloor, RaycasterWalls, RaycasterSprites, Raycaster (core), Minimap, HUD, DialogBox, Toast, TransitionFX, CardFan, ScreenManager, MenuBox, AudioMusicManager, SplashScreen, GameLoop, SpraySystem, CleaningSystem
+
+The raycaster was split from a single 4,729-line file into 6 sub-modules + a 2,758-line core during the jam. Sub-modules own their own state and consume the core's z-buffer/pedestal buffers via `bind()` getters; see `docs/RAYCASTER_EXTRACTION_ROADMAP.md`.
 
 **Layer 3** -- Game modules: Player, MouseLook, FloorManager, FloorTransition, InputPoll, InteractPrompt, CombatBridge, HazardSystem, Shop, MenuFaces, TitleScreen, GameOverScreen, VictoryScreen, HoseReel, ReadinessCalc
 
@@ -114,7 +116,7 @@ Each depth has its own spatial contract governing wall height, fog model, render
 | Hose state/reel | Original | Breadcrumb path, kink detection, auto-reel |
 | Spray system | Original | 5 brush shapes, data-driven nozzle resolution |
 | Card authority | Original | Canonical inventory state, Sprint 0 rewrite |
-| Raycaster | Original | DDA casting, textures, door animation |
+| Raycaster | Original | DDA casting, textures, door animation; split into 6 sub-modules (lighting/textures/projection/floor/walls/sprites) + core |
 | Skybox | Original | Procedural clouds, mountains, water |
 | Dialog box | Original | Dual-mode canvas dialog system |
 | Texture atlas | Original | Procedural 64x64 wall textures |

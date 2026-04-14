@@ -259,6 +259,7 @@ var FloorManager = (function () {
             14: 'door_iron',       // BOSS_DOOR
             18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
             21: 'tree_trunk',      // TREE — perimeter trees (brown trunk + green canopy)
+            85: 'tree_trunk',      // TREE_SQ — square-silhouette tree (dense treeline / grove-fill)
             22: 'shrub',           // SHRUB — wayfinding hedgerows (half-height, see-over)
             35: 'fence_wood',      // FENCE — wooden rail
             37: 'shrub',           // MAILBOX — shrub base matching grass floor (emoji billboard above via MailboxSprites)
@@ -286,6 +287,7 @@ var FloorManager = (function () {
             14: 3.5,               // BOSS_DOOR — flush with building facade
             18: 0.3,               // BONFIRE — low stone ring, fire cavity visible inside
             21: 2.5,               // TREE — 2.5× tall perimeter trees (solid treeline)
+            85: 2.5,               // TREE_SQ — square treeline variant, same height
             22: 0.5,               // SHRUB — half-height hedge (player sees over to buildings)
             35: 0.4,               // FENCE — railing, player sees over
             37: 0.25,              // MAILBOX — short stone platform, emoji framed inside
@@ -332,6 +334,7 @@ var FloorManager = (function () {
           floorTexture: 'floor_brick_red',
           tileFloorTextures: Object.freeze({
             21: 'floor_grass',       // TREE — grass under trees
+            85: 'floor_grass',       // TREE_SQ — grass under square trees
             22: 'floor_grass',       // SHRUB — grass under hedges
             32: 'floor_cobble',      // ROAD — cobblestone avenues
             33: 'floor_dirt',        // PATH — dirt trails
@@ -366,6 +369,7 @@ var FloorManager = (function () {
             14: 'door_iron',       // BOSS_DOOR
             18: 'bonfire_ring',    // BONFIRE — stone ring
             21: 'tree_trunk',      // TREE — perimeter trees
+            85: 'tree_trunk',      // TREE_SQ — square-silhouette tree variant
             22: 'shrub',           // SHRUB — wayfinding hedgerows
             35: 'fence_wood',      // FENCE — wooden rail
             37: 'shrub',           // MAILBOX — shrub base matching grass floor
@@ -392,6 +396,7 @@ var FloorManager = (function () {
             14: 3.5,               // BOSS_DOOR — flush with building facade
             18: 0.3,               // BONFIRE — low stone ring
             21: 2.5,               // TREE — 2.5× tall perimeter trees
+            85: 2.5,               // TREE_SQ — square-silhouette tree variant
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
@@ -419,6 +424,7 @@ var FloorManager = (function () {
           floorTexture: 'floor_cobble',  // Polished stone walkway
           tileFloorTextures: Object.freeze({
             21: 'floor_grass',       // TREE — grass under trees
+            85: 'floor_grass',       // TREE_SQ — grass under square trees
             22: 'floor_grass',       // SHRUB — grass under hedges
             32: 'floor_cobble',      // ROAD — cobblestone avenues
             33: 'floor_dirt',        // PATH — dirt trails
@@ -469,10 +475,14 @@ var FloorManager = (function () {
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling for close-up immersion
-            7:  0.7,               // CHEST — waist-height stash box
+            7:  0.60,              // CHEST — chest-lid height, sits on floor (no legs)
             10: 2.0,               // PILLAR — full wall height decorative column
-            27: 0.6,               // BED — low, player sees over it
-            28: 0.4,               // TABLE — low third-height surface
+            27: 0.09,              // BED — mattress slab (10% thicker than TABLE to
+                                   //   read as a softer quilted form).
+            28: 0.08,              // TABLE — thin tabletop slab. Pairs with a tall
+                                   //   heightOffset so the visible face reads as a
+                                   //   board, not a cube, and the under-table shadow
+                                   //   reads as legs.
             29: 2.5,               // HEARTH — full chimney stack
             36: 1.0                // TERMINAL — desk-height CRT station
           }),
@@ -499,11 +509,11 @@ var FloorManager = (function () {
           }),
           tileWallHeights: Object.freeze({
             1:  2.5,               // WALL — extends above ceiling for close-up immersion
-            7:  0.7,               // CHEST — waist-height storage
+            7:  0.60,              // CHEST — chest-lid height, sits on floor (no legs)
             10: 2.2,               // PILLAR — tall decorative beams
-            26: 0.8,               // BAR_COUNTER — counter height
-            27: 0.6,               // BED — low inn bed
-            28: 0.4,               // TABLE — low dining surface
+            26: 0.80,              // BAR_COUNTER — counter height, solid kickplate to floor
+            27: 0.09,              // BED — mattress slab (10% thicker than TABLE)
+            28: 0.08,              // TABLE — thin tabletop slab
             29: 0.5,               // HEARTH — short base stone (sandwich: mantle above fire cavity)
             41: 0.35               // BENCH — low cushioned seat
           }),
@@ -546,6 +556,7 @@ var FloorManager = (function () {
             14: 'door_iron',        // BOSS_DOOR
             18: 'bonfire_ring',     // BONFIRE — stone ring
             21: 'tree_trunk',       // TREE — perimeter trees
+            85: 'tree_trunk',       // TREE_SQ — square-silhouette tree variant
             22: 'shrub',            // SHRUB — wayfinding hedgerows
             35: 'fence_wood',       // FENCE — wooden rail
             37: 'shrub',            // MAILBOX — shrub base matching grass floor
@@ -571,6 +582,7 @@ var FloorManager = (function () {
             14: 3.5,               // BOSS_DOOR — flush with building facade
             18: 0.3,               // BONFIRE — low stone ring
             21: 2.5,               // TREE — perimeter trees
+            85: 2.5,               // TREE_SQ — square-silhouette tree variant
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — railing
             37: 0.25,              // MAILBOX — short stone platform
@@ -601,6 +613,7 @@ var FloorManager = (function () {
           floorTexture: 'floor_cobble',
           tileFloorTextures: Object.freeze({
             21: 'floor_grass',       // TREE — grass under trees
+            85: 'floor_grass',       // TREE_SQ — grass under square trees
             22: 'floor_grass',       // SHRUB — grass under hedges
             32: 'floor_cobble',      // ROAD — cobblestone avenues
             33: 'floor_boardwalk',   // PATH — boardwalk planks (walkable boardwalk surface)
@@ -625,6 +638,7 @@ var FloorManager = (function () {
             14: 'door_iron',         // BOSS_DOOR — grand arch gate
             18: 'bonfire_ring',      // BONFIRE — stone ring
             21: 'tree_trunk',        // TREE — perimeter/forest trees
+            85: 'tree_trunk',        // TREE_SQ — square-silhouette tree variant
             22: 'shrub',             // SHRUB — border hedges
             35: 'wall_pier',         // FENCE — salt-worn pier railing
             37: 'shrub',             // MAILBOX — shrub base
@@ -653,6 +667,7 @@ var FloorManager = (function () {
             14: 3.5,               // BOSS_DOOR — grand arch (tallest element)
             18: 0.3,               // BONFIRE — low stone ring
             21: 2.5,               // TREE — perimeter trees
+            85: 2.5,               // TREE_SQ — square-silhouette tree variant
             22: 0.5,               // SHRUB — half-height hedge
             35: 0.4,               // FENCE — pier railing
             37: 0.25,              // MAILBOX — short platform
@@ -677,6 +692,7 @@ var FloorManager = (function () {
           floorTexture: 'floor_dirt',
           tileFloorTextures: Object.freeze({
             21: 'floor_grass',       // TREE — grass under trees
+            85: 'floor_grass',       // TREE_SQ — grass under square trees
             22: 'floor_grass',       // SHRUB — grass under hedges
             32: 'floor_cobble',      // ROAD — highway cobblestone
             33: 'floor_dirt',        // PATH — worn dirt (slum + pier)
@@ -1029,10 +1045,14 @@ var FloorManager = (function () {
           roomCount: { min: 4, max: 4 },
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at front door
-            7:  -0.08,   // CHEST (stash) — sunken into floor alcove
+            7:  0,       // CHEST (stash) — sits on floor, lid-height block
             10: 0,       // PILLAR — flush with floor (no floating)
-            27: -0.15,   // BED — low to the ground, player looks down at it
-            28: -0.10,   // TABLE — half-height work surface
+            27: 0.30,    // BED — mattress top at 0.39 world (~10% taller than prior
+                         //   pass); under-bed skirt from 0–0.30 paints the frame shadow.
+            28: 0.44,    // TABLE — tabletop at 0.52 world, waist-high dining
+                         //   (15% taller than the prior knee-height pass, which is
+                         //   now the coffee-table variant band); under-table skirt
+                         //   from 0–0.44 reads as four-leg shadow.
             29: -0.40    // HEARTH — deep sunken: generous fire cavity for sandwich rendering
           })
         }, biomeTextures));
@@ -1050,9 +1070,9 @@ var FloorManager = (function () {
           roomCount: { min: 3, max: 4 },
           tileHeightOffsets: Object.freeze({
             4:  0.05,    // DOOR_EXIT — slight step at entrance
-            26: -0.05,   // BAR_COUNTER — bar height offset
-            27: -0.15,   // BED — low guest bed
-            28: -0.10,   // TABLE — dining table
+            26: 0,       // BAR_COUNTER — counter to floor with kickplate
+            27: 0.30,    // BED — mattress top at 0.39 world (guest bed)
+            28: 0.44,    // TABLE — tabletop at 0.52 world (dining height, waist-high)
             29: -0.40    // HEARTH — deep sunken: generous fire cavity for sandwich rendering
           })
         }, biomeTextures));
@@ -1579,7 +1599,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //23  pod tops S (open N)
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
-    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  DUMP_TRUCK(30,26) — parked in SE pod
+    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,86,86,86,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  STOOP(21-23,26) — 3-tile raised landing in front of Gleaner's Home DOOR_FACADE(22,27); DUMP_TRUCK(30,26) parked in SE pod
     [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,80,74,80,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_ALCOVE(21,27)(23,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29

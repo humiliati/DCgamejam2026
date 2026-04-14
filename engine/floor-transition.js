@@ -58,6 +58,12 @@ var FloorTransition = (function () {
     if (_transitioning) return;
     _transitioning = true;
 
+    // Compound span: covers door SFX + fade + gen + fade orchestration.
+    // End fires in TransitionFX onComplete (or legacy setTimeout tail).
+    var _dpm = (typeof DebugPerfMonitor !== 'undefined')
+      ? DebugPerfMonitor.probe : null;
+    if (_dpm) _dpm.begin('FloorTransition.fadeAndGo');
+
     // Cancel any queued movement and minimap auto-path
     MC.cancelAll();
     if (typeof MinimapNav !== 'undefined') MinimapNav.cancel();
@@ -107,6 +113,7 @@ var FloorTransition = (function () {
         },
         onComplete: function () {
           _transitioning = false;
+          if (_dpm) _dpm.end('FloorTransition.fadeAndGo');
           if (_onAfterTransition) _onAfterTransition();
         }
       });
@@ -118,6 +125,7 @@ var FloorTransition = (function () {
         setTimeout(function () {
           HUD.hideFloorTransition();
           _transitioning = false;
+          if (_dpm) _dpm.end('FloorTransition.fadeAndGo');
           if (_onAfterTransition) _onAfterTransition();
         }, 300);
       }, preFadeDelay);
@@ -149,8 +157,13 @@ var FloorTransition = (function () {
     var contract = FloorManager.getFloorContract(targetFloorId);
     Minimap.enterFloor(targetFloorId, contract.label || ('Floor ' + targetFloorId));
 
-    // Generate the floor (sync)
+    // Generate the floor (sync — BSP + A* + populate + raycaster hydrate
+    // all happen inside FloorManager.generateCurrentFloor)
+    var _dpmSwitch = (typeof DebugPerfMonitor !== 'undefined')
+      ? DebugPerfMonitor.probe : null;
+    if (_dpmSwitch) _dpmSwitch.begin('FloorLoad.generate');
     var spawn = FloorManager.generateCurrentFloor();
+    if (_dpmSwitch) _dpmSwitch.end('FloorLoad.generate');
     console.log('[FloorTransition] Floor generated — spawn at (' +
                 spawn.x + ',' + spawn.y + ') dir=' + spawn.dir);
 

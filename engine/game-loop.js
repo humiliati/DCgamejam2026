@@ -46,6 +46,11 @@ var GameLoop = (function () {
   function _loop(now) {
     if (!_active) return;
 
+    // Per-frame probe handle (cached once; null if perf monitor inactive).
+    // Two null checks per phase = microsecond overhead when off.
+    var _dpm = (typeof DebugPerfMonitor !== 'undefined')
+      ? DebugPerfMonitor.probe : null;
+
     var delta = now - _lastTime;
     _lastTime = now;
 
@@ -54,11 +59,14 @@ var GameLoop = (function () {
 
     _accumulator += delta;
 
-    // Fixed timestep ticks
+    // Fixed timestep ticks (10Hz AI / game logic bucket)
     while (_accumulator >= _tickInterval) {
       try {
+        if (_dpm) _dpm.begin('GameLoop.aiTick');
         if (_onTick) _onTick(_tickInterval);
+        if (_dpm) _dpm.end('GameLoop.aiTick');
       } catch (e) {
+        if (_dpm) _dpm.end('GameLoop.aiTick');
         console.error('[GameLoop] tick error:', e);
       }
       _accumulator -= _tickInterval;
@@ -67,8 +75,11 @@ var GameLoop = (function () {
     // Render every frame with interpolation factor (0-1)
     var alpha = _accumulator / _tickInterval;
     try {
+      if (_dpm) _dpm.begin('GameLoop.render');
       if (_onRender) _onRender(alpha);
+      if (_dpm) _dpm.end('GameLoop.render');
     } catch (e) {
+      if (_dpm) _dpm.end('GameLoop.render');
       console.error('[GameLoop] render error:', e);
     }
 

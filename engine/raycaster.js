@@ -13,6 +13,47 @@
 var Raycaster = (function () {
   'use strict';
 
+  // ── Extracted helpers (see docs/RAYCASTER_EXTRACTION_ROADMAP.md) ──
+  // Fog / tint / glow helpers live in RaycasterLighting. Aliased here
+  // so existing call sites (e.g. _applyFogAndBrightness(...)) continue
+  // to resolve to single-identifier lookups at runtime.
+  var _applyFogAndBrightness = RaycasterLighting.applyFogAndBrightness;
+  var _tintedDark            = RaycasterLighting.tintedDark;
+  var _parseGlowRGB          = RaycasterLighting.parseGlowRGB;
+
+  // Freeform gap-filler registry + alpha-range cache live in
+  // RaycasterTextures (EX-2). `_gapFillers` is the shared registry
+  // object — aliasing it here means Layer 3 registrations via
+  // Raycaster.registerFreeformGapFiller still land in the same object
+  // the hot loop reads from.
+  var _gapFillers           = RaycasterTextures.getRegistry();
+  var _computeAlphaRange    = RaycasterTextures.computeAlphaRange;
+  var _clearAlphaRangeCache = RaycasterTextures.clearAlphaRangeCache;
+
+  // Floor / parallax / weather-veil renderers live in RaycasterFloor
+  // (EX-4). Aliased here so existing call sites (_renderFloor(...),
+  // _renderParallax(...), _renderWeatherVeil(...)) continue to resolve
+  // to single-identifier lookups.
+  var _renderFloor        = RaycasterFloor.renderFloor;
+  var _renderParallax     = RaycasterFloor.renderParallax;
+  var _renderWeatherVeil  = RaycasterFloor.renderWeatherVeil;
+
+  // Wall column drawing lives in RaycasterWalls (EX-5). Aliased so hot
+  // call sites inside the DDA wall phase (~960× / frame) resolve via
+  // a single local identifier.
+  var _drawTiledColumn      = RaycasterWalls.drawTiledColumn;
+  var _drawTiledColumnPixel = RaycasterWalls.drawTiledColumnPixel;
+  var _hitFace              = RaycasterWalls.hitFace;
+  var _crenelFaceVisible    = RaycasterWalls.crenelFaceVisible;
+
+  // Sprite / wall-decor / particle rendering lives in RaycasterSprites
+  // (EX-6). Only the three public entry points are aliased — the stack /
+  // corpse-pile / sub-layer / hue helpers are module-private and called
+  // only from within renderSprites.
+  var _renderSprites            = RaycasterSprites.renderSprites;
+  var _renderWallDecor          = RaycasterSprites.renderWallDecor;
+  var _updateAndRenderParticles = RaycasterSprites.updateAndRenderParticles;
+
   // Main canvas — owned by the page, stays at native CSS resolution so
   // HUD / minimap / menus / overlays all draw at full fidelity. We DO NOT
   // shrink this canvas when RENDER_SCALE < 1.0 — only the 3D viewport
@@ -83,11 +124,6 @@ var Raycaster = (function () {
   var _zBufferPedMX   = [];
   var _zBufferPedMY   = [];
 
-  // Floor casting buffer (reused across frames to avoid GC)
-  var _floorImgData = null;
-  var _floorBufW = 0;
-  var _floorBufH = 0;
-
   // Wall colors per biome
   var _wallColors = {
     light: '#8a7a6a', dark: '#6a5a4a',
@@ -143,51 +179,16 @@ var Raycaster = (function () {
   // Called from the DDA front-hit loop and the N-layer back-collection
   // loop. Uses _renderGrid / _renderGridW / _renderGridH stashed at
   // the top of render().
-  function _crenelFaceVisible(mx, my, side) {
-    var g = _renderGrid, gW = _renderGridW, gH = _renderGridH;
-    if (!g) return true; // safety fallback
-    var W = TILES.WALL;
-
-    // Tier 1 — direct WALL on the hit axis
-    if (side === 0) {
-      // X-axis hit (east/west face): check E/W neighbors for WALL
-      if (mx > 0 && g[my][mx - 1] === W) return true;
-      if (mx < gW - 1 && g[my][mx + 1] === W) return true;
-    } else {
-      // Y-axis hit (north/south face): check N/S neighbors for WALL
-      if (my > 0 && g[my - 1][mx] === W) return true;
-      if (my < gH - 1 && g[my + 1][mx] === W) return true;
-    }
-
-    // Tier 2 — corner detection: no direct WALL in ANY cardinal
-    // direction, but CRENEL neighbors on both perpendicular axes.
-    // Corners wrap the rampart roofline and render on all faces.
-    var hasAnyWall = false;
-    if (mx > 0 && g[my][mx - 1] === W) hasAnyWall = true;
-    if (!hasAnyWall && mx < gW - 1 && g[my][mx + 1] === W) hasAnyWall = true;
-    if (!hasAnyWall && my > 0 && g[my - 1][mx] === W) hasAnyWall = true;
-    if (!hasAnyWall && my < gH - 1 && g[my + 1][mx] === W) hasAnyWall = true;
-    if (hasAnyWall) return false; // has wall but not on this axis → skip
-
-    // No wall anywhere — possible corner piece.
-    var CR = TILES.ROOF_CRENEL;
-    var hasXCrenel = (mx > 0 && g[my][mx - 1] === CR) ||
-                     (mx < gW - 1 && g[my][mx + 1] === CR);
-    var hasYCrenel = (my > 0 && g[my - 1][mx] === CR) ||
-                     (my < gH - 1 && g[my + 1][mx] === CR);
-    if (hasXCrenel && hasYCrenel) return true; // L-bend corner
-
-    return false;
-  }
+  // _crenelFaceVisible moved to engine/raycaster-walls.js (EX-5)
 
   var _layerBuf = [
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
-    { mx: 0, my: 0, sd: 0, tile: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
+    { mx: 0, my: 0, sd: 0, tile: 0, isCircle: false, hx: 0, hy: 0, cx: 0, cy: 0 },
     { mx: 0, my: 0, sd: 0, tile: 0 }
   ];
 
@@ -270,214 +271,10 @@ var Raycaster = (function () {
     ff: null
   };
 
-  var _gapFillers = {
-    // Default: dark placeholder. Shows through floor prepass + back
-    // layers with a dim fog-blended tint so an unregistered cavity
-    // still reads as "something goes here" rather than a hole.
-    _default: function (ctx, col, gapStart, gapH, info) {
-      ctx.fillStyle = _applyFogAndBrightness(
-        '#141414', info.fogFactor, info.brightness * 0.5, info.fogColor
-      );
-      ctx.fillRect(col, gapStart, 1, gapH);
-    },
-
-    // Transparent: explicit no-op filler for tiles whose cavity should
-    // be a literal hole through the column — sky above horizon, floor
-    // below. The sky/skybox and floor prepasses have already painted
-    // both halves of the screen before walls start drawing, and the
-    // back-layer collection flag (_fgIsFreeformSeeThrough) emits any
-    // walls behind the freeform tile into this Y range as well. Doing
-    // nothing here preserves all of that.
-    //
-    // Used by PERGOLA_BEAM (70) — a top-anchored beam with hLower=0
-    // and a huge gap below the beam band; painting anything here would
-    // cover the sky/plaza the player expects to see under the canopy.
-    _transparent: function () { /* intentional no-op */ },
-
-    // HEARTH / BONFIRE fire cavity: transparent window through the
-    // column with a warm amber glow overlay. The dragonfire emoji is
-    // NOT drawn here — BonfireSprites emits a billboard sprite at the
-    // tile center so the glyph has proper single-instance parallax.
-    // HEARTH columns bypass the z-buffer (see zBypass in the main DDA
-    // loop) so the sprite isn't culled by the front face distance.
-    //
-    // The cavity is literally see-through: no opaque backdrop is
-    // painted. Whatever was drawn by prior passes (floor prepass +
-    // back layers) shows through and is merely tinted by the glow.
-    hearth_fire: function (ctx, col, gapStart, gapH, info) {
-      var glowA = 0.08 * info.brightness * (1 - Math.min(0.85, info.fogFactor));
-      if (glowA > 0.01) {
-        ctx.fillStyle = 'rgba(255,120,30,' + glowA.toFixed(3) + ')';
-        ctx.fillRect(col, gapStart, 1, gapH);
-      }
-    },
-
-    // CITY_BONFIRE (Olympic community pyre): tall vertical flame column
-    // rising from the stone pedestal into the open sky. Unlike the
-    // HEARTH cavity — which is a small amber wash behind a billboard —
-    // the city bonfire IS the cavity visual: a layered vertical
-    // gradient from hot white-yellow at the base, through saturated
-    // orange, to near-transparent red at the crown (so sky peeks
-    // through). Per-column flicker phases keep adjacent columns and
-    // adjacent pyres out of sync so the flame reads as alive.
-    //
-    // The gradient is anchored to the UNCLIPPED gap extents (computed
-    // from info.ff.hUpper / info.ff.hLower) so band proportions stay
-    // correct even when the viewport clips the top of the pyre —
-    // otherwise walking up close would squish the crown into a red
-    // band instead of fading out against the sky.
-    //
-    // Runs one createLinearGradient per visible column. At close range
-    // that is ~16–32 gradients per frame; well within budget.
-    city_bonfire_fire: function (ctx, col, gapStart, gapH, info) {
-      if (gapH <= 0) return;
-      var ff = info.ff;
-      if (!ff) return;
-
-      var whMult = info.wallHeightMult;
-      var lineH  = info.lineH;
-      var wallTop = info.wallTop;
-
-      // Full (unclipped) gap extents in screen pixels. The gradient is
-      // anchored here so band proportions stay correct at close range.
-      var fullGapTop = wallTop + (ff.hUpper / whMult) * lineH;
-      var fullGapBot = wallTop + lineH * (1 - ff.hLower / whMult);
-      if (fullGapBot - fullGapTop < 1) return;
-
-      // Per-column flicker. Slow sine modulated by column + tile so
-      // adjacent columns and adjacent pyres desynchronise naturally.
-      var t = Date.now();
-      var flicker = 0.88 + 0.12 * Math.sin(
-        t * 0.012 + col * 0.31 + info.mapX * 1.7 + info.mapY * 2.9
-      );
-      var fogFade = 1 - Math.min(0.85, info.fogFactor);
-      var bAdj    = info.brightness * flicker * fogFade;
-
-      var aBase  = (0.88 * bAdj).toFixed(3);  // hot core (pedestal top)
-      var aMid   = (0.72 * bAdj).toFixed(3);  // body
-      var aCrown = (0.34 * bAdj).toFixed(3);  // fade-out cap
-
-      var grad = ctx.createLinearGradient(0, fullGapTop, 0, fullGapBot);
-      // Crown (top of gap) — transparent → faint red, sky shows through
-      grad.addColorStop(0.00, 'rgba(255, 60, 10, 0)');
-      grad.addColorStop(0.15, 'rgba(220, 60, 15, ' + aCrown + ')');
-      // Upper body — red-orange
-      grad.addColorStop(0.35, 'rgba(240, 110, 30, ' + aMid   + ')');
-      // Mid body — warm orange
-      grad.addColorStop(0.55, 'rgba(255, 150, 40, ' + aMid   + ')');
-      // Lower body — yellow-orange
-      grad.addColorStop(0.78, 'rgba(255, 200, 90, ' + aBase  + ')');
-      // Base (flush with pedestal top) — hot white-yellow core
-      grad.addColorStop(1.00, 'rgba(255, 235, 170, ' + aBase + ')');
-
-      ctx.fillStyle = grad;
-      ctx.fillRect(col, gapStart, 1, gapH);
-    },
-
-    // DUMP_TRUCK spool cavity: transparent ground-level slot through the
-    // truck body housing the pressure-wash hose reel. Follows the same
-    // pattern as hearth_fire — the cavity is LITERALLY see-through and
-    // painted with nothing but a subtle cool-blue tint on top of the
-    // back-layer content the freeform see-through logic has already
-    // emitted behind the tile. The 🧵 spool glyph itself is NOT drawn
-    // here: DumpTruckSprites emits a billboard sprite at the tile center
-    // (mirror of BonfireSprites for HEARTH) and the z-bypass path lets
-    // that billboard render even though the truck's front face is closer
-    // to the camera than the sprite. The result is "the player looks
-    // into the slot and sees the reel bobbing inside," NOT "a blue
-    // rubber band painted across the truck."
-    //
-    // If the filler painted anything opaque the cavity would become an
-    // emoji-coloured band on the wall face — which is exactly the bug
-    // this rewrite fixes. KEEP THIS TRANSPARENT.
-    truck_spool_cavity: function (ctx, col, gapStart, gapH, info) {
-      if (gapH <= 0) return;
-      // Cool-blue "pressure wash" tint. Alpha scales with brightness
-      // and inverse fog so the glow fades at distance, matching the
-      // hearth_fire warm-glow pattern exactly.
-      var glowA = 0.10 * info.brightness * (1 - Math.min(0.85, info.fogFactor));
-      if (glowA > 0.01) {
-        ctx.fillStyle = 'rgba(70, 130, 200, ' + glowA.toFixed(3) + ')';
-        ctx.fillRect(col, gapStart, 1, gapH);
-      }
-    }
-
-    // NOTE: window_tavern_interior is registered at Layer 3 init time
-    // from engine/window-sprites.js via registerFreeformGapFiller().
-    // That module owns the per-floor exterior-face cache the filler
-    // reads from (for skipping interior paint on non-exterior faces),
-    // so the filler closes over WindowSprites state naturally. See
-    // docs/LIVING_WINDOWS_ROADMAP.md §4 for the window depth contract.
-  };
-
-  function registerFreeformGapFiller(key, fn) {
-    if (typeof key !== 'string' || typeof fn !== 'function') return false;
-    _gapFillers[key] = fn;
-    return true;
-  }
-
-  // ── Alpha-range cache for alpha-mask freeform (Phase 3) ──────────
-  // For tiles with `gapTexAlpha: true`, the gap boundary is not a flat
-  // row-range but varies per texture column based on the texture's
-  // alpha channel. This helper walks a texture column once, finds the
-  // contiguous transparent (α < 128) row range, and caches the result
-  // per (textureId, texX) pair so subsequent frames are a plain lookup.
-  //
-  // Cache key: "texId:texX". Value: { topOpaque, botOpaque } — the
-  // last fully opaque row counting from the top, and the first fully
-  // opaque row counting from the bottom. The gap occupies
-  // [topOpaque+1 .. botOpaque-1]. If the column has no transparent
-  // pixels, topOpaque = texHeight-1 and botOpaque = 0 (no gap).
-
-  var _alphaRangeCache = {};
-
-  /**
-   * Walk texture column `texX` and return { topOpaque, botOpaque }.
-   * Cached per texture ID + column index.
-   * @param {Object} tex  - TextureAtlas texture { width, height, data }
-   * @param {string} texId - Texture ID (for cache keying)
-   * @param {number} texX  - Column index (0..width-1)
-   * @returns {{ topOpaque: number, botOpaque: number }}
-   */
-  function _computeAlphaRange(tex, texId, texX) {
-    var cacheKey = texId + ':' + texX;
-    if (_alphaRangeCache[cacheKey]) return _alphaRangeCache[cacheKey];
-
-    var w = tex.width;
-    var h = tex.height;
-    var d = tex.data;  // Uint8ClampedArray, RGBA stride
-    var topOpaque = h - 1;  // default: no gap (entire column opaque)
-    var botOpaque = 0;
-
-    // Walk down from top — find last opaque row before first transparent
-    for (var y = 0; y < h; y++) {
-      var a = d[(y * w + texX) * 4 + 3];
-      if (a < 128) { topOpaque = y - 1; break; }
-    }
-
-    // Walk up from bottom — find last opaque row before first transparent
-    for (var y2 = h - 1; y2 >= 0; y2--) {
-      var a2 = d[(y2 * w + texX) * 4 + 3];
-      if (a2 < 128) { botOpaque = y2 + 1; break; }
-    }
-
-    // Sanity: if topOpaque >= botOpaque there's no transparent band
-    // in this column (fully opaque or fully transparent edge case).
-    if (topOpaque < 0) topOpaque = 0;
-    if (botOpaque > h - 1) botOpaque = h - 1;
-
-    var result = { topOpaque: topOpaque, botOpaque: botOpaque };
-    _alphaRangeCache[cacheKey] = result;
-    return result;
-  }
-
-  /**
-   * Flush the alpha-range cache. Call on floor transition or when
-   * textures are regenerated.
-   */
-  function _clearAlphaRangeCache() {
-    _alphaRangeCache = {};
-  }
+  // _gapFillers registry, registerFreeformGapFiller, alpha-range
+  // cache moved to engine/raycaster-textures.js (EX-2). Aliases for
+  // _gapFillers / _computeAlphaRange / _clearAlphaRangeCache are
+  // defined at IIFE top.
 
   // ── Debug layer trace (URL param ?debug=1) ───────────────────────
   // Dumps the N-layer collection buffer for a sparse set of sample
@@ -585,9 +382,8 @@ var Raycaster = (function () {
 
     // Floor buffer is tied to backing store dims — invalidate so the
     // next frame re-allocates at the new size.
-    _floorImgData = null;
-    _floorBufW = 0;
-    _floorBufH = 0;
+    RaycasterFloor.resetBuffer();
+    RaycasterWalls.resetBuffer();
   }
 
   // Public: change render scale at runtime. Clamps, persists, resizes.
@@ -629,6 +425,14 @@ var Raycaster = (function () {
    * @param {Object} [lightMap]
    */
   function render(player, grid, gridW, gridH, sprites, lightMap) {
+    // ── Per-frame perf probe handle (P1 CPU attribution) ──────────────
+    // DebugPerfMonitor loads at Layer 5, after this IIFE parses, so we
+    // can't cache it at module init. Look up once per frame; when the
+    // monitor is absent or idle, begin/end short-circuit on _running.
+    // Cost in release: 1 property lookup + 1 truthy check per frame.
+    var _dpm = (typeof DebugPerfMonitor !== 'undefined')
+      ? DebugPerfMonitor.probe : null;
+
     _renderGrid = grid;  // stash for helpers (_renderFreeformForeground etc.)
     _renderGridW = gridW;
     _renderGridH = gridH;
@@ -695,6 +499,7 @@ var Raycaster = (function () {
     var useSkybox = _contract && _contract.ceilingType === 'sky' &&
                     typeof Skybox !== 'undefined' && _contract.skyPreset;
 
+    if (_dpm) _dpm.begin('Raycaster.skybox');
     if (useSkybox) {
       Skybox.render(ctx, w, halfH, player.dir, _contract.skyPreset, 16);
     } else {
@@ -706,6 +511,7 @@ var Raycaster = (function () {
       ctx.fillStyle = cGrad;
       ctx.fillRect(0, 0, w, halfH);
     }
+    if (_dpm) _dpm.end('Raycaster.skybox');
 
     // ── Floor: textured floor casting or gradient fallback ──
     var floorTexId = _contract ? SpatialContract.getFloorTexture(_contract) : null;
@@ -726,6 +532,7 @@ var Raycaster = (function () {
       if (tileFloorTexArr.length === 0) tileFloorTexArr = null;
     }
 
+    if (_dpm) _dpm.begin('Raycaster.floorCast');
     if (floorTex) {
       _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex,
                    fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr);
@@ -738,14 +545,17 @@ var Raycaster = (function () {
       ctx.fillStyle = fGrad;
       ctx.fillRect(0, halfH, w, h - halfH);
     }
+    if (_dpm) _dpm.end('Raycaster.floorCast');
 
     // ── Parallax layers (behind walls, above floor gradient) ──
+    if (_dpm) _dpm.begin('Raycaster.parallax');
     if (_contract) {
       var parallax = SpatialContract.getParallax(_contract);
       if (parallax) {
         _renderParallax(ctx, w, h, halfH, parallax, player.dir);
       }
     }
+    if (_dpm) _dpm.end('Raycaster.parallax');
 
     // ── Cast rays ──
     var px = player.x + 0.5;
@@ -792,7 +602,20 @@ var Raycaster = (function () {
     // the player can peek between trunks — the whole point of doing
     // this. If you need them to visibly touch, raise toward 0.5.
     var _CIRCLE_R = 0.45;
+    // 'circle4' shape: 2×2 cluster of small pillars inside one tile.
+    // Sub-centers at (±_CIRCLE4_OFF, ±_CIRCLE4_OFF) from tile centre,
+    // each of radius _CIRCLE4_R. The 0.2/0.25 pair leaves a ~0.1 gap
+    // between adjacent sub-pillars (visible diagonal slits through the
+    // cluster) and ~0.05 gap to the cell edge (hidden behind neighbours).
+    var _CIRCLE4_R = 0.2;
+    var _CIRCLE4_OFF = 0.25;
 
+    // Wall phase encompasses DDA, column draw, freeform foreground,
+    // back-layer collection, and floating-lid rendering — they're
+    // interleaved inside the per-column loop so they can't be split
+    // without Phase 4's hotpath extraction. Gated as one coarse span.
+    if (_dpm) _dpm.begin('Raycaster.wallPhase');
+    if (_dpm) _dpm.count('Raycaster.wallPhase.columns', w);
     for (var col = 0; col < w; col++) {
       var cameraX = (2 * col / w) - 1;
       var rayAngle = pDir + Math.atan(cameraX * Math.tan(halfFov));
@@ -863,33 +686,52 @@ var Raycaster = (function () {
               // perpDist/wallX/side after the loop.
               var _shape = (_contract && SpatialContract.getTileShape)
                 ? SpatialContract.getTileShape(_contract, tile) : null;
-              if (_shape === 'circle') {
-                var _cX = mapX + 0.5;
-                var _cY = mapY + 0.5;
-                var _bX = px - _cX;
-                var _bY = py - _cY;
-                var _B = _bX * rayDirX + _bY * rayDirY;
-                var _C = _bX * _bX + _bY * _bY - _CIRCLE_R * _CIRCLE_R;
-                var _disc = _B * _B - _C;
-                if (_disc >= 0) {
-                  var _sqrtD = Math.sqrt(_disc);
-                  var _t = -_B - _sqrtD;
-                  if (_t > 0) {
-                    var _hX = px + _t * rayDirX;
-                    var _hY = py + _t * rayDirY;
-                    // Clamp acceptance to this tile's footprint — the
-                    // ray may graze a neighbouring circle on its way
-                    // through, but the DDA will visit that neighbour
-                    // on its own step. Treat out-of-tile hits as a
-                    // miss here so cells can't steal each other's
-                    // contributions.
-                    if (Math.floor(_hX) === mapX && Math.floor(_hY) === mapY) {
-                      hit = true; hitTile = tile;
-                      _circleHit = true;
-                      _circleHX = _hX; _circleHY = _hY;
-                      _circleCX = _cX; _circleCY = _cY;
-                    }
+              if (_shape === 'circle' || _shape === 'circle4') {
+                // Single-circle vs 2×2 cluster. For 'circle4' we solve
+                // four sub-circles and keep the nearest hit; for 'circle'
+                // we solve one inscribed circle at tile centre. Shared
+                // math below; the loop count + sub-centre layout is the
+                // only difference.
+                var _isQuad = (_shape === 'circle4');
+                var _nSubs  = _isQuad ? 4 : 1;
+                var _subR   = _isQuad ? _CIRCLE4_R : _CIRCLE_R;
+                var _bestT  = Infinity;
+                var _bestHX = 0, _bestHY = 0, _bestCX = 0, _bestCY = 0;
+                for (var _si = 0; _si < _nSubs; _si++) {
+                  var _cX, _cY;
+                  if (_isQuad) {
+                    _cX = mapX + ((_si & 1) ? (0.5 + _CIRCLE4_OFF) : (0.5 - _CIRCLE4_OFF));
+                    _cY = mapY + ((_si & 2) ? (0.5 + _CIRCLE4_OFF) : (0.5 - _CIRCLE4_OFF));
+                  } else {
+                    _cX = mapX + 0.5;
+                    _cY = mapY + 0.5;
                   }
+                  var _bX = px - _cX;
+                  var _bY = py - _cY;
+                  var _B = _bX * rayDirX + _bY * rayDirY;
+                  var _C = _bX * _bX + _bY * _bY - _subR * _subR;
+                  var _disc = _B * _B - _C;
+                  if (_disc < 0) continue;
+                  var _t = -_B - Math.sqrt(_disc);
+                  if (_t <= 0 || _t >= _bestT) continue;
+                  var _hX = px + _t * rayDirX;
+                  var _hY = py + _t * rayDirY;
+                  // Clamp acceptance to this tile's footprint — the
+                  // ray may graze a neighbouring circle on its way
+                  // through, but the DDA will visit that neighbour
+                  // on its own step. Treat out-of-tile hits as a
+                  // miss here so cells can't steal each other's
+                  // contributions.
+                  if (Math.floor(_hX) !== mapX || Math.floor(_hY) !== mapY) continue;
+                  _bestT  = _t;
+                  _bestHX = _hX; _bestHY = _hY;
+                  _bestCX = _cX; _bestCY = _cY;
+                }
+                if (_bestT !== Infinity) {
+                  hit = true; hitTile = tile;
+                  _circleHit = true;
+                  _circleHX = _bestHX; _circleHY = _bestHY;
+                  _circleCX = _bestCX; _circleCY = _bestCY;
                 }
                 // else: miss — DDA continues
               } else {
@@ -897,6 +739,14 @@ var Raycaster = (function () {
               }
             }
           } else if (TILES.isDoor(tile)) {
+            hit = true; hitTile = tile;
+          } else if (TILES.isStep && TILES.isStep(tile)) {
+            // Walkable raised-step tiles (STOOP, DECK). Not opaque, not
+            // a door — the DDA would normally skip them, leaving only
+            // the floor-texture override visible. Treat as a ray hit so
+            // drawWallSlice runs with the contract's short wallHeight
+            // (0.08×) + positive heightOffset (+0.10), producing the
+            // thin lip silhouette that reads as a raised platform.
             hit = true; hitTile = tile;
           }
         }
@@ -916,6 +766,13 @@ var Raycaster = (function () {
         _layerBuf[0].my = mapY;
         _layerBuf[0].sd = side;
         _layerBuf[0].tile = hitTile;
+        _layerBuf[0].isCircle = _circleHit;
+        if (_circleHit) {
+          _layerBuf[0].hx = _circleHX;
+          _layerBuf[0].hy = _circleHY;
+          _layerBuf[0].cx = _circleCX;
+          _layerBuf[0].cy = _circleCY;
+        }
         _lc = 1;
 
         // Track tallest TOP EDGE seen in world-space altitude — only
@@ -1086,6 +943,59 @@ var Raycaster = (function () {
               !_crenelFaceVisible(_cMX, _cMY, _cSd)) {
             _cTSolid = false;
           }
+          // Round-tile back-layer hit test. Same contract as the
+          // front-hit DDA: circle tiles occlude only where the ray
+          // actually intersects the inscribed circle; corner gaps
+          // are see-through. Without this, a tree trunk behind a
+          // shrub (or below a canopy ring) would render as a square
+          // back layer because _renderBackLayer assumes axis-aligned
+          // bounds for perpDist / wallX. We stash the circle hit
+          // here and flag the layer entry so the renderer picks the
+          // circle path.
+          var _cbCircleHit = false;
+          var _cbHX = 0, _cbHY = 0, _cbCX = 0, _cbCY = 0;
+          if (_cTSolid) {
+            var _cbShape = (_contract && SpatialContract.getTileShape)
+              ? SpatialContract.getTileShape(_contract, _cT) : null;
+            if (_cbShape === 'circle' || _cbShape === 'circle4') {
+              // Same single-vs-quad dispatch as the front-hit path.
+              var _cbIsQuad = (_cbShape === 'circle4');
+              var _cbNSubs  = _cbIsQuad ? 4 : 1;
+              var _cbSubR   = _cbIsQuad ? _CIRCLE4_R : _CIRCLE_R;
+              var _cbBestT  = Infinity;
+              var _cbAccept = false;
+              for (var _cbSi = 0; _cbSi < _cbNSubs; _cbSi++) {
+                var _cbCx, _cbCy;
+                if (_cbIsQuad) {
+                  _cbCx = _cMX + ((_cbSi & 1) ? (0.5 + _CIRCLE4_OFF) : (0.5 - _CIRCLE4_OFF));
+                  _cbCy = _cMY + ((_cbSi & 2) ? (0.5 + _CIRCLE4_OFF) : (0.5 - _CIRCLE4_OFF));
+                } else {
+                  _cbCx = _cMX + 0.5;
+                  _cbCy = _cMY + 0.5;
+                }
+                var _cbBx = px - _cbCx;
+                var _cbBy = py - _cbCy;
+                var _cbB  = _cbBx * rayDirX + _cbBy * rayDirY;
+                var _cbC  = _cbBx * _cbBx + _cbBy * _cbBy - _cbSubR * _cbSubR;
+                var _cbDisc = _cbB * _cbB - _cbC;
+                if (_cbDisc < 0) continue;
+                var _cbT = -_cbB - Math.sqrt(_cbDisc);
+                if (_cbT <= 0 || _cbT >= _cbBestT) continue;
+                var _cbX = px + _cbT * rayDirX;
+                var _cbY = py + _cbT * rayDirY;
+                if (Math.floor(_cbX) !== _cMX || Math.floor(_cbY) !== _cMY) continue;
+                _cbBestT = _cbT;
+                _cbAccept = true;
+                _cbCircleHit = true;
+                _cbHX = _cbX; _cbHY = _cbY;
+                _cbCX = _cbCx; _cbCY = _cbCy;
+              }
+              // Miss — treat as non-solid so the back-layer collector
+              // walks past the cell and keeps looking for farther
+              // geometry through the corner gap.
+              if (!_cbAccept) _cTSolid = false;
+            }
+          }
 
           // Inject back-face for short walls on first step past the tile.
           // Bounds-checked above — back-face coordinates are always in-grid.
@@ -1107,6 +1017,11 @@ var Raycaster = (function () {
               _layerBuf[_lc].my = _cMY;
               _layerBuf[_lc].sd = _cSd;
               _layerBuf[_lc].tile = hitTile;
+              // Back-face injections are always square silhouettes —
+              // the mirrored face of the foreground tile. Circle tiles
+              // don't inject a back face (they're not in _needBackFace
+              // list), so the flag below is defensively cleared.
+              _layerBuf[_lc].isCircle = false;
               _lc++;
             }
             _needBackFace = false;
@@ -1132,8 +1047,25 @@ var Raycaster = (function () {
             if (_cTop > _maxTop) {
               _layerBuf[_lc].mx = _cMX;
               _layerBuf[_lc].my = _cMY;
-              _layerBuf[_lc].sd = _cSd;
+              // For circle hits, derive sd from hit-point normal so
+              // shading/tinting picks the same E/W vs N/S branch as
+              // the foreground circle path. Square hits keep the
+              // DDA's _cSd (which axis we stepped through).
+              if (_cbCircleHit) {
+                var _cbNdX = _cbHX - _cbCX;
+                var _cbNdY = _cbHY - _cbCY;
+                _layerBuf[_lc].sd = (Math.abs(_cbNdX) > Math.abs(_cbNdY)) ? 0 : 1;
+              } else {
+                _layerBuf[_lc].sd = _cSd;
+              }
               _layerBuf[_lc].tile = _cT;
+              _layerBuf[_lc].isCircle = _cbCircleHit;
+              if (_cbCircleHit) {
+                _layerBuf[_lc].hx = _cbHX;
+                _layerBuf[_lc].hy = _cbHY;
+                _layerBuf[_lc].cx = _cbCX;
+                _layerBuf[_lc].cy = _cbCY;
+              }
               _lc++;
               // Ground-anchored tiles cover altitude [0, _cTop] fully,
               // so they raise the occlusion threshold and can terminate
@@ -1586,7 +1518,8 @@ var Raycaster = (function () {
             ctx, col, _layerBuf[_li], h, halfH, baseWallH,
             px, py, rayDirX, rayDirY, stepX, stepY,
             renderDist, fogDist, fogColor, lightMap,
-            tintStr, tintIdx, tintRGB
+            tintStr, tintIdx, tintRGB,
+            _pdCos, _pdSin
           );
         }
       }
@@ -1916,7 +1849,25 @@ var Raycaster = (function () {
           var stepTop = drawEnd + 1;
           var stepBot = Math.min(h, flatBottom);
           if (stepBot > stepTop) {
-            ctx.fillRect(col, stepTop, 1, stepBot - stepTop);
+            // Thin-slab furniture (TABLE/BED) uses a TRANSLUCENT shadow
+            // overlay here instead of the opaque texture-sampled band
+            // the stoop/deck use. The floor texture has already been
+            // drawn in the floor pass; an rgba fill darkens it without
+            // replacing it, so the under-table region reads as "floor
+            // in shadow" rather than as a separate colored kickplate.
+            // This is the look the user described as the "bed's
+            // transparent step-fill method" — the shadow is a tint,
+            // not a band.
+            if (TILES.hasFlatTopCap && TILES.hasFlatTopCap(hitTile) &&
+                hitTile !== TILES.STOOP && hitTile !== TILES.DECK) {
+              // Alpha scales gently with brightness so far-away shadows
+              // fade into fog like everything else.
+              var _skA = Math.min(0.55, 0.40 * brightness);
+              ctx.fillStyle = 'rgba(0,0,0,' + _skA.toFixed(3) + ')';
+              ctx.fillRect(col, stepTop, 1, stepBot - stepTop);
+            } else {
+              ctx.fillRect(col, stepTop, 1, stepBot - stepTop);
+            }
           }
         } else {
           // Sunken tile: lip visible ABOVE the wall.
@@ -2037,9 +1988,126 @@ var Raycaster = (function () {
       // correct at all distances. The cap color is sampled from the
       // wall texture's top-edge pixels at reduced brightness (reads as
       // a lit horizontal surface vs the vertical wall face).
+      // ── STOOP/DECK top-surface cap (per-row floor projection) ───────
+      // Step tiles have a horizontal TOP plane at world height
+      // topElev = heightOffset + wallHeightMult/2. Previous attempts
+      // filled the cap region with a single fillRect sampled by wallX
+      // (the 1D U-coordinate along the hit face), which produced
+      // vertical-stripe artifacts because wallX doesn't parametrise a
+      // horizontal surface. The correct approach mirrors RaycasterFloor:
+      // for each screen row between the horizon and drawStart, compute
+      // the rowDist that maps that row to the elevated plane, project
+      // into world (floorX, floorY), test whether that world point is
+      // still inside a step tile, and sample the tile's floor texture
+      // at those coordinates.
+      //
+      // Eye is at world height baseWallH/2 (the centre of a standard
+      // wall). Vertical drop from eye to the top plane is
+      //   eyeAbove = baseWallH/2 - topElev
+      // so the floor-projection formula becomes
+      //   rowDist = trueHalfH * (baseWallH - 2*topElev) / rowFromCenter.
+      // For STOOP (topElev = 0.06) this is slightly beyond the regular
+      // floor's rowDist for the same row — the near face of the lip
+      // occludes the cap's foreground edge, so only rows between
+      // halfH (horizon) and drawStart receive a paint.
+      if (TILES.hasFlatTopCap && TILES.hasFlatTopCap(hitTile) && drawStart > halfH) {
+        // Top of the slab in world Y: walls are anchored at the floor
+        // plane and extend UP by wallHeightMult, then shifted UP by
+        // heightOffset. So the top plane sits at (heightOffset +
+        // wallHeightMult) world units.
+        var _capTopElev = heightOffset + wallHeightMult;
+        var _capEyeScale = baseWallH - 2 * _capTopElev;
+        if (_capEyeScale > 0.01) {
+          var _capTrueHalf = h / 2;
+          var _capRowStart = Math.floor(halfH) + 1;
+          var _capRowEnd = Math.min(drawStart - 1, h - 1);
+          // Fog band parameters (match RaycasterFloor formula).
+          var _capFogStart = fogDist * 0.5;
+          var _capFogRange = (fogDist * 1.5) - _capFogStart;
+          // Cap texture lookup: prefer tileFloorTextures (flagstone for
+          // STOOP, boardwalk for DECK, a dedicated tabletop texture for
+          // TABLE/BED). If no entry is registered, fall back to the
+          // wall texture (`tex`) already used for the face — the top
+          // reads as the same material as the apron, which is the
+          // right default for furniture where side and top are the
+          // same board of wood.
+          var _capTex = null;
+          if (typeof TextureAtlas !== 'undefined' && TextureAtlas.get) {
+            var _capTexId = _contract && _contract.tileFloorTextures
+              ? _contract.tileFloorTextures[hitTile] : null;
+            if (_capTexId) _capTex = TextureAtlas.get(_capTexId);
+          }
+          if (!_capTex && tex && tex.data) _capTex = tex;
+          if (_capTex && _capTex.data) {
+            var _capTW = _capTex.width;
+            var _capTH = _capTex.height;
+            var _capTD = _capTex.data;
+            // Per-tile cap texture scale. We sample the texture in world
+            // coords (floorX * texW mod texW) — dividing the world coord
+            // by a scale factor stretches the texture across more world
+            // units per repeat. TABLE stretches the wood planks so they
+            // read larger than the floor's planks (2× width, 2.5× length
+            // grain direction); BED stretches the quilt a touch. Others
+            // (STOOP, DECK) sample 1:1.
+            var _capScaleX = 1.0, _capScaleY = 1.0;
+            if (hitTile === TILES.TABLE) { _capScaleX = 2.0; _capScaleY = 2.5; }
+            else if (hitTile === TILES.BED) { _capScaleX = 1.5; _capScaleY = 1.5; }
+            for (var _capRow = _capRowStart; _capRow <= _capRowEnd; _capRow++) {
+              var _capRowFromCenter = _capRow - halfH;
+              if (_capRowFromCenter < 0.5) continue;
+              var _capRowDist = (_capTrueHalf * _capEyeScale) / _capRowFromCenter;
+              // Stay in front of the near-face hit — past the back edge
+              // of the slab we have no footprint to paint.
+              if (_capRowDist < perpDist) continue;
+              // Project into world; skip if outside a step tile.
+              var _capWX = px + _capRowDist * rayDirX;
+              var _capWY = py + _capRowDist * rayDirY;
+              var _capTGX = Math.floor(_capWX);
+              var _capTGY = Math.floor(_capWY);
+              if (_capTGX < 0 || _capTGX >= gridW ||
+                  _capTGY < 0 || _capTGY >= gridH) continue;
+              var _capCellT = grid[_capTGY][_capTGX];
+              if (!(TILES.hasFlatTopCap && TILES.hasFlatTopCap(_capCellT))) continue;
+              // Tile-repeating texture sample. Dividing world coords by
+              // the per-tile scale stretches the texture (a scale of 2
+              // means the pattern period doubles in world units, so
+              // planks look twice as wide).
+              var _capTx = ((Math.floor(_capWX * _capTW / _capScaleX) % _capTW) + _capTW) % _capTW;
+              var _capTy = ((Math.floor(_capWY * _capTH / _capScaleY) % _capTH) + _capTH) % _capTH;
+              var _capIdx = (_capTy * _capTW + _capTx) * 4;
+              var _capR = _capTD[_capIdx];
+              var _capG = _capTD[_capIdx + 1];
+              var _capB = _capTD[_capIdx + 2];
+              // Distance-lit (same curve as RaycasterFloor) — horizontal
+              // surfaces catch a bit more overhead light, so lift the
+              // floor formula's 0.04 falloff slightly.
+              var _capBright = Math.max(0.30, 1 - _capRowDist * 0.035);
+              _capR = _capR * _capBright;
+              _capG = _capG * _capBright;
+              _capB = _capB * _capBright;
+              // Fog (row-based, matching floor).
+              if (_capRowDist > _capFogStart) {
+                var _capFog = Math.min(1, (_capRowDist - _capFogStart) / _capFogRange);
+                var _capInv = 1 - _capFog;
+                _capR = _capR * _capInv + fogColor.r * _capFog;
+                _capG = _capG * _capInv + fogColor.g * _capFog;
+                _capB = _capB * _capInv + fogColor.b * _capFog;
+              }
+              ctx.fillStyle = 'rgb(' + (_capR | 0) + ',' + (_capG | 0) + ',' + (_capB | 0) + ')';
+              ctx.fillRect(col, _capRow, 1, 1);
+            }
+          }
+        }
+      }
+
       if (wallHeightMult < 0.95 && wallHeightMult > 0.25 && drawStart > halfH) {
-        var _isCapTile = (hitTile === TILES.TABLE || hitTile === TILES.BED ||
-                          hitTile === TILES.CHEST || hitTile === TILES.BAR_COUNTER);
+        // NOTE: TABLE and BED were removed from this wallX-sampled cap
+        // path and now render their tops via the floor-projected cap
+        // above (TILES.hasFlatTopCap). That path avoids the 1D U
+        // striping artifact and correctly presents the tabletop as a
+        // horizontal plane. Only CHEST and BAR_COUNTER — which are
+        // fat cubes, not thin slabs — still use the cheap wallX cap.
+        var _isCapTile = (hitTile === TILES.CHEST || hitTile === TILES.BAR_COUNTER);
         if (_isCapTile) {
           var capTop = Math.max(0, halfH);
           var capBot = Math.min(drawStart, h);
@@ -2113,6 +2181,8 @@ var Raycaster = (function () {
       try { console.log('[RC-DBG] ===== END FRAME ====='); } catch (_) {}
     }
 
+    if (_dpm) _dpm.end('Raycaster.wallPhase');
+
     // ── Sprite + weather-veil sandwich ──────────────────────────
     // Weather overlays (veil gradient, parallax debris layers) sit
     // between a distant and near sprite pass. Sprites closer than
@@ -2133,28 +2203,34 @@ var Raycaster = (function () {
     // no tiles behind them" artifact at the very edge of view.
     // 0.92 is empirically just inside the back-layer perpDist cap.
     var _spriteRenderDist = renderDist * 0.92;
+    if (_dpm) _dpm.begin('Raycaster.spritesDistant');
     if (sprites && sprites.length > 0) {
       _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, _spriteRenderDist, fogDist, fogColor, terminusDist, null);
     }
+    if (_dpm) _dpm.end('Raycaster.spritesDistant');
 
     // ── Weather layer insertion point ─────────────────────────────
     // When WeatherSystem is loaded (Phase 1+), it renders the veil,
     // lower parallax (rolling debris), and upper parallax (wind
     // streaks) here — between distant and near sprite passes.
     // Fallback: the legacy terminus fog veil for exterior FADE floors.
+    if (_dpm) _dpm.begin('Raycaster.weather');
     if (typeof WeatherSystem !== 'undefined' && WeatherSystem.renderBelow) {
       WeatherSystem.renderBelow(ctx, w, h, halfH, fogColor);
     } else {
       _renderWeatherVeil(ctx, w, h, halfH, fogColor);
     }
+    if (_dpm) _dpm.end('Raycaster.weather');
 
     // Near sprite pass — punches through the weather so close NPCs
     // and props are never painted into the horizon band. Near sprites
     // are always within terminusDist tiles of the player, so they're
     // inside the tile backdrop and don't need the _spriteRenderDist bias.
+    if (_dpm) _dpm.begin('Raycaster.spritesNear');
     if (sprites && sprites.length > 0) {
       _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, 0, terminusDist);
     }
+    if (_dpm) _dpm.end('Raycaster.spritesNear');
 
     // ── Render particles (above sprites, below HUD) ──
     // dt is estimated from frame timing since render() doesn't receive it.
@@ -2162,9 +2238,11 @@ var Raycaster = (function () {
     var now = Date.now();
     var pDt = now - (_lastParticleTime || now);
     _lastParticleTime = now;
+    if (_dpm) _dpm.begin('Raycaster.particles');
     if (pDt > 0 && pDt < 100) {
       _updateAndRenderParticles(ctx, pDt);
     }
+    if (_dpm) _dpm.end('Raycaster.particles');
 
     // ── Blit offscreen 3D viewport → main canvas ───────────────────
     // The raycaster drew everything above into `_offCanvas` at the
@@ -2175,27 +2253,18 @@ var Raycaster = (function () {
     // Any ctx transform already applied to _mainCtx (e.g. CombatFX
     // zoom set up by game.js before calling render) is respected by
     // drawImage.
+    if (_dpm) _dpm.begin('Raycaster.blit');
     if (_mainCtx && _offCanvas && _canvas) {
       _mainCtx.drawImage(_offCanvas, 0, 0, _canvas.width, _canvas.height);
     }
+    if (_dpm) _dpm.end('Raycaster.blit');
   }
 
   var _lastParticleTime = 0;
 
   // ── Parallax background layers ──
-  function _renderParallax(ctx, w, h, halfH, layers, playerDir) {
-    for (var i = 0; i < layers.length; i++) {
-      var layer = layers[i];
-      // Depth determines vertical position (closer to horizon = deeper)
-      var bandY = Math.floor(halfH * (1 - layer.height * layer.depth));
-      var bandH = Math.max(2, Math.floor(h * layer.height * 0.5));
+  // _renderParallax moved to engine/raycaster-floor.js (EX-4)
 
-      // Horizontal offset from player facing (subtle parallax scroll)
-      // This makes layers feel "behind" the geometry
-      ctx.fillStyle = layer.color;
-      ctx.fillRect(0, bandY, w, bandH);
-    }
-  }
 
   // ── Terminus fog veil (legacy fallback) ──────────────────────────
   // Draws a soft atmospheric gradient band centered on the horizon to
@@ -2203,30 +2272,8 @@ var Raycaster = (function () {
   // Only active on exterior FADE floors when WeatherSystem is not loaded.
   // When WeatherSystem is present, it takes over this slot entirely via
   // renderBelow() and may draw additional parallax sprite layers.
-  function _renderWeatherVeil(ctx, w, h, halfH, fogColor) {
-    if (!_contract || _contract.fogModel !== 'fade' || !_contract.terminusFog) return;
-    var tf = _contract.terminusFog;
-    var tfOpacity = tf.opacity || 0;
-    if (tfOpacity <= 0.01) return;
+  // _renderWeatherVeil moved to engine/raycaster-floor.js (EX-4)
 
-    var veilH = Math.floor(h * (tf.height || 0.15));
-    var veilTop = Math.max(0, Math.floor(halfH) - veilH);
-    var veilBot = Math.min(h, Math.floor(halfH) + veilH);
-    var veilTotalH = veilBot - veilTop;
-    if (veilTotalH <= 4) return;
-
-    var r = fogColor.r, g = fogColor.g, b = fogColor.b;
-    var mid = tfOpacity.toFixed(3);
-    var side = (tfOpacity * 0.6).toFixed(3);
-    var veilGrad = ctx.createLinearGradient(0, veilTop, 0, veilBot);
-    veilGrad.addColorStop(0,    'rgba(' + r + ',' + g + ',' + b + ',0)');
-    veilGrad.addColorStop(0.35, 'rgba(' + r + ',' + g + ',' + b + ',' + side + ')');
-    veilGrad.addColorStop(0.5,  'rgba(' + r + ',' + g + ',' + b + ',' + mid + ')');
-    veilGrad.addColorStop(0.65, 'rgba(' + r + ',' + g + ',' + b + ',' + side + ')');
-    veilGrad.addColorStop(1,    'rgba(' + r + ',' + g + ',' + b + ',0)');
-    ctx.fillStyle = veilGrad;
-    ctx.fillRect(0, veilTop, w, veilTotalH);
-  }
 
   // ── Tiled texture column renderer ──────────────────────────────
   // Draws a single textured wall column with vertical tiling for WALL
@@ -2511,337 +2558,20 @@ var Raycaster = (function () {
     }
   }
 
-  function _drawTiledColumn(ctx, tex, texX, wallTop, lineH, drawStart, drawEnd, col, whMult, tileType) {
-    var stripH = drawEnd - drawStart + 1;
-    if (stripH <= 0 || lineH <= 0) return;
+  // _drawTiledColumn moved to engine/raycaster-walls.js (EX-5)
 
-    // Only WALL tiles tile their texture (bricks repeat on tall facades).
-    // Doors, trees, pillars, concrete etc. stretch — their textures are
-    // authored for the full height. Also stretch at or below 1.0×.
-    var shouldTile = (tileType === TILES.WALL) && (whMult > 1.001);
-
-    if (!shouldTile) {
-      var srcY = (drawStart - wallTop) / lineH * tex.height;
-      var srcH = stripH / lineH * tex.height;
-      if (srcY < 0) { srcH += srcY; srcY = 0; }
-      if (srcY + srcH > tex.height) srcH = tex.height - srcY;
-      if (srcH < 0.5) srcH = 0.5;
-      ctx.drawImage(tex.canvas, texX, srcY, 1, srcH, col, drawStart, 1, stripH);
-      return;
-    }
-
-    // Above 1.0×: tile the texture vertically. Each repeat occupies
-    // (lineH / whMult) screen pixels — the height of a 1.0× wall at
-    // this distance. The wall contains ceil(whMult) full or partial tiles.
-    var tilePixH = lineH / whMult;          // screen pixels per texture repeat
-    var numTiles = Math.ceil(whMult);        // number of tile segments
-
-    for (var t = 0; t < numTiles; t++) {
-      var segWallTop = wallTop + t * tilePixH;
-      var segWallBot = wallTop + (t + 1) * tilePixH;
-
-      // Last tile may be partial (e.g. 0.5 of a tile for 3.5×)
-      if (t === numTiles - 1 && whMult % 1 > 0.001) {
-        segWallBot = wallTop + lineH;  // align to actual wall bottom
-      }
-
-      // Clamp to visible region
-      var segStart = Math.max(drawStart, Math.floor(segWallTop));
-      var segEnd   = Math.min(drawEnd,   Math.ceil(segWallBot) - 1);
-      if (segStart > segEnd) continue;
-
-      var segH = segEnd - segStart + 1;
-      var localTileH = segWallBot - segWallTop;
-      if (localTileH < 1) localTileH = 1;
-
-      // Source UV within this single texture tile
-      var sY = (segStart - segWallTop) / localTileH * tex.height;
-      var sH = segH / localTileH * tex.height;
-      if (sY < 0) { sH += sY; sY = 0; }
-      if (sY + sH > tex.height) sH = tex.height - sY;
-      if (sH < 0.5) sH = 0.5;
-
-      ctx.drawImage(tex.canvas, texX, sY, 1, sH, col, segStart, 1, segH);
-    }
-  }
 
   // ── Per-pixel wall column renderer (PW-1 grime hook) ─────────
   // Reads texture data directly and writes via ImageData, enabling
   // per-pixel grime tinting. Only used for wall columns that have a
   // GrimeGrid — clean columns keep the fast ctx.drawImage path above.
   //
-  // Pre-allocated 1-pixel-wide column buffer (shared across calls).
-  var _wallColImgData = null;
-  var _wallColBuf = null;   // Uint8ClampedArray alias for _wallColImgData.data
-  var _wallColBufH = 0;     // allocated height
+  // _drawTiledColumnPixel moved to engine/raycaster-walls.js (EX-5)
 
-  // Grime tint target color (brownish-green, PW-1 §5.3)
-  var _GRIME_R = 82, _GRIME_G = 68, _GRIME_B = 46;
-
-  /**
-   * Per-pixel wall column renderer with grime tint.
-   *
-   * Replicates _drawTiledColumn logic but samples texture pixels manually
-   * so grime can be composited per-pixel. The grime grid is a Uint8Array
-   * of resolution×resolution subcells — the wallU selects the horizontal
-   * subcell and the vertical V within the column selects the vertical one.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {Object} tex         - TextureAtlas entry { canvas, width, height, data }
-   * @param {number} texX        - Source texture column (integer pixel index)
-   * @param {number} wallTop     - Unshifted top pixel of the full wall strip
-   * @param {number} lineH       - Total wall height in pixels
-   * @param {number} drawStart   - Visible top pixel (clamped to screen)
-   * @param {number} drawEnd     - Visible bottom pixel (clamped to screen)
-   * @param {number} col         - Screen column X
-   * @param {number} whMult      - Wall height multiplier (tileWallHeights)
-   * @param {number} tileType    - TILES constant
-   * @param {Object} grimeGrid   - { data: Uint8Array, res: number } or null
-   * @param {number} wallU       - UV coordinate along wall face (0..1)
-   */
-  function _drawTiledColumnPixel(ctx, tex, texX, wallTop, lineH,
-                                  drawStart, drawEnd, col, whMult, tileType,
-                                  grimeGrid, wallU) {
-    var stripH = drawEnd - drawStart + 1;
-    if (stripH <= 0 || lineH <= 0) return;
-
-    // Lazy-init / grow the shared column buffer
-    if (!_wallColImgData || _wallColBufH < _height) {
-      _wallColImgData = ctx.createImageData(1, _height);
-      _wallColBuf = _wallColImgData.data;
-      _wallColBufH = _height;
-    }
-
-    var shouldTile = (tileType === TILES.WALL) && (whMult > 1.001);
-    var texData = tex.data;
-    var texW = tex.width;
-    var texH = tex.height;
-
-    // Grime subcell X is constant for the entire column (same U)
-    var grimeRes = grimeGrid ? grimeGrid.res : 0;
-    var grimeData = grimeGrid ? grimeGrid.data : null;
-    var grimeSubX = 0;
-    if (grimeGrid) {
-      grimeSubX = Math.floor(wallU * grimeRes);
-      if (grimeSubX >= grimeRes) grimeSubX = grimeRes - 1;
-    }
-
-    for (var py = 0; py < stripH; py++) {
-      var screenY = drawStart + py;
-
-      // Compute V coordinate within the wall (0..1)
-      var v;
-      if (!shouldTile) {
-        v = (screenY - wallTop) / lineH;
-      } else {
-        // Tiled walls: V wraps per tile repeat
-        var globalV = (screenY - wallTop) / lineH * whMult;
-        v = globalV - Math.floor(globalV);
-      }
-
-      // Sample source texel
-      var srcY = Math.floor(v * texH);
-      if (srcY < 0) srcY = 0;
-      if (srcY >= texH) srcY = texH - 1;
-      var srcIdx = (srcY * texW + texX) * 4;
-      var r = texData[srcIdx];
-      var g = texData[srcIdx + 1];
-      var b = texData[srcIdx + 2];
-      var a = texData[srcIdx + 3];
-
-      // ── GrimeGrid tint (PW-1 §5.3) ──
-      // Subcell lookup: grimeSubX is column-constant, subY varies per pixel.
-      if (grimeData) {
-        var grimeSubY = Math.floor(v * grimeRes);
-        if (grimeSubY >= grimeRes) grimeSubY = grimeRes - 1;
-        var grime = grimeData[grimeSubY * grimeRes + grimeSubX];
-        if (grime > 0) {
-          var ga = (grime / 255) * 0.6;  // max 60% opacity
-          r = r * (1 - ga) + _GRIME_R * ga;
-          g = g * (1 - ga) + _GRIME_G * ga;
-          b = b * (1 - ga) + _GRIME_B * ga;
-        }
-      }
-
-      var bufIdx = py * 4;
-      _wallColBuf[bufIdx]     = r;
-      _wallColBuf[bufIdx + 1] = g;
-      _wallColBuf[bufIdx + 2] = b;
-      _wallColBuf[bufIdx + 3] = a;
-    }
-
-    ctx.putImageData(_wallColImgData, col, drawStart, 0, 0, 1, stripH);
-  }
 
   // ── Wall decor rendering ──────────────────────────────────────
-  // Draws small alpha-transparent sprites pinned to wall faces.
-  // Called after the wall texture and before fog/brightness overlays
-  // so that all post-processing applies uniformly to both wall and decor.
-
-  /**
-   * Determine which wall face was hit.
-   * @param {number} sd - DDA side (0=vertical grid line, 1=horizontal)
-   * @param {number} stX - Step direction X (+1 or -1)
-   * @param {number} stY - Step direction Y (+1 or -1)
-   * @returns {string} Face key: 'n', 's', 'e', 'w'
-   */
-  /**
-   * Parse a glow color string into 'r,g,b' for use in rgba() construction.
-   * Accepts '#rrggbb' hex, 'rgba(r,g,b,a)', or 'rgb(r,g,b)'.
-   * Returns '255,255,255' as fallback.
-   */
-  function _parseGlowRGB(color) {
-    if (!color) return '255,255,255';
-    if (color.charAt(0) === '#') {
-      var hex = color.length === 4
-        ? color.charAt(1) + color.charAt(1) + color.charAt(2) + color.charAt(2) + color.charAt(3) + color.charAt(3)
-        : color.substring(1);
-      return parseInt(hex.substring(0, 2), 16) + ',' +
-             parseInt(hex.substring(2, 4), 16) + ',' +
-             parseInt(hex.substring(4, 6), 16);
-    }
-    var m = color.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-    if (m) return m[1] + ',' + m[2] + ',' + m[3];
-    return '255,255,255';
-  }
-
-  function _hitFace(sd, stX, stY) {
-    // side 0 (vertical line): ray going right (+X) hits the WEST face;
-    //                          ray going left (-X) hits the EAST face
-    // side 1 (horizontal line): ray going south (+Y) hits the NORTH face;
-    //                            ray going north (-Y) hits the SOUTH face
-    if (sd === 0) return stX > 0 ? 'w' : 'e';
-    return stY > 0 ? 'n' : 's';
-  }
-
-  /**
-   * Render wall decor sprites for one column at a specific grid cell/face.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} col - Screen column
-   * @param {number} wallX - UV coordinate along the wall face (0..1)
-   * @param {number} drawStart - Top pixel of the wall strip (clamped to screen)
-   * @param {number} drawEnd - Bottom pixel of the wall strip (clamped to screen)
-   * @param {number} lineHeight - Full height of the wall in pixels (may exceed screen)
-   * @param {number} wallTop - UNCLAMPED top pixel of the full wall strip
-   * @param {number} mapX - Grid X of hit cell
-   * @param {number} mapY - Grid Y of hit cell
-   * @param {number} sd - DDA side
-   * @param {number} stX - Step X
-   * @param {number} stY - Step Y
-   */
-  function _renderWallDecor(ctx, col, wallX, drawStart, drawEnd, lineHeight,
-                            wallTop, mapX, mapY, sd, stX, stY) {
-    if (!_wallDecor) return;
-    var row = _wallDecor[mapY];
-    if (!row) return;
-    var cell = row[mapX];
-    if (!cell) return;
-
-    var face = _hitFace(sd, stX, stY);
-    var items = cell[face];
-    if (!items || items.length === 0) return;
-
-    if (drawEnd - drawStart < 0) return;
-
-    for (var di = 0; di < items.length; di++) {
-      var d = items[di];
-
-      // Skip items rendered in the step-fill cavity band (fire sprites
-      // for HEARTH/BONFIRE — already composited into the lip region)
-      if (d.cavityBand) continue;
-
-      var halfW = d.scale / 2;
-      var uMin = d.anchorU - halfW;
-      var uMax = d.anchorU + halfW;
-
-      // Check if this column falls within the sprite's horizontal span
-      if (wallX < uMin || wallX >= uMax) continue;
-
-      var tex = TextureAtlas.get(d.spriteId);
-      if (!tex) continue;
-
-      // Which column of the sprite to sample
-      var texCol = Math.floor((wallX - uMin) / d.scale * tex.width);
-      if (texCol < 0) texCol = 0;
-      if (texCol >= tex.width) texCol = tex.width - 1;
-
-      // Vertical placement: anchorV 0=bottom, 1=top of wall face
-      // Sprite aspect ratio preserved: vExtent = scale * (texH / texW)
-      var vExtent = d.scale * tex.height / tex.width;
-      var vCenter = d.anchorV;
-      // Wobble: slow vertical bobbing for fire-inside-wall sprites
-      if (d.wobble) {
-        vCenter += Math.sin(Date.now() * 0.003) * d.wobble;
-      }
-      var vMin = vCenter - vExtent / 2;
-      var vMax = vCenter + vExtent / 2;
-
-      // Map to screen pixels within the FULL (unclamped) wall strip.
-      // Using wallTop + lineHeight (not drawStart + stripH) so sprite
-      // position is stable regardless of screen clamping — fixes the
-      // "flag waving" warping artifact on peripheral walls.
-      // wallV 0=top of wall, 1=bottom → sprite vMin/vMax are 0=bottom, 1=top
-      var spriteTop = wallTop + (1 - vMax) * lineHeight;
-      var spriteBot = wallTop + (1 - vMin) * lineHeight;
-      var spriteH = spriteBot - spriteTop;
-      if (spriteH < 1) continue;
-
-      // Clamp to wall bounds
-      var dTop = Math.max(drawStart, Math.floor(spriteTop));
-      var dBot = Math.min(drawEnd, Math.floor(spriteBot) - 1);
-      if (dTop > dBot) continue;
-
-      // ── Cavity glow: radial-falloff colored glow behind the sprite ──
-      // Renders per-pixel alpha-faded glow before the sprite texture.
-      // Uses radial distance from glow center to produce soft orb-like
-      // light spill, not a flat disc. Makes fire openings (bonfires,
-      // hearths) and CRT screens look like they emit volumetric light
-      // from inside the short wall cavity.
-      if (d.cavityGlow) {
-        var cgR = d.glowR || 255;
-        var cgG = d.glowG || 120;
-        var cgB = d.glowB || 30;
-        var cgA = d.glowA || 0.3;
-        // Extend glow region beyond sprite bounds
-        var glowPad = Math.max(3, Math.floor((dBot - dTop) * 0.35));
-        var gTop = Math.max(drawStart, dTop - glowPad);
-        var gBot = Math.min(drawEnd, dBot + glowPad);
-        var gH = gBot - gTop + 1;
-        if (gH > 0) {
-          // Glow center in screen Y (sprite vertical center)
-          var gCY = (dTop + dBot) * 0.5;
-          // Glow center in screen X (sprite horizontal center)
-          var spriteCX = wallTop + (1 - d.anchorV) * lineHeight; // approximate
-          // Column offset from sprite U center → horizontal falloff
-          var uCenter = d.anchorU;
-          var uDist = Math.abs(wallX - uCenter) / (d.scale * 0.5 + 0.001);
-          uDist = Math.min(uDist, 1); // 0 at center, 1 at edge
-          // Per-pixel vertical render with radial falloff
-          for (var gp = gTop; gp <= gBot; gp++) {
-            var vDist = Math.abs(gp - gCY) / (glowPad + (dBot - dTop) * 0.5 + 0.001);
-            vDist = Math.min(vDist, 1);
-            // Radial distance from center (0=center, 1=edge)
-            var rDist = Math.sqrt(uDist * uDist + vDist * vDist);
-            if (rDist >= 1) continue;
-            // Smooth falloff: bright core, soft edge
-            var falloff = 1 - rDist * rDist; // quadratic falloff
-            var pixA = cgA * falloff;
-            if (pixA < 0.01) continue;
-            ctx.fillStyle = 'rgba(' + cgR + ',' + cgG + ',' + cgB + ',' + pixA.toFixed(3) + ')';
-            ctx.fillRect(col, gp, 1, 1);
-          }
-        }
-      }
-
-      // Source rect in sprite texture
-      var srcY = (dTop - spriteTop) / spriteH * tex.height;
-      var srcH = (dBot - dTop + 1) / spriteH * tex.height;
-      if (srcH < 0.5) srcH = 0.5;
-
-      ctx.drawImage(tex.canvas, texCol, srcY, 1, srcH, col, dTop, 1, dBot - dTop + 1);
-    }
-  }
+  // _renderWallDecor, _hitFace moved to engine/raycaster-walls.js (EX-5)
+  // and engine/raycaster-sprites.js (EX-6). Aliased at top of IIFE.
 
   // ── Floating-slab underside (opaque lid) ────────────────────────
   // Renders the slab's bottom horizontal face as an opaque fill,
@@ -2967,10 +2697,19 @@ var Raycaster = (function () {
   function _renderBackLayer(ctx, col, L, h, halfH, baseWallH,
                             px, py, rayDirX, rayDirY, stepX, stepY,
                             renderDist, fogDist, fogColor, lightMap,
-                            tintStr, tintIdx, tintRGB) {
-    // Perpendicular distance
+                            tintStr, tintIdx, tintRGB,
+                            pdCos, pdSin) {
+    // Perpendicular distance.
+    // Circle-shaped tiles (flagged during back-layer collection) use
+    // the stashed circle intersection point and project onto the
+    // player's forward vector — matching the foreground-hit path so a
+    // trunk behind a shrub / under a canopy renders with the same
+    // round silhouette and angle-wrapped texture as an unoccluded trunk.
     var pd;
-    if (L.sd === 0) {
+    if (L.isCircle) {
+      pd = (L.hx - px) * pdCos + (L.hy - py) * pdSin;
+      if (pd < 0) pd = 0;
+    } else if (L.sd === 0) {
       pd = (L.mx - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
     } else {
       pd = (L.my - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
@@ -3012,16 +2751,27 @@ var Raycaster = (function () {
       bri = lightMap[L.my][L.mx];
     }
 
-    // Wall UV
+    // Wall UV.
+    // Circle layers wrap the texture by hit-point angle around the
+    // trunk centre. Square layers use the standard axis-aligned UV
+    // derived from the ray's tile-crossing.
     var wx;
-    if (L.sd === 0) {
-      wx = py + pd * rayDirY;
+    if (L.isCircle) {
+      var _blDxC = L.hx - L.cx;
+      var _blDyC = L.hy - L.cy;
+      wx = (Math.atan2(_blDyC, _blDxC) + Math.PI) / (2 * Math.PI);
+      if (wx < 0) wx = 0;
+      if (wx >= 1) wx -= 1;
     } else {
-      wx = px + pd * rayDirX;
-    }
-    wx -= Math.floor(wx);
-    if ((L.sd === 0 && rayDirX > 0) || (L.sd === 1 && rayDirY < 0)) {
-      wx = 1 - wx;
+      if (L.sd === 0) {
+        wx = py + pd * rayDirY;
+      } else {
+        wx = px + pd * rayDirX;
+      }
+      wx -= Math.floor(wx);
+      if ((L.sd === 0 && rayDirX > 0) || (L.sd === 1 && rayDirY < 0)) {
+        wx = 1 - wx;
+      }
     }
 
     // ── Crenellated back-face tooth cutout ──────────────────────
@@ -3222,1492 +2972,75 @@ var Raycaster = (function () {
   // ── Floor casting — textured floor via ImageData ──
   // For each pixel below the horizon, computes the world floor position
   // and samples the floor texture. Uses a reusable ImageData buffer.
-  function _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr) {
-    var floorH = h - Math.floor(halfH);
-    if (floorH <= 0) return;
-
-    // Allocate / reuse ImageData buffer for floor region
-    if (_floorBufW !== w || _floorBufH !== floorH || !_floorImgData) {
-      _floorImgData = ctx.createImageData(w, floorH);
-      _floorBufW = w;
-      _floorBufH = floorH;
-    }
-
-    var buf = _floorImgData.data;
-    var px = player.x + 0.5;
-    var py = player.y + 0.5;
-    var pDir = player.dir;
-    var halfFov = fov / 2;
-
-    // Precompute direction vectors for left and right screen edges
-    var dirX = Math.cos(pDir);
-    var dirY = Math.sin(pDir);
-    var planeX = -Math.sin(pDir) * Math.tan(halfFov);
-    var planeY =  Math.cos(pDir) * Math.tan(halfFov);
-
-    var texW = floorTex.width;
-    var texH = floorTex.height;
-    var texData = floorTex.data;
-
-    var fr = fogColor ? fogColor.r : 0;
-    var fg = fogColor ? fogColor.g : 0;
-    var fb = fogColor ? fogColor.b : 0;
-    // Water colour — pulled from contract, falls back to deep ocean blue
-    var _wc = _contract && _contract.waterColor;
-    var _waterR = _wc ? _wc.r : 15;
-    var _waterG = _wc ? _wc.g : 35;
-    var _waterB = _wc ? _wc.b : 65;
-    var fogStart = fogDist * 0.5;
-    var fogRange = (fogDist * 1.5) - fogStart;
-
-    var halfHFloor = Math.floor(halfH);
-    // True projection center — always h/2 regardless of pitch.
-    // The floor paints starting from halfH (the pitched horizon) so the
-    // visible region shifts correctly, but perspective distance uses the
-    // true center so floor rows at a wall's base position always produce
-    // rowDist == perpDist. Without this, pitched halfH scales distance
-    // non-uniformly: nearby floor stays correct but far floor detaches
-    // from wall bases ("jaw opening" artifact).
-    var trueHalfH = h / 2;
-
-    for (var row = 0; row < floorH; row++) {
-      // Screen Y (actual pixel row on screen)
-      var screenY = halfHFloor + row;
-      // Distance from horizon
-      var rowFromCenter = screenY - halfH;
-      if (rowFromCenter <= 0) rowFromCenter = 0.5;
-
-      // Floor distance for this scanline (anchored to true center)
-      var rowDist = (trueHalfH * baseWallH) / rowFromCenter;
-
-      // World position of left and right edges of this scanline
-      var floorStepX = (2 * rowDist * planeX) / w;
-      var floorStepY = (2 * rowDist * planeY) / w;
-
-      // Start position (leftmost pixel)
-      var floorX = px + rowDist * (dirX - planeX);
-      var floorY = py + rowDist * (dirY - planeY);
-
-      // Fog for this row
-      var rowFog = 0;
-      if (rowDist > fogStart) {
-        rowFog = Math.min(1, (rowDist - fogStart) / fogRange);
-      }
-      var invFog = 1 - rowFog;
-
-      // Distance-based darkening (simulate lighting falloff)
-      var bright = Math.max(0.25, 1 - rowDist * 0.04);
-
-      var rowOffset = row * w * 4;
-
-      // ── Per-tile cache ──
-      // getBlood() does string concat + hash lookup — expensive per-pixel.
-      // Cache the result and only re-query when the tile coordinate changes.
-      // PW-1: also caches floor grime grid for sub-tile tinting.
-      var prevTileGX = -1, prevTileGY = -1;
-      var cachedBlood = 0;
-      var cachedFloorGrime = null;  // PW-1: { data: Uint8Array, res: number } or null
-      var _hasGrimeGrid = (typeof GrimeGrid !== 'undefined');
-
-      for (var col = 0; col < w; col++) {
-        // Compute grid tile coordinates (used for per-tile texture and blood)
-        var tileGX = Math.floor(floorX);
-        var tileGY = Math.floor(floorY);
-
-        // Select floor texture — per-tile override or default
-        var curTexW = texW;
-        var curTexH = texH;
-        var curTexData = texData;
-
-        // ── WATER tile skip: render dedicated water color instead of texture ──
-        // WATER tiles (9) have no floor surface — they render as deep ocean.
-        // Uses contract.waterColor (default deep blue) so water reads correctly
-        // regardless of the fog color (which may be warm brown for amber atmosphere).
-        var tileVal = (tileGX >= 0 && tileGX < gridW &&
-                       tileGY >= 0 && tileGY < gridH)
-                      ? grid[tileGY][tileGX] : -1;
-        if (tileVal === 9) { // TILES.WATER
-          // Write water colour directly — skip texture sampling.
-          // Distance-darkened + fog-blended so water fades naturally at range.
-          var pIdx = rowOffset + col * 4;
-          var wr = _waterR, wg = _waterG, wb = _waterB;
-          // Blend toward fog at distance (same fog curve as textured floor)
-          var wR = (wr * invFog + fr * rowFog) * bright;
-          var wG = (wg * invFog + fg * rowFog) * bright;
-          var wB = (wb * invFog + fb * rowFog) * bright;
-          buf[pIdx]     = (wR) | 0;
-          buf[pIdx + 1] = (wG) | 0;
-          buf[pIdx + 2] = (wB) | 0;
-          buf[pIdx + 3] = 255;
-          floorX += floorStepX;
-          floorY += floorStepY;
-          continue;
-        }
-
-        if (tileFloorTexArr && tileVal >= 0) {
-          var altTex = tileFloorTexArr[tileVal];
-          if (altTex) {
-            curTexW = altTex.width;
-            curTexH = altTex.height;
-            curTexData = altTex.data;
-          }
-        }
-
-        // Texture coordinates — wrap to tile boundaries
-        var tx = ((Math.floor(floorX * curTexW) % curTexW) + curTexW) % curTexW;
-        var ty = ((Math.floor(floorY * curTexH) % curTexH) + curTexH) % curTexH;
-
-        // Sample texel
-        var texIdx = (ty * curTexW + tx) * 4;
-        var r = curTexData[texIdx]     * bright;
-        var g = curTexData[texIdx + 1] * bright;
-        var b = curTexData[texIdx + 2] * bright;
-
-        // ── Dirt/grime tint — blood overlay or sub-tile grime grid ──
-        // Per-tile cache: only re-query when tile coordinate changes.
-        // PW-1: when GrimeGrid exists for this tile, use subcell grime
-        // tint instead of flat blood level. No grid = old blood fallback.
-        if (_bloodFloorId && typeof CleaningSystem !== 'undefined') {
-          if (tileGX !== prevTileGX || tileGY !== prevTileGY) {
-            cachedBlood = CleaningSystem.getBlood(tileGX, tileGY, _bloodFloorId);
-            cachedFloorGrime = _hasGrimeGrid
-              ? GrimeGrid.get(_bloodFloorId, tileGX, tileGY) : null;
-            prevTileGX = tileGX;
-            prevTileGY = tileGY;
-          }
-
-          if (cachedFloorGrime) {
-            // PW-1 §5.3: sub-tile grime tint (4×4 floor grid)
-            // UV within tile = fractional part of world floor coords
-            var floorFracX = floorX - tileGX;
-            var floorFracY = floorY - tileGY;
-            var fgRes = cachedFloorGrime.res;
-            var fgSubX = Math.floor(floorFracX * fgRes);
-            var fgSubY = Math.floor(floorFracY * fgRes);
-            if (fgSubX >= fgRes) fgSubX = fgRes - 1;
-            if (fgSubY >= fgRes) fgSubY = fgRes - 1;
-            if (fgSubX < 0) fgSubX = 0;
-            if (fgSubY < 0) fgSubY = 0;
-            var fgLevel = cachedFloorGrime.data[fgSubY * fgRes + fgSubX];
-            if (fgLevel > 0) {
-              var fga = (fgLevel / 255) * 0.6;
-              r = r * (1 - fga) + _GRIME_R * fga;
-              g = g * (1 - fga) + _GRIME_G * fga;
-              b = b * (1 - fga) + _GRIME_B * fga;
-            }
-          } else if (cachedBlood > 0) {
-            // Legacy blood tint — flat per-tile overlay (no grime grid)
-            var bloodAlpha = 0.15 * cachedBlood;
-            r = r * (1 - bloodAlpha) + 140 * bloodAlpha;
-            g = g * (1 - bloodAlpha * 1.3);
-            b = b * (1 - bloodAlpha * 1.3);
-          }
-        }
-
-        // Apply fog
-        if (rowFog > 0.01) {
-          r = r * invFog + fr * rowFog;
-          g = g * invFog + fg * rowFog;
-          b = b * invFog + fb * rowFog;
-        }
-
-        var pIdx = rowOffset + col * 4;
-        buf[pIdx]     = r | 0;
-        buf[pIdx + 1] = g | 0;
-        buf[pIdx + 2] = b | 0;
-        buf[pIdx + 3] = 255;
-
-        floorX += floorStepX;
-        floorY += floorStepY;
-      }
-    }
-
-    ctx.putImageData(_floorImgData, 0, halfHFloor);
-  }
-
-  // ── Facing direction lookup for sprite directional shading ──
-  // Maps enemy.facing string → [dx, dy] unit vector.
-  var _FACE_VEC = {
-    east:  [ 1,  0],
-    south: [ 0,  1],
-    west:  [-1,  0],
-    north: [ 0, -1]
-  };
-
-  // Max darkness when enemy faces directly away from player.
-  // 0.45 = heavy shadow, enough to read as "their back" without
-  // fully obscuring the emoji.
-  var FACING_DARK_MAX = 0.45;
-
-  // ── Overhead awareness expressions (MGS-style indicators) ────────
-  // Maps EnemyAI awareness state labels → overhead glyph + color.
-  // Rendered above enemy sprites in world-space (canvas coordinates).
-  var _AWARENESS_GLYPHS = {
-    Unaware:    { glyph: '💤', color: '#aaa' },
-    Suspicious: { glyph: '❓', color: '#cc4' },
-    Alerted:    { glyph: '❗', color: '#c44' },
-    Engaged:    { glyph: '⚔️',  color: '#c4c' }
-  };
-
-  // Overhead expression bob amplitude (px at distance 1)
-  var OVERHEAD_BOB_AMP = 3;
-  // Overhead expression bob frequency (cycles per second)
-  var OVERHEAD_BOB_FREQ = 2.5;
-
-  // ── Lightweight particle pool for status FX ──────────────────────
-  // Fixed pool, no allocation per frame. Each particle has:
-  //   emoji, x, y, vx, vy, life, maxLife, size, alpha
-  var _PARTICLE_MAX = 48;
-  var _particles = [];
-  var _particleThrottle = {};  // Keyed by screenX bucket, limits spawn rate
-
-  function _emitParticle(emoji, sx, sy, spriteH, dist, baseAlpha) {
-    // Throttle: max 1 particle per sprite-bucket every 200ms
-    var bucket = Math.floor(sx / 20);
-    var now = Date.now();
-    if (_particleThrottle[bucket] && now - _particleThrottle[bucket] < 200) return;
-    _particleThrottle[bucket] = now;
-
-    // Find a dead slot or overwrite oldest
-    var slot = null;
-    for (var pi = 0; pi < _particles.length; pi++) {
-      if (_particles[pi].life <= 0) { slot = _particles[pi]; break; }
-    }
-    if (!slot) {
-      if (_particles.length < _PARTICLE_MAX) {
-        slot = { emoji: '', x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 10, alpha: 1 };
-        _particles.push(slot);
-      } else {
-        slot = _particles[0];
-        for (var pi = 1; pi < _particles.length; pi++) {
-          if (_particles[pi].life < slot.life) slot = _particles[pi];
-        }
-      }
-    }
-
-    var pSize = Math.max(8, Math.floor(spriteH * 0.25));
-    slot.emoji = emoji;
-    slot.x = sx + (Math.random() - 0.5) * spriteH * 0.4;
-    slot.y = sy - spriteH * 0.2;
-    slot.vx = (Math.random() - 0.5) * 0.3;
-    slot.vy = -0.4 - Math.random() * 0.3;  // Float upward
-    slot.life = 800 + Math.random() * 400;  // 800-1200ms
-    slot.maxLife = slot.life;
-    slot.size = pSize;
-    slot.alpha = baseAlpha;
-  }
-
-  function _updateAndRenderParticles(ctx, dt) {
-    for (var pi = 0; pi < _particles.length; pi++) {
-      var p = _particles[pi];
-      if (p.life <= 0) continue;
-
-      p.life -= dt;
-      p.x += p.vx * dt * 0.06;
-      p.y += p.vy * dt * 0.06;
-
-      var t = Math.max(0, p.life / p.maxLife);
-      ctx.save();
-      ctx.globalAlpha = p.alpha * t * 0.7;
-      ctx.font = Math.floor(p.size * t) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(p.emoji, p.x, p.y);
-      ctx.restore();
-    }
-  }
-
-  // ── Triple emoji stack renderer ──────────────────────────────────
-  // Slot Y offsets as fraction of spriteH from center:
-  //   Slot 0 (head):  -0.28
-  //   Slot 1 (torso):  0.00
-  //   Slot 2 (legs):  +0.28
-  var _SLOT_Y = [-0.28, 0.0, 0.28];
-  // Per-slot bob damping: head bobs full, legs stay grounded
-  var _SLOT_BOB = [1.0, 0.6, 0.2];
-  // Per-slot font scale (fraction of spriteH for each emoji)
-  var _SLOT_FONT = 0.32;
-
-  // ── Per-slot tint offscreen canvas ─────────────────────────────
-  // Reusable scratch canvas for isolating individual emoji glyphs
-  // so hue tint only colors the glyph pixels (source-atop), not a
-  // bounding rect that bleeds onto transparent areas and other slots.
-  var _tintCanvas = null;
-  var _tintCtx    = null;
-  // Default tint mask: [head, torso, legs]. Only clothes slots tinted.
-  var _DEFAULT_TINT_SLOTS = [false, true, true];
-
-  function _ensureTintCanvas(size) {
-    if (!_tintCanvas || _tintCanvas.width < size || _tintCanvas.height < size) {
-      _tintCanvas = document.createElement('canvas');
-      _tintCanvas.width  = size;
-      _tintCanvas.height = size;
-      _tintCtx = _tintCanvas.getContext('2d');
-    }
-    return _tintCtx;
-  }
-
-  /**
-   * Render a triple emoji stack at billboard position.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {Object} stack - { head, torso, legs, hat, backWeapon, frontWeapon, headMods, torsoMods, tintHue }
-   * @param {number} screenX - Horizontal center (px)
-   * @param {number} centerY - Vertical center (px)
-   * @param {number} spriteH - Total sprite height (px)
-   * @param {number} spriteW - Total sprite width (px)
-   * @param {number} hSquish - Horizontal squish from Euler flattening
-   * @param {number} ySquish - Vertical squish for ground tilt
-   * @param {string} facing  - Cardinal direction string ('north','south','east','west')
-   * @param {Object} item    - Sorted sprite item (has .dx, .dy, .dist)
-   */
-  function _renderStack(ctx, stack, screenX, centerY, spriteH, spriteW, hSquish, ySquish, facing, item, bobY, stackFX) {
-    var fontSize = Math.max(8, Math.floor(spriteH * _SLOT_FONT));
-    var sx = hSquish < 0.98 ? hSquish : 1;
-    // Differential idle bob per slot (head leads, legs anchor)
-    var baseBob = bobY || 0;
-
-    // ── Stack FX extraction ──────────────────────────────────────
-    var fx = stackFX || {};
-    var travelSpring = fx.travelSpring || 0;
-    var lungePhase   = fx.lungePhase   || 0;
-    var flashWhite   = fx.flashWhite   || false;
-    var dotFlash     = fx.dotFlash     || false;
-    var statusHue    = (fx.statusHue !== null && fx.statusHue !== undefined) ? fx.statusHue : -1;
-    var statusAlpha  = fx.statusAlpha  || 0;
-    var ghostAlpha   = fx.ghostAlpha !== undefined ? fx.ghostAlpha : 1;
-
-    // Apply ghost alpha to all slots
-    if (ghostAlpha < 1) ctx.globalAlpha *= ghostAlpha;
-
-    // Per-slot travel spring offsets (head sways most, legs least)
-    // Spring is a horizontal displacement that creates a walking sway
-    var _SPRING_SCALE = [1.0, 0.5, 0.15];
-    // Per-slot lunge offsets (torso leads, head follows, legs anchor)
-    // Lunge shifts slots upward (toward player in billboard space) for forward lean
-    var _LUNGE_SCALE = [0.6, 1.0, 0.1];
-
-    // Resolve directional facing dot product for layer visibility
-    var faceDot = 0;
-    if (facing && item) {
-      var fv = _FACE_VEC[facing];
-      if (fv && item.dist > 0.01) {
-        var invD = 1 / item.dist;
-        var ex = -item.dx * invD;
-        var ey = -item.dy * invD;
-        faceDot = fv[0] * ex + fv[1] * ey;
-      }
-    }
-    // Layer visibility based on facing
-    var showFrontWeapon = faceDot > -0.1;
-    var showBackWeapon  = faceDot < 0.2;
-    // When NPC faces away, back weapon renders ON TOP (highest z) instead of behind
-    var backWeaponOnTop = faceDot < -0.3;
-    var headDim = faceDot < -0.3 ? 0.6 : 1.0;
-    // Head Y-squash when facing away (back-of-head foreshortening)
-    var headSquash = faceDot < -0.3 ? 0.94 : 1.0;
-    // Weapon scale multiplier at side angles (foreshortening)
-    var absFace = Math.abs(faceDot);
-    var weaponFore = absFace < 0.3 ? 0.7 : 1.0;
-    // Hat X-shift in facing direction (perspective offset)
-    var hatShiftX = 0;
-    if (facing && absFace < 0.5) {
-      var fv2 = _FACE_VEC[facing];
-      if (fv2) hatShiftX = fv2[0] * fontSize * 0.12;
-    }
-    // Back weapon squish: weapon is perpendicular to body plane, so it
-    // foreshortens LESS than the body at side angles. Lerp toward 1.0.
-    var bwSx = sx + (1 - sx) * 0.6;
-
-    var slots = [stack.head, stack.torso, stack.legs];
-    var mods  = [stack.headMods, stack.torsoMods, null];
-
-    for (var si = 0; si < 3; si++) {
-      var slotEmoji = slots[si];
-      if (!slotEmoji) continue;
-
-      var slotBob = baseBob * _SLOT_BOB[si];
-      // Travel spring: horizontal sway per slot
-      var slotSpringX = travelSpring * _SPRING_SCALE[si] * fontSize * 0.5;
-      // Attack lunge: Y offset (torso dips forward most)
-      var slotLungeY = lungePhase * _LUNGE_SCALE[si] * fontSize * -0.3;
-      var slotY = centerY + _SLOT_Y[si] * spriteH + slotBob + slotLungeY;
-      var slotX = screenX + slotSpringX;
-
-      // ── Back sub-layers (render behind this slot) ──
-      if (si === 0 && stack.hat && stack.hat.behind) {
-        _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
-                        fontSize * stack.hat.scale * 1.5, sx, ySquish);
-      }
-      if (si === 1 && stack.backWeapon && showBackWeapon && !backWeaponOnTop) {
-        // Position with offsetX (fraction of spriteW) — mirrors frontWeapon pattern.
-        // bwSx reduces Euler squish (weapon perpendicular to body plane).
-        var bwBehindX = slotX + spriteW * (stack.backWeapon.offsetX || 0.3);
-        _renderSubLayer(ctx, stack.backWeapon.emoji, bwBehindX, slotY,
-                        fontSize * (stack.backWeapon.scale || 0.4), bwSx, ySquish);
-      }
-
-      // ── Slot modifiers (behind main emoji) ──
-      if (mods[si]) {
-        for (var mi = 0; mi < mods[si].length; mi++) {
-          var mod = mods[si][mi];
-          var modX = slotX + spriteW * (mod.offsetX || 0);
-          var modY = slotY + spriteH * (mod.offsetY || 0);
-          _renderSubLayer(ctx, mod.emoji, modX, modY,
-                          fontSize * (mod.scale || 0.4), sx, ySquish);
-        }
-      }
-
-      // ── Main slot emoji ──
-      // Determine if this slot should receive hue tint (clothes only by default)
-      var hasHueTint   = (stack.tintHue !== null && stack.tintHue !== undefined);
-      var hasColorTint = !!(stack.tintColor && typeof stack.tintColor.r === 'number');
-      var wantTint = ((hasHueTint || hasColorTint) && spriteH > 10);
-      if (wantTint) {
-        var tSlots = stack.tintSlots || _DEFAULT_TINT_SLOTS;
-        wantTint = !!tSlots[si];
-      }
-
-      ctx.save();
-      ctx.translate(slotX, slotY);
-      var slotSx = sx;
-      var slotSy = ySquish;
-      // Head: dim + Y-squash when facing away
-      if (si === 0) {
-        if (headDim < 1) ctx.globalAlpha *= headDim;
-        if (headSquash < 1) slotSy *= headSquash;
-      }
-      if (slotSx !== 1 || slotSy !== 1) ctx.scale(slotSx, slotSy);
-
-      if (wantTint) {
-        // ── Per-glyph tint: draw emoji on offscreen canvas, color
-        //    only the glyph pixels via source-atop, then composite back.
-        var tSize = Math.ceil(fontSize * 2.5);
-        var tHalf = tSize * 0.5;
-        var tc = _ensureTintCanvas(tSize);
-        tc.clearRect(0, 0, tSize, tSize);
-
-        // 1) Draw emoji centered on scratch canvas
-        tc.globalCompositeOperation = 'source-over';
-        tc.globalAlpha = 1;
-        tc.font = fontSize + 'px serif';
-        tc.textAlign = 'center';
-        tc.textBaseline = 'middle';
-        tc.fillText(slotEmoji, tHalf, tHalf);
-
-        // 2) Paint hue ONLY on glyph pixels (source-atop)
-        //    Stacks may override with a direct tintColor (e.g. pure black
-        //    for hero antagonists) and a stronger tintAlpha to achieve a
-        //    true darken/black wash that hue rotation cannot produce.
-        tc.globalCompositeOperation = 'source-atop';
-        tc.globalAlpha = (typeof stack.tintAlpha === 'number') ? stack.tintAlpha : 0.22;
-        var rgb;
-        if (stack.tintColor && typeof stack.tintColor.r === 'number') {
-          rgb = stack.tintColor;
-        } else {
-          rgb = _hueToRgb(stack.tintHue);
-        }
-        tc.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
-        tc.fillRect(0, 0, tSize, tSize);
-
-        // 3) Reset scratch state
-        tc.globalCompositeOperation = 'source-over';
-        tc.globalAlpha = 1;
-
-        // 4) Draw tinted result onto main canvas (inherits transform).
-        //    Use 9-arg drawImage to sample only the tSize×tSize region —
-        //    _tintCanvas may be larger from a prior sprite, and the 4-arg
-        //    form maps the FULL canvas into the destination, shifting the
-        //    emoji off-center.
-        ctx.drawImage(_tintCanvas, 0, 0, tSize, tSize, -tHalf, -tHalf, tSize, tSize);
-      } else {
-        ctx.font = fontSize + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slotEmoji, 0, 0);
-      }
-      ctx.restore();
-
-      // ── Front sub-layers (render over this slot) ──
-      if (si === 0 && stack.hat && !stack.hat.behind) {
-        _renderSubLayer(ctx, stack.hat.emoji, slotX + hatShiftX, slotY - fontSize * 0.4,
-                        fontSize * stack.hat.scale * 1.5, sx, ySquish);
-      }
-      if (si === 1 && stack.frontWeapon && showFrontWeapon) {
-        var fwX = slotX + spriteW * stack.frontWeapon.offsetX;
-        _renderSubLayer(ctx, stack.frontWeapon.emoji, fwX, slotY,
-                        fontSize * stack.frontWeapon.scale * weaponFore, sx, ySquish);
-      }
-    }
-
-    // ── Back weapon ON TOP pass (NPC facing away → weapon at highest z) ──
-    if (stack.backWeapon && showBackWeapon && backWeaponOnTop) {
-      var bwTopY = centerY + _SLOT_Y[1] * spriteH + (baseBob * _SLOT_BOB[1]);
-      var bwTopX = screenX + travelSpring * _SPRING_SCALE[1] * fontSize * 0.5
-                 + spriteW * (stack.backWeapon.offsetX || 0.3);
-      _renderSubLayer(ctx, stack.backWeapon.emoji, bwTopX, bwTopY,
-                      fontSize * (stack.backWeapon.scale || 0.4), bwSx, ySquish);
-    }
-
-    // ── Status effect hue overlay (poison green, frozen blue, etc.) ──
-    if (statusHue >= 0 && statusAlpha > 0 && spriteH > 6) {
-      var sRgb = _hueToRgb(statusHue);
-      ctx.save();
-      ctx.globalAlpha = statusAlpha;
-      ctx.fillStyle = 'rgb(' + sRgb.r + ',' + sRgb.g + ',' + sRgb.b + ')';
-      ctx.fillRect(screenX - spriteW * 0.45, centerY - spriteH * 0.45,
-                   spriteW * 0.9, spriteH * 0.9);
-      ctx.restore();
-    }
-
-    // ── Damage white flash (all slots flash white on hit) ──
-    if ((flashWhite || dotFlash) && spriteH > 6) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.globalAlpha = flashWhite ? 0.6 : 0.35;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(screenX - spriteW * 0.45, centerY - spriteH * 0.45,
-                   spriteW * 0.9, spriteH * 0.9);
-      ctx.restore();
-    }
-  }
-
-  /**
-   * Render a sub-layer emoji (hat, weapon, modifier) at given position/scale.
-   */
-  /**
-   * Render a corpse pile — scattered stack slots on the ground plane.
-   * Each slot emoji is drawn at its pile offset with resting rotation.
-   */
-  function _renderCorpsePile(ctx, pile, screenX, centerY, spriteH, ySquish) {
-    var fontSize = Math.max(6, Math.floor(spriteH * _SLOT_FONT));
-    var dir = pile.dir || 1;
-    var slots = pile.slots;
-
-    for (var si = 0; si < slots.length; si++) {
-      if (!slots[si]) continue;
-      var px = screenX + pile.pileX[si] * dir * spriteH * 0.4;
-      var py = centerY + pile.pileY[si] * spriteH * 0.2;
-      var rot = pile.pileRot[si] * dir;
-
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(rot);
-      if (ySquish !== 1) ctx.scale(1, ySquish);
-      ctx.globalAlpha = 0.85;
-      ctx.font = Math.floor(fontSize * 0.9) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(slots[si], 0, 0);
-      ctx.restore();
-    }
-
-    // Detached accessories (hat, weapon) at scattered offsets
-    if (pile.hat) {
-      var hatX = screenX + dir * spriteH * 0.25;
-      var hatY = centerY - spriteH * 0.1;
-      ctx.save();
-      ctx.translate(hatX, hatY);
-      ctx.rotate(dir * 0.4);
-      if (ySquish !== 1) ctx.scale(1, ySquish);
-      ctx.globalAlpha = 0.7;
-      ctx.font = Math.floor(fontSize * (pile.hatScale || 0.5)) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(pile.hat, 0, 0);
-      ctx.restore();
-    }
-    if (pile.frontWeapon) {
-      var wpnX = screenX - dir * spriteH * 0.3;
-      var wpnY = centerY + spriteH * 0.05;
-      ctx.save();
-      ctx.translate(wpnX, wpnY);
-      ctx.rotate(-dir * 0.5);
-      if (ySquish !== 1) ctx.scale(1, ySquish);
-      ctx.globalAlpha = 0.75;
-      ctx.font = Math.floor(fontSize * (pile.frontWeaponScale || 0.65)) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(pile.frontWeapon, 0, 0);
-      ctx.restore();
-    }
-  }
-
-  function _renderSubLayer(ctx, emoji, x, y, fontSize, hSquish, ySquish) {
-    if (!emoji) return;
-    ctx.save();
-    ctx.translate(x, y);
-    var sx = hSquish < 0.98 ? hSquish : 1;
-    if (sx !== 1 || ySquish !== 1) ctx.scale(sx, ySquish);
-    ctx.font = Math.max(6, Math.floor(fontSize)) + 'px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, 0, 0);
-    ctx.restore();
-  }
-
-  /**
-   * Convert a hue (0-360) to an RGB object for tint overlay.
-   */
-  function _hueToRgb(hue) {
-    // HSL to RGB with S=100%, L=50%
-    var h = hue / 60;
-    var c = 255;
-    var x = Math.floor(c * (1 - Math.abs(h % 2 - 1)));
-    if (h < 1) return { r: c, g: x, b: 0 };
-    if (h < 2) return { r: x, g: c, b: 0 };
-    if (h < 3) return { r: 0, g: c, b: x };
-    if (h < 4) return { r: 0, g: x, b: c };
-    if (h < 5) return { r: x, g: 0, b: c };
-    return { r: c, g: 0, b: x };
-  }
-
-  function _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, renderDist, fogDist, fogColor, minDist, maxDist) {
-    // Optional distance window — lets callers split sprite rendering
-    // into "distant" and "near" passes sandwiching the terminus fog
-    // veil so close sprites punch through the horizon band. Defaults
-    // to no filter (render everything in the normal render distance).
-    var _tanHF = Math.tan(halfFov);
-    var hasMin = (typeof minDist === 'number');
-    var hasMax = (typeof maxDist === 'number');
-    var sorted = [];
-    for (var i = 0; i < sprites.length; i++) {
-      var s = sprites[i];
-      // Skip sprites that have a CSS DOM overlay (SpriteLayer handles them)
-      if (s.domSprite) continue;
-      var dx = (s.x + 0.5) - px;
-      var dy = (s.y + 0.5) - py;
-      var dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.3 || dist > renderDist) continue;
-      if (hasMin && dist <  minDist) continue;
-      if (hasMax && dist >= maxDist) continue;
-
-      var angle = Math.atan2(dy, dx) - pDir;
-      while (angle > Math.PI) angle -= 2 * Math.PI;
-      while (angle < -Math.PI) angle += 2 * Math.PI;
-      if (Math.abs(angle) > halfFov + 0.3) continue;
-
-      sorted.push({ sprite: s, dist: dist, angle: angle, dx: dx, dy: dy });
-    }
-
-    sorted.sort(function (a, b) { return b.dist - a.dist; });
-
-    for (var i = 0; i < sorted.length; i++) {
-      var item = sorted[i];
-      var s = item.sprite;
-      var dist = item.dist;
-      var angle = item.angle;
-
-      // Perspective-correct column: exact inverse of DDA's atan mapping.
-      var screenX = Math.floor((1 + Math.tan(angle) / _tanHF) * w / 2);
-      var baseScale = (s.scale || 0.6) / dist;
-      // Pulse effect: scaleAdd oscillates 0..max, adds to base scale
-      var pulseAdd = s.scaleAdd || 0;
-      var scale = baseScale + pulseAdd / dist;
-      var spriteH = Math.floor(h * scale);
-      var spriteW = spriteH;
-      // Bob effect: vertical oscillation (world-space px scaled by distance)
-      var bobOffset = s.bobY ? Math.floor(s.bobY * h / dist * 0.15) : 0;
-
-      // ── Euler flattening: narrow sprites at perpendicular facing ──
-      // Dot product of facing vs enemy→player gives front/back (|1|)
-      // vs side (0). Side-facing sprites appear narrower, like turning
-      // a paper cutout. Uses cos²-shaped curve for smooth roll-off.
-      if (s.facing) {
-        var fv = _FACE_VEC[s.facing];
-        if (fv && dist > 0.01) {
-          var invD = 1 / dist;
-          var ex = -item.dx * invD;
-          var ey = -item.dy * invD;
-          var faceDot = fv[0] * ex + fv[1] * ey;
-          // |dot|=1 → front/back (full width), 0 → perpendicular (narrow)
-          // flatScale: 0.55 at perpendicular, 1.0 at front/back
-          var absDot = Math.abs(faceDot);
-          var flatScale = 0.55 + 0.45 * absDot * absDot; // cos²-ish
-          spriteW = Math.floor(spriteW * flatScale);
-        }
-      }
-
-      var drawX = screenX - spriteW / 2;
-
-      // Z-buffer check
-      var startCol = Math.max(0, Math.floor(drawX));
-      var endCol = Math.min(w - 1, Math.floor(drawX + spriteW));
-      var visible = false;
-      for (var col = startCol; col <= endCol; col++) {
-        if (_zBuffer[col] > dist) { visible = true; break; }
-      }
-      if (!visible) continue;
-
-      var fogFactor = _contract
-        ? SpatialContract.getFogFactor(_contract, dist, renderDist, fogDist)
-        : Math.min(1, dist / fogDist);
-      // Interactive/solid sprites (mailbox, bonfire ring) stay opaque —
-      // fog fade on close-range interactables looks like a rendering bug.
-      var alpha = s.noFogFade ? 1.0 : Math.max(0.1, 1 - fogFactor);
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      // Sprite center Y with bob displacement
-      // Ground-level sprites (corpses, items) render at floor plane
-      var groundShift = s.groundLevel ? Math.floor(spriteH * 0.35) : 0;
-      // yAlt: world-space altitude above player eye plane (positive = up).
-      // 1 world unit projects to (h / dist) screen px — same scale the
-      // raycaster uses for wall top/bottom. Used by window vignettes so
-      // emoji render at a table or sill height inside the cavity instead
-      // of pinned to the horizon.
-      var yAltShift = s.yAlt ? Math.floor(s.yAlt * h / dist) : 0;
-      var spriteCenterY = halfH + bobOffset + groundShift - yAltShift;
-
-      // Billboard tilt for ground sprites (origami corpse / Paper Mario style)
-      // Y-scale compresses to ~40% so they look like flat objects on the floor,
-      // with a slight tilt toward the player for visibility from distance.
-      // Closer corpses appear flatter; distant ones tilt more upward.
-      var ySquish = 1;
-      if (s.groundTilt) {
-        var tiltBase = 0.35;  // Minimum Y scale (very flat)
-        var tiltLift = Math.min(0.25, 0.8 / (dist + 0.5)); // Lift more when close
-        ySquish = tiltBase + tiltLift;
-      }
-
-      // ── Glow halo (drawn behind sprite) ─────────────────────────
-      // Radial gradient with multi-stop falloff for soft orb-like
-      // light spill. Matches the silhouette glow pattern for visual
-      // consistency with fog-tinted creature rendering and cavity glow.
-      if (s.glow && s.glowRadius && spriteH > 4) {
-        var glowRad = Math.floor(spriteH * 0.5 + s.glowRadius / dist * 8);
-        var sgAlpha = alpha * 0.35;
-        // Parse glow color: accepts '#rrggbb' or 'rgba(r,g,b,a)'
-        var sgRGB = _parseGlowRGB(s.glow);
-        var sgGrad = ctx.createRadialGradient(screenX, spriteCenterY, 0, screenX, spriteCenterY, glowRad);
-        sgGrad.addColorStop(0, 'rgba(' + sgRGB + ',' + sgAlpha.toFixed(3) + ')');
-        sgGrad.addColorStop(0.5, 'rgba(' + sgRGB + ',' + (sgAlpha * 0.4).toFixed(3) + ')');
-        sgGrad.addColorStop(1, 'rgba(' + sgRGB + ',0)');
-        ctx.fillStyle = sgGrad;
-        ctx.fillRect(screenX - glowRad, spriteCenterY - glowRad, glowRad * 2, glowRad * 2);
-      }
-
-      // Horizontal squish ratio for perpendicular flattening
-      var hSquish = spriteH > 0 ? spriteW / spriteH : 1;
-
-      // ── Pedestal occlusion (sprite behind a freeform stone base) ──
-      // Scan the columns the sprite spans; if any column has a
-      // freeform pedestal in front of the sprite AND that pedestal
-      // is NOT in the same grid cell as the sprite, clip the
-      // sprite's bottom at the tightest pedestal-top screen row.
-      // Same-cell sprites (HEARTH dragonfire emoji, future bonfire
-      // glow billboards) skip the clip so they can render through
-      // the cavity band.
-      var _pedClipped = false;
-      var _pedClipY = Infinity;
-      var _spriteMX = Math.floor(s.x);
-      var _spriteMY = Math.floor(s.y);
-      for (var _pcol = startCol; _pcol <= endCol; _pcol++) {
-        var _pd = _zBufferPedDist[_pcol];
-        if (_pd > 0 && _pd < dist) {
-          // Different tile than the sprite → pedestal occludes.
-          if (_zBufferPedMX[_pcol] !== _spriteMX ||
-              _zBufferPedMY[_pcol] !== _spriteMY) {
-            var _py2 = _zBufferPedTopY[_pcol];
-            if (_py2 < _pedClipY) _pedClipY = _py2;
-          }
-        }
-      }
-      if (_pedClipY < Infinity) {
-        var _spriteBottom = spriteCenterY + spriteH * 0.5 * ySquish;
-        if (_pedClipY < _spriteBottom) {
-          ctx.save();
-          ctx.beginPath();
-          // Clip the sprite's draw region to rows ABOVE the pedestal
-          // top. Extra horizontal padding lets overhead capsule/glow
-          // render outside the raw sprite rect without re-clipping.
-          ctx.rect(screenX - spriteW, 0, spriteW * 2, _pedClipY);
-          ctx.clip();
-          _pedClipped = true;
-        }
-      }
-
-      // ── Counter occlusion (vendor behind half-height counter) ──
-      var _counterClipped = false;
-      if (s.counterOcclude && s.stack && spriteH > 6) {
-        ctx.save();
-        ctx.beginPath();
-        // Clip to upper 60% of sprite — legs hidden by counter tile
-        var clipTop = spriteCenterY - spriteH * 0.5;
-        ctx.rect(screenX - spriteW, clipTop, spriteW * 2, spriteH * 0.6);
-        ctx.clip();
-        _counterClipped = true;
-      }
-
-      if (s.stack && spriteH > 6 && s.stackFX && s.stackFX.sleeping) {
-        // ── Sleeping stack: render as pile (like corpse) ────────
-        var sleepPile = {
-          slots: [s.stack.head, s.stack.torso, s.stack.legs],
-          dir: 1,
-          pileX: [-0.3, 0.1, 0.35],
-          pileY: [0.15, 0.0, -0.1],
-          pileRot: [0.12, 0.08, 0.04],
-          hat: s.stack.hat ? s.stack.hat.emoji : null,
-          hatScale: s.stack.hat ? s.stack.hat.scale : 0.5,
-          frontWeapon: s.stack.frontWeapon ? s.stack.frontWeapon.emoji : null,
-          frontWeaponScale: s.stack.frontWeapon ? s.stack.frontWeapon.scale : 0.65
-        };
-        _renderCorpsePile(ctx, sleepPile, screenX, spriteCenterY, spriteH, ySquish);
-      } else if (s.stack && spriteH > 6) {
-        // ── Triple emoji stack rendering ──────────────────────────
-        _renderStack(ctx, s.stack, screenX, spriteCenterY, spriteH, spriteW,
-                     hSquish, ySquish, s.facing, item, bobOffset, s.stackFX);
-      } else if (s.corpseStack && spriteH > 4) {
-        // ── Corpse pile: scattered stack slots on ground ─────────
-        _renderCorpsePile(ctx, s.corpseStack, screenX, spriteCenterY, spriteH, ySquish);
-      } else if (s.emoji) {
-        ctx.save();
-        ctx.translate(screenX, spriteCenterY);
-        var sx = hSquish < 0.98 ? hSquish : 1;
-        if (sx !== 1 || ySquish !== 1) ctx.scale(sx, ySquish);
-        ctx.font = Math.floor(spriteH * 0.8) + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(s.emoji, 0, 0);
-        // Overlay emoji (e.g. translucent 🐉 over 🔥 for dragonfire)
-        if (s.emojiOverlay) {
-          var ov = s.emojiOverlay;
-          var prevAlpha = ctx.globalAlpha;
-          ctx.globalAlpha = prevAlpha * (ov.opacity || 0.5);
-          var ovScale = ov.scale || 1.0;
-          if (ovScale !== 1.0) ctx.scale(ovScale, ovScale);
-          ctx.font = Math.floor(spriteH * 0.8 / ovScale) + 'px serif';
-          ctx.fillText(ov.emoji, ov.offX || 0, ov.offY || 0);
-          ctx.globalAlpha = prevAlpha;
-        }
-        ctx.restore();
-      } else if (s.color) {
-        ctx.fillStyle = s.color;
-        ctx.fillRect(drawX, spriteCenterY - spriteH / 2, spriteW, spriteH * ySquish);
-      }
-
-      // Close counter occlusion clip if active
-      if (_counterClipped) {
-        ctx.restore();
-      }
-      // Close pedestal occlusion clip if active (restored after
-      // counter clip so the two nested save/restores stay balanced).
-      if (_pedClipped) {
-        ctx.restore();
-      }
-
-      // ── Tint overlay ───────────────────────────────────────────
-      if (s.tint && spriteH > 4) {
-        ctx.fillStyle = s.tint;
-        ctx.fillRect(
-          screenX - spriteW * 0.45,
-          spriteCenterY - spriteH * 0.45,
-          spriteW * 0.9,
-          spriteH * 0.9
-        );
-      }
-
-      // ── Directional facing shade ──────────────────────────────
-      // Darken sprites facing away from the player. The dot product
-      // of the enemy's facing vector and the enemy→player vector
-      // gives -1 (back) to +1 (front). We map that to a 0→max
-      // darkness overlay, giving implied depth and pathing.
-      //
-      // Exterior floors (ceilingType === 'sky') get an additional
-      // radial center-fade that implies the featureless back of the
-      // emoji — a soft silhouette where the center washes out to a
-      // color-averaged blur while the edges retain some definition.
-      if (s.facing && spriteH > 0 && !s.friendly) {
-        // Skip directional shading for friendly NPCs — they should always
-        // be clearly visible regardless of facing direction.
-        var fv = _FACE_VEC[s.facing];
-        if (fv) {
-          var invDist = 1 / dist;
-          var etpX = -item.dx * invDist;
-          var etpY = -item.dy * invDist;
-          var dot = fv[0] * etpX + fv[1] * etpY;
-          var darkness = (1 - dot) * 0.5 * FACING_DARK_MAX;
-
-          if (darkness > 0.01) {
-            var isExterior = _contract && _contract.ceilingType === 'sky';
-            var backFactor = Math.max(0, -dot);   // 0 when front, 1 when directly away
-
-            if (isExterior && backFactor > 0.2) {
-              // ── Exterior back-of-sprite: radial silhouette ──
-              // A radial gradient that is opaque at center and transparent
-              // at edges — the emoji's details vanish in the middle while
-              // the silhouette outline persists. Combined with fog color
-              // so the back blends into the environment.
-              var silAlpha = Math.min(0.65, backFactor * 0.7);
-              var fogR = fogColor ? fogColor.r : 0;
-              var fogG = fogColor ? fogColor.g : 0;
-              var fogB = fogColor ? fogColor.b : 0;
-              var silR = Math.round(fogR * 0.4);
-              var silG = Math.round(fogG * 0.4);
-              var silB = Math.round(fogB * 0.4);
-              var sX = screenX;
-              var sY = spriteCenterY;
-              var sR = Math.max(spriteW, spriteH) * 0.45;
-              var grad = ctx.createRadialGradient(sX, sY, 0, sX, sY, sR);
-              grad.addColorStop(0, 'rgba(' + silR + ',' + silG + ',' + silB + ',' + silAlpha.toFixed(3) + ')');
-              grad.addColorStop(0.6, 'rgba(' + silR + ',' + silG + ',' + silB + ',' + (silAlpha * 0.4).toFixed(3) + ')');
-              grad.addColorStop(1, 'rgba(' + silR + ',' + silG + ',' + silB + ',0)');
-              ctx.globalAlpha = 1;
-              ctx.fillStyle = grad;
-              ctx.fillRect(
-                screenX - spriteW * 0.5,
-                spriteCenterY - spriteH * 0.5,
-                spriteW, spriteH
-              );
-            } else {
-              // ── Interior / dungeon: flat darkness overlay ──
-              ctx.globalAlpha = 1;
-              ctx.fillStyle = 'rgba(0,0,0,' + darkness.toFixed(3) + ')';
-              ctx.fillRect(
-                screenX - spriteW * 0.45,
-                spriteCenterY - spriteH * 0.45,
-                spriteW * 0.9,
-                spriteH * 0.9
-              );
-            }
-          }
-        }
-      }
-
-      // ── Particle FX (status emoji floating upward) ──────────────
-      // Lightweight: spawn particles into a shared pool, render with
-      // the sprite's screen coordinates. Pool lives on the module.
-      if (s.particleEmoji && spriteH > 10) {
-        _emitParticle(s.particleEmoji, screenX, spriteCenterY, spriteH, dist, alpha);
-      }
-
-      // ── Status overlay text (BURN, PARA, ATK+, etc.) ────────────
-      if (s.overlayText && spriteH > 12) {
-        var olSize = Math.max(8, Math.floor(spriteH * 0.22));
-        ctx.globalAlpha = alpha * 0.85;
-        ctx.font = 'bold ' + olSize + 'px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        // Dark outline for readability
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.lineWidth = 2;
-        ctx.strokeText(s.overlayText, screenX, spriteCenterY - spriteH * 0.45);
-        ctx.fillStyle = '#fff';
-        ctx.fillText(s.overlayText, screenX, spriteCenterY - spriteH * 0.45);
-      }
-
-      // ── Kaomoji capsule (intent + speech) above head ──────────────
-      // Replaces old floating emoji intent glyph with a pill-shaped
-      // capsule containing animated kaomoji text.
-      var _capsuleRendered = false;
-      if (typeof KaomojiCapsule !== 'undefined' && s.id !== undefined && spriteH > 12) {
-        var capsuleNow = performance.now();
-        var capData = KaomojiCapsule.getRenderData(s.id, capsuleNow);
-        if (capData && capData.text) {
-          _capsuleRendered = true;
-          var cbobPhase = (capsuleNow * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
-          var cbob = Math.sin(cbobPhase) * OVERHEAD_BOB_AMP / dist;
-
-          // Position capsule above head slot (or above single-emoji sprite)
-          var capsuleBaseY = s.stack
-            ? spriteCenterY - spriteH * 0.28 // head slot Y
-            : spriteCenterY;
-          var capsuleY = capsuleBaseY - spriteH * 0.32 + cbob;
-
-          // Capsule dimensions scale with sprite height
-          var capFontSize = Math.max(8, Math.floor(spriteH * 0.18));
-          var textWidth = capData.text.length * capFontSize * 0.55;
-          var capsuleW = Math.max(textWidth + capFontSize * 0.8, spriteH * 0.35);
-          var capsuleH = capFontSize * 1.4;
-          var capR = capsuleH / 2; // Corner radius = half height (full pill)
-
-          // Background pill
-          ctx.save();
-          ctx.globalAlpha = alpha * capData.alpha * 0.5;
-          ctx.fillStyle = 'rgba(' + capData.bgR + ',' + capData.bgG + ',' + capData.bgB + ',0.55)';
-          ctx.beginPath();
-          // Rounded rect as pill shape
-          var cx1 = screenX - capsuleW / 2;
-          var cy1 = capsuleY - capsuleH / 2;
-          if (ctx.roundRect) {
-            ctx.roundRect(cx1, cy1, capsuleW, capsuleH, capR);
-          } else {
-            // Fallback for browsers without roundRect
-            ctx.moveTo(cx1 + capR, cy1);
-            ctx.lineTo(cx1 + capsuleW - capR, cy1);
-            ctx.arcTo(cx1 + capsuleW, cy1, cx1 + capsuleW, cy1 + capR, capR);
-            ctx.lineTo(cx1 + capsuleW, cy1 + capsuleH - capR);
-            ctx.arcTo(cx1 + capsuleW, cy1 + capsuleH, cx1 + capsuleW - capR, cy1 + capsuleH, capR);
-            ctx.lineTo(cx1 + capR, cy1 + capsuleH);
-            ctx.arcTo(cx1, cy1 + capsuleH, cx1, cy1 + capsuleH - capR, capR);
-            ctx.lineTo(cx1, cy1 + capR);
-            ctx.arcTo(cx1, cy1, cx1 + capR, cy1, capR);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-
-          // Kaomoji text
-          ctx.save();
-          ctx.globalAlpha = alpha * capData.alpha * 0.95;
-          ctx.font = 'bold ' + capFontSize + 'px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          // Dark outline for readability
-          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-          ctx.lineWidth = 1.5;
-          ctx.strokeText(capData.text, screenX, capsuleY);
-          ctx.fillStyle = '#fff';
-          ctx.fillText(capData.text, screenX, capsuleY);
-          ctx.restore();
-        }
-      }
-
-      // ── Card stack telegraph (rendered below capsule during combat) ──
-      if (typeof EnemyIntent !== 'undefined' && EnemyIntent.isActive() && spriteH > 18) {
-        var intentData = EnemyIntent.getRenderData();
-        if (intentData && s.id !== undefined && intentData.enemyId === s.id && intentData.greed > 0) {
-          _capsuleRendered = true;
-          var csNow = Date.now();
-          var csBobPhase = (csNow * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
-          var csBob = Math.sin(csBobPhase) * OVERHEAD_BOB_AMP / dist;
-          var csBaseY = s.stack
-            ? spriteCenterY - spriteH * 0.28
-            : spriteCenterY;
-          var csOverheadY = csBaseY - spriteH * 0.32 + csBob;
-
-          var slotSize = Math.max(8, Math.floor(spriteH * 0.18));
-          var slotGap = Math.max(2, Math.floor(slotSize * 0.25));
-          var totalW = intentData.greed * slotSize + (intentData.greed - 1) * slotGap;
-          // Card row sits above the capsule
-          var cardRowY = csOverheadY - slotSize * 0.9;
-          var stackStartX = screenX - totalW * 0.5;
-
-          ctx.font = slotSize + 'px serif';
-          ctx.textBaseline = 'bottom';
-          ctx.textAlign = 'center';
-
-          for (var ci = 0; ci < intentData.greed; ci++) {
-            var slotCX = stackStartX + ci * (slotSize + slotGap) + slotSize * 0.5;
-
-            if (ci < intentData.cardEmojis.length) {
-              ctx.globalAlpha = alpha * 0.9;
-              ctx.fillText(intentData.cardEmojis[ci], slotCX, cardRowY);
-            } else {
-              ctx.globalAlpha = alpha * 0.3;
-              ctx.fillStyle = 'rgba(255,255,255,0.4)';
-              ctx.fillRect(
-                slotCX - slotSize * 0.35,
-                cardRowY - slotSize * 0.8,
-                slotSize * 0.7,
-                slotSize * 0.7
-              );
-            }
-          }
-
-          // Ready pulse (stack full — flashing warning)
-          if (intentData.ready) {
-            var csPulse = (Math.sin(csNow * 0.008) * 0.5 + 0.5);
-            ctx.globalAlpha = alpha * 0.25 * csPulse;
-            ctx.fillStyle = '#ff4040';
-            ctx.fillRect(
-              stackStartX - slotGap,
-              cardRowY - slotSize,
-              totalW + slotGap * 2,
-              slotSize * 1.1
-            );
-          }
-        }
-      }
-
-      // Exploration awareness glyph (only when capsule is NOT shown)
-      // Friendly entities (Dispatcher, vendors, quest givers) never show the
-      // hostile ❓/❗/⚔ ladder even if their awareness field gets nudged —
-      // they're not threats, so painting an alert indicator would lie to the
-      // player. Gated here in addition to the EnemyAI skip in game.js so the
-      // visual stays quiet regardless of how awareness was mutated.
-      if (!_capsuleRendered && !s.friendly && s.awareness !== undefined && spriteH > 8) {
-        var awarenessState = typeof EnemyAI !== 'undefined'
-          ? EnemyAI.getAwarenessState(s.awareness)
-          : null;
-        if (awarenessState && awarenessState.label !== 'Unaware') {
-          var glyphInfo = _AWARENESS_GLYPHS[awarenessState.label];
-          if (glyphInfo) {
-            var overheadY = spriteCenterY - spriteH * 0.55;
-            var bobPhase = (Date.now() * 0.001 * OVERHEAD_BOB_FREQ * Math.PI * 2);
-            var bob = Math.sin(bobPhase) * OVERHEAD_BOB_AMP / dist;
-
-            var glyphSize = Math.max(10, Math.floor(spriteH * 0.35));
-            ctx.globalAlpha = alpha * 0.9;
-            ctx.font = glyphSize + 'px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(glyphInfo.glyph, screenX, overheadY + bob);
-          }
-        }
-      }
-
-      ctx.restore();
-    }
-  }
+  // _renderFloor moved to engine/raycaster-floor.js (EX-4)
+
+
+  // ── Sprite / particle / wall-decor rendering ───────────────────
+  // _renderSprites, _renderWallDecor, _updateAndRenderParticles plus
+  // module-private helpers (_renderStack, _renderCorpsePile,
+  // _renderSubLayer, _hueToRgb, _emitParticle, _ensureTintCanvas) and
+  // constants (_FACE_VEC, _AWARENESS_GLYPHS, FACING_DARK_MAX,
+  // OVERHEAD_BOB_*, _SLOT_*, _PARTICLE_MAX, tint canvas) all moved to
+  // engine/raycaster-sprites.js (EX-6). Aliased at top of IIFE.
 
   // ── Tint helpers ────────────────────────────────────────────────
-  // Shared by foreground and back-layer brightness overlays.
+  // _tintedDark and _applyFogAndBrightness moved to
+  // engine/raycaster-lighting.js (EX-1). Aliased at top of IIFE.
 
-  /**
-   * Build an rgba() darkness overlay string, tinted by the light palette.
-   * @param {Array[]} tS   - tint strength map (Float32Array[])
-   * @param {Array[]} tI   - tint index map (Uint8Array[])
-   * @param {Array}   tRGB - palette: [[r,g,b], ...]
-   * @param {number}  my   - tile Y
-   * @param {number}  mx   - tile X
-   * @param {number}  alpha - overlay opacity (1-brightness)
-   * @returns {string} rgba() CSS color
-   */
-  function _tintedDark(tS, tI, tRGB, my, mx, alpha) {
-    var s = tS && tS[my] ? tS[my][mx] : 0;
-    if (s > 0.01 && tRGB) {
-      var idx = tI && tI[my] ? tI[my][mx] : 0;
-      var c = tRGB[idx] || tRGB[0];
-      return 'rgba(' + ((s * c[0]) | 0) + ',' + ((s * c[1]) | 0) + ',' + ((s * c[2]) | 0) + ',' + alpha + ')';
+  // ── Projection / pointer-ray APIs ───────────────────────────────
+  // castScreenRay, findTileScreenRange, projectWorldToScreen moved to
+  // engine/raycaster-projection.js (EX-3). Bind the live closure state
+  // once here so the projection module reads the same _zBuffer /
+  // _zBufferPed* arrays, _contract, _width etc. that the render loop
+  // fills each frame.
+  RaycasterProjection.bind({
+    canvas:      function () { return _canvas; },
+    width:       function () { return _width; },
+    height:      function () { return _height; },
+    contract:    function () { return _contract; },
+    rooms:       function () { return _rooms; },
+    cellHeights: function () { return _cellHeights; },
+    renderScale: function () { return RENDER_SCALE; },
+    lastHalfH:   function () { return _lastHalfH; },
+    zBuffer:     function () { return _zBuffer; },
+    pedBuffers:  function () {
+      return { mx: _zBufferPedMX, my: _zBufferPedMY, topY: _zBufferPedTopY };
     }
-    return 'rgba(0,0,0,' + alpha + ')';
-  }
+  });
 
-  function _applyFogAndBrightness(hexColor, fogFactor, brightness, fogColor, tintS, tintI, tintRGB) {
-    var r = parseInt(hexColor.substr(1, 2), 16);
-    var g = parseInt(hexColor.substr(3, 2), 16);
-    var b = parseInt(hexColor.substr(5, 2), 16);
+  // RaycasterFloor reads _contract (waterColor, terminusFog) and
+  // _bloodFloorId (CleaningSystem / GrimeGrid lookups) via lazy getters
+  // so mutations (setContract, setBloodFloorId) after this point still
+  // land in subsequent frames.
+  RaycasterFloor.bind({
+    contract:     function () { return _contract; },
+    bloodFloorId: function () { return _bloodFloorId; }
+  });
 
-    r = Math.floor(r * brightness);
-    g = Math.floor(g * brightness);
-    b = Math.floor(b * brightness);
+  // RaycasterWalls reads _height (to size its 1-pixel column scratch
+  // buffer on first use or after resize) and the per-frame floor grid
+  // (for ROOF_CRENEL face culling). All lazy — mutations propagate
+  // automatically on subsequent frames.
+  RaycasterWalls.bind({
+    height: function () { return _height; },
+    grid:   function () { return _renderGrid; },
+    gridW:  function () { return _renderGridW; },
+    gridH:  function () { return _renderGridH; }
+  });
 
-    // Color tint: shift toward palette color in dim areas near tinted sources
-    if (tintS > 0.01 && tintRGB) {
-      var inv = 1 - brightness; // Stronger in darker areas
-      var tc = tintRGB[tintI] || tintRGB[0];
-      r = Math.min(255, r + Math.floor(tc[0] * tintS * inv));
-      g = Math.min(255, g + Math.floor(tc[1] * tintS * inv));
-      b = Math.max(0,   b - Math.floor(Math.max(0, 10 - tc[2]) * tintS * inv));
-    }
-
-    var fr = fogColor ? fogColor.r : 0;
-    var fg = fogColor ? fogColor.g : 0;
-    var fb = fogColor ? fogColor.b : 0;
-
-    r = Math.floor(r * (1 - fogFactor) + fr * fogFactor);
-    g = Math.floor(g * (1 - fogFactor) + fg * fogFactor);
-    b = Math.floor(b * (1 - fogFactor) + fb * fogFactor);
-
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
-  }
-
-  // ── Pointer ray query (PW-3 squeegee aim) ─────────────────────────
-  //
-  // Casts a single ray from the player's eye through a screen-space
-  // pixel and returns the wall hit info: tile coordinates, UV on the
-  // face, perpendicular distance, and which subcell the pointer is
-  // aimed at for the grime grid. Used by SpraySystem to map Magic
-  // Remote / mouse cursor position to a specific grime subcell.
-  //
-  // Returns null if the ray doesn't hit an opaque/door tile within
-  // render distance, or if required globals aren't available.
-
-  /**
-   * @param {number} screenX — pixel column on canvas (0..width-1)
-   * @param {number} screenY — pixel row on canvas (0..height-1)
-   * @param {Array[]} grid — 2D tile grid
-   * @param {number} gridW
-   * @param {number} gridH
-   * @returns {Object|null} { tileX, tileY, wallU, wallV, perpDist, side,
-   *                          subX, subY, grimeRes }  or null
-   */
-  function castScreenRay(screenX, screenY, grid, gridW, gridH) {
-    if (!_canvas || !grid) return null;
-    var w = _width;
-    var h = _height;
-    if (w < 1 || h < 1) return null;
-
-    // Incoming pointer coords are in main-canvas (CSS) pixel space,
-    // but raycasting happens in the offscreen viewport at w × h. Map
-    // the cursor from CSS space → offscreen space so the cameraX /
-    // screenY math below stays in the casting coordinate system.
-    if (_canvas.width > 0 && _canvas.height > 0) {
-      screenX = screenX * (w / _canvas.width);
-      screenY = screenY * (h / _canvas.height);
-    }
-
-    // Reconstruct player eye state (same sources as render())
-    var MC = (typeof MovementController !== 'undefined') ? MovementController : null;
-    if (!MC || typeof Player === 'undefined') return null;
-    var rp = MC.getRenderPos();
-    var ps = Player.state();
-    var pDir = rp.angle + (ps.lookOffset || 0);
-    var px = rp.x + 0.5;
-    var py = rp.y + 0.5;
-    var pitch = ps.lookPitch || 0;
-
-    var fov = Math.PI / 3;
-    var halfFov = fov / 2;
-    var rawHalfH = h / 2;
-    var pitchShift = pitch * rawHalfH;
-    var halfH = Math.max(20, Math.min(h - 20, rawHalfH - pitchShift));
-    // Match the boosted render distance used by render() so cursor
-    // picks on far-off walls succeed at the same distance the wall
-    // is actually visible at.
-    var _baseRenderDist = _contract ? _contract.renderDistance : 16;
-    var _csBoost = (RENDER_SCALE > 0.01) ? Math.max(1.0, 1.0 / RENDER_SCALE) : 1.0;
-    var renderDist = Math.min(80, _baseRenderDist * _csBoost);
-    var baseWallH = _contract ? _contract.wallHeight : 1.0;
-
-    // ── Horizontal: screen column → ray angle ──
-    var cameraX = (2 * screenX / w) - 1;
-    var rayAngle = pDir + Math.atan(cameraX * Math.tan(halfFov));
-    var rayDirX = Math.cos(rayAngle);
-    var rayDirY = Math.sin(rayAngle);
-
-    // ── DDA setup (identical to render loop) ──
-    var mapX = Math.floor(px);
-    var mapY = Math.floor(py);
-    var deltaDistX = Math.abs(1 / (rayDirX || 1e-10));
-    var deltaDistY = Math.abs(1 / (rayDirY || 1e-10));
-    var stepX, stepY, sideDistX, sideDistY;
-
-    if (rayDirX < 0) { stepX = -1; sideDistX = (px - mapX) * deltaDistX; }
-    else              { stepX = 1;  sideDistX = (mapX + 1 - px) * deltaDistX; }
-    if (rayDirY < 0) { stepY = -1; sideDistY = (py - mapY) * deltaDistY; }
-    else              { stepY = 1;  sideDistY = (mapY + 1 - py) * deltaDistY; }
-
-    // ── DDA traversal ──
-    var hit = false;
-    var side = 0;
-    var hitTile = 0;
-    var depth = 0;
-
-    while (!hit && depth < renderDist) {
-      if (sideDistX < sideDistY) {
-        sideDistX += deltaDistX; mapX += stepX; side = 0;
-      } else {
-        sideDistY += deltaDistY; mapY += stepY; side = 1;
-      }
-      depth++;
-      if (mapX < 0 || mapX >= gridW || mapY < 0 || mapY >= gridH) break;
-      var tile = grid[mapY][mapX];
-      if (typeof TILES !== 'undefined' && (TILES.isOpaque(tile) || TILES.isDoor(tile))) {
-        hit = true;
-        hitTile = tile;
-      }
-    }
-
-    if (!hit) return null;
-
-    // ── Perpendicular distance ──
-    var perpDist;
-    if (side === 0) {
-      perpDist = (mapX - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
-    } else {
-      perpDist = (mapY - py + (1 - stepY) / 2) / (rayDirY || 1e-10);
-    }
-    perpDist = Math.abs(perpDist);
-    if (perpDist < 0.2) perpDist = 0.2;
-
-    // Wall U coordinate (horizontal position on face, 0..1)
-    var wallU;
-    if (side === 0) {
-      wallU = py + perpDist * rayDirY;
-    } else {
-      wallU = px + perpDist * rayDirX;
-    }
-    wallU = wallU - Math.floor(wallU);
-    if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-      wallU = 1 - wallU;
-    }
-
-    // Wall V coordinate (vertical position on face, 0..1)
-    var wallHeightMult = baseWallH;
-    if (_contract && typeof SpatialContract !== 'undefined') {
-      wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
-    }
-    var lineHeight = Math.max(2, Math.floor((h * wallHeightMult) / perpDist));
-    var heightOffset = (_contract && typeof SpatialContract !== 'undefined')
-      ? SpatialContract.getTileHeightOffset(_contract, hitTile) : 0;
-    var vertShift = Math.floor((h * heightOffset) / perpDist);
-    var baseLineH = Math.floor((h * baseWallH) / perpDist);
-    var flatBottom = Math.floor(halfH + baseLineH / 2);
-    var flatTop = flatBottom - lineHeight;
-    var drawStart = flatTop - vertShift;
-    var drawEnd = flatBottom - vertShift;
-
-    // V = fraction of wall column from top (0) to bottom (1)
-    var wallV = (screenY - drawStart) / (drawEnd - drawStart);
-    wallV = Math.max(0, Math.min(1, wallV));
-
-    // Map UV to grime grid subcell
-    var grimeRes = 0;
-    var subX = 0;
-    var subY = 0;
-    if (typeof GrimeGrid !== 'undefined') {
-      var gGrid = GrimeGrid.get(
-        (typeof FloorManager !== 'undefined' ? FloorManager.getCurrentFloorId() : ''),
-        mapX, mapY
-      );
-      if (gGrid) {
-        grimeRes = gGrid.res;
-        subX = Math.min(grimeRes - 1, Math.floor(wallU * grimeRes));
-        subY = Math.min(grimeRes - 1, Math.floor(wallV * grimeRes));
-      }
-    }
-
-    return {
-      tileX: mapX,
-      tileY: mapY,
-      wallU: wallU,
-      wallV: wallV,
-      perpDist: perpDist,
-      side: side,
-      subX: subX,
-      subY: subY,
-      grimeRes: grimeRes
-    };
-  }
-
-  // ── Sprite-layer projection API ──────────────────────────────────
-  // Exposes the same projection math _renderSprites uses internally
-  // so the DOM sprite-layer can position CSS overlays in world space.
-  var _FOV = Math.PI / 3;
-  var _HALF_FOV = _FOV / 2;
-
-  /**
-   * Project a world-space tile centre onto the display canvas.
-   * Returns { screenX, screenY, dist, scaleH, visible, startCol, endCol }
-   * or null if culled (behind camera, out of range, fully behind walls).
-   *
-   * @param {number} tileX   - grid X of the sprite tile
-   * @param {number} tileY   - grid Y of the sprite tile
-   * @param {number} camX    - player X (float)
-   * @param {number} camY    - player Y (float)
-   * @param {number} camDir  - player facing angle in radians
-   * @param {number} [spriteScale=0.6] - base sprite scale
-   */
-  // ── Pedestal-buffer tile scan ──────────────────────────────────
-  /**
-   * Scan the pedestal occlusion buffers to find the exact screen column
-   * range where a given tile was rendered as a freeform pedestal (HEARTH,
-   * CITY_BONFIRE, etc.). Returns the leftmost column, rightmost column,
-   * center column, and the pedestal top screen-Y at center.
-   *
-   * This is far more accurate than angular projection for positioning
-   * DOM sprites inside freeform cavities, because it uses the actual
-   * DDA rendering results rather than approximating the geometry.
-   *
-   * @param {number} tileX - grid X of the target tile
-   * @param {number} tileY - grid Y of the target tile
-   * @returns {Object|null} { minCol, maxCol, centerCol, centerPedY, w, h }
-   *   or null if the tile isn't visible in any pedestal column.
-   */
-  function findTileScreenRange(tileX, tileY) {
-    if (!_zBufferPedMX || !_zBufferPedMX.length) return null;
-
-    var minCol = -1;
-    var maxCol = -1;
-    var pedYSum = 0;
-    var pedYCount = 0;
-
-    for (var col = 0; col < _width; col++) {
-      if (_zBufferPedMX[col] === tileX && _zBufferPedMY[col] === tileY) {
-        if (minCol === -1) minCol = col;
-        maxCol = col;
-        pedYSum += _zBufferPedTopY[col];
-        pedYCount++;
-      }
-    }
-
-    if (minCol === -1) return null;
-
-    var centerCol = Math.floor((minCol + maxCol) / 2);
-    var avgPedY = Math.floor(pedYSum / pedYCount);
-
-    return {
-      minCol:     minCol,
-      maxCol:     maxCol,
-      centerCol:  centerCol,
-      centerPedY: avgPedY,
-      w:          _width,
-      h:          _height
-    };
-  }
-
-  /**
-   * Project a world tile to screen coordinates for DOM sprite overlay.
-   *
-   * @param {number} tileX, tileY  — grid position
-   * @param {number} camX, camY    — camera world position
-   * @param {number} camDir        — camera angle (radians)
-   * @param {number} [spriteScale] — billboard scale (default 0.6)
-   * @param {number} [worldOffsetY] — vertical offset: 0 = eye level,
-   *   positive = below eye level (toward floor). Units are fraction of
-   *   wall height at distance 1. 0.5 = bottom of a standard wall.
-   */
-  function projectWorldToScreen(tileX, tileY, camX, camY, camDir, spriteScale, worldOffsetY) {
-    // Use the RENDER-SPACE dimensions (_width/_height) — these match the
-    // z-buffer array length.  _canvas.width is the full-res display canvas
-    // which is larger than _width when RENDER_SCALE < 1.0; using it caused
-    // the z-buffer loop to read undefined entries for center-screen sprites,
-    // making them invisible when looked at directly.
-    var w = _width  || (_canvas ? _canvas.width  : 320);
-    var h = _height || (_canvas ? _canvas.height : 200);
-    var dx = (tileX + 0.5) - camX;
-    var dy = (tileY + 0.5) - camY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 0.3 || dist > 16) return null;
-
-    var angle = Math.atan2(dy, dx) - camDir;
-    while (angle >  Math.PI) angle -= 2 * Math.PI;
-    while (angle < -Math.PI) angle += 2 * Math.PI;
-    if (Math.abs(angle) > _HALF_FOV + 0.3) return null;
-
-    // Perspective-correct inverse of the DDA's column→angle mapping:
-    //   DDA: rayAngle = pDir + atan(cameraX * tan(halfFov))
-    //   Inverse: cameraX = tan(angle) / tan(halfFov)
-    // The old linear formula (angle / halfFov) drifted ~9% at 10° off-
-    // center, sliding DOM sprites out of freeform cavities.
-    var _tanHF = Math.tan(_HALF_FOV);
-    var screenX = Math.floor((1 + Math.tan(angle) / _tanHF) * w / 2);
-    var baseScale = (spriteScale || 0.6) / dist;
-    var spriteH = Math.floor(h * baseScale);
-    var spriteW = spriteH;
-    var drawX = screenX - spriteW / 2;
-    // Vertical position: use the pitch-shifted horizon (_lastHalfH) so
-    // DOM sprites track the camera's vertical look direction, matching
-    // the raycaster's wall/sprite rendering. Falls back to h/2 if no
-    // render has occurred yet.
-    var horizon = _lastHalfH || (h / 2);
-    var yShift = worldOffsetY ? Math.floor((worldOffsetY / dist) * h) : 0;
-    var screenY = Math.floor(horizon - spriteH / 2) + yShift;
-
-    // Z-buffer occlusion check
-    var startCol = Math.max(0, Math.floor(drawX));
-    var endCol   = Math.min(w - 1, Math.floor(drawX + spriteW));
-    var visible = false;
-    for (var col = startCol; col <= endCol; col++) {
-      if (_zBuffer[col] > dist) { visible = true; break; }
-    }
-
-    return {
-      screenX: screenX,
-      screenY: screenY,
-      dist: dist,
-      scaleH: spriteH,
-      scaleW: spriteW,
-      visible: visible,
-      startCol: startCol,
-      endCol: endCol,
-      canvasW: w,
-      canvasH: h
-    };
-  }
+  // RaycasterSprites reads the z-buffer + pedestal arrays for occlusion,
+  // the active contract (ceilingType → exterior silhouette branch), and
+  // the per-floor wall-decor grid. All via lazy getters — swapping floor
+  // data or contract propagates on the next frame.
+  RaycasterSprites.bind({
+    contract:   function () { return _contract; },
+    zBuffer:    function () { return _zBuffer; },
+    pedBuffers: function () {
+      return { dist: _zBufferPedDist, topY: _zBufferPedTopY,
+               mx:   _zBufferPedMX,   my:   _zBufferPedMY };
+    },
+    wallDecor:  function () { return _wallDecor; }
+  });
 
   return {
     init: init,
@@ -4715,14 +3048,14 @@ var Raycaster = (function () {
     setBiomeColors: setBiomeColors,
     setContract: setContract,
     setBloodFloorId: function (id) { _bloodFloorId = id; },
-    castScreenRay: castScreenRay,
+    castScreenRay: RaycasterProjection.castScreenRay,
     setRenderScale: setRenderScale,
     getRenderScale: getRenderScale,
     setFreeformEnabled: function (enabled) { _freeformEnabled = !!enabled; },
     isFreeformEnabled: function () { return _freeformEnabled; },
-    registerFreeformGapFiller: registerFreeformGapFiller,
-    projectWorldToScreen: projectWorldToScreen,
-    findTileScreenRange: findTileScreenRange,
+    registerFreeformGapFiller: RaycasterTextures.register,
+    projectWorldToScreen: RaycasterProjection.projectWorldToScreen,
+    findTileScreenRange: RaycasterProjection.findTileScreenRange,
     getZBuffer: function () { return _zBuffer; },
     getCanvasSize: function () { return { w: _canvas ? _canvas.width : 320, h: _canvas ? _canvas.height : 200 }; }
   };

@@ -1,14 +1,22 @@
 # raycaster.js Extraction Roadmap
 
-> **Status:** Proposed — raycaster.js is currently **4,729 lines / ~181 KB**
-> in a single IIFE. `render()` alone spans lines 631–2181 (~1,550 lines) and
-> interleaves DDA casting, wall drawing, back-layer collection, freeform
-> cavities, door facade recess, and blit. Agent-assisted edits require
-> loading most of the file into context to stay safe.
+> **Status:** Phases 1–3 **COMPLETE** (as of April 2026). raycaster.js has
+> shrunk from **4,729 lines / ~181 KB** to **2,758 lines**, split across
+> seven IIFEs loaded in Layer 2. `render()` still owns DDA casting,
+> back-layer collection, freeform cavities, door facade recess, and blit,
+> but wall drawing, floor/parallax/weather, sprites/particles/wall-decor,
+> projection/tool APIs, lighting helpers, and texture gap-fillers are now
+> each in their own file.
 >
-> **Goal:** Split the module into 5–7 focused IIFEs so agents can edit
-> individual concerns without risking the per-column hotpath. Target
-> core file size: ~2,000 lines.
+> Phase 4 (carving up the per-column hotpath itself) remains **DEFERRED**
+> until after post-Jam voting. See bottom of this doc.
+>
+> **Original goal:** Split the module into 5–7 focused IIFEs so agents can
+> edit individual concerns without risking the per-column hotpath. Target
+> core file size: ~2,000 lines. **Achieved:** 6 sub-modules + core, core
+> at 2,758 (the ~600-line gap vs. the 2,150 target is `_renderBackLayer`
+> and `_renderFloatingLid`, both DDA-phase-adjacent and deferred to
+> Phase 4).
 >
 > **Hard constraint:** Do not regress framerate. The per-column DDA loop
 > runs ~960× per frame at native resolution. Any extraction that adds
@@ -60,7 +68,7 @@ piece of shared infrastructure. Build it before Phase 2.
 
 ---
 
-## Phase 1 — Zero-risk extractions (~600 lines saved)
+## Phase 1 — Zero-risk extractions (~600 lines saved) ✅ COMPLETE
 
 These touch no hotpath state and can be lifted nearly verbatim into
 new Layer 2 IIFEs. Do them first to validate the split pattern.
@@ -98,7 +106,7 @@ Public API on Raycaster shrinks by 5 methods.
 
 ---
 
-## Phase 2 — Low-risk extractions (~900 lines saved)
+## Phase 2 — Low-risk extractions (~900 lines saved) ✅ COMPLETE
 
 Build `FrameContext` first. Each module below consumes it but does not
 mutate shared hotpath state.
@@ -131,7 +139,7 @@ mutate shared hotpath state.
 
 ---
 
-## Phase 3 — Medium extraction: sprites (~1,100 lines saved)
+## Phase 3 — Medium extraction: sprites (~1,100 lines saved) ✅ COMPLETE
 
 ### EX-6: Sprite / particle / wall-decor rendering → `engine/raycaster-sprites.js`
 - **Lines:** 3464–3863, 3865–4366 (~1,100 lines)
@@ -151,11 +159,24 @@ mutate shared hotpath state.
   test: verify sprite occlusion behind pedestals (HEARTH, etc.) still
   clips at the correct row after the split.
 
-**Phase 3 total: ~1,100 lines removed → core ~2,150 remaining.**
+**Phase 3 total: ~1,100 lines removed → core 2,758 actual.**
 
-This is the biggest single win for agent tractability — the sprite
-renderer is frequently the target of "tweak how X enemy displays" edits
-that currently require loading the whole raycaster.
+This was the biggest single win for agent tractability — the sprite
+renderer used to be the target of "tweak how X enemy displays" edits
+that previously required loading the whole raycaster.
+
+**Implementation notes (post-merge):**
+- Public API: `RaycasterSprites.renderSprites`, `renderWallDecor`,
+  `updateAndRenderParticles`, plus `bind({contract, zBuffer, pedBuffers,
+  wallDecor})` called by core near end of IIFE.
+- `pedBuffers` getter returns `{dist, topY, mx, my}` — the four parallel
+  pedestal-occlusion arrays bundled so sprite code sees them atomically.
+- Layer-2 aliases captured at IIFE top: `_parseGlowRGB` from
+  RaycasterLighting, `_hitFace` from RaycasterWalls.
+- Module owns its own `_particles[]`, `_tintCanvas`, `_tintCtx`,
+  `_AWARENESS_GLYPHS`, `_FACE_VEC`, bob/facing constants.
+- Core retains call sites: delegated `_renderSprites` →
+  `RaycasterSprites.renderSprites` via an alias at raycaster.js top.
 
 ---
 
@@ -184,12 +205,12 @@ per frame). Done poorly, per-frame object allocation tanks FPS.
 
 ## Sequencing summary
 
-| Phase | Target | Core after | Agent-tractability gain |
-|-------|--------|------------|-------------------------|
-| 1 | Lighting + Textures + Projection | ~4,140 | Public API surface shrinks; cold helpers isolated |
-| 2 | Floor + Walls | ~3,250 | Wall-texture edits decoupled from DDA |
-| 3 | Sprites | ~2,150 | **Biggest win** — sprite tweaks stop requiring raycaster context |
-| 4 | Core split (deferred) | ~1,400 per file | Nice-to-have; framerate-gated |
+| Phase | Target | Core after | Status | Agent-tractability gain |
+|-------|--------|------------|--------|-------------------------|
+| 1 | Lighting + Textures + Projection | ~4,140 | ✅ done | Public API surface shrinks; cold helpers isolated |
+| 2 | Floor + Walls | ~3,250 | ✅ done | Wall-texture edits decoupled from DDA |
+| 3 | Sprites | 2,758 actual | ✅ done | **Biggest win** — sprite tweaks no longer require raycaster context |
+| 4 | Core split (deferred) | ~1,400 per file | ⏸ post-jam | Nice-to-have; framerate-gated |
 
 Phases 1–3 can land in roughly one focused session each. Each PR
 should include:
@@ -208,13 +229,13 @@ Layer 1: (unchanged)
 Layer 2:
   TextureAtlas
   Skybox
-  RaycasterLighting    (Phase 1, new)
-  RaycasterTextures    (Phase 1, new)
-  RaycasterProjection  (Phase 1, new)
-  RaycasterFloor       (Phase 2, new)
-  RaycasterWalls       (Phase 2, new)
-  RaycasterSprites     (Phase 3, new)
-  Raycaster            (core — DDA + freeform + back-layer + orchestration)
+  RaycasterLighting    (Phase 1 ✅)   ~114 lines
+  RaycasterTextures    (Phase 1 ✅)   ~278 lines
+  RaycasterProjection  (Phase 1 ✅)   ~374 lines
+  RaycasterFloor       (Phase 2 ✅)   ~331 lines
+  RaycasterWalls       (Phase 2 ✅)   ~293 lines
+  RaycasterSprites     (Phase 3 ✅) ~1,129 lines
+  Raycaster            (core — DDA + freeform + back-layer + orchestration) ~2,758 lines
   Minimap, HUD, ...
 ```
 

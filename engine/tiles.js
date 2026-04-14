@@ -228,11 +228,66 @@ var TILES = (function () {
                            //   cavity so the slit reads from floor to lintel.
                            //   Defensive / gaolhouse aesthetic.
                            //   Gap filler: 'window_arrowslit_interior'.
-    WINDOW_MURDERHOLE: 83  // Murder hole / peephole — small high square opening.
+    WINDOW_MURDERHOLE: 83, // Murder hole / peephole — small high square opening.
                            //   Narrow wallX band (~20%) at high elevation so the
                            //   player has to crane up to see through. Classic
                            //   dungeon guard-room feature.
                            //   Gap filler: 'window_murderhole_interior'.
+
+    // ── Dungeon hanging-moss variant (square) ─────────────────────────
+    CANOPY_MOSS_SQ:   84,  // Square-silhouette hanging moss — the dungeon /
+                           //   cellar variant of CANOPY_MOSS. Shares the same
+                           //   floating-strip altitude and translucent moss
+                           //   underside rendering, but KEEPS a square cell
+                           //   footprint so it reads as "moss hanging from
+                           //   between stone ceiling beams" rather than a
+                           //   round leafy pad. Placed in nested-dungeon
+                           //   ceiling bays where the square silhouette
+                           //   conforms to rectangular stonework. The
+                           //   regular CANOPY_MOSS (66) renders round in
+                           //   exterior contracts via tileShapes: 'circle'.
+
+    // ── Square-silhouette tree variant ────────────────────────────────
+    TREE_SQ:          85,  // Square-footprint tree — visually identical to
+                           //   TREE (21) in texture, wall height, floor,
+                           //   and canopy compatibility, but KEEPS the
+                           //   default square cell silhouette instead of
+                           //   the inscribed-circle render. Use for:
+                           //     (a) dense treelines / hedgerow walls where
+                           //         adjacent squares butt together with no
+                           //         corner gaps (round TREE leaves visible
+                           //         corner slivers by design),
+                           //     (b) the interior of a grove — ring the
+                           //         perimeter with round TREE (21) for a
+                           //         soft silhouette, fill the inside with
+                           //         TREE_SQ (85) to read as a thick,
+                           //         impenetrable forest mass.
+                           //   No tileShapes entry → falls through to the
+                           //   default square DDA hit.
+
+    // ── Raised walkable platforms (ARCHITECTURAL_SHAPES_ROADMAP §3) ──────
+    STOOP:            86,  // Raised entry step — 0.08× thin lip, +0.10 offset.
+                           //   Walkable, non-opaque. Floor texture override
+                           //   differentiates step surface from surrounding
+                           //   ground. Use in front of doors or as single-
+                           //   tile porch entry.
+    DECK:             87,  // Multi-tile raised platform — same 0.08× lip and
+                           //   +0.10 offset as STOOP. Walkable, non-opaque.
+                           //   Floor override gives boardwalk planking. Ring
+                           //   with FENCE (0.4h) for railings.
+
+    // ── 2×2 pillar cluster ────────────────────────────────────────────
+    PILLAR_QUAD:      88   // Four small round columns inside a single tile
+                           //   cell. Non-walkable, opaque at the tile level
+                           //   (movement can't pass through), but visually
+                           //   sight-permeable through the diagonal gaps
+                           //   between the four sub-pillars. Rendered via
+                           //   tileShapes 'circle4' — 4 sub-circles of
+                           //   r≈0.20 at (±0.25, ±0.25) from tile centre.
+                           //   Use for quad-colonnade plaza accents,
+                           //   decorative shrine bases, or chokepoints
+                           //   that let the player peek the next chamber
+                           //   before walking around.
   };
 
   /** Check if a tile blocks movement */
@@ -246,12 +301,14 @@ var TILES = (function () {
            tile === T.PUZZLE || tile === T.ROAD || tile === T.PATH ||
            tile === T.GRASS || tile === T.DETRITUS ||
            tile === T.ROOST || tile === T.FUNGAL_PATCH || tile === T.TERRITORIAL_MARK ||
-           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL ||
+           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.CANOPY_MOSS_SQ ||
+           tile === T.ROOF_CRENEL ||
            tile === T.PERGOLA || tile === T.PERGOLA_BEAM ||
            tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK ||
            tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
            tile === T.DOOR_FACADE ||
-           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
+           tile === T.STOOP || tile === T.DECK;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -262,12 +319,13 @@ var TILES = (function () {
 
   /** Check if a tile blocks light / line of sight */
   T.isOpaque = function (tile) {
-    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.CHEST || tile === T.TREE || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.BONFIRE || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL || tile === T.MAILBOX || tile === T.DUMP_TRUCK ||
+    return tile === T.WALL || tile === T.PILLAR || tile === T.BREAKABLE || tile === T.CHEST || tile === T.TREE || tile === T.TREE_SQ || tile === T.PILLAR_QUAD || tile === T.SHRUB || tile === T.LOCKED_DOOR || tile === T.BOOKSHELF || tile === T.BAR_COUNTER || tile === T.BED || tile === T.TABLE || tile === T.HEARTH || tile === T.BONFIRE || tile === T.TORCH_LIT || tile === T.TORCH_UNLIT || tile === T.FENCE || tile === T.TERMINAL || tile === T.MAILBOX || tile === T.DUMP_TRUCK ||
            tile === T.WELL || tile === T.BENCH || tile === T.NOTICE_BOARD || tile === T.ANVIL || tile === T.BARREL || tile === T.CHARGING_CRADLE || tile === T.SWITCHBOARD || tile === T.SOUP_KITCHEN || tile === T.COT ||
            tile === T.NEST || tile === T.DEN || tile === T.ENERGY_CONDUIT ||
            tile === T.STRETCHER_DOCK || tile === T.TRIAGE_BED || tile === T.MORGUE_TABLE || tile === T.INCINERATOR || tile === T.REFRIG_LOCKER ||
            tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L || tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
-           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.ROOF_CRENEL || tile === T.PERGOLA ||
+           tile === T.CANOPY || tile === T.CANOPY_MOSS || tile === T.CANOPY_MOSS_SQ ||
+           tile === T.ROOF_CRENEL || tile === T.PERGOLA ||
            tile === T.CITY_BONFIRE || tile === T.PERGOLA_BEAM ||
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
            tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
@@ -291,11 +349,42 @@ var TILES = (function () {
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
   };
 
+  /**
+   * Check if tile is a raised "step" tile — walkable platform that still
+   * needs the raycaster to draw its thin lip column so the Doom-rule
+   * heightOffset + short wallHeight read as a visible step silhouette.
+   * Without this, walkable+non-opaque tiles are skipped entirely by the
+   * DDA and no vertical lip renders (floor-texture override still works).
+   */
+  T.isStep = function (tile) {
+    return tile === T.STOOP || tile === T.DECK;
+  };
+
+  /**
+   * Tiles that render their TOP surface via per-row floor projection
+   * (the "stoop cap" path in raycaster.js) instead of the cheap wallX
+   * sampling used by block furniture. Used for thin-slab geometry where
+   * the top plane is a visible horizontal surface — STOOP/DECK (walkable
+   * curbs), plus raised thin-slab furniture like TABLE and BED whose
+   * tabletop/mattress reads as a board, not the top of a fat cube.
+   *
+   * These tiles MUST have positive tileHeightOffsets on the relevant
+   * floor contract; the cap only renders above the horizon gap above
+   * the wall face. Walls opt in by being in this set AND having
+   * wallHeightMult small enough (< ~0.2) that the visible face reads
+   * as a slab rather than a column.
+   */
+  T.hasFlatTopCap = function (tile) {
+    return tile === T.STOOP || tile === T.DECK ||
+           tile === T.TABLE || tile === T.BED;
+  };
+
   /** Check if tile is a floating architectural shape (no step fill, walkable + opaque) */
   T.isFloating = function (tile) {
     return tile === T.ROOF_EAVE_L || tile === T.ROOF_SLOPE_L ||
            tile === T.ROOF_PEAK || tile === T.ROOF_SLOPE_R ||
            tile === T.ROOF_EAVE_R || tile === T.CANOPY || tile === T.CANOPY_MOSS ||
+           tile === T.CANOPY_MOSS_SQ ||
            tile === T.ROOF_CRENEL || tile === T.PERGOLA;
   };
 
@@ -337,7 +426,7 @@ var TILES = (function () {
    * style; all other floating tiles use the opaque lid.
    */
   T.isFloatingMoss = function (tile) {
-    return tile === T.CANOPY_MOSS;
+    return tile === T.CANOPY_MOSS || tile === T.CANOPY_MOSS_SQ;
   };
 
   /**
