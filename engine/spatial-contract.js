@@ -235,10 +235,11 @@ var SpatialContract = (function () {
         // emoji renders behind glass and iron bars with real depth.
         77: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
         // WINDOW_BAY — residential bay window. Projects 0.20 units OUTWARD
-        // from the wall (negative recessD). Smaller, higher slot (0.55→1.00,
-        // 0.45 tall) for a cozy residential look. Beveled side jambs render
-        // in building wallTexture via the recess jamb path.
-        78: Object.freeze({ hUpper: 2.50, hLower: 0.55, fillGap: 'window_bay_interior', recessD: -0.20, zBypassMode: 'depth' }),
+        // from the wall (negative recessD). Mid-height slot (0.55→1.30,
+        // 0.75 tall) — tall enough that the glass reads as a real pane
+        // rather than a dark seam even at range. Beveled side jambs
+        // render in building wallTexture via the recess jamb path.
+        78: Object.freeze({ hUpper: 2.25, hLower: 0.55, fillGap: 'window_bay_interior', recessD: -0.20, zBypassMode: 'depth' }),
         // WINDOW_SLIT — institutional fortress slit. Narrow opening, single
         // iron bar. Higher slot (0.50→1.70, 1.20 tall) — tall and narrow.
         // Moderate inset (0.15) for thick fortress wall depth.

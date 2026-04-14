@@ -300,6 +300,23 @@ var WindowSprites = (function () {
         var sprX = fx + (scene.interiorStep ? scene.interiorStep.dx : 0);
         var sprY = fy + (scene.interiorStep ? scene.interiorStep.dy : 0);
 
+        // Vignette altitude above the player eye (world units). Each
+        // window type opens its gap at a different world-Y range, and
+        // the sprite has to rise out of the horizon and sit inside
+        // that slot. Eye sits at altitude 0.5 (mid of the base 1.0
+        // wall). Slot centers — for a 3.5-tall building facade —
+        // are:
+        //   shop / tavern  hLower 0.40 → whMult-hUpper 1.15   center 0.775
+        //   bay            hLower 0.55 → whMult-hUpper 1.25   center 0.900
+        //   slit           hLower 0.50 → whMult-hUpper 1.70   center 1.100
+        // yAlt = slotCenter − eyeAlt. Positive lifts the sprite on
+        // screen; the raycaster projects this with (h / dist) so the
+        // vignette tracks the gap as the player approaches.
+        var wType = bldg ? bldg.windowType : null;
+        var yAlt  = 0.275;                    // shop / tavern default
+        if (wType === 'bay')  yAlt = 0.40;
+        if (wType === 'slit') yAlt = 0.60;
+
         _cachedSprites.push({
           x: sprX,
           y: sprY,
@@ -310,6 +327,7 @@ var WindowSprites = (function () {
           glowRadius:   glowR,
           windowTavern: true,
           noFogFade:    false,
+          yAlt:         yAlt,
           bobY:         0
         });
       }

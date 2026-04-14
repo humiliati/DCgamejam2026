@@ -3850,7 +3850,13 @@ var Raycaster = (function () {
       // Sprite center Y with bob displacement
       // Ground-level sprites (corpses, items) render at floor plane
       var groundShift = s.groundLevel ? Math.floor(spriteH * 0.35) : 0;
-      var spriteCenterY = halfH + bobOffset + groundShift;
+      // yAlt: world-space altitude above player eye plane (positive = up).
+      // 1 world unit projects to (h / dist) screen px — same scale the
+      // raycaster uses for wall top/bottom. Used by window vignettes so
+      // emoji render at a table or sill height inside the cavity instead
+      // of pinned to the horizon.
+      var yAltShift = s.yAlt ? Math.floor(s.yAlt * h / dist) : 0;
+      var spriteCenterY = halfH + bobOffset + groundShift - yAltShift;
 
       // Billboard tilt for ground sprites (origami corpse / Paper Mario style)
       // Y-scale compresses to ~40% so they look like flat objects on the floor,
