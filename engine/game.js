@@ -3767,6 +3767,38 @@ var Game = (function () {
       }
     }
 
+    // ── EmojiMount billboards (generic tile-mounted emoji tech) ─────
+    // Registered mounts (TERMINAL 💻 hologram in Phase 1, window
+    // vignettes in Phase 2, shop-shelf items beyond) emit billboard
+    // sprites the same way WindowSprites does. buildSprites() caches
+    // per-floor; animate() ticks bob/glint on the cached array in
+    // place so there's no per-frame allocation once the scene is
+    // warm.
+    if (typeof EmojiMount !== 'undefined') {
+      var _emFloorId = (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId)
+        ? FloorManager.getCurrentFloorId() : '0';
+      var emojiSprites = EmojiMount.buildSprites(
+        _emFloorId, floorData.grid, floorData.gridW, floorData.gridH
+      );
+      EmojiMount.animate(now);
+      for (var emi = 0; emi < emojiSprites.length; emi++) {
+        var emm = emojiSprites[emi];
+        _sprites.push({
+          x: emm.x,
+          y: emm.y,
+          emoji: emm.emoji,
+          emojiOverlay: emm.emojiOverlay || null,
+          scale: emm.scale,
+          bobY: emm.bobY || 0,
+          yAlt: emm.yAlt || 0,
+          glow: emm.glow || null,
+          glowRadius: emm.glowRadius || 0,
+          groundLevel: emm.groundLevel === true,
+          noFogFade: emm.noFogFade === true
+        });
+      }
+    }
+
     // ── Detritus billboard sprites (bobbing debris on floor) ─────
     if (typeof DetritusSprites !== 'undefined') {
       var _detFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
@@ -3845,6 +3877,25 @@ var Game = (function () {
       floorData.grid, floorData.gridW, floorData.gridH,
       _sprites, lightMap
     );
+
+    // Spatial debug overlay — world-Y ruler painted on the 3D
+    // viewport to make tile heights/offsets legible when authoring.
+    // Inert unless SpatialDebug.setEnabled(true) (test-harness toggle
+    // or window.dbg.spatialRuler). Reads the live contract from
+    // FloorManager so exterior/interior/dungeon ruler scales match
+    // whichever floor the player is on.
+    if (typeof SpatialDebug !== 'undefined' && SpatialDebug.isEnabled()) {
+      var _sdbgContract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
+        ? FloorManager.getFloorContract(FloorManager.getCurrentFloorId())
+        : null;
+      if (_sdbgContract) {
+        SpatialDebug.render(ctx,
+          { px: renderPos.x, py: renderPos.y,
+            pDir: renderPos.angle + p.lookOffset + shakeOffset,
+            pitch: p.lookPitch || 0, bobY: MC.getBobY() },
+          _sdbgContract, _canvas.width, _canvas.height, _sprites);
+      }
+    }
 
     if (combatZoom !== 1) ctx.restore();
 

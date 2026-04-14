@@ -17,6 +17,34 @@
 > PERGOLA_BEAM lattices. Phase 9 (octagonal columns) scoped to tree
 > trunk rendering via all-face recess of the shipped DOOR_FACADE
 > technique. Phases 2–6 unchanged.
+>
+> **2026-04-14 — Stale-refresh pass.** Phase 5 (Painted-On Windows)
+> **superseded** — see the shipped window-tile family
+> (`WINDOW_SHOP`/`BAY`/`SLIT`/`ALCOVE`/`COMMERCIAL`/`ARROWSLIT`/`MURDERHOLE`)
+> plus EmojiMount cavity vignettes in `LIVING_WINDOWS_ROADMAP.md`.
+> Phase 9 tree-trunk target updated to **true circular bases** (the
+> chamfered octagon was a good stepping stone but the real goal is a
+> ray-vs-circle equation per tile); an alternative **untested 4-tile
+> column cluster** pattern is queued. Added a new **Living
+> Architecture Primitives** section, a **Tile Predicates** reference,
+> and a **Dependencies for Open-Building NPC Flow** punch list
+> tracking the pergola-as-NPC-shuffler work. Cross-refs to
+> `LIVING_WINDOWS_ROADMAP.md` phases 6–12 and `PROXY_ZONE_DESIGN.md`
+> added where relevant.
+
+---
+
+## Cross-Reference Map
+
+This roadmap covers **shapes and silhouettes** — the envelopes the renderer
+projects. The consumers of those shapes live in other docs:
+
+| Doc | Consumes |
+|---|---|
+| `LIVING_WINDOWS_ROADMAP.md` | Window tile family + EmojiMount cavity scenes (replaces the old Phase 5 painted-on pattern). Phases 6–12: EmojiMount port, surface-mount tiles (TABLE/COUNTER/COFFEE_TABLE), blockout authoring, patrons, hours, polish, proxy zones. |
+| `PROXY_ZONE_DESIGN.md` | Inverse facade — interior floors N.N with windows looking out at pasted floor-N exterior tiles + parent skybox substitution. Depends on the open-sky predicate (see Tile Predicates below). |
+| `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` | Multi-segment columns, per-column alpha, Z-buffer bypass. Consumed by PERGOLA_BEAM, WINDOW_*, HEARTH, BONFIRE, CITY_BONFIRE, DOOR_FACADE, PORTHOLE, TRAPDOOR_*. |
+| `DOOR_ARCHITECTURE_ROADMAP.md` | Wolfenstein thin-wall offset for DOOR_FACADE (shipped). Phase 9 tree-trunk recess builds directly on this. |
 
 ---
 
@@ -84,6 +112,86 @@ rendering).
 **These two knobs compose.** A tile can be both short (0.4 height) and
 raised (+0.10 offset). This combination produces a low wall floating above
 the floor plane  useful for awnings, railings on decks, window sills.
+
+---
+
+## Living Architecture Primitives
+
+The shipped kit below is what "open buildings composed mostly of windows
+and beams" is built from. These primitives are the substrate Living
+Architecture (NPCs shuffling through semi-enclosed spaces) stands on.
+
+| Primitive | Tile(s) | Role | Status |
+|---|---|---|---|
+| **Pergola deck** | `PERGOLA` (68) | Walkable floor with open-sky roofing; back-face sampling for shaded edges. | Shipped, used on floor 1 plaza. |
+| **Pergola beam** | `PERGOLA_BEAM` (70) | Freeform top-anchored beam at chimney elevation (`hUpper>0, hLower=0`). Lands on `CITY_BONFIRE` hood, rings the pyre. | Shipped, 8-cell ring around floor-1 bonfire. |
+| **City bonfire** | `CITY_BONFIRE` (69) | Freeform pyre (pedestal + fire cavity + hood) — the pergola's structural anchor. | Shipped, floor 1. |
+| **Canopy ring** | `CANOPY` (65), `CANOPY_MOSS` (66) | Floating opaque/translucent lid at altitude. Original use: tree canopies. Generalized: any roofline moat. | Shipped, rendering; placement in progress. |
+| **Window tile family** | `WINDOW_SHOP`, `WINDOW_BAY`, `WINDOW_SLIT`, `WINDOW_ALCOVE`, `WINDOW_COMMERCIAL`, `WINDOW_ARROWSLIT`, `WINDOW_MURDERHOLE` | Freeform cavity walls. EmojiMount binds cavity vignettes. Face-aware tint (amber/cyan) drives day-night orientation. | Shipped tiles; EmojiMount port in flight (Phase 6 of LIVING_WINDOWS). |
+| **Fence** | `FENCE` | Low wall (0.4× height) — waist-high barrier, walkable from sprite pass but blocks DDA ray termination only partially. Used as pergola infill / deck railing. | Shipped. |
+| **Canales / roof crenel** | `ROOF_CRENEL` (67) | Toothed rampart strip — breaks flat rooflines so they read as depth from any angle. | Shipped tile, placement in progress. |
+
+### Why these matter to Living Architecture
+
+Open buildings let NPCs path through a tile while the tile still reads as
+"roofed" or "enclosed" from a distance. `PERGOLA` deck tiles are
+walkable; `PERGOLA_BEAM` is rendered from the top of the 2.0-unit column
+(no ground-level occlusion); `FENCE` is shin-high. A plaza ringed by
+pergola beams + fence segments + bonfire hood is a structured social
+space the NPCs can diffuse through without pathing breaking — that's
+the substrate the Living Architecture design depends on.
+
+Cross-ref: `LIVING_WINDOWS_ROADMAP.md` §Phase 12 (proxy zones) uses
+this same kit on the interior side — interior floors get the pergola
+beam + window family mirrored with parent-floor skybox substitution.
+
+---
+
+## Tile Predicates (shipped)
+
+The tile-class predicates below are the vocabulary the raycaster and
+floor generator use to reason about shapes without hard-coded tile IDs.
+Most live in `engine/tiles.js`; a few are contract-driven.
+
+| Predicate | Location | Used for |
+|---|---|---|
+| `TILES.isOpaque(t)` | `tiles.js` | DDA termination — does the ray stop here? |
+| `TILES.isWalkable(t)` | `tiles.js` | Player + NPC movement, AI pathing. |
+| `TILES.isFreeform(t)` | `tiles.js` | Raycaster routes to multi-segment column pipeline. |
+| `TILES.isWindow(t)` | `tiles.js` | Window tile family gate for EmojiMount cavity binding. |
+| `TILES.hasFlatTopCap(t)` | `tiles.js` | Top-plane cap rendering for STOOP/DECK + counter-top surface mounts. |
+| `TILES.hasVoidCap(t)` | `tiles.js` | Signals "no ceiling above this tile" — dungeon punch-throughs. |
+| `SpatialContract.tileFaceWallHeights` | `spatial-contract.js` | Per-face height override (front vs. back inferred from walkable neighbor). Shipped for TERMINAL; available to any tile. |
+
+### Predicates in flight (not yet shipped)
+
+| Predicate | Planned for | Reference |
+|---|---|---|
+| `TILES.hasOpenSky(t)` | Proxy zones — ceiling-pass branch paints parent-floor skybox. | `PROXY_ZONE_DESIGN.md` §3 |
+| `tileFaceFreeform(contract, tile, face)` | One-sided pergola (dropping `hLower` to floor on one face while keeping the other as open beam). See Dependencies punch list below. | (not yet scoped) |
+
+---
+
+## Dependencies for Open-Building NPC Flow
+
+"We're mostly successful" on the open-building primitives. This table
+tracks the dependencies for using them as NPC shuffle-through spaces:
+
+| # | Dependency | Status | Notes |
+|---|---|---|---|
+| 1 | **Sprite occlusion under PERGOLA_BEAM** | ✅ Verified on floor 1 at `CITY_BONFIRE` plaza | Sprites render correctly beneath the 8-cell beam ring. Z-buffer bypass + pedestal-occlusion logic holds up. |
+| 2 | **NPC pathing across PERGOLA tiles** | ⚠️ Untested | No NPC has actually walked across a PERGOLA deck cell yet. Need a scripted stroll — if `isWalkable(PERGOLA)` is true and freeform rendering doesn't spuriously clip the sprite while the NPC is mid-tile, we're fine. Should hold but wants confirmation before Living Architecture leans on it. |
+| 3 | **NPC pathing under PERGOLA_BEAM** | ⚠️ Untested | PERGOLA_BEAM is freeform with `hLower=0` — ground is clear. Same confirmation as #2 — need an NPC to cross a beam-tile column to verify sprite Y-clip and AI awareness cones aren't tripped by the overhead band. |
+| 4 | **PERGOLA_BEAM × `tileFaceWallHeights`** | 🟡 Partial — need `tileFaceFreeform` for true one-sided pergola | `getWallHeight()` at `spatial-contract.js:885` already accepts face + grid and is called with both at `raycaster.js:1316` — so the **total column altitude** (the 2.0 in `tileWallHeights[70]`) honors per-face overrides today. BUT the freeform band split (`hUpper`/`hLower`) comes from `getTileFreeform(contract, tile)` which is tile-type-keyed only. A one-sided pergola (beam closed to the floor on one face, open canopy on the other) needs a new `getTileFreeformFace(contract, tile, face)` resolver threaded into raycaster.js:1254, 1347, 1419, 2920. ~20 lines. Not scoped yet. |
+| 5 | **AI awareness cones through window tiles** | ⚠️ Untested | Enemies on floor N.N looking at the player through `WINDOW_COMMERCIAL` — current visibility check is wall-blocked (`isOpaque`). Window tiles are freeform-cavity, not opaque, so the cone *should* see through. Needs a sight-line test before Proxy Zone patrons lean on it. |
+| 6 | **Billboard `wallFacing` flag for NPCs at pergola edges** | ⚠️ Deferred | Bench sprites benefit from `wallFacing` (Phase 6 of this doc). NPCs standing at a pergola column have the same issue — narrow when viewed from the side. Decide per-NPC or wire globally. |
+| 7 | **Fog-profile inheritance through windows** | 🟡 Designed, not shipped | `fogProfile: 'parent'` window config exists in `PROXY_ZONE_DESIGN.md` §3 but the raycaster fog lookup is still CLAMP-for-interior. Blocks Proxy Zone long-range visibility. |
+
+Items 2, 3, and 5 unblock by scheduling one scripted NPC walk — a
+patrolling dialogue NPC crossing `(23,16) → (24,16) → (25,16)` (the
+PERGOLA_BEAM ring + CITY_BONFIRE cell on floor 1) and looking at the
+player through the inn window would verify all three in a single
+session.
 
 ---
 
@@ -509,7 +617,31 @@ writes/frame per animated composite texture  negligible.
 
 ---
 
-## Phase 5  Interior Windows (Painted-On, Porthole Pattern)
+## Phase 5 — Interior Windows (Painted-On, Porthole Pattern) ⛔ SUPERSEDED
+
+> **Superseded by the real window-tile family + EmojiMount.**
+> The painted-on diorama approach is obsolete. We now ship true
+> freeform-cavity window tiles (`WINDOW_SHOP`, `WINDOW_BAY`,
+> `WINDOW_SLIT`, `WINDOW_ALCOVE`, `WINDOW_COMMERCIAL`,
+> `WINDOW_ARROWSLIT`, `WINDOW_MURDERHOLE`) with EmojiMount cavity
+> vignettes driving interior/exterior scene content. Face-aware tint
+> (amber inside-looking-out lamp glow; cyan outside-looking-in
+> daylight) is wired to DayCycle. For interior-floor windows that
+> need a live view back at the exterior, see the proxy zone system
+> (`PROXY_ZONE_DESIGN.md`).
+>
+> See `LIVING_WINDOWS_ROADMAP.md` phases 6 (EmojiMount port), 7
+> (surface-mount tiles), 8 (blockout authoring), 9–11 (patrons,
+> hours, polish), and 12 (exterior proxy zones).
+>
+> The original painted-on plan is preserved below **for historical
+> reference only** — the porthole animation technique is still used
+> by `PORTHOLE` tiles in the sealab biome, but no new window tiles
+> will be built on this pattern.
+
+---
+
+## Phase 5 (Historical) — Interior Windows (Painted-On, Porthole Pattern)
 
 **Difficulty:** Moderate  extends the animated texture system.
 **Estimated size:** ~150 lines (texture generators + optional tick animation).
@@ -692,22 +824,22 @@ POST-JAM POLISH — updated 2026-04-12
     New tile types or per-cell texture randomizer
     Place in Promenade/Lantern Row templates
 
- Phase 5: Painted-On Windows  (huge atmosphere gain)
-    5 window textures (warm, dark, sky, stained, shutter)
-    Composite wall-with-window textures
-    Optional animated warm glow via porthole system
+ Phase 5: Painted-On Windows  ⛔ SUPERSEDED
+    → Real window-tile family + EmojiMount cavity vignettes
+    → See LIVING_WINDOWS_ROADMAP.md phases 6–12
+    → Proxy zones: PROXY_ZONE_DESIGN.md
 
  Phase 6: Billboard Props 
     wallFacing flag (~3 lines in raycaster)
     5 prop sprite definitions
     Placement rules for templates + proc-gen
 
- Phase 9: Octagonal Tree Trunks  (medium priority)
-    Stage 1: recessAllFaces flag + isExteriorHit gate bypass (~18 lines)
-    Stage 2: chamferCorners diagonal planes in jamb branch (~35 lines)
-    Reference: raycast.js-master WALL_DIAG + getIntersect
-    chamferTexture / jambTexture for bark on corner + face columns
-    Wire up tree tiles + CANOPY rings in templates
+ Phase 9: Circular Tree Trunks  (medium priority) ← target updated
+    NEW TARGET: ray-vs-circle intersection (radius = 0.5 − recessD)
+    Stepping stone shipped in DOOR_FACADE (thin-wall offset)
+    Octagon (chamfered 8-gon) remains an option — see Phase 9 body
+    Alternative: untested 4-tile column cluster (no raycaster changes)
+    Decide path before implementation; wire tree tiles + CANOPY rings
 
    ⛔ superseded — no further work ───────────────────
 
@@ -726,6 +858,20 @@ diagonal corner planes adapted from `raycast.js-master` WALL_DIAG.
 textures ~15, contract wiring ~20).
 **Prerequisite**: Phase 1.5 of `DOOR_ARCHITECTURE_ROADMAP.md` (Wolfenstein
 thin-wall offset for DOOR_FACADE — **SHIPPED**).
+
+> **2026-04-14 update — target is true circular bases.** The chamfered
+> octagon below was always a stepping-stone. Tree trunks want a
+> genuine circle-in-tile silhouette (ray-vs-circle, radius = 0.5 −
+> recessD from tile center), not an 8-gon. Extra per-ray math is a
+> single `sqrt` in the jamb branch plus an arctan for the texture U
+> coordinate — comparable cost to the diagonal segment test.
+> **Alternative path on the shelf:** an **untested 4-tile column
+> cluster** — instead of recessing inside one tile, use four adjacent
+> tiles with the inner corners chamfered to form a round silhouette
+> at 2×-scale. No per-column math changes; pure data-level trick. It
+> loses small-pillar use cases but buys proper trunk thickness for
+> large trees at zero raycaster risk. Pick one before starting
+> implementation.
 
 ### Problem
 

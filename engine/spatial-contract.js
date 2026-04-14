@@ -671,7 +671,12 @@ var SpatialContract = (function () {
         26: 0.80,   // BAR_COUNTER — tall counter, solid kickplate to floor
         27: 0.45,   // BED — mattress slab; frame gap below exposes "under-bed" skirt
         28: 0.35,   // TABLE — tabletop slab; legs zone exposed by heightOffset
-        36: 0.6,    // TERMINAL — desk height, CRT screen above
+        36: 0.90,   // TERMINAL — fallback height (back-layer / paths
+                    //   without a face param). Front face is overridden
+                    //   to 0.54 via tileFaceWallHeights so the player-
+                    //   approach side is short (emoji peeks over) while
+                    //   the back + side bezel walls stay tall to hide
+                    //   the 💻 from distance.
         71: 2.5,    // ARCH_DOORWAY — match interior WALL height
         74: 2.5,    // DOOR_FACADE — match interior WALL height
         75: 2.0,    // TRAPDOOR_DN — full interior wall height
@@ -680,6 +685,15 @@ var SpatialContract = (function () {
         83: 2.0,    // WINDOW_MURDERHOLE — matches interior wall
         88: 1.8     // PILLAR_QUAD — interior 2×2 sub-pillar cluster
       }, opts.tileWallHeights),
+
+      // ── Per-face wall-height overrides ──
+      // Face-selective heights for tiles where the player-approach face
+      // should be shorter than the back / side walls. Front = any face
+      // whose outward neighbor is walkable. See getWallHeight() resolver.
+      tileFaceWallHeights: Object.freeze(Object.assign({
+        36: { front: 0.54, back: 0.90 }  // TERMINAL — rim lip in front,
+                                          // monitor bezel behind/sides
+      }, opts.tileFaceWallHeights || {})),
 
       // ── Gameplay rules ──
       timeFreeze:       true,    // No time pressure inside buildings — cozy safety contract
@@ -821,13 +835,18 @@ var SpatialContract = (function () {
       // ── Per-tile-type wall height overrides ──
       tileWallHeights: _mergeTileTable({
         18: 0.3,    // BONFIRE — low stone ring
-        36: 0.6,    // TERMINAL — desk height
+        36: 0.90,   // TERMINAL — tall bezel fallback; front face 0.54 via tileFaceWallHeights
         75: 1.2,    // TRAPDOOR_DN — low dungeon wall around hatch
         76: 1.2,    // TRAPDOOR_UP — low dungeon wall around hatch
         82: 1.2,    // WINDOW_ARROWSLIT — matches dungeon wall
         83: 1.2,    // WINDOW_MURDERHOLE — matches dungeon wall
         84: 0.25    // CANOPY_MOSS_SQ — thin moss band (floats via tileHeightOffset)
       }, opts.tileWallHeights),
+
+      // ── Per-face wall-height overrides ──
+      tileFaceWallHeights: Object.freeze(Object.assign({
+        36: { front: 0.54, back: 0.90 }  // TERMINAL — rim in front, bezel elsewhere
+      }, opts.tileFaceWallHeights || {})),
 
       // ── Gameplay rules ──
       timeFreeze:       false,   // Time ticks in the dungeons — pressure!
@@ -863,7 +882,7 @@ var SpatialContract = (function () {
    * @param {Array}  rooms - Room list from GridGen (with bounds)
    * @returns {number} Wall height multiplier
    */
-  function getWallHeight(contract, x, y, rooms, tileType, cellHeights) {
+  function getWallHeight(contract, x, y, rooms, tileType, cellHeights, face, grid) {
     // Per-cell height override (e.g. building entrance doors computed at
     // floor build time). Takes priority over everything else — this is how
     // the door height contract resolves per-instance height differences
@@ -873,6 +892,33 @@ var SpatialContract = (function () {
       if (cellHeights[cellKey] != null) {
         return cellHeights[cellKey];
       }
+    }
+
+    // Per-face-per-tile override (e.g. TERMINAL front face short so the
+    // emoji peeks over the rim, back/side faces tall so the bezel hides
+    // the emoji from distance). Only fires when the caller supplies a
+    // face ('n'|'s'|'e'|'w') and the live grid — the DDA hot loop
+    // passes these; back-layer / default paths skip and fall through
+    // to tileWallHeights. Front vs back is inferred from the outward
+    // neighbor: if the tile on the far side of this face is walkable,
+    // that face is the "front" the player approaches.
+    if (tileType != null && face && grid && contract.tileFaceWallHeights &&
+        contract.tileFaceWallHeights[tileType]) {
+      var faceCfg = contract.tileFaceWallHeights[tileType];
+      var nx = x, ny = y;
+      if (face === 'w') nx = x - 1;
+      else if (face === 'e') nx = x + 1;
+      else if (face === 'n') ny = y - 1;
+      else if (face === 's') ny = y + 1;
+      var neighborWalkable = false;
+      if (ny >= 0 && grid[ny] && nx >= 0 && nx < grid[ny].length) {
+        var nt = grid[ny][nx];
+        neighborWalkable = TILES.isWalkable && TILES.isWalkable(nt);
+      }
+      var faceH = neighborWalkable
+        ? (faceCfg.front != null ? faceCfg.front : faceCfg.back)
+        : (faceCfg.back  != null ? faceCfg.back  : faceCfg.front);
+      if (faceH != null) return faceH;
     }
 
     // Per-tile-type height override (e.g. TREE tiles at 2x in exterior)

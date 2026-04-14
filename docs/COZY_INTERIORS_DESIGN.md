@@ -2,6 +2,16 @@
 > **DOC-10** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-03-29
 >
 > **⚠ Alignment note (v2.2, April 2 2026):** The world graph was restructured in Tutorial_world_roadmap.md v2.0+. Floor 0.1 (Entry Lobby) no longer exists — the player goes directly from Floor 0 to Floor 1 (The Promenade). References to "Entry Lobby" and "Floor 0.1" in this document should be read as Floor 1 interiors. The interior design principles and time-freeze rules remain valid. As of v2.2: DayCycle.setPaused() is implemented, BedPeek and MailboxPeek are live, bookshelves are auto-placed in all proc-gen interiors via `_placeBookshelvesInInterior()`, and Floor 1.6 has 7 hand-placed bookshelves. See §11 for full status.
+>
+> **⚠ Refresh note (v2.3, April 14 2026):** Since v2.2, a lot has shipped or landed in design that *directly* affects cozy interiors but wasn't represented here. Highlights:
+> - **Real window tiles** (`WINDOW_SHOP`/`BAY`/`SLIT`/`ALCOVE`/`COMMERCIAL`/`ARROWSLIT`/`MURDERHOLE`) with freeform cavities and face-aware tint (amber inside-looking-out, cyan outside-looking-in). Interiors are no longer wall-in-a-box — they have views. See `LIVING_WINDOWS_ROADMAP.md`.
+> - **EmojiMount system** binding emoji to tile cavities as vignette scenes. Interior windows will show pasted-parent-floor vignettes or curated scene emoji (candles, silhouettes). See `LIVING_WINDOWS_ROADMAP.md` §Phase 6 (in flight).
+> - **Surface-mount tile family** coming online: `TABLE`, `COUNTER`, `COFFEE_TABLE` with per-tile emoji mounts for drinks, books-in-progress, card piles, board-game props. Reframes BAR_COUNTER as the surface-mount prototype.
+> - **Proxy zones** — interior floors with windows looking out at live pasted exterior scenes (parent-floor tiles + skybox substitution). Pilot target: Driftwood Inn 1.2 windows looking at Promenade. See `PROXY_ZONE_DESIGN.md`.
+> - **Living Architecture primitives** (`PERGOLA`, `PERGOLA_BEAM`, `CANOPY`, `FENCE`) landed — relevant because the Coral Bazaar + future city plaza interiors will use open-air roofed pergolas as the cozy-but-exterior boundary zone. See `ARCHITECTURAL_SHAPES_ROADMAP.md`.
+> - **NPC system v1** shipped with bark pools, awareness cones, patrol paths. §10.4 "NPC presence" promise is now backed by real code. See `NPC_SYSTEM_ROADMAP.md` and `VERB_FIELD_NPC_ROADMAP.md`.
+>
+> The interaction taxonomy (§3), per-building inventory (§6), juice (§10), and cross-references (§12) have been updated. Section 5 reframes BAR_COUNTER as the prototype for the surface-mount family. Section 6 adds window placements per building. The Cross-References table is much larger.
 
 ---
 
@@ -10,8 +20,10 @@
 1. [Overview — The Safety Contract](#1-overview--the-safety-contract)
 2. [The Time-Freeze Rule](#2-the-time-freeze-rule)
 3. [Interior Interaction Taxonomy](#3-interior-interaction-taxonomy)
+3.5. [Interior Windows & Cavity Vignettes](#35-interior-windows--cavity-vignettes)
 4. [Bookshelf Interactions (BOOKSHELF tile)](#4-bookshelf-interactions-bookshelf-tile)
 5. [Bar Counter Interactions (BAR_COUNTER tile)](#5-bar-counter-interactions-bar_counter-tile)
+5.5. [Surface-Mount Family — Tables, Counters, Coffee Tables](#55-surface-mount-family--tables-counters-coffee-tables)
 6. [Per-Building Interaction Inventory](#6-per-building-interaction-inventory)
 7. [Cozy Minigame Stubs (Post-Jam Roadmap)](#7-cozy-minigame-stubs-post-jam-roadmap)
 8. [Book & Document Data Schema](#8-book--document-data-schema)
@@ -112,6 +124,62 @@ Every depth-2 interior has a curated set of interactable tiles beyond doors and 
 > - Furniture is **one-shot** (rest, check mail, store items).
 >
 > This tempo variety prevents interiors from feeling monotonous. Each interaction type demands a different mode of player attention, and the mix creates a natural rhythm of fast/slow, active/passive engagement.
+
+---
+
+## 3.5. Interior Windows & Cavity Vignettes
+
+**Status:** Tiles shipped, EmojiMount port in flight (see `LIVING_WINDOWS_ROADMAP.md` §Phase 6). Proxy-zone live views designed, not yet implemented (see `PROXY_ZONE_DESIGN.md`).
+
+Interior windows are the single biggest atmospheric upgrade to the cozy loop since v2.2. They dissolve the "interior is a box" claustrophobia without breaking the Safety Contract. The player can *see* the outside world — the dusk sky, the Promenade lanterns, a silhouette walking past — while time is still frozen for them.
+
+### 3.5.1 Window Tile Family
+
+| Tile | Use | Typical building |
+|------|-----|------------------|
+| `WINDOW_SHOP` | Tall commercial glass | Coral Bazaar, Dispatcher's Office |
+| `WINDOW_BAY` | Residential bay window (deeper cavity) | Driftwood Inn, Gleaner's Home |
+| `WINDOW_SLIT` | Thin horizontal — watchtower / basement | Watchman's Post |
+| `WINDOW_ALCOVE` | Recessed square — general residential | Home, Guild |
+| `WINDOW_COMMERCIAL` | Floor-to-ceiling storefront | Coral Bazaar |
+| `WINDOW_ARROWSLIT` | Defensive narrow vertical | Watchman's Post |
+| `WINDOW_MURDERHOLE` | Dungeon-scale inspection hatch | Soft Cellar entry, Hero's Wake |
+
+All are freeform-cavity tiles. The raycaster renders the mullion/frame as a solid band, the glass as an alpha-blended pane, and the cavity content (vignette or proxy zone) behind the glass.
+
+### 3.5.2 Cavity Vignette Model (EmojiMount)
+
+Each interior window tile can bind an emoji vignette via EmojiMount (`cavity` anchor mode). Vignettes are composed from the recipe library (`bv-emoji-recipes.js`): `window_shop` (merchandise silhouettes), `window_bay` (curtains + potted plant), etc.
+
+Vignettes render **behind** the glass, are **face-aware** (tinted by the side the player is looking from), and cull aggressively — the emoji never z-fights the mullion or the glass pane.
+
+### 3.5.3 Face-Aware Tint
+
+The glass always paints the *other* side's lighting:
+
+| Player position | Looking at window | Glass tint | Why |
+|-----------------|-------------------|-----------|-----|
+| Inside building (depth 2) | Inside face → outside world | Cyan / sky | Daylight spilling in |
+| Outside building (depth 1) | Outside face → inside world | Amber / lamp | Warm interior glow visible from street |
+
+Tint is driven from `DayCycle` phase; at night the cyan-out becomes deep navy, and the amber-in persists (lamps stay lit).
+
+### 3.5.4 Proxy Zones (Live Exterior Views)
+
+For interior floors where pasted static vignettes aren't enough — the Driftwood Inn facing the Promenade, or a motel room on city floor 4 — the window looks out at a **proxy zone**: a rectangle of parent-floor tiles with the parent's skybox substituted through a `hasOpenSky` ceiling puncture, and fog inherited via `fogProfile: 'parent'`. Designed in `PROXY_ZONE_DESIGN.md`; Driftwood Inn 1.2 is the pilot.
+
+### 3.5.5 Cozy Contract Implications
+
+Windows do **not** break the Safety Contract:
+- Time still frozen — the sky visible through an Inn window is a snapshot of the dusk the player left.
+- Enemies through a window cannot engage the player — no AI awareness cone crosses the pane (see dependency #5 in `ARCHITECTURAL_SHAPES_ROADMAP.md`).
+- Windows *do* carry narrative — seeing a hero march past an Inn window, or a dispatcher's silhouette in Lantern Row, is environmental storytelling with no gameplay cost.
+
+### 3.5.6 Authoring Policy
+
+- Exterior-facing windows on depth-1 (N) → emoji vignettes fine (curated cozy silhouettes).
+- Interior-facing windows on depth-2 (N.N) looking out → **no emoji on the N.N face**; reserved for tall commercial glass or proxy zones. (Per 2026-04-07 direction.)
+- Interior-facing windows on depth-2 (N.N) looking at another interior room → emoji vignettes fine (e.g., a pass-through into a kitchen).
 
 ---
 
@@ -222,6 +290,49 @@ This is not gated content — it's ambient discovery. The player is never forced
 The bar counter fills the same emotional niche as a bonfire but with lower stakes and cozy flavour. The bonfire is a survival checkpoint (heal, save, rest). The bar counter is a **comfort checkpoint** — it says "here's something small and nice for stopping by."
 
 The 3-tap limit prevents exploitation while still rewarding the player for visiting interiors. The limit resets on floor re-enter (not per-day), so the player can return to the Inn multiple times in one day and get more drinks — but they have to leave and come back each time. This creates a natural rhythm of dungeon work → building visit → dungeon work.
+
+---
+
+## 5.5. Surface-Mount Family — Tables, Counters, Coffee Tables
+
+**Status:** Design in `LIVING_WINDOWS_ROADMAP.md` §4.9. `BAR_COUNTER` is the surface-mount prototype. `TABLE` is a shipped furniture tile (see home room pair in §6.5) awaiting `surface` EmojiMount binding. `COUNTER` and `COFFEE_TABLE` are queued as new tile IDs in Phase 7.
+
+### 5.5.1 The Surface Principle
+
+A cozy interior is defined as much by what's *on* its furniture as by the furniture itself. A TABLE without a mug, a bookshelf without a book-in-progress, a counter without a bell-and-ledger — these are empty stage flats. The surface-mount family gives every flat-topped piece of furniture an emoji vignette bound to its top plane.
+
+### 5.5.2 Cap Heights (for EmojiMount `surface` anchor)
+
+| Tile | Cap height | Role | Typical scene emoji |
+|------|-----------|------|---------------------|
+| `COFFEE_TABLE` | 0.30 | Living-room low table | 🫖 kettle, ♠️/♥️/♦️/♣️ cards, 📖 open book |
+| `TABLE` | 0.52 | Dining / workshop table | 🍲 bowl, 🕯️ candle, 📜 parchment |
+| `COUNTER` | 0.78 | Shop counter / reception | 🔔 service bell, 📒 ledger, ⚖️ scales |
+| `BAR_COUNTER` | 0.78 | Drink service (prototype) | 🍺 mug, 🍵 teapot, 🧃 tonic bottle |
+| `SHELF` | 1.30 | Wall shelf, high counter end | 📘 stacked books, 🏺 jar cluster |
+
+### 5.5.3 Authoring: Recipe Library vs Per-Coord Override
+
+Two ways to bind scene emoji to a surface:
+
+- **Type mount (global)** — `EmojiMount.register({ tile: TILES.COFFEE_TABLE, recipe: 'coffee_table_home' })` — every COFFEE_TABLE in the world uses the same recipe's emoji pool.
+- **Instance mount (per-coord)** — `EmojiMount.registerAt(floorId, x, y, { scene: ['🍵', '📖'] })` — this specific table has exactly these props. Stored in the floor data's `emojiMounts` map, keyed by `"x,y"` (same shape as `doorTargets`, `windowScenes`).
+
+Per-coord wins over type. This is how the Driftwood Inn living-room COFFEE_TABLE gets its specific tea-and-book vignette while the Guild break-room table uses the generic `table_shop` recipe.
+
+### 5.5.4 Surface-Mount as Cozy Storytelling
+
+A TABLE with a half-drunk mug and a closed book reads as "someone was just here." A COUNTER with a bell and an open ledger reads as "service awaits." A COFFEE_TABLE with a card spread reads as "a game is in progress." None of these require new interaction verbs or peek overlays — they are pure visual language. Stardew Valley's NPC homes lean hard on this trick.
+
+### 5.5.5 Interaction Future
+
+For the jam, surface-mount is purely visual. Post-jam, surfaces can host micro-interactions:
+
+- **Card table** (COFFEE_TABLE with card scene) → card sorting minigame (§7.1).
+- **Counter with ledger** → work-order review panel (merged with §7.4).
+- **Table with bowl** → food refill / cooking pot entry (§7.3).
+
+These dovetail cleanly with §7 cozy minigame stubs; the surface-mount family is the visual stub for all of them.
 
 ---
 
@@ -551,19 +662,52 @@ If no explicit assignment exists, BookshelfPeek selects a biome-appropriate book
 
 ## 12. Cross-References
 
-| This Section | Links To | Relationship |
-|--------------|----------|-------------|
-| §2 Time-Freeze | → DOC-7 §5 Day/Night Cycle | Day cycle must expose `setPaused()` |
-| §2 Time-Freeze | → DOC-7 §17 Fail States | Curfew cannot trigger inside buildings |
-| §4 Bookshelf | → `engine/bookshelf-peek.js` | Implementation |
-| §4 Bookshelf | → `data/books.json` | Book data catalog |
-| §5 Bar Counter | → `engine/bar-counter-peek.js` | Implementation |
-| §5 Bar Counter | → DOC-7 §6 Juice Inventory | Juice spec for drink effects |
-| §6 Building Inventory | → DOC-2 §3 Floor Registry | Floor grid positions |
-| §6 Building Inventory | → DOC-2 §5 Floor Designs | Building layouts |
-| §6 Building Inventory | → ACT2_NARRATIVE_OUTLINE §5.4 Housing Reassignment | Temporary HomeBnB → field quarters downgrade uses interior feature tiers |
-| §6 Building Inventory | → DOC-9 §9 Interior NPCs | NPC roster per building |
-| §7 Minigame Stubs | → Post-jam backlog | Not scheduled for jam |
-| §8 Book Schema | → `data/books.json` | Data format spec |
-| §10 Juice | → DOC-7 §6 Juice Inventory (§6.7) | Cross-referenced juice entries |
-| §11 Roadmap | → DOC-6 TABLE_OF_CONTENTS Phase B/C | Scheduled implementation |
+### 12.1 Design Docs (cozy & interior-adjacent)
+
+| Doc | Why it's relevant to cozy interiors |
+|-----|-------------------------------------|
+| `LIVING_WINDOWS_ROADMAP.md` | Window tile family, EmojiMount port, surface-mount tiles (TABLE/COUNTER/COFFEE_TABLE), blockout authoring, patrons, hours. Direct feed for §3.5 and §5.5. |
+| `PROXY_ZONE_DESIGN.md` | Interior windows looking out at live parent-floor exterior scenes. Pilot is Driftwood Inn 1.2 → Promenade. Direct feed for §3.5.4. |
+| `ARCHITECTURAL_SHAPES_ROADMAP.md` | Living-architecture primitives (PERGOLA, PERGOLA_BEAM, CANOPY, FENCE, window family). Tile predicates reference. Dependencies for open-building NPC flow. |
+| `NPC_SYSTEM_ROADMAP.md` | Shipped NPC v1 — bark pools, awareness cones, patrols. Backs §10.4's "NPC presence" promise. |
+| `VERB_FIELD_NPC_ROADMAP.md` | Verb-field NPC behaviors — the shuffle-through-pergola pathing that makes interiors feel inhabited from outside. |
+| `LIVING_INFRASTRUCTURE_BLOCKOUT.md` | Blockout of living-infrastructure tiles on floors 1–3 — locates where cozy furniture and NPC patrol paths overlap. |
+| `D3_AI_LIVING_INFRA_PROCGEN_AUDIT_ROADMAP.md` | Dungeon-3 audit; relevant because interior→dungeon transitions are where the Safety Contract flips off. |
+| `STREET_CHRONICLES_NARRATIVE_OUTLINE.md` | Faction structure + NPC roster driving bookshelf lore content. |
+| `ACT2_NARRATIVE_OUTLINE.md` §5.4 | Housing Reassignment — HomeBnB → field quarters downgrade uses interior feature tiers. |
+| `Tutorial_world_roadmap.md` | World graph + floor registry; source of truth for floor IDs referenced in §6. |
+| `SEAWAY_FLOOR_DESIGN.md` | Sealab biome — porthole animated texture pattern is the historical ancestor of EmojiMount cavity vignettes. |
+| `HERO_FOYER_ENCOUNTER.md` | The hero's-mess interior encounter; directly plays against the Safety Contract (§1) as a deliberate one-time breach. |
+| `COMBAT_DRAG_SYSTEM.md` | Card-combat input — relevant to §7.1 card sorting minigame (reuses drag affordances). |
+| `INVENTORY_CARD_MENU_REWORK.md`, `INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md`, `UNIFIED_INVENTORY_METADATA_CONTRACT.md` | Inventory surface; bar-counter drinks and bookshelf oneShots interact with card metadata + card fan. |
+| `SHOP_REFRESH_ECONOMY.md` | Coral Bazaar vendor loop; the shop-interior interplay is part of the cozy contract. |
+| `CRATEUI_INTERACTION_OVERHAUL.md`, `UNIFIED_RESTOCK_SURFACE_ROADMAP.md`, `CHEST_RESTOCK_AND_WORK_ORDERS.md` | Surface-mount family (§5.5) adjacency — chests and counters use the same EmojiMount `surface` anchor. |
+| `LIGHT_AND_TORCH_ROADMAP.md` | Interior lighting is currently "uniformly lit"; this doc defines how that softens post-jam (candle flicker, bonfire glow). Pairs with §10.4 Ambient juice. |
+| `AUDIO_ENGINE.md`, `SPATIAL_AUDIO_BARK_ROADMAP.md` | Interior ambient audio (§10.4) and bark pool pipeline (§4.4, §10.2). |
+| `VERB_FIELD_NPC_ROADMAP.md` | Shuffle-through behaviors for interior NPCs (innkeeper patrolling, guildmates walking). |
+| `MENU_INTERACTIONS_CATALOG.md`, `B5_INVENTORY_INTERACTION_DESIGN.md`, `B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md` | Verbs catalogued for interior interactions; §3 taxonomy pulls from here. |
+| `TOOLTIP_BARK_ROADMAP.md`, `EYESONLYS_TOOLTIP_SPACE_CANON.md` | Interior bark pools + tooltip spacing for peek overlays. |
+| `CORE_GAME_LOOP_AND_JUICE.md` | Source of the broader juice inventory §10 expands on. |
+| `VISUAL_OVERHAUL.md`, `SKYBOX_ROADMAP.md` | Window-tint day/night driver (DayCycle + skybox) — §3.5.3 depends on both. |
+| `FATIGUE_SYSTEM_ROADMAP.md` | Rest + bed-peek; the cozy contract's mechanical payoff (clearing TIRED). |
+| `PEEK_SYSTEM_ROADMAP.md`, `PEEK_WORKBENCH_SCOPE.md` | Peek overlay architecture — §9 module specs inherit from here. |
+
+### 12.2 Implementation References
+
+| This Section | Implementation / Data |
+|--------------|-----------------------|
+| §2 Time-Freeze | `engine/day-cycle.js` (`setPaused()`), wired in `Game._onFloorArrive()` |
+| §3.5 Windows | `engine/tiles.js` (WINDOW_*), `engine/spatial-contract.js` (freeform config), `engine/raycaster-sprites.js` (cavity vignettes) |
+| §4 Bookshelf | `engine/bookshelf-peek.js`, `data/books.json` |
+| §5 Bar Counter | `engine/bar-counter-peek.js` |
+| §5.5 Surface-Mount | Planned: `engine/emoji-mount.js`, `tools/bv-emoji-recipes.js`, `emojiMounts` map in floor data |
+| §6 Building Inventory | `engine/floor-manager.js` floor data, `_placeBookshelvesInInterior()` |
+| §8 Book Schema | `data/books.json` |
+| §9 Peek Specs | `engine/bookshelf-peek.js`, `engine/bar-counter-peek.js`, `engine/bed-peek.js`, `engine/mailbox-peek.js` |
+
+### 12.3 Historical / Archive
+
+| Doc | Relationship |
+|-----|-------------|
+| `Archive/BONFIRE_BRAINSTORMING.md` | Bonfire-as-checkpoint reasoning; §5.4 (bar counter as micro-bonfire) inherits from here. |
+| `Archive/LIVING_INFRASTRUCTURE_BRAINSTORM.md` | Original living-infrastructure thinking; superseded by `LIVING_INFRASTRUCTURE_BLOCKOUT.md` and `NPC_SYSTEM_ROADMAP.md`. |

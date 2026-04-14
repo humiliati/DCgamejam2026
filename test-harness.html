@@ -292,6 +292,10 @@
             <input type="checkbox" id="t-perfMon">
             <span>Resource tracker<small>FPS, frame time, stutter log, scene counts</small></span>
           </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-spatialRuler">
+            <span>Spatial ruler<small>world-Y ruler on 3D viewport (SpatialDebug)</small></span>
+          </label>
         </div>
       </fieldset>
 
@@ -354,7 +358,7 @@
         if (saved.floor)     floorIn.value = saved.floor;
         if (saved.callsign)  document.getElementById('callsign').value = saved.callsign;
         if (saved.klass)     document.getElementById('klass').value = saved.klass;
-        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon'].forEach(function (k) {
+        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon','spatialRuler'].forEach(function (k) {
           var el = document.getElementById('t-' + k);
           if (el && typeof saved[k] === 'boolean') el.checked = saved[k];
         });
@@ -374,7 +378,8 @@
         fullHp:     document.getElementById('t-fullHp').checked,
         hideHud:    document.getElementById('t-hideHud').checked,
         logState:   document.getElementById('t-logState').checked,
-        perfMon:    document.getElementById('t-perfMon').checked
+        perfMon:    document.getElementById('t-perfMon').checked,
+        spatialRuler: document.getElementById('t-spatialRuler').checked
       };
     }
 
@@ -395,6 +400,7 @@
       if (c.hideHud)    params.set('hideHud',    '1');
       if (c.logState)   params.set('logState',   '1');
       if (c.perfMon)    params.set('perfMon',    '1');
+      if (c.spatialRuler) params.set('spatialRuler', '1');
       return 'index.html?' + params.toString();
     }
 

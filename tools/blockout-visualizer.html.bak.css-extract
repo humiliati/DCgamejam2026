@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dungeon Gleaner — Blockout Visualizer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d0d0d;
+  color: #ccc;
+  font-family: 'Consolas', 'Monaco', monospace;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#toolbar label { font-size: 11px; color: #888; }
+#toolbar select, #toolbar button {
+  background: #222;
+  color: #ddd;
+  border: 1px solid #444;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+#toolbar select:hover, #toolbar button:hover { border-color: #777; }
+#toolbar button.active { background: #2a6a2a; border-color: #4a4; }
+#toolbar button.edit-active { background: #6a2a2a; border-color: #a44; }
+#toolbar button.tool-active { background: #4a3a6a; border-color: #86c; }
+#toolbar button.copy-btn { background: #2a4a6a; border-color: #49a; }
+#toolbar button.copy-btn:hover { background: #3a5a7a; }
+#toolbar button.copy-btn.flash { background: #2a6a2a; border-color: #4a4; transition: background 0.1s; }
+#toolbar button.save-btn { background: #2a6a2a; border-color: #4a4; color: #eff; }
+#toolbar button.save-btn:hover { background: #3a7a3a; }
+#toolbar button.save-btn.needs-dir { background: #6a4a2a; border-color: #a74; }
+#save-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999;
+  display: none; align-items: center; justify-content: center;
+}
+#save-modal.open { display: flex; }
+#save-modal-inner {
+  background: #1a1d22; border: 1px solid #445; border-radius: 8px;
+  width: 80%; max-width: 900px; max-height: 80vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#save-modal-inner h3 { margin: 0; padding: 14px 18px; border-bottom: 1px solid #334;
+  color: #cfe; font-family: Consolas, monospace; font-size: 13px; }
+#save-diff { flex: 1; overflow: auto; padding: 12px 18px; font-family: Consolas, monospace;
+  font-size: 11px; line-height: 1.45; white-space: pre; color: #bcd; background: #0f1114; }
+#save-diff .diff-add { color: #7f7; background: #0e2a0e; display: block; }
+#save-diff .diff-del { color: #f88; background: #2a0e0e; display: block; }
+#save-diff .diff-hunk { color: #8af; display: block; }
+#save-diff .diff-meta { color: #789; display: block; }
+#save-modal-actions { padding: 12px 18px; border-top: 1px solid #334;
+  display: flex; justify-content: flex-end; gap: 8px; }
+#save-modal-actions button { padding: 6px 14px; font-family: Consolas, monospace; font-size: 12px;
+  cursor: pointer; border-radius: 4px; }
+#save-modal-actions .primary { background: #2a6a2a; border: 1px solid #4a4; color: #eff; }
+#save-modal-actions .primary:hover { background: #3a7a3a; }
+#save-modal-actions .secondary { background: #333; border: 1px solid #556; color: #bcd; }
+
+/* Validation modal */
+#validate-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999;
+  display: none; align-items: center; justify-content: center;
+}
+#validate-modal.open { display: flex; }
+#validate-modal-inner {
+  background: #1a1d22; border: 1px solid #445; border-radius: 8px;
+  width: 80%; max-width: 980px; max-height: 82vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#validate-modal-inner h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid #334;
+  color: #cfe; font-family: Consolas, monospace; font-size: 13px; display:flex; align-items:center; gap:10px; }
+#validate-modal-inner h3 .vm-sub { color:#789; font-size:10px; font-weight:normal; margin-left:auto; }
+#validate-tabs { display:flex; gap:0; border-bottom:1px solid #334; background:#14171c; flex-shrink:0; }
+#validate-tabs button { flex:1; padding:8px 12px; background:transparent; color:#789;
+  border:none; border-bottom:2px solid transparent; font-family:Consolas,monospace;
+  font-size:11px; cursor:pointer; }
+#validate-tabs button:hover { color:#bcd; background:#1c2028; }
+#validate-tabs button.active { color:#cfe; border-bottom-color:#6ab0e8; background:#1c2028; }
+#validate-summary { padding:10px 16px; border-bottom:1px solid #334; background:#14171c;
+  color:#bcd; font-family:Consolas,monospace; font-size:11px; display:flex; gap:18px; align-items:center; }
+#validate-summary .pill { padding:2px 8px; border-radius:10px; font-size:10px; }
+#validate-summary .pill.err { background:#3a1414; color:#f88; border:1px solid #833; }
+#validate-summary .pill.warn { background:#3a2a14; color:#fc8; border:1px solid #a73; }
+#validate-summary .pill.ok { background:#143a1a; color:#7f7; border:1px solid #383; }
+#validate-list { flex:1; overflow:auto; padding:0; font-family:Consolas,monospace; font-size:11px;
+  background:#0f1114; }
+#validate-list .vrow { display:flex; align-items:center; gap:10px; padding:8px 16px;
+  border-bottom:1px solid #222; cursor:pointer; color:#bcd; }
+#validate-list .vrow:hover { background:#1c2028; }
+#validate-list .vrow.selected { background:#233040; color:#cfe; }
+#validate-list .vrow .vsev { width:56px; font-size:10px; padding:2px 6px; border-radius:3px; text-align:center; flex-shrink:0; }
+#validate-list .vrow .vsev.err  { background:#3a1414; color:#f88; border:1px solid #833; }
+#validate-list .vrow .vsev.warn { background:#3a2a14; color:#fc8; border:1px solid #a73; }
+#validate-list .vrow .vsev.info { background:#14283a; color:#8cf; border:1px solid #357; }
+#validate-list .vrow .vfloor { color:#8af; width:70px; flex-shrink:0; }
+#validate-list .vrow .vkind { color:#cfa; width:140px; flex-shrink:0; }
+#validate-list .vrow .vmsg { flex:1; color:#bcd; }
+#validate-list .vrow .vcells { color:#789; font-size:10px; flex-shrink:0; }
+#validate-list .vempty { padding:24px 16px; text-align:center; color:#6a7; }
+#validate-modal-actions { padding:10px 16px; border-top:1px solid #334;
+  display:flex; justify-content:flex-end; gap:8px; }
+#validate-modal-actions button { padding:5px 12px; font-family:Consolas,monospace; font-size:11px;
+  cursor:pointer; border-radius:4px; }
+#validate-modal-actions .primary { background:#2a6a2a; border:1px solid #4a4; color:#eff; }
+#validate-modal-actions .secondary { background:#333; border:1px solid #556; color:#bcd; }
+
+#toolbar button.validate-btn { background:#4a3a6a; border:1px solid #75a; color:#eff; }
+#toolbar button.validate-btn:hover { background:#5a4a8a; }
+#toolbar button.validate-btn.has-errors { background:#6a2a2a; border-color:#a44; }
+#toolbar button.validate-btn.has-warnings { background:#6a4a2a; border-color:#a74; }
+#toolbar button.validate-btn.clean { background:#2a6a2a; border-color:#4a4; }
+
+/* Tier 3 metadata panel — right-side overlay mirroring #windows-panel */
+#metadata-panel {
+  position:absolute; top:10px; right:10px; z-index:12;
+  background:rgba(18,22,28,0.94); border:1px solid #445; border-radius:6px;
+  color:#cfe; font-family:Consolas,monospace; font-size:11px;
+  max-height:70vh; overflow:auto; min-width:240px; max-width:320px;
+  box-shadow:0 6px 22px rgba(0,0,0,0.55);
+  display:none;
+}
+#metadata-panel.open { display:block; }
+#metadata-panel .mp-header { padding:8px 12px; border-bottom:1px solid #334;
+  color:#cfe; background:#1c2028; display:flex; align-items:center; gap:8px; }
+#metadata-panel .mp-header .mp-title { flex:1; font-weight:bold; color:#ffd7; }
+#metadata-panel .mp-header button { padding:2px 8px; font-family:Consolas,monospace;
+  font-size:10px; background:#333; border:1px solid #556; color:#bcd; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-header button:hover { background:#444; }
+#metadata-panel .mp-section-title { padding:6px 12px; color:#789; font-size:10px;
+  text-transform:uppercase; letter-spacing:0.5px; background:#14171c; border-bottom:1px solid #222; }
+#metadata-panel .mp-row { padding:6px 12px; border-bottom:1px solid #222;
+  display:flex; align-items:center; gap:8px; }
+#metadata-panel .mp-row:hover { background:#1c2028; }
+#metadata-panel .mp-tileswatch { width:14px; height:14px; border:1px solid #555; flex-shrink:0; border-radius:2px; }
+#metadata-panel .mp-row .mp-label { color:#bcd; flex:1; }
+#metadata-panel .mp-row .mp-coords { color:#789; font-size:10px; }
+#metadata-panel .mp-row select { background:#222; border:1px solid #556; color:#cfe;
+  font-family:Consolas,monospace; font-size:10px; padding:2px 4px; border-radius:3px; min-width:80px; }
+#metadata-panel .mp-row button.mp-move { padding:2px 8px; background:#3a5a7a; border:1px solid #578;
+  color:#cfe; font-family:Consolas,monospace; font-size:10px; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-row button.mp-move:hover { background:#4a6a8a; }
+#metadata-panel .mp-row button.mp-move.placing { background:#8a6a2a; border-color:#c94; color:#ffd; }
+#metadata-panel .mp-empty { padding:14px 12px; color:#6a7; text-align:center; font-style:italic; }
+#metadata-panel .mp-actions { padding:8px 12px; border-top:1px solid #334;
+  display:flex; gap:6px; background:#14171c; }
+#metadata-panel .mp-actions button { flex:1; padding:4px 8px; font-family:Consolas,monospace;
+  font-size:10px; background:#333; border:1px solid #556; color:#bcd; border-radius:3px; cursor:pointer; }
+#metadata-panel .mp-actions button:hover { background:#444; }
+#metadata-panel .mp-actions button.primary { background:#2a6a2a; border-color:#4a4; color:#eff; }
+#metadata-panel .mp-actions button.primary:hover { background:#3a7a3a; }
+#toolbar button.meta-btn { background:#4a2a6a; border:1px solid #85a; color:#eff; }
+#toolbar button.meta-btn:hover { background:#5a3a8a; }
+#toolbar button.meta-btn.active { background:#6a3a9a; border-color:#a8d; }
+#toolbar .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+#toolbar .spacer { flex: 1; }
+#toolbar .title { font-size: 13px; font-weight: bold; color: #e8c547; letter-spacing: 1px; }
+#zoom-display { font-size: 10px; color: #666; min-width: 40px; text-align: center; }
+#edit-count { font-size: 10px; color: #e86a6a; display: none; }
+
+/* ── Resize bar ──────────────────────────────────────────── */
+#resize-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  font-size: 10px;
+  color: #888;
+  flex-shrink: 0;
+}
+#resize-bar button {
+  background: #222; color: #ddd; border: 1px solid #444;
+  padding: 1px 7px; font-family: inherit; font-size: 11px; cursor: pointer;
+  min-width: 22px;
+}
+#resize-bar button:hover { border-color: #777; }
+#resize-bar .rsep { width: 1px; height: 16px; background: #444; margin: 0 4px; }
+#resize-bar label { color: #999; font-size: 10px; }
+#resize-bar .dim-display { color: #e8c547; font-weight: bold; min-width: 60px; text-align: center; }
+
+/* ── Canvas area ─────────────────────────────────────────── */
+#canvas-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: crosshair;
+}
+canvas { display: block; }
+
+/* ── Tooltip ─────────────────────────────────────────────── */
+#tooltip {
+  position: absolute;
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+  display: none;
+  z-index: 10;
+  max-width: 280px;
+  white-space: pre-line;
+}
+#tooltip .tt-tile { color: #e8c547; font-weight: bold; }
+#tooltip .tt-coord { color: #888; }
+#tooltip .tt-prop { color: #6ab0e8; }
+
+/* Custom hover tooltip for [title] UI elements (toolbar buttons, dropdowns, etc.) */
+#ui-tooltip {
+  position: fixed;
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  color: #ddd;
+  padding: 5px 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-family: Consolas, monospace;
+  pointer-events: none;
+  display: none;
+  z-index: 9999;
+  max-width: 300px;
+  white-space: pre-line;
+  box-shadow: 0 2px 8px #000a;
+}
+#ui-tooltip .tt-key {
+  color: #e8c547;
+  font-weight: bold;
+}
+#tooltip .tt-door { color: #e86a6a; }
+#tooltip .tt-edit { color: #e86a6a; font-style: italic; }
+
+/* ── Windows panel (Tier 4 — window-scene editor) ──────────── */
+#windows-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #1a1a1acc;
+  border: 1px solid #446;
+  padding: 6px 10px;
+  font-size: 10px;
+  line-height: 1.6;
+  max-height: 45%;
+  overflow-y: auto;
+  z-index: 5;
+  display: none;
+  min-width: 170px;
+}
+#windows-panel.has-windows { display: block; }
+#windows-panel .wp-title { color: #9cf; font-weight: bold; margin-bottom: 4px; letter-spacing: 1px; }
+#windows-panel .wp-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer;
+  border-radius: 2px;
+}
+#windows-panel .wp-row:hover { background: #ffffff1a; }
+#windows-panel .wp-swatch {
+  width: 10px; height: 10px; border: 1px solid #666; flex-shrink: 0;
+}
+#windows-panel .wp-coord { color: #bcd; min-width: 46px; }
+#windows-panel .wp-name  { color: #889; font-size: 9px; }
+#windows-panel .wp-has-scene { color: #9e9; }
+#windows-panel .wp-empty { color: #666; font-style: italic; padding: 2px 0; }
+
+/* ── Scene editor modal ────────────────────────────────────── */
+#scene-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 998;
+  display: none; align-items: center; justify-content: center;
+}
+#scene-modal.open { display: flex; }
+#scene-modal-inner {
+  background: #14161a; border: 1px solid #446; border-radius: 8px;
+  width: 720px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#scene-modal-inner h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid #334;
+  color: #9cf; font-family: Consolas, monospace; font-size: 13px;
+  display: flex; justify-content: space-between; align-items: center; }
+#scene-modal-inner h3 .sm-sub { color: #789; font-size: 10px; font-weight: normal; }
+#scene-body { padding: 12px 16px; display: flex; gap: 14px; flex: 1; overflow: auto; }
+#scene-canvas-wrap { flex: 0 0 auto; }
+#scene-canvas { background: #0b0c10; border: 1px solid #445; display: block; cursor: crosshair; image-rendering: pixelated; }
+#scene-meta { flex: 1; font-family: Consolas, monospace; font-size: 11px; color: #bcd;
+  display: flex; flex-direction: column; gap: 10px; }
+#scene-meta .sm-section { border: 1px solid #334; padding: 8px 10px; border-radius: 4px; }
+#scene-meta .sm-section-title { color: #9cf; font-size: 10px; letter-spacing: 1px; margin-bottom: 4px; }
+#scene-meta button { font-family: inherit; font-size: 10px; cursor: pointer; padding: 3px 8px;
+  background: #2a2d35; color: #ddd; border: 1px solid #556; border-radius: 3px; margin-right: 4px; }
+#scene-meta button:hover { background: #3a3d45; border-color: #778; }
+#scene-meta button.primary { background: #2a4a6a; border-color: #49a; }
+#scene-meta button.primary:hover { background: #3a5a7a; }
+#scene-meta .sm-tile-info { color: #889; font-size: 10px; }
+#scene-meta .sm-paint-hint { color: #666; font-size: 10px; font-style: italic; }
+#scene-modal-actions { padding: 10px 16px; border-top: 1px solid #334;
+  display: flex; justify-content: flex-end; gap: 6px; }
+#scene-modal-actions button { padding: 5px 12px; font-family: Consolas, monospace; font-size: 11px;
+  cursor: pointer; border-radius: 4px; }
+#scene-modal-actions .primary { background: #2a6a2a; border: 1px solid #4a4; color: #eff; }
+#scene-modal-actions .secondary { background: #333; border: 1px solid #556; color: #bcd; }
+
+/* ── Legend panel ─────────────────────────────────────────── */
+#legend-panel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #1a1a1acc;
+  border: 1px solid #333;
+  padding: 8px 12px;
+  font-size: 10px;
+  line-height: 1.8;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  z-index: 5;
+  display: none;
+}
+#legend-panel .legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+#legend-panel .legend-row:hover { background: #ffffff11; }
+#legend-panel .legend-row.selected { background: #e8c54722; outline: 1px solid #e8c547; }
+#legend-panel .legend-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #555;
+  flex-shrink: 0;
+}
+
+/* ── Tile picker (edit mode) ─────────────────────────────── */
+#tile-picker {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1aee;
+  border: 1px solid #555;
+  padding: 6px 10px;
+  display: none;
+  z-index: 6;
+  max-width: 90vw;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+#tile-picker .tp-row { display: inline-flex; gap: 2px; align-items: center; margin-right: 10px; }
+#tile-picker .tp-tile {
+  width: 22px; height: 22px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+#tile-picker .tp-tile:hover { border-color: #fff; }
+#tile-picker .tp-tile.selected { border-color: #e8c547; box-shadow: 0 0 6px #e8c547; }
+#tile-picker .tp-tile .tp-label {
+  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+  font-size: 8px; color: #888; white-space: nowrap; pointer-events: none; display: none;
+}
+#tile-picker .tp-tile:hover .tp-label { display: block; }
+#tile-picker .tp-cat { font-size: 9px; color: #666; margin-right: 4px; writing-mode: vertical-rl; text-orientation: mixed; }
+
+/* ── Lasso selection ─────────────────────────────────────── */
+#lasso-rect {
+  position: absolute;
+  border: 2px dashed #e8c547;
+  background: #e8c54711;
+  pointer-events: none;
+  z-index: 4;
+  display: none;
+}
+
+/* ── Clipboard toast ─────────────────────────────────────── */
+#copy-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #2a6a2aee;
+  color: #fff;
+  padding: 12px 24px;
+  font-size: 14px;
+  border-radius: 6px;
+  z-index: 100;
+  display: none;
+  pointer-events: none;
+}
+
+/* ── Info bar ────────────────────────────────────────────── */
+#info-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 16px;
+  background: #1a1a1a;
+  border-top: 1px solid #333;
+  font-size: 11px;
+  color: #666;
+  flex-shrink: 0;
+}
+#info-bar .ib-label { color: #888; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title">BLOCKOUT VISUALIZER</span>
+  <div class="sep"></div>
+  <label>Floor:</label>
+  <select id="floor-select" title="Select floor to view / edit"></select>
+  <div class="sep"></div>
+  <button id="btn-edit" title="Toggle edit mode (E)">Edit</button>
+  <span id="tool-row" style="display:none">
+    <button id="btn-tool-paint"   class="tool-active" title="Paint brush (P)">Paint</button>
+    <button id="btn-tool-rect"    title="Rectangle (R) — hold Shift for outline">Rect</button>
+    <button id="btn-tool-line"    title="Line (N) — Bresenham">Line</button>
+    <button id="btn-tool-bucket"  title="Flood fill (F)">Fill</button>
+    <button id="btn-tool-replace" title="Replace all of type (X)">Replace</button>
+    <button id="btn-lasso"        title="Lasso (L) — drag to select, drag selection to move">Lasso</button>
+    <button id="btn-copy"         title="Copy selection (Ctrl+C)">Copy</button>
+    <button id="btn-cut"          title="Cut selection (Ctrl+X)">Cut</button>
+    <button id="btn-tool-paste"   title="Paste (V / Ctrl+V) — click to stamp at cursor">Paste</button>
+    <label style="margin-left:8px">Brush:</label>
+    <select id="brush-size" title="Brush size (paint tool)">
+      <option value="1">1×1</option><option value="2">2×2</option>
+      <option value="3">3×3</option><option value="5">5×5</option>
+    </select>
+    <span id="clipboard-badge" title="Clipboard — click to jump to source floor"
+          style="display:none; margin-left:12px; padding:2px 8px; border-radius:10px;
+                 background:#2a4a6a; color:#cfe; font-size:11px; cursor:pointer;
+                 font-family:Consolas,monospace; vertical-align:middle;">
+      <canvas id="clipboard-thumb" width="28" height="28"
+              style="vertical-align:middle; margin-right:6px; background:#111; border:1px solid #44668a;"></canvas>
+      <span id="clipboard-badge-text">—</span>
+    </span>
+  </span>
+  <button id="btn-undo" style="display:none" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="btn-redo" style="display:none" title="Redo (Ctrl+Shift+Z / Ctrl+Y)">Redo</button>
+  <button id="btn-revert" style="display:none" title="Revert all edits on this floor (confirms first)">Revert</button>
+  <span id="edit-count"></span>
+  <div class="sep"></div>
+  <button id="btn-copy-full" class="copy-btn" title="Copy the whole grid as a JS array literal — paste into a floor builder">Copy Full</button>
+  <button id="btn-copy-diff" class="copy-btn" title="Copy only changed cells (unchanged = `..`) — good for code review">Copy Diff</button>
+  <button id="btn-meta" class="meta-btn" title="Metadata panel — edit spawn, door targets (Tier 3)">Meta</button>
+  <button id="btn-validate" class="validate-btn" title="Validate floor (walkability, door contracts, spawn, required tiles)">Validate</button>
+  <button id="btn-save" class="save-btn" title="Save to file (Ctrl+S) — writes to engine/floor-blockout-*.js">Save</button>
+  <button id="btn-save-dir" class="save-btn needs-dir" style="display:none"
+          title="Pick the engine/ folder to enable direct writes">Pick engine/…</button>
+  <div class="spacer"></div>
+  <button id="btn-legend" title="Toggle legend panel (L in view mode)">Legend</button>
+  <button id="btn-rooms" class="active" title="Toggle room overlays (R in view mode)">Rooms</button>
+  <button id="btn-doors" class="active" title="Toggle door-target overlays (D)">Doors</button>
+  <button id="btn-grid" title="Toggle grid lines (G)">Grid</button>
+  <button id="btn-ids" title="Toggle tile IDs / glyphs (I)">IDs</button>
+  <span id="zoom-display">1.0x</span>
+</div>
+
+<div id="resize-bar">
+  <label>Resize:</label>
+  <span>Cols</span>
+  <button id="btn-col-shrink-l" title="Remove column from left">-L</button>
+  <button id="btn-col-add-l" title="Add column to left">+L</button>
+  <span class="dim-display" id="dim-display">50 x 36</span>
+  <button id="btn-col-add-r" title="Add column to right">+R</button>
+  <button id="btn-col-shrink-r" title="Remove column from right">-R</button>
+  <span class="rsep"></span>
+  <span>Rows</span>
+  <button id="btn-row-shrink-t" title="Remove row from top">-T</button>
+  <button id="btn-row-add-t" title="Add row to top">+T</button>
+  <span>&middot;</span>
+  <button id="btn-row-add-b" title="Add row to bottom">+B</button>
+  <button id="btn-row-shrink-b" title="Remove row from bottom">-B</button>
+  <span class="rsep"></span>
+  <label>Fill tile:</label>
+  <select id="resize-fill-tile" title="Tile used when growing the grid (added cells)"></select>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="cv"></canvas>
+  <div id="tooltip"></div>
+  <div id="legend-panel"></div>
+  <div id="windows-panel"></div>
+  <div id="metadata-panel"></div>
+  <div id="tile-picker"></div>
+  <div id="lasso-rect"></div>
+</div>
+
+<div id="copy-toast"></div>
+
+<div id="info-bar">
+  <span><span class="ib-label">Cursor:</span> <span id="ib-pos">--</span></span>
+  <span><span class="ib-label">Tile:</span> <span id="ib-tile">--</span></span>
+  <span><span class="ib-label">Grid:</span> <span id="ib-grid">--</span></span>
+  <span><span class="ib-label">Floor:</span> <span id="ib-floor">--</span></span>
+  <span><span class="ib-label">Paint:</span> <span id="ib-paint">--</span></span>
+  <span><span class="ib-label">Tool:</span> <span id="ib-tool">Paint</span></span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     Pass 0.1 — extracted modules (load order is the dependency graph).
+     The inline <script> below still contains the original definitions
+     as a fallback / safety net; modules define globals first, inline
+     code redeclares identically (no-op). Later passes will delete the
+     extracted sections from inline as we gain confidence.
+     ═══════════════════════════════════════════════════════════════ -->
+<script src="js/bv-tile-schema.js"></script>
+<script src="js/bv-floor-data.js"></script>
+<script src="js/bv-edit-state.js"></script>
+<script src="js/bv-brush.js"></script>
+<script src="js/bv-primitives.js"></script>
+<script src="js/bv-grid-resize.js"></script>
+<script src="js/bv-lasso.js"></script>
+<script src="js/bv-clipboard.js"></script>
+<script src="js/bv-save-patcher.js"></script>
+<script src="js/bv-clipboard-utils.js"></script>
+<script src="js/bv-render.js"></script>
+<script src="js/bv-interaction.js"></script>
+<script src="js/bv-tile-picker.js"></script>
+<script src="js/bv-legend.js"></script>
+<script src="js/bv-floor-selection.js"></script>
+<script src="js/bv-toolbar.js"></script>
+<script src="js/bv-scenes.js"></script>
+<script src="js/bv-validation.js"></script>
+<script src="js/bv-meta-editor.js"></script>
+<script src="js/bv-ui-tooltip.js"></script>
+<script src="js/bv-bo-router.js"></script>
+<script src="js/bv-stamp-library.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  [Pass 0.1 CLEANUP] 9 inline fallback section bodies removed.
+//  All of the following are now live from their js/bv-*.js modules:
+//    TILE SCHEMA           → js/bv-tile-schema.js
+//    FLOOR DATA LOADER     → js/bv-floor-data.js
+//    EDIT STATE            → js/bv-edit-state.js + bv-brush.js + bv-primitives.js
+//    GRID RESIZE           → js/bv-grid-resize.js
+//    LASSO TOOL            → js/bv-lasso.js
+//    SELECTION CLIPBOARD   → js/bv-clipboard.js
+//    DIRECT FILE WRITE     → js/bv-save-patcher.js
+//    CLIPBOARD (utils)     → js/bv-clipboard-utils.js
+//    RENDERING             → js/bv-render.js
+//  Removing the inline `applyEntry` redeclaration also restores the
+//  bv-meta-editor monkey-patch that was previously being overwritten.
+// ═══════════════════════════════════════════════════════════════
+// [Pass 0.1] INTERACTION → js/bv-interaction.js
+// (pan, zoom, hover, paint, lasso event handlers extracted —
+//  inline block removed because addEventListener stacks)
+
+// [Pass 0.1] TILE PICKER → js/bv-tile-picker.js
+
+// [Pass 0.1] LEGEND → js/bv-legend.js
+
+// [Pass 0.1] FLOOR SELECTION → js/bv-floor-selection.js
+
+// [Pass 0.1] TOOLBAR EVENTS + keyboard shortcuts + __clipboardSmokeTest
+//           → js/bv-toolbar.js
+// (inline block removed — addEventListener stacks)
+
+// [Pass 0.1] TIER 4 — WINDOW-SCENE EDITOR → js/bv-scenes.js
+// (inline block removed — addEventListener stacks, patchSelectFloorForWindows must run once)
+// (body moved to js/bv-scenes.js)
+
+// [Pass 0.1] TIER 2 — VALIDATION → js/bv-validation.js
+// (inline block removed — addEventListener stacks)
+
+// [Pass 0.1] TIER 3 — PER-FLOOR METADATA EDITOR → js/bv-meta-editor.js
+// (inline block removed — addEventListener stacks, monkey-patches applyEntry/updateCursor/selectFloor run once)
+
+window.__validateSmokeTest = function(scope) {
+  runValidation(scope || 'all');
+  console.log('[validate-smoke] scope=' + (scope||'all') + ' issues:', VALIDATE.lastResults.length);
+  VALIDATE.lastResults.slice(0, 8).forEach(function(i) {
+    console.log('  [' + i.severity + '] ' + i.floorId + ' ' + i.kind + ' — ' + i.msg);
+  });
+  return VALIDATE.lastResults;
+};
+
+// [Pass 0.1] UI TOOLTIP → js/bv-ui-tooltip.js
+// (inline block removed — self-contained IIFE, addEventListener stacks)
+
+// [Pass 0.1] BO ROUTER → js/bv-bo-router.js
+// (inline block removed — subsplit into router/perception/tile-lookup/stamps deferred; ACTIONS closure is tightly interdependent)
+
+loadAllFloors();
+</script>
+<div id="validate-modal" role="dialog" aria-modal="true" aria-labelledby="validate-modal-title">
+  <div id="validate-modal-inner">
+    <h3 id="validate-modal-title">
+      Validation report
+      <span class="vm-sub" id="validate-subtitle">—</span>
+    </h3>
+    <div id="validate-tabs">
+      <button id="vtab-current" class="active" data-scope="current" title="Validate only the floor currently in view">Current floor</button>
+      <button id="vtab-all" data-scope="all" title="Validate every floor plus cross-floor door references">All floors</button>
+    </div>
+    <div id="validate-summary">
+      <span class="pill err"  id="vsum-err">0 errors</span>
+      <span class="pill warn" id="vsum-warn">0 warnings</span>
+      <span class="pill ok"   id="vsum-ok">checks passed</span>
+      <span style="margin-left:auto; color:#789;">Click any row to jump &amp; highlight</span>
+    </div>
+    <div id="validate-list"></div>
+    <div id="validate-modal-actions">
+      <button class="secondary" id="validate-rerun" title="Re-run validation with current scope">Re-run</button>
+      <button class="secondary" id="validate-close" title="Close report (Esc)">Close</button>
+    </div>
+  </div>
+</div>
+<div id="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
+  <div id="save-modal-inner">
+    <h3 id="save-modal-title">Save floor — confirm diff</h3>
+    <div id="save-diff"></div>
+    <div id="save-modal-actions">
+      <button class="secondary" id="save-cancel" title="Cancel — no file written">Cancel</button>
+      <button class="secondary" id="save-download" title="Download the patched file as a Blob instead of writing in place">Download instead</button>
+      <button class="primary"   id="save-confirm" title="Write the patched file to engine/floor-blockout-*.js">Write to file</button>
+    </div>
+  </div>
+</div>
+<div id="scene-modal" role="dialog" aria-modal="true" aria-labelledby="scene-modal-title">
+  <div id="scene-modal-inner">
+    <h3 id="scene-modal-title">
+      <span id="sm-heading">Window scene</span>
+      <span class="sm-sub" id="sm-sub">—</span>
+    </h3>
+    <div id="scene-body">
+      <div id="scene-canvas-wrap">
+        <canvas id="scene-canvas" width="384" height="288"></canvas>
+        <div class="sm-paint-hint" style="margin-top:6px;">Click to paint with current brush tile. Right-click erases (tile 0).</div>
+      </div>
+      <div id="scene-meta">
+        <div class="sm-section">
+          <div class="sm-section-title">DIMENSIONS</div>
+          <div id="sm-dims">8 × 6</div>
+          <div style="margin-top:6px;">
+            <button id="sm-w-dec" title="Remove rightmost column">W−</button><button id="sm-w-inc" title="Add column to right">W+</button>
+            <button id="sm-h-dec" title="Remove bottom row">H−</button><button id="sm-h-inc" title="Add row to bottom">H+</button>
+          </div>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">PAINT TILE</div>
+          <div id="sm-paint-info" class="sm-tile-info">—</div>
+          <div class="sm-paint-hint">Uses the main editor's selected brush tile. Close modal to change it.</div>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">PARENT EXTERIOR</div>
+          <div id="sm-parent-info" class="sm-tile-info">—</div>
+          <button id="sm-jump-parent" title="Switch main view to the parent exterior floor (keeps modal bound)">Jump to parent floor</button>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">CLIPBOARD</div>
+          <div id="sm-clip-info" class="sm-tile-info">—</div>
+          <button id="sm-stamp-clip" class="primary" title="Paste the main clipboard into this scene sub-grid starting at (0,0)">Stamp clipboard at (0,0)</button>
+        </div>
+        <div class="sm-section">
+          <div class="sm-section-title">EXPORT</div>
+          <button id="sm-export-json" title="Dump all window scenes across all floors as sidecar JSON">Download window-scenes.json</button>
+          <div class="sm-paint-hint" style="margin-top:4px;">All scenes on all floors dumped to sidecar JSON.</div>
+        </div>
+      </div>
+    </div>
+    <div id="scene-modal-actions">
+      <button class="secondary" id="sm-clear" title="Reset all cells in this scene to EMPTY">Clear scene</button>
+      <button class="secondary" id="sm-close" title="Close scene editor (Esc)">Close</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

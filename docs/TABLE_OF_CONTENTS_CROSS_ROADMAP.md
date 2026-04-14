@@ -1,6 +1,6 @@
 ﻿# Dungeon Gleaner - Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-08
+**Created**: 2026-03-28 | **Updated**: 2026-04-14
 **Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed
 **Goal**: Polish, post-jam vision execution, LG webOS deployment readiness
 
@@ -59,6 +59,16 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-72 | [GAME_JS_EXTRACTION_ROADMAP.md](#doc-72-game_js_extraction_roadmapmd) | docs/ |
 | DOC-73 | [ARCHITECTURAL_SHAPES_ROADMAP.md](#doc-73-architectural_shapes_roadmapmd) | docs/ |
 | DOC-87 | [RAYCAST_FREEFORM_UPGRADE_ROADMAP.md](#doc-87-raycast_freeform_upgrade_roadmapmd) — freeform wall blocks (hearth sandwich, civilized bonfire + pergola moat, arches, portholes) modelled on raycast.js-master reference | docs/ |
+| DOC-88 | [DOOR_ARCHITECTURE_ROADMAP.md](#doc-88-door_architecture_roadmapmd) — Phase 0–2 + 5A + 6A/6B shipped (DOOR_FACADE, trapdoors, double doors, great arches); Phase 3 stamp-out unblocked | docs/ |
+| DOC-89 | [TRAPDOOR_ARCHITECTURE_ROADMAP.md](#doc-89-trapdoor_architecture_roadmapmd) — Tiers 1–5 shipped (first pass), Tiers 6–8 specced; TRAPDOOR_DN/UP freeform + ladder shaft filler | docs/ |
+| DOC-90 | [RECESS_REPAIR_ROADMAP.md](#doc-90-recess_repair_roadmapmd) — **BLOCKING**: reinstate Wolfenstein thin-wall recess block in raycaster.js lost during trapdoor session | docs/ |
+| DOC-91 | [RAYCASTER_EXTRACTION_ROADMAP.md](#doc-91-raycaster_extraction_roadmapmd) — Phases 1–3 complete (raycaster split from 4,729 → 2,758 lines across 7 IIFEs); Phase 4 deferred post-Jam | docs/ |
+| DOC-92 | [LIVING_WINDOWS_ROADMAP.md](#doc-92-living_windows_roadmapmd) — Phase 0–2.5 shipped (SHOP/BAY/SLIT/ALCOVE/COMMERCIAL + corner bitmask); Phase 6 EmojiMount port next | docs/ |
+| DOC-93 | [PROXY_ZONE_DESIGN.md](#doc-93-proxy_zone_designmd) — Phase 12 of LIVING_WINDOWS: interior windows looking out onto pasted exterior slices (design only) | docs/ |
+| DOC-94 | [SPATIAL_DEBUG_OVERLAY_VISION.md](#doc-94-spatial_debug_overlay_visionmd) — vision doc for world-space debug overlay (tile geometry, raycast trace, contributor comms) | docs/ |
+| DOC-95 | [MINIGAME_TILES.md](#doc-95-minigame_tilesmd) — tile-by-tile clicky-minigame survey (WELL, BAR_COUNTER, etc.) for §11.1/§15 living-infra tiles | docs/ |
+| DOC-96 | [TEST_HARNESS_ROADMAP.md](#doc-96-test_harness_roadmapmd) — Phase 0 shipped: DebugPerfMonitor (FPS, frame time, stutter log, subsystem probes) via test-harness.html | docs/ |
+| DOC-101 | [WEATHER_MODULE_ROADMAP.md](#doc-101-weather_module_roadmapmd) — Planning: per-floor weather system (haze/rain/wind/debris) at configurable Z-depth in 3D viewport, punch-through terminus | docs/ |
 
 ### Card, Inventory And Combat
 
@@ -89,6 +99,9 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-58 | [PEEK_BOX_VISUAL_AUDIT.md](#doc-58-peek_box_visual_auditmd) | docs/ | â€” |
 | DOC-77 | [BOX_EDITOR_PRODUCT_ROADMAP.md](#doc-77-box_editor_product_roadmapmd) | docs/ | â€” |
 | DOC-78 | [PEEK_WORKBENCH_SCOPE.md](#doc-78-peek_workbench_scopemd) | docs/ | â€” |
+| DOC-98 | [BOXFORGE_AUDIT.md](#doc-98-boxforge_auditmd) | docs/ | Audit of tools/peek-workbench.html (7,074 lines) — color selectors, sidebar wiring, export pipeline |
+| DOC-99 | [BOXFORGE_NEXT_STEPS.md](#doc-99-boxforge_next_stepsmd) | docs/ | Enhancement plan — peek system support (orbs, phases, sub-attachments, templates) |
+| DOC-100 | [BOXFORGE_TOOLS_ROADMAP.md](#doc-100-boxforge_tools_roadmapmd) | docs/ | Active — items 1–5 complete, 6–8 in planning; tools/peek-workbench.html ↔ tools/boxforge.html |
 
 ### Gleaner Systems (Cleaning, Restocking, Traps)
 
@@ -105,6 +118,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-69 | [RESTOCK_AUDIT.md](#doc-69-restock_auditmd) | docs/ |
 | DOC-70 | [UNIFIED_RESTOCK_SURFACE_ROADMAP.md](#doc-70-unified_restock_surface_roadmapmd) | docs/ |
 | DOC-71 | [SPATIAL_CONTRACTS.md](#doc-71-spatial_contractsmd) | docs/ |
+| DOC-97 | [FATIGUE_SYSTEM_ROADMAP.md](#doc-97-fatigue_system_roadmapmd) | docs/ |
 
 ### NPCs, Barks And Audio
 

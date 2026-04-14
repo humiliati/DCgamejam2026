@@ -277,7 +277,7 @@ var TILES = (function () {
                            //   with FENCE (0.4h) for railings.
 
     // ── 2×2 pillar cluster ────────────────────────────────────────────
-    PILLAR_QUAD:      88   // Four small round columns inside a single tile
+    PILLAR_QUAD:      88,  // Four small round columns inside a single tile
                            //   cell. Non-walkable, opaque at the tile level
                            //   (movement can't pass through), but visually
                            //   sight-permeable through the diagonal gaps
@@ -288,6 +288,19 @@ var TILES = (function () {
                            //   decorative shrine bases, or chokepoints
                            //   that let the player peek the next chamber
                            //   before walking around.
+
+    // ── Reserved: TERMINAL_RIM ────────────────────────────────────────
+    // Slot 89 was reserved for a back-layer "rim" slab auto-attached on
+    // top of TERMINAL (36). We simplified to a single-slab pedestal
+    // approach: TERMINAL itself is a low ~0.45-tall wall with
+    // hasFlatTopCap + hasVoidCap on the tile directly, so the top
+    // surface renders as a translucent void without a separate rim
+    // tile. The ~0.09 "lip" is achieved by bumping TERMINAL's
+    // wallHeight to 0.54 and letting the top strip of the pedestal
+    // texture read as the rim. If we later want a genuinely distinct
+    // rim material (e.g. brass ring around a wooden pedestal), re-
+    // introduce this slot and implement per-tile slab stacking.
+    TERMINAL_RIM:     89
   };
 
   /** Check if a tile blocks movement */
@@ -376,7 +389,25 @@ var TILES = (function () {
    */
   T.hasFlatTopCap = function (tile) {
     return tile === T.STOOP || tile === T.DECK ||
-           tile === T.TABLE || tile === T.BED;
+           tile === T.TABLE || tile === T.BED ||
+           tile === T.TERMINAL;
+  };
+
+  /**
+   * Tiles whose cap should render as a translucent void (dark-tinted
+   * fill) instead of sampling a floor-style texture. Used for terminal
+   * wells, scrying basins, and any "rim around a void" furniture where
+   * looking down onto the cap should read as "looking into the piece"
+   * rather than a solid surface. Sits inside the hasFlatTopCap cap loop
+   * as a branch — the outer predicate still gates the loop, the inner
+   * branch picks paint style.
+   *
+   * TERMINAL uses a dark-green tint (~rgba(4,18,10,0.55*brightness))
+   * keyed to the hologram emoji's glow color family, so the well reads
+   * as lit by the terminal itself rather than just "dark."
+   */
+  T.hasVoidCap = function (tile) {
+    return tile === T.TERMINAL;
   };
 
   /** Check if tile is a floating architectural shape (no step fill, walkable + opaque) */

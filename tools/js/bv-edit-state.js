@@ -154,6 +154,18 @@ function applyEntry(entry, phase) {
     currentFloor.grid = snapshotGrid(g);
     currentFloor.gridW = g[0] ? g[0].length : 0;
     currentFloor.gridH = g.length;
+    // FIX #2: resize entries carry spawn/rooms/doorTargets/doorFaces
+    // snapshots taken before and after the structural shift. Undo must
+    // also rewind the metadata so door keys line up with the grid.
+    if (entry.type === 'resize') {
+      var meta = (phase === 'undo') ? entry.oldMeta : entry.newMeta;
+      if (meta && typeof restoreFloorMetadata === 'function') {
+        restoreFloorMetadata(currentFloor, meta);
+      }
+      if (typeof buildMetadataPanel === 'function' && typeof META !== 'undefined' && META.open) {
+        buildMetadataPanel();
+      }
+    }
   }
 }
 

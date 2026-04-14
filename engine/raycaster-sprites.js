@@ -850,6 +850,29 @@ var RaycasterSprites = (function () {
           ctx.globalAlpha = prevAlpha;
         }
         ctx.restore();
+
+        // ── CRT scanlines overlay ───────────────────────────────────
+        // For EmojiMount entries flagged crtScanlines (data terminal
+        // holograms, shop security monitors, etc). Paints semi-
+        // transparent 1px horizontal dim rows across the sprite rect
+        // in world-space (tied to sprite pixel coords so lines sit
+        // still on the billboard as the player moves — distance
+        // density scales naturally with spriteH).
+        if (s.crtScanlines && spriteH >= 6) {
+          var _slTop = spriteCenterY - Math.floor(spriteH * 0.5 * ySquish);
+          var _slBot = spriteCenterY + Math.floor(spriteH * 0.5 * ySquish);
+          var _slLx  = screenX - Math.floor(spriteW * 0.5);
+          var _slRx  = screenX + Math.floor(spriteW * 0.5);
+          var _slW   = Math.max(1, _slRx - _slLx);
+          // Row spacing: every 2 sprite-pixels → ~half the vertical
+          // resolution is dimmed. Alpha stays modest so the emoji
+          // stays legible at close range.
+          var _slAlpha = 0.38 * alpha;
+          ctx.fillStyle = 'rgba(0,10,4,' + _slAlpha.toFixed(3) + ')';
+          for (var _slY = _slTop; _slY < _slBot; _slY += 2) {
+            ctx.fillRect(_slLx, _slY, _slW, 1);
+          }
+        }
       } else if (s.color) {
         ctx.fillStyle = s.color;
         ctx.fillRect(drawX, spriteCenterY - spriteH / 2, spriteW, spriteH * ySquish);

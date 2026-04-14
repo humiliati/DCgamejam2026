@@ -1,0 +1,22 @@
+#!/bin/sh
+# ============================================================
+# tools/.githooks/pre-commit
+# File-size budget check (Pass 0.6).
+# Install: git config core.hooksPath tools/.githooks
+# Skip:    git commit --no-verify
+# ============================================================
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] node not on PATH — skipping budget check" >&2
+  exit 0
+fi
+
+node "$repo_root/tools/check-budgets.js" || {
+  echo "" >&2
+  echo "[pre-commit] File-size budget FAIL." >&2
+  echo "  - Review with: node tools/check-budgets.js --verbose" >&2
+  echo "  - Override with: git commit --no-verify" >&2
+  exit 1
+}

@@ -1,8 +1,8 @@
 # Living Windows Roadmap — Believable Building Depth
 
-> **DOC-17** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-04-11 | Updated: 2026-04-13
+> **DOC-17** | Dungeon Gleaner — DC Jam 2026 | Created: 2026-04-11 | Updated: 2026-04-14
 >
-> **Status**: Phase 0 ✅, Phase 1 ✅, Phase 2 ✅ (SHOP/BAY/SLIT + ALCOVE + COMMERCIAL), **Phase 2.5 ✅** (corner-window bitmask refactor + dungeon apertures: ARROWSLIT + MURDERHOLE). **Next**: beveled corners (→ round pillars, round trees), crumbled-gap variant, Phase 3 patron NPCs.
+> **Status**: Phase 0 ✅, Phase 1 ✅, Phase 2 ✅ (SHOP/BAY/SLIT + ALCOVE + COMMERCIAL), Phase 2.5 ✅ (corner-window bitmask + ARROWSLIT + MURDERHOLE). **Next**: Phase 6 EmojiMount port (retires `zBypassMode`, unifies window/terminal/table billboard emission — see §4.6), Phase 7 surface-mount tiles (COUNTER, COFFEE_TABLE — see §4.9), Phase 8 blockout tool authoring flow (see §10.6). Phase 12 (Exterior Proxy Zones — interior windows looking *out* onto pasted exterior slices) is the large post-Jam ambition; design lives in sibling doc `PROXY_ZONE_DESIGN.md`. Beveled corners, crumbled-gap variant, Phase 9 patron NPCs follow.
 >
 > Companion to `RAYCAST_FREEFORM_UPGRADE_ROADMAP.md` (Phase 4: WINDOW_TAVERN tile), `COZY_INTERIORS_DESIGN.md`, and `DOOR_ARCHITECTURE_ROADMAP.md` (recess tech adapted for window depth). Defines the contract that turns a raycast window from "a hole in the wall with a floating emoji" into a believable view into a lived-in interior — per-building window types with real depth, iron-bar commercial storefronts, protruding residential bays, and narrow fortress slits.
 
@@ -244,6 +244,44 @@ The raycaster reads `zBypassMode` from the freeform config instead of unconditio
 
 These are optional — the gap fillers can paint procedurally (as WINDOW_TAVERN does now). But pre-rendered textures are cheaper per-column than per-pixel filler math, so we may migrate the filler to texture sampling in a polish pass.
 
+### 4.6 EmojiMount unification (supersedes `zBypassMode='depth'`)
+
+The TERMINAL hologram work (`engine/emoji-mount.js`, shipped 2026-04-14) produced a generic **EmojiMount** system: a tile can register a billboarded emoji with an anchor mode (`floor` / `cavity` / `surface`), a `lift` offset, a `recess` value (the unified z-bypass knob), bob/glint/scanline animation, and optional overlay/glow. Sprites flow through the existing `_sprites[]` array; the raycaster billboards them in its normal sprite pass. Same plumbing shape as WindowSprites, generalized.
+
+This supersedes Phase 2's `zBypassMode='depth'` fix. That field was a temporary patch — a binary knob that wrote `perpDist + 1.0` to the z-buffer for window tiles so vignettes didn't cull against the glass column. EmojiMount's per-mount `recess` replaces it with a continuous, per-instance value: how far into the tile (along the view axis) the billboard sits, which determines both the sprite's draw distance and the z-buffer comparison depth. Tile geometry remains the same; only the sprite emitter changes.
+
+**Two registration paths share one runtime.**
+
+- **Type mounts** — `EmojiMount.register({ tile: TILES.TERMINAL, emoji: '💻', … })`. Every tile of that type anywhere in the world gets the mount. Good for tiles whose content is invariant (terminals, torches, pedestals, arcade cabinets).
+- **Instance mounts** — `EmojiMount.registerAt(floorId, x, y, { emoji: '🍺', overlay: null, lift: 0.8, … })`. Keyed by `(floorId, x, y)`. The tile's freeform geometry (WINDOW_SHOP, TABLE, COUNTER) determines anchor mode and cavity/surface math; the instance record supplies the glyph, overlay, glow, and lifecycle hooks. This is the path windows, tables, and counters take — the tile is authored once, the emoji is authored per placement.
+
+`EmojiMount.buildSprites()` walks the grid, and for each cell checks (in order): instance mount at this coord → type mount for this tile → nothing. The first hit emits a sprite record using the tile's geometry to pick defaults (anchor, lift, recess) and the mount's fields to override per-instance.
+
+**Floor data grows one sibling map.** `windowScenes` (building-scoped with patron/hours lifecycle) and `emojiMounts` (geometry-scoped, runtime-swappable) coexist:
+
+```js
+{
+  floorId: '1',
+  grid: ...,
+  windowFaces: { '9,8': 1, ... },
+  windowScenes: [ /* patron + hours stuff — unchanged */ ],
+  emojiMounts: {
+    '9,8':   { emoji: '🃏', recipe: 'bazaar_cards' },   // WINDOW_SHOP cavity
+    '21,8':  { emoji: '🍺', recipe: 'tavern_mug' },     // WINDOW_SHOP cavity
+    '23,15': { emoji: '☕', anchor: 'surface' },         // COFFEE_TABLE top
+    '11,14': { emoji: '🕯️', anchor: 'surface', lift: 0.78 } // COUNTER top
+  }
+}
+```
+
+`windowScenes` entries may reference an `emojiMounts` key instead of carrying a vignette inline — the scene supplies the lifecycle (open/closed/hero-day swap) and the mount supplies the glyph. A closed tavern swaps the key's record to the `closed_dim` recipe; an open tavern swaps it back. No grid mutation.
+
+**What retires.**
+
+- `zBypassMode` field on freeform configs is deleted. All window tiles drop to the default z-buffer write. The recess knob on the per-coord mount drives sprite depth.
+- Per-tile-type vignette emission in `WindowSprites._emitBillboards` is deleted. WindowSprites retains only the filler pass (glass surface, mullions, frame, per-tile `wallTexture` and `mullionStyle` overrides). Billboard emission moves to EmojiMount.
+- `BuildingRegistry.defaultVignette` stays — it supplies the *default recipe* the blockout tool uses to seed `emojiMounts` entries when a window is placed via a building-typed stamp. The recipe is still data.
+
 ### 4.7 Rules
 
 **Public buildings** (Inn, Bazaar, Dispatcher's Office, Soup Kitchen, Shop, Bar):
@@ -269,6 +307,40 @@ Game calls `WindowScenes.refresh(floorId, hourOfDay)` on:
 - Building state change (quest unlocks a new shop, curfew closes all public buildings)
 
 `refresh` walks the `windowScenes` table, computes OPEN/CLOSED/HOME/AWAY for each, and inserts or removes the vignette sprite + patron NPC from the live floor state.
+
+### 4.9 Surface-mount family — tables, counters, coffee tables
+
+Windows look *through* a tile into a cavity. Tables look *on top of* a tile. Same EmojiMount system, different anchor.
+
+Surface-mount tiles share a predicate (`TILES.hasFlatTopCap`) that tells the raycaster to project a textured top plane down from the tile's cap elevation to the floor at the correct foreshortening. The top plane is the "stage" the emoji sits on. Three tiles ship with this shape today (TABLE, BED, STOOP/DECK); the decor family extends with COUNTER and COFFEE_TABLE.
+
+**Per-tile cap elevations** (world-Y, matches `tileCapHeights` in the spatial contract):
+
+| Tile | Cap height | Typical emoji | Anchor `lift` |
+|---|---|---|---|
+| COFFEE_TABLE | 0.30 | ☕ 📖 🕯️ | matches cap — 0.30 |
+| TABLE | 0.52 | 🍺 🃏 🍲 🗝️ | 0.52 |
+| COUNTER | 0.78 | 💰 ⚖️ 🍞 ☕ | 0.78 |
+| SHELF (future) | 1.30 | 📚 🏺 | 1.30 |
+
+EmojiMount uses `anchor: 'surface'` on these. The mount's `lift` defaults to the tile's cap elevation so the billboard's baseline plants flush on the cap. The designer can override `lift` for tall items (a candelabra on a table → `lift: 0.52 + 0.15`). `recess` defaults to `0.5` (tile center) because surface emojis are not peering through a thin-wall cavity — they sit on an open top and standard sprite z-sort handles occlusion correctly.
+
+**Bob and glint** are the same code path as terminals — phase-hashed off grid coords so four coffee tables in a row don't bob in sync. Glint is useful for metallic items (🗝️, ⚔️, 💰).
+
+**Same `emojiMounts` map** authors all three anchor families. The runtime picks anchor mode from the tile's predicates (hasVoidCap → `floor` for terminals, hasFlatTopCap → `surface` for tables, isFreeform window → `cavity`). The per-coord record carries just the glyph and overrides. The blockout tool authors both window and table emojis through one meta-editor panel — the tile type determines the preset recipe list.
+
+**Example — shop interior** (Coral Bazaar, floor `"1.1"`):
+
+```js
+emojiMounts: {
+  '4,5': { emoji: '💰', recipe: 'shop_counter_coins' },  // COUNTER
+  '6,5': { emoji: '⚖️', recipe: 'shop_counter_scale' },  // COUNTER
+  '4,3': { emoji: '🗝️', recipe: 'shop_table_key' },      // TABLE
+  '8,4': { emoji: '🏺', recipe: 'shop_shelf_urn' }        // SHELF (future)
+}
+```
+
+The same shop viewed from the Promenade through a WINDOW_SHOP has its *cavity* emoji authored on the exterior floor (`"1"`) at the window coord — a separate record, typically a larger/brighter recipe because it's meant to be read through glass from a distance. The interior floor has the real items; the facade has the marketing poster. Both use EmojiMount.
 
 ---
 
@@ -418,82 +490,66 @@ This diff model is idempotent — the game can call `refresh()` as many times as
 
 **Acceptance:** The 🍺 renders visually *behind* the window mullion grid, with a clear depth gap between the glass and the glyph. The player reads it as "beer mug sitting on a table inside the tavern." Window mullions on the Bazaar are warm bronze, on the Inn warm bronze, on institutional buildings cold iron.
 
-### Phase 2 — Z-Depth Fix + Window Type Foundation (HIGH PRIORITY)
+### Phase 2 — Z-Depth Fix + Window Type Foundation (shipped 2026-04-12)
 
-The single most impactful change: stop writing `renderDist` to the z-buffer for window tiles. This is why vignette emojis render on top of everything — they have no depth competition with the glass.
+Five window tile types shipped with face-aware gap fillers, per-tile `wallTexture`/`mullionStyle` overrides, and `zBypassMode='depth'` on the freeform configs so vignette emojis render at `perpDist + 1.0` instead of at `renderDist`. Tiles: WINDOW_SHOP (77), WINDOW_BAY (78), WINDOW_SLIT (79), WINDOW_ALCOVE (80), WINDOW_COMMERCIAL (81).
 
-**Work**:
-1. Add `zBypassMode` field to freeform tile configs in `SpatialContract`:
-   - `'full'` (default) = `renderDist` → DOOR_FACADE, ARCH_DOORWAY, PORTHOLE
-   - `'depth'` = `perpDist + 1.0` → all window tiles (vignette has real depth)
-   - `'solid'` = `perpDist` → canopy, roof tiles
-2. Raycaster reads `zBypassMode` from the freeform config instead of the blanket `_zBypass` boolean. One conditional change in the z-buffer write block (~line 1302).
-3. Set `zBypassMode: 'depth'` on WINDOW_TAVERN (73) freeform config. Existing windows immediately get correct depth.
-4. Register three new tile IDs in `tiles.js`:
-   - `WINDOW_SHOP: 77` — commercial plate glass + iron bars
-   - `WINDOW_BAY: 78` — residential protruding bay window
-   - `WINDOW_SLIT: 79` — institutional fortress slit
-5. Add `isFreeform()` entries for 77/78/79 in tiles.js.
-6. Add `SpatialContract` freeform configs for each new tile type (see §4.5 for geometry).
+**Note (2026-04-14):** `zBypassMode` is slated for retirement in Phase 6. See §4.6 — the per-mount `recess` on EmojiMount is the unified, per-instance z-depth knob that replaces this boolean. Existing window tiles will drop the field and get the same (or better) depth behavior through EmojiMount's sprite emission.
 
-**Acceptance:** The 🍺 in the Driftwood Inn window renders *behind* the mullion grid and *behind* the glass wash — visible through the window but clearly inside the building, not floating in front. Walking parallel to the facade produces visible parallax between glass surface and vignette depth.
+### Phase 2.5 — Corner-Window Bitmask + Dungeon Apertures (shipped 2026-04-13)
 
-### Phase 2A — WINDOW_SHOP gap filler + stamp-out (1 day)
+`_exteriorFaces` stores a bitmask (1=E, 2=S, 4=W, 8=N) instead of a single face index; `windowFaces[key]` accepts a number or an array. Two new dungeon aperture tiles: WINDOW_ARROWSLIT (82) and WINDOW_MURDERHOLE (83). Billboard emission is suppressed for aperture tiles — no amber vignette leakage on dungeon floors.
 
-The commercial storefront window. Replaces WINDOW_TAVERN on Coral Bazaar and Driftwood Inn.
+### Phase 6 — EmojiMount port + `zBypassMode` retirement (next, HIGH PRIORITY)
+
+Unify billboard emission under `engine/emoji-mount.js`. Retire `zBypassMode` as a field; per-mount `recess` drives all sprite-vs-freeform z-sort.
 
 **Work**:
-1. Write `_windowShopFiller()` in `window-sprites.js`:
-   - Amber wash (warmer, higher opacity than TAVERN — this is a lit display case).
-   - 3 thin vertical iron bars at wallX ≈ 0.25, 0.50, 0.75 (1px each, iron grey).
-   - Horizontal top/bottom iron frame (2px).
-   - No mullion cross — the glass dominates. The vignette emoji is the star.
-   - Parallax glint on each of the 4 pane segments.
-2. Register filler as `'window_shop_interior'`.
-3. SpatialContract config: `recessD: 0.10` (slight inset — glass sits behind wall face).
-4. Generate `window_shop_iron` texture in TextureAtlas (optional — filler can paint procedurally first, migrate to texture sampling in polish).
-5. Convert Promenade windows:
-   - Coral Bazaar (9,8) and (11,8): WINDOW_TAVERN → WINDOW_SHOP
-   - Driftwood Inn (21,8) and (23,8): WINDOW_TAVERN → WINDOW_SHOP
-6. Update `windowScenes` to reference new tile type (scene data is tile-agnostic — just need filler dispatch).
+1. Extend EmojiMount with instance-keyed registration:
+   - `EmojiMount.registerAt(floorId, x, y, cfg)` — store in `_instances[floorId]['x,y'] = frozen cfg`.
+   - `EmojiMount.clearFloor(floorId)` — drop all instance mounts for a floor on transition.
+   - `buildSprites(floorId, grid, w, h)` walks the grid and resolves mount in priority order: instance → type.
+2. Move window vignette emission from `WindowSprites._emitBillboards` into EmojiMount. WindowSprites retains only filler-pass concerns (glass, mullions, frame, texture/mullion overrides).
+3. Anchor-mode resolution from tile predicates:
+   - `TILES.isWindow(t)` → `anchor: 'cavity'`, default `lift` matches tile's `hLower + (hUpper-hLower)/2`, default `recess` = window config's `recessD + 0.5`.
+   - `TILES.hasFlatTopCap(t)` → `anchor: 'surface'`, default `lift` from contract's `tileCapHeights[t]`, default `recess` = 0.5.
+   - `TILES.hasVoidCap(t)` → `anchor: 'floor'`, defaults per existing TERMINAL config.
+4. Delete `zBypassMode` field from `SpatialContract` freeform configs (all five window tiles). Remove the conditional in `raycaster.js` that switched z-buffer write based on it. All window tiles return to the default `perpDist` write; EmojiMount sprites carry their own depth via `recess`.
+5. Add `emojiMounts: { 'x,y': { emoji, recipe?, lift?, recess?, glow?, overlay? } }` to floor data. Migrate existing `windowScenes` vignette fields onto `emojiMounts`; `windowScenes` retains only `building`, `patron`, and `hours`.
+6. `game.js` calls `EmojiMount.clearFloor(prev)` + `EmojiMount.registerAt` for each `emojiMounts` entry on floor transition.
+7. `BuildingRegistry.defaultVignette` becomes a recipe name consumed by the blockout tool at stamp time (seeds the per-coord mount record), not a runtime lookup.
 
-**Acceptance:** Coral Bazaar windows show 🃏 playing cards through large plate-glass panes with thin iron bars. The bars are visually minimal — the window reads as "glass display case" not "jail cell." The glass is subtly recessed behind the brick facade.
+**Acceptance:** All shipped windows (4 Bazaar/Inn on Promenade, Gleaner's Home alcoves) render identical or better than Phase 2, with `zBypassMode` gone from the codebase. TERMINAL hologram still renders correctly (type mount path, unchanged). Floor transitions don't leak instance mounts between floors. `grep zBypassMode engine/` returns no hits.
 
-### Phase 2B — WINDOW_BAY gap filler + Gleaner's Home (1 day)
+### Phase 7 — Surface-mount tiles (TABLE / COUNTER / COFFEE_TABLE emoji)
 
-The residential bay window. Projects outward from the wall into the street tile.
-
-**Work**:
-1. Write `_windowBayFiller()` in `window-sprites.js`:
-   - Warm amber wash + classic 2×2 mullion cross (wood, dark oak).
-   - Frame in building's `wallTexture` color.
-2. Implement negative `recessD` in raycaster recess block:
-   - Current code: `_rPD = perpDist + _recessD / rayComponent` (positive = deeper).
-   - Negative `recessD` makes `_rPD < perpDist` — glass face renders closer to player.
-   - Jamb columns at lateral edges use the building's `wallTexture` → beveled side panels.
-3. SpatialContract config: `recessD: -0.20`, `hLower: 0.55`, `hUpper: 2.50` (smaller, higher slot).
-4. Place WINDOW_BAY tiles on Gleaner's Home facade (Floor 1).
-5. Add `windowScenes` for Gleaner's Home: vignette `home_candle` (🕯️), interiorStep pointing into the home footprint.
-
-**Acceptance:** Standing on the Promenade looking at Gleaner's Home, the bay window *protrudes* from the building face. The beveled side panels are visible in the building's dark wood texture. A warm candle glow is visible deep inside. The bay casts a subtle shadow line where it meets the wall.
-
-### Phase 2C — WINDOW_SLIT gap filler + institutional buildings (half day)
-
-The fortress slit. Narrow, cold, minimal.
+Extend the surface-mount family so any `hasFlatTopCap` tile can carry an emoji via `emojiMounts`.
 
 **Work**:
-1. Write `_windowSlitFiller()` in `window-sprites.js`:
-   - Cold blue-grey wash (institutional interior light).
-   - Opaque masonry on wallX < 0.35 and wallX > 0.65 (narrows the opening).
-   - Single vertical iron bar at center (2px).
-   - Iron top/bottom frame.
-2. SpatialContract config: `recessD: 0.15`, `hLower: 0.50`, `hUpper: 1.80` (tall narrow slit).
-3. Place WINDOW_SLIT tiles on Storm Shelter facade (Floor 1). If Storm Shelter has no windows currently, add 1–2 slits flanking the door.
-4. Reserve WINDOW_SLIT for Lantern Row institutional buildings (Dispatcher's, Watchman's) when those floors are built out.
+1. Add `COUNTER` and `COFFEE_TABLE` tile IDs to `tiles.js`; register both with `hasFlatTopCap`.
+2. `SpatialContract.tileCapHeights`: TABLE 0.52 (existing), COUNTER 0.78, COFFEE_TABLE 0.30.
+3. Cap texture per tile (wood for TABLE/COFFEE_TABLE, stone or marble for COUNTER) via existing `tileCapTextures` map.
+4. EmojiMount resolves `anchor: 'surface'` automatically for these tiles — no new code path once Phase 6 lands.
+5. Populate one shop interior (Coral Bazaar `"1.1"`) with a COUNTER + TABLE + COFFEE_TABLE and 3–4 `emojiMounts` entries to validate.
+6. Update `tools/blockout-visualizer.html` tile-picker so the new tiles appear in the stamp library with their correct preview colors.
 
-**Acceptance:** The Storm Shelter windows read as narrow fortress slits — a dim glow barely visible through thick walls. The contrast with the Bazaar's plate-glass storefronts sells the building's defensive character.
+**Acceptance:** Walking into Coral Bazaar, the player sees ☕ on a coffee table, 💰 on the counter, and 🗝️ on a side table — each emoji planted at the correct cap height, billboards aligned, standard sprite z-sort (no special bypass). Same authoring flow for all three.
 
-### Phase 3 — Patron NPCs (1 day)
+### Phase 8 — Blockout tool authoring flow for `emojiMounts`
+
+Author emoji-on-tile through the meta-editor panel, not a drop-time prompt. See §10.6 for full UX spec.
+
+**Work**:
+1. Extend `bv-meta-editor.js` with an "Emoji Mount" inspector row that shows when the selected tile has a registered mount-capable shape (`isWindow`, `hasFlatTopCap`, `hasVoidCap`).
+2. Inspector fields: emoji (text + recipe dropdown), anchor (auto from tile, read-only unless overriding), lift (slider bracketed by tile's cap range), recess (slider 0.0–1.0), glow, overlay.
+3. Recipe library panel (`bv-emoji-recipes.js`, new file): curated sets keyed by tile family — `window_shop`, `window_bay`, `table_shop`, `table_tavern`, `counter_shop`, `coffee_table_home`. Each recipe pre-fills the inspector fields in one click.
+4. Save patcher writes to floor data's `emojiMounts` map keyed by `"x,y"`. `bv-validation.js` warns when a mount is placed on a tile whose shape doesn't match any anchor mode.
+5. Visual indicator in the grid render: a tiny emoji glyph overlaid on the tile cell when a mount is present. Hovering shows the recipe name.
+6. Building-typed stamps (e.g. "Tavern window pair") auto-seed default mounts from `BuildingRegistry.defaultVignette` so the designer gets correct content on drop without a prompt.
+
+**Acceptance:** Dropping a WINDOW_SHOP via a non-building stamp leaves it blank; dropping it via the "Coral Bazaar window" compound stamp fills in 🃏 via the registry default. Selecting any mount-capable tile shows an Emoji Mount row in the inspector — never a modal. Saving writes valid `emojiMounts` JSON that loads unmodified in-game.
+
+### Phase 9 — Patron NPCs (previously Phase 3)
 - Add `engine/window-patron.js` — minimal patrol sprite with step-lerp.
 - Register 3-4 patron archetypes (tavern patron, bazaar merchant, dispatch clerk, home resident).
 - Patron definitions inline in `windowScenes` for jam scope; promote to a data file post-jam.
@@ -501,20 +557,42 @@ The fortress slit. Narrow, cold, minimal.
 
 **Acceptance:** Standing outside the Driftwood Inn, the player sees a patron walking between two tiles inside the building, clearly visible through the iron-bar glass as they cross behind the panes.
 
-### Phase 4 — Business hours + open/closed state (half day)
-- Extend BuildingRegistry with `defaultHours` + `isOpen(id, hour, flags)`.
-- Hook `WindowScenes.refresh()` into DayCycle hour rollover.
-- Closed-state vignette swap + patron despawn.
+### Phase 10 — Business hours + open/closed state (previously Phase 4)
+- Extend BuildingRegistry with `defaultHours` + `isOpen(id, hour, flags)` (partially shipped).
+- Hook `WindowScenes.refresh()` into DayCycle hour rollover — swaps `emojiMounts` recipe at the scene's coord (open → `tavern_mug`, closed → `closed_dim`). No grid mutation.
+- Patron despawn on close.
 - Private-building inversion (home residents appear at night, not day).
 
-**Acceptance:** The Inn windows are bright with a visible patron during the day, dim and empty at night (or vice versa for Gleaner's Home). Curfew closes all public buildings simultaneously.
+**Acceptance:** The Inn windows are bright with a visible patron during open hours, dim and empty at night (or vice versa for Gleaner's Home). Curfew closes all public buildings simultaneously via a single BuildingRegistry flag.
 
-### Phase 5 — Scale + polish (stretch)
-- Multi-window buildings with different vignettes per window (Watchman's Post: counter window + back room window).
-- Per-window lighting tint (warm tavern vs. cool Dispatcher vs. green alchemist).
+### Phase 11 — Scale + polish (stretch, previously Phase 5)
+- Multi-window buildings with different vignettes per window (Watchman's Post: counter window + back room window) — already data-supportable via per-coord `emojiMounts`.
+- Per-window lighting tint (warm tavern vs. cool Dispatcher vs. green alchemist) — EmojiMount `glow` field.
 - Patron path variation with random dwell times.
 - Audio: low murmur from public buildings at open hours when the player is within 3 tiles of a window.
 - Migrate gap fillers to texture sampling (pre-rendered 64×64 textures) for per-column performance.
+
+### Phase 12 — Exterior Proxy Zones (inverse facade: interior windows looking *out*)
+
+Full design lives in `docs/PROXY_ZONE_DESIGN.md`. This entry is the phase summary — see the companion doc for rendering pipeline details, blockout tool UX, and the city-floor motel variant.
+
+Interior windows on floor N.N need to show an actual slice of the exterior (floor N) on the far side of the glass — not a tinted poster. The approach embeds a region of floor-N tiles into floor-N.N's grid as a **proxy zone**: regular grid tiles flagged `hasOpenSky`, rendered under a fog profile inherited from the parent floor, with the parent's skybox substituted through the ceiling pass. This is the inverse of the facade interior pattern already shipped on floor N — buildings on N have empty interiors populated with emoji vignettes; buildings on N.N have windows looking out onto pasted exterior slices. Both use the same Wolfenstein "diorama behind a wall you can't reach" trick, mirrored.
+
+**Work**:
+1. `TILES.hasOpenSky(t)` predicate + raycaster ceiling-pass branch that paints parent-floor skybox when the ceiling column hits a sky-flagged tile.
+2. Window freeform config field `fogProfile: 'parent'` that resets fog params for ray distance beyond the window crossing.
+3. `FloorManager.getParent(floorId)` exposed to the raycaster for skybox + fog lookup at render time (currently only used for back-nav).
+4. Contract extension: N.N's interior contract accepts N's exterior wall-tile height overrides on the tile IDs pasted into its proxy zones. No new contract — the existing `tileWallHeights` / `tileFaceWallHeights` maps absorb exterior IDs.
+5. Floor data metadata: `proxyZones: [{ x, y, w, h, sourceFloorId, sourceOrigin }]` describing each zone's footprint and (optionally) its source region on floor N for refresh-from-source.
+6. Blockout tool: sky-zone rectangle tag, blue diagonal hatch overlay in the grid render, auto-wire window `fogProfile` when a window is placed on a wall adjacent to a tagged zone.
+7. Pilot: Driftwood Inn interior (`"1.2"`) gets a proxy zone looking out onto the Promenade. Three interior windows, one tall commercial-style storefront view.
+
+**Deferred to 12B**:
+- Bidirectional source-bind (edit floor N → re-pull into zone).
+- Dynamic sprite replication (NPCs, animations visible through the window).
+- Motel variant on future city floor 4 (doubled diorama — see PROXY_ZONE_DESIGN §8).
+
+**Acceptance:** Standing inside the Driftwood Inn and looking out a window, the player sees the Promenade's sunset skybox, the correct building silhouettes across the street, and the DayCycle's current phase through cyan-tinted glass. Walking back outside and looking *in* the same window from the Promenade still shows amber lamp light, the tavern_mug vignette, and any patron. Both directions remain visually coherent.
 
 ---
 
@@ -577,11 +655,116 @@ The fortress slit. Narrow, cold, minimal.
 
 **Medium-term**:
 
-4. **Phase 3 — patron NPCs** (`engine/window-patron.js`) — static billboards ship today via `windowScenes`, but lively patrons walking a 2–3 tile patrol behind the glass are the Layer 3 payoff of the whole depth contract (see §4.1).
+4. **Phase 6 — EmojiMount port** (§4.6) — the decisive architectural unifier. Moves window vignette emission into `engine/emoji-mount.js` alongside the terminal hologram, retires `zBypassMode` as a field, keys billboards by `(floorId, x, y)` through instance mounts, and introduces the `emojiMounts` floor-data map. Unblocks Phase 7 and Phase 10's open/closed runtime swaps.
 
-5. **Phase 4 — business hours + open/closed state** — `BuildingRegistry.isOpen()` already exists; hook into DayCycle hour rollover + vignette swap.
+5. **Phase 7 — surface-mount tiles** (§4.9) — COUNTER + COFFEE_TABLE with `hasFlatTopCap` caps and `anchor: 'surface'` mounts. Populate Coral Bazaar `"1.1"` interior as the first validation ground.
+
+6. **Phase 8 — blockout tool authoring flow** (§10.6) — the meta-editor "Emoji Mount" inspector row, recipe library, and compound stamps. No prompt-on-drop, no parallel tile variants — per-coord data only.
+
+7. **Phase 9 — patron NPCs** (`engine/window-patron.js`) — static billboards ship today via `windowScenes`, but lively patrons walking a 2–3 tile patrol behind the glass are the Layer 3 payoff of the whole depth contract (see §4.1).
+
+8. **Phase 10 — business hours + open/closed state** — `BuildingRegistry.isOpen()` already exists; hook into DayCycle hour rollover and swap the `emojiMounts` recipe at the scene's coord (no grid mutation, no re-registration — just a field update on the frozen record, or a re-register if the instance API makes that cheaper).
 
 6. **Window-back face texture** — the interior (back) face currently paints a static dark wash. A cheap win: reuse `TextureAtlas` stone/wood samples so the back of the window reads as an actual inside wall.
+
+## 10.6 Blockout tool authoring flow for emoji mounts
+
+**Design axiom**: *Tiles are geometry. Emojis are data attached by coordinate. Dropping a tile never prompts.*
+
+This section specifies the UX for authoring `emojiMounts` in `tools/blockout-visualizer.html`. It exists because two alternative models were considered and rejected:
+
+| Model | Rejected because |
+|---|---|
+| Prompt-on-drop ("is this an emoji window?") | Modal mid-authoring breaks flow. Silent-no-emoji failure mode when the designer dismisses the prompt. Can't retrofit emoji to existing tiles without re-placement. |
+| Parallel tile variants (WINDOW_SHOP vs WINDOW_SHOP_LIT vs WINDOW_SHOP_MUG) | Tile ID table doubles per emoji variant. Every `isOpaque`/`isFreeform`/`isWindow`/`hasFlatTopCap` switch multiplies. Day/night swaps require re-stamping the grid instead of a table lookup. Minimap/validation/FloorManager all learn new IDs. |
+
+The chosen model — per-coord map keyed by `"x,y"`, authored in the meta-editor panel — follows the same pattern as `doorTargets`, `windowFaces`, and `windowScenes` already established in this codebase.
+
+### 10.6.1 Three-surface UI
+
+**(1) Stamp library** (`bv-stamp-library.js`). No changes to geometry stamps. Two new compound stamps per building archetype:
+
+- `tavern_window_pair` — stamps two WINDOW_SHOP tiles *plus* seeds two `emojiMounts` entries with the building's `defaultVignette` recipe. One-click authoring for the common case.
+- `shop_interior_counter_row` — stamps COUNTER + TABLE + COFFEE_TABLE *plus* seeds `emojiMounts` with default shop-interior recipes.
+
+Compound stamps are how "drop a window with content" happens without a prompt: the stamp itself carries the content. Dropping a raw WINDOW_SHOP (non-compound) leaves it blank — that's the "no emoji, the scene is handled by a separate stamp" case.
+
+**(2) Meta-editor panel** (`bv-meta-editor.js`). When the selection tool has a single tile selected, a new "Emoji Mount" inspector row appears — conditionally, only when the tile's shape registers a mount-capable anchor:
+
+- `TILES.isWindow(t)` → anchor: `cavity`
+- `TILES.hasFlatTopCap(t)` → anchor: `surface`
+- `TILES.hasVoidCap(t)` → anchor: `floor`
+- otherwise → row hidden
+
+Inspector fields:
+
+| Field | UI | Default |
+|---|---|---|
+| **Recipe** | dropdown from curated list filtered by tile family | blank |
+| **Emoji** | text input (single glyph) | from recipe |
+| **Anchor** | read-only label, derived from tile predicates | auto |
+| **Lift** | slider, range bracketed by tile's cap/cavity height | from recipe or anchor default |
+| **Recess** | slider 0.0–1.0 (how deep into the tile along view axis) | 0.5 |
+| **Glow** | color picker + radius slider, nullable | from recipe |
+| **Overlay** | optional second emoji (for layered glyphs like 🐉 over 🔥) | null |
+| **Clear** | button — removes the `emojiMounts` entry for this coord | — |
+
+The panel writes directly into the floor data's `emojiMounts` map through `bv-save-patcher.js`. Blank-and-save deletes the entry; setting any field creates one.
+
+**(3) Recipe library** (`bv-emoji-recipes.js`, new file). Curated presets keyed by tile family:
+
+```js
+var EMOJI_RECIPES = {
+  window_shop: {
+    bazaar_cards:  { emoji: '🃏', scale: 0.42, glow: '#ffcc55', glowRadius: 2, lift: 0.9 },
+    tavern_mug:    { emoji: '🍺', scale: 0.42, glow: '#ffaa33', glowRadius: 2, lift: 0.85 },
+    shop_display:  { emoji: '🗝️', scale: 0.40, glow: '#ffbb44', glowRadius: 2, lift: 0.85 },
+    closed_dim:    { emoji: '🕯️', scale: 0.18, glow: '#442200', glowRadius: 1, lift: 0.85 }
+  },
+  window_bay: {
+    home_candle:   { emoji: '🕯️', scale: 0.30, glow: '#ffdd88', glowRadius: 2, lift: 1.10 }
+  },
+  table_tavern: {
+    tavern_mug:    { emoji: '🍺', scale: 0.45, glow: '#ffaa33', glowRadius: 1, lift: 0.52 },
+    tavern_food:   { emoji: '🍲', scale: 0.45, glow: '#ff8833', glowRadius: 1, lift: 0.52 }
+  },
+  table_shop: {
+    key_display:   { emoji: '🗝️', scale: 0.40, lift: 0.52 },
+    deck_display:  { emoji: '🃏', scale: 0.40, lift: 0.52 }
+  },
+  counter_shop: {
+    coin_pile:     { emoji: '💰', scale: 0.42, lift: 0.78 },
+    scale:         { emoji: '⚖️', scale: 0.42, lift: 0.78 },
+    bread:         { emoji: '🍞', scale: 0.40, lift: 0.78 }
+  },
+  coffee_table_home: {
+    coffee:        { emoji: '☕', scale: 0.35, lift: 0.30 },
+    book:          { emoji: '📖', scale: 0.35, lift: 0.30 },
+    candle:        { emoji: '🕯️', scale: 0.30, glow: '#ffdd88', glowRadius: 1, lift: 0.32 }
+  }
+};
+```
+
+The recipe dropdown is filtered by the selected tile's family — a WINDOW_SHOP shows `window_shop.*`, a COUNTER shows `counter_shop.*`. Picking a recipe pre-fills every inspector field; edits after the pick don't unpick the recipe (the `recipe` field stays in the saved JSON as a reference, but the edited fields override). Clearing the recipe field turns the mount into a fully ad-hoc entry.
+
+### 10.6.2 Visual indicator in the grid
+
+The tile cell renders its normal geometry color at 80% opacity, with the mount's emoji drawn at 14px centered. Hover tooltip: `"🍺 (recipe: window_shop.tavern_mug)"`. Coords with an `emojiMounts` entry but an incompatible tile shape (e.g. emoji set on a WALL tile from a stale save) render with a red border and a validation warning in the tooltip.
+
+### 10.6.3 Validation rules
+
+`bv-validation.js` runs these on save:
+
+1. **Anchor match.** For each `emojiMounts` key, the tile at that coord must have a mount-capable predicate (`isWindow` / `hasFlatTopCap` / `hasVoidCap`). Mismatch → error, block save until cleared.
+2. **Lift in range.** Lift must fall within the tile's allowed elevation: window `[hLower, hUpper]`, surface `[cap, cap + 1.0]`, floor `[-0.5, 1.0]`. Out-of-range → warning, don't block save.
+3. **Recipe integrity.** If `recipe` is set, it must resolve in the recipe library and the resolved family must match the tile family. Mismatch → warning (e.g. `window_shop.tavern_mug` on a COUNTER tile). Don't block; the designer may intentionally be reusing a recipe.
+4. **Duplicate-stamp overlap.** If a compound stamp seeds an `emojiMounts` entry at a coord that already has one, keep the existing entry. Show a toast: *"Mount at 11,14 already authored — compound stamp skipped emoji seed."*
+
+### 10.6.4 Loading back into the game
+
+No new loader code. `floor-manager.js` already reads arbitrary sibling fields off floor data (`doorTargets`, `windowFaces`, `windowScenes`). Phase 6 adds one line: `if (fd.emojiMounts) for each → EmojiMount.registerAt(...)` during floor arrival.
+
+The blockout tool's output JSON is already a faithful subset of `floor-manager.js`'s floor records, so `emojiMounts` round-trips through save/load without transform.
 
 ## 11. Open questions
 
@@ -607,3 +790,4 @@ The fortress slit. Narrow, cold, minimal.
 - `NPC_SYSTEM_ROADMAP.md` — main NPC system; window patrons are intentionally **not** part of it (lightweight billboards only)
 - `LIVING_INFRASTRUCTURE_BLOCKOUT.md` — building inventory that drives BuildingRegistry records
 - `BLOCKOUT_REFRESH_PLAN.docx` §6 — window-door consistency rules; mullion ↔ hardware tier alignment
+- `PROXY_ZONE_DESIGN.md` — Phase 12 companion doc; the inverse-facade pattern that lets interior windows render actual exterior tiles + parent-floor skybox + parent-floor fog. Includes the city-floor motel variant (doubled diorama across floor N ↔ N.N).

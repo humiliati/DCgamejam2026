@@ -1306,9 +1306,16 @@ var Raycaster = (function () {
       if (perpDist < 0.2) perpDist = 0.2;
 
       // ── Wall height: contract tileWallHeights → chamber override → base ──
+      // Face for per-face height resolution (TERMINAL bezel etc). side+step
+      // maps to 'n'/'s'/'e'/'w' using the project's +Y=south convention.
+      var _whFace = null;
+      if (side === 0) _whFace = (stepX > 0) ? 'w' : 'e';
+      else            _whFace = (stepY > 0) ? 'n' : 's';
       var wallHeightMult = baseWallH;
       if (_contract) {
-        wallHeightMult = SpatialContract.getWallHeight(_contract, mapX, mapY, _rooms, hitTile, _cellHeights);
+        wallHeightMult = SpatialContract.getWallHeight(
+          _contract, mapX, mapY, _rooms, hitTile, _cellHeights, _whFace, grid
+        );
       }
 
       // Z-buffer: initial write based on the tile's class. This is a
@@ -1356,6 +1363,21 @@ var Raycaster = (function () {
       // Jamb columns are solid walls — restore normal z-buffer so
       // sprites behind the jamb are properly culled.
       if (_recessJamb) { _zBuffer[col] = perpDist; }
+      // EmojiMount z-bypass: any tile with a registered emoji mount
+      // pushes its zbuffer write out to perpDist + mount.recess so
+      // the sprite at the tile's center isn't culled by the tile's
+      // own wall column. Deeper geometry (the next tile and beyond)
+      // still writes smaller z and wins the sprite's depth test, so
+      // the hologram/vignette is occluded correctly by everything
+      // *behind* it — just not by its own pedestal.
+      //
+      // This replaces the per-tile `zBypassMode: 'depth'` pattern
+      // used on windows (Phase 2 will port those into EmojiMount
+      // and retire the SpatialContract field entirely).
+      if (typeof EmojiMount !== 'undefined' && EmojiMount.getMount) {
+        var _emMnt = EmojiMount.getMount(hitTile);
+        if (_emMnt) _zBuffer[col] = perpDist + _emMnt.recess;
+      }
       // Default-clear the pedestal mask for this column. Freeform
       // tiles populate it inside _renderFreeformForeground; short
       // ground walls populate it in the dedicated block below.
@@ -2066,8 +2088,37 @@ var Raycaster = (function () {
               var _capTGY = Math.floor(_capWY);
               if (_capTGX < 0 || _capTGX >= gridW ||
                   _capTGY < 0 || _capTGY >= gridH) continue;
+              // Contiguity gate. The cap may paint the hit tile itself
+              // or a 4-adjacent hasFlatTopCap neighbor — this supports
+              // authored multi-tile furniture like a 2×1 dining table
+              // where both cells should render as one continuous top.
+              // Cells farther than 1 step (Manhattan) from the hit
+              // cell are rejected: without this, grazing rays that
+              // skim past the hit tile and keep walking would paint
+              // another hasFlatTopCap tile across the room, producing
+              // ghostly tabletop strips on the far side of walls.
+              //
+              // The neighbor must itself be hasFlatTopCap so the cap
+              // stops at the tabletop's real edge rather than bleeding
+              // onto plain floor.
               var _capCellT = grid[_capTGY][_capTGX];
               if (!(TILES.hasFlatTopCap && TILES.hasFlatTopCap(_capCellT))) continue;
+              var _capDX = _capTGX - mapX; if (_capDX < 0) _capDX = -_capDX;
+              var _capDY = _capTGY - mapY; if (_capDY < 0) _capDY = -_capDY;
+              // Void-cap tiles (TERMINAL pedestal wells) must keep their
+              // dark-green paint strictly inside their own footprint. The
+              // Manhattan ≤ 1 gate that lets authored 2×1 tabletops paint
+              // as a continuous top will, for a void cap, spill rows into
+              // adjacent columns at the same world-Y and stomp on whatever
+              // back-layer geometry (e.g. HEARTH behind) is drawn in that
+              // rectangle. Flat-top tiles (TABLE/BED/STOOP/DECK) keep the
+              // relaxed gate.
+              var _capIsVoid = TILES.hasVoidCap && TILES.hasVoidCap(_capCellT);
+              if (_capIsVoid) {
+                if (_capDX + _capDY > 0) continue;
+              } else {
+                if (_capDX + _capDY > 1) continue;
+              }
               // Tile-repeating texture sample. Dividing world coords by
               // the per-tile scale stretches the texture (a scale of 2
               // means the pattern period doubles in world units, so
@@ -2092,6 +2143,30 @@ var Raycaster = (function () {
                 _capR = _capR * _capInv + fogColor.r * _capFog;
                 _capG = _capG * _capInv + fogColor.g * _capFog;
                 _capB = _capB * _capInv + fogColor.b * _capFog;
+              }
+              // Void-cap override: TERMINAL (and future hollow pedestals)
+              // paint their top surface as "looking down into a lit
+               // well" — not a surface at all. We discard the texture
+              // sample entirely (which otherwise reads as green-tinted
+              // wood planks) and paint a near-black fill with a faint
+              // hologram-green cast + horizontal CRT scanline on every
+              // other pixel row. The depth cue comes from row distance:
+              // rows closer to the horizon (far edge of the well)
+              // darken toward pure black; rows nearer the player
+              // (front of the well) lift slightly so the 💻 hologram
+              // appears to be "down in the well."
+              if (TILES.hasVoidCap && TILES.hasVoidCap(_capCellT)) {
+                // Depth factor: 0 at far horizon edge, 1 at near front lip.
+                var _voidT = (_capRow - halfH) / Math.max(1, (_capRowEnd - halfH));
+                if (_voidT < 0) _voidT = 0; else if (_voidT > 1) _voidT = 1;
+                var _voidLift = _voidT * _voidT;   // quadratic, dark deep
+                _capR = 2 + 10 * _voidLift;
+                _capG = 10 + 32 * _voidLift;
+                _capB = 4 + 14 * _voidLift;
+                // Scanlines: dim every other row for CRT feel.
+                if ((_capRow & 1) === 0) {
+                  _capR *= 0.55; _capG *= 0.55; _capB *= 0.55;
+                }
               }
               ctx.fillStyle = 'rgb(' + (_capR | 0) + ',' + (_capG | 0) + ',' + (_capB | 0) + ')';
               ctx.fillRect(col, _capRow, 1, 1);

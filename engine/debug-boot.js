@@ -265,6 +265,10 @@ var DebugBoot = (function () {
       DebugPerfMonitor.show();
       console.log('[DebugBoot] resource tracker mounted');
     }
+    if (PARAMS.spatialRuler === '1' && typeof SpatialDebug !== 'undefined') {
+      SpatialDebug.setEnabled(true);
+      console.log('[DebugBoot] spatial ruler enabled');
+    }
     _updateBanner('READY @ ' + ((typeof FloorManager !== 'undefined') ? FloorManager.getFloor() : '?'));
   }
 

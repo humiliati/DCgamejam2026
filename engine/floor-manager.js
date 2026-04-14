@@ -484,7 +484,9 @@ var FloorManager = (function () {
                                    //   board, not a cube, and the under-table shadow
                                    //   reads as legs.
             29: 2.5,               // HEARTH — full chimney stack
-            36: 1.0                // TERMINAL — desk-height CRT station
+            36: 0.90               // TERMINAL — fallback height for back-layer /
+                                   //   face-less paths. Front-face resolves to 0.54
+                                   //   via tileFaceWallHeights in the active contract.
           }),
           floorTexture: 'floor_wood'
         };
@@ -2040,33 +2042,15 @@ var FloorManager = (function () {
       }
     }
 
-    // ── Terminal CRT screen decor on TERMINAL tile faces ──
-    for (var ty = 0; ty < H; ty++) {
-      for (var tx = 0; tx < W; tx++) {
-        if (grid[ty][tx] !== T.TERMINAL) continue;
-        // Find walkable neighbor → that's the face the player approaches from
-        var tFaces = [];
-        if (ty > 0 && T.isWalkable(grid[ty - 1][tx])) tFaces.push('n');
-        if (ty < H - 1 && T.isWalkable(grid[ty + 1][tx])) tFaces.push('s');
-        if (tx > 0 && T.isWalkable(grid[ty][tx - 1])) tFaces.push('w');
-        if (tx < W - 1 && T.isWalkable(grid[ty][tx + 1])) tFaces.push('e');
-        if (tFaces.length === 0) continue;
+    // ── Terminal decor retired: EmojiMount now owns the 💻 hologram ──
+    // The old decor_terminal wall-decor CRT sprite pinned an emoji to
+    // the terminal's side faces and raced against EmojiMount's floor-
+    // anchored hologram. EmojiMount (engine/emoji-mount.js) emits a
+    // single billboard centered on the tile, which reads correctly from
+    // any approach angle and passes through the standard sprite depth
+    // pipeline. See emoji-mount.js TERMINAL registration.
 
-        if (!decor[ty][tx]) decor[ty][tx] = { n: [], s: [], e: [], w: [] };
-        for (var tf = 0; tf < tFaces.length; tf++) {
-          decor[ty][tx][tFaces[tf]].push({
-            spriteId: 'decor_terminal',
-            anchorU: 0.5,
-            anchorV: 0.75,  // Upper portion (screen above desk)
-            scale: 0.35,
-            cavityGlow: true,  // CRT screen emits sickly green glow
-            glowR: 30, glowG: 90, glowB: 35, glowA: 0.25
-          });
-        }
-      }
-    }
-
-    // ── Torch tile cavity decor (TORCH_LIT warm glow, TORCH_UNLIT dim bracket) ──
+// ── Torch tile cavity decor (TORCH_LIT warm glow, TORCH_UNLIT dim bracket) ──
     for (var tcy = 0; tcy < H; tcy++) {
       for (var tcx = 0; tcx < W; tcx++) {
         var tct = grid[tcy][tcx];
