@@ -1,0 +1,41 @@
+{
+  "$schema": "./template.schema.json",
+  "id": "two-room-corridor",
+  "title": "Two Rooms + Corridor",
+  "description": "North antechamber (spawn) connected by a short corridor to a south main chamber. DOOR_EXIT north wall back to parent, DOOR south wall descends to child. Torches flank both rooms. Useful for interior floors that need a staging beat before the action (guild, inn, dispatcher's office).",
+  "defaults": {
+    "width": 13,
+    "height": 15
+  },
+  "legend": {
+    "#": "wallTile",
+    ".": "floorTile",
+    "D": "DOOR",
+    "E": "DOOR_EXIT",
+    "T": "torchTile",
+    "S": "__spawn__"
+  },
+  "grid": [
+    "######E######",
+    "#T.........T#",
+    "#...........#",
+    "#.....S.....#",
+    "#...........#",
+    "#T.........T#",
+    "######.######",
+    "#####...#####",
+    "######.######",
+    "#T.........T#",
+    "#...........#",
+    "#...........#",
+    "#...........#",
+    "#T.........T#",
+    "######D######"
+  ],
+  "spawn": { "x": 6, "y": 3, "dir": 1 },
+  "doors": [
+    { "x": 6, "y": 0,  "key": "exit",  "kind": "DOOR_EXIT", "target": "__parent__" },
+    { "x": 6, "y": 14, "key": "descend", "kind": "DOOR",    "target": "__child1__" }
+  ],
+  "entities": []
+}

@@ -942,11 +942,19 @@ Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
     embedded raycaster preview, playtest replay heatmaps, difficulty-curve plotting. Depends on
     Pass 5b's graph schema staying polymorphic. Scope: open-ended, post-Winter-2026.
 
-**Recommended next step:** Extend the save patcher to rewrite `spawn:` and `doorTargets:` inside
-the `registerFloorBuilder` call so the Meta panel's edits persist on Ctrl+S instead of via
-clipboard-paste. Alternative paths: Tier 4 window-scene engine consumption (raycaster reads
-`sceneGrid`, JSON re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance
-from spawn, lighting coverage).
+**Recommended next step:** ✅ **Done (2026-04-14).** The save patcher (`tools/js/bv-save-patcher.js`)
+now rewrites `spawn:` and `doorTargets:` inside the `registerFloorBuilder` block in addition to the
+grid. `patchSpawnInSource` targets the `var SPAWN = { x, y, dir };` literal; `patchDoorTargetsInSource`
+handles both the inline `doorTargets: { ... }` object on the builder return and the scaffold
+`var DOOR_TARGETS = { ... };` form, preserving single-quoted JS-string convention and sorting keys by
+(y, x) for stable diffs. All three patches are chained in `prepareSaveCurrentFloor` so Meta-panel edits
+(spawn position/direction, door destinations) now persist on Ctrl+S without clipboard-paste. Verified
+via `outputs/patcher_sim.js` with four cases: inline doorTargets, scaffold var, missing blocks (no-op),
+and full chain + VM parse.
+
+**Next recommended step:** Tier 4 window-scene engine consumption (raycaster reads `sceneGrid`, JSON
+re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance from spawn, lighting
+coverage).
 
 Items that are probably **never worth it** for DG's scope: collaborative editing, procedural recipe
 editor, history tree with branching, customizable shortcuts. A small team building one game doesn't

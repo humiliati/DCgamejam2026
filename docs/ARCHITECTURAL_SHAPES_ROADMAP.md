@@ -834,12 +834,13 @@ POST-JAM POLISH — updated 2026-04-12
     5 prop sprite definitions
     Placement rules for templates + proc-gen
 
- Phase 9: Circular Tree Trunks  (medium priority) ← target updated
-    NEW TARGET: ray-vs-circle intersection (radius = 0.5 − recessD)
-    Stepping stone shipped in DOOR_FACADE (thin-wall offset)
-    Octagon (chamfered 8-gon) remains an option — see Phase 9 body
-    Alternative: untested 4-tile column cluster (no raycaster changes)
-    Decide path before implementation; wire tree tiles + CANOPY rings
+ Phase 9: Circular Tree Trunks + Quad Pillars  ✔ SHIPPED 2026-04-14
+    ray-vs-circle DDA + back-layer path in raycaster.js
+    tileShapes protocol in SpatialContract (getTileShape)
+    'circle' applied to: TREE, CANOPY, CANOPY_MOSS, PILLAR
+    'circle4' (new): PILLAR_QUAD — 2×2 sub-pillar cluster
+    Square-silhouette siblings: TREE_SQ, CANOPY_MOSS_SQ (dungeon)
+    Future: per-tile radius override, shape-aware collision
 
    ⛔ superseded — no further work ───────────────────
 
@@ -849,29 +850,77 @@ POST-JAM POLISH — updated 2026-04-12
 
 ---
 
-## Phase 9 — Octagonal Columns / Tree Trunks (Recess Generalization)
+## Phase 9 — Circular Tree Trunks + Quad Pillars ✅ SHIPPED (2026-04-14)
 
-**Priority:** Medium — primary use case is round tree trunk columns.
-**Difficulty:** Medium — extends DOOR_FACADE recess to all four faces, adds
-diagonal corner planes adapted from `raycast.js-master` WALL_DIAG.
-**Estimated size:** ~90 lines (all-face recess ~18, diagonal chamfer ~35,
-textures ~15, contract wiring ~20).
-**Prerequisite**: Phase 1.5 of `DOOR_ARCHITECTURE_ROADMAP.md` (Wolfenstein
-thin-wall offset for DOOR_FACADE — **SHIPPED**).
+**Status:** Shipped via the ray-vs-circle path in `engine/raycaster.js`
++ `SpatialContract.tileShapes` routing. The chamfered-octagon stepping-stone
+described below is retained for historical reference but will not be built.
 
-> **2026-04-14 update — target is true circular bases.** The chamfered
-> octagon below was always a stepping-stone. Tree trunks want a
-> genuine circle-in-tile silhouette (ray-vs-circle, radius = 0.5 −
-> recessD from tile center), not an 8-gon. Extra per-ray math is a
-> single `sqrt` in the jamb branch plus an arctan for the texture U
-> coordinate — comparable cost to the diagonal segment test.
-> **Alternative path on the shelf:** an **untested 4-tile column
-> cluster** — instead of recessing inside one tile, use four adjacent
-> tiles with the inner corners chamfered to form a round silhouette
-> at 2×-scale. No per-column math changes; pure data-level trick. It
-> loses small-pillar use cases but buys proper trunk thickness for
-> large trees at zero raycaster risk. Pick one before starting
-> implementation.
+### What shipped
+
+**Shape protocol** — `SpatialContract.tileShapes` is a per-contract map
+from tile-type → shape kind (`'circle'`, `'circle4'`, or absent = square).
+Accessed at render time via `SpatialContract.getTileShape(contract, tile)`.
+Plumbed into both the primary DDA hit branch and the N-layer back-layer
+collector so circle tiles behave identically whether in front of or
+behind other geometry.
+
+**`'circle'` (ray-vs-inscribed-circle)** — `_CIRCLE_R = 0.45` (in raycaster.js).
+On hit: override perpDist to the camera-forward projection of the hit
+point (`(hx-px)*pdCos + (hy-py)*pdSin`), set `wallX` via
+`(atan2(dy,dx) + π) / (2π)` so the texture wraps around the circumference.
+On miss: DDA walks past the tile so the player can peek through the
+~0.05 corner gaps between adjacent round tiles. Applied to:
+
+| Tile | Contract | Use |
+|---|---|---|
+| `TREE` (21) | exterior | Round tree trunks |
+| `CANOPY` (65) | exterior | Round leaf pads (floating disc above trunk) |
+| `CANOPY_MOSS` (66) | exterior | Round hanging-moss clumps |
+| `PILLAR` (10) | exterior + interior | Round architectural columns / lamp-post shafts |
+
+**`'circle4'` (2×2 sub-pillar cluster)** — `_CIRCLE4_R = 0.2`,
+`_CIRCLE4_OFF = 0.25`. Four sub-circles at (±0.25, ±0.25) from tile
+centre, radius 0.2 each. Ray solves all four, keeps the nearest positive-t
+hit; the winning sub-centre populates the same `_circleCX/CY/HX/HY`
+channels used by single-circle so perpDist / wallX work unchanged.
+Diagonal gaps between sub-pillars are sight-permeable (tile stays
+non-walkable via `isOpaque`). Applied to:
+
+| Tile | Contract | Use |
+|---|---|---|
+| `PILLAR_QUAD` (88) | exterior + interior | Quad-colonnade accents, shrine bases, see-through chokepoints |
+
+**Square-silhouette sibling tiles** — for places where a square footprint
+is the right read:
+
+| Tile | Purpose |
+|---|---|
+| `TREE_SQ` (85) | Dense treelines / grove-fill. Ring perimeter with round TREE, fill interior with TREE_SQ for a soft silhouette around a solid mass. |
+| `CANOPY_MOSS_SQ` (84) | Dungeon ceiling-beam moss. Wired into `nestedDungeon()` base at offset 0.85, 0.25-thick slab tucked against a 1.2-tall dungeon wall. |
+
+### What's left (future work, not blocking)
+
+- **Per-tile radius override** — `tileShapes` values are strings today.
+  Promoting to `{ kind: 'circle', r: 0.4 }` objects would let individual
+  biomes carry different trunk thicknesses (thin sapling / fat oak) and
+  let PILLAR_QUAD tune `(r, off)` independently from TREE. ~15 lines.
+- **Circle collision** — the player's collision AABB still tests the
+  full tile boundary, so you can't physically walk between the diagonal
+  gaps of a PILLAR_QUAD. Matches the DOOR_FACADE precedent. Upgrade
+  path: per-shape collision test in `MovementController` or at the
+  grid-gen level. Not scoped.
+- **Shape-aware wall decor** — billboard sprites mounted on circle
+  tiles (torches on a round column) still position against the square
+  tile boundary. Visible on close approach. Low priority.
+
+### Historical — chamfered octagon (not shipping)
+
+The chamfered-8-gon path below was the original Phase 9 plan. Kept for
+contributors wondering why there's a `WALL_DIAG` reference in
+`raycast.js-master` — we studied it, and the ray-circle path was
+cheaper per column (one sqrt + one atan2 vs. a line-segment intersection
+and a pointVsRect check per corner).
 
 ### Problem
 

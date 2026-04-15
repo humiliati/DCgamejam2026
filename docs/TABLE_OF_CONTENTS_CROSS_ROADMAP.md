@@ -61,7 +61,6 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-87 | [RAYCAST_FREEFORM_UPGRADE_ROADMAP.md](#doc-87-raycast_freeform_upgrade_roadmapmd) — freeform wall blocks (hearth sandwich, civilized bonfire + pergola moat, arches, portholes) modelled on raycast.js-master reference | docs/ |
 | DOC-88 | [DOOR_ARCHITECTURE_ROADMAP.md](#doc-88-door_architecture_roadmapmd) — Phase 0–2 + 5A + 6A/6B shipped (DOOR_FACADE, trapdoors, double doors, great arches); Phase 3 stamp-out unblocked | docs/ |
 | DOC-89 | [TRAPDOOR_ARCHITECTURE_ROADMAP.md](#doc-89-trapdoor_architecture_roadmapmd) — Tiers 1–5 shipped (first pass), Tiers 6–8 specced; TRAPDOOR_DN/UP freeform + ladder shaft filler | docs/ |
-| DOC-90 | [RECESS_REPAIR_ROADMAP.md](#doc-90-recess_repair_roadmapmd) — **BLOCKING**: reinstate Wolfenstein thin-wall recess block in raycaster.js lost during trapdoor session | docs/ |
 | DOC-91 | [RAYCASTER_EXTRACTION_ROADMAP.md](#doc-91-raycaster_extraction_roadmapmd) — Phases 1–3 complete (raycaster split from 4,729 → 2,758 lines across 7 IIFEs); Phase 4 deferred post-Jam | docs/ |
 | DOC-92 | [LIVING_WINDOWS_ROADMAP.md](#doc-92-living_windows_roadmapmd) — Phase 0–2.5 shipped (SHOP/BAY/SLIT/ALCOVE/COMMERCIAL + corner bitmask); Phase 6 EmojiMount port next | docs/ |
 | DOC-93 | [PROXY_ZONE_DESIGN.md](#doc-93-proxy_zone_designmd) — Phase 12 of LIVING_WINDOWS: interior windows looking out onto pasted exterior slices (design only) | docs/ |
@@ -69,6 +68,8 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-95 | [MINIGAME_TILES.md](#doc-95-minigame_tilesmd) — tile-by-tile clicky-minigame survey (WELL, BAR_COUNTER, etc.) for §11.1/§15 living-infra tiles | docs/ |
 | DOC-96 | [TEST_HARNESS_ROADMAP.md](#doc-96-test_harness_roadmapmd) — Phase 0 shipped: DebugPerfMonitor (FPS, frame time, stutter log, subsystem probes) via test-harness.html | docs/ |
 | DOC-101 | [WEATHER_MODULE_ROADMAP.md](#doc-101-weather_module_roadmapmd) — Planning: per-floor weather system (haze/rain/wind/debris) at configurable Z-depth in 3D viewport, punch-through terminus | docs/ |
+| DOC-104 | [DOC_GRAPH_BLOCKOUT_ARC.md](#doc-104-doc_graph_blockout_arcmd) — Mermaid document graph for the blockout refresh arc: prereqs → spec → engine files → downstream consumers; reading order for delegated engineers | docs/ |
+| DOC-105 | [POST_JAM_FOLLOWUP_ROADMAP.md](#doc-105-post_jam_followup_roadmapmd) — Consolidates deferred items from DOC-62/82/86/17/19/48/88/89/91/92 + legacy carryovers into 6 ordered waves aligned with Blockout → NPC → Living Shops arc | docs/ |
 
 ### Card, Inventory And Combat
 
@@ -192,17 +193,53 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 
 ## Outstanding And Post-Jam Considerations
 
-Primary outstanding execution priorities:
+### Current arc — Living Shops & Economy → weighted dungeon loot
 
-1. Run DOC-82 POST_JAM_EXECUTION_ORDER.md as the active patch plan (P1-P5).
-2. Close legacy carryovers from archived jam plan:
+The recent architectural cluster (DOC-88 doors / DOC-89 trapdoors / DOC-92 living windows /
+DOC-93 proxy zones / DOC-94 spatial debug / DOC-95 minigame tiles / DOC-101 weather) was
+ramp-up to give dungeon activity feedback more surface to display. The arc now pivots to
+**DOC-84 LIVING_INFRASTRUCTURE_BLOCKOUT** + **DOC-74 ACT2_NARRATIVE_OUTLINE** as the
+north stars. Two new plans are coming next week:
+
+- **BLOCKOUT_REFRESH_PLAN** (upcoming) — reserve **DOC-102**. Expands the dungeon tile
+  library, locks in architecture, drops verb-nodes + exterior living-infra tiles across
+  Floors 0–3, flags remaining ramp-up debug items for ship.
+- **NPC_REFRESH_PLAN** (upcoming, follows BLOCKOUT) — reserve **DOC-103**. Populates
+  per-NPC memories, creature verb-sets, faction relations matrix, Act 2 dispatcher/contact
+  choreography. Target: living shops & economy visible before circling back to dungeoning.
+
+### Primary outstanding execution priorities
+
+1. Run DOC-82 POST_JAM_EXECUTION_ORDER.md as the active patch plan (P1–P5).
+2. **Expand dungeon tile library** — DOC-84 §12.2 creature tiles 49–54 land in `tiles.js`
+   + biome textures + `enemies.json` verb-sets (blocks "loot feels weighted" payoff).
+3. **Expand DOC-95 MINIGAME_TILES** — lock Tier 1 implementation order (WELL, ANVIL,
+   SOUP_KITCHEN, BARREL, FUNGAL_PATCH); flesh out Tier 2 UI flow for SWITCHBOARD +
+   NOTICE_BOARD; define overflow/failure states + juice/particle hooks; reconcile with
+   DOC-84 verb-node list (same tile, consistent treatment).
+4. **Register verb-nodes on Floors 2 & 3** (DOC-84 §5.2c/§6.2c) — 22 + 16 nodes, unblocks
+   surface-level economy visibility as soon as it lands.
+5. Implement DOC-74 Act 2 housing reassignment arc (§5.4) with DOC-10 / DOC-84 interior
+   + living-infrastructure hooks. Resolve Act 2 open questions (§12): hero-cycle faction
+   colors, faction re-alignment escape hatch, Act 2 climax fight mechanics (Seaway 0.1.2).
+6. Execute depth-3 reliability work from DOC-85 (AI disposition contract, proc-gen
+   invariants, acceptance tests). **Feed §12.6 creature-tile placement rules into the
+   D3 Phase 4 composer** — this is the integration point where dungeon-creature economy
+   becomes non-negotiable.
+7. Cross-floor verb attenuation (DOC-83 Phase 11) — prevents reanimated constructs from
+   stampeding upstairs, without which ENERGY_CONDUIT→CHARGING_CRADLE pulls dominate.
+8. Close legacy carryovers from archived jam plan:
    - E1/E2 (hero boss encounter + hero deck)
    - E5.8/E5.9/E5.10 (chest interaction + playtest gate)
    - Phase F (economy tuning + tool progression)
    - Phase G (audio, LG validation, submission polish)
-3. Implement Act 2 housing reassignment arc (DOC-74 §5.4) with corresponding interior/living-infrastructure hooks (DOC-10, DOC-84).
-4. Execute depth-3 reliability work from DOC-85 (AI disposition contract, proc-gen invariants, acceptance tests).
-5. Run DOC-86 critical path sequencing for legacy roadmap triage and dependency closure before new renderer/living-infra expansions.
+9. Run DOC-86 critical path sequencing for legacy roadmap triage and dependency closure
+   before new renderer/living-infra expansions.
+
+### Recently shipped / archived
+
+- **DOC-90 RECESS_REPAIR_ROADMAP** — repair shipped 2026-04-14; folds back into DOC-88
+  Phase 1.5 as the canonical recess reference. Removed from active engine table.
 
 ## Archived Detail
 

@@ -20,14 +20,21 @@ var BuildingRegistry = (function () {
   // Sprite config for the billboard that renders behind each window's
   // glass cavity. Keyed by recipe name, referenced from building
   // records and windowScenes entries.
+  // Scales trimmed 2026-04-14 (post Phase 6 EmojiMount port) — the
+  // old values were tuned against WindowSprites' loose filler-proxy
+  // emission and read too loud from across the map once the unified
+  // billboard path made the vignette render reliably at every
+  // distance. Target: a sprite that reads clearly on approach without
+  // dominating the skyline silhouette. glowRadius also trimmed so the
+  // halo is a vignette cue instead of a beacon.
   var VIGNETTES = {
-    tavern_mug:    { emoji: '\uD83C\uDF7A', scale: 0.42, glow: '#ffaa33', glowRadius: 2 },  // 🍺
-    bazaar_cards:  { emoji: '\uD83C\uDCCF', scale: 0.40, glow: '#ffcc55', glowRadius: 2 },  // 🃏
-    soup_cauldron: { emoji: '\uD83C\uDF72', scale: 0.42, glow: '#ff9933', glowRadius: 2 },  // 🍲
-    dispatch_lamp: { emoji: '\uD83C\uDFEE', scale: 0.38, glow: '#ffbb44', glowRadius: 3 },  // 🏮
-    home_candle:   { emoji: '\uD83D\uDD6F\uFE0F', scale: 0.30, glow: '#ffdd88', glowRadius: 2 },  // 🕯️
-    watch_lantern: { emoji: '\uD83D\uDD26', scale: 0.36, glow: '#eecc44', glowRadius: 2 },  // 🔦
-    closed_dim:    { emoji: '\uD83D\uDD6F\uFE0F', scale: 0.18, glow: '#442200', glowRadius: 1 }   // 🕯️ dim
+    tavern_mug:    { emoji: '\uD83C\uDF7A', scale: 0.30, glow: '#ffaa33', glowRadius: 1.2 },  // 🍺
+    bazaar_cards:  { emoji: '\uD83C\uDCCF', scale: 0.28, glow: '#ffcc55', glowRadius: 1.2 },  // 🃏
+    soup_cauldron: { emoji: '\uD83C\uDF72', scale: 0.30, glow: '#ff9933', glowRadius: 1.2 },  // 🍲
+    dispatch_lamp: { emoji: '\uD83C\uDFEE', scale: 0.28, glow: '#ffbb44', glowRadius: 1.6 },  // 🏮
+    home_candle:   { emoji: '\uD83D\uDD6F\uFE0F', scale: 0.22, glow: '#ffdd88', glowRadius: 1.2 },  // 🕯️
+    watch_lantern: { emoji: '\uD83D\uDD26', scale: 0.26, glow: '#eecc44', glowRadius: 1.2 },  // 🔦
+    closed_dim:    { emoji: '\uD83D\uDD6F\uFE0F', scale: 0.14, glow: '#442200', glowRadius: 0.8 }   // 🕯️ dim
   };
 
   // ── Mullion materials ─────────────────────────────────────────────

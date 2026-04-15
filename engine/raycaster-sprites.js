@@ -647,6 +647,12 @@ var RaycasterSprites = (function () {
       if (dist < 0.3 || dist > renderDist) continue;
       if (hasMin && dist <  minDist) continue;
       if (hasMax && dist >= maxDist) continue;
+      // Per-sprite max distance. Used by window vignettes that
+      // shouldn't render through shrubs / half-walls from across
+      // the map — the raycaster's z-buffer doesn't distinguish
+      // freeform occluders from see-through freeform tiles, so a
+      // hard distance cull stands in for proper sub-tile occlusion.
+      if (s.maxDist && dist > s.maxDist) continue;
 
       var angle = Math.atan2(dy, dx) - pDir;
       while (angle > Math.PI) angle -= 2 * Math.PI;

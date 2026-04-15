@@ -1,4 +1,5 @@
 /EyesOnly
+/dist
 *.bak
 .DS_Store
 Thumbs.db

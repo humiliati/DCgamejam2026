@@ -1,0 +1,45 @@
+{
+  "$schema": "./template.schema.json",
+  "id": "cellar-3x3-grid",
+  "title": "Cellar 3x3 Grid",
+  "description": "Nine-chamber nested-dungeon grid: 3x3 of 5x5 cells separated by 1-tile walls with single-tile openings. Spawn NW chamber facing east. STAIRS_UP in NW returns to parent; STAIRS_DN in SE descends to sibling. Torches in alternating chambers. Good scaffold for depth-3 floors (cellar, catacomb, hero's-wake B1).",
+  "defaults": {
+    "width": 19,
+    "height": 19
+  },
+  "legend": {
+    "#": "wallTile",
+    ".": "floorTile",
+    "U": "STAIRS_UP",
+    "N": "STAIRS_DN",
+    "T": "torchTile",
+    "S": "__spawn__"
+  },
+  "grid": [
+    "###################",
+    "#U....#T....#....T#",
+    "#.....#.....#.....#",
+    "#..S..............#",
+    "#.....#.....#.....#",
+    "#.....#.....#.....#",
+    "###.#####.#####.###",
+    "#T....#.....#T....#",
+    "#.....#.....#.....#",
+    "#.................#",
+    "#.....#.....#.....#",
+    "#.....#T....#.....#",
+    "###.#####.#####.###",
+    "#.....#T....#.....#",
+    "#.....#.....#.....#",
+    "#.................#",
+    "#.....#.....#.....#",
+    "#T....#.....#....N#",
+    "###################"
+  ],
+  "spawn": { "x": 3, "y": 3, "dir": 0 },
+  "doors": [
+    { "x": 1,  "y": 1,  "key": "up",   "kind": "STAIRS_UP", "target": "__parent__" },
+    { "x": 17, "y": 17, "key": "down", "kind": "STAIRS_DN", "target": "__sibling_next__" }
+  ],
+  "entities": []
+}

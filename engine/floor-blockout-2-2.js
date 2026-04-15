@@ -83,7 +83,10 @@
         stairsDn: { x: 9, y: 2 },   // STAIRS_DN — to Hero's Wake B1 (2.2.1)
         doorExit: { x: 9, y: 12 }   // DOOR_EXIT — back to Lantern Row
       },
-      doorTargets: { '9,12': '2' },  // DOOR_EXIT → Lantern Row
+      doorTargets: {
+        '9,12': '2',      // DOOR_EXIT  → Lantern Row (parent)
+        '9,2':  '2.2.1'   // STAIRS_DN  → Hero's Wake B1 (child)
+      },
       gridW: W,
       gridH: H,
       biome: 'watchpost',

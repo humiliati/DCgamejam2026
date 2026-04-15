@@ -69,6 +69,10 @@
         doorExit: { x: 7, y: 10 }   // DOOR_EXIT — back to Promenade
       },
       doorTargets: { '7,10': '1' },  // DOOR_EXIT → The Promenade
+      procGenChildren: [
+        { id: '1.1.1', kind: 'template', label: 'Coral Cellars',
+          doorCoord: '7,4', biomeHint: 'coral_cellar', maxDepth: 2 }
+      ],
       gridW: W,
       gridH: H,
       biome: 'bazaar',

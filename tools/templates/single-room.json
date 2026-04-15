@@ -1,0 +1,33 @@
+{
+  "$schema": "./template.schema.json",
+  "id": "single-room",
+  "title": "Single Room",
+  "description": "One rectangular room with a single DOOR_EXIT to the parent floor. Spawn faces north toward the door. Four torches in the corners. Good for small interior biomes (bazaar, guild, apothecary, armory).",
+  "defaults": {
+    "width": 11,
+    "height": 9
+  },
+  "legend": {
+    "#": "wallTile",
+    ".": "floorTile",
+    "E": "DOOR_EXIT",
+    "T": "torchTile",
+    "S": "__spawn__"
+  },
+  "grid": [
+    "###########",
+    "#T.......T#",
+    "#.........#",
+    "#.........#",
+    "#....S....#",
+    "#.........#",
+    "#.........#",
+    "#T.......T#",
+    "#####E#####"
+  ],
+  "spawn": { "x": 5, "y": 4, "dir": 3 },
+  "doors": [
+    { "x": 5, "y": 8, "key": "exit", "kind": "DOOR_EXIT", "target": "__parent__" }
+  ],
+  "entities": []
+}

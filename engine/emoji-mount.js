@@ -32,15 +32,36 @@
  * per render frame and animate() per frame with the current timestamp.
  * Same plumbing shape as WindowSprites (engine/window-sprites.js).
  *
- * Future: Phase 2 ports WindowSprites' emoji emission into this module
- * and retires `zBypassMode='depth'` from SpatialContract — the
- * per-mount `recess` is the unified z-bypass knob.
+ * Phase 6 (LIVING_WINDOWS_ROADMAP §4.6) ported WindowSprites' window
+ * vignette emission into this module. Each windowScenes entry on the
+ * floor data becomes an INSTANCE mount (anchor='cavity', recess=1.0,
+ * lift per-tile) registered via registerAt(floorId, x, y, cfg). The
+ * per-mount `recess` is now the unified z-bypass knob — the
+ * `zBypassMode='depth'` field on SpatialContract freeform configs
+ * has been deleted, and the raycaster's per-tile zbuffer write is
+ * back to the simple transparent-to-sprites rule with depth applied
+ * by getMountAtOrType() on the column-by-column hot path.
  */
 var EmojiMount = (function () {
   'use strict';
 
   // Mount registry — key: tile id (number), value: frozen config.
+  // TYPE mounts apply uniformly to every tile of a given kind (e.g.
+  // every TERMINAL tile emits a hologram). Registered once at load.
   var _mounts = {};
+
+  // INSTANCE mount registry — per-floor, per-coord overrides. Keyed
+  // by floorId → "x,y" → frozen config. Used by window vignettes
+  // where every (x,y) has a distinct billboard (🍺 vs 🗝️ vs 🕯️) even
+  // though the underlying tile type (WINDOW_TAVERN) is the same.
+  // Populated on floor load from floorData.emojiMounts / windowScenes.
+  // Cleared via clearFloor(floorId) on floor transition.
+  var _instances = {};
+
+  // Tracks the floor id most recently passed to buildSprites(). The
+  // raycaster's z-bypass path reads this to look up instance mounts
+  // without having to thread the floor id through every call site.
+  var _currentFloorId = null;
 
   // Per-floor sprite list cache — invalidated on clearCache() or
   // whenever buildSprites() sees a different floorId than last time.
@@ -104,12 +125,104 @@ var EmojiMount = (function () {
     _cachedFloorId = null;
   }
 
-  /** Look up a mount by tile id. Returns the frozen config or null. */
+  /**
+   * Register a per-coord instance mount. Same config fields as
+   * register(), but the mount applies only at (x,y) on floorId. If
+   * both an instance mount and a type mount exist for a tile, the
+   * instance wins. Typical use: window vignettes, where windowScenes
+   * declarations become one registerAt() call per facade tile.
+   */
+  function registerAt(floorId, x, y, cfg) {
+    if (cfg == null || floorId == null || x == null || y == null) return;
+    if (!_instances[floorId]) _instances[floorId] = {};
+    var key = x + ',' + y;
+    _instances[floorId][key] = Object.freeze({
+      emoji:       cfg.emoji || '\u2754',
+      overlay:     cfg.overlay || null,
+      glow:        cfg.glow || null,
+      glowRadius:  (cfg.glowRadius != null) ? cfg.glowRadius : 0.5,
+      scale:       (cfg.scale != null) ? cfg.scale : 0.5,
+      anchor:      cfg.anchor || 'cavity',
+      lift:        (cfg.lift != null) ? cfg.lift : 0,
+      // Default 1.5: the sprite typically emits at (sprX,sprY) one
+      // tile off the key (cavity vignettes: facade + interiorStep),
+      // so spriteDist ≈ perpDist + 1. The raycaster-sprites z-test
+      // is STRICT greater (`zBuffer[col] > dist`), so recess must
+      // exceed 1.0 for the sprite to pass on the key-tile's columns.
+      // 1.5 puts the threshold a half-tile past the sprite center.
+      recess:      (cfg.recess != null) ? cfg.recess : 1.5,
+      bob:         (cfg.bob != null) ? cfg.bob : 0,
+      bobPeriod:   (cfg.bobPeriod != null) ? cfg.bobPeriod : 3200,
+      glint:       cfg.glint === true,
+      noFogFade:   cfg.noFogFade === true,
+      groundLevel: cfg.groundLevel === true,
+      crtScanlines:cfg.crtScanlines === true,
+      // Per-instance hard render-distance cap. raycaster-sprites
+      // culls the billboard when player-to-sprite distance exceeds
+      // this value. Used by window vignettes so the cross-map read
+      // respects shrubs / half-wall occluders that the z-buffer
+      // can't distinguish from see-through freeform tiles. Null
+      // means no cap (defer to the raycaster's renderDist fog).
+      maxDist:     (cfg.maxDist != null) ? cfg.maxDist : null,
+      // Extra fields not owned by type mounts — instance emits a
+      // billboard at (sprX, sprY) which may differ from (x,y). For
+      // windows, sprX/sprY is the interior-adjacent tile behind the
+      // glass ("facade + interiorStep") so the vignette reads as
+      // content INSIDE the building, with the glass pane in front.
+      sprX:        (cfg.sprX != null) ? cfg.sprX : x,
+      sprY:        (cfg.sprY != null) ? cfg.sprY : y
+    });
+    // Invalidate the sprite cache for this floor if it matches.
+    if (floorId === _cachedFloorId) _cachedFloorId = null;
+  }
+
+  /**
+   * Drop ALL instance mounts for a floor. Called by game.js on floor
+   * transition so that descending into the Bazaar doesn't leave the
+   * Promenade's 🍺 vignettes registered (they'd still try to look up
+   * tiles at those coords on the new grid).
+   */
+  function clearFloor(floorId) {
+    if (_instances[floorId]) delete _instances[floorId];
+    if (floorId === _cachedFloorId) _cachedFloorId = null;
+  }
+
+  /** Look up a type mount by tile id. Returns the frozen config or null. */
   function getMount(tile) {
     return _mounts[tile] || null;
   }
 
-  /** Fast predicate for raycaster hot loops. */
+  /**
+   * Look up an instance mount at (x,y) on floorId. Returns frozen
+   * config or null. Raycaster hot-path uses this to resolve the
+   * per-tile recess for window vignettes.
+   */
+  function getMountAt(floorId, x, y) {
+    var bucket = _instances[floorId];
+    if (!bucket) return null;
+    return bucket[x + ',' + y] || null;
+  }
+
+  /**
+   * Combined lookup: instance mount at (x,y) on the current floor
+   * (whichever floor was last passed to buildSprites) wins; falls
+   * back to type mount by tile id. This is the raycaster's z-bypass
+   * entry point — one call covers both window vignettes (per-coord)
+   * and TERMINAL holograms (per-type) without the caller having to
+   * thread floor id through the per-column hotpath.
+   */
+  function getMountAtOrType(x, y, tile) {
+    if (_currentFloorId != null) {
+      var bucket = _instances[_currentFloorId];
+      if (bucket) {
+        var inst = bucket[x + ',' + y];
+        if (inst) return inst;
+      }
+    }
+    return _mounts[tile] || null;
+  }
+
+  /** Fast predicate for raycaster hot loops (type mounts only). */
   function hasMount(tile) {
     return _mounts[tile] != null;
   }
@@ -139,10 +252,18 @@ var EmojiMount = (function () {
    * can safely animate() + push into _sprites without redoing work.
    */
   function buildSprites(floorId, grid, w, h) {
+    // Track the floor id for raycaster getMountAtOrType lookups even
+    // when the sprite cache hits — the raycaster needs this every
+    // frame, not just on floor transitions.
+    _currentFloorId = floorId;
     if (floorId === _cachedFloorId) return _cachedSprites;
     _cachedSprites = [];
     _cachedFloorId = floorId;
     if (!grid) return _cachedSprites;
+    // Pass 1: type mounts — scan the grid and emit one sprite per
+    // matching tile. Skip tiles that also have an instance mount at
+    // the same (x,y) to avoid double emission.
+    var floorInstances = _instances[floorId] || null;
     for (var y = 0; y < h; y++) {
       var row = grid[y];
       if (!row) continue;
@@ -150,7 +271,22 @@ var EmojiMount = (function () {
         var t = row[x];
         var m = _mounts[t];
         if (!m) continue;
+        if (floorInstances && floorInstances[x + ',' + y]) continue;
         _emit(x, y, m);
+      }
+    }
+    // Pass 2: instance mounts — iterate the per-floor registry. The
+    // instance's sprX/sprY is the emission coord, which may differ
+    // from the registered (x,y) key (windows: sprite sits one tile
+    // inside the facade behind the glass).
+    if (floorInstances) {
+      for (var key in floorInstances) {
+        if (!Object.prototype.hasOwnProperty.call(floorInstances, key)) continue;
+        var parts = key.split(',');
+        var gx = parseInt(parts[0], 10);
+        var gy = parseInt(parts[1], 10);
+        if (isNaN(gx) || isNaN(gy)) continue;
+        _emit(gx, gy, floorInstances[key]);
       }
     }
     return _cachedSprites;
@@ -172,8 +308,14 @@ var EmojiMount = (function () {
     // coords. _renderSprites() in raycaster-sprites adds 0.5 to center
     // the billboard on the tile. Double-adding (gx+0.5) pushes the
     // sprite a half-tile southeast — the "offset to one side" bug.
-    var sx = gx;
-    var sy = gy;
+    //
+    // Instance mounts may override the sprite emission position via
+    // sprX/sprY (window vignettes place the billboard one tile INSIDE
+    // the facade, behind the glass, so the raycaster renders it at
+    // perpDist + recess and it reads as interior content behind the
+    // mullion grid).
+    var sx = (m.sprX != null) ? m.sprX : gx;
+    var sy = (m.sprY != null) ? m.sprY : gy;
     var yAlt = 0;
     if (m.anchor === 'floor') {
       // Floor-anchored: sprite center is lifted above floor by `lift`.
@@ -201,6 +343,7 @@ var EmojiMount = (function () {
       groundLevel:  m.groundLevel,
       noFogFade:    m.noFogFade,
       crtScanlines: m.crtScanlines,
+      maxDist:      m.maxDist || null,
       // EmojiMount-private animation state — leading underscore marks
       // them as "don't read from the renderer, set by animate()":
       _mountBobAmp:    m.bob,
@@ -265,11 +408,15 @@ var EmojiMount = (function () {
   }
 
   return Object.freeze({
-    register:     register,
-    getMount:     getMount,
-    hasMount:     hasMount,
-    animate:      animate,
-    buildSprites: buildSprites,
-    clearCache:   clearCache
+    register:        register,
+    registerAt:      registerAt,
+    clearFloor:      clearFloor,
+    getMount:        getMount,
+    getMountAt:      getMountAt,
+    getMountAtOrType:getMountAtOrType,
+    hasMount:        hasMount,
+    animate:         animate,
+    buildSprites:    buildSprites,
+    clearCache:      clearCache
   });
 })();

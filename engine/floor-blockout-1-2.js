@@ -79,6 +79,10 @@
         doorExit: { x: 10, y: 15 }
       },
       doorTargets: { '10,15': '1' },  // DOOR_EXIT → The Promenade
+      procGenChildren: [
+        { id: '1.2.1', kind: 'composed', label: 'Inn Cellar',
+          doorCoord: '7,9', biomeHint: 'inn_cellar', maxDepth: 1 }
+      ],
       gridW: W,
       gridH: H,
       biome: 'inn',

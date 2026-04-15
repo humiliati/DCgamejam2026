@@ -234,32 +234,32 @@ var SpatialContract = (function () {
         //     carrying the load above the opening. Dominates the facade
         //     silhouette so the window reads as a small cut-out in a
         //     full wall rather than half the building.
-        73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior', zBypassMode: 'depth' }),
+        73: Object.freeze({ hUpper: 2.35, hLower: 0.40, fillGap: 'window_tavern_interior' }),
         // WINDOW_SHOP — ground-floor storefront. Plate glass confined to
         // the first tile of the facade (0.25→1.00 world units, 0.75 tall).
         // Divided into 3 panels by 2 vertical mullions at wallX ≈ 1/3, 2/3
         // — no horizontal bar. For WINDOW_COMMERCIAL (tile 81) the same
         // filler is applied to a tall 2.75-unit cavity.
         // Slight inset (recessD: 0.10) so glass sits behind the wall face.
-        77: Object.freeze({ hUpper: 2.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
+        77: Object.freeze({ hUpper: 2.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10 }),
         // WINDOW_BAY — residential bay window. Projects 0.20 units OUTWARD
         // from the wall (negative recessD). Mid-height slot (0.55→1.30,
         // 0.75 tall) — tall enough that the glass reads as a real pane
         // rather than a dark seam even at range. Beveled side jambs
         // render in building wallTexture via the recess jamb path.
-        78: Object.freeze({ hUpper: 2.25, hLower: 0.55, fillGap: 'window_bay_interior', recessD: -0.20, zBypassMode: 'depth' }),
+        78: Object.freeze({ hUpper: 2.25, hLower: 0.55, fillGap: 'window_bay_interior', recessD: -0.20 }),
         // WINDOW_SLIT — institutional fortress slit. Narrow opening, single
         // iron bar. Higher slot (0.50→1.70, 1.20 tall) — tall and narrow.
         // Moderate inset (0.15) for thick fortress wall depth.
-        79: Object.freeze({ hUpper: 1.80, hLower: 0.50, fillGap: 'window_slit_interior', recessD: 0.15, zBypassMode: 'depth' }),
+        79: Object.freeze({ hUpper: 1.80, hLower: 0.50, fillGap: 'window_slit_interior', recessD: 0.15 }),
         // WINDOW_ALCOVE — like BAY but with a mild inset (not a protrusion)
         // and a narrower glass cavity. For facades adjacent to doors or
         // corners where BAY's outward push reads awkwardly.
-        80: Object.freeze({ hUpper: 2.45, hLower: 0.55, fillGap: 'window_alcove_interior', recessD: 0.12, zBypassMode: 'depth' }),
+        80: Object.freeze({ hUpper: 2.45, hLower: 0.55, fillGap: 'window_alcove_interior', recessD: 0.12 }),
         // WINDOW_COMMERCIAL — gas-station / car-dealership storefront. Full
         // facade-height glass (0.25→3.00 world units) divided into 3 tall
         // panels. Shares the shop filler — just a larger cavity.
-        81: Object.freeze({ hUpper: 0.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10, zBypassMode: 'depth' }),
+        81: Object.freeze({ hUpper: 0.50, hLower: 0.25, fillGap: 'window_shop_interior', recessD: 0.10 }),
         69: Object.freeze({ hUpper: 0.80, hLower: 0.50, fillGap: 'city_bonfire_fire' }),
         // PERGOLA_BEAM sits at the TOP of the 2.0-unit column as a
         // thin canopy strip — 0.20 world units, roughly one quarter
@@ -389,9 +389,10 @@ var SpatialContract = (function () {
         88: 'stone_rough',     // PILLAR_QUAD — default 2×2 sub-pillar texture
                                //   (biomes can override with pillar_stone, marble,
                                //   etc. to match their colonnade style)
-        86: 'stone_rough',     // STOOP — rough cut-stone band for the raised step
-                               //   face (thin lip around the platform perimeter).
-        87: 'wood_plank',      // DECK — plank siding for the raised-boardwalk lip.
+        86: 'stoop_face_flagstone', // STOOP — 3 big flagstones across the face,
+                                    //   palette matches floor_flagstone on the cap.
+        87: 'deck_face_beams',      // DECK — board + beam construction with dark
+                                    //   gap-fill pockets showing framing beneath.
         74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
                                //   above the door opening. Per-tile override via
                                //   DoorSprites.getWallTexture() replaces this with
@@ -434,7 +435,8 @@ var SpatialContract = (function () {
         81: 'floor_cobble',      // WINDOW_COMMERCIAL — street cobblestones outside storefront
         74: 'floor_stone',      // DOOR_FACADE — stone threshold under the door
         86: 'floor_flagstone',  // STOOP — shaped stone paving on the step surface
-        87: 'floor_boardwalk'   // DECK — plank boardwalk on the raised platform
+        87: 'floor_deck_planks' // DECK — wide planks running perpendicular to
+                                //   floor_wood so neighbouring courses contrast.
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -790,7 +792,37 @@ var SpatialContract = (function () {
         // WINDOW_MURDERHOLE on dungeon walls. Short high band 0.70 → 0.95
         // so the player looks up into the opening. Filler confines the
         // aperture to wallX ∈ [0.40, 0.60].
-        83: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'window_murderhole_interior', recessD: 0.06 })
+        83: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'window_murderhole_interior', recessD: 0.06 }),
+
+        // TUNNEL_RIB — walkable rib-vault on a 1.3-tall tunnel tile.
+        // hUpper 0.35 = arched ceiling voussoir (world 0.95 → 1.30),
+        // hLower 0.00 = no threshold (walkable clean).
+        // Gap spans 0.00 → 0.95 — opening the player steps through.
+        // The upper band crosses just below eye height (1.0) so the
+        // ceiling visually compresses as the player advances — the
+        // hobbit-hole corridor feeling.
+        94: Object.freeze({ hUpper: 0.35, hLower: 0.00, fillGap: null }),
+
+        // TUNNEL_WALL — non-walkable side-wall with a decorative alcove.
+        // hUpper 0.25 + hLower 0.25 on a 1.0 wall leaves a 0.50 niche
+        // centred at world 0.25 → 0.75 (eye-level-ish). Filler paints
+        // the alcove content (lantern niche / shelf / mushroom cluster).
+        95: Object.freeze({ hUpper: 0.25, hLower: 0.25, fillGap: 'tunnel_alcove', recessD: 0.10 }),
+
+        // PORTHOLE_OCEAN — riveted bulkhead with an ocean skybox gap.
+        // hUpper 0.20 + hLower 0.40 lifts the porthole centre above
+        // eye level slightly (gap spans 0.40 → 0.80). Filler samples
+        // the contract's oceanSkybox with a parallax lookup so the
+        // horizon stays stable as the player walks past.
+        //
+        // Home environment: submarine-base dungeons at floor IDs
+        // 3.n.n (e.g. `3.1.1` Sealab Armory) and 4.n.n. The ocean
+        // palette in porthole-ocean.js is tuned for coastal water
+        // (greener, murkier) rather than open-ocean blue — sealab
+        // reads as anchored near continental shelf rather than
+        // mid-ocean abyss. Kelp silhouettes + surface caustics
+        // reinforce "shallow enough to see daylight filtering down."
+        96: Object.freeze({ hUpper: 0.20, hLower: 0.40, fillGap: 'porthole_ocean', recessD: 0.08 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -811,7 +843,11 @@ var SpatialContract = (function () {
         36: 'terminal_screen', // TERMINAL — dungeon data terminal
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw dungeon stone
         83: 'stone_rough',     // WINDOW_MURDERHOLE — raw dungeon stone
-        84: 'canopy_moss'      // CANOPY_MOSS_SQ — hanging moss (reuse exterior texture)
+        84: 'canopy_moss',     // CANOPY_MOSS_SQ — hanging moss (reuse exterior texture)
+        94: 'wood_dark',       // TUNNEL_RIB — warm damp planking for hobbit-hole feel
+        95: 'stone_rough',     // TUNNEL_WALL — tight fieldstone side-wall
+        96: 'concrete'         // PORTHOLE_OCEAN — bulkhead plate (placeholder until
+                               //   a dedicated rivet-steel texture is authored)
       }), opts.textures),
 
       // ── Floor texture ──
@@ -829,7 +865,8 @@ var SpatialContract = (function () {
         75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
         76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch
         82: 'floor_stone',       // WINDOW_ARROWSLIT — stone at the slit base
-        83: 'floor_stone'        // WINDOW_MURDERHOLE — stone at the wall base
+        83: 'floor_stone',       // WINDOW_MURDERHOLE — stone at the wall base
+        94: 'floor_stone'        // TUNNEL_RIB — walkable tile, uses tunnel floor
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -840,7 +877,12 @@ var SpatialContract = (function () {
         76: 1.2,    // TRAPDOOR_UP — low dungeon wall around hatch
         82: 1.2,    // WINDOW_ARROWSLIT — matches dungeon wall
         83: 1.2,    // WINDOW_MURDERHOLE — matches dungeon wall
-        84: 0.25    // CANOPY_MOSS_SQ — thin moss band (floats via tileHeightOffset)
+        84: 0.25,   // CANOPY_MOSS_SQ — thin moss band (floats via tileHeightOffset)
+        94: 1.3,    // TUNNEL_RIB — slightly taller than baseline so the arch
+                    //   reads above surrounding walls and the rib crosses
+                    //   just above player eye (Y=1.0) during traversal
+        95: 1.0,    // TUNNEL_WALL — matches baseline so niche sits at eye
+        96: 1.0     // PORTHOLE_OCEAN — matches baseline bulkhead height
       }, opts.tileWallHeights),
 
       // ── Per-face wall-height overrides ──

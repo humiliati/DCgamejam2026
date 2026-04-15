@@ -300,7 +300,82 @@ var TILES = (function () {
     // texture read as the rim. If we later want a genuinely distinct
     // rim material (e.g. brass ring around a wooden pedestal), re-
     // introduce this slot and implement per-tile slab stacking.
-    TERMINAL_RIM:     89
+    TERMINAL_RIM:     89,
+
+    // ── Beveled / diagonally-slashed wall tiles ───────────────────────
+    // Ported from raycast.js-master (OFFSET_DIAG_WALLS). Each tile is a
+    // single axis-aligned diagonal segment spanning two corners of the
+    // unit cell; the other half of the cell is open/traversable. The
+    // four orientations correspond to the four corner-to-corner slashes:
+    //
+    //   WALL_DIAG_0 (90): #/   segment (0,1)→(1,0)  — SW→NE, fills NW
+    //   WALL_DIAG_1 (91): \#   segment (0,0)→(1,1)  — NW→SE, fills NE
+    //   WALL_DIAG_2 (92): /#   segment (1,0)→(0,1)  — NE→SW, fills SE
+    //   WALL_DIAG_3 (93): #\   segment (1,1)→(0,0)  — SE→NW, fills SW
+    //
+    // Non-walkable (the segment blocks movement across its half of the
+    // cell). Opaque (blocks sight along the segment). Rendering uses a
+    // DDA-secondary ray-segment intersection in raycaster.js; the
+    // texture U coordinate is (hitX - x0) / (x1 - x0). Unit-cell corner
+    // offsets live in TILES.OFFSET_DIAG_WALLS below.
+    WALL_DIAG_0:      90,
+    WALL_DIAG_1:      91,
+    WALL_DIAG_2:      92,
+    WALL_DIAG_3:      93,
+
+    // ── Sealab / hobbit-tunnel dungeon tiles ──────────────────────────
+    // Walkable + freeform-rendered tunnel rib. Acts like ARCH_DOORWAY
+    // but with a lower headroom ceiling so a 1-tile corridor reads as
+    // a compressed rib-vault the player threads through. Place at
+    // every 1-2 tiles along a corridor centerline. Gap is traversable;
+    // upper band is a low arched ceiling; lower band is a raised
+    // threshold lip. See SpatialContract.hobbitTunnel() preset for
+    // the exact band extents and textures.
+    TUNNEL_RIB:       94,
+
+    // Corridor side-wall variant with an inset decorative alcove
+    // (lantern niche, shelf, mushroom cluster). Opaque, NOT walkable —
+    // the gap is a recessed display niche, not a traversable opening.
+    // Place on either side of TUNNEL_RIB to reinforce the narrow
+    // silhouette when the player looks left/right. Gap filler draws
+    // the alcove contents as a billboard; upper/lower bands use the
+    // tunnel's tight fieldstone / damp wood texture.
+    TUNNEL_WALL:      95,
+
+    // Ocean skybox porthole. Opaque, NOT walkable. Freeform gap is
+    // filled by a parallax skybox sampler that pulls from the active
+    // contract's oceanSkybox asset (undersea gradient + kelp silhouette
+    // band + occasional fish sprite band). Upper/lower bands render as
+    // riveted bulkhead plate. Intended for sealab dungeon outer walls
+    // where the tile is adjacent to "hull exterior." Gap reveals the
+    // distant ocean; parallax-based (stable horizon) rather than true
+    // skybox-cube sampling — correct for 1-tile porthole scale.
+    PORTHOLE_OCEAN:   96
+  };
+
+  /**
+   * Unit-cell corner offsets for the four WALL_DIAG orientations.
+   * Each entry is [[ax, ay], [bx, by]] — the two endpoints of the
+   * diagonal segment inside the tile's unit cell. Consumed by the
+   * raycaster's ray-segment intersection test and by the movement
+   * collider's side-of-line check. Indexed by (tile - WALL_DIAG_0).
+   */
+  T.OFFSET_DIAG_WALLS = Object.freeze([
+    Object.freeze([Object.freeze([0, 1]), Object.freeze([1, 0])]), // WALL_DIAG_0: #/
+    Object.freeze([Object.freeze([0, 0]), Object.freeze([1, 1])]), // WALL_DIAG_1: \#
+    Object.freeze([Object.freeze([1, 0]), Object.freeze([0, 1])]), // WALL_DIAG_2: /#
+    Object.freeze([Object.freeze([1, 1]), Object.freeze([0, 0])])  // WALL_DIAG_3: #\
+  ]);
+
+  /** Check if a tile is one of the four diagonal wall orientations. */
+  T.isWallDiag = function (tile) {
+    return tile === T.WALL_DIAG_0 || tile === T.WALL_DIAG_1 ||
+           tile === T.WALL_DIAG_2 || tile === T.WALL_DIAG_3;
+  };
+
+  /** Convert a WALL_DIAG tile ID to its OFFSET_DIAG_WALLS index (0-3). */
+  T.diagFaceIndex = function (tile) {
+    return tile - T.WALL_DIAG_0;
   };
 
   /** Check if a tile blocks movement */
@@ -321,7 +396,8 @@ var TILES = (function () {
            tile === T.ROOF_SLOPE_R || tile === T.ROOF_EAVE_R ||
            tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
-           tile === T.STOOP || tile === T.DECK;
+           tile === T.STOOP || tile === T.DECK ||
+           tile === T.TUNNEL_RIB;
   };
 
   /** Check if a tile is an environmental hazard */
@@ -346,7 +422,11 @@ var TILES = (function () {
            tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
            tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE ||
            tile === T.DOOR_FACADE ||
-           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
+           tile === T.WALL_DIAG_0 || tile === T.WALL_DIAG_1 ||
+           tile === T.WALL_DIAG_2 || tile === T.WALL_DIAG_3 ||
+           tile === T.TUNNEL_RIB || tile === T.TUNNEL_WALL ||
+           tile === T.PORTHOLE_OCEAN;
   };
 
   /** Check if tile is a torch (lit or unlit) */
@@ -360,6 +440,29 @@ var TILES = (function () {
            tile === T.STAIRS_DN || tile === T.STAIRS_UP || tile === T.BOSS_DOOR ||
            tile === T.LOCKED_DOOR || tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
+  };
+
+  /**
+   * Descent-stair predicate — true for any tile that sends the player
+   * to a deeper (or sibling-further) floor via the stair-transition
+   * path. STAIRS_DN and TRAPDOOR_DN are semantic variants: STAIRS for
+   * one-depth-step descents (N->N.N, N.N->N.N.N), TRAPDOOR for intra-
+   * dungeon sibling drops and dungeon-to-surface warps. Transition
+   * logic is unified; the tile identity is a rendering-intent marker
+   * consumed by SpatialContract + DoorSprites.
+   */
+  T.isDescendStair = function (tile) {
+    return tile === T.STAIRS_DN || tile === T.TRAPDOOR_DN;
+  };
+
+  /** Ascent-stair predicate — mirror of isDescendStair. */
+  T.isAscendStair = function (tile) {
+    return tile === T.STAIRS_UP || tile === T.TRAPDOOR_UP;
+  };
+
+  /** Any stair-like transition tile (either direction). */
+  T.isStairLike = function (tile) {
+    return T.isDescendStair(tile) || T.isAscendStair(tile);
   };
 
   /**
@@ -499,7 +602,8 @@ var TILES = (function () {
     // Phase 4: + WINDOW_TAVERN (row-range glass slot on building facades,
     //   interior scene billboard renders inside the transparent gap).
     // Phase 4b: + WINDOW_SHOP, WINDOW_BAY, WINDOW_SLIT (per-building
-    //   window types with zBypassMode:'depth' for real vignette depth).
+    //   window types; vignette depth now driven by EmojiMount instance
+    //   mount recess rather than the retired zBypassMode field).
     return tile === T.HEARTH || tile === T.CITY_BONFIRE ||
            tile === T.PERGOLA_BEAM || tile === T.DUMP_TRUCK ||
            tile === T.ARCH_DOORWAY || tile === T.PORTHOLE ||
@@ -508,7 +612,9 @@ var TILES = (function () {
            tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
            tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE ||
            tile === T.DOOR_FACADE ||
-           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP;
+           tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
+           tile === T.TUNNEL_RIB || tile === T.TUNNEL_WALL ||
+           tile === T.PORTHOLE_OCEAN;
   };
 
   /** Check if tile is any window type (facade glass + dungeon apertures) */
@@ -516,7 +622,8 @@ var TILES = (function () {
     return tile === T.WINDOW_TAVERN || tile === T.WINDOW_SHOP ||
            tile === T.WINDOW_BAY || tile === T.WINDOW_SLIT ||
            tile === T.WINDOW_ALCOVE || tile === T.WINDOW_COMMERCIAL ||
-           tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE;
+           tile === T.WINDOW_ARROWSLIT || tile === T.WINDOW_MURDERHOLE ||
+           tile === T.PORTHOLE_OCEAN;
   };
 
   return T;

@@ -797,6 +797,38 @@ var TextureAtlas = (function () {
       grainDark: 0.65
     });
 
+    // ── Stoop / Deck short-wall face textures ─────────────────────
+    // Very short walls (wallHeight 0.04) show as a thin horizontal band.
+    // Texture design emphasises horizontal variation across x; vertical
+    // detail gets compressed into a handful of screen pixels.
+
+    // Stoop face — 3 large flagstones echoing the floor_flagstone lid.
+    // Big blocks with wide dark mortar so player reads the band as
+    // "flagstone edge" aligned with the cap above.
+    _genStoopFace('stoop_face_flagstone', {
+      baseR: 58, baseG: 52, baseB: 48,          // Warm grey slab (matches floor_flagstone)
+      mortarR: 30, mortarG: 26, mortarB: 22,    // Dark mortar joints
+      stainR: 48, stainG: 38, stainB: 30,       // Oil/rust stain patches
+      variance: 16
+    });
+
+    // Deck face — big boards and beams. Horizontal top rail + vertical
+    // beams every ~21px with dark gap-fill pockets between.
+    _genDeckFace('deck_face_beams', {
+      beamR: 85, beamG: 60, beamB: 34,          // Dark beam wood
+      boardR: 105, boardG: 75, boardB: 45,      // Brighter top/bottom board
+      gapR: 30,   gapG: 22,  gapB: 14,          // Dark gap fill between beams
+      grainDark: 0.7
+    });
+
+    // Deck lid — larger plank tiles rotated 90° vs floor_wood so that
+    // side-by-side boardwalk regions read as different board courses.
+    _genFloorDeckPlanks('floor_deck_planks', {
+      baseR: 92, baseG: 64, baseB: 38,          // Warm weathered deck wood
+      gapR:  32, gapG:  24,  gapB: 14,          // Dark plank gaps
+      grainDark: 0.7
+    });
+
     // Bonfire stone ring — low cylindrical wall texture for 0.3× bonfire tile
     _genBonfireRing('bonfire_ring', {
       stoneR: 85, stoneG: 78, stoneB: 68,      // Warm grey river stones
@@ -3002,6 +3034,205 @@ var TextureAtlas = (function () {
         r: _clamp(p.baseR + blockNoise + pn),
         g: _clamp(p.baseG + blockNoise + pn),
         b: _clamp(p.baseB + blockNoise + pn * 0.8)
+      };
+    });
+  }
+
+  // ── Stoop face flagstone (short wall face, 3 big slabs) ──
+  //
+  // Designed for wallHeight 0.04 tiles (STOOP). Palette + block size
+  // mirrors floor_flagstone so the face reads as the same flagstone
+  // material used on the stoop's cap/lid. Layout is a horizontal band
+  // of 3 large slabs separated by thick vertical mortar seams; top and
+  // bottom 2px are darker mortar edges so the short sliver still reads
+  // as "stone edge, not wall".
+
+  function _genStoopFace(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var slabCount = 3;               // 3 wide slabs across 64px
+      var slabW = Math.floor(S / slabCount); // ~21
+      var mortarV = 2;                 // thick vertical mortar
+      var edgeBand = 2;                // top/bottom edge mortar
+
+      // Top/bottom dark mortar edge — frames the slab band
+      if (y < edgeBand || y >= S - edgeBand) {
+        var en = (_hash(x + 9400, y + 9401) - 0.5) * 4;
+        return {
+          r: _clamp(p.mortarR + en),
+          g: _clamp(p.mortarG + en),
+          b: _clamp(p.mortarB + en)
+        };
+      }
+
+      var slabIdx = Math.floor(x / slabW);
+      var localX = x - slabIdx * slabW;
+
+      // Vertical mortar between slabs
+      if (localX < mortarV) {
+        var mn = (_hash(x + 9500, y + 9501) - 0.5) * 4;
+        return {
+          r: _clamp(p.mortarR + mn),
+          g: _clamp(p.mortarG + mn),
+          b: _clamp(p.mortarB + mn)
+        };
+      }
+
+      // Per-slab tone (strong variation like floor_flagstone)
+      var slabTone = (_hash(slabIdx, 9600) - 0.5) * p.variance * 2;
+      var pn = (_hash(x + 9700, y + 9701) - 0.5) * 6;
+
+      // Rust/oil stain on ~30% of slabs — echoes floor_flagstone
+      var stainSeed = _hash(slabIdx + 9800, 0);
+      if (stainSeed > 0.7) {
+        var sCx = slabIdx * slabW + slabW / 2;
+        var sCy = S / 2;
+        var sDx = x - sCx, sDy = y - sCy;
+        var sDist = Math.sqrt(sDx * sDx + sDy * sDy);
+        var sMax = slabW * 0.35;
+        if (sDist < sMax) {
+          var sFall = 1.0 - sDist / sMax;
+          return {
+            r: _clamp(p.stainR + pn * 0.5 + slabTone * sFall),
+            g: _clamp(p.stainG + pn * 0.4 + slabTone * sFall),
+            b: _clamp(p.stainB + pn * 0.3 + slabTone * sFall)
+          };
+        }
+      }
+
+      // Subtle edge shading within slab (3-tier lightness)
+      var edgeDist = Math.min(localX - mortarV, slabW - 1 - localX,
+                              y - edgeBand, S - edgeBand - 1 - y);
+      var tier = edgeDist < 2 ? 0.85 : (edgeDist > 6 ? 1.08 : 1.0);
+
+      return {
+        r: _clamp((p.baseR + slabTone) * tier + pn),
+        g: _clamp((p.baseG + slabTone) * tier + pn * 0.9),
+        b: _clamp((p.baseB + slabTone) * tier + pn * 0.8)
+      };
+    });
+  }
+
+  // ── Deck face beams (short wall face, boards + beams) ──
+  //
+  // Designed for wallHeight 0.04 tiles (DECK). Layout:
+  //   rows  0–5   : top board (horizontal plank edge — brighter)
+  //   rows  6–57  : vertical beams every ~21px separated by dark gap
+  //                 pockets (the "gap fill under" the deck)
+  //   rows 58–63  : bottom board / shadow line
+  // Beam colour varies per-beam so it reads as discrete lumber.
+
+  function _genDeckFace(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var topBoard = 6;
+      var botBoard = 6;
+      var beamW = 10;                  // beam width
+      var gapW = 11;                   // gap between beams (slightly wider)
+      var pitch = beamW + gapW;        // 21
+
+      // Top board — brighter horizontal plank with grain
+      if (y < topBoard) {
+        var grain = (_hash(x + 9000, Math.floor(y / 2) + 9001) - 0.5) * 10 * p.grainDark;
+        var darken = (y === 0 || y === topBoard - 1) ? -12 : 0;
+        return {
+          r: _clamp(p.boardR + grain + darken),
+          g: _clamp(p.boardG + grain * 0.8 + darken),
+          b: _clamp(p.boardB + grain * 0.5 + darken)
+        };
+      }
+
+      // Bottom board — darker shadow rail
+      if (y >= S - botBoard) {
+        var bn = (_hash(x + 9100, y + 9101) - 0.5) * 8 * p.grainDark;
+        var bd = (y === S - 1 || y === S - botBoard) ? -10 : 0;
+        return {
+          r: _clamp(p.boardR * 0.75 + bn + bd),
+          g: _clamp(p.boardG * 0.75 + bn * 0.8 + bd),
+          b: _clamp(p.boardB * 0.75 + bn * 0.5 + bd)
+        };
+      }
+
+      // Beam/gap band
+      var localX = x % pitch;
+      var beamIdx = Math.floor(x / pitch);
+
+      if (localX >= beamW) {
+        // Dark gap pocket — shows framing/void under deck
+        var gn = (_hash(x + 9200, y + 9201) - 0.5) * 5;
+        var gapFall = (localX - beamW) / (gapW - 1);
+        // Slightly darker in the middle of the gap (deeper recess)
+        var gd = (gapFall > 0.3 && gapFall < 0.7) ? -6 : 0;
+        return {
+          r: _clamp(p.gapR + gn + gd),
+          g: _clamp(p.gapG + gn * 0.9 + gd),
+          b: _clamp(p.gapB + gn * 0.8 + gd)
+        };
+      }
+
+      // Beam surface — per-beam tone, vertical grain
+      var beamTone = (_hash(beamIdx, 9300) - 0.5) * 16;
+      var vGrain = Math.sin(y * 0.6 + beamIdx * 1.9) * 4;
+      var pn2 = (_hash(x + 9310, y + 9311) - 0.5) * 5 * p.grainDark;
+      // Beam edge shading
+      var edgeShade = (localX === 0 || localX === beamW - 1) ? 0.78 : 1.0;
+
+      return {
+        r: _clamp((p.beamR + beamTone) * edgeShade + vGrain + pn2),
+        g: _clamp((p.beamG + beamTone) * edgeShade + vGrain * 0.8 + pn2 * 0.8),
+        b: _clamp((p.beamB + beamTone) * edgeShade + vGrain * 0.5 + pn2 * 0.5)
+      };
+    });
+  }
+
+  // ── Deck lid planks (top surface — perpendicular to floor_wood) ──
+  //
+  // Wider planks than floor_wood (6px vs 4px), laid ALONG Y so the grain
+  // runs vertical in texture space — opposite of floor_wood whose grain
+  // runs along X. When a deck region sits next to a floor_wood region,
+  // the two plank-run directions contrast visually.
+
+  function _genFloorDeckPlanks(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var plankW = 8;                  // wide planks (wider than boardwalk 8H)
+      var gapW = 1;                    // thin dark gap between planks
+      var plankIdx = Math.floor(x / plankW);
+      var localX = x % plankW;
+
+      // Vertical gap between planks (perpendicular orientation to floor_wood)
+      if (localX >= plankW - gapW) {
+        return { r: p.gapR, g: p.gapG, b: p.gapB };
+      }
+
+      // Per-plank base tone
+      var plankSeed = _hash(plankIdx + 9850, 0);
+      var plankShift = (plankSeed - 0.5) * 16;
+
+      // Per-row end-cut seam (varied position per plank)
+      var cutIdx = Math.floor(_hash(plankIdx, 9860) * 5);
+      var plankCut = 16 + cutIdx * 10;  // 16,26,36,46,56
+      if (y === plankCut || y === plankCut - 1) {
+        var cn = (_hash(x + 9870, y + 9871) - 0.5) * 4;
+        return {
+          r: _clamp(p.baseR * 0.40 + cn),
+          g: _clamp(p.baseG * 0.40 + cn * 0.85),
+          b: _clamp(p.baseB * 0.35 + cn * 0.7)
+        };
+      }
+
+      // Vertical grain (runs along plank length — down the y axis)
+      var grain = _hash(Math.floor(x / 2) + plankIdx * 500, y + 9880);
+      var gn2 = (grain - 0.5) * 14 * p.grainDark;
+
+      // Weathering spots
+      var weather = _hash(x + 9890, y + 9891);
+      var wearDark = weather > 0.93 ? -18 : 0;
+
+      return {
+        r: _clamp(p.baseR + plankShift + gn2 + wearDark),
+        g: _clamp(p.baseG + plankShift * 0.75 + gn2 * 0.75 + wearDark * 0.8),
+        b: _clamp(p.baseB + plankShift * 0.5 + gn2 * 0.5 + wearDark * 0.6)
       };
     });
   }

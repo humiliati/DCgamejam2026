@@ -1,0 +1,137 @@
+{
+  "$schema": "./biome-map.schema.json",
+  "generated": "2026-04-14",
+  "source": "docs/Biome Plan.html v5 (transcribed); palettes mirrored from engine biome color tables",
+  "notes": [
+    "Per-biome tile *name* references (string). Resolve via tools/tile-schema.json at use time.",
+    "Raycaster wall colors are biome-keyed (see engine/biome-colors or biome-string switches)",
+    "and consumed at floor load, not at scaffold time.",
+    "depth is the authoritative tier: 1=exterior, 2=interior, 3=nested dungeon.",
+    "contract picks the SpatialContract factory: 'exterior' | 'interior' | 'nestedDungeon'.",
+    "accentTiles are decorative/interactive tiles a template can randomly sprinkle.",
+    "breakableSet lists tiles BreakableSpawner can roll into (post-Pass-5a).",
+    "wallHeight is a multiplier over the contract default (0.7..3.0)."
+  ],
+  "biomes": {
+    "promenade": {
+      "depth": 1, "type": "exterior", "contract": "exterior",
+      "wallTile": "WALL", "floorTile": "ROAD", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["BENCH", "NOTICE_BOARD", "CITY_BONFIRE", "PERGOLA_BEAM"],
+      "breakableSet": ["BARREL", "BREAKABLE"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#c8b090", "wallDark": "#805a3a", "door": "#8a5a38", "doorDark": "#442816", "ceil": null, "floor": "#8c6e48" },
+      "notes": "Marble walkways, chrome railings, sunset palette. Floor 1 parent."
+    },
+    "gardens": {
+      "depth": 1, "type": "exterior", "contract": "exterior",
+      "wallTile": "WALL", "floorTile": "GRASS", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["BENCH", "FENCE", "WELL", "PERGOLA_BEAM"],
+      "breakableSet": ["BARREL"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#a8c898", "wallDark": "#3a5a3a", "door": "#6a8a4a", "doorDark": "#2a4a2a", "ceil": null, "floor": "#4a6a3a" },
+      "notes": "Lantern-lit, jade-teal, dragon mural lore hub."
+    },
+    "frontier": {
+      "depth": 1, "type": "exterior", "contract": "exterior",
+      "wallTile": "WALL", "floorTile": "PATH", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["FENCE", "ANVIL", "NOTICE_BOARD"],
+      "breakableSet": ["BARREL", "BREAKABLE"],
+      "wallHeight": 2.5,
+      "palette": { "wallLight": "#a89080", "wallDark": "#5a4838", "door": "#704830", "doorDark": "#2a1a10", "ceil": null, "floor": "#6a5a48" },
+      "notes": "Rougher stone, mercenary staging, serious combat."
+    },
+    "bazaar": {
+      "depth": 2, "type": "interior", "contract": "interior",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": "WALL",
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["SHOP", "BAR_COUNTER", "TABLE", "WINDOW_SHOP", "WINDOW_BAY"],
+      "breakableSet": ["BARREL"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#d8a070", "wallDark": "#6a3818", "door": "#8a5a38", "doorDark": "#2a1a10", "ceil": "#3a1a0a", "floor": "#c89868" },
+      "notes": "Coral-gold card shop, warmth, HIGH windows."
+    },
+    "guild": {
+      "depth": 2, "type": "interior", "contract": "interior",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": "WALL",
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["BENCH", "TABLE", "NOTICE_BOARD", "WINDOW_COMMERCIAL"],
+      "breakableSet": ["BARREL"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#88a8a8", "wallDark": "#2a4a4a", "door": "#4a7a7a", "doorDark": "#0a1a1a", "ceil": "#0a1a1a", "floor": "#2a4a4a" },
+      "notes": "Teal-chrome, professional, cool."
+    },
+    "inn": {
+      "depth": 2, "type": "interior", "contract": "interior",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": "WALL",
+      "torchTile": "HEARTH",
+      "accentTiles": ["HEARTH", "BAR_COUNTER", "TABLE", "BED", "COT", "WINDOW_TAVERN", "BONFIRE"],
+      "breakableSet": ["BARREL"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#c09870", "wallDark": "#6a4828", "door": "#8a6a38", "doorDark": "#2a1a08", "ceil": "#2a1a0a", "floor": "#8a6038" },
+      "notes": "Amber driftwood, fire-lit, safe haven (Driftwood Inn)."
+    },
+    "apothecary": {
+      "depth": 2, "type": "interior", "contract": "interior",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": "WALL",
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["SHOP", "BOOKSHELF", "BAR_COUNTER", "WINDOW_ALCOVE"],
+      "breakableSet": ["BARREL", "BREAKABLE"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#8870a8", "wallDark": "#2a1a4a", "door": "#5a3a8a", "doorDark": "#0a0a1a", "ceil": "#0a0a1a", "floor": "#1a1a2a" },
+      "notes": "Violet glow, bottle-lit, mystical."
+    },
+    "armory": {
+      "depth": 2, "type": "interior", "contract": "interior",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": "WALL",
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["ANVIL", "SHOP", "TABLE", "WINDOW_ARROWSLIT"],
+      "breakableSet": ["BARREL", "BREAKABLE"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#a87088", "wallDark": "#4a1a2a", "door": "#8a3858", "doorDark": "#1a0a1a", "ceil": "#1a0a1a", "floor": "#2a1a2a" },
+      "notes": "Dark iron-magenta, forge glow, martial."
+    },
+    "cellar": {
+      "depth": 3, "type": "nested-dungeon", "contract": "nestedDungeon",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["CHEST", "CORPSE", "BONFIRE"],
+      "breakableSet": ["BARREL", "BREAKABLE", "DETRITUS"],
+      "wallHeight": 0.7,
+      "palette": { "wallLight": "#a06848", "wallDark": "#3a1a0a", "door": "#6a3818", "doorDark": "#1a0a08", "ceil": null, "floor": "#2a1a0a" },
+      "notes": "Coral stone, 0.7x wall height (cramped), tutorial dungeon."
+    },
+    "catacomb": {
+      "depth": 3, "type": "nested-dungeon", "contract": "nestedDungeon",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["CHEST", "CORPSE", "BOOKSHELF", "PUZZLE"],
+      "breakableSet": ["BARREL", "BREAKABLE", "DETRITUS"],
+      "wallHeight": 1.0,
+      "palette": { "wallLight": "#80a088", "wallDark": "#1a3a2a", "door": "#4a7a5a", "doorDark": "#0a1a10", "ceil": null, "floor": "#1a2a1a" },
+      "notes": "Jade-green, burial stone, ancient."
+    },
+    "depths": {
+      "depth": 3, "type": "nested-dungeon", "contract": "nestedDungeon",
+      "wallTile": "WALL", "floorTile": "EMPTY", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["CHEST", "BOSS_DOOR", "CORPSE", "PUZZLE"],
+      "breakableSet": ["BARREL", "BREAKABLE"],
+      "wallHeight": 1.2,
+      "palette": { "wallLight": "#8868a8", "wallDark": "#2a0a3a", "door": "#5a2a7a", "doorDark": "#0a0a1a", "ceil": null, "floor": "#1a0a2a" },
+      "notes": "Deep violet void, boss chamber."
+    },
+    "exterior": {
+      "depth": 1, "type": "exterior", "contract": "exterior",
+      "wallTile": "WALL", "floorTile": "PATH", "ceilingTile": null,
+      "torchTile": "TORCH_LIT",
+      "accentTiles": ["BENCH", "FENCE", "NOTICE_BOARD"],
+      "breakableSet": ["BARREL"],
+      "wallHeight": 2.0,
+      "palette": { "wallLight": "#b0a090", "wallDark": "#504838", "door": "#705a38", "doorDark": "#2a1a10", "ceil": null, "floor": "#6a5a48" },
+      "notes": "Generic exterior fallback (floor 0: The Approach). Prefer promenade/gardens/frontier."
+    }
+  }
+}

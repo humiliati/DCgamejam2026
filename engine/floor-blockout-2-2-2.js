@@ -51,9 +51,9 @@
  *   - Bone Guard ×1 (north vault entrance — serious fight)
  *
  * Tile legend:
- *   0=EMPTY  1=WALL  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
+ *   0=EMPTY  1=WALL  7=CHEST  8=TRAP  10=PILLAR
  *   11=BREAKABLE  19=CORPSE  27=BED  28=TABLE
- *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS
+ *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS  76=TRAPDOOR_UP
  */
 (function () {
   'use strict';
@@ -82,7 +82,7 @@
     [ 1, 1, 1, 1, 1, 1, 1, 0,11, 0,10, 0,11, 1, 1, 1, 1, 1, 1, 1], //15  entry — crates (8,15)(12,15), pillar (10,15)
     [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1], //16  entry hall
     [ 1, 1, 1, 1, 1, 1,30, 0, 0,11, 0,11, 0,30, 1, 1, 1, 1, 1, 1], //17  entry — lit torches (6,17)(13,17), crates (9,17)(11,17)
-    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 6, 0, 0, 1, 1, 1, 1, 1, 1, 1], //18  STAIRS_UP (10,18) — back to B1 (2.2.1)
+    [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,76, 0, 0, 1, 1, 1, 1, 1, 1, 1], //18  TRAPDOOR_UP (10,18) — back to B1 (2.2.1) sibling ascent
     [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  //19  south wall
   ];
 
@@ -179,7 +179,7 @@
       grid: grid,
       rooms: ROOMS.slice(),
       doors: {
-        stairsUp: { x: 10, y: 18 },  // STAIRS_UP → Deepwatch Cellars B1 (2.2.1)
+        stairsUp: { x: 10, y: 18 },  // TRAPDOOR_UP → Hero's Wake B1 (2.2.1) sibling
         stairsDn: null,               // Terminal floor — no deeper
         doorExit: null
       },

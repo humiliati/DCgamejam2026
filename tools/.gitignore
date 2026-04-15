@@ -1,0 +1,18 @@
+# Pass 5b — tools-only dev artifacts (do NOT ship in webOS dist)
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Editor-local persisted layouts
+world-layout.json
+
+# Build artifacts
+dist/
+build/
+
+# Temp scratch
+*.tmp
+.DS_Store
+
+# NOTE: tools/vendor/ IS committed (offline dependencies like jsPlumb).
+# The build-webos whitelist below excludes it from the shippable dist.

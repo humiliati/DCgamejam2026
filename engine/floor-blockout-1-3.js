@@ -77,6 +77,13 @@
         doorExit: { x: 7, y: 10 }   // DOOR_EXIT — back to Promenade
       },
       doorTargets: { '7,10': '1' },  // DOOR_EXIT → The Promenade
+      procGenChildren: [
+        // STAIRS_DN (7,3) leads into the tutorial proc-gen cellar chain.
+        // Kind 'template' = seed picks from a hand-authored template set;
+        // 'composed' = template chunks stitched; 'random' = GridGen freeform.
+        { id: '1.3.1', kind: 'template', label: 'Soft Cellar',
+          doorCoord: '7,3', biomeHint: 'soft_cellar', maxDepth: 1 }
+      ],
       gridW: W,
       gridH: H,
       biome: 'cellar_entry',

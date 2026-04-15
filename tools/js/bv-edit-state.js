@@ -79,6 +79,13 @@ function updateEditUI() {
   var el = document.getElementById('edit-count');
   if (EDIT.dirtyCount > 0) { el.textContent = EDIT.dirtyCount + ' changed'; el.style.display = 'inline'; }
   else { el.style.display = 'none'; }
+  // Mirror into the info-bar status cell so dirty count is visible even
+  // when the toolbar is busy. '0' when clean so the cell never goes blank.
+  var ibDirty = document.getElementById('ib-dirty');
+  if (ibDirty) {
+    ibDirty.textContent = String(EDIT.dirtyCount || 0);
+    ibDirty.style.color = EDIT.dirtyCount > 0 ? '#f88' : '#666';
+  }
 
   var undoBtn = document.getElementById('btn-undo');
   var redoBtn = document.getElementById('btn-redo');

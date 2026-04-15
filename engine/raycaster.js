@@ -455,6 +455,22 @@ var Raycaster = (function () {
     var fogColor       = _contract ? _contract.fogColor : { r: 0, g: 0, b: 0 };
     var baseWallH      = _contract ? _contract.wallHeight : 1.0;
 
+    // ── Player elevation (multi-elevation rendering arc) ──
+    // Sampled here — early, before the floor + wall passes — so both
+    // can apply the same eye-height correction. See the "Player
+    // elevation" note later in this function and the arc roadmap
+    // (docs/MULTI_ELEVATION_RENDERING.md).
+    var _playerElev = 0;
+    if (_contract) {
+      var _peGX = player.x | 0;
+      var _peGY = player.y | 0;
+      if (_peGX >= 0 && _peGX < gridW && _peGY >= 0 && _peGY < gridH) {
+        var _peTile = grid[_peGY][_peGX];
+        var _peOff = SpatialContract.getTileHeightOffset(_contract, _peTile);
+        if (_peOff) _playerElev = _peOff;
+      }
+    }
+
     // ── Render-scale-aware distance boost ──────────────────────────
     // The pixel-cost lever (RENDER_SCALE) shrinks the offscreen
     // viewport quadratically: at 0.5 scale the raycaster paints ~25%
@@ -535,7 +551,8 @@ var Raycaster = (function () {
     if (_dpm) _dpm.begin('Raycaster.floorCast');
     if (floorTex) {
       _renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex,
-                   fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr);
+                   fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr,
+                   _playerElev);
     } else {
       var floorGrads = _contract ? SpatialContract.getGradients(_contract)
         : { floorTop: '#444', floorBottom: '#111' };
@@ -561,6 +578,10 @@ var Raycaster = (function () {
     var px = player.x + 0.5;
     var py = player.y + 0.5;
     var pDir = player.dir;
+
+    // _playerElev computed above (right after baseWallH) so the floor
+    // pass + wall pass see the same value. See the multi-elevation
+    // rendering arc doc for why this shifts world-Y=0 DOWN on screen.
 
     // ── Debug trace: snapshot flag for this frame, dump player state ──
     // Snapshot into a frame-local so the trace is atomic — the global
@@ -645,6 +666,17 @@ var Raycaster = (function () {
       // perpDist + wallX + side overrides fire after the DDA loop.
       var _circleHit = false;
       var _circleHX = 0, _circleHY = 0, _circleCX = 0, _circleCY = 0;
+
+      // Diagonal-wall hit state: populated when the DDA accepts a
+      // WALL_DIAG_0..3 ray-segment intersection. `_diagOffsetLeft` is
+      // the normalised position along the segment (0 at endpoint A,
+      // 1 at endpoint B) — used as texture U coordinate downstream.
+      // The perpDist + wallX + side overrides fire after the DDA loop,
+      // mirroring the circle-hit path.
+      var _diagHit = false;
+      var _diagHX = 0, _diagHY = 0;
+      var _diagNX = 0, _diagNY = 0; // segment normal (for side derivation)
+      var _diagOffsetLeft = 0;
 
       // Perpendicular-distance budget: same fix as the back-layer
       // loop. `depth` alone is a DDA step count that under-shoots
@@ -734,6 +766,45 @@ var Raycaster = (function () {
                   _circleCX = _bestCX; _circleCY = _bestCY;
                 }
                 // else: miss — DDA continues
+              } else if (TILES.isWallDiag && TILES.isWallDiag(tile)) {
+                // WALL_DIAG_0..3 ray-segment intersection.
+                // Ported from raycast.js-master. The DDA has landed on
+                // a diagonal wall tile; the actual geometry is a single
+                // line segment spanning two corners of the unit cell.
+                // We solve the ray vs segment crossing; miss means the
+                // ray passes through the open half of the cell and the
+                // DDA continues.
+                var _dOff = TILES.OFFSET_DIAG_WALLS[TILES.diagFaceIndex(tile)];
+                var _dAx = mapX + _dOff[0][0];
+                var _dAy = mapY + _dOff[0][1];
+                var _dBx = mapX + _dOff[1][0];
+                var _dBy = mapY + _dOff[1][1];
+                var _dSx = _dBx - _dAx;
+                var _dSy = _dBy - _dAy;
+                // det = Dy*Sx - Dx*Sy (2D cross product of ray dir and segment dir).
+                var _dDet = rayDirY * _dSx - rayDirX * _dSy;
+                if (_dDet !== 0) {
+                  var _dT = ((_dAy - py) * _dSx - (_dAx - px) * _dSy) / _dDet;
+                  var _dS = (rayDirY * (_dAx - px) - rayDirX * (_dAy - py)) / _dDet;
+                  if (_dT > 0 && _dS >= 0 && _dS <= 1) {
+                    hit = true; hitTile = tile;
+                    _diagHit = true;
+                    _diagHX = px + _dT * rayDirX;
+                    _diagHY = py + _dT * rayDirY;
+                    _diagOffsetLeft = _dS;
+                    // Segment normal (perpendicular to (Sx, Sy) in 2D).
+                    // We pick whichever of the two possible normals
+                    // points back toward the player — that face is the
+                    // one the ray is hitting.
+                    var _dNx = _dSy;
+                    var _dNy = -_dSx;
+                    if (_dNx * rayDirX + _dNy * rayDirY > 0) {
+                      _dNx = -_dNx; _dNy = -_dNy;
+                    }
+                    _diagNX = _dNx; _diagNY = _dNy;
+                  }
+                }
+                // else: ray parallel to segment, or missed — DDA continues
               } else {
                 hit = true; hitTile = tile;
               }
@@ -1044,7 +1115,18 @@ var Raycaster = (function () {
             // stack's top — that's the only way it adds visible pixels
             // we haven't already covered. Shorter/lower or equal top
             // tiles are fully occluded by the foreground silhouette.
-            if (_cTop > _maxTop) {
+            //
+            // MULTI-ELEVATION ARC: when the player themselves stands on
+            // a raised lip tile (STOOP/DECK), a second same-height lip
+            // tile behind the foreground IS visible — its cap plane sits
+            // at the player's eye-relative elevation, not below it. We
+            // relax the strict > to a ≥ for low-lip tiles (offset below
+            // half a wall) so two same-height lips in a row both
+            // register. Full-height solid walls still use strict > so
+            // we don't double-paint identical back walls.
+            var _cIsLowLip = (_cOff > 0 && _cOff < 0.5 && _cH < 0.25);
+            var _elevAccept = _cIsLowLip && _playerElev > 0 && _cTop >= _maxTop;
+            if (_cTop > _maxTop || _elevAccept) {
               _layerBuf[_lc].mx = _cMX;
               _layerBuf[_lc].my = _cMY;
               // For circle hits, derive sd from hit-point normal so
@@ -1221,6 +1303,13 @@ var Raycaster = (function () {
         var _ndX = _circleHX - _circleCX;
         var _ndY = _circleHY - _circleCY;
         side = (Math.abs(_ndX) > Math.abs(_ndY)) ? 0 : 1;
+      } else if (_diagHit) {
+        // Diagonal-wall hit: project hit point onto the player's forward
+        // axis for a fisheye-free perpDist, then pick shading side based
+        // on which axis the segment normal is more aligned with.
+        perpDist = (_diagHX - px) * _pdCos + (_diagHY - py) * _pdSin;
+        if (perpDist < 0) perpDist = 0;
+        side = (Math.abs(_diagNX) > Math.abs(_diagNY)) ? 0 : 1;
       } else if (side === 0) {
         perpDist = (mapX - px + (1 - stepX) / 2) / (rayDirX || 1e-10);
       } else {
@@ -1326,15 +1415,13 @@ var Raycaster = (function () {
       //   • DUMP_TRUCK — legacy short-body representation, always
       //     renderDist so the hose billboard floats above. Will be
       //     rebuilt as a 2×1×1 vehicle (see pending spec below).
-      //   • Freeform tiles — zBypass mode determines z-buffer write:
-      //       'full'  (default) — renderDist (cavity fully transparent
-      //               to sprites/back-layers). Used by DOOR_FACADE,
-      //               ARCH_DOORWAY, PORTHOLE, HEARTH, etc.
-      //       'depth' — perpDist + 1.0 (vignette has real depth —
-      //               renders behind glass, behind mullions, in front
-      //               of back wall). Used by all window tiles.
-      //       'solid' — perpDist (no see-through). Reserved for
-      //               future canopy/roof freeform tiles.
+      //   • Freeform tiles — renderDist (cavity fully transparent to
+      //     sprites/back-layers). Per-sprite depth is governed by the
+      //     EmojiMount block below: any tile with a registered mount
+      //     (type OR instance) writes perpDist + mount.recess instead,
+      //     placing the sprite's z-threshold inside the building mass
+      //     so vignettes read with real depth. Used by DOOR_FACADE,
+      //     ARCH_DOORWAY, PORTHOLE, HEARTH, all window tiles, etc.
       //     The foreground helper still owns its own pedestal mask
       //     write for the solid bands.
       //   • Ultra-short props (<0.35×) — already transparent to the
@@ -1343,39 +1430,31 @@ var Raycaster = (function () {
       //   • Tall walls (≥1.0×) — normal perpDist occlusion.
       var _zBypass = (hitTile === TILES.DUMP_TRUCK) ||
                      (_freeformEnabled && TILES.isFreeform(hitTile));
-      if (_zBypass && _contract) {
-        var _zbCfg = SpatialContract.getTileFreeform(_contract, hitTile);
-        var _zbMode = (_zbCfg && _zbCfg.zBypassMode) ? _zbCfg.zBypassMode : 'full';
-        if (_zbMode === 'depth') {
-          // Window tiles: vignette emoji has real depth. perpDist + 1.0
-          // places the z-threshold one tile behind the glass so content
-          // inside the facade competes with geometry instead of floating.
-          _zBuffer[col] = perpDist + 1.0;
-        } else if (_zbMode === 'solid') {
-          _zBuffer[col] = perpDist;
-        } else {
-          // 'full' — original behavior: renderDist (fully transparent).
-          _zBuffer[col] = renderDist;
-        }
+      if (_zBypass) {
+        _zBuffer[col] = renderDist;
       } else {
-        _zBuffer[col] = (!_zBypass && wallHeightMult > 0.35) ? perpDist : renderDist;
+        _zBuffer[col] = (wallHeightMult > 0.35) ? perpDist : renderDist;
       }
       // Jamb columns are solid walls — restore normal z-buffer so
       // sprites behind the jamb are properly culled.
       if (_recessJamb) { _zBuffer[col] = perpDist; }
       // EmojiMount z-bypass: any tile with a registered emoji mount
-      // pushes its zbuffer write out to perpDist + mount.recess so
-      // the sprite at the tile's center isn't culled by the tile's
-      // own wall column. Deeper geometry (the next tile and beyond)
-      // still writes smaller z and wins the sprite's depth test, so
-      // the hologram/vignette is occluded correctly by everything
-      // *behind* it — just not by its own pedestal.
+      // (per-coord instance OR per-tile-type) pushes its zbuffer write
+      // out to perpDist + mount.recess so the sprite at the tile's
+      // center isn't culled by the tile's own wall column. Deeper
+      // geometry (the next tile and beyond) still writes smaller z
+      // and wins the sprite's depth test, so the hologram/vignette
+      // is occluded correctly by everything *behind* it — just not
+      // by its own pedestal.
       //
-      // This replaces the per-tile `zBypassMode: 'depth'` pattern
-      // used on windows (Phase 2 will port those into EmojiMount
-      // and retire the SpatialContract field entirely).
-      if (typeof EmojiMount !== 'undefined' && EmojiMount.getMount) {
-        var _emMnt = EmojiMount.getMount(hitTile);
+      // As of Phase 6 this is the unified z-bypass path for all
+      // billboard mounts — the old `zBypassMode: 'depth'` field on
+      // window tile freeform configs has been retired. Window
+      // vignettes (🍺, 🗝️, 🕯️) are instance mounts registered from
+      // floorData.windowScenes via game.js; TERMINAL holograms are
+      // type mounts registered at emoji-mount.js load. One path.
+      if (typeof EmojiMount !== 'undefined' && EmojiMount.getMountAtOrType) {
+        var _emMnt = EmojiMount.getMountAtOrType(mapX, mapY, hitTile);
         if (_emMnt) _zBuffer[col] = perpDist + _emMnt.recess;
       }
       // Default-clear the pedestal mask for this column. Freeform
@@ -1436,8 +1515,17 @@ var Raycaster = (function () {
       // the bottom at normal floor level and extend upward only. Without
       // this, centered positioning makes tall walls grow symmetrically
       // above and below the horizon, clipping into the floor.
+      //
+      // MULTI-ELEVATION: _playerElev shifts the world-Y=0 plane DOWN on
+      // screen by h*_playerElev/perpDist (player's eye rides up, floor
+      // appears further below). flatBottom picks this up; flatTop,
+      // drawStart, drawEnd all inherit through the subtraction chain,
+      // so every step-fill band and cap paint stays geometrically
+      // consistent without per-site corrections.
+      var _elevShift = (_playerElev > 0)
+        ? Math.floor((h * _playerElev) / perpDist) : 0;
       var baseLineH = Math.floor((h * baseWallH) / perpDist);
-      var flatBottom = Math.floor(halfH + baseLineH / 2);
+      var flatBottom = Math.floor(halfH + baseLineH / 2) + _elevShift;
       var flatTop    = flatBottom - lineHeight;
 
       // Shifted positions (where the wall actually draws)
@@ -1541,7 +1629,7 @@ var Raycaster = (function () {
             px, py, rayDirX, rayDirY, stepX, stepY,
             renderDist, fogDist, fogColor, lightMap,
             tintStr, tintIdx, tintRGB,
-            _pdCos, _pdSin
+            _pdCos, _pdSin, _playerElev
           );
         }
       }
@@ -1595,12 +1683,19 @@ var Raycaster = (function () {
         wallX = (Math.atan2(_dyC, _dxC) + Math.PI) / (2 * Math.PI);
         if (wallX < 0) wallX = 0;
         if (wallX >= 1) wallX -= 1;
+      } else if (_diagHit) {
+        // Diagonal-wall hit: texture U is the position along the
+        // segment from endpoint A to endpoint B (already normalised
+        // 0..1 by the ray-segment solver).
+        wallX = _diagOffsetLeft;
+        if (wallX < 0) wallX = 0;
+        if (wallX >= 1) wallX = 0.9999;
       } else if (side === 0) {
         wallX = py + perpDist * rayDirY;
       } else {
         wallX = px + perpDist * rayDirX;
       }
-      if (!_circleHit) {
+      if (!_circleHit && !_diagHit) {
         wallX = wallX - Math.floor(wallX);
 
         // Flip for consistent left-to-right on both face orientations
@@ -2037,8 +2132,17 @@ var Raycaster = (function () {
         // plane and extend UP by wallHeightMult, then shifted UP by
         // heightOffset. So the top plane sits at (heightOffset +
         // wallHeightMult) world units.
+        //
+        // MULTI-ELEVATION: eye is at (_playerElev + baseWallH/2) in
+        // world Y. Row-to-plane formula is rowDist = trueHalfH *
+        // 2*(eyeY - topElev) / rowFromCenter. Collapsing 2*(eye - top)
+        // = baseWallH + 2*(_playerElev - _capTopElev) gives the
+        // eye-scale below — matches the non-elevated formula when
+        // _playerElev = 0. Negative values mean the cap plane is
+        // ABOVE eye level (can't render as "cap from above" — it'd be
+        // a ceiling) so we bail via the positive-scale gate below.
         var _capTopElev = heightOffset + wallHeightMult;
-        var _capEyeScale = baseWallH - 2 * _capTopElev;
+        var _capEyeScale = baseWallH - 2 * _capTopElev + 2 * _playerElev;
         if (_capEyeScale > 0.01) {
           var _capTrueHalf = h / 2;
           var _capRowStart = Math.floor(halfH) + 1;
@@ -2074,6 +2178,48 @@ var Raycaster = (function () {
             var _capScaleX = 1.0, _capScaleY = 1.0;
             if (hitTile === TILES.TABLE) { _capScaleX = 2.0; _capScaleY = 2.5; }
             else if (hitTile === TILES.BED) { _capScaleX = 1.5; _capScaleY = 1.5; }
+            // ── Contiguous flat-top run precompute ────────────────────
+            // Walk a DDA step past the hit tile in ray direction,
+            // collecting consecutive hasFlatTopCap cells of the same
+            // species as the hit. This replaces the Manhattan ≤ 1 gate
+            // for non-void caps — long boardwalk/deck strips viewed
+            // longitudinally need more than 1 neighbour to stay lit, but
+            // we still stop at the first non-flat-top cell so grazing
+            // rays can't paint ghostly lids across a room.
+            //
+            // Void caps (TERMINAL pedestal wells) skip this — they keep
+            // the strict self-only gate enforced in the row loop.
+            var _capRun = null;
+            if (TILES.hasVoidCap && TILES.hasVoidCap(hitTile)) {
+              // leave null — row loop uses strict Manhattan 0 below
+            } else {
+              _capRun = {};
+              _capRun[mapX + ',' + mapY] = true;
+              var _runWX = mapX, _runWY = mapY;
+              var _runSgnX = rayDirX >= 0 ? 1 : -1;
+              var _runSgnY = rayDirY >= 0 ? 1 : -1;
+              var _runDeltaX = rayDirX === 0 ? 1e30 : Math.abs(1 / rayDirX);
+              var _runDeltaY = rayDirY === 0 ? 1e30 : Math.abs(1 / rayDirY);
+              var _runTMaxX = rayDirX === 0 ? 1e30
+                : ((rayDirX > 0 ? (mapX + 1) : mapX) - px) / rayDirX;
+              var _runTMaxY = rayDirY === 0 ? 1e30
+                : ((rayDirY > 0 ? (mapY + 1) : mapY) - py) / rayDirY;
+              for (var _runStep = 0; _runStep < 12; _runStep++) {
+                if (_runTMaxX < _runTMaxY) {
+                  _runTMaxX += _runDeltaX; _runWX += _runSgnX;
+                } else {
+                  _runTMaxY += _runDeltaY; _runWY += _runSgnY;
+                }
+                if (_runWX < 0 || _runWX >= gridW ||
+                    _runWY < 0 || _runWY >= gridH) break;
+                var _runT = grid[_runWY][_runWX];
+                if (!(TILES.hasFlatTopCap && TILES.hasFlatTopCap(_runT))) break;
+                // Stop if we enter a void-cap tile — shouldn't blend
+                // with solid flat-top strips.
+                if (TILES.hasVoidCap && TILES.hasVoidCap(_runT)) break;
+                _capRun[_runWX + ',' + _runWY] = true;
+              }
+            }
             for (var _capRow = _capRowStart; _capRow <= _capRowEnd; _capRow++) {
               var _capRowFromCenter = _capRow - halfH;
               if (_capRowFromCenter < 0.5) continue;
@@ -2103,21 +2249,18 @@ var Raycaster = (function () {
               // onto plain floor.
               var _capCellT = grid[_capTGY][_capTGX];
               if (!(TILES.hasFlatTopCap && TILES.hasFlatTopCap(_capCellT))) continue;
-              var _capDX = _capTGX - mapX; if (_capDX < 0) _capDX = -_capDX;
-              var _capDY = _capTGY - mapY; if (_capDY < 0) _capDY = -_capDY;
               // Void-cap tiles (TERMINAL pedestal wells) must keep their
-              // dark-green paint strictly inside their own footprint. The
-              // Manhattan ≤ 1 gate that lets authored 2×1 tabletops paint
-              // as a continuous top will, for a void cap, spill rows into
-              // adjacent columns at the same world-Y and stomp on whatever
-              // back-layer geometry (e.g. HEARTH behind) is drawn in that
-              // rectangle. Flat-top tiles (TABLE/BED/STOOP/DECK) keep the
-              // relaxed gate.
+              // dark-green paint strictly inside their own footprint —
+              // otherwise they spill rows onto adjacent cells and stomp
+              // back-layer geometry (e.g. HEARTH behind) at the same
+              // world-Y. Flat-top tiles (TABLE/BED/STOOP/DECK) use the
+              // precomputed run membership instead, so a long DECK strip
+              // paints its whole lid and isn't clipped at Manhattan 1.
               var _capIsVoid = TILES.hasVoidCap && TILES.hasVoidCap(_capCellT);
               if (_capIsVoid) {
-                if (_capDX + _capDY > 0) continue;
+                if (_capTGX !== mapX || _capTGY !== mapY) continue;
               } else {
-                if (_capDX + _capDY > 1) continue;
+                if (!_capRun || !_capRun[_capTGX + ',' + _capTGY]) continue;
               }
               // Tile-repeating texture sample. Dividing world coords by
               // the per-tile scale stretches the texture (a scale of 2
@@ -2773,7 +2916,8 @@ var Raycaster = (function () {
                             px, py, rayDirX, rayDirY, stepX, stepY,
                             renderDist, fogDist, fogColor, lightMap,
                             tintStr, tintIdx, tintRGB,
-                            pdCos, pdSin) {
+                            pdCos, pdSin, playerElev) {
+    playerElev = playerElev || 0;
     // Perpendicular distance.
     // Circle-shaped tiles (flagged during back-layer collection) use
     // the stashed circle intersection point and project onto the
@@ -2806,8 +2950,13 @@ var Raycaster = (function () {
     var blHeightOffset = SpatialContract.getTileHeightOffset(_contract, L.tile);
     var blVertShift = Math.floor((h * blHeightOffset) / pd);
 
-    // Bottom-anchored positioning (same as foreground)
-    var flatBot = Math.floor(halfH + baseLH / 2);
+    // Bottom-anchored positioning (same as foreground).
+    // MULTI-ELEVATION: playerElev pushes the floor plane DOWN on
+    // screen — same correction as the foreground wall pass so
+    // back-layer tiles stay pinned to the shared world-Y=0 plane.
+    var _blElevShift = (playerElev > 0)
+      ? Math.floor((h * playerElev) / pd) : 0;
+    var flatBot = Math.floor(halfH + baseLH / 2) + _blElevShift;
     var flatTop = flatBot - lineH;
     var drStart = Math.max(0, flatTop - blVertShift);
     var drEnd   = Math.min(h - 1, flatBot - blVertShift);

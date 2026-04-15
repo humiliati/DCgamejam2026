@@ -1601,7 +1601,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,22,22,22,22,0,0,22,22,22,22,22,22,22,22,22,22,0,0,22,22,22,22,22,0,0,0,0,22,22,22,22,22,0,0,22,22,22,22,22,0,0,35,35,35], //23  pod tops S (open N)
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
-    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,86,86,86,0,0,0,0,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  STOOP(21-23,26) — 3-tile raised landing in front of Gleaner's Home DOOR_FACADE(22,27); DUMP_TRUCK(30,26) parked in SE pod
+    [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,86,86,86,0,87,87,87,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  STOOP(21-23,26) — 3-tile raised landing in front of Gleaner's Home DOOR_FACADE(22,27); DECK(25-27,26) test strip east of stoop for board/beam visual comparison; DUMP_TRUCK(30,26) parked in SE pod
     [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,80,74,80,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_ALCOVE(21,27)(23,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
@@ -2443,8 +2443,12 @@ var FloorManager = (function () {
       _enemies = [];  // No enemies in the plaza (safe zone)
       _floorCache[_floorId] = { floorData: _floorData, enemies: _enemies };
     } else {
-      // Depth-2 (interior) floors use trapdoor hatches for descent into dungeons;
-      // Depth-3 (nested dungeon) floors use trapdoor hatches for ascent back up.
+      // Option B tile-identity rule (destination-relative):
+      //   STAIRS   = depth-crossing (N↔N.N, N.N↔N.N.N)
+      //   TRAPDOOR = intra-dungeon sibling (N.N.N ↔ N.N.N±1)
+      // So only depth-3 floors use TRAPDOOR_DN for sibling descent. All
+      // ascent from depth 3 is STAIRS_UP (→ parent N.N). Depth-2 uses
+      // STAIRS in both directions (N.N→N child, N.N→N.N.N descend).
       var _genDepth = _depth(_floorId);
       var _genOpts = {
         width: contract.gridSize.w,
@@ -2456,11 +2460,9 @@ var FloorManager = (function () {
         placeStairsDn: true,
         roomCount: SeededRNG.randInt(contract.roomCount.min, contract.roomCount.max)
       };
-      if (_genDepth === 2) {
-        _genOpts.stairDnTile = TILES.TRAPDOOR_DN;
-      }
       if (_genDepth === 3) {
-        _genOpts.stairUpTile = TILES.TRAPDOOR_UP;
+        _genOpts.stairDnTile = TILES.TRAPDOOR_DN;  // sibling descent → N.N.N+1
+        // stairUpTile left as default STAIRS_UP — ascent to parent N.N
       }
       _floorData = GridGen.generate(_genOpts);
 
@@ -2769,6 +2771,14 @@ var FloorManager = (function () {
       // Lazy-register the facade_door gap filler (safe to call repeatedly)
       if (typeof DoorSprites.ensureFillerRegistered === 'function') {
         DoorSprites.ensureFillerRegistered();
+      }
+
+      // Lazy-register porthole_ocean + tunnel_alcove gap fillers for
+      // sealab dungeon tiles. Safe to call repeatedly — the module
+      // itself guards with a _registered flag.
+      if (typeof PortholeOcean !== 'undefined' &&
+          typeof PortholeOcean.ensureRegistered === 'function') {
+        PortholeOcean.ensureRegistered();
       }
     }
 

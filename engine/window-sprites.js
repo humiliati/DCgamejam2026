@@ -479,6 +479,58 @@ var WindowSprites = (function () {
     _windowMullions = {};
   }
 
+  // ── Back-face interior wall fill ────────────────────────────────
+  // LIVING_WINDOWS_ROADMAP §10.5 #6 — the back (interior) face of a
+  // window tile used to paint nothing (transparent), which meant the
+  // ray kept walking into whatever was behind the tile. Now we paint
+  // a TextureAtlas sample of the building's wall material, darkened
+  // a touch for the "inside shadow" feel, and fog-modulated. Reads
+  // as a real interior wall without costing us the forward-facing
+  // emoji billboards (sprites draw between back-layer and foreground
+  // so the vignette still punches through the glass from the street).
+  //
+  // Called from each filler when (isBack && !isGlass).
+  function _paintInteriorBack(ctx, col, gapStart, gapH, info) {
+    if (gapH <= 0) return;
+
+    var texId = _windowTextures[info.mapX + ',' + info.mapY] || null;
+    var tex = (texId && typeof TextureAtlas !== 'undefined')
+      ? TextureAtlas.get(texId) : null;
+
+    if (tex && tex.canvas && info.lineH > 0) {
+      var texX = Math.floor(info.wallX * tex.width);
+      if (texX >= tex.width) texX = tex.width - 1;
+      if (texX < 0) texX = 0;
+      var srcY = (gapStart - info.wallTop) / info.lineH * tex.height;
+      var srcH = gapH / info.lineH * tex.height;
+      if (srcY < 0) { srcH += srcY; srcY = 0; }
+      if (srcY + srcH > tex.height) srcH = tex.height - srcY;
+      if (srcH < 0.5) srcH = 0.5;
+      ctx.drawImage(tex.canvas, texX, srcY, 1, srcH, col, gapStart, 1, gapH);
+    } else {
+      // Fallback: warm dark interior wash.
+      ctx.fillStyle = 'rgb(24, 16, 10)';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // Interior shadow — back of a window is always dimmer than the
+    // daylit exterior. Additional 35% darken on top of the normal
+    // brightness attenuation.
+    var bAdj   = info.brightness;
+    var darkA  = 1 - bAdj * 0.65;
+    if (darkA > 0.05) {
+      ctx.fillStyle = 'rgba(0,0,0,' + darkA.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+
+    // Fog pass.
+    if (info.fogFactor > 0.05) {
+      ctx.fillStyle = 'rgba(' + info.fogColor.r + ',' + info.fogColor.g +
+                      ',' + info.fogColor.b + ',' + info.fogFactor.toFixed(3) + ')';
+      ctx.fillRect(col, gapStart, 1, gapH);
+    }
+  }
+
   // ── Gap filler ──────────────────────────────────────────────────
   // The filler closes over _exteriorFaces (via getExteriorFace) so
   // every column can look up its tile's exterior face and decide
@@ -490,11 +542,11 @@ var WindowSprites = (function () {
   //
   // Three-face model for the window cavity:
   //   EXTERIOR face  → glass pane (mullion + amber + glint)
-  //   INTERIOR face  → transparent (no fill, back layers show through)
+  //   INTERIOR face  → textured wall sample (see _paintInteriorBack)
   //   SIDE faces     → opaque wall masonry (close the tile edges)
   // The window reads as a thin glass pane on the building facade:
-  // mullion on the front, see-through from front to back, solid
-  // wall on the edges where the tile meets its neighbours.
+  // mullion on the front, a proper inside wall on the back,
+  // solid masonry on the edges where the tile meets its neighbours.
   function _windowTavernInteriorFiller(ctx, col, gapStart, gapH, info) {
     if (gapH <= 0) return;
 
@@ -511,8 +563,9 @@ var WindowSprites = (function () {
     //   Back of a glass   → nothing (leave cavity transparent)
     //   Side faces        → opaque wall masonry (close the tile edges)
 
-    // ── Back-of-glass face: leave transparent ────────────────────
+    // ── Back-of-glass face: textured interior wall (roadmap §10.5 #6)
     if (isBack) {
+      _paintInteriorBack(ctx, col, gapStart, gapH, info);
       return;
     }
 
@@ -654,8 +707,11 @@ var WindowSprites = (function () {
     var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
     var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
-    // Interior face: transparent (see-through)
-    if (isBack) return;
+    // Interior face: textured back-wall (roadmap §10.5 #6)
+    if (isBack) {
+      _paintInteriorBack(ctx, col, gapStart, gapH, info);
+      return;
+    }
 
     // Side faces: opaque masonry
     if (!isGlass) {
@@ -764,8 +820,11 @@ var WindowSprites = (function () {
     var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
     var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
-    // Interior face: transparent
-    if (isBack) return;
+    // Interior face: textured back-wall (roadmap §10.5 #6)
+    if (isBack) {
+      _paintInteriorBack(ctx, col, gapStart, gapH, info);
+      return;
+    }
 
     // Side faces: building wall texture masonry (the beveled jambs).
     // Use a warmer brown for residential wood.
@@ -874,8 +933,11 @@ var WindowSprites = (function () {
     var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
     var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
-    // Interior face: transparent
-    if (isBack) return;
+    // Interior face: textured back-wall (roadmap §10.5 #6)
+    if (isBack) {
+      _paintInteriorBack(ctx, col, gapStart, gapH, info);
+      return;
+    }
 
     // Side faces: opaque masonry
     if (!isGlass) {
@@ -977,7 +1039,11 @@ var WindowSprites = (function () {
     var isGlass = (extMask > 0 && (extMask & hitBit) !== 0);
     var isBack  = (extMask > 0 && !isGlass && (extMask & oppBit) !== 0);
 
-    if (isBack) return;
+    // Interior face: textured back-wall (roadmap §10.5 #6)
+    if (isBack) {
+      _paintInteriorBack(ctx, col, gapStart, gapH, info);
+      return;
+    }
 
     if (!isGlass) {
       var bAdjW = info.brightness;

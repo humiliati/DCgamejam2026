@@ -3,95 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>World Designer</title>
-    <link rel="stylesheet" href="css/map-designer.css"> <!-- Re-using the same CSS for now -->
+    <title>Dungeon Gleaner — World Designer</title>
+    <link rel="stylesheet" href="vendor/jsplumb/jsplumbtoolkit-defaults.css">
+    <style>
+      body { margin:0; font-family: Consolas, "Courier New", monospace; background:#1a1d22; color:#e6e6e6; }
+      .dg-header { display:flex; align-items:center; gap:12px; padding:8px 16px; background:#0f1115; border-bottom:1px solid #333; }
+      .dg-header h1 { margin:0; font-size:15px; letter-spacing:1px; color:#8ad; }
+      .dg-header .sub { color:#789; font-size:12px; }
+      .dg-header .spacer { flex:1; }
+      .dg-header button { background:#2a3a4a; color:#cfe; border:1px solid #456; padding:4px 10px; cursor:pointer; font-family:inherit; font-size:12px; border-radius:3px; }
+      .dg-header button:hover { background:#345; }
+      .dg-header .status { color:#9c6; font-size:11px; }
+
+      .dg-container { display:flex; height: calc(100vh - 44px); }
+      .dg-sidebar { width: 220px; padding:12px; background:#15181d; border-right:1px solid #333; overflow-y:auto; font-size:12px; }
+      .dg-sidebar h3 { margin:0 0 8px; font-size:11px; color:#8ad; letter-spacing:1px; text-transform:uppercase; }
+      .dg-sidebar .legend-row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+      .dg-sidebar .swatch { width:14px; height:14px; border:1px solid #222; border-radius:2px; }
+      .dg-sidebar .sect { margin-bottom:16px; padding-bottom:12px; border-bottom:1px dashed #2a2e33; }
+      .dg-sidebar .sect:last-child { border-bottom:none; }
+
+      .dg-canvas-wrap { flex:1; position:relative; overflow:auto; background:#20232a;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+      #dg-canvas { position:absolute; top:0; left:0; width:4000px; height:3000px; }
+
+      .dg-node {
+        position:absolute; width:150px; min-height:54px;
+        border:2px solid #789; border-radius:6px;
+        background:#2a3240; color:#e6e6e6;
+        padding:6px 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        cursor: move;
+        font-size: 12px;
+        user-select:none;
+      }
+      .dg-node.depth-1  { background:#2b3a2a; border-color:#6a8; }
+      .dg-node.depth-2  { background:#2a3644; border-color:#79a; }
+      .dg-node.depth-3  { background:#3a2a44; border-color:#96b; }
+      .dg-node .dg-node-id { font-weight:bold; color:#cfe; font-size:13px; }
+      .dg-node .dg-node-biome { color:#9ab; font-size:10px; margin-top:2px; letter-spacing:0.5px; text-transform:uppercase; }
+      .dg-node .dg-node-size { color:#678; font-size:10px; margin-top:2px; }
+      .dg-node.selected { outline: 2px solid #fc6; outline-offset:2px; }
+
+      /* Ghost nodes (Pass 5b.2) — proc-gen slots + planned dangling refs */
+      .dg-node.dg-node-ghost {
+        border-style: dashed;
+        opacity: 0.78;
+        box-shadow: none;
+      }
+      .dg-node.dg-ghost-procgen.depth-1 { background:#1e2a1d; }
+      .dg-node.dg-ghost-procgen.depth-2 { background:#1e2632; }
+      .dg-node.dg-ghost-procgen.depth-3 { background:#2b1e34; }
+      .dg-node.dg-ghost-planned {
+        background:#2e2a1d !important;
+        border-color:#c96 !important;
+      }
+      .dg-node .dg-node-badge {
+        position:absolute; top:3px; right:4px;
+        font-size:8px; font-weight:bold;
+        padding:1px 4px; border-radius:2px;
+        letter-spacing:0.5px;
+        background:#0008; color:#cfe; border:1px solid #456;
+      }
+      .dg-node.dg-ghost-procgen .dg-node-badge { background:#1a2a38; color:#8cf; border-color:#567; }
+      .dg-node.dg-ghost-planned .dg-node-badge { background:#3a2a1a; color:#fc8; border-color:#764; }
+
+      .dg-inspector { width: 260px; padding:12px; background:#15181d; border-left:1px solid #333; overflow-y:auto; font-size:12px; }
+      .dg-inspector h3 { margin:0 0 8px; font-size:11px; color:#8ad; letter-spacing:1px; text-transform:uppercase; }
+      .dg-inspector .kv { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dotted #2a2e33; }
+      .dg-inspector .kv .k { color:#789; }
+      .dg-inspector .kv .v { color:#cfe; font-weight:bold; }
+      .dg-inspector .empty { color:#567; font-style:italic; text-align:center; margin-top:40px; }
+      .dg-inspector .door-row { font-size:11px; padding:2px 0; color:#bcd; }
+      .dg-inspector a.jump { color:#8cf; cursor:pointer; text-decoration:underline; }
+
+      /* jsPlumb connection overrides — depth-typed edges */
+      .jtk-connector path { stroke-width: 2px; }
+      svg.dg-edge-interior path { stroke: #79a; }
+      svg.dg-edge-exterior path { stroke: #9b6; }
+      svg.dg-edge-dungeon  path { stroke: #b69; }
+      svg.dg-edge-mismatch path { stroke: #f66; stroke-dasharray: 6,4; }
+      /* Proc-gen edges inherit depth color + dash pattern */
+      svg.dg-edge-procgen path { stroke-dasharray: 4,3; opacity: 0.8; }
+      svg.dg-edge-planned path { stroke: #c96; stroke-dasharray: 2,5; opacity: 0.85; }
+    </style>
 </head>
 <body>
-    <header class="designer-header">
-        <h1>World Designer</h1>
-        <div class="header-controls">
-            <select id="world-selector" class="floor-selector"></select>
-            <button id="import-world-btn" class="btn btn-primary">Import World</button>
-            <input type="file" id="import-file" accept=".json" style="display:none;">
-            <button id="export-world-btn" class="btn btn-primary">Export World</button>
-        </div>
-    </header>
-
-    <div class="designer-container">
-        <aside class="palette-sidebar">
-            <div class="palette-section">
-                <h3>Draggable Items</h3>
-                <div class="palette-grid">
-                    <div class="draggable-item floor-0-color" draggable="true" data-item-type="floor-0">Floor 0 (Start)</div>
-                    <div class="draggable-item floor-color" draggable="true" data-item-type="floor">Floor</div>
-                    <div class="draggable-item bonfire-color" draggable="true" data-item-type="bonfire">Bonfire</div>
-                    <div class="draggable-item vents-color" draggable="true" data-item-type="vents">Vents</div>
-                    <div class="draggable-item boss-color" draggable="true" data-item-type="boss">Boss</div>
-                    <div class="draggable-item floor-999-color" draggable="true" data-item-type="floor-999">Floor 999 (End)</div>
-                    <div class="draggable-item building-simple-color" draggable="true" data-item-type="BuildingSimple">Simple Building</div>
-                    <div class="draggable-item building-vertical-color" draggable="true" data-item-type="BuildingVertical">Vertical Building</div>
-                    <div class="draggable-item building-horizontal-color" draggable="true" data-item-type="BuildingHorizontal">Horizontal Building</div>
-                </div>
-            </div>
-            <div class="palette-section">
-                <h3>Connection Types</h3>
-                <div class="palette-grid" style="font-size:11px; line-height:1.6;">
-                    <div style="color:#3c3;">→ Advance (forward door)</div>
-                    <div style="color:#cc0;">← Retreat (back door)</div>
-                    <div style="color:#39f;">🚪 Building (enter interior)</div>
-                    <div style="color:#c3f;">↩ Interior Exit (return)</div>
-                </div>
-                <div style="margin-top:6px; font-size:10px; color:#777; line-height:1.5;">
-                    <div><b>Door Contract Legend:</b></div>
-                    <div>Green connection = advance/retreat pair</div>
-                    <div>Blue connection = building → interior</div>
-                    <div>Purple connection = interior exit override</div>
-                </div>
-            </div>
-            <div class="palette-section">
-                <h3>Canvas Tools</h3>
-                <div class="palette-grid">
-                    <button id="pan-tool-btn">Pan</button>
-                    <button id="grid-toggle-btn">Grid</button>
-                    <button id="snap-toggle-btn">Snap</button>
-                </div>
-            </div>
-        </aside>
-
-        <main class="canvas-area">
-            <div class="canvas-toolbar">
-                <button id="zoom-in-btn" class="btn btn-secondary">Zoom In</button>
-                <button id="zoom-out-btn" class="btn btn-secondary">Zoom Out</button>
-                <button id="select-all-btn" class="btn btn-secondary">Select All</button>
-                <button id="clear-selection-btn" class="btn btn-secondary">Clear Selection</button>
-            </div>
-            <div id="world-canvas" style="width: 100%; height: 100%; position: relative;"></div>
-            <div id="selection-marquee"></div>
-        </main>
-
-        <aside class="property-inspector">
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="properties">Properties</button>
-                <button class="tab-btn" data-tab="notes">Notes</button>
-            </div>
-            <div id="properties-tab" class="tab-content active">
-                <h3>Properties</h3>
-                <div id="inspector-content">
-                    <div class="inspector-empty">
-                        <p>Select a node to view properties</p>
-                    </div>
-                </div>
-            </div>
-            <div id="notes-tab" class="tab-content">
-                <h3>Notes</h3>
-                <textarea id="node-notes" style="width: 100%; height: 200px;" placeholder="Add notes here..."></textarea>
-            </div>
-            <button id="delete-btn" class="btn btn-danger" style="display:none;">Delete</button>
-        </aside>
+    <div class="dg-header">
+      <h1>DUNGEON GLEANER — WORLD DESIGNER</h1>
+      <span class="sub">read-only viewer · Pass 5b.1</span>
+      <div class="spacer"></div>
+      <button id="btn-reload" title="Reload floor-data.json from disk">Reload Data</button>
+      <button id="btn-layout-reset" title="Reset node positions to auto-layout">Reset Layout</button>
+      <button id="btn-layout-save" title="Save current positions to tools/world-layout.json (download)">Save Layout</button>
+      <span id="dg-status" class="status">idle</span>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/js/jsplumb.min.js"></script>
+    <div class="dg-container">
+      <aside class="dg-sidebar">
+        <div class="sect">
+          <h3>Depth Legend</h3>
+          <div class="legend-row"><div class="swatch" style="background:#2b3a2a;border-color:#6a8;"></div><span>Depth 1 — Exterior</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#2a3644;border-color:#79a;"></div><span>Depth 2 — Interior</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#3a2a44;border-color:#96b;"></div><span>Depth 3 — Dungeon</span></div>
+        </div>
+        <div class="sect">
+          <h3>Slot Legend</h3>
+          <div class="legend-row"><div class="swatch" style="background:#2b1e34;border-color:#96b;border-style:dashed;"></div><span>Proc-gen slot</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#2e2a1d;border-color:#c96;border-style:dashed;"></div><span>Planned (not authored)</span></div>
+          <div style="font-size:10px; color:#678; margin-top:4px;">Kinds: <span style="color:#8cf;">TEMPLATE</span> · <span style="color:#8cf;">COMPOSED</span> · <span style="color:#8cf;">RANDOM</span></div>
+        </div>
+        <div class="sect">
+          <h3>Edge Legend</h3>
+          <div class="legend-row"><div class="swatch" style="background:#9b6;"></div><span>Exterior link</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#79a;"></div><span>Interior link</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#b69;"></div><span>Dungeon link</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#f66;"></div><span>Non-reciprocal (warn)</span></div>
+          <div class="legend-row"><div class="swatch" style="background:linear-gradient(90deg,#b69 50%,transparent 50%); background-size:6px 100%;"></div><span>Proc-gen edge (dashed)</span></div>
+          <div class="legend-row"><div class="swatch" style="background:linear-gradient(90deg,#c96 50%,transparent 50%); background-size:4px 100%;"></div><span>Planned edge (dotted)</span></div>
+        </div>
+        <div class="sect">
+          <h3>Summary</h3>
+          <div class="kv"><span class="k">Floors:</span> <span id="sum-floors">—</span></div>
+          <div class="kv"><span class="k">Doors:</span> <span id="sum-doors">—</span></div>
+          <div class="kv"><span class="k">Warnings:</span> <span id="sum-warn">—</span></div>
+        </div>
+      </aside>
+
+      <div class="dg-canvas-wrap" id="dg-canvas-wrap">
+        <div id="dg-canvas"></div>
+      </div>
+
+      <aside class="dg-inspector">
+        <h3>Inspector</h3>
+        <div id="dg-inspector-body">
+          <div class="empty">Click a floor node</div>
+        </div>
+      </aside>
+    </div>
+
+    <script src="vendor/jsplumb/jsplumb.min.js"></script>
+    <script src="floor-data.js"></script>
     <script src="js/world-designer.js"></script>
-    <script src="js/unified-data-manager.js"></script>
 </body>
 </html>

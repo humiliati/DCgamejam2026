@@ -431,3 +431,141 @@ canvas { display: block; }
   flex-shrink: 0;
 }
 #info-bar .ib-label { color: #888; }
+
+/* ─────────────────────────────────────────────────────────────
+   Help button + help modal (bv-help.js)
+   ───────────────────────────────────────────────────────────── */
+#toolbar button.help-btn {
+  background: #2a3a4a;
+  border: 1px solid #5a7a9a;
+  color: #cfe;
+  min-width: 26px;
+  padding: 3px 8px;
+  font-weight: bold;
+}
+#toolbar button.help-btn:hover { background: #3a4a5a; border-color: #7aa; }
+
+#help-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999;
+  display: none; align-items: center; justify-content: center;
+}
+#help-modal.open { display: flex; }
+#help-modal-inner {
+  background: #1a1d22; border: 1px solid #445; border-radius: 8px;
+  width: 80%; max-width: 980px; max-height: 85vh;
+  display: flex; flex-direction: column;
+  color: #cde; font-family: Consolas, monospace; font-size: 12px;
+}
+#help-modal-inner h3 {
+  margin: 0; padding: 12px 16px; border-bottom: 1px solid #334;
+  color: #cfe; font-family: Consolas, monospace; font-size: 13px;
+  display: flex; align-items: center; gap: 10px;
+}
+#help-modal-inner h3 .hm-sub {
+  color: #789; font-size: 10px; font-weight: normal; margin-left: auto;
+}
+
+#help-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid #334;
+  background: #14171c; flex-shrink: 0; overflow-x: auto;
+}
+#help-tabs .help-tab-btn {
+  padding: 8px 14px; background: transparent; color: #789;
+  border: none; border-right: 1px solid #223;
+  font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
+  white-space: nowrap;
+}
+#help-tabs .help-tab-btn:hover { color: #bcd; background: #1a1d22; }
+#help-tabs .help-tab-btn.active {
+  color: #cfe; background: #1a1d22;
+  border-bottom: 2px solid #5a8; margin-bottom: -1px;
+}
+
+#help-body {
+  flex: 1; overflow: auto; padding: 14px 20px;
+  line-height: 1.5;
+}
+#help-body .help-section { margin-bottom: 18px; }
+#help-body .help-section h4 {
+  margin: 0 0 8px 0; padding: 0;
+  color: #9cf; font-size: 12px; font-weight: bold;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  border-bottom: 1px solid #334; padding-bottom: 4px;
+}
+#help-body p { margin: 6px 0; color: #cde; }
+#help-body ul, #help-body ol { margin: 6px 0 6px 18px; padding: 0; color: #cde; }
+#help-body li { margin: 3px 0; }
+#help-body code {
+  background: #0e1116; color: #bdf; padding: 1px 5px; border-radius: 3px;
+  border: 1px solid #223; font-size: 11px;
+}
+#help-body kbd {
+  background: #222; color: #eff; border: 1px solid #556;
+  border-bottom-width: 2px; border-radius: 3px;
+  padding: 1px 6px; font-family: Consolas, monospace; font-size: 10px;
+  box-shadow: 0 1px 0 #000;
+}
+#help-body table.help-table {
+  width: 100%; border-collapse: collapse; margin: 6px 0 10px 0;
+  font-size: 11px;
+}
+#help-body table.help-table th {
+  text-align: left; padding: 5px 8px;
+  background: #0e1116; color: #9cf; border-bottom: 1px solid #334;
+  font-weight: bold;
+}
+#help-body table.help-table td {
+  padding: 5px 8px; border-bottom: 1px solid #1e2128;
+  color: #cde; vertical-align: top;
+}
+#help-body table.help-table tr:hover td { background: #15181e; }
+
+#help-body .help-sev {
+  display: inline-block; padding: 0 6px; border-radius: 3px;
+  font-size: 10px; font-weight: bold; margin: 0 2px;
+}
+#help-body .help-sev.err  { background: #4a1818; color: #fcc; border: 1px solid #933; }
+#help-body .help-sev.warn { background: #4a3810; color: #feb; border: 1px solid #a73; }
+#help-body .help-sev.info { background: #18324a; color: #acf; border: 1px solid #379; }
+
+#help-body .help-planned {
+  padding: 10px 12px; background: #1d2028;
+  border-left: 3px solid #5a8; border-radius: 4px;
+}
+
+#help-body details {
+  margin: 6px 0; padding: 4px 0;
+}
+#help-body details summary {
+  cursor: pointer; color: #9cf; font-size: 11px;
+  padding: 2px 0;
+}
+#help-body .help-actions-list {
+  font-family: Consolas, monospace; font-size: 10px;
+  color: #acd; background: #0e1116;
+  padding: 8px 10px; border: 1px solid #223; border-radius: 4px;
+  word-break: break-word; line-height: 1.7;
+}
+
+#help-body .help-error {
+  color: #f99; background: #2a1010; border: 1px solid #733;
+  padding: 10px; border-radius: 4px;
+}
+
+#help-modal-actions {
+  padding: 10px 16px; border-top: 1px solid #334;
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+}
+#help-modal-actions .hm-docs-hint {
+  margin-right: auto; color: #678; font-size: 10px;
+}
+#help-modal-actions .hm-docs-hint code {
+  background: #0e1116; color: #9ab; padding: 1px 4px; border-radius: 3px;
+  border: 1px solid #223; font-size: 10px;
+}
+#help-modal-actions button {
+  padding: 5px 14px; font-family: Consolas, monospace; font-size: 11px;
+  cursor: pointer; border-radius: 4px;
+}
+#help-modal-actions .secondary { background: #333; border: 1px solid #556; color: #bcd; }
+#help-modal-actions .secondary:hover { background: #444; }

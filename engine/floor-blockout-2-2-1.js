@@ -60,9 +60,9 @@
  *   - Wounded Vault Warden ×1 (triggered after hero exit)
  *
  * Tile legend:
- *   0=EMPTY  1=WALL  5=STAIRS_DN  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
+ *   0=EMPTY  1=WALL  6=STAIRS_UP  7=CHEST  8=TRAP  10=PILLAR
  *   11=BREAKABLE  19=CORPSE  27=BED  28=TABLE
- *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS
+ *   30=TORCH_LIT  31=TORCH_UNLIT  39=DETRITUS  75=TRAPDOOR_DN
  */
 (function () {
   'use strict';
@@ -74,7 +74,7 @@
   var GRID = [
     //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
     [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0  north wall
-    [ 1, 5, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0,39,19, 0, 0, 0, 0,19,39, 0, 0, 1], // 1  North Hall — STAIRS_DN(1,1) to B2, 3 corpses + 3 detritus
+    [ 1,75, 0, 0, 0, 0, 0, 0,19,39, 0, 0, 0,39,19, 0, 0, 0, 0,19,39, 0, 0, 1], // 1  North Hall — TRAPDOOR_DN(1,1) to B2 (sibling), 3 corpses + 3 detritus
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 2  triggered trap (10,2) — COMBAT TRIGGER ZONE
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0, 0, 1], // 3  crate toppled by hero (14,3)
     [ 1, 0, 0, 0, 1, 1,30, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,31, 1,31, 0, 0, 0, 1], // 4  inner block N face — lit(6,4), unlit(17,4),(19,4)
@@ -245,11 +245,14 @@
       grid: grid,
       rooms: ROOMS.slice(),
       doors: {
-        stairsUp: { x: 11, y: 21 },  // STAIRS_UP → Watchman's Post (2.2)
-        stairsDn: { x: 1, y: 1 },    // STAIRS_DN → Deepwatch Vaults B2 (2.2.2)
+        stairsUp: { x: 11, y: 21 },  // STAIRS_UP   → Watchman's Post (2.2) — depth-cross
+        stairsDn: { x: 1, y: 1 },    // TRAPDOOR_DN → Hero's Wake B2 (2.2.2) — sibling
         doorExit: null
       },
-      doorTargets: { '11,21': '2.2' },
+      doorTargets: {
+        '11,21': '2.2',    // STAIRS_UP   → Watchman's Post (parent, depth-cross)
+        '1,1':   '2.2.2'   // TRAPDOOR_DN → Hero's Wake B2 (deeper sibling)
+      },
       gridW: W,
       gridH: H,
       biome: 'dungeon',

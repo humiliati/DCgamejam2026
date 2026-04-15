@@ -787,10 +787,27 @@
     }
   }
 
+  // Pass 5a: extension hook so sibling modules (bv-bo-floor.js)
+  // can register additional actions without editing this file.
+  function registerAction(name, fn) {
+    if (typeof name !== 'string' || !name) throw new Error('registerAction needs a name');
+    if (typeof fn !== 'function')           throw new Error('registerAction needs a function');
+    ACTIONS[name] = fn;
+    if (window.BO) window.BO.actions = Object.keys(ACTIONS).sort();
+    return name;
+  }
+
   window.BO = {
     run: run,
     actions: Object.keys(ACTIONS).sort(),
-    version: '0.3.0',
+    version: '0.3.1',
+    _register: registerAction,
+    _helpers: {
+      resolveTileRef: resolveTileRef,
+      ensureFloor:    ensureFloor,
+      applyAndPush:   applyAndPush,
+      currentFloorSnapshot: currentFloorSnapshot
+    },
     // ── Pass 3: direct helpers (no router wrap) ────────────────
     tile:       function(name)       { return ACTIONS.tile({ name: name }); },
     tileName:   function(id)         { return ACTIONS.tileName({ id: id }); },
@@ -831,8 +848,7 @@ window.__boSmokeTest = function(floorId) {
   var r9 = window.BO.run({ action: 'tileSchema', name: 'WALL' });
   console.log('[bo-smoke] tileSchema(WALL) →', r9.result);
   // Pass 4 — stamps
-  var rA = window.BO.run({ action: 'stampRoom', at:{x:6,y:6}, w:4, h:4, wallTile:'WALL', floorTile:'EMPTY' });
-  console.log('[bo-smoke] stampRoom 4×4 →', rA);
+  var rA = window.BO.run({ action: 'stampRoom', at:{x:6,y:6}, w:4, h:4, wallTile:'WALL', floorTile:'EMPTY' });  console.log('[bo-smoke] stampRoom 4×4 →', rA);
   var rB = window.BO.run({ action: 'saveStamp', name:'smoke-room', at:{x:6,y:6}, w:4, h:4 });
   console.log('[bo-smoke] saveStamp →', rB);
   var rC = window.BO.run({ action: 'applyStamp', name:'smoke-room', at:{x:12,y:12}, rotate:90 });

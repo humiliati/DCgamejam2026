@@ -4,11 +4,13 @@ Canvas-based map editor for Dungeon Gleaner's ASCII blockout grids.
 Loads floor data from `floor-data.json` (extracted by `extract-floors.js`)
 and renders the post-builder grid — what the player actually sees.
 
-Current version: **v0.13** (April 2026). Full Tier 1 drawing + selection +
+Current version: **v0.14** (April 2026). Full Tier 1 drawing + selection +
 history, Tier 2 direct file write **and validation** (walkability, door
-contracts, spawn, required tiles), **Tier 3 per-floor metadata editor**
-(spawn drag-place, door target dropdowns, JSON snippet export), a
-Tier 4 window-scene editor first pass, and **Tier 6 Passes 1 + 2 + 3 + 4** —
+contracts, spawn, required tiles) — `Ctrl+S` now patches **`GRID`,
+`SPAWN`, and `doorTargets`** in one pass, **Tier 3 per-floor metadata
+editor** (spawn drag-place, door target dropdowns, JSON snippet export),
+a Tier 4 window-scene editor first pass, a built-in **help modal**
+(`?` / F1) with 8 tabs, and **Tier 6 Passes 1 + 2 + 3 + 4** —
 the headless `window.BO.run({action,…})` command surface, the matching
 `tools/blockout-cli.js` Node wrapper, the perception toolkit
 (`renderAscii`, `diffAscii`, `describeCell`, `reportValidation`,
@@ -20,7 +22,34 @@ library** — parametric stamps (`stampRoom`, `stampCorridor`,
 `listStamps`, `deleteStamp`, `exportStamps`, `importStamps`) with a
 `tools/stamps.json` sidecar for cross-session reuse and CLI/browser
 interop. See
-`BLOCKOUT_VISUALIZER_ROADMAPv2.md` for the full feature plan.
+`BLOCKOUT_VISUALIZER_ROADMAPv2.md` for the full feature plan and
+`tools/short-roadmap.md` for the active pass ordering.
+
+## What this tool is / isn't
+
+**Is:** a grid-cutting editor for *existing* floor blockouts. Load a
+floor → paint / rect / line / bucket / lasso / stamp → validate → save
+back to `engine/floor-blockout-<id>.js`. Same flow works for a delegated
+engineer at the mouse and for an AI agent via `window.BO.run({...})` or
+`tools/blockout-cli.js`.
+
+**Is also:** the edit surface for spawn and door-target metadata. The
+Meta panel (`M`) plus `Ctrl+S` is the canonical way to fix
+`door-target-missing` / `no-return-door` issues that validation surfaces.
+
+**Isn't:** a world-designer. Creating a brand-new floor — picking a
+biome, wiring the new node into the floor-ID tree, fixing which doors
+on which neighbors point at it — belongs in the **world-designer** tool
+(upstream of BO-V). The planned handoff: world-designer births a floor
+node with biome defaults, dimensions, pre-stamped required tiles, and
+pinned door targets, then opens BO-V on that seeded grid so the
+designer (or agent) can just cut the layout. Until that handoff lands,
+use the "Workflow: creating a new floor" section below as a manual
+stop-gap.
+
+**Also isn't:** a level-logic editor. Enemy placement, loot tables,
+card drops, quest wiring, NPC dialogue all live in their own data
+files. BO-V only owns the tile grid + spawn + doorTargets.
 
 ## Quick start
 
@@ -60,6 +89,7 @@ the picker — there is no hardcoded tile list in the editor anymore.
 | Toggle door overlays | `D` key |
 | Toggle tile IDs / glyphs | `I` key |
 | Toggle legend panel | `L` key (view mode only) |
+| Open help modal | `?` or `F1` (also the `?` button on the toolbar) |
 
 The floor selector dropdown lists every extracted floor, indented by depth.
 Exterior floors (`"0"`, `"1"`, `"2"`) are top-level; interiors (`"1.1"`,
@@ -165,11 +195,17 @@ undo step.
 
 The first save prompts you to pick your `engine/` directory via the File
 System Access API. The editor then reads the current
-`floor-blockout-<id>.js`, patches **only the `var GRID = [...]` literal**
-via regex (W/H, ROOMS, build(), doorTargets, registerFloorBuilder are all
-preserved byte-for-byte), and shows a color-coded unified diff in a modal
-before writing. Three exit paths: **Cancel**, **Download instead**,
-**Write to file**.
+`floor-blockout-<id>.js` and patches three regions via regex:
+
+- the `var GRID = [...]` literal (plus `W`/`H` if dimensions changed),
+- the `SPAWN = { x, y }` block (if the Meta panel moved spawn),
+- the `doorTargets` map inside the registered builder (if any door
+  target row changed — including the `(fallback)` delete case).
+
+Everything else — `ROOMS`, `build()` body, auxiliary consts, comments,
+`registerFloorBuilder` wiring — is preserved byte-for-byte. A
+color-coded unified diff renders in a modal before writing with three
+exit paths: **Cancel**, **Download instead**, **Write to file**.
 
 On `file://` or in browsers that don't support the File System Access API,
 the editor falls back to a Blob download of the patched file.
@@ -288,7 +324,7 @@ Panel actions:
 
 | Button | Effect |
 |--------|--------|
-| **Copy meta JSON** | Copies `{floorId, spawn, doorTargets}` as JSON to the clipboard for manual paste into `engine/floor-blockout-*.js` (the direct-write patcher currently only rewrites `GRID`). |
+| **Copy meta JSON** | Copies `{floorId, spawn, doorTargets}` as JSON to the clipboard — useful for reviews, diffs, or pasting into a non-standard builder shape. `Ctrl+S` already rewrites `SPAWN` and `doorTargets` in `engine/floor-blockout-*.js` directly, so the manual paste is no longer the default path. |
 | **Revert meta** | Re-fetches `floor-data.json` and restores this floor's spawn + doorTargets to disk state. Grid edits are NOT affected. |
 
 A dirty indicator (`●`) appears in the panel header when any unsaved
@@ -304,8 +340,11 @@ full reload.
 3. Press `M` to open the metadata panel; the door is listed with its
    current (broken) target.
 4. Pick the correct floor from the dropdown.
-5. Click **Copy meta JSON** and paste into the floor's
-   `registerFloorBuilder` entry.
+5. `Ctrl+S` — the save diff shows the `doorTargets` block patch alongside
+   any grid edits. Confirm and write.
+
+(Legacy path: **Copy meta JSON** → paste into the floor's
+`registerFloorBuilder` entry — still works for non-standard shapes.)
 
 ## Agent API (Tier 6 Pass 1)
 

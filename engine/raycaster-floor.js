@@ -115,7 +115,8 @@ var RaycasterFloor = (function () {
   // WATER tiles bypass texture sampling entirely and write the
   // contract's waterColor (fog-blended, distance-darkened) so water
   // reads as deep ocean even under warm amber fog palettes.
-  function renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr) {
+  function renderFloor(ctx, w, h, halfH, player, fov, baseWallH, floorTex, fogDist, fogColor, grid, gridW, gridH, tileFloorTexArr, playerElev) {
+    playerElev = playerElev || 0;
     var floorH = h - Math.floor(halfH);
     if (floorH <= 0) return;
 
@@ -173,8 +174,12 @@ var RaycasterFloor = (function () {
       var rowFromCenter = screenY - halfH;
       if (rowFromCenter <= 0) rowFromCenter = 0.5;
 
-      // Floor distance for this scanline (anchored to true center)
-      var rowDist = (trueHalfH * baseWallH) / rowFromCenter;
+      // Floor distance for this scanline (anchored to true center).
+      // MULTI-ELEVATION: eye is at (baseWallH/2 + playerElev) in world
+      // Y, so the row→world mapping uses (baseWallH + 2*playerElev)
+      // in the numerator (== 2 × eye-height-above-floor). Falls back
+      // to the simple formula when playerElev is 0.
+      var rowDist = (trueHalfH * (baseWallH + 2 * playerElev)) / rowFromCenter;
 
       // World position of left and right edges of this scanline
       var floorStepX = (2 * rowDist * planeX) / w;

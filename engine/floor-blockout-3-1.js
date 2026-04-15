@@ -78,6 +78,10 @@
         doorExit: { x: 8, y: 13 }   // DOOR_EXIT — back to The Garrison
       },
       doorTargets: { '8,13': '3' },  // DOOR_EXIT → The Garrison (Floor 3)
+      procGenChildren: [
+        { id: '3.1.1', kind: 'composed', label: 'Ironhold Depths',
+          doorCoord: '8,3', biomeHint: 'ironhold', maxDepth: 3 }
+      ],
       gridW: W,
       gridH: H,
       biome: 'armory',

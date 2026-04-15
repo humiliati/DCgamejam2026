@@ -181,18 +181,52 @@ var FloorTransition = (function () {
   // ── Stair interaction ──────────────────────────────────────────────
 
   /**
-   * Resolve the target floor ID for a stair transition.
-   * Down: descend to next level (child or next sibling)
-   * Up: ascend to parent level
+   * Resolve the target floor ID for a stair/trapdoor transition.
+   *
+   * Option B semantic rule — destination-relative, tile-aware:
+   *   STAIRS_DN   N     → N.N    (child)       depth 1→2
+   *   STAIRS_DN   N.N   → N.N.N  (child)       depth 2→3
+   *   STAIRS_UP   N.N.N → N.N    (parent)      depth 3→2
+   *   STAIRS_UP   N.N   → N      (parent)      depth 2→1
+   *   TRAPDOOR_DN N.N.N → N.N.N+1 (nextSibling) depth 3→3 (deeper dungeon)
+   *   TRAPDOOR_UP N.N.N → N.N.N-1 (prevSibling) depth 3→3 (shallower dungeon)
+   *   TRAPDOOR_UP N.N.N → N      (skip to surface — via doorTargets only)
+   *
+   * Explicit doorTargets entries always win over the convention.
+   *
+   * @param {string} currentId - Current floor ID
+   * @param {string} direction - 'down' or 'up'
+   * @param {number} tile - Tile constant (STAIRS_* or TRAPDOOR_*)
+   * @param {number} [tx] - Tile X (for doorTargets lookup)
+   * @param {number} [ty] - Tile Y (for doorTargets lookup)
    */
-  function _resolveStairTarget(currentId, direction) {
+  function _resolveStairTarget(currentId, direction, tile, tx, ty) {
+    // 1. Explicit doorTargets entry wins
+    if (typeof tx === 'number' && typeof ty === 'number') {
+      var floorData = FloorManager.getFloorData();
+      var dt = floorData && floorData.doorTargets;
+      if (dt) {
+        var key = tx + ',' + ty;
+        if (dt[key]) return dt[key];
+      }
+    }
+
+    // 2. Convention by tile identity + depth
     var depth = currentId.split('.').length;
+    var isTrapdoor = (typeof TILES !== 'undefined') &&
+      (tile === TILES.TRAPDOOR_DN || tile === TILES.TRAPDOOR_UP);
+
     if (direction === 'down') {
-      if (depth >= 3) return FloorManager.nextSiblingId(currentId);
+      // TRAPDOOR_DN only at depth 3: sibling descent
+      if (isTrapdoor && depth >= 3) return FloorManager.nextSiblingId(currentId);
+      // STAIRS_DN: child (only valid at depth 1 and 2)
+      if (depth >= 3) return null;
       return FloorManager.childId(currentId, '1');
     } else {
       if (depth <= 1) return null;  // Can't ascend from depth 1
-      if (depth >= 3) return FloorManager.prevSiblingId(currentId);
+      // TRAPDOOR_UP only at depth 3: sibling ascent (skip-to-surface needs doorTargets)
+      if (isTrapdoor && depth >= 3) return FloorManager.prevSiblingId(currentId);
+      // STAIRS_UP: parent (valid at all depths ≥ 2, including N.N.N → N.N)
       return FloorManager.parentId(currentId);
     }
   }
@@ -210,13 +244,16 @@ var FloorTransition = (function () {
     var tile = grid[pos.y][pos.x];
     var currentId = FloorManager.getFloor();
 
-    if (direction === 'down' && (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN)) {
-      var target = _resolveStairTarget(currentId, 'down');
+    // Tile-identity (STAIRS_* vs TRAPDOOR_*) is a rendering-intent
+    // marker — transition logic is unified via TILES.isDescendStair /
+    // isAscendStair predicates.
+    if (direction === 'down' && TILES.isDescendStair(tile)) {
+      var target = _resolveStairTarget(currentId, 'down', tile, pos.x, pos.y);
       if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'advance', null, currentId);
       go(target, 'advance');
-    } else if (direction === 'up' && (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP)) {
-      var target = _resolveStairTarget(currentId, 'up');
+    } else if (direction === 'up' && TILES.isAscendStair(tile)) {
+      var target = _resolveStairTarget(currentId, 'up', tile, pos.x, pos.y);
       if (!target) return;
       DoorContracts.setContract({ x: pos.x, y: pos.y }, 'retreat', null, currentId);
       go(target, 'retreat');
@@ -237,15 +274,18 @@ var FloorTransition = (function () {
     var tile = grid[fy][fx];
     var currentId = FloorManager.getFloor();
 
-    if (tile === TILES.STAIRS_DN || tile === TILES.TRAPDOOR_DN) {
-      var target = _resolveStairTarget(currentId, 'down');
+    // Tile-identity (STAIRS_* vs TRAPDOOR_*) is a rendering-intent
+    // marker — transition logic is unified via TILES.isDescendStair /
+    // isAscendStair predicates.
+    if (TILES.isDescendStair(tile)) {
+      var target = _resolveStairTarget(currentId, 'down', tile, fx, fy);
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'advance');
       DoorContracts.setContract({ x: fx, y: fy }, 'advance', null, currentId);
       go(target, 'advance');
       return true;
-    } else if (tile === TILES.STAIRS_UP || tile === TILES.TRAPDOOR_UP) {
-      var target = _resolveStairTarget(currentId, 'up');
+    } else if (TILES.isAscendStair(tile)) {
+      var target = _resolveStairTarget(currentId, 'up', tile, fx, fy);
       if (!target) return false;
       _startDoorAnimation(fx, fy, tile, 'retreat');
       DoorContracts.setContract({ x: fx, y: fy }, 'retreat', null, currentId);

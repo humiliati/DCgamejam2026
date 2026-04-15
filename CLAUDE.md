@@ -231,3 +231,28 @@ Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
 2. Use `detect_changes` for code review.
 3. Use `get_affected_flows` to understand impact.
 4. Use `query_graph` pattern="tests_for" to check coverage.
+
+## Document Graph (docs/, not code)
+
+The code-review-graph above covers code. For navigating the **docs/** corpus
+— especially when picking up a delegated slice of the current blockout arc —
+use `docs/DOC_GRAPH_BLOCKOUT_ARC.md` (registered as DOC-104 in the TOC).
+
+It's a Mermaid diagram centered on `BLOCKOUT_REFRESH_PLAN` with five clusters:
+prerequisites (blue), implementation spec (green), engine file leaf nodes
+(purple), downstream consumers (red), and verification/meta (grey). Solid
+arrows = prerequisite, dashed = informs, dotted = downstream. Renders in
+GitHub and VS Code preview.
+
+Delegated-work reading order:
+
+1. `docs/DOC_GRAPH_BLOCKOUT_ARC.md` to orient
+2. Blue cluster (prereqs) in order
+3. Green cluster spec docs your slice touches
+4. `code-review-graph` MCP (`semantic_search_nodes`, `get_impact_radius`) **before** editing any engine file
+5. Implement + verify via the grey cluster
+6. Flag red-cluster docs that now need a revision pass
+
+**Arc-scoped.** Full doc catalog lives at `docs/TABLE_OF_CONTENTS_CROSS_ROADMAP.md`.
+When the blockout arc closes, archive the graph and start a fresh one for the
+next cluster (likely NPC refresh → living economy).

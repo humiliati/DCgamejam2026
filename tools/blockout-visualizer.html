@@ -56,6 +56,7 @@
   <button id="btn-doors" class="active" title="Toggle door-target overlays (D)">Doors</button>
   <button id="btn-grid" title="Toggle grid lines (G)">Grid</button>
   <button id="btn-ids" title="Toggle tile IDs / glyphs (I)">IDs</button>
+  <button id="btn-help" class="help-btn" title="Help — controls, agent API, workflows (? or F1)">?</button>
   <span id="zoom-display">1.0x</span>
 </div>
 
@@ -98,6 +99,8 @@
   <span><span class="ib-label">Floor:</span> <span id="ib-floor">--</span></span>
   <span><span class="ib-label">Paint:</span> <span id="ib-paint">--</span></span>
   <span><span class="ib-label">Tool:</span> <span id="ib-tool">Paint</span></span>
+  <span><span class="ib-label">Dirty:</span> <span id="ib-dirty">0</span></span>
+  <span style="margin-left:auto; color:#667;">Press <kbd style="font-size:10px;background:#222;border:1px solid #556;padding:0 4px;border-radius:2px;">?</kbd> for help</span>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -128,7 +131,9 @@
 <script src="js/bv-meta-editor.js"></script>
 <script src="js/bv-ui-tooltip.js"></script>
 <script src="js/bv-bo-router.js"></script>
+<script src="js/bv-bo-floor.js"></script>
 <script src="js/bv-stamp-library.js"></script>
+<script src="js/bv-help.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -266,6 +271,22 @@ loadAllFloors();
     <div id="scene-modal-actions">
       <button class="secondary" id="sm-clear" title="Reset all cells in this scene to EMPTY">Clear scene</button>
       <button class="secondary" id="sm-close" title="Close scene editor (Esc)">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help modal — populated by js/bv-help.js -->
+<div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+  <div id="help-modal-inner">
+    <h3 id="help-modal-title">
+      Blockout Visualizer — Help
+      <span class="hm-sub" id="help-version">v0.14</span>
+    </h3>
+    <div id="help-tabs"></div>
+    <div id="help-body"></div>
+    <div id="help-modal-actions">
+      <span class="hm-docs-hint">Full docs: <code>tools/BO-V README.md</code> · roadmap <code>tools/short-roadmap.md</code></span>
+      <button class="secondary" id="help-close" title="Close help (Esc)">Close</button>
     </div>
   </div>
 </div>

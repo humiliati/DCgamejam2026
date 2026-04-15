@@ -67,6 +67,10 @@
         doorExit: { x: 7, y: 9 }   // DOOR_EXIT — back to The Garrison
       },
       doorTargets: { '7,9': '3' },  // DOOR_EXIT → The Garrison (Floor 3)
+      procGenChildren: [
+        { id: '3.2.1', kind: 'composed', label: 'Foundry Stores',
+          doorCoord: '9,7', biomeHint: 'foundry', maxDepth: 2 }
+      ],
       gridW: W,
       gridH: H,
       biome: 'shop',

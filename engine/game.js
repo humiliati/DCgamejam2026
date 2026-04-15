@@ -31,6 +31,126 @@ var Game = (function () {
   // Sprite list reused each frame
   var _sprites = [];
 
+  // EmojiMount instance-registration tracker. Holds the floor id
+  // most recently registered so we only replay the windowScenes →
+  // EmojiMount.registerAt migration once per floor transition. On
+  // change, clearFloor(prev) drops stale instance mounts (so the
+  // Promenade's 🍺 vignettes don't linger when descending into the
+  // Bazaar). See Phase 6 (LIVING_WINDOWS_ROADMAP §4.6).
+  var _lastEmojiMountFloor = null;
+
+  /**
+   * Migrate floorData.windowScenes declarations into per-coord
+   * EmojiMount instance mounts for the given floor. Runs once per
+   * floor transition from the render loop. Each scene entry becomes
+   * a cavity-anchored billboard at facade + interiorStep with
+   * vignette recipe resolved from BuildingRegistry.
+   *
+   * The per-tile yAlt table mirrors the legacy WindowSprites ladder
+   * (shop 0.125, commercial 1.125, alcove 0.30, bay 0.40, slit 0.60,
+   * default 0.275) so visual placement stays identical to Phase 2.
+   * Recess defaults to 1.0 — the old `perpDist + 1.0` z-bypass
+   * the retired `zBypassMode: 'depth'` field hardcoded.
+   */
+  function _registerWindowSceneMounts(floorId, floorData) {
+    if (!floorData || !floorData.windowScenes || typeof EmojiMount === 'undefined') return;
+    if (!EmojiMount.registerAt) return;
+    var scenes = floorData.windowScenes;
+    var grid   = floorData.grid;
+    // Defaults for when a scene omits vignette (or BuildingRegistry
+    // has no matching recipe). Match the legacy WindowSprites.INTERIOR
+    // config so unconfigured windows still render a 🍺 vignette.
+    var DEFAULT_EMOJI  = '\uD83C\uDF7A'; // 🍺
+    var DEFAULT_SCALE  = 0.42;
+    var DEFAULT_GLOW   = '#ffaa33';
+    var DEFAULT_RADIUS = 2;
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i];
+      if (!scene || !scene.facade) continue;
+      var fx = scene.facade.x;
+      var fy = scene.facade.y;
+      // ARROWSLIT / MURDERHOLE are pure stone cuts — skip vignette.
+      // The gap filler handles the visual; no billboard emission.
+      var tile = (grid && grid[fy]) ? grid[fy][fx] : 0;
+      if (typeof TILES !== 'undefined' &&
+          (tile === TILES.WINDOW_ARROWSLIT || tile === TILES.WINDOW_MURDERHOLE)) {
+        continue;
+      }
+      // Vignette recipe from BuildingRegistry (or defaults).
+      var vKey  = scene.vignette || null;
+      var vData = null;
+      if (vKey && typeof BuildingRegistry !== 'undefined' && BuildingRegistry.getVignette) {
+        vData = BuildingRegistry.getVignette(vKey);
+      }
+      var emoji = vData ? vData.emoji      : DEFAULT_EMOJI;
+      var scale = vData ? vData.scale      : DEFAULT_SCALE;
+      var glow  = vData ? vData.glow       : DEFAULT_GLOW;
+      var glowR = vData ? vData.glowRadius : DEFAULT_RADIUS;
+      // Per-tile cavity altitude (matches legacy WindowSprites ladder).
+      var bldgId = scene.building || null;
+      var bldg   = (bldgId && typeof BuildingRegistry !== 'undefined' && BuildingRegistry.get)
+                 ? BuildingRegistry.get(bldgId) : null;
+      // Per-tile cavity altitude. 2026-04-14 tweak: dropped every
+      // value by 0.25 world units so the vignette sits about half a
+      // bar lower on the SpatialDebug Y-ruler — the post-port
+      // sprites were reading too high (appeared to "float above" the
+      // glass slot from across the map) even though they were
+      // geometrically inside the cavity. The shift settles the
+      // emoji into the bottom half of the glass so it reads as
+      // "content on a counter / shelf behind the window" instead of
+      // "content floating mid-pane."
+      var wType  = bldg ? bldg.windowType : null;
+      var yAlt   = 0.025;                   // shop / tavern default (was 0.275)
+      if (wType === 'bay')  yAlt = 0.15;    // (was 0.40)
+      if (wType === 'slit') yAlt = 0.35;    // (was 0.60)
+      if (typeof TILES !== 'undefined') {
+        if (tile === TILES.WINDOW_ALCOVE)     yAlt = 0.05;   // (was 0.30)
+        if (tile === TILES.WINDOW_SHOP)       yAlt = -0.125; // (was 0.125)
+        if (tile === TILES.WINDOW_COMMERCIAL) yAlt = 0.875;  // (was 1.125)
+      }
+      // Billboard emission position: one tile inside the facade
+      // behind the glass. The instance is KEYED by the facade tile
+      // (fx,fy) so the raycaster's z-bypass resolves at the tile
+      // the ray actually hits, but the sprite emits at (sprX,sprY).
+      var sprX = fx + (scene.interiorStep ? scene.interiorStep.dx : 0);
+      var sprY = fy + (scene.interiorStep ? scene.interiorStep.dy : 0);
+      EmojiMount.registerAt(floorId, fx, fy, {
+        emoji:      emoji,
+        scale:      scale,
+        glow:       glow,
+        glowRadius: glowR,
+        anchor:     'cavity',
+        lift:       yAlt,
+        // Recess 1.5 — the z-threshold (perpDist + recess) must be
+        // STRICTLY greater than the sprite's distance for it to pass
+        // the `zBuffer[col] > dist` test in raycaster-sprites. The
+        // sprite emits at (facade + interiorStep) which is one tile
+        // deeper than the key (fx,fy), so spriteDist ≈ perpDist + 1.0.
+        // Recess 1.0 (what the retired zBypassMode='depth' hardcoded)
+        // sat EXACTLY at sprite distance — the strict-greater test
+        // failed on the glass-tile columns and the sprite only
+        // rendered on side columns that spilled past the tile's
+        // footprint, producing the "emoji floats on glass from far,
+        // vanishes up close" bug. 1.5 puts the threshold a half-tile
+        // past the sprite center so every column passes cleanly at
+        // every approach distance.
+        recess:     1.5,
+        noFogFade:  false,
+        // Hard render-distance cap. Shrubs and half-walls between the
+        // player and a facade don't write the z-buffer (they're
+        // freeform / transparent), so the vignette sprite would
+        // otherwise read through them from across the map. 10 tiles
+        // is just beyond the typical street-crossing sightline from
+        // Gleaner's Home to the Tavern — close enough to see the
+        // mug as you approach, far enough that the two-shrub gauntlet
+        // obscures it before that line opens up.
+        maxDist:    10,
+        sprX:       sprX,
+        sprY:       sprY
+      });
+    }
+  }
+
   // Last NPC speech capsule target (for cleanup when dialog closes)
   var _lastSpeechSpriteId = null;
 
@@ -3728,55 +3848,51 @@ var Game = (function () {
       }
     }
 
-    // ── Window tavern interior billboard sprites (🍺 in glass slot) ─
-    // Mirror of the DumpTruckSprites pattern above. Each WINDOW_TAVERN
-    // tile gets a warm amber glyph inside its eye-level glass cavity
-    // so the slot reads as "a lit tavern interior" instead of a blank
-    // amber pane. No groundLevel flag — the cavity center sits just
-    // below eye level on a 2.0-tall facade, so the default sprite
-    // placement lands inside the slot naturally.
+    // ── Window facade caches (glass filler + mullion + wallTexture) ─
+    // WindowSprites still owns the per-floor face bitmask cache and
+    // the building-keyed wallTexture/mullion maps that the raycaster
+    // reads for every column crossing a window tile. As of Phase 6 it
+    // no longer emits the interior billboard sprite — vignette
+    // emission has moved to EmojiMount (see registerAt block below).
+    // We call buildSprites purely for its side effects on those
+    // caches and ignore the returned array.
     if (typeof WindowSprites !== 'undefined') {
       var _wsFloorId = FloorManager.getCurrentFloorId ? FloorManager.getCurrentFloorId() : '0';
-      // Pass floorData.windowFaces (per-tile face override, §4.3)
-      // and floorData.windowScenes (vignette placement, §4.4). When
-      // windowScenes is present, vignettes are positioned one tile
-      // inside the building facade instead of at the glass tile — the
-      // depth gap makes the billboard read as interior content behind
-      // the mullion grid rather than a pictogram stamped on the glass.
-      var windowSprites = WindowSprites.buildSprites(
+      WindowSprites.buildSprites(
         _wsFloorId, floorData.grid, floorData.gridW, floorData.gridH,
         floorData.windowFaces || null,
         floorData.windowScenes || null
       );
       WindowSprites.animate(now);
-      for (var wsi = 0; wsi < windowSprites.length; wsi++) {
-        var wss = windowSprites[wsi];
-        _sprites.push({
-          x: wss.x,
-          y: wss.y,
-          emoji: wss.emoji,
-          emojiOverlay: wss.emojiOverlay || null,
-          scale: wss.scale,
-          bobY: wss.bobY || 0,
-          yAlt: wss.yAlt || 0,
-          glow: wss.glow || null,
-          glowRadius: wss.glowRadius || 0,
-          groundLevel: wss.groundLevel === true,
-          noFogFade: wss.noFogFade === true
-        });
-      }
     }
 
     // ── EmojiMount billboards (generic tile-mounted emoji tech) ─────
-    // Registered mounts (TERMINAL 💻 hologram in Phase 1, window
-    // vignettes in Phase 2, shop-shelf items beyond) emit billboard
-    // sprites the same way WindowSprites does. buildSprites() caches
-    // per-floor; animate() ticks bob/glint on the cached array in
-    // place so there's no per-frame allocation once the scene is
-    // warm.
+    // Registered mounts emit billboard sprites the same way the
+    // legacy WindowSprites/DumpTruckSprites pipelines did.
+    // buildSprites() caches per-floor; animate() ticks bob/glint on
+    // the cached array in place so there's no per-frame allocation
+    // once the scene is warm.
+    //
+    // Two classes of mount both flow through this one registry:
+    //   - TYPE mounts (TERMINAL 💻 hologram) — registered at module
+    //     load, applied to every tile of the matching kind.
+    //   - INSTANCE mounts (window vignettes 🍺/🗝️/🕯️/🎴) — registered
+    //     per (floorId, x, y) from floorData.windowScenes on floor
+    //     transition. Retires `zBypassMode: 'depth'`: the recess
+    //     knob on each instance mount drives z-bypass via the
+    //     raycaster's EmojiMount.getMountAtOrType path.
     if (typeof EmojiMount !== 'undefined') {
       var _emFloorId = (typeof FloorManager !== 'undefined' && FloorManager.getCurrentFloorId)
         ? FloorManager.getCurrentFloorId() : '0';
+      // Floor transition — drop stale instance mounts for the
+      // previous floor and replay windowScenes → registerAt for the
+      // current one. Idempotent: once _lastEmojiMountFloor matches,
+      // this block is skipped on subsequent frames.
+      if (_emFloorId !== _lastEmojiMountFloor) {
+        if (_lastEmojiMountFloor != null) EmojiMount.clearFloor(_lastEmojiMountFloor);
+        _registerWindowSceneMounts(_emFloorId, floorData);
+        _lastEmojiMountFloor = _emFloorId;
+      }
       var emojiSprites = EmojiMount.buildSprites(
         _emFloorId, floorData.grid, floorData.gridW, floorData.gridH
       );
@@ -3794,7 +3910,8 @@ var Game = (function () {
           glow: emm.glow || null,
           glowRadius: emm.glowRadius || 0,
           groundLevel: emm.groundLevel === true,
-          noFogFade: emm.noFogFade === true
+          noFogFade: emm.noFogFade === true,
+          maxDist: emm.maxDist || null
         });
       }
     }
