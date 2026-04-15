@@ -201,6 +201,29 @@ var Game = (function () {
   function init() {
     _canvas = document.getElementById('view-canvas');
 
+    // ?seed=LANTERN-DRAGON-SCAR-a7c3 URL-param handler. Decodes and stashes on
+    // window._pendingRunSeed for TitleScreen.deploy to consume. Invalid phrases
+    // fall back to a random seed with a console warning. See M1 in
+    // tools/short-roadmap.md.
+    if (typeof SeedPhrase !== 'undefined' && typeof window !== 'undefined' && window.location) {
+      try {
+        var qs = window.location.search || '';
+        var m = qs.match(/[?&]seed=([^&]+)/);
+        if (m) {
+          var phrase = decodeURIComponent(m[1]);
+          var decoded = SeedPhrase.decode(phrase);
+          if (decoded != null) {
+            window._pendingRunSeed = decoded;
+            console.log('[Game.init] ?seed= accepted: ' + phrase + ' → 0x' + decoded.toString(16));
+          } else {
+            console.warn('[Game.init] ?seed= phrase did not decode: ' + phrase + ' (random seed will be used)');
+          }
+        }
+      } catch (e) {
+        console.warn('[Game.init] ?seed= parse error', e);
+      }
+    }
+
     // Wire shared helpers module
     GameActions.init({ canvas: _canvas, gateUnlocked: _gateUnlocked });
 
@@ -985,22 +1008,10 @@ var Game = (function () {
         );
       }
 
-      // Equip starting class item if nothing equipped yet
-      if (_ps.equipped[0] === null && _ps.avatarName) {
-        var _startItems = {
-          'Blade':    { emoji: '\uD83D\uDDE1\uFE0F', name: 'Iron Sword',    subtype: 'melee',   stat: 'str',     value: 2 },
-          'Ranger':   { emoji: '\uD83C\uDFF9',       name: 'Short Bow',     subtype: 'ranged',  stat: 'dex',     value: 2 },
-          'Shadow':   { emoji: '\uD83D\uDCA8',       name: 'Smoke Bomb',    subtype: 'stealth', stat: 'stealth', value: 2 },
-          'Sentinel': { emoji: '\uD83D\uDEE1\uFE0F', name: 'Tower Shield',  subtype: 'shield',  stat: 'hp',      value: 2 },
-          'Seer':     { emoji: '\uD83D\uDD2E',       name: 'Focus Crystal', subtype: 'focus',   stat: 'energy',  value: 2 },
-          'Wildcard': { emoji: '\uD83C\uDCCF',       name: 'Lucky Card',    subtype: 'wild',    stat: 'random',  value: 2 }
-        };
-        var _si = _startItems[_ps.avatarName];
-        if (_si) {
-          _ps.equipped[0] = _si;
-          if (typeof QuickBar !== 'undefined' && QuickBar.refresh) QuickBar.refresh();
-        }
-      }
+      // Equip starting class item — only on a genuine fresh run, never
+      // on resume-from-save. See _equipClassStarterItem for the guard
+      // rationale (was incorrectly running on loads and re-equipping
+      // slot 0 whenever the player had intentionally cleared it).
 
       // Delay HUD reveal — let the player absorb the 3D viewport first.
       // HUD elements slide in after a brief beat.
@@ -1119,7 +1130,70 @@ var Game = (function () {
 
   // ── Deferred gameplay init ────────────────────────────────────────
 
+  /**
+   * Equip the starting class item in quick-slot 0.
+   *
+   * Called EXACTLY once per fresh run from _seedFreshRun. Never on
+   * resume (the serialized equipped[] is the source of truth) and
+   * never on retry (Player.reset clears equipped and this re-seeds).
+   */
+  function _equipClassStarterItem(ps) {
+    if (!ps || !ps.avatarName) return;
+    var startItems = {
+      'Blade':    { emoji: '\uD83D\uDDE1\uFE0F', name: 'Iron Sword',    subtype: 'melee',   stat: 'str',     value: 2 },
+      'Ranger':   { emoji: '\uD83C\uDFF9',       name: 'Short Bow',     subtype: 'ranged',  stat: 'dex',     value: 2 },
+      'Shadow':   { emoji: '\uD83D\uDCA8',       name: 'Smoke Bomb',    subtype: 'stealth', stat: 'stealth', value: 2 },
+      'Sentinel': { emoji: '\uD83D\uDEE1\uFE0F', name: 'Tower Shield',  subtype: 'shield',  stat: 'hp',      value: 2 },
+      'Seer':     { emoji: '\uD83D\uDD2E',       name: 'Focus Crystal', subtype: 'focus',   stat: 'energy',  value: 2 },
+      'Wildcard': { emoji: '\uD83C\uDCCF',       name: 'Lucky Card',    subtype: 'wild',    stat: 'random',  value: 2 }
+    };
+    var item = startItems[ps.avatarName];
+    if (!item) return;
+    if (ps.equipped[0] !== null) return; // respect prior state
+    ps.equipped[0] = item;
+    if (typeof QuickBar !== 'undefined' && QuickBar.refresh) QuickBar.refresh();
+  }
+
+  /**
+   * Seed all fresh-run-only state. Called ONCE per new run from the
+   * fresh-deploy branch of _initGameplay. Never called on resume or
+   * retry. Modules here are destructive and MUST NOT be safe to
+   * re-run over an already-populated world.
+   *
+   *   1. CardSystem.seedStarter  — adds starter deck, 15g, 16 silk
+   *                                spiders, 2 trap kits into bag
+   *   2. _equipClassStarterItem  — slot-0 class item from avatar
+   *   3. Salvage.reset           — clears salvage ledger
+   *   4. WorldItems.init         — clears walk-over items
+   *   5. SessionStats.reset      — zeroes run-scoped stats
+   *   6. MorningReport.reset     — clears hero-run dedupe window
+   */
+  function _seedFreshRun(ps) {
+    if (typeof CardSystem !== 'undefined' && CardSystem.seedStarter) {
+      CardSystem.seedStarter();
+    }
+    _equipClassStarterItem(ps);
+    if (typeof Salvage !== 'undefined') Salvage.reset();
+    if (typeof WorldItems !== 'undefined') WorldItems.init();
+    if (typeof SessionStats !== 'undefined') SessionStats.reset();
+    if (typeof MorningReport !== 'undefined') MorningReport.reset();
+  }
+
   function _initGameplay() {
+    // ── Resume handshake ──────────────────────────────────────────
+    // TitleScreen._loadSelectedSlot calls SaveState.setResuming(slotId)
+    // after populating all subsystems from the save blob. We consume
+    // the flag exactly once here; a truthy return means "skip fresh-
+    // run seeding". The flag auto-clears, so retry-after-death paths
+    // behave as fresh runs unless the player explicitly loads again.
+    var _resumingSlot = (typeof SaveState !== 'undefined' && SaveState.consumeResuming)
+      ? SaveState.consumeResuming()
+      : null;
+    var _loadedFromSave = !!_resumingSlot;
+    if (_loadedFromSave) {
+      console.log('[Game] Resuming run from slot "' + _resumingSlot + '"');
+    }
+
     // Only init gameplay-specific modules once (or re-init on retry)
     Minimap.init(document.getElementById('minimap'));
     HUD.init();
@@ -1130,6 +1204,8 @@ var Game = (function () {
     // has access to DungeonSchedule for context-aware messaging.
     HUD.setOnTierCross(_onReadinessTierCross);
 
+    // Registry load only — starter inventory is seeded via
+    // _seedFreshRun below (and ONLY on fresh runs).
     CardSystem.init();
     // Refresh status bar now that CardSystem has the starting hand/deck
     if (typeof StatusBar !== 'undefined') { StatusBar.updateDeck(); StatusBar.updateBag(); }
@@ -1476,7 +1552,7 @@ var Game = (function () {
         if (depth >= 3 && typeof CardAuthority !== 'undefined') {
           var hand = CardAuthority.getHand();
           if (hand.length > 0) {
-            var confiscateIdx = Math.floor(Math.random() * hand.length);
+            var confiscateIdx = SeededRNG.randInt(0, hand.length - 1);
             var taken = CardAuthority.removeFromHand(confiscateIdx);
             if (taken && typeof Toast !== 'undefined') {
               var cardName = taken.name || taken.id || 'a card';
@@ -1701,42 +1777,94 @@ var Game = (function () {
         // minimap marker stays stuck at the previous floor's coordinates
         // and renders at a garbage tile on the new grid.
         _updateQuestTarget();
+
+        // ── M2.4 floor-transition autosave ─────────────────────────
+        // Persist after every successful transition. This captures the
+        // new floor id, updated explored bitmap, any crates touched on
+        // the old floor, and (via CardAuthority / Player live state)
+        // any inventory/hp drift. Skip on the very first floor load —
+        // _previousFloorId is null there, and that path runs through
+        // _generateAndWire() directly (not FloorTransition).
+        if (_previousFloorId && typeof SaveState !== 'undefined' && SaveState.autosave) {
+          try { SaveState.autosave(); }
+          catch (e) { console.warn('[Game] autosave after transition failed:', e); }
+        }
       }
     });
 
-    // Initialize starting floor — Floor 0 (exterior approach)
-    var startFloorId = '0';
-    FloorManager.setFloor(startFloorId);
-    Minimap.pushFloor(startFloorId);
-    Minimap.enterFloor(startFloorId, 'The Approach');
+    // ── M2.5: Load-from-save branch ────────────────────────────────
+    // _loadedFromSave was captured+consumed at the top of _initGameplay.
+    // When true: FloorManager has the restored currentFloor, Minimap has
+    // the restored stack, and CardAuthority/Player/SessionStats/etc.
+    // hold serialized state. We just need to regenerate the current
+    // floor's transient visuals and fire arrival hooks. Skip the
+    // fresh-game scaffolding.
+    var startFloorId;
+    if (_loadedFromSave) {
+      startFloorId = FloorManager.getFloor();
+      console.log('[Game] Resuming from save at floor ' + startFloorId);
+    } else {
+      // Initialize starting floor — Floor 0 (exterior approach)
+      startFloorId = '0';
+      FloorManager.setFloor(startFloorId);
+      Minimap.pushFloor(startFloorId);
+      Minimap.enterFloor(startFloorId, 'The Approach');
+    }
 
-    // Generate Floor 0 and wire movement callbacks
+    // Generate current floor and wire movement callbacks.
+    // On load, this regenerates the floor from its authored grid + diff,
+    // but MC.init inside _generateAndWire uses the floor's authored spawn
+    // point — we override to the serialized player position below.
     _generateAndWire();
 
-    // Start overworld music for the initial floor (title music persists)
+    if (_loadedFromSave) {
+      var ps = Player.state();
+      if (typeof MC !== 'undefined' && MC.setPosition &&
+          typeof ps.x === 'number' && typeof ps.y === 'number') {
+        MC.setPosition(ps.x, ps.y, ps.dir);
+        if (typeof Minimap !== 'undefined' && Minimap.reveal) {
+          Minimap.reveal(ps.x, ps.y);
+        }
+      }
+    }
+
+    // Start overworld music for the current floor (title music persists)
     if (typeof AudioMusicManager !== 'undefined') {
       AudioMusicManager.onFloorChange(startFloorId);
     }
 
-    // Trigger per-floor arrival hooks for the starting floor (NPC spawns,
-    // ambient barks, gate logic). _onFloorArrive is normally fired by the
-    // FloorTransition callback, but the very first floor is loaded directly
-    // — not via transition — so it must be called explicitly here.
+    // Trigger per-floor arrival hooks (NPC spawns, ambient barks, gate
+    // logic). _onFloorArrive is normally fired by the FloorTransition
+    // callback, but the initial/resumed floor is loaded directly — not
+    // via transition — so it must be called explicitly here.
     _onFloorArrive(startFloorId);
 
-    // Draw initial card hand
-    CardAuthority.drawHand();
-    HUD.updateCards(CardAuthority.getHand());
-    var _initHand = CardAuthority.getHand();
-    if (_initHand.length > 0 && typeof Toast !== 'undefined') {
-      Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
+    // ── Fresh-run seeding ──────────────────────────────────────────
+    // Everything below the "fresh-deploy only" banner gets handled by
+    // the centralized _seedFreshRun helper — starter deck, 15g,
+    // starter bag consumables, class-item equip, Salvage/WorldItems/
+    // SessionStats/MorningReport resets, and the initial hand draw.
+    //
+    // Resume path does none of this: the blob already captured it.
+    if (!_loadedFromSave) {
+      _seedFreshRun(Player.state());
+      CardAuthority.drawHand();
+      HUD.updateCards(CardAuthority.getHand());
+      var _initHand = CardAuthority.getHand();
+      if (_initHand.length > 0 && typeof Toast !== 'undefined') {
+        Toast.show('\uD83C\uDCA0 Drew ' + _initHand.length + ' cards', 'dim');
+      }
+    } else {
+      // Refresh HUD against the already-restored hand
+      HUD.updateCards(CardAuthority.getHand());
     }
 
     // Play deploy dropoff monologue (player was just dropped off by the truck).
+    // Skip on load-from-save — the player has already played past deploy.
     // IntroWalk (cursor-hijack tutorial) disabled for jam — module preserved
     // in engine/intro-walk.js for post-jam re-enable. To restore, uncomment
     // the script tag in index.html and call _startIntroWalk() in onComplete.
-    if (typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
+    if (!_loadedFromSave && typeof MonologuePeek !== 'undefined' && MonologuePeek.play) {
       MonologuePeek.play('deploy_dropoff');
     }
 
@@ -1770,17 +1898,10 @@ var Game = (function () {
       })(i);
     }
 
-    // Reset salvage state for new run
-    if (typeof Salvage !== 'undefined') Salvage.reset();
-
-    // Reset walk-over ground items for new run
-    WorldItems.init();
-
-    // Reset stats for new run
-    SessionStats.reset();
-
-    // Reset morning report dedup for new run
-    if (typeof MorningReport !== 'undefined') MorningReport.reset();
+    // (Salvage.reset / WorldItems.init / SessionStats.reset /
+    // MorningReport.reset are handled inside _seedFreshRun above for
+    // fresh runs. On resume, they must NOT re-run — the save blob
+    // already restored these subsystems.)
 
     _gameplayReady = true;
     console.log('[Game] Gameplay initialized — WASD to move, Q/E turn, 1-5 for cards');
@@ -4019,6 +4140,15 @@ var Game = (function () {
     // DOM sprite overlay (CSS flame/particle sprites anchored in world)
     if (typeof SpriteLayer !== 'undefined' && SpriteLayer.count() > 0) {
       SpriteLayer.tick(renderPos.x, renderPos.y, renderPos.angle + p.lookOffset + shakeOffset);
+    }
+
+    // Light orbs — additive halation over fire sources. Runs after
+    // SpriteLayer so gaze (bonfire/hearth) screen positions are current.
+    if (typeof LightOrbs !== 'undefined' && LightOrbs.render) {
+      LightOrbs.tick(frameDt);
+      LightOrbs.render(ctx, _canvas.width, _canvas.height,
+                       renderPos.x, renderPos.y,
+                       renderPos.angle + p.lookOffset + shakeOffset);
     }
 
     // Cobweb rendering (after raycaster, before minimap)

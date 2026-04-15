@@ -96,36 +96,55 @@ var CardSystem = (function () {
    * Load data/cards.json registry. Seed CardAuthority's backup deck
    * from cards flagged { starterDeck: true }.
    */
+  /**
+   * Idempotent registry init — safe to call on every GAMEPLAY enter,
+   * including after loads. Must NEVER mutate CardAuthority or Player.
+   *
+   * Starter inventory is explicitly NOT seeded here — see seedStarter().
+   * Conflating the two caused the "duplicate gold / duplicate bag items
+   * on resume" bug; keep them separate.
+   */
   function init() {
     _loadRegistry();
+  }
 
-    // Seed CardAuthority backup with starter deck if available
-    if (typeof CardAuthority !== 'undefined') {
-      var starters = [];
-      for (var i = 0; i < _registry.length; i++) {
-        if (_registry[i].starterDeck) {
-          starters.push(_registry[i]);
-        }
-      }
-      if (starters.length === 0) starters = _fallbackRegistry();
-      for (var s = 0; s < starters.length; s++) {
-        CardAuthority.addToBackup(starters[s]);
-      }
-      CardAuthority.resetDeck();
+  /**
+   * Destructive fresh-run seed — adds starter deck, 15g, and starter
+   * bag consumables to CardAuthority. Call EXACTLY once per new run,
+   * from the fresh-deploy branch of Game._initGameplay. Never from a
+   * load path or a retry path (Player.reset() / CardAuthority state
+   * from the save slot is the source of truth there).
+   */
+  function seedStarter() {
+    if (typeof CardAuthority === 'undefined') return;
 
-      // Starter gold — 15g flat for all classes.
-      // Class multiplier hook reserved for future per-class tuning.
-      CardAuthority.addGold(15);
+    if (!_loaded) _loadRegistry();
 
-      // Phase 2: Seed starter embellishment consumables into bag
-      // 16 Silk Spiders + 2 Trap Kits — full starter loadout.
-      // Each addToBag call gets a fresh object literal so bag slots are independent.
-      for (var si = 0; si < 16; si++) {
-        CardAuthority.addToBag({ id: 'ITM-115', name: 'Silk Spider', emoji: '\uD83D\uDD77\uFE0F', type: 'consumable', subtype: 'supply' });
+    // Starter deck — cards flagged { starterDeck: true } in cards.json
+    var starters = [];
+    for (var i = 0; i < _registry.length; i++) {
+      if (_registry[i].starterDeck) {
+        starters.push(_registry[i]);
       }
-      CardAuthority.addToBag({ id: 'ITM-116', name: 'Trap Kit', emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' });
-      CardAuthority.addToBag({ id: 'ITM-116', name: 'Trap Kit', emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' });
     }
+    if (starters.length === 0) starters = _fallbackRegistry();
+    for (var s = 0; s < starters.length; s++) {
+      CardAuthority.addToBackup(starters[s]);
+    }
+    CardAuthority.resetDeck();
+
+    // Starter gold — 15g flat for all classes.
+    // Class multiplier hook reserved for future per-class tuning.
+    CardAuthority.addGold(15);
+
+    // Starter embellishment consumables — 16 Silk Spiders + 2 Trap Kits.
+    // Each addToBag call gets a fresh object literal so bag slots are
+    // independent references (no shared-state aliasing).
+    for (var si = 0; si < 16; si++) {
+      CardAuthority.addToBag({ id: 'ITM-115', name: 'Silk Spider', emoji: '\uD83D\uDD77\uFE0F', type: 'consumable', subtype: 'supply' });
+    }
+    CardAuthority.addToBag({ id: 'ITM-116', name: 'Trap Kit', emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' });
+    CardAuthority.addToBag({ id: 'ITM-116', name: 'Trap Kit', emoji: '\uD83E\uDE9C', type: 'consumable', subtype: 'supply' });
   }
 
   // ── Registry queries (the real API) ───────────────────────────────
@@ -164,7 +183,8 @@ var CardSystem = (function () {
 
   return {
     // ── Lifecycle ──
-    init: init,
+    init:         init,
+    seedStarter:  seedStarter,
 
     // ── Registry queries ──
     getById:        getById,

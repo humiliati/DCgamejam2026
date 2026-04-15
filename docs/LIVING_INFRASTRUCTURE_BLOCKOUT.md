@@ -105,6 +105,8 @@ Each biome that uses a new tile needs height + texture entries in `floor-manager
 
 ## 2. Building Interior Templates
 
+**Authoring note.** The templates below are source-of-truth *shapes*, but the day-to-day cut happens inside the **Blockout Visualizer** (`tools/blockout-visualizer.html`) — not by editing `engine/floor-blockout-*.js` by hand. Paint / rect / lasso / stamp the interior, set spawn + door targets via the Meta panel (`M`), validate, then `Ctrl+S` writes `GRID`, `SPAWN`, and `doorTargets` back into the floor-builder file. For batch work or agent drivers, use `window.BO.run({action,...})` in the browser or `node tools/blockout-cli.js <action>`. See `tools/BO-V README.md` — particularly the "What this tool is / isn't" and "Workflows for AI agents" sections — before starting a slice. The **world-designer → BO-V seed payload** flow (planned in `tools/short-roadmap.md`) will eventually scaffold a new building node with biome defaults + pinned door targets and open BO-V on the seeded grid; until then, pick the closest existing template below, duplicate, and edit in BO-V.
+
 New buildings follow standardized templates based on existing interior patterns. All interiors use the same IIFE floor-builder pattern as existing blockouts.
 
 ### 2.1 Template: Shop (16×12)

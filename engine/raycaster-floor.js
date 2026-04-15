@@ -167,6 +167,16 @@ var RaycasterFloor = (function () {
 
     var bloodFloorId = _s ? _s.bloodFloorId() : null;
 
+    // ── Dynamic flickering light contribution (per-pixel add) ──────
+    // Pull the per-frame snapshot from Lighting. Each entry carries its
+    // flicker-adjusted peak, warm RGB, radius, shape, and direction.
+    // The inner loop does sq-dist early-out first so most pixels touch
+    // at most one or two sources even in a crowded torch corridor.
+    var _dynLights = (typeof Lighting !== 'undefined' && Lighting.getFlickerLights)
+      ? Lighting.getFlickerLights((typeof performance !== 'undefined' ? performance.now() : Date.now()))
+      : null;
+    var _nDyn = _dynLights ? _dynLights.length : 0;
+
     for (var row = 0; row < floorH; row++) {
       // Screen Y (actual pixel row on screen)
       var screenY = halfHFloor + row;
@@ -310,6 +320,53 @@ var RaycasterFloor = (function () {
           r = r * invFog + fr * rowFog;
           g = g * invFog + fg * rowFog;
           b = b * invFog + fb * rowFog;
+        }
+
+        // ── Dynamic flickering lights: cone (torch), ring (bonfire),
+        //    disc (hearth/lantern). Additive warm overlay per source
+        //    with per-shape falloff. Fog-attenuated so distant lights
+        //    don't punch through the fog wash.
+        if (_nDyn > 0) {
+          var _lFade = invFog;  // lights dim into fog
+          for (var _li = 0; _li < _nDyn; _li++) {
+            var _L = _dynLights[_li];
+            var _ldx = floorX - _L.wx;
+            var _ldy = floorY - _L.wy;
+            var _ldSq = _ldx * _ldx + _ldy * _ldy;
+            var _lRsq = _L.radius * _L.radius;
+            if (_ldSq >= _lRsq) continue;
+            var _ld = Math.sqrt(_ldSq);
+            var _shapeF;
+            if (_L.shape === 'cone') {
+              // Dot product with facing direction, biased so the cone
+              // has soft shoulders and doesn't cut off abruptly.
+              var _invLd = (_ld > 1e-4) ? 1 / _ld : 0;
+              var _dot = (_ldx * _L.dx + _ldy * _L.dy) * _invLd;
+              var _coneK = (_dot + 0.3) / 1.3;  // bias 0.3 rad half-shoulder
+              if (_coneK <= 0) continue;
+              if (_coneK > 1) _coneK = 1;
+              var _rfall = 1 - _ld / _L.radius;
+              _shapeF = _rfall * _rfall * _coneK;
+            } else if (_L.shape === 'ring') {
+              // Annulus peak at 0.65 * radius, band width 0.5 * radius.
+              var _ringC = _L.radius * 0.65;
+              var _ringW = _L.radius * 0.5;
+              var _dBand = Math.abs(_ld - _ringC) / _ringW;
+              if (_dBand >= 1) continue;
+              _shapeF = (1 - _dBand) * (1 - _dBand);
+            } else {
+              var _rf2 = 1 - _ld / _L.radius;
+              _shapeF = _rf2 * _rf2;
+            }
+            var _add = _L.peakA * _shapeF * _lFade;
+            if (_add < 0.01) continue;
+            r += _L.r * _add;
+            g += _L.g * _add;
+            b += _L.b * _add;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+          }
         }
 
         var pIdx2 = rowOffset + col * 4;

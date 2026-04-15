@@ -50,10 +50,8 @@ var HeroRun = (function() {
    * @returns {number} Random value
    */
   function random(min, max) {
-    var r = (typeof SeededRNG !== 'undefined' && SeededRNG && typeof SeededRNG.random === 'function')
-      ? SeededRNG.random()
-      : Math.random();
-    return min + (r * (max - min));
+    // M1: SeededRNG is guaranteed present (Layer 0). No Math.random fallback.
+    return min + (SeededRNG.random() * (max - min));
   }
 
   /**

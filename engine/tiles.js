@@ -614,7 +614,8 @@ var TILES = (function () {
            tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
            tile === T.TUNNEL_RIB || tile === T.TUNNEL_WALL ||
-           tile === T.PORTHOLE_OCEAN;
+           tile === T.PORTHOLE_OCEAN ||
+           tile === T.TORCH_LIT || tile === T.TORCH_UNLIT;
   };
 
   /** Check if tile is any window type (facade glass + dungeon apertures) */

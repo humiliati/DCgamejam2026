@@ -24,6 +24,19 @@ But the deeper you go, the stranger the evidence. The hero isn't just clearing m
 
 ### Running it
 
+open powershell, 
+type cd "C:\...\DCgamejam2026" hit enter
+type node tools/extract-floors.js hit enter
+type python -m http.server 8080 hit enter
+open browser, paste http://localhost:8080/index.html into field hit enter  
+
+cd <project-root>
+node tools/extract-floors.js         # rebuilds tools/*.json side-cars
+python -m http.server 8080           # serve locally (fetch needs HTTP)
+```
+Open `http://localhost:8080/index.html`
+Open `http://localhost:8080/test-harness.html`.
+
 For development: run `python3 serve.py` or `node serve.js` from the game directory, then open `http://localhost:8080`.
 
 For quick testing: open `index.html` directly in a browser (audio will not work on `file://` due to CORS -- use the local server).

@@ -553,6 +553,16 @@ var TextureAtlas = (function () {
       tipR: 255,   tipG: 240,   tipB: 200        // White-yellow flame tip
     });
 
+    // Unlit torch — charred bracket stub, no flame. Sooty iron + black tip.
+    // Same silhouette as decor_torch but the flame region is replaced with
+    // a small charred wick stub so the bracket still reads as a torch,
+    // just extinguished. Consumer: TORCH_UNLIT wallDecor.
+    _genTorchUnlit('decor_torch_unlit', {
+      bracketR: 48, bracketG: 44, bracketB: 40,  // Sooty iron
+      stubR: 35,  stubG: 28,  stubB: 22,         // Charred wick
+      ashR:  55,  ashG:  48,  ashB:  42          // Ash highlight
+    });
+
     // Hearth fire — flame + dragon silhouette for porthole cavity
     // (legacy procedural texture; used by the original step-fill lip
     // path and the wall-decor billboard system)
@@ -4147,6 +4157,60 @@ var TextureAtlas = (function () {
       }
 
       return { r: 0, g: 0, b: 0, a: 0 }; // transparent
+    });
+  }
+
+  /** Unlit torch — bracket silhouette identical to decor_torch but the
+   *  flame region becomes a small charred wick stub. Keeps the same anchor
+   *  layout so TORCH_UNLIT tiles can swap spriteId without re-tuning
+   *  anchorU/anchorV/scale. */
+  function _genTorchUnlit(id, p) {
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var S = DECOR_SIZE;
+      var cx = S / 2;
+
+      // ── Wick stub (where the flame used to be) ──
+      // Tiny charred nub at the top of the bracket arm — 3px tall,
+      // 2px wide centered. Reads as "burned down to a stump."
+      var stubTop = Math.floor(S * 0.48);
+      var stubBot = Math.floor(S * 0.6);
+      if (y >= stubTop && y < stubBot && Math.abs(x - cx) <= 1) {
+        var sn = (_hash(x + 5600, y + 5700) - 0.5) * 12;
+        // Ash flecks on the very top of the stub
+        var isTop = y <= stubTop + 1;
+        return {
+          r: _clamp((isTop ? p.ashR : p.stubR) + sn),
+          g: _clamp((isTop ? p.ashG : p.stubG) + sn * 0.7),
+          b: _clamp((isTop ? p.ashB : p.stubB) + sn * 0.5),
+          a: 255
+        };
+      }
+
+      // ── Bracket region (bottom 40%) — match decor_torch layout ──
+      var bracketTop = Math.floor(S * 0.6);
+      if (y < bracketTop) return { r: 0, g: 0, b: 0, a: 0 };
+      var by = y - bracketTop;
+      var bh = S - bracketTop;
+
+      // Vertical stem: center column 2px wide
+      if (Math.abs(x - cx) <= 1) {
+        var bn = (_hash(x + 5800, y + 5900) - 0.5) * 8;
+        return {
+          r: _clamp(p.bracketR + bn), g: _clamp(p.bracketG + bn),
+          b: _clamp(p.bracketB + bn), a: 255
+        };
+      }
+
+      // Horizontal arm: bottom 2 rows, extends 3px each side from center
+      if (by >= bh - 2 && Math.abs(x - cx) <= 3) {
+        var an = (_hash(x + 6000, y + 6100) - 0.5) * 6;
+        return {
+          r: _clamp(p.bracketR - 5 + an), g: _clamp(p.bracketG - 5 + an),
+          b: _clamp(p.bracketB - 5 + an), a: 255
+        };
+      }
+
+      return { r: 0, g: 0, b: 0, a: 0 };
     });
   }
 

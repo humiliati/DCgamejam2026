@@ -295,6 +295,15 @@ var BedPeek = (function () {
     }
 
     _isSleeping = false;
+
+    // ── M2.4 checkpoint autosave ───────────────────────────────────
+    // Bed is a respawn anchor (Gleaner's Home). Persist after the
+    // day advances + debuffs clear so a crash post-sleep preserves
+    // the well-rested state.
+    if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+      try { SaveState.autosave(); }
+      catch (e) { console.warn('[BedPeek] autosave after sleep failed:', e); }
+    }
   }
 
   // ── Update Loop ─────────────────────────────────────────────

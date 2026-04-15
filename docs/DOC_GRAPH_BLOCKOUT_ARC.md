@@ -76,6 +76,14 @@ flowchart LR
         CRG["code-review-graph MCP<br/><i>detect_changes, query_graph,<br/>get_impact_radius</i>"]:::meta
     end
 
+    %% ============ TOOLING ============
+    subgraph TOOL["Tooling — the grid-cut surface"]
+        direction TB
+        BOV["Blockout Visualizer (BO-V)<br/><i>tools/blockout-visualizer.html<br/>window.BO.run + tools/blockout-cli.js</i>"]:::tool
+        BOVR["tools/BO-V README.md<br/><i>agent workflows, save patcher,<br/>meta panel, help modal</i>"]:::tool
+        BVR2["BLOCKOUT_VISUALIZER_ROADMAPv2<br/><i>Tier plan + short-roadmap.md</i>"]:::tool
+    end
+
     %% ============ EDGES: prereq -> center ============
     LIB --> BRP
     MGT --> BRP
@@ -127,6 +135,15 @@ flowchart LR
     CRG -.-> C1
     TOC -.-> BRP
 
+    %% ============ EDGES: tooling ties ============
+    BOV --> BRP
+    BOVR -.-> BOV
+    BVR2 -.-> BOV
+    BOV -.-> C5
+    BOV -.-> C4
+    SPC -.-> BOV
+    DAR -.-> BOV
+
     %% ============ STYLES ============
     classDef center fill:#fff2cc,stroke:#b58900,stroke-width:3px,color:#000
     classDef prereq fill:#dbeafe,stroke:#1e40af,stroke-width:1px,color:#000
@@ -134,6 +151,7 @@ flowchart LR
     classDef code fill:#f3e8ff,stroke:#6b21a8,stroke-width:1px,color:#000
     classDef down fill:#ffe4e6,stroke:#9f1239,stroke-width:1px,color:#000
     classDef meta fill:#f1f5f9,stroke:#475569,stroke-width:1px,color:#000
+    classDef tool fill:#fff7ed,stroke:#c2410c,stroke-width:1px,color:#000
 ```
 
 ---
@@ -144,6 +162,7 @@ flowchart LR
 2. **Prereqs** (the blue cluster) — in order: `Biome Plan.html` → `LIVING_INFRASTRUCTURE_BLOCKOUT` → `MINIGAME_TILES` → `BLOCKOUT_ALIGNMENT`. Read `ACT2_NARRATIVE_OUTLINE` + `STREET_CHRONICLES` lightly for narrative intent.
 3. **Spec** (the green cluster) — pull only the ones your slice touches. If you're on doors, it's `DOOR_ARCHITECTURE_ROADMAP` + `SPATIAL_CONTRACTS` + `RAYCASTER_EXTRACTION_ROADMAP`. If you're on trapdoors, swap in `TRAPDOOR_ARCHITECTURE_ROADMAP`.
 4. **Before opening code** — hit `code-review-graph` MCP: `semantic_search_nodes` for the target subsystem, then `get_impact_radius` on functions you intend to edit. Cheaper than grep + safer than blind edits.
+4.5. **Grid edits go through the tool, not by hand.** Open `tools/blockout-visualizer.html`, press `?` for the in-tool help, and read `tools/BO-V README.md` — the "What this tool is / isn't" and "Workflows for AI agents" sections. `Ctrl+S` patches `GRID`, `SPAWN`, and `doorTargets` in place. For headless edits, use `window.BO.run({action,...})` in the browser or `node tools/blockout-cli.js <action>`. Never hand-edit `engine/floor-blockout-*.js` arrays.
 5. **Implement** — the purple cluster shows which engine files the blockout work generally touches. Not all slices touch all six.
 6. **Verify** — `TEST_HARNESS_ROADMAP` + `PLAYTEST_AND_BLOCKOUT_PROCEDURE`. Use `SPATIAL_DEBUG_OVERLAY_VISION` patterns if you add overlays.
 7. **Handoff** — update `DEBUG_NOTES_SCREENER` and flag any downstream-cluster docs (red) that now need a revision pass.
@@ -159,6 +178,7 @@ flowchart LR
 | Engine files | purple | Leaf nodes — the actual code |
 | Downstream | red | Work that unblocks (or breaks) when this lands |
 | Meta / verification | grey | Testing, overlays, procedure, coordination |
+| Tooling | orange | Editor + CLI + agent API that produces the grid |
 | **BLOCKOUT_REFRESH_PLAN** | **yellow** | **The arc this graph is centered on** |
 
 ---

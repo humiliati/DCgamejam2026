@@ -99,29 +99,145 @@
       gap: 6px;
       flex-wrap: wrap;
       margin-top: 8px;
+      max-height: 168px;           /* ≈ 3 rows of chips before scroll */
+      overflow-y: auto;
+      padding: 4px;
+      border: 1px dashed rgba(42,252,224,0.18);
+      border-radius: 3px;
+      background: rgba(0,0,0,0.25);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(42,252,224,0.5) rgba(0,0,0,0.35);
     }
+    .chips::-webkit-scrollbar       { width: 8px; }
+    .chips::-webkit-scrollbar-track { background: rgba(0,0,0,0.35); }
+    .chips::-webkit-scrollbar-thumb { background: rgba(42,252,224,0.5); border-radius: 4px; }
+    .chips .chip-group-label {
+      flex-basis: 100%;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(42,252,224,0.6);
+      text-transform: uppercase;
+      margin: 4px 0 2px;
+      border-bottom: 1px dotted rgba(42,252,224,0.15);
+      padding-bottom: 2px;
+    }
+    .chips .chip-group-label:first-child { margin-top: 0; }
     .chip {
       background: rgba(42,252,224,0.08);
       border: 1px solid rgba(42,252,224,0.5);
       color: #2afce0;
-      padding: 6px 10px;
+      padding: 4px 4px 5px;
       font-size: 11px;
       font-family: 'Courier New', monospace;
       cursor: pointer;
       letter-spacing: 1px;
       transition: all 0.15s;
+      width: 84px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 3px;
     }
     .chip:hover {
       background: rgba(252,80,198,0.25);
       border-color: #fc50c6;
       color: #fff;
     }
+    .chip.chip-selected {
+      background: rgba(252,255,26,0.18);
+      border-color: #fcff1a;
+      color: #fcff1a;
+      box-shadow: 0 0 10px rgba(252,255,26,0.45);
+    }
     .chip small {
       display: block;
       font-size: 9px;
       color: #888;
-      margin-top: 2px;
       letter-spacing: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chip .chip-id {
+      font-weight: bold;
+      font-size: 11px;
+    }
+    .chip canvas {
+      display: block;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto;
+      background: #0a0a10;
+      border: 1px solid rgba(42,252,224,0.15);
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .chip canvas.chip-thumb-missing {
+      background: repeating-linear-gradient(45deg,
+        rgba(252,80,198,0.08) 0 6px, rgba(0,0,0,0.4) 6px 12px);
+    }
+    .floor-filter {
+      width: 100%;
+      margin-top: 10px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.35);
+      color: #e7e2ff;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      box-sizing: border-box;
+    }
+    .floor-filter:focus {
+      outline: none;
+      border-color: #2afce0;
+      box-shadow: 0 0 8px rgba(42,252,224,0.4);
+    }
+    .floor-source-badge {
+      font-size: 9px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(42,252,224,0.65);
+      margin-top: 6px;
+    }
+    .floor-source-badge.stale { color: #fc50c6; }
+    .floor-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .floor-controls .floor-filter { margin-top: 0; flex: 1; }
+    .floor-refresh {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      background: rgba(42,252,224,0.12);
+      border: 1px solid rgba(42,252,224,0.5);
+      color: #2afce0;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .floor-refresh:hover {
+      background: rgba(252,80,198,0.25);
+      border-color: #fc50c6;
+      color: #fff;
+    }
+    .floor-refresh:disabled {
+      opacity: 0.4;
+      cursor: wait;
+    }
+    .chip[draggable="true"]:active { cursor: grabbing; }
+    .floor-field-wrap {
+      position: relative;
+    }
+    .floor-field-wrap.drop-hover input {
+      border-color: #fcff1a;
+      box-shadow: 0 0 12px rgba(252,255,26,0.55);
     }
 
     .toggles {
@@ -228,8 +344,17 @@
       <fieldset>
         <legend>◇ Target Floor</legend>
         <label for="floor">Floor ID (N / N.N / N.N.N)</label>
-        <input type="text" id="floor" name="floor" value="1" placeholder="e.g. 1, 1.3.1, 2.2.1">
+        <div class="floor-field-wrap" id="floor-field-wrap">
+          <input type="text" id="floor" name="floor" value="1" placeholder="e.g. 1, 1.3.1, 2.2.1">
+        </div>
+        <div class="floor-controls">
+          <input type="text" id="floor-filter" class="floor-filter"
+                 placeholder="filter by id or name…">
+          <button type="button" class="floor-refresh" id="floor-refresh"
+                  title="Re-fetch tools/floor-data.json without reloading">↻ refresh</button>
+        </div>
         <div class="chips" id="floor-chips"></div>
+        <div class="floor-source-badge" id="floor-source-badge">loading floor snapshots…</div>
       </fieldset>
 
       <fieldset>
@@ -317,38 +442,319 @@
   (function () {
     'use strict';
 
-    // Known floors from CLAUDE.md world map — quick-jump chips.
+    // Known floors — mirrors tools/js/bv-floor-selection.js FLOOR_NAMES
+    // so the harness target picker stays in sync with the world-designer
+    // and blockout-visualizer pipeline. Add new floors to BOTH places.
+    // Organized in tiers matching the hierarchy depth convention
+    // (N = exterior, N.N = interior, N.N.N = nested dungeon).
     var FLOORS = [
+      { group: 'Zone 0 — Tutorial' },
       { id: '0',     label: 'Approach' },
+
+      { group: 'Zone 1 — Promenade' },
       { id: '1',     label: 'Promenade' },
       { id: '1.1',   label: 'Bazaar' },
       { id: '1.2',   label: 'Driftwood Inn' },
       { id: '1.3',   label: 'Cellar Ent.' },
       { id: '1.6',   label: 'Home' },
       { id: '1.3.1', label: 'Soft Cellar' },
+
+      { group: 'Zone 2 — Lantern Row' },
       { id: '2',     label: 'Lantern Row' },
       { id: '2.1',   label: 'Dispatcher' },
       { id: '2.2',   label: 'Watchman' },
+      { id: '2.3',   label: 'Armorer' },
+      { id: '2.4',   label: 'Chandler' },
+      { id: '2.5',   label: 'Apothecary' },
+      { id: '2.6',   label: 'Cartographer' },
+      { id: '2.7',   label: 'Tea House' },
       { id: '2.2.1', label: "Hero's Wake B1" },
-      { id: '2.2.2', label: "Hero's Wake B2" }
+      { id: '2.2.2', label: "Hero's Wake B2" },
+
+      { group: 'Zone 3 — The Garrison' },
+      { id: '3',     label: 'Garrison' },
+      { id: '3.1',   label: 'Armory/Barracks' },
+      { id: '3.2',   label: 'Quartermaster' }
     ];
 
-    var form     = document.getElementById('harness-form');
-    var chipRoot = document.getElementById('floor-chips');
-    var floorIn  = document.getElementById('floor');
-    var preview  = document.getElementById('preview');
+    var form        = document.getElementById('harness-form');
+    var chipRoot    = document.getElementById('floor-chips');
+    var floorIn     = document.getElementById('floor');
+    var preview     = document.getElementById('preview');
+    var filterIn    = document.getElementById('floor-filter');
+    var sourceBadge = document.getElementById('floor-source-badge');
 
-    // Build quick-jump chips
+    // Floor data snapshot (populated async from tools/floor-data.json)
+    // and tile color map (from tools/tile-schema.json). Both live next
+    // to the blockout-visualizer so the harness shares the designer's
+    // authoritative view of each floor's grid.
+    var FLOOR_DATA = null;
+    var TILE_COLORS = {};
+    // Tile ids that represent inter-floor connectivity. Stamped as tiny
+    // glyphs on the thumbnail so the designer can see "this floor has
+    // two stair-downs and a side door" at a glance. Kept in sync with
+    // tools/tile-schema.json — DOOR=2, DOOR_BACK=3, DOOR_EXIT=4,
+    // STAIRS_DN=5, STAIRS_UP=6, DOOR_FACADE=74.
+    var CONNECTIVITY = {
+      2:  { sym: 'D', color: '#d4a44a' },  // DOOR          (descend)
+      3:  { sym: 'B', color: '#b8863a' },  // DOOR_BACK     (ascend)
+      4:  { sym: 'X', color: '#c97a30' },  // DOOR_EXIT     (sibling)
+      5:  { sym: 'v', color: '#5577cc' },  // STAIRS_DN
+      6:  { sym: '^', color: '#77aaee' },  // STAIRS_UP
+      74: { sym: 'd', color: '#a67a2a' }   // DOOR_FACADE
+    };
+
+    // Each chip registers itself here for filter/highlight passes.
+    var _chipEntries = [];  // { id, label, root, canvas }
+
+    function renderThumbnail(canvas, grid) {
+      var ctx = canvas.getContext('2d');
+      canvas.width = 72;
+      canvas.height = 72;
+      if (!grid || !grid.length) {
+        canvas.classList.add('chip-thumb-missing');
+        return false;
+      }
+      var gh = grid.length;
+      var gw = grid[0].length || 0;
+      if (!gw) {
+        canvas.classList.add('chip-thumb-missing');
+        return false;
+      }
+      canvas.classList.remove('chip-thumb-missing');
+      ctx.fillStyle = '#0a0a10';
+      ctx.fillRect(0, 0, 72, 72);
+      // Fit to square while preserving aspect; center the grid.
+      var scale = Math.min(72 / gw, 72 / gh);
+      var cellW = Math.max(1, Math.floor(scale));
+      var offX  = Math.floor((72 - cellW * gw) / 2);
+      var offY  = Math.floor((72 - cellW * gh) / 2);
+      // Pass 1 — base tiles.
+      var connectivity = [];
+      for (var y = 0; y < gh; y++) {
+        var row = grid[y];
+        for (var x = 0; x < gw; x++) {
+          var id = row[x];
+          var color = TILE_COLORS[id] || '#444';
+          ctx.fillStyle = color;
+          ctx.fillRect(offX + x * cellW, offY + y * cellW, cellW, cellW);
+          if (CONNECTIVITY[id]) connectivity.push({ x: x, y: y, c: CONNECTIVITY[id] });
+        }
+      }
+      // Pass 2 — connectivity markers. Painted as a crisp colored ring
+      // with a glyph centered when the cell is ≥5px, or a dot otherwise.
+      // Kept subtle enough to not swamp tiny floors (e.g. 16×16 cellW=4).
+      if (connectivity.length && cellW >= 2) {
+        ctx.save();
+        for (var i = 0; i < connectivity.length; i++) {
+          var m = connectivity[i];
+          var cx = offX + (m.x + 0.5) * cellW;
+          var cy = offY + (m.y + 0.5) * cellW;
+          var r = Math.max(1.2, cellW * 0.45);
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          ctx.beginPath(); ctx.arc(cx, cy, r + 0.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = m.c.color;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+          if (cellW >= 5) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold ' + Math.floor(cellW * 0.85) + 'px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(m.c.sym, cx, cy + 0.5);
+          }
+        }
+        ctx.restore();
+      }
+      return true;
+    }
+
+    function applyFilter() {
+      var q = (filterIn.value || '').trim().toLowerCase();
+      var anyVisible = false;
+      var visibleGroupCount = {};
+      _chipEntries.forEach(function (e) {
+        var hit = !q || e.id.toLowerCase().indexOf(q) >= 0
+                       || e.label.toLowerCase().indexOf(q) >= 0;
+        e.root.style.display = hit ? '' : 'none';
+        if (hit) {
+          anyVisible = true;
+          if (e.groupLabel) visibleGroupCount[e.groupLabel] = (visibleGroupCount[e.groupLabel] || 0) + 1;
+        }
+      });
+      // Hide group headers whose entire group got filtered out.
+      Array.prototype.forEach.call(chipRoot.querySelectorAll('.chip-group-label'), function (hdr) {
+        var txt = hdr.textContent;
+        hdr.style.display = (!q || visibleGroupCount[txt]) ? '' : 'none';
+      });
+    }
+
+    function highlightSelected() {
+      var cur = (floorIn.value || '').trim();
+      _chipEntries.forEach(function (e) {
+        if (e.id === cur) e.root.classList.add('chip-selected');
+        else               e.root.classList.remove('chip-selected');
+      });
+    }
+
+    // Build quick-jump chips. Entries with a `group` key render as a
+    // zone-header strip across the full row; entries with `id` render
+    // as a clickable chip that includes a tiny grid snapshot.
+    var currentGroup = null;
     FLOORS.forEach(function (f) {
+      if (f.group) {
+        currentGroup = f.group;
+        var hdr = document.createElement('div');
+        hdr.className = 'chip-group-label';
+        hdr.textContent = f.group;
+        chipRoot.appendChild(hdr);
+        return;
+      }
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip';
-      b.innerHTML = f.id + '<small>' + f.label + '</small>';
+      b.title = f.id + ' — ' + f.label;
+      b.draggable = true;
+      b.addEventListener('dragstart', function (fid) {
+        return function (ev) {
+          ev.dataTransfer.setData('text/plain', fid);
+          ev.dataTransfer.effectAllowed = 'copy';
+        };
+      }(f.id));
+
+      var cv = document.createElement('canvas');
+      cv.width = 72; cv.height = 72;
+      cv.classList.add('chip-thumb-missing');
+      b.appendChild(cv);
+
+      var idLine = document.createElement('div');
+      idLine.className = 'chip-id';
+      idLine.textContent = f.id;
+      b.appendChild(idLine);
+
+      var lblLine = document.createElement('small');
+      lblLine.textContent = f.label;
+      b.appendChild(lblLine);
+
       b.addEventListener('click', function () {
         floorIn.value = f.id;
+        highlightSelected();
         updatePreview();
       });
+
       chipRoot.appendChild(b);
+      _chipEntries.push({ id: f.id, label: f.label, root: b, canvas: cv, groupLabel: currentGroup });
+    });
+
+    filterIn.addEventListener('input', applyFilter);
+    floorIn.addEventListener('input', highlightSelected);
+
+    // Asynchronously pull the grid snapshots + tile palette from the
+    // world-designer / blockout-visualizer pipeline. Graceful fallback
+    // if the fetches fail (file:// without allow-file-access will trip
+    // CORS; the harness still works, the chips just stay hatched).
+    function loadFloorSnapshots() {
+      var basePrefixes = ['tools/', './tools/', '../tools/'];
+      function tryFetch(names) {
+        // Try each prefix until one 200s; returns Promise<parsed|null>.
+        var idx = 0;
+        return new Promise(function (resolve) {
+          function step() {
+            if (idx >= basePrefixes.length) return resolve(null);
+            fetch(basePrefixes[idx] + names)
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (j) { if (j) resolve(j); else { idx++; step(); } })
+              .catch(function ()  { idx++; step(); });
+          }
+          step();
+        });
+      }
+      return Promise.all([tryFetch('tile-schema.json'), tryFetch('floor-data.json')])
+        .then(function (pair) {
+          var schema = pair[0], floors = pair[1];
+          if (schema && schema.tiles) {
+            Object.keys(schema.tiles).forEach(function (k) {
+              var t = schema.tiles[k];
+              if (t && t.color) TILE_COLORS[+k] = t.color;
+            });
+          }
+          if (floors && floors.floors) {
+            FLOOR_DATA = floors.floors;
+            var drawn = 0, missing = 0;
+            _chipEntries.forEach(function (e) {
+              var fd = FLOOR_DATA[e.id];
+              if (fd && fd.grid && renderThumbnail(e.canvas, fd.grid)) {
+                drawn++;
+                // Decorate the chip title with grid size so designers see
+                // the authored dimensions without opening the visualizer.
+                var gh = fd.grid.length, gw = fd.grid[0] ? fd.grid[0].length : 0;
+                e.root.title = e.id + ' — ' + e.label + '  (' + gw + '×' + gh + ')';
+              } else {
+                missing++;
+              }
+            });
+            sourceBadge.textContent = 'snapshots · ' + drawn + ' of ' +
+              _chipEntries.length + ' from tools/floor-data.json' +
+              (missing ? ' (' + missing + ' missing — rerun extract-floors.js)' : '');
+            sourceBadge.classList.toggle('stale', missing > 0);
+          } else {
+            sourceBadge.textContent = 'floor-data.json unreachable — launch via http:// or run extract-floors.js';
+            sourceBadge.classList.add('stale');
+          }
+        });
+    }
+    loadFloorSnapshots();
+
+    // ── Refresh button — re-fetch snapshots without reloading the page.
+    // Useful when you've just re-run `node tools/extract-floors.js` in
+    // another terminal and want the harness picker to reflect the new
+    // grids without losing your current harness-form state.
+    var refreshBtn = document.getElementById('floor-refresh');
+    refreshBtn.addEventListener('click', function () {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '↻ …';
+      sourceBadge.textContent = 're-fetching snapshots…';
+      sourceBadge.classList.remove('stale');
+      // Clear the existing thumbs so missing ones become visible during
+      // the window where fetch is in flight.
+      _chipEntries.forEach(function (e) {
+        var cx = e.canvas.getContext('2d');
+        cx.clearRect(0, 0, e.canvas.width, e.canvas.height);
+        e.canvas.classList.add('chip-thumb-missing');
+      });
+      Promise.resolve(loadFloorSnapshots()).finally(function () {
+        setTimeout(function () {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = '↻ refresh';
+        }, 400);
+      });
+    });
+
+    // ── Drag-to-paste — dropping a chip onto the floor input pastes the
+    // floor id, mirroring the click behavior but surfacing that chips
+    // carry a value. Visual feedback via the `.drop-hover` class on the
+    // wrapper element (yellow border + glow).
+    var floorWrap = document.getElementById('floor-field-wrap');
+    ['dragenter', 'dragover'].forEach(function (evt) {
+      floorWrap.addEventListener(evt, function (ev) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'copy';
+        floorWrap.classList.add('drop-hover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (evt) {
+      floorWrap.addEventListener(evt, function (ev) {
+        floorWrap.classList.remove('drop-hover');
+      });
+    });
+    floorWrap.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      var id = ev.dataTransfer.getData('text/plain');
+      if (!id) return;
+      floorIn.value = id;
+      highlightSelected();
+      updatePreview();
+      floorIn.focus();
+      floorIn.select();
     });
 
     // Restore last-used config
@@ -427,6 +833,7 @@
     form.addEventListener('input',  updatePreview);
     form.addEventListener('change', updatePreview);
     updatePreview();
+    highlightSelected();
   })();
   </script>
 </body>

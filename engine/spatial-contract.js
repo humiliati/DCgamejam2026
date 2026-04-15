@@ -347,8 +347,14 @@ var SpatialContract = (function () {
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron gate
         18: 'bonfire_ring',    // BONFIRE — stone ring (0.3× short column)
-        30: 'torch_bracket_lit',   // TORCH_LIT — stone wall + burning torch
-        31: 'torch_bracket_unlit', // TORCH_UNLIT — stone wall + charred bracket
+        // TORCH_LIT (30) / TORCH_UNLIT (31): no per-tile override —
+        // inherits the biome's WALL texture. Torch geometry is supplied
+        // by wallDecor sprites (decor_torch / decor_torch_unlit) on the
+        // walkable-adjacent face(s) only. See floor-manager.js torch
+        // decor block. Prior to 2026-04-15 these pointed at dedicated
+        // torch_bracket_lit/unlit textures that painted a giant torch
+        // onto all 4 faces; the decor-sprite-only path avoids the
+        // duplicate-paint-from-angles artifact.
         35: 'fence_wood',      // FENCE — wooden rail (0.4× half-wall)
         38: 'truck_body',      // DUMP_TRUCK — blue pressure wash truck (2.0× HEARTH-stature
                                //   freeform: 0.40 lower body w/ wheel decor + 0.25 spool
@@ -619,7 +625,14 @@ var SpatialContract = (function () {
         // narrow high horizontal band (1.35 → 1.70) and the filler
         // confines the aperture to wallX ∈ [0.40, 0.60]. Player has to
         // crane up to see through — classic guard-room feature.
-        83: Object.freeze({ hUpper: 0.30, hLower: 1.35, fillGap: 'window_murderhole_interior', recessD: 0.08 })
+        83: Object.freeze({ hUpper: 0.30, hLower: 1.35, fillGap: 'window_murderhole_interior', recessD: 0.08 }),
+
+        // TORCH_LIT / TORCH_UNLIT — recessed niche on 2.0-tall interior
+        // wall. Cavity band world 1.20 → 1.50 (~2/3 wall height, just
+        // above eye line). hLower 1.20 + hUpper 0.50 leaves a 0.30 gap.
+        // Same recessD + filler as the dungeon variant — see torch-niche.js.
+        30: Object.freeze({ hUpper: 0.50, hLower: 1.20, fillGap: 'torch_niche', recessD: 0.22 }),
+        31: Object.freeze({ hUpper: 0.50, hLower: 1.20, fillGap: 'torch_niche', recessD: 0.22 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -637,8 +650,7 @@ var SpatialContract = (function () {
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron archway
         18: 'bonfire_ring',    // BONFIRE — stone ring (interior hearth variant)
-        30: 'torch_bracket_lit',   // TORCH_LIT — interior wall torch
-        31: 'torch_bracket_unlit', // TORCH_UNLIT — extinguished
+        // TORCH_LIT/UNLIT: inherit WALL texture; torch rendered via wallDecor sprite.
         36: 'terminal_screen', // TERMINAL — CRT desk (retro-futuristic)
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw stone around the slit
         83: 'stone_rough',     // WINDOW_MURDERHOLE — raw stone around the hole
@@ -798,10 +810,12 @@ var SpatialContract = (function () {
         // hUpper 0.35 = arched ceiling voussoir (world 0.95 → 1.30),
         // hLower 0.00 = no threshold (walkable clean).
         // Gap spans 0.00 → 0.95 — opening the player steps through.
-        // The upper band crosses just below eye height (1.0) so the
-        // ceiling visually compresses as the player advances — the
-        // hobbit-hole corridor feeling.
-        94: Object.freeze({ hUpper: 0.35, hLower: 0.00, fillGap: null }),
+        // fillGap '_transparent' so the gap is a true see-through window
+        // (floor + back-layer walls show through). Previously `null`,
+        // which routed to the `_default` placeholder and painted the
+        // gap as opaque #141414 — i.e. the arch looked like a black
+        // cube with a thin wooden ceiling lip.
+        94: Object.freeze({ hUpper: 0.35, hLower: 0.00, fillGap: '_transparent' }),
 
         // TUNNEL_WALL — non-walkable side-wall with a decorative alcove.
         // hUpper 0.25 + hLower 0.25 on a 1.0 wall leaves a 0.50 niche
@@ -822,7 +836,24 @@ var SpatialContract = (function () {
         // reads as anchored near continental shelf rather than
         // mid-ocean abyss. Kelp silhouettes + surface caustics
         // reinforce "shallow enough to see daylight filtering down."
-        96: Object.freeze({ hUpper: 0.20, hLower: 0.40, fillGap: 'porthole_ocean', recessD: 0.08 })
+        96: Object.freeze({ hUpper: 0.20, hLower: 0.40, fillGap: 'porthole_ocean', recessD: 0.08 }),
+
+        // TORCH_LIT / TORCH_UNLIT — recessed niche at ~2/3 wall height.
+        // On a 1.2 dungeon wall: hLower 0.70 (stone jamb below, up to
+        // world 0.70 = eye level) and hUpper 0.25 (lintel above, from
+        // 0.95 → 1.20). Cavity band is world 0.70 → 0.95 (a 0.25-tall
+        // niche centred just above eye level).
+        // recessD 0.08 pushes the cavity face into the tile (same thin-
+        // wall trick DOOR_FACADE uses) so the niche reads as an inset
+        // carved into the masonry, not a surface decal.
+        // fillGap 'torch_niche' — see engine/torch-niche.js. The filler
+        // masks wallX outside [0.35, 0.65] with wall stone (so the niche
+        // is narrow horizontally), paints dark interior stone inside the
+        // aperture, and for TORCH_LIT (info.hitTile === 30) adds a warm
+        // amber radial glow + flame silhouette. TORCH_UNLIT renders the
+        // same cavity with a charred wick stub instead of flame.
+        30: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'torch_niche', recessD: 0.22 }),
+        31: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'torch_niche', recessD: 0.22 })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -838,8 +869,7 @@ var SpatialContract = (function () {
         11: 'crate_wood',      // BREAKABLE — destructible crate
         14: 'door_iron',       // BOSS_DOOR — iron chamber door
         18: 'bonfire_ring',    // BONFIRE — dungeon rest point
-        30: 'torch_bracket_lit',   // TORCH_LIT — dungeon wall torch
-        31: 'torch_bracket_unlit', // TORCH_UNLIT — hero's mess
+        // TORCH_LIT/UNLIT: inherit WALL texture; torch rendered via wallDecor sprite.
         36: 'terminal_screen', // TERMINAL — dungeon data terminal
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw dungeon stone
         83: 'stone_rough',     // WINDOW_MURDERHOLE — raw dungeon stone
@@ -1298,7 +1328,16 @@ var SpatialContract = (function () {
    */
   function getTexture(contract, tileType) {
     if (!contract || !contract.textures) return null;
-    return contract.textures[tileType] || null;
+    var tex = contract.textures[tileType];
+    if (tex) return tex;
+    // TORCH_LIT (30) / TORCH_UNLIT (31) inherit the WALL (1) texture so
+    // the torch tile looks like a plain wall under the decor sprite. A
+    // per-tile texture would have painted the whole face as torch-on-stone;
+    // wallDecor gives us face-aware bracket placement instead.
+    if (tileType === 30 || tileType === 31) {
+      return contract.textures[1] || null;
+    }
+    return null;
   }
 
   /**

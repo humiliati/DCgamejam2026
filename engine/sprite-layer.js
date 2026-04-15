@@ -212,7 +212,48 @@ var SpriteLayer = (function () {
       sp.el.style.transform =
         'translate(' + (displayX - displayW / 2) + 'px,' + displayY + 'px)';
 
+      // Publish last-render position for LightOrbs (gaze lock).
+      // Only sprites flagged with a lightKind participate — bonfires,
+      // hearths, any future "eyeball flame" DOM sprites. LightOrbs
+      // reads displayCenterX/displayCenterY so the orb follows the
+      // over-rotation/shrink quirk of the CSS billboard exactly.
+      if (sp.opts.lightKind) {
+        sp.lastRender = {
+          visible: sp.el.style.display !== 'none',
+          centerX: displayX,
+          centerY: displayY + displayH * 0.5,
+          topY:    displayY,
+          w:       displayW,
+          h:       displayH,
+          dist:    dist,
+          alpha:   alpha,
+          kind:    sp.opts.lightKind,
+          gaze:    sp.opts.gaze !== false,   // default true for lightKind
+          tileX:   sp.tileX,
+          tileY:   sp.tileY
+        };
+      } else if (sp.lastRender) {
+        sp.lastRender.visible = false;
+      }
     }
+  }
+
+  /**
+   * Snapshot of DOM sprites registered as light sources (bonfire/hearth
+   * eyeball flames, etc.). Each entry carries the post-billboard screen
+   * position LightOrbs needs to pin orbs to the gazing flame.
+   *
+   * @returns {Array<Object>} array of lastRender snapshots
+   */
+  function getLightSprites() {
+    var out = [];
+    for (var i = 0; i < _sprites.length; i++) {
+      var sp = _sprites[i];
+      if (sp.opts && sp.opts.lightKind && sp.lastRender && sp.lastRender.visible) {
+        out.push(sp.lastRender);
+      }
+    }
+    return out;
   }
 
   /**
@@ -229,6 +270,7 @@ var SpriteLayer = (function () {
     removeSprite: removeSprite,
     clear:        clear,
     tick:         tick,
-    count:        count
+    count:        count,
+    getLightSprites: getLightSprites
   };
 })();

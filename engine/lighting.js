@@ -68,21 +68,86 @@ var Lighting = (function () {
    * @param {string|number} [opts.tint='none'] - 'none'|'warm'|'sickly' or TINT index
    * @param {number} [opts.warmth]  - DEPRECATED: >0 maps to tint 'warm'
    * @param {string} [opts.flicker='none'] - 'none' | 'torch' | 'bonfire' | 'steady'
+   * @param {string} [opts.kind] - 'torch' | 'bonfire' | 'hearth' | 'lantern' | 'brazier' (LightOrbs profile hint)
+   * @param {boolean} [opts.gaze] - true if this source is tied to a gazing sprite (bonfire/hearth eye)
    */
   function addLightSource(x, y, radius, intensity, opts) {
     opts = opts || {};
     // Backward compat: warmth > 0 maps to WARM tint
     var tint = opts.tint !== undefined ? _resolveTint(opts.tint)
       : (opts.warmth && opts.warmth > 0 ? TINT.WARM : TINT.NONE);
+    var flicker = opts.flicker || 'none';
+    // Infer kind from flicker if not explicit
+    var kind = opts.kind;
+    if (!kind) {
+      if (flicker === 'bonfire') kind = 'bonfire';
+      else if (flicker === 'hearth-dungeon') kind = 'hearth';
+      else if (flicker === 'torch') kind = 'torch';
+      else if (flicker === 'steady') kind = 'lantern';
+      else kind = 'torch';
+    }
+    var gaze = (opts.gaze === true) || (kind === 'bonfire' || kind === 'hearth');
+    // Shape for dynamic floor illumination pass:
+    //   'cone' — wall-mounted directional source (torch), needs opts.dir
+    //   'ring' — annular glow peaking at band radius (bonfire, brazier)
+    //   'disc' — omnidirectional radial falloff (hearth, lantern, default)
+    // Shape is separate from the per-tile lightmap, which always uses
+    // radial falloff — this only governs the floor-pixel glow pass.
+    var shape = opts.shape;
+    if (!shape) {
+      if (kind === 'torch')   shape = 'cone';
+      else if (kind === 'bonfire' || kind === 'brazier') shape = 'ring';
+      else                    shape = 'disc';
+    }
+    var dir = opts.dir || null;  // {x, y} unit vector, walls-into-walkable
     _lightSources.push({
       x: x,
       y: y,
       radius: radius,
       intensity: Math.min(1, Math.max(0, intensity)),
       tint: tint,
-      flickerType: opts.flicker || 'none',
+      flickerType: flicker,
+      kind: kind,
+      gaze: gaze,
+      shape: shape,
+      dir: dir,
       _seed: _lightSources.length * 137 + 42
     });
+  }
+
+  /**
+   * Per-frame snapshot of dynamic lights, with flicker precomputed.
+   * Called by the floor caster once per frame. Returns a compact list:
+   *   { wx, wy, r, g, b, radius, peakA, shape, dx, dy }
+   * where peakA already includes the flicker multiplier and intensity,
+   * and (r, g, b) is the warm tint colour the floor pass should add.
+   * Caller-allocates nothing — returns the shared internal buffer.
+   */
+  var _lightSnapshot = [];
+  function getFlickerLights(now) {
+    _lightSnapshot.length = 0;
+    var t = (now || 0) * 0.001;
+    for (var i = 0; i < _lightSources.length; i++) {
+      var src = _lightSources[i];
+      // Skip neutral sources — floor pass only paints coloured light.
+      if (src.tint === TINT.NONE) continue;
+      var fM = _flicker(src, t);
+      // Torch: radius held steady (matches grid lightmap behaviour).
+      var eR = (src.flickerType === 'torch') ? src.radius : src.radius * fM;
+      var peak = src.intensity * fM;
+      if (peak <= 0.02 || eR <= 0.05) continue;
+      var rgb = _TINT_RGB[src.tint] || _TINT_RGB[0];
+      _lightSnapshot.push({
+        wx: src.x + 0.5, wy: src.y + 0.5,
+        r: rgb[0], g: rgb[1], b: rgb[2],
+        radius: eR,
+        peakA: peak,
+        shape: src.shape || 'disc',
+        dx: src.dir ? src.dir.x : 0,
+        dy: src.dir ? src.dir.y : 0
+      });
+    }
+    return _lightSnapshot;
   }
 
   /**
@@ -117,8 +182,13 @@ var Lighting = (function () {
     var s = src._seed;
     switch (src.flickerType) {
       case 'torch':
-        // Fast flicker ~3Hz, ±15%
-        return 0.85 + 0.15 * Math.sin(t * 18.85 + s);
+        // Subtle intensity-only shimmer ~3Hz, ±6%. The raycaster-side
+        // glow gradient (torch-niche.js) carries the visible flicker
+        // on the flame itself; keeping the grid lightmap near-steady
+        // prevents adjacent wall textures from pulsing when multiple
+        // torches share a wall. Radius is held steady by the caller
+        // for 'torch' flickerType so edge-of-range tiles don't pop.
+        return 0.94 + 0.06 * Math.sin(t * 18.85 + s);
       case 'bonfire':
         // Slow pulse ~1Hz ±10%, plus subtle fast shimmer
         return 0.90 + 0.10 * Math.sin(t * 6.28 + s)
@@ -209,7 +279,11 @@ var Lighting = (function () {
     for (var s = 0; s < _lightSources.length; s++) {
       var src = _lightSources[s];
       var flickMult = _flicker(src, t);
-      var effRadius = src.radius * flickMult;
+      // Torch: hold radius steady so edge-of-range tiles don't pop in/out
+      // and cause adjacent walls to pulse. Only modulate intensity.
+      // Other flicker types (bonfire, hearth-dungeon) keep full radius mod.
+      var _torchSteady = (src.flickerType === 'torch');
+      var effRadius = _torchSteady ? src.radius : src.radius * flickMult;
       var effIntensity = src.intensity * flickMult;
       var ir = Math.ceil(effRadius);
       var irSq = effRadius * effRadius;
@@ -289,6 +363,7 @@ var Lighting = (function () {
     getTintRGB:         getTintRGB,
     getTintEnum:        getTintEnum,
     getSources:         getSources,
+    getFlickerLights:   getFlickerLights,
     addLightSource:     addLightSource,
     removeLightSource:  removeLightSource,
     clearLightSources:  clearLightSources

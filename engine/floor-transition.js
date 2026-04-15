@@ -157,6 +157,12 @@ var FloorTransition = (function () {
     var contract = FloorManager.getFloorContract(targetFloorId);
     Minimap.enterFloor(targetFloorId, contract.label || ('Floor ' + targetFloorId));
 
+    // Reseed RNG from (runSeed, floorId) so this floor's proc-gen scatter is
+    // reproducible regardless of visit order. See docs/SEED_AND_SAVELOAD_DESIGN.md §2.
+    if (typeof SeededRNG !== 'undefined' && typeof SeededRNG.deriveFloor === 'function') {
+      SeededRNG.deriveFloor(targetFloorId);
+    }
+
     // Generate the floor (sync — BSP + A* + populate + raycaster hydrate
     // all happen inside FloorManager.generateCurrentFloor)
     var _dpmSwitch = (typeof DebugPerfMonitor !== 'undefined')

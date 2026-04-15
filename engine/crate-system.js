@@ -947,6 +947,38 @@ var CrateSystem = (function () {
     rehydrateFloor: rehydrateFloor,
     REHYDRATE_COOLDOWN: REHYDRATE_COOLDOWN,
     clearFloor:     clearFloor,
-    clearAll:       clearAll
+    clearAll:       clearAll,
+
+    // ── M2.3 save/load hooks ────────────────────────────────────────
+    // Return a deep-cloned array of all containers on `floorId`. Fields
+    // are already JSON-safe (type/x/y/floorId/biome/slots/sealed/…), so
+    // a structured clone is sufficient. SaveState folds this into
+    // floors[floorId].containers.
+    serializeFloor: function (floorId) {
+      var list = [];
+      var prefix = floorId + ':';
+      for (var key in _containers) {
+        if (_containers.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
+          list.push(JSON.parse(JSON.stringify(_containers[key])));
+        }
+      }
+      return list;
+    },
+
+    // Wipe the current floor's containers and re-install the saved ones
+    // verbatim. Called by SaveState as each floor is regenerated during
+    // load (authored grid + restored containers = full state).
+    deserializeFloor: function (floorId, list) {
+      clearFloor(floorId);
+      if (!Array.isArray(list)) return;
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (!c || typeof c.x !== 'number') continue;
+        // Force floorId to match the key we're inserting under, in case
+        // a save was moved between slots or the id differs.
+        c.floorId = floorId;
+        _containers[floorId + ':' + c.x + ':' + c.y] = c;
+      }
+    }
   };
 })();

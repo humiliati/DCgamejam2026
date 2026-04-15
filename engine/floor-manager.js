@@ -783,7 +783,7 @@ var FloorManager = (function () {
             10: 'wood_dark',        // PILLAR — dark wood display columns
             25: 'bookshelf',        // BOOKSHELF — supply shelves / weapon racks
             26: 'wood_dark',        // BAR_COUNTER — display case surface
-            30: 'wood_plank',       // TORCH_LIT — torch bracket (warm wood)
+            // TORCH_LIT: inherits WALL texture; bracket via wallDecor sprite.
             43: 'anvil_iron',       // ANVIL — dark iron work surface
             44: 'barrel_wood'       // BARREL — banded oak barrel
           }),
@@ -791,7 +791,9 @@ var FloorManager = (function () {
             1:  2.5,               // WALL — extends above ceiling
             10: 2.2,               // PILLAR — tall display columns
             26: 0.8,               // BAR_COUNTER — counter height
-            30: 1.0,               // TORCH_LIT — wall sconce height
+            // TORCH_LIT: inherits WALL height — decor sprite is anchored
+            // within the wall face at anchorV 0.6, so full-height walls
+            // read correctly with the torch at head height.
             43: 0.5,               // ANVIL — waist-height iron block
             44: 0.6                // BARREL — banded oak
           }),
@@ -2050,45 +2052,20 @@ var FloorManager = (function () {
     // any approach angle and passes through the standard sprite depth
     // pipeline. See emoji-mount.js TERMINAL registration.
 
-// ── Torch tile cavity decor (TORCH_LIT warm glow, TORCH_UNLIT dim bracket) ──
-    for (var tcy = 0; tcy < H; tcy++) {
-      for (var tcx = 0; tcx < W; tcx++) {
-        var tct = grid[tcy][tcx];
-        if (!T.isTorch(tct)) continue;
-
-        // Find walkable neighbor faces → those are the faces the player sees
-        var tcFaces = [];
-        if (tcy > 0 && T.isWalkable(grid[tcy - 1][tcx])) tcFaces.push('n');
-        if (tcy < H - 1 && T.isWalkable(grid[tcy + 1][tcx])) tcFaces.push('s');
-        if (tcx > 0 && T.isWalkable(grid[tcy][tcx - 1])) tcFaces.push('w');
-        if (tcx < W - 1 && T.isWalkable(grid[tcy][tcx + 1])) tcFaces.push('e');
-        if (tcFaces.length === 0) continue;
-
-        if (!decor[tcy][tcx]) decor[tcy][tcx] = { n: [], s: [], e: [], w: [] };
-        var isLit = tct === T.TORCH_LIT;
-        for (var tcf = 0; tcf < tcFaces.length; tcf++) {
-          if (isLit) {
-            // Lit torch: fire decor with warm cavity glow
-            decor[tcy][tcx][tcFaces[tcf]].push({
-              spriteId: 'decor_torch',
-              anchorU: 0.5,
-              anchorV: 0.6,
-              scale: 0.25,
-              cavityGlow: true,
-              glowR: 255, glowG: 140, glowB: 40, glowA: 0.3
-            });
-          } else {
-            // Unlit torch: charred bracket, no glow
-            decor[tcy][tcx][tcFaces[tcf]].push({
-              spriteId: 'decor_torch',
-              anchorU: 0.5,
-              anchorV: 0.6,
-              scale: 0.2
-            });
-          }
-        }
-      }
-    }
+// ── Torch tile cavity decor ────────────────────────────────────────
+    // DISABLED: replaced by the torch_niche freeform filler (engine/
+    // torch-niche.js). The filler draws the full recessed niche +
+    // flame/stub directly into the cavity band via a single per-column
+    // linear gradient, which is ~100× cheaper than the prior wallDecor
+    // sprite + per-pixel cavityGlow fillRect loop AND renders as a
+    // real architectural inset (recessD=0.08) rather than a sticker
+    // on a flat wall face.
+    //
+    // The torch tiles now register in spatial-contract's tileFreeform
+    // table with fillGap='torch_niche'. See docs/INTERACTIVE_OBJECTS_AUDIT.md
+    // for the migration history. Leaving this block as a no-op (rather
+    // than deleting) so the search tag `Torch tile cavity decor` still
+    // points into floor-manager for anyone tracing the old behaviour.
 
     // ── Dump truck wheel decor on DUMP_TRUCK faces ─────────────────
     // Two wheels per side face. DUMP_TRUCK is a 2.0-unit-tall freeform
@@ -2338,6 +2315,9 @@ var FloorManager = (function () {
   function _registerLightSources(grid, gridW, gridH, contract) {
     if (typeof Lighting === 'undefined' || !Lighting.addLightSource) return;
     Lighting.clearLightSources();
+    // Clear LightOrbs tracking so smoothed positions from the previous
+    // floor don't bleed into the new one.
+    if (typeof LightOrbs !== 'undefined' && LightOrbs.reset) LightOrbs.reset();
 
     var isExterior = contract && contract.depth === 'exterior';
     var isInterior = contract && contract.depth === 'interior';
@@ -2368,8 +2348,29 @@ var FloorManager = (function () {
           // Data terminal — sickly green CRT glow
           Lighting.addLightSource(x, y, 2, 0.45, { tint: 'sickly', flicker: 'steady' });
         } else if (t === TILES.TORCH_LIT) {
-          // Wall-mounted torch — warm glow, standard torch flicker
-          Lighting.addLightSource(x, y, 4, 0.8, { tint: 'warm', flicker: 'torch' });
+          // Wall-mounted torch — warm glow, standard torch flicker.
+          // Detect walkable-face normal so the floor cone points away from
+          // the wall. If multiple neighbours are walkable (e.g. pillar),
+          // average them — the cone still aims into open space.
+          var _tDx = 0, _tDy = 0, _tN = 0;
+          var _neigh = [[1,0],[-1,0],[0,1],[0,-1]];
+          for (var _ni = 0; _ni < 4; _ni++) {
+            var _nx = x + _neigh[_ni][0], _ny = y + _neigh[_ni][1];
+            if (_ny >= 0 && _ny < gridH && _nx >= 0 && _nx < gridW) {
+              var _nt = grid[_ny][_nx];
+              // Walkable if floor (0) or any non-wall passable tile.
+              if (_nt === 0 || _nt === TILES.FLOOR) {
+                _tDx += _neigh[_ni][0]; _tDy += _neigh[_ni][1]; _tN++;
+              }
+            }
+          }
+          var _tLen = Math.sqrt(_tDx * _tDx + _tDy * _tDy);
+          var _tDir = (_tN > 0 && _tLen > 1e-6)
+            ? { x: _tDx / _tLen, y: _tDy / _tLen } : null;
+          Lighting.addLightSource(x, y, 4, 0.8, {
+            tint: 'warm', flicker: 'torch',
+            shape: _tDir ? 'cone' : 'disc', dir: _tDir
+          });
         } else if (t === TILES.BED && isInterior) {
           // Home bed — golden steady glow, safest rest point in the game.
           // Radius 5 to fill the bedroom with warm amber light.
@@ -2779,6 +2780,14 @@ var FloorManager = (function () {
       if (typeof PortholeOcean !== 'undefined' &&
           typeof PortholeOcean.ensureRegistered === 'function') {
         PortholeOcean.ensureRegistered();
+      }
+
+      // Lazy-register torch_niche gap filler for TORCH_LIT/UNLIT tiles.
+      // Replaces the per-column cavityGlow fillRect loop that was pegging
+      // wallPhase to 125 ms/frame when multiple torches faced each other.
+      if (typeof TorchNiche !== 'undefined' &&
+          typeof TorchNiche.ensureRegistered === 'function') {
+        TorchNiche.ensureRegistered();
       }
     }
 

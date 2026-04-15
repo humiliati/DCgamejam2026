@@ -121,9 +121,10 @@ var EnemyDeck = (function () {
   }
 
   function _shuffle(arr) {
-    // Fisher-Yates in place
+    // Fisher-Yates in place — uses SeededRNG for reproducibility.
+    var rnd = (typeof SeededRNG !== 'undefined') ? SeededRNG.random : Math.random;
     for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
+      var j = Math.floor(rnd() * (i + 1));
       var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     }
     return arr;

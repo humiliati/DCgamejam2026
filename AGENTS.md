@@ -7,6 +7,10 @@ the codebase.** The graph is faster, cheaper (fewer tokens), and gives
 you structural context (callers, dependents, test coverage) that file
 scanning cannot.
 
+
+Read CLAUDE.md , that applies to you as well
+
+
 ### When to use graph tools FIRST
 
 - **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep

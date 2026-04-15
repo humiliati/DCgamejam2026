@@ -314,6 +314,7 @@ var DebugPerfMonitor = (function () {
       '  <div class="dpm-sep"></div>',
       '  <div class="dpm-section">Scene</div>',
       '  <div class="dpm-row"><span class="dpm-label">floor</span><span class="dpm-val" data-f="floor">--</span></div>',
+      '  <div class="dpm-row"><span class="dpm-label">seed</span><span class="dpm-val" data-f="seed" style="font-size:10px;">--</span></div>',
       '  <div class="dpm-row"><span class="dpm-label">enemies</span><span class="dpm-val" data-f="enemies">--</span></div>',
       '  <div class="dpm-row"><span class="dpm-label">particles</span><span class="dpm-val" data-f="particles">--</span></div>',
       '  <div class="dpm-row"><span class="dpm-label">grid</span><span class="dpm-val" data-f="grid">--</span></div>',
@@ -633,6 +634,15 @@ var DebugPerfMonitor = (function () {
       (_stutterCount > 5 ? 'danger' : _stutterCount > 0 ? 'warn' : '');
 
     _refs.floor.textContent = _getFloorId();
+    // M1: run seed phrase for reproducibility debugging
+    if (_refs.seed) {
+      if (typeof SeededRNG !== 'undefined' && typeof SeededRNG.runSeed === 'function' &&
+          typeof SeedPhrase !== 'undefined') {
+        _refs.seed.textContent = SeedPhrase.encode(SeededRNG.runSeed());
+      } else {
+        _refs.seed.textContent = '--';
+      }
+    }
     var enemies = _getEnemyCount();
     _refs.enemies.textContent = enemies;
     _refs.enemies.className = 'dpm-val ' + (enemies > 15 ? 'warn' : '');

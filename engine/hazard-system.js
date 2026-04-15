@@ -202,6 +202,15 @@ var HazardSystem = (function () {
                 (isDungeon ? ' (brief)' : ' → dawn') +
                 ' | WELL_RESTED=' + gotWellRested +
                 (isDungeon ? ' (dungeon=never)' : ' (bedtime ' + (sleepHour >= 6 ? 'before' : 'after') + ' midnight)'));
+
+    // ── M2.4 checkpoint autosave ───────────────────────────────────
+    // Bonfire/hearth is a designated respawn anchor. Persist the
+    // updated respawn cache + current floor state so death:reset has
+    // a fresh anchor and the player can reload here directly.
+    if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+      try { SaveState.autosave(); }
+      catch (e) { console.warn('[HazardSystem] autosave after bonfire rest failed:', e); }
+    }
   }
 
   /**
@@ -451,6 +460,28 @@ var HazardSystem = (function () {
     // §9b: REST face reads last rest outcome for status feedback
     getLastRestResult: function () { return _lastRestResult; },
     clearLastRestResult: function () { _lastRestResult = null; },
+
+    // M2 save/load hooks — SaveState reads/writes the bonfire-respawn map
+    // across floors. Returns a shallow copy; setter replaces wholesale.
+    getBonfirePositions: function () {
+      var out = {};
+      for (var k in _bonfirePositions) {
+        if (_bonfirePositions.hasOwnProperty(k)) {
+          var p = _bonfirePositions[k];
+          out[k] = { x: p.x, y: p.y };
+        }
+      }
+      return out;
+    },
+    setBonfirePositions: function (map) {
+      _bonfirePositions = {};
+      if (!map) return;
+      for (var k in map) {
+        if (map.hasOwnProperty(k) && map[k] && typeof map[k].x === 'number') {
+          _bonfirePositions[k] = { x: map[k].x, y: map[k].y };
+        }
+      }
+    },
 
     // Expose for testing / debug
     HAZARD_DAMAGE: HAZARD_DAMAGE

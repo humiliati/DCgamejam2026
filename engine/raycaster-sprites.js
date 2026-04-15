@@ -165,6 +165,24 @@ var RaycasterSprites = (function () {
       if (d.wobble) {
         vCenter += Math.sin(Date.now() * 0.003) * d.wobble;
       }
+      // ── Flicker: per-frame flame animation for torch decor ─────────
+      // Matches Lighting.js _flicker() curve (0.85 + 0.15·sin(t·18.85+seed))
+      // so sprite brightness + cavity-glow radius/alpha + grid lightmap
+      // all breathe on the same beat. Seeded by tile coord so neighbouring
+      // torches don't pulse in lockstep. _fFactor lives in the 0.70–1.00
+      // range; _fBoost = factor^2 gives a sharper bright-dark swing on
+      // the glow alpha while keeping sprite scale changes subtle.
+      var _fFactor = 1, _fBoost = 1, _fSeed = 0;
+      if (d.flicker === 'torch') {
+        _fSeed = ((mapX * 1103515245 + mapY * 12345) & 0x7fffffff) / 0x7fffffff * 6.28;
+        var _fT = Date.now() * 0.001;
+        _fFactor = 0.85 + 0.15 * Math.sin(_fT * 18.85 + _fSeed);
+        _fBoost = _fFactor * _fFactor;
+        // Micro-wobble the flame height ±6% — reads as a dancing flame
+        // without the jitter crossing the sub-pixel threshold and
+        // shimmering on the neighboring wall column.
+        vExtent *= 0.94 + 0.12 * Math.sin(_fT * 14.2 + _fSeed * 1.7);
+      }
       var vMin = vCenter - vExtent / 2;
       var vMax = vCenter + vExtent / 2;
 
@@ -194,33 +212,51 @@ var RaycasterSprites = (function () {
         var cgG = d.glowG || 120;
         var cgB = d.glowB || 30;
         var cgA = d.glowA || 0.3;
+        // Flicker modulates glow: alpha ramps with factor² (sharper swing),
+        // radius ramps linearly with factor. 35%→60% base pad when flicker
+        // is active so the torch casts a visibly larger warm bloom onto
+        // the surrounding wall column (pairs with the Lighting module's
+        // grid-lightmap flicker on the floor in front).
+        var _glowPadFrac = 0.35;
+        if (d.flicker === 'torch') {
+          cgA = cgA * _fBoost;
+          _glowPadFrac = 0.55 + 0.10 * _fFactor;
+        }
         // Extend glow region beyond sprite bounds
-        var glowPad = Math.max(3, Math.floor((dBot - dTop) * 0.35));
+        var glowPad = Math.max(3, Math.floor((dBot - dTop) * _glowPadFrac));
         var gTop = Math.max(drawStart, dTop - glowPad);
         var gBot = Math.min(drawEnd, dBot + glowPad);
         var gH = gBot - gTop + 1;
         if (gH > 0) {
-          // Glow center in screen Y (sprite vertical center)
-          var gCY = (dTop + dBot) * 0.5;
-          // Glow center in screen X (sprite horizontal center)
-          var spriteCX = wallTop + (1 - d.anchorV) * lineHeight; // approximate
-          // Column offset from sprite U center → horizontal falloff
+          // Horizontal radial component: alpha scales quadratically with
+          // distance from the sprite's U center. Columns beyond the glow
+          // radius (uDist ≥ 1) contribute nothing → bail early.
           var uCenter = d.anchorU;
           var uDist = Math.abs(wallX - uCenter) / (d.scale * 0.5 + 0.001);
-          uDist = Math.min(uDist, 1); // 0 at center, 1 at edge
-          // Per-pixel vertical render with radial falloff
-          for (var gp = gTop; gp <= gBot; gp++) {
-            var vDist = Math.abs(gp - gCY) / (glowPad + (dBot - dTop) * 0.5 + 0.001);
-            vDist = Math.min(vDist, 1);
-            // Radial distance from center (0=center, 1=edge)
-            var rDist = Math.sqrt(uDist * uDist + vDist * vDist);
-            if (rDist >= 1) continue;
-            // Smooth falloff: bright core, soft edge
-            var falloff = 1 - rDist * rDist; // quadratic falloff
-            var pixA = cgA * falloff;
-            if (pixA < 0.01) continue;
-            ctx.fillStyle = 'rgba(' + cgR + ',' + cgG + ',' + cgB + ',' + pixA.toFixed(3) + ')';
-            ctx.fillRect(col, gp, 1, 1);
+          if (uDist < 1) {
+            var hFalloff = 1 - uDist * uDist;          // 1 at center → 0 at edge
+            var peakA = cgA * hFalloff;
+            if (peakA >= 0.01) {
+              // Vertical falloff is rendered in a SINGLE linear gradient
+              // (3 stops: top-transparent → center-peak → bottom-transparent)
+              // instead of a per-pixel fillRect loop. Previously this loop
+              // burned ~300 fillRect+string-alloc calls per column, per
+              // torch, per frame — catastrophic when five torches faced
+              // each other on the same row (wallPhase hit 125 ms/frame).
+              // Gradients are hardware-accelerated in Canvas and give the
+              // same soft radial orb visually.
+              var gCY = (dTop + dBot) * 0.5;
+              var centerT = (gCY - gTop) / gH;
+              if (centerT < 0) centerT = 0;
+              else if (centerT > 1) centerT = 1;
+              var grad = ctx.createLinearGradient(0, gTop, 0, gBot + 1);
+              var _rgb = cgR + ',' + cgG + ',' + cgB + ',';
+              grad.addColorStop(0, 'rgba(' + _rgb + '0)');
+              grad.addColorStop(centerT, 'rgba(' + _rgb + peakA.toFixed(3) + ')');
+              grad.addColorStop(1, 'rgba(' + _rgb + '0)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(col, gTop, 1, gH);
+            }
           }
         }
       }

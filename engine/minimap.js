@@ -1118,6 +1118,65 @@ var Minimap = (function () {
     zoomOut: zoomOut,
     getExplored: function () { return _explored; },
     getCanvas: function () { return _canvas; },
-    getSize: function () { return _size; }
+    getSize: function () { return _size; },
+
+    // ── M2.3 save/load hooks ────────────────────────────────────────
+    // Return a JSON-safe snapshot of all per-floor explored bitmaps plus
+    // the breadcrumb stack. SaveState folds this into its floors payload.
+    serializeState: function () {
+      var floors = {};
+      // Snapshot the in-memory _explored for the active floor into the
+      // cache before serializing so the live view isn't lost.
+      if (_currentFloorId) {
+        _floorCache[_currentFloorId] = _floorCache[_currentFloorId] || {};
+        _floorCache[_currentFloorId].explored     = _explored;
+        _floorCache[_currentFloorId].visibleFrame = _visibleFrame;
+      }
+      for (var fid in _floorCache) {
+        if (_floorCache.hasOwnProperty(fid)) {
+          var cached = _floorCache[fid];
+          // Only the explored bitmap (a sparse "x,y"→true map) needs to
+          // survive a load; visibleFrame is a transient per-tick highlight.
+          var exploredCopy = {};
+          if (cached.explored) {
+            for (var k in cached.explored) {
+              if (cached.explored.hasOwnProperty(k)) exploredCopy[k] = true;
+            }
+          }
+          floors[fid] = { explored: exploredCopy };
+        }
+      }
+      return {
+        floors:       floors,
+        floorStack:   _floorStack.slice(),
+        currentFloor: _currentFloorId || null
+      };
+    },
+
+    // Replace the per-floor cache wholesale. Called by SaveState during
+    // load BEFORE FloorManager regenerates the authored grid, so when
+    // enterFloor fires it restores the saved bitmap instead of starting
+    // fresh.
+    deserializeState: function (snap) {
+      if (!snap) return;
+      _floorCache = {};
+      if (snap.floors) {
+        for (var fid in snap.floors) {
+          if (snap.floors.hasOwnProperty(fid)) {
+            var saved = snap.floors[fid];
+            var exp = {};
+            if (saved && saved.explored) {
+              for (var k in saved.explored) {
+                if (saved.explored.hasOwnProperty(k)) exp[k] = true;
+              }
+            }
+            _floorCache[fid] = { explored: exp, visibleFrame: {} };
+          }
+        }
+      }
+      _floorStack = Array.isArray(snap.floorStack) ? snap.floorStack.slice() : [];
+      // Active-floor _explored/_visibleFrame will be restored when
+      // enterFloor(currentFloor) fires during FloorManager.generate.
+    }
   };
 })();

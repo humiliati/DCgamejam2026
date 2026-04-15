@@ -321,6 +321,16 @@ var HomeEvents = (function() {
               }
             }, 1500);
           }
+
+          // ── M2.4 checkpoint autosave ────────────────────────────
+          // Home-door rest is a respawn anchor for TIRED players who
+          // short-circuit the bed. Persist after WeekStrip advances +
+          // overnight hero run resolves so the save reflects the new
+          // day's world state.
+          if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+            try { SaveState.autosave(); }
+            catch (e) { console.warn('[HomeEvents] autosave after door-rest failed:', e); }
+          }
         }
       });
     }

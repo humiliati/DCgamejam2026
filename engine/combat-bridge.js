@@ -673,7 +673,7 @@ var CombatBridge = (function () {
     if (enemy.nonLethal) refightChance = 0;
     if (enemy.isElite || enemy.tier === 'boss') refightChance = 0.5;
 
-    var roll = Math.random();
+    var roll = SeededRNG.random();
     if (roll < refightChance) {
       // ── Re-initiate combat ──
       enemy.friendly = false;

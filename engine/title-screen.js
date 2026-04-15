@@ -105,7 +105,15 @@ var TitleScreen = (function () {
 
   // ── Title menu options ────────────────────────────────────────────
 
-  var TITLE_OPTIONS = ['new_game', 'credits', 'placeholder_settings'];
+  var TITLE_OPTIONS = ['new_game', 'continue', 'credits', 'placeholder_settings'];
+
+  // ── Slot-picker state (phase 4) ───────────────────────────────────
+  // Rows: 0 = autosave, 1..3 = slot_0..slot_2, 4 = BACK
+  var SAVE_SLOT_IDS  = ['autosave', 'slot_0', 'slot_1', 'slot_2'];
+  var SAVE_SLOT_BACK = SAVE_SLOT_IDS.length; // index of the BACK row
+  var _slotPickerSelected = 0;
+  var _slotPickerError   = null; // transient error text
+  var _slotPickerErrorT  = 0;    // ms remaining
 
   // ── Credits state ──────────────────────────────────────────────────
   var _creditsOpen = false;
@@ -278,6 +286,9 @@ var TitleScreen = (function () {
       _selected = (_selected - 1 + TITLE_OPTIONS.length) % TITLE_OPTIONS.length;
     } else if (_phase === 2) {
       _avatarIndex = (_avatarIndex - 1 + AVATARS.length) % AVATARS.length;
+    } else if (_phase === 4) {
+      var n4 = SAVE_SLOT_IDS.length + 1;
+      _slotPickerSelected = (_slotPickerSelected - 1 + n4) % n4;
     }
   }
 
@@ -290,6 +301,9 @@ var TitleScreen = (function () {
       _selected = (_selected + 1) % TITLE_OPTIONS.length;
     } else if (_phase === 2) {
       _avatarIndex = (_avatarIndex + 1) % AVATARS.length;
+    } else if (_phase === 4) {
+      var n4d = SAVE_SLOT_IDS.length + 1;
+      _slotPickerSelected = (_slotPickerSelected + 1) % n4d;
     }
   }
 
@@ -357,9 +371,14 @@ var TitleScreen = (function () {
         _callsignIndex = 0;
         _callsign = CALLSIGNS[0];
       } else if (_selected === 1) {
+        _phase = 4;
+        _slotPickerSelected = 0;
+        _slotPickerError = null;
+        _slotPickerErrorT = 0;
+      } else if (_selected === 2) {
         _creditsOpen = true;
         _creditsScroll = 0;
-      } else if (_selected === 2) {
+      } else if (_selected === 3) {
         _settingsOpen = true;
         _settingsSelected = 0;
         _settingsScroll = 0;
@@ -370,6 +389,13 @@ var TitleScreen = (function () {
       _avatarIndex = 0;
     } else if (_phase === 2) {
       _deploy();
+    } else if (_phase === 4) {
+      if (_slotPickerSelected === SAVE_SLOT_BACK) {
+        _phase = 0;
+        _selected = 1; // keep cursor on CONTINUE
+      } else {
+        _loadSelectedSlot(SAVE_SLOT_IDS[_slotPickerSelected]);
+      }
     }
   }
 
@@ -387,6 +413,9 @@ var TitleScreen = (function () {
       _selected = 0;
     } else if (_phase === 2) {
       _phase = 1;
+    } else if (_phase === 4) {
+      _phase = 0;
+      _selected = 1;
     }
   }
 
@@ -419,6 +448,16 @@ var TitleScreen = (function () {
     _phase = 3;
     _deployTimer = 0;
 
+    // Begin the run's seed lifecycle BEFORE any class-stat rolls so the roll
+    // is reproducible from the run seed. If a ?seed= URL param was decoded
+    // in Game.init, it will have been stashed on window._pendingRunSeed.
+    if (typeof SeededRNG !== 'undefined' && typeof SeededRNG.beginRun === 'function') {
+      var pending = (typeof window !== 'undefined' && window._pendingRunSeed != null)
+        ? window._pendingRunSeed : null;
+      SeededRNG.beginRun(pending);
+      if (typeof window !== 'undefined') window._pendingRunSeed = null;
+    }
+
     var ava = AVATARS[_avatarIndex];
     var p = Player.state();
     p.callsign = _callsign;
@@ -434,8 +473,8 @@ var TitleScreen = (function () {
       case 'energy':  p.maxEnergy += 3; p.energy = p.maxEnergy; break;
       case 'random':
         var stats = ['str', 'dex', 'stealth'];
-        p[stats[Math.floor(Math.random() * 3)]] += 3;
-        p.maxHp += Math.floor(Math.random() * 3);
+        p[stats[SeededRNG.randInt(0, 2)]] += 3;
+        p.maxHp += SeededRNG.randInt(0, 2);
         p.hp = p.maxHp;
         break;
     }
@@ -512,6 +551,8 @@ var TitleScreen = (function () {
       _renderAvatar(w, h);
     } else if (_phase === 3) {
       _renderDeploy(w, h);
+    } else if (_phase === 4) {
+      _renderSlotPicker(w, h);
     }
 
     // Update hover after drawing (zones are now populated)
@@ -957,6 +998,7 @@ var TitleScreen = (function () {
     var gap = 18;
     var labels = [
       i18n.t('title.new_game', 'New Game'),
+      i18n.t('title.continue', 'Continue'),
       i18n.t('title.credits', 'Credits'),
       i18n.t('title.settings', 'Settings')
     ];
@@ -1313,6 +1355,212 @@ var TitleScreen = (function () {
     _ctx.font = '16px ' + CRT_FONT;
     _ctx.textAlign = 'center';
     _ctx.fillText(i18n.t('create.avatar_hint', '[\u2190 \u2192 \u2191 \u2193] Browse   [Enter] Deploy   [Back]'), cx, h - 12);
+  }
+
+  // ── Slot picker (phase 4) ─────────────────────────────────────────
+
+  /**
+   * Read the peek metadata for a slot without loading it.
+   * Returns null if SaveState is unavailable or the slot is empty.
+   */
+  function _peekSlot(slotId) {
+    if (typeof SaveState === 'undefined' || !SaveState.peek) return null;
+    try { return SaveState.peek(slotId); }
+    catch (e) { return null; }
+  }
+
+  /** Format a slot row label from peek metadata. */
+  function _formatSlotLabel(slotId, meta) {
+    var prefix;
+    if (slotId === 'autosave') prefix = 'AUTOSAVE';
+    else prefix = 'SLOT ' + (parseInt(slotId.replace('slot_', ''), 10) + 1);
+
+    if (!meta) return prefix + ' \u2014 empty';
+
+    var cs   = meta.callsign || '???';
+    var cls  = (meta.class || '').toUpperCase();
+    var flr  = meta.currentFloor || '?';
+    var mins = Math.floor((meta.playtimeMs || 0) / 60000);
+    var playtime = mins < 60
+      ? mins + 'm'
+      : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+
+    var buildBadge = '';
+    var curBuild = (typeof SaveState !== 'undefined' && SaveState.BUILD_VERSION)
+      ? SaveState.BUILD_VERSION : null;
+    if (meta.buildVersion && curBuild && meta.buildVersion !== curBuild) {
+      buildBadge = '  \u26A0 build ' + meta.buildVersion;
+    }
+
+    return prefix + ' \u2014 ' + cs + ' (' + cls + ')  floor ' + flr +
+           '  \u00B7 ' + playtime + buildBadge;
+  }
+
+  function _renderSlotPicker(w, h) {
+    var cx = w / 2;
+
+    // Header
+    _ctx.save();
+    _ctx.shadowColor = GLOW_DIM;
+    _ctx.shadowBlur = 8;
+    _ctx.fillStyle = TEXT_WARM;
+    _ctx.font = 'bold 36px ' + CRT_FONT;
+    _ctx.textAlign = 'center';
+    _ctx.textBaseline = 'middle';
+    _ctx.fillText(i18n.t('title.continue', 'CONTINUE'), cx, h * 0.18);
+    _ctx.restore();
+
+    _ctx.fillStyle = TEXT_MUTED;
+    _ctx.font = '18px ' + CRT_FONT;
+    _ctx.textAlign = 'center';
+    _ctx.fillText('Select a save slot', cx, h * 0.18 + 36);
+
+    // Rows
+    var btnW = Math.min(640, w - 120);
+    var btnH = 56;
+    var gap  = 14;
+    var rows = SAVE_SLOT_IDS.length + 1; // +1 for BACK
+    var startY = h * 0.34;
+
+    for (var i = 0; i < SAVE_SLOT_IDS.length; i++) {
+      var slotId = SAVE_SLOT_IDS[i];
+      var meta   = _peekSlot(slotId);
+      var by     = startY + i * (btnH + gap);
+      var bx     = cx - btnW / 2;
+      var isSel  = (_slotPickerSelected === i);
+      var zoneIdx = _hitZones.length;
+      var disabled = !meta;
+
+      _drawGlowButton(_ctx, bx, by, btnW, btnH, {
+        selected: isSel,
+        hovered: _isZoneHovered(zoneIdx),
+        disabled: disabled
+      });
+
+      _ctx.textAlign = 'left';
+      _ctx.textBaseline = 'middle';
+      _ctx.font = (isSel ? 'bold ' : '') + '18px ' + CRT_FONT;
+      if (disabled) _ctx.fillStyle = '#555';
+      else if (isSel || _isZoneHovered(zoneIdx)) _ctx.fillStyle = '#fff';
+      else _ctx.fillStyle = TEXT_WARM;
+      _ctx.fillText(_formatSlotLabel(slotId, meta), bx + 20, by + btnH / 2);
+
+      (function (rowIdx, hasMeta) {
+        _hitZones.push({
+          x: bx, y: by, w: btnW, h: btnH,
+          action: function () {
+            _slotPickerSelected = rowIdx;
+            if (hasMeta) _confirm();
+          }
+        });
+      })(i, !disabled);
+    }
+
+    // BACK row
+    var byBack = startY + SAVE_SLOT_IDS.length * (btnH + gap) + 20;
+    var bxBack = cx - btnW / 2;
+    var isBackSel = (_slotPickerSelected === SAVE_SLOT_BACK);
+    var backZone  = _hitZones.length;
+
+    _drawGlowButton(_ctx, bxBack, byBack, btnW, btnH, {
+      selected: isBackSel,
+      hovered: _isZoneHovered(backZone),
+      disabled: false
+    });
+    _ctx.textAlign = 'center';
+    _ctx.font = (isBackSel ? 'bold ' : '') + '20px ' + CRT_FONT;
+    _ctx.fillStyle = (isBackSel || _isZoneHovered(backZone)) ? '#fff' : TEXT_WARM;
+    _ctx.fillText('BACK', cx, byBack + btnH / 2);
+
+    _hitZones.push({
+      x: bxBack, y: byBack, w: btnW, h: btnH,
+      action: function () {
+        _slotPickerSelected = SAVE_SLOT_BACK;
+        _confirm();
+      }
+    });
+
+    // Transient error toast (e.g., load failed)
+    if (_slotPickerError && _slotPickerErrorT > 0) {
+      _ctx.fillStyle = '#ff6b6b';
+      _ctx.font = 'bold 18px ' + CRT_FONT;
+      _ctx.textAlign = 'center';
+      _ctx.fillText(_slotPickerError, cx, h - 72);
+      _slotPickerErrorT -= 16; // approximate per-frame tick; set generously on error
+    }
+  }
+
+  /**
+   * Load a save slot and transition into gameplay.
+   *
+   * Build-version gate: if the saved blob was authored under a different
+   * SaveState.BUILD_VERSION, we warn (via Toast + slot-picker banner) but
+   * allow the load anyway. For Jam scope, schema breakage is unlikely —
+   * additive extensions dominate — and forcing a lockout would orphan
+   * playtesters across quick patches.
+   */
+  function _loadSelectedSlot(slotId) {
+    if (typeof SaveState === 'undefined' || !SaveState.load) {
+      _slotPickerError = 'Save system unavailable';
+      _slotPickerErrorT = 2500;
+      return;
+    }
+
+    var meta = _peekSlot(slotId);
+    if (!meta) {
+      _slotPickerError = 'Slot is empty';
+      _slotPickerErrorT = 2000;
+      return;
+    }
+
+    // Build-version advisory (non-blocking)
+    var curBuild = SaveState.BUILD_VERSION || null;
+    if (meta.buildVersion && curBuild && meta.buildVersion !== curBuild) {
+      if (typeof Toast !== 'undefined' && Toast.show) {
+        Toast.show('\u26A0 Save from build ' + meta.buildVersion +
+                   ' (current: ' + curBuild + '). Attempting load...', 'warning');
+      }
+      console.warn('[TitleScreen] build mismatch: save=' + meta.buildVersion +
+                   ' current=' + curBuild);
+    }
+
+    // Attempt load — SaveState.load restores all subsystems in-place.
+    var ok = false;
+    try {
+      ok = !!SaveState.load(slotId);
+    } catch (e) {
+      console.error('[TitleScreen] SaveState.load threw:', e);
+      ok = false;
+    }
+
+    if (!ok) {
+      _slotPickerError = 'Failed to load save';
+      _slotPickerErrorT = 2500;
+      if (typeof Toast !== 'undefined' && Toast.show) {
+        Toast.show('\u2716 Could not load save', 'error');
+      }
+      return;
+    }
+
+    // Hand off to gameplay. The load has already populated FloorManager,
+    // CardAuthority, Player, Minimap, CrateSystem, DayCycle, SessionStats,
+    // etc. Mark the resume handshake so Game._initGameplay skips the
+    // fresh-run seeding path (starter deck, 15g, starter bag items,
+    // class-item equip, deploy monologue, Floor 0 scaffolding).
+    if (typeof SaveState !== 'undefined' && SaveState.setResuming) {
+      SaveState.setResuming(slotId);
+    }
+
+    _active = false;
+    _unbindInput();
+
+    if (typeof AudioMusicManager !== 'undefined' && AudioMusicManager.stopTitle) {
+      AudioMusicManager.stopTitle();
+    }
+
+    if (typeof ScreenManager !== 'undefined' && ScreenManager.toGameplay) {
+      ScreenManager.toGameplay();
+    }
   }
 
   function _renderDeploy(w, h) {
@@ -1907,6 +2155,9 @@ var TitleScreen = (function () {
     _callsign = CALLSIGNS[0];
     _avatarIndex = 0;
     _deployTimer = 0;
+    _slotPickerSelected = 0;
+    _slotPickerError = null;
+    _slotPickerErrorT = 0;
     _mouseX = -1;
     _mouseY = -1;
     _hoveredZoneIdx = -1;

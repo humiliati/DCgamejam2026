@@ -346,6 +346,33 @@ full reload.
 (Legacy path: **Copy meta JSON** → paste into the floor's
 `registerFloorBuilder` entry — still works for non-standard shapes.)
 
+## In-tool help
+
+Click the **`?`** button in the toolbar (or press `?` / `F1`) for the
+built-in help modal. Eight tabs, each mirroring a section of this
+README:
+
+| Tab | Contents |
+|-----|----------|
+| Controls | Pan / zoom / tool shortcuts / brush sizes / quick-select tiles |
+| Overlays | Room, door, dirty, legend, tile-ID toggles |
+| Save | `Ctrl+S` flow, what the patcher rewrites, fallback download |
+| Validate | Per-floor + cross-floor checks, severity colors |
+| Meta | Spawn drag-place, door-target dropdown, dirty indicator |
+| Agent API | `window.BO.run`, perception tools, stamp library cheat sheet |
+| Workflows | Edit-existing / author-window-scene / fix-door-targets |
+| New floor | The planned world-designer → BO-V seed-payload handoff |
+
+Close with **Close**, `Esc`, or click outside the modal. The modal is
+keyboard-dismissable even while edit mode is active; typing into any
+input/textarea swallows the `?` shortcut so it doesn't collide with
+tile-picker search or rename fields.
+
+The info bar at the bottom of the window also shows a live **Dirty:**
+cell that mirrors the toolbar's edit-count (red when dirty, grey when
+clean) and a persistent "Press ? for help" hint pinned to the right
+edge.
+
 ## Agent API (Tier 6 Pass 1)
 
 The visualizer exposes a headless command router so an AI agent
@@ -549,6 +576,42 @@ __metaSmokeTest()                    // list doors + spawn for current floor
 __boSmokeTest('1.3.1')               // selectFloor + paintRect + validate + undo roundtrip
 ```
 
+## Workflows for AI agents
+
+Three canonical entry points, matching the tool's three execution
+modes. Pick the one that fits the agent's environment:
+
+| Mode | Entry point | When to use |
+|------|-------------|-------------|
+| In-browser (DOM access) | `window.BO.run({action, ...})` | The agent drives the live editor (Claude-in-Chrome, Puppeteer, browser extension). Edits land in the real undo stack; `Ctrl+S` or `{action:'save'}` writes back to `engine/`. |
+| Headless Node | `tools/blockout-cli.js <action> [flags]` | Batch edits, CI scripts, agents without a browser. Mutates `tools/floor-data.json` and the stamp registry at `tools/stamps.json`. Cannot rewrite `engine/floor-blockout-*.js` — round-trip via the browser. |
+| Perception-only | `renderAscii` / `diffAscii` / `describeCell` / `reportValidation` / `captureFloor` | Before every mutation, agents without vision should snapshot with `getFloor`, make an edit, then `diffAscii` against the snapshot to verify. Pair with `reportValidation` to catch broken door targets + unreachable walkable regions. |
+
+**Recommended loop for a delegated slice** (e.g. "rebuild floor 2 to
+48×32" or "wire door at (5,3) to floor 2.2.2"):
+
+1. `listFloors` → confirm the target floor exists and matches the
+   planned ID.
+2. `getFloor` → snapshot. Keep the result — it's the `before:` for
+   `diffAscii`.
+3. `renderAscii` with a modest viewport → read what's actually on disk
+   today.
+4. Plan edits against the tile schema via `findTiles({isDoor:true})` /
+   `tileSchema('WALL')` — never hardcode numeric tile IDs in agent
+   scripts.
+5. Mutate via `paintRect` / `paintLine` / `floodFill` / `stampRoom` /
+   `applyStamp` / `setSpawn` / `setDoorTarget`. Every mutation is one
+   undo step.
+6. `diffAscii` against the snapshot → confirm the change matches
+   intent.
+7. `reportValidation` (or append `postValidate:'current'` to the last
+   mutation) → must be clean of `err`-severity issues before save.
+8. `{action:'save'}` (browser only) or hand off to a human for the
+   File-System-Access-API save.
+
+See the help modal's **Agent API** and **Workflows** tabs for the
+short-form version.
+
 ## Workflow: editing an existing floor
 
 1. Run `node tools/extract-floors.js` to refresh the side-cars
@@ -564,14 +627,31 @@ compact per-cell delta.
 
 ## Workflow: creating a new floor
 
+**Planned model (post world-designer):** floor birth happens in the
+world-designer — pick the node in the floor-ID tree, pick a biome, pin
+which neighbor doors target it, set dimensions from the biome defaults.
+World-designer scaffolds `engine/floor-blockout-<id>.js` with the
+required tiles pre-stamped (entry door, spawn, the pinned doorTargets
+entries) and opens BO-V on the seeded grid. BO-V's job is then just to
+cut the layout.
+
+**Manual stop-gap** until that handoff ships (use this for Floor 2
+rebuild, Floor 3 creation, and any one-offs):
+
 1. Pick an existing floor of similar size as a starting point
 2. Use the resize controls to adjust dimensions
-3. Paint / lasso / bucket the new layout
-4. **Copy Full** → paste into a new `floor-blockout-*.js` file
-5. Register with `FloorManager.registerFloorBuilder('ID', builderFn)`
-6. Add the `<script>` tag to `index.html` at the correct layer
-7. Re-run `extract-floors.js` so the new floor appears in the visualizer
-   dropdown next time
+3. Paint / lasso / bucket / stamp the new layout
+4. Set spawn and pin door targets via the Meta panel (`M`)
+5. **Copy Full** → paste into a new `floor-blockout-*.js` file
+6. Register with `FloorManager.registerFloorBuilder('ID', builderFn)`
+7. Add the `<script>` tag to `index.html` at the correct layer
+8. Re-run `extract-floors.js` so the new floor appears in the
+   visualizer dropdown next time
+9. Re-open BO-V on the new floor and run **Validate → All floors** to
+   catch broken cross-references in neighbors
+
+See `tools/short-roadmap.md` for the pass that will promote step 5-8
+into the world-designer seed-payload flow.
 
 ## Workflow: authoring a window scene
 

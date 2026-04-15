@@ -1328,8 +1328,11 @@ var Raycaster = (function () {
       var _recessJamb = false;
       // Recess gate: check BOTH door and window exterior-face registries.
       // Door tiles use DoorSprites; window tiles use WindowSprites.
+      // Torch tiles are omnidirectional — every face is a valid niche face,
+      // so they recess on any hit (no exterior-face lookup needed).
       var _isExtHit = false;
-      if (TILES.isFreeform(hitTile)) {
+      var _isOmniRecess = (hitTile === TILES.TORCH_LIT || hitTile === TILES.TORCH_UNLIT);
+      if (TILES.isFreeform(hitTile) && !_isOmniRecess) {
         if (TILES.isWindow && TILES.isWindow(hitTile)) {
           _isExtHit = (typeof WindowSprites !== 'undefined' && WindowSprites.isExteriorHit &&
                        WindowSprites.isExteriorHit(mapX, mapY, side, stepX, stepY));
@@ -1338,7 +1341,30 @@ var Raycaster = (function () {
                        DoorSprites.isExteriorHit(mapX, mapY, side, stepX, stepY));
         }
       }
-      if (_isExtHit) {
+      // ── Narrow-aperture preview (torch tiles only) ────────────────
+      // Torches want a 1/5-tile-wide niche with flush masonry jambs on
+      // either side — NOT a full-tile recess like DOOR_FACADE. Compute a
+      // preview wallX at the tile-boundary perpDist; if it lands outside
+      // the aperture range, short-circuit: leave perpDist at the tile
+      // face (flush with adjacent walls) and mark _recessJamb so the
+      // freeform filler is suppressed below — the column then renders
+      // with the normal wall-texture path. Only aperture columns recess.
+      var _torchFlushJamb = false;
+      if (_isOmniRecess) {
+        var _pwX;
+        if (side === 0) _pwX = py + perpDist * rayDirY;
+        else            _pwX = px + perpDist * rayDirX;
+        _pwX = _pwX - Math.floor(_pwX);
+        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+          _pwX = 1 - _pwX;
+        }
+        // Aperture must match torch-niche.js _NICHE_L / _NICHE_R (0.40/0.60).
+        if (_pwX < 0.40 || _pwX > 0.60) {
+          _recessJamb = true;      // suppresses freeformCfg / solid z-buffer write
+          _torchFlushJamb = true;  // skip the recess-advance block below
+        }
+      }
+      if ((_isExtHit || _isOmniRecess) && !_torchFlushJamb) {
         // Per-tile recess depth from freeform config, or global default.
         var _rfCfg = (_contract) ? SpatialContract.getTileFreeform(_contract, hitTile) : null;
         var _recessD = (_rfCfg && _rfCfg.recessD) ? _rfCfg.recessD : 0.25;
