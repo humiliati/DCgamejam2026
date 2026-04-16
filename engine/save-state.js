@@ -19,12 +19,24 @@
  *             state. Shop + WorkOrderSystem gained serialize()/deserialize()
  *             (2026-04-15) and are wired in here. Quests/Factions remain
  *             forward-compat stubs until their owning modules exist.
- *   M2.3 ⏳ — per-floor diffs (explored, cleanup, entity, chests, vermin,
- *             traps, doors, buttons, puzzles, reanimated formidables).
- *             Partial progress: M2.3a landed CleaningSystem blood + grime
- *             (base64 Uint8Array per allocated tile); M2.3c landed
- *             Minimap.explored + CrateSystem containers; remaining
- *             categories stubbed in _emptyFloorDiff.
+ *   M2.3 ✅ — per-floor diffs (explored, cleanup, torches, containers,
+ *             traps). Shipped across five subslices 2026-04-14/15:
+ *               M2.3a CleaningSystem blood + grime (base64 Uint8Array
+ *                     per allocated tile).
+ *               M2.3b TorchState per-floor records (tile + 3-slot fuel)
+ *                     with _loaded gate that suppresses re-seed +
+ *                     hero-damage roll and grid-patches from torch.tile
+ *                     on post-load regen.
+ *               M2.3c Minimap.explored bitmap + CrateSystem containers.
+ *               M2.3d TrapRearm {consumed,rearmed,total} with
+ *                     onFloorLoad grid-patch for consumed-but-not-
+ *                     rearmed positions.
+ *               M2.3e retired superseded stub fields (cleanedTiles,
+ *                     bloodTiles, armedTraps, disarmedTraps, sealedCrates,
+ *                     chestPhases) in _emptyFloorDiff. Forward-compat
+ *                     stubs retained for modules that don't exist yet
+ *                     (doors, buttons, puzzles, vermin, formidables,
+ *                     entities) — see _emptyFloorDiff for per-key status.
  *   M2.4 ⏳ — autosave hooks (FloorTransition + checkpoint tiles) +
  *             death:reset integration. Decision 2026-04-15: same slice
  *             wires curfew → teleport-to-residence using an act-aware
@@ -368,28 +380,70 @@ var SaveState = (function () {
       }
     }
 
+    // M2.3b — TorchState: per-floor torch slot records (tile state, 3-slot
+    // fuel array). Plain JSON, no binary. Only floors that registered
+    // torches get serialized; empty floors stay on the stub.
+    if (typeof TorchState !== 'undefined' && TorchState.serialize) {
+      for (var fid5 in seenFloors) {
+        if (!seenFloors.hasOwnProperty(fid5)) continue;
+        var torchSnap = TorchState.serialize(fid5);
+        if (!torchSnap) continue;
+        if (!out[fid5]) out[fid5] = _emptyFloorDiff();
+        out[fid5].torches = torchSnap;
+      }
+    }
+
+    // M2.3d — TrapRearm: per-floor {consumed, rearmed, total}. Floors
+    // with a recorded _total (visited at least once) get serialized even
+    // if no traps were consumed yet — the count matters for readiness.
+    if (typeof TrapRearm !== 'undefined' && TrapRearm.serialize) {
+      for (var fid6 in seenFloors) {
+        if (!seenFloors.hasOwnProperty(fid6)) continue;
+        var trapSnap = TrapRearm.serialize(fid6);
+        if (!trapSnap) continue;
+        if (!out[fid6]) out[fid6] = _emptyFloorDiff();
+        out[fid6].traps = trapSnap;
+      }
+    }
+
     return out;
   }
 
   function _emptyFloorDiff() {
+    // Shape of a per-floor diff (M2.3e, 2026-04-15).
+    //
+    // Reality-matched fields (M2.3a–d): owner module + shape aligned with
+    // what that module actually serializes.
+    //   explored     — Minimap._floorCache              (M2.3c, 2026-04-14)
+    //   containers   — CrateSystem.serializeFloor()     (M2.3c, 2026-04-14)
+    //   blood/grime/seeded — CleaningSystem.serialize() (M2.3a)
+    //   torches      — TorchState.serialize()           (M2.3b)
+    //   traps        — TrapRearm.serialize()            (M2.3d)
+    //
+    // Retired 2026-04-15 (M2.3e): fields whose shape never matched an owning
+    // module and whose responsibilities are now covered by the reality-matched
+    // keys above — cleanedTiles/bloodTiles (→ blood+grime), armedTraps/
+    // disarmedTraps (→ traps), sealedCrates/chestPhases (→ containers).
+    //
+    // Forward-compat stubs kept for modules that don't exist yet:
+    //   relockedDoors/unlockedDoors — DoorContracts has no per-floor lock
+    //     state serialize hook yet; format TBD.
+    //   resetButtons/scrambledPuzzles — modules don't exist.
+    //   verminSpawns/verminLastRefreshDay/reanimatedFormidables — post-Jam.
+    //   entities — needs EnemyAI + NpcSystem serialize (separate slice).
     return {
-      explored:              {},  // sparse "x,y" → true bitmap
+      explored:              {},  // Minimap: sparse "x,y" → true bitmap
       containers:            [],  // CrateSystem.serializeFloor() output
-      // M2.3a — CleaningSystem per-floor state
-      blood:                 {},  // "x,y" → discrete blood level 1-3
-      grime:                 {},  // "x,y" → { res, b64(Uint8Array) }
+      blood:                 {},  // CleaningSystem: "x,y" → discrete blood level 1-3
+      grime:                 {},  // CleaningSystem: "x,y" → { res, b64(Uint8Array) }
       seeded:                false, // CleaningSystem.isSeeded flag
-      // TODO (M2.3 later slices) — stubbed fields keyed for forward compat
-      cleanedTiles:          [],
-      bloodTiles:            [],
-      armedTraps:            [],
-      disarmedTraps:         [],
+      torches:               {},  // TorchState: "x,y" → {x,y,tile,biome,idealFuel,slots[3]}
+      traps:                 null, // TrapRearm: { consumed, rearmed, total } or null
+      // Forward-compat stubs — owning modules not written yet (see above)
       relockedDoors:         [],
       unlockedDoors:         [],
       resetButtons:          [],
       scrambledPuzzles:      [],
-      sealedCrates:          [],
-      chestPhases:           [],
       verminSpawns:          [],
       verminLastRefreshDay:  0,
       reanimatedFormidables: [],
@@ -521,6 +575,33 @@ var SaveState = (function () {
           grime:  sliceC.grime  || {},
           seeded: !!sliceC.seeded
         });
+      }
+    }
+
+    // M2.3b — TorchState: restore per-floor torch records. The _loaded
+    // flag set by deserialize short-circuits registerFloor's baseline
+    // scan and applyHeroDamage's re-roll on the next FloorManager
+    // generation pass — registerFloor instead patches the fresh grid
+    // from saved torch.tile values.
+    if (blob.floors && typeof TorchState !== 'undefined' && TorchState.deserialize) {
+      for (var fidT in blob.floors) {
+        if (!blob.floors.hasOwnProperty(fidT)) continue;
+        var sliceT = blob.floors[fidT];
+        if (!sliceT) continue;
+        TorchState.deserialize(fidT, sliceT.torches || null);
+      }
+    }
+
+    // M2.3d — TrapRearm: restore per-floor {consumed, rearmed, total}.
+    // Setting _total[floorId] serves as the "already loaded" sentinel
+    // for onFloorLoad, which then grid-patches consumed-but-not-rearmed
+    // positions to TILES.EMPTY on the next FloorManager regen.
+    if (blob.floors && typeof TrapRearm !== 'undefined' && TrapRearm.deserialize) {
+      for (var fidR in blob.floors) {
+        if (!blob.floors.hasOwnProperty(fidR)) continue;
+        var sliceR = blob.floors[fidR];
+        if (!sliceR) continue;
+        TrapRearm.deserialize(fidR, sliceR.traps || null);
       }
     }
 

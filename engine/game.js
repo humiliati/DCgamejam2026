@@ -1356,6 +1356,7 @@ var Game = (function () {
     if (typeof TorchPeek    !== 'undefined') TorchPeek.init();
     if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.init();
     if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.init();
+    if (typeof ClickyMinigame !== 'undefined') ClickyMinigame.init();
     if (typeof BedPeek !== 'undefined') BedPeek.init();
     if (typeof HosePeek !== 'undefined') HosePeek.init();
     if (typeof SpraySystem !== 'undefined') SpraySystem.init();
@@ -3093,6 +3094,24 @@ var Game = (function () {
         HosePeek.tryGrab(fx, fy, FloorManager.getCurrentFloorId());
       }
     }
+    // ── Tier 1 clicky minigame tiles (WELL/ANVIL/SOUP_KITCHEN/BARREL) ──
+    else if (typeof ClickyMinigame !== 'undefined' && ClickyMinigame.hasRecipe(tile)) {
+      var faceRecipe = ClickyMinigame.getRecipe(tile);
+      if (faceRecipe && !faceRecipe.walkable) {
+        ClickyMinigame.tryTap(tile, fx, fy, floorData);
+      }
+    }
+
+    // ── Walkable clicky (FUNGAL_PATCH etc.) — test standing tile ──
+    if (typeof ClickyMinigame !== 'undefined') {
+      var pp = Player.getPos();
+      var standRow = floorData.grid[pp.y];
+      var standTile = standRow ? standRow[pp.x] : -1;
+      var standRecipe = ClickyMinigame.getRecipe(standTile);
+      if (standRecipe && standRecipe.walkable) {
+        ClickyMinigame.tryTap(standTile, pp.x, pp.y, floorData);
+      }
+    }
   }
 
   // ── Quick-fill crate from bag (DEPTH3 §6.3b) ─────────────────────
@@ -3600,6 +3619,7 @@ var Game = (function () {
       if (typeof TorchPeek    !== 'undefined') TorchPeek.update(frameDt);
       if (typeof BookshelfPeek !== 'undefined') BookshelfPeek.update(frameDt);
       if (typeof BarCounterPeek !== 'undefined') BarCounterPeek.update(frameDt);
+      if (typeof ClickyMinigame !== 'undefined') ClickyMinigame.update(frameDt);
       if (typeof BedPeek !== 'undefined') BedPeek.update(frameDt);
       if (typeof MailboxPeek !== 'undefined') MailboxPeek.update(frameDt);
       if (typeof StatusEffectHUD !== 'undefined') StatusEffectHUD.update();

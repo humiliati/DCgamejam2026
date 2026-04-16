@@ -33,11 +33,41 @@ var Lighting = (function () {
     [50, 24, 6 ]    // HOME_HEARTH — golden amber, high R = safe/warm read
   ];
 
+  // ── Flicker tunables (Lighting Test-Harness §1) ────────────────
+  // Lifted from hardcoded values in _flicker() so the harness can tune.
+  var _FLICKER_FREQ = {
+    torch:          18.85,  // rad/s (~3 Hz visible shimmer)
+    bonfire_slow:    6.28,  // rad/s (~1 Hz slow pulse)
+    bonfire_fast:   31.40,  // rad/s fast shimmer overlay
+    hearth_primary: 31.40,  // rad/s nervous stutter primary
+    hearth_second:  47.10,  // rad/s erratic secondary harmonic
+    hearth_third:   11.00,  // rad/s low-freq wobble
+    steady:          0.00   // no flicker
+  };
+
+  var _FLICKER_AMP = {
+    torch:          0.15,   // ±15% of base intensity
+    bonfire_slow:   0.10,
+    bonfire_fast:   0.03,
+    hearth_primary: 0.18,
+    hearth_second:  0.06,
+    hearth_third:   0.04
+  };
+
+  // Tint palette RGB — mutable copies for harness tuning.
+  // _TINT_RGB above is the public reference; keep both in sync.
+  // (We mutate _TINT_RGB entries in-place so getTintRGB callers get
+  // updated values without re-querying.)
+
+  var _GRID_LIGHTMAP_RADIUS = 6;  // alias; _playerLightRadius starts here
+  var _FALLOFF_EXPONENT     = 2;  // 1 = linear, 2 = quadratic (default)
+  var _WALL_DARKNESS_MUL    = 1.0;  // multiplier on unlit wall shading
+
   // ── State ──────────────────────────────────────────────────────
   var _lightMap = null;   // Float32Array[] — brightness per tile (0–1)
   var _tintStr  = null;   // Float32Array[] — tint intensity per tile (0–1)
   var _tintId   = null;   // Uint8Array[]   — tint palette index per tile
-  var _playerLightRadius = 6;
+  var _playerLightRadius = _GRID_LIGHTMAP_RADIUS;
   var _lightSources = []; // { x, y, radius, intensity, tint, flickerType, _seed }
   var _gridW = 0;
   var _gridH = 0;
@@ -207,17 +237,17 @@ var Lighting = (function () {
         // The grid lightmap path (calculate()) further damps this to
         // ±6% and holds radius steady, so adjacent wall textures don't
         // pulse when several torches share a corridor.
-        return 0.85 + 0.15 * Math.sin(t * 18.85 + s);
+        return (1.0 - _FLICKER_AMP.torch) + _FLICKER_AMP.torch * Math.sin(t * _FLICKER_FREQ.torch + s);
       case 'bonfire':
         // Slow pulse ~1Hz ±10%, plus subtle fast shimmer
-        return 0.90 + 0.10 * Math.sin(t * 6.28 + s)
-                     + 0.03 * Math.sin(t * 31.4 + s * 2);
+        return (1.0 - _FLICKER_AMP.bonfire_slow) + _FLICKER_AMP.bonfire_slow * Math.sin(t * _FLICKER_FREQ.bonfire_slow + s)
+                     + _FLICKER_AMP.bonfire_fast * Math.sin(t * _FLICKER_FREQ.bonfire_fast + s * 2);
       case 'hearth-dungeon':
         // Nervous stutter — 5Hz primary + erratic secondary harmonic.
         // Reads as a fire fighting a draft, unsafe and sputtering.
-        return 0.78 + 0.18 * Math.sin(t * 31.4 + s)
-                     + 0.06 * Math.sin(t * 47.1 + s * 3)
-                     + 0.04 * Math.sin(t * 11.0 + s * 7);
+        return (1.0 - _FLICKER_AMP.hearth_primary - _FLICKER_AMP.hearth_second) + _FLICKER_AMP.hearth_primary * Math.sin(t * _FLICKER_FREQ.hearth_primary + s)
+                     + _FLICKER_AMP.hearth_second * Math.sin(t * _FLICKER_FREQ.hearth_second + s * 3)
+                     + _FLICKER_AMP.hearth_third * Math.sin(t * _FLICKER_FREQ.hearth_third + s * 7);
       case 'steady':
       case 'none':
       default:
@@ -353,7 +383,7 @@ var Lighting = (function () {
 
   // ── Accessors ─────────────────────────────────────────────────
 
-  function setRadius(r) { _playerLightRadius = r; }
+  function setRadius(r) { _playerLightRadius = r; _GRID_LIGHTMAP_RADIUS = r; }
   function getMap() { return _lightMap; }
 
   /** @returns {Array[]} Float32Array[] — tint intensity per tile (0–1) */
@@ -374,6 +404,80 @@ var Lighting = (function () {
   // getWarmMap() returns tintStr for callers that haven't migrated.
   function getWarmMap() { return _tintStr; }
 
+  // ── Accessors for downstream consumers (raycaster wall-darkness) ─
+  function getWallDarknessMul() { return _WALL_DARKNESS_MUL; }
+  function getFalloffExponent() { return _FALLOFF_EXPONENT; }
+
+  // ── Tunable surface (Lighting Test-Harness §1) ────────────────
+
+  function getTunables() {
+    var tintRGB = [];
+    for (var i = 0; i < _TINT_RGB.length; i++) {
+      tintRGB.push([_TINT_RGB[i][0], _TINT_RGB[i][1], _TINT_RGB[i][2]]);
+    }
+    return {
+      GRID_LIGHTMAP_RADIUS: _GRID_LIGHTMAP_RADIUS,
+      FALLOFF_EXPONENT:     _FALLOFF_EXPONENT,
+      WALL_DARKNESS_MUL:    _WALL_DARKNESS_MUL,
+      FLICKER_FREQ:  {
+        torch:          _FLICKER_FREQ.torch,
+        bonfire_slow:   _FLICKER_FREQ.bonfire_slow,
+        bonfire_fast:   _FLICKER_FREQ.bonfire_fast,
+        hearth_primary: _FLICKER_FREQ.hearth_primary,
+        hearth_second:  _FLICKER_FREQ.hearth_second,
+        hearth_third:   _FLICKER_FREQ.hearth_third
+      },
+      FLICKER_AMP: {
+        torch:          _FLICKER_AMP.torch,
+        bonfire_slow:   _FLICKER_AMP.bonfire_slow,
+        bonfire_fast:   _FLICKER_AMP.bonfire_fast,
+        hearth_primary: _FLICKER_AMP.hearth_primary,
+        hearth_second:  _FLICKER_AMP.hearth_second,
+        hearth_third:   _FLICKER_AMP.hearth_third
+      },
+      TINT_RGB: tintRGB
+    };
+  }
+
+  function setTunables(patch) {
+    if (!patch || typeof patch !== 'object') return;
+    if (patch.GRID_LIGHTMAP_RADIUS != null) {
+      _GRID_LIGHTMAP_RADIUS = +patch.GRID_LIGHTMAP_RADIUS;
+      _playerLightRadius    = _GRID_LIGHTMAP_RADIUS;
+    }
+    if (patch.FALLOFF_EXPONENT  != null) _FALLOFF_EXPONENT  = +patch.FALLOFF_EXPONENT;
+    if (patch.WALL_DARKNESS_MUL != null) _WALL_DARKNESS_MUL = +patch.WALL_DARKNESS_MUL;
+    // Flicker frequency overrides
+    if (patch.FLICKER_FREQ && typeof patch.FLICKER_FREQ === 'object') {
+      var ff = patch.FLICKER_FREQ;
+      for (var fk in ff) {
+        if (ff.hasOwnProperty(fk) && _FLICKER_FREQ.hasOwnProperty(fk)) {
+          _FLICKER_FREQ[fk] = +ff[fk];
+        }
+      }
+    }
+    // Flicker amplitude overrides
+    if (patch.FLICKER_AMP && typeof patch.FLICKER_AMP === 'object') {
+      var fa = patch.FLICKER_AMP;
+      for (var ak in fa) {
+        if (fa.hasOwnProperty(ak) && _FLICKER_AMP.hasOwnProperty(ak)) {
+          _FLICKER_AMP[ak] = +fa[ak];
+        }
+      }
+    }
+    // Tint palette RGB overrides — array of [r,g,b] by index
+    if (patch.TINT_RGB && Array.isArray(patch.TINT_RGB)) {
+      for (var ti = 0; ti < patch.TINT_RGB.length && ti < _TINT_RGB.length; ti++) {
+        var t = patch.TINT_RGB[ti];
+        if (Array.isArray(t) && t.length >= 3) {
+          _TINT_RGB[ti][0] = +t[0];
+          _TINT_RGB[ti][1] = +t[1];
+          _TINT_RGB[ti][2] = +t[2];
+        }
+      }
+    }
+  }
+
   return {
     TINT:               TINT,
     TINT_RGB:           _TINT_RGB,
@@ -389,6 +493,10 @@ var Lighting = (function () {
     getFlickerLights:   getFlickerLights,
     addLightSource:     addLightSource,
     removeLightSource:  removeLightSource,
-    clearLightSources:  clearLightSources
+    clearLightSources:  clearLightSources,
+    getWallDarknessMul: getWallDarknessMul,
+    getFalloffExponent: getFalloffExponent,
+    getTunables:        getTunables,
+    setTunables:        setTunables
   };
 })();

@@ -978,6 +978,81 @@ var WeatherSystem = (function () {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // ── Tunable surface (Lighting Test-Harness §1) ──
+  // ═══════════════════════════════════════════════════════════════
+
+  // Particle density scale — multiplier on per-layer particle cap.
+  // 1.0 = normal, 0.25 = quarter density, 1.5 = 50% more.
+  var _particleDensityScale = 1.0;
+
+  // Wind vector override — when non-null, replaces per-preset
+  // scrollX/scrollY for all layers. {x: px/s, y: px/s}.
+  var _windOverride = null;
+
+  // Preset force — when non-null, setPreset calls are intercepted
+  // and the forced preset is used instead (for harness preview).
+  var _presetForce = null;
+
+  // Wrap setPreset to support forced preset
+  var _origSetPreset = setPreset;
+  setPreset = function (name, contract) {
+    if (_presetForce && _presets[_presetForce]) {
+      _origSetPreset(_presetForce, contract);
+    } else {
+      _origSetPreset(name, contract);
+    }
+  };
+
+  // Wrap tick to apply density scale and wind override
+  var _origTick = tick;
+  tick = function (dt, screenW, screenH) {
+    // Temporarily scale MAX_PARTICLES for density control
+    var origMax = MAX_PARTICLES;
+    MAX_PARTICLES = Math.round(origMax * _particleDensityScale);
+    _origTick(dt, screenW, screenH);
+    MAX_PARTICLES = origMax;
+  };
+
+  function getTunables() {
+    return {
+      MAX_PARTICLES:         MAX_PARTICLES,
+      CROSSFADE_MS:          CROSSFADE_MS,
+      particleDensityScale:  _particleDensityScale,
+      windOverride:          _windOverride ? { x: _windOverride.x, y: _windOverride.y } : null,
+      presetForce:           _presetForce,
+      activePreset:          _activeName
+    };
+  }
+
+  function setTunables(patch) {
+    if (!patch || typeof patch !== 'object') return;
+    if (patch.MAX_PARTICLES != null)         MAX_PARTICLES = Math.max(1, +patch.MAX_PARTICLES | 0);
+    if (patch.CROSSFADE_MS  != null)         CROSSFADE_MS  = Math.max(50, +patch.CROSSFADE_MS | 0);
+    if (patch.particleDensityScale != null)  _particleDensityScale = +patch.particleDensityScale;
+    if (patch.windOverride !== undefined) {
+      if (patch.windOverride === null) {
+        _windOverride = null;
+      } else {
+        _windOverride = { x: +patch.windOverride.x || 0, y: +patch.windOverride.y || 0 };
+      }
+    }
+    if (patch.presetForce !== undefined) {
+      if (patch.presetForce === null || patch.presetForce === 'auto') {
+        _presetForce = null;
+      } else {
+        _presetForce = patch.presetForce;
+        // Immediately apply forced preset
+        if (_presets[_presetForce]) {
+          _origSetPreset(_presetForce, _contract);
+        }
+      }
+    }
+  }
+
+  /** Set particle density scale directly (⭐ player-facing modal). */
+  function setParticleScale(s) { _particleDensityScale = +s || 1.0; }
+
+  // ═══════════════════════════════════════════════════════════════
   // ── Public API ──
   // ═══════════════════════════════════════════════════════════════
 
@@ -1002,6 +1077,11 @@ var WeatherSystem = (function () {
     getTerminusDist:    getTerminusDist,
     getPresetName:      getPresetName,
     isTransitioning:    isTransitioning,
-    getParticleCount:   getParticleCount
+    getParticleCount:   getParticleCount,
+
+    // Tunable surface
+    setParticleScale:   setParticleScale,
+    getTunables:        getTunables,
+    setTunables:        setTunables
   });
 })();

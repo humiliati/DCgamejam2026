@@ -877,6 +877,18 @@ var TextureAtlas = (function () {
       bubbleR: 90, bubbleG: 180, bubbleB: 55       // Bright bubble highlights
     });
 
+    // Fungal patch — bioluminescent growth on damp dungeon stone.
+    // Clusters of glowing teal-cyan caps on a dark loamy substrate with
+    // occasional bright spore highlights. Walkable tile; harvestable via
+    // ClickyMinigame (P2 = pluck caps, P3 = depleted substrate).
+    _genFloorFungalPatch('floor_fungal_patch', {
+      loamR: 30,  loamG: 34, loamB: 28,           // Dark damp loam substrate
+      loamHiR: 50, loamHiG: 56, loamHiB: 44,       // Damp loam highlights
+      capR: 40,   capG: 150, capB: 140,            // Teal-cyan glowing cap body
+      capHiR: 120, capHiG: 240, capHiB: 220,       // Bright cap crown highlight
+      sporeR: 180, sporeG: 255, sporeB: 230        // Drifting spore specks
+    });
+
     // ── Environmental floor textures ───────────────────────────────
 
     // Corpse — bloodstained stone with bone fragments
@@ -5594,6 +5606,101 @@ var TextureAtlas = (function () {
         r: _clamp(p.stoneR + bt + pn - stain * 15),
         g: _clamp(p.stoneG + bt + pn * 0.9 + stain * 25),
         b: _clamp(p.stoneB + bt + pn * 0.7 - stain * 10)
+      };
+    });
+  }
+
+  // ── Bioluminescent floor ──────────────────────────────────────────
+
+  // Fungal patch — 64x64 organic floor tile. No mortar grid (this is a
+  // living growth, not worked stone). Damp loam base with 3-5 clusters
+  // of bioluminescent caps and scattered spore sparkles. The cap palette
+  // leans teal-cyan so it reads as cool glow against warm torchlight.
+  function _genFloorFungalPatch(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Loam substrate — mottled dark earth using low-freq noise
+      var loamNoise = _hash(x + 11000, y + 11100);
+      var loamBand = _hash(Math.floor(x / 3) + 11200, Math.floor(y / 3) + 11201);
+      var loamMix = loamNoise * 0.4 + loamBand * 0.6;
+
+      // Cap clusters — 4 cluster centres at quasi-random fixed positions
+      // (deterministic so the texture tiles cleanly)
+      var clusters = [
+        { cx: 12, cy: 14, r: 7.5 },
+        { cx: 42, cy: 10, r: 6.0 },
+        { cx: 22, cy: 40, r: 8.5 },
+        { cx: 50, cy: 46, r: 6.5 }
+      ];
+
+      var bestCapT = 0;    // 0..1 — 1 = cap centre, 0 = outside cluster
+      var bestCapJitter = 0;
+      for (var i = 0; i < clusters.length; i++) {
+        var c = clusters[i];
+        var dx = x - c.cx;
+        var dy = y - c.cy;
+        // Noise-warped distance so cluster edges aren't perfect circles
+        var jitter = (_hash(x + 11300 + i * 50, y + 11400 + i * 50) - 0.5) * 3.5;
+        var d = Math.sqrt(dx * dx + dy * dy) + jitter;
+        if (d < c.r) {
+          var t = 1.0 - d / c.r;
+          if (t > bestCapT) {
+            bestCapT = t;
+            bestCapJitter = jitter;
+          }
+        }
+      }
+
+      // Spore sparkles — rare bright specks anywhere (including loam)
+      var sporeSeed = _hash(x + 11500, y + 11501);
+      var isSpore = sporeSeed > 0.985;
+
+      if (isSpore) {
+        var sn = (_hash(x + 11600, y + 11601) - 0.5) * 20;
+        return {
+          r: _clamp(p.sporeR + sn * 0.5),
+          g: _clamp(p.sporeG + sn * 0.3),
+          b: _clamp(p.sporeB + sn * 0.4)
+        };
+      }
+
+      if (bestCapT > 0) {
+        // Cap body — hot centre, cool rim; highlight crown near bestCapT ≈ 0.75
+        var crown = 1.0 - Math.abs(bestCapT - 0.75) * 3.0;     // peaks at 0.75
+        crown = Math.max(0, Math.min(1, crown));
+        var cn = (_hash(x + 11700, y + 11701) - 0.5) * 12;
+        var capR = p.capR + (p.capHiR - p.capR) * crown * 0.9;
+        var capG = p.capG + (p.capHiG - p.capG) * crown * 0.9;
+        var capB = p.capB + (p.capHiB - p.capB) * crown * 0.9;
+        // Blend cap into loam at the cluster edge for soft fringe
+        var edge = Math.min(1, bestCapT * 3.0);
+        var loamR = p.loamR + (p.loamHiR - p.loamR) * loamMix;
+        var loamG = p.loamG + (p.loamHiG - p.loamG) * loamMix;
+        var loamB = p.loamB + (p.loamHiB - p.loamB) * loamMix;
+        return {
+          r: _clamp(loamR * (1 - edge) + capR * edge + cn * 0.4),
+          g: _clamp(loamG * (1 - edge) + capG * edge + cn * 0.6),
+          b: _clamp(loamB * (1 - edge) + capB * edge + cn * 0.5)
+        };
+      }
+
+      // Plain loam surface — damp earth with hair-fine mycelium specks
+      var myc = _hash(x + 11800, y + 11801) > 0.97;
+      var mn = (_hash(x + 11900, y + 11901) - 0.5) * 6;
+      var lr = p.loamR + (p.loamHiR - p.loamR) * loamMix;
+      var lg = p.loamG + (p.loamHiG - p.loamG) * loamMix;
+      var lb = p.loamB + (p.loamHiB - p.loamB) * loamMix;
+      if (myc) {
+        // Thin bluish mycelium thread — faint cool tint over loam
+        return {
+          r: _clamp(lr * 0.9 + 10),
+          g: _clamp(lg * 0.95 + 25),
+          b: _clamp(lb * 0.95 + 30)
+        };
+      }
+      return {
+        r: _clamp(lr + mn * 0.6),
+        g: _clamp(lg + mn),
+        b: _clamp(lb + mn * 0.8)
       };
     });
   }

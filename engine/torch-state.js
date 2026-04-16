@@ -33,6 +33,14 @@ var TorchState = (function () {
   // ── Per-floor registries: floorId → { 'x,y': torchRecord } ──────
   var _floors = {};
 
+  // Floors whose TorchState came from a save blob (M2.3b). When a floor
+  // is flagged here, subsequent FloorManager floor-generation passes
+  // must NOT re-seed authored baseline torches or re-roll hero damage —
+  // the saved records are the source of truth. registerFloor instead
+  // writes torch.tile back onto the freshly-generated grid so the
+  // TORCH_LIT/TORCH_UNLIT values match the saved state.
+  var _loaded = {};
+
   // ── Fuel classification helpers ──────────────────────────────────
 
   function isTorchFuel(itemId) {
@@ -64,6 +72,21 @@ var TorchState = (function () {
    * @param {string} biome - floor biome key (from FloorManager.getBiome)
    */
   function registerFloor(floorId, grid, W, H, biome) {
+    // Post-load path: records came from a save, grid is authored-baseline
+    // fresh. Sync each saved torch.tile back onto the grid and short-circuit
+    // the scan. Hero damage must NOT re-run (applyHeroDamage checks _loaded).
+    if (_loaded[floorId] && _floors[floorId]) {
+      var saved = _floors[floorId];
+      for (var sk in saved) {
+        if (!saved.hasOwnProperty(sk)) continue;
+        var st = saved[sk];
+        if (!st) continue;
+        if (grid[st.y] && typeof grid[st.y][st.x] !== 'undefined') {
+          grid[st.y][st.x] = st.tile;
+        }
+      }
+      return;
+    }
     if (_floors[floorId]) return; // already registered (cached floor)
 
     var torches = {};
@@ -117,6 +140,9 @@ var TorchState = (function () {
    * @param {Object} opts - { corpsePositions: Set<'x,y'>, stairPositions: Set<'x,y'> }
    */
   function applyHeroDamage(floorId, grid, opts) {
+    // Loaded-from-save floors already carry real hero damage from a prior
+    // session; re-rolling would clobber it. Skip unconditionally.
+    if (_loaded[floorId]) return;
     var torches = _floors[floorId];
     if (!torches) return;
 
@@ -414,6 +440,7 @@ var TorchState = (function () {
    */
   function clearFloor(floorId) {
     delete _floors[floorId];
+    delete _loaded[floorId];
   }
 
   /**
@@ -421,6 +448,68 @@ var TorchState = (function () {
    */
   function reset() {
     _floors = {};
+    _loaded = {};
+  }
+
+  // ── Save/Load (Track B M2.3b) ────────────────────────────────────
+  //
+  // Torch records are plain JSON (no Uint8Arrays, no functions), so
+  // serialize is a deep-copy and deserialize rebuilds the map in-place.
+  // The grid-sync step happens lazily via registerFloor when FloorManager
+  // regenerates the floor post-load — the _loaded flag tells registerFloor
+  // to patch grid tiles from records instead of re-scanning the grid.
+
+  function _copyTorch(t) {
+    if (!t) return null;
+    var slots = [];
+    for (var i = 0; i < SLOTS_PER_TORCH; i++) {
+      var s = t.slots && t.slots[i];
+      if (!s) { slots.push({ state: 'empty', item: null }); continue; }
+      var itemCopy = null;
+      if (s.item) {
+        itemCopy = { id: s.item.id };
+        if (s.item.junk) itemCopy.junk = true;
+      }
+      slots.push({ state: s.state, item: itemCopy });
+    }
+    return {
+      x:         t.x | 0,
+      y:         t.y | 0,
+      tile:      t.tile | 0,
+      biome:     t.biome || '',
+      idealFuel: t.idealFuel || GENERIC_FUEL,
+      slots:     slots
+    };
+  }
+
+  function serialize(floorId) {
+    var torches = _floors[floorId];
+    if (!torches) return null;
+    var out = {};
+    var keys = Object.keys(torches);
+    if (keys.length === 0) return null;
+    for (var i = 0; i < keys.length; i++) {
+      out[keys[i]] = _copyTorch(torches[keys[i]]);
+    }
+    return out;
+  }
+
+  function deserialize(floorId, snap) {
+    delete _floors[floorId];
+    delete _loaded[floorId];
+    if (!snap || typeof snap !== 'object') return;
+    var restored = {};
+    var any = false;
+    for (var k in snap) {
+      if (!snap.hasOwnProperty(k)) continue;
+      var t = _copyTorch(snap[k]);
+      if (!t) continue;
+      restored[k] = t;
+      any = true;
+    }
+    if (!any) return;
+    _floors[floorId] = restored;
+    _loaded[floorId] = true;
   }
 
   // ── Public API ───────────────────────────────────────────────────
@@ -444,6 +533,10 @@ var TorchState = (function () {
     getReadiness:    getReadiness,
     getCounts:       getCounts,
     clearFloor:      clearFloor,
-    reset:           reset
+    reset:           reset,
+
+    // Save/Load (M2.3b)
+    serialize:       serialize,
+    deserialize:     deserialize
   };
 })();

@@ -29,6 +29,15 @@ var RaycasterFloor = (function () {
   var _floorBufW = 0;
   var _floorBufH = 0;
 
+  // ── Row-local light cull scratch buffer (PERF-1) ─────────────────
+  // Reused across every row of every floor cast to avoid per-row
+  // allocation. Grown on demand when a scene has more dynamic lights
+  // than we've ever seen before. Entries are direct refs into the
+  // Lighting module's flicker-light array — safe because that array is
+  // only mutated at snapshot time (once per frame, before renderFloor).
+  var _rowLights = [];
+  var _rowLightsLen = 0;
+
   // ── State binding (installed by Raycaster IIFE) ──────────────────
   //   contract()       → active SpatialContract or null
   //   bloodFloorId()   → current CleaningSystem floor id or null
@@ -220,6 +229,54 @@ var RaycasterFloor = (function () {
       var cachedFloorGrime = null;  // PW-1: { data: Uint8Array, res: number } or null
       var _hasGrimeGrid = (typeof GrimeGrid !== 'undefined');
 
+      // ── PERF-1: Row-level dynamic-light culling ───────────────────
+      // Before the per-pixel lights loop, test each dynamic light
+      // against this row's world-space segment. Lights whose closest
+      // approach to the segment is outside their own radius cannot
+      // contribute to any pixel in this row and are skipped entirely.
+      //
+      // This collapses the lights loop to zero work for rows that see
+      // no nearby torch/bonfire/hearth. On a torchlit floor, far rows
+      // typically see 0 lights while rows near a light source see 1–2.
+      //
+      // Point-to-segment squared distance (no sqrt):
+      //   AB = end - start
+      //   AP = P - start
+      //   t  = clamp((AP·AB) / |AB|², 0, 1)
+      //   closest = start + t·AB
+      //   distSq  = |P - closest|²
+      //
+      // |AB|² is the same for every light, so hoist it. A small radius
+      // padding (+0.5 world unit) covers the "just inside R" contribution
+      // clamp we do at line ~362 (_add < 0.01 short-circuit) so we don't
+      // skip a pixel that would have contributed.
+      var _rowLen = 0;
+      if (_nDyn > 0) {
+        var _segEndX = floorX + (w - 1) * floorStepX;
+        var _segEndY = floorY + (w - 1) * floorStepY;
+        var _abx = _segEndX - floorX;
+        var _aby = _segEndY - floorY;
+        var _abSq = _abx * _abx + _aby * _aby;
+        var _invAbSq = (_abSq > 1e-8) ? (1 / _abSq) : 0;
+        for (var _rli = 0; _rli < _nDyn; _rli++) {
+          var _RL = _dynLights[_rli];
+          var _apx = _RL.wx - floorX;
+          var _apy = _RL.wy - floorY;
+          var _t = (_apx * _abx + _apy * _aby) * _invAbSq;
+          if (_t < 0) _t = 0; else if (_t > 1) _t = 1;
+          var _cx = floorX + _t * _abx;
+          var _cy = floorY + _t * _aby;
+          var _dcx = _RL.wx - _cx;
+          var _dcy = _RL.wy - _cy;
+          var _dcSq = _dcx * _dcx + _dcy * _dcy;
+          var _rPad = _RL.radius + 0.5;
+          if (_dcSq <= _rPad * _rPad) {
+            _rowLights[_rowLen++] = _RL;
+          }
+        }
+      }
+      _rowLightsLen = _rowLen;
+
       for (var col = 0; col < w; col++) {
         // Compute grid tile coordinates (used for per-tile texture and blood)
         var tileGX = Math.floor(floorX);
@@ -326,10 +383,12 @@ var RaycasterFloor = (function () {
         //    disc (hearth/lantern). Additive warm overlay per source
         //    with per-shape falloff. Fog-attenuated so distant lights
         //    don't punch through the fog wash.
-        if (_nDyn > 0) {
+        // PERF-1: Iterates the row-culled list, not the scene list. Rows
+        // that passed no lights through culling skip this loop entirely.
+        if (_rowLightsLen > 0) {
           var _lFade = invFog;  // lights dim into fog
-          for (var _li = 0; _li < _nDyn; _li++) {
-            var _L = _dynLights[_li];
+          for (var _li = 0; _li < _rowLightsLen; _li++) {
+            var _L = _rowLights[_li];
             var _ldx = floorX - _L.wx;
             var _ldy = floorY - _L.wy;
             var _ldSq = _ldx * _ldx + _ldy * _ldy;

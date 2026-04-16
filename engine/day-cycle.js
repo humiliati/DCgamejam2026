@@ -546,6 +546,91 @@ var DayCycle = (function () {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  TUNABLE SURFACE (Lighting Test-Harness §1)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Mutable advance-minute overrides. The frozen ADVANCE constant
+  // is the baseline; _advanceOverrides patches on top.
+  var _advanceOverrides = {};
+
+  // Phase force: when non-null, getPhase() returns this instead of
+  // the time-resolved phase. advanceTime still ticks the clock, but
+  // downstream consumers see a frozen phase for rendering/barks.
+  var _phaseForce = null;
+
+  // Sun angle override: when non-null, getSunIntensity() returns a
+  // value derived from this angle instead of the time-based calc.
+  var _sunAngleOverride = null;
+
+  // Store the original getPhase for internal use
+  var _resolvedPhase = getPhase;
+
+  // Wrap getPhase to support forced phase
+  var _origGetPhase = getPhase;
+  getPhase = function () {
+    if (_phaseForce) return _phaseForce;
+    return _origGetPhase();
+  };
+
+  // Wrap getSunIntensity to support sun angle override
+  if (typeof getSunIntensity === 'function') {
+    var _origGetSunIntensity = getSunIntensity;
+    getSunIntensity = function () {
+      if (_sunAngleOverride != null) {
+        // Map angle 0–360 to intensity 0–1 with peak at 90 (noon)
+        var a = (+_sunAngleOverride % 360 + 360) % 360;
+        return Math.max(0, Math.sin(a * Math.PI / 180));
+      }
+      return _origGetSunIntensity();
+    };
+  }
+
+  /**
+   * Get the effective advance minutes for a transition type, with
+   * any harness overrides applied.
+   */
+  function getEffectiveAdvance(type) {
+    if (_advanceOverrides[type] != null) return +_advanceOverrides[type];
+    return ADVANCE[type] || 0;
+  }
+
+  function getTunables() {
+    var adv = {};
+    for (var k in ADVANCE) {
+      if (ADVANCE.hasOwnProperty(k)) {
+        adv[k] = (_advanceOverrides[k] != null) ? +_advanceOverrides[k] : ADVANCE[k];
+      }
+    }
+    return {
+      ADVANCE:           adv,
+      HERO_DAY_INTERVAL: HERO_DAY_INTERVAL,
+      phaseForce:        _phaseForce,
+      sunAngleOverride:  _sunAngleOverride
+    };
+  }
+
+  function setTunables(patch) {
+    if (!patch || typeof patch !== 'object') return;
+    if (patch.ADVANCE && typeof patch.ADVANCE === 'object') {
+      for (var k in patch.ADVANCE) {
+        if (patch.ADVANCE.hasOwnProperty(k) && ADVANCE.hasOwnProperty(k)) {
+          _advanceOverrides[k] = +patch.ADVANCE[k];
+        }
+      }
+    }
+    if (patch.phaseForce !== undefined) {
+      if (patch.phaseForce === null || patch.phaseForce === 'auto') {
+        _phaseForce = null;
+      } else {
+        _phaseForce = patch.phaseForce;
+      }
+    }
+    if (patch.sunAngleOverride !== undefined) {
+      _sunAngleOverride = (patch.sunAngleOverride === null) ? null : +patch.sunAngleOverride;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   //  PUBLIC API
   // ═══════════════════════════════════════════════════════════════
 
@@ -600,6 +685,11 @@ var DayCycle = (function () {
     getDayLabelColor:     getDayLabelColor,
     getPhaseIcon:         getPhaseIcon,
     isTiredHour:          isTiredHour,
-    isCurfewHour:         isCurfewHour
+    isCurfewHour:         isCurfewHour,
+
+    // Tunable surface
+    getEffectiveAdvance:  getEffectiveAdvance,
+    getTunables:          getTunables,
+    setTunables:          setTunables
   });
 })();

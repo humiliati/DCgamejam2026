@@ -36,7 +36,28 @@ var TrapRearm = (function () {
    * @param {number} gridH
    */
   function onFloorLoad(floorId, grid, gridW, gridH) {
-    if (_total[floorId] !== undefined) return; // Already scanned (cached floor)
+    // Post-load path (M2.3d): _total is already set from a save blob.
+    // The fresh grid has authored-baseline TRAP tiles everywhere; patch
+    // consumed-but-not-rearmed positions back to EMPTY so the loaded
+    // floor matches the saved state.
+    if (_total[floorId] !== undefined) {
+      var consumed = _consumed[floorId];
+      var rearmed  = _rearmed[floorId] || {};
+      if (consumed) {
+        for (var ck in consumed) {
+          if (!consumed.hasOwnProperty(ck)) continue;
+          if (rearmed[ck]) continue; // re-armed → grid already has TRAP
+          var parts = ck.split(',');
+          var cx = parseInt(parts[0], 10);
+          var cy = parseInt(parts[1], 10);
+          if (!isFinite(cx) || !isFinite(cy)) continue;
+          if (grid[cy] && typeof grid[cy][cx] !== 'undefined') {
+            grid[cy][cx] = TILES.EMPTY;
+          }
+        }
+      }
+      return;
+    }
 
     var count = 0;
     for (var y = 0; y < gridH; y++) {
@@ -172,6 +193,47 @@ var TrapRearm = (function () {
     _lastRearmTime = 0;
   }
 
+  // ── Save/Load (Track B M2.3d) ───────────────────────────────────
+  //
+  // Three sparse sets + baseline count per floor — all plain JSON.
+  // serialize returns null if nothing of interest has been recorded
+  // (no consumed traps AND no baseline count). On deserialize, the
+  // _total[floorId] flag also serves as the "already loaded" sentinel
+  // for onFloorLoad's grid-patch path.
+
+  function _copyKeys(src) {
+    var out = {};
+    if (!src) return out;
+    for (var k in src) {
+      if (src.hasOwnProperty(k) && src[k]) out[k] = true;
+    }
+    return out;
+  }
+
+  function serialize(floorId) {
+    var totalSet = (_total[floorId] !== undefined);
+    var consumed = _copyKeys(_consumed[floorId]);
+    var rearmed  = _copyKeys(_rearmed[floorId]);
+    var hasConsumed = false;
+    for (var ckS in consumed) { if (consumed.hasOwnProperty(ckS)) { hasConsumed = true; break; } }
+    if (!totalSet && !hasConsumed) return null;
+    return {
+      consumed: consumed,
+      rearmed:  rearmed,
+      total:    _total[floorId] | 0
+    };
+  }
+
+  function deserialize(floorId, snap) {
+    delete _consumed[floorId];
+    delete _rearmed[floorId];
+    delete _total[floorId];
+    if (!snap || typeof snap !== 'object') return;
+    _consumed[floorId] = _copyKeys(snap.consumed);
+    _rearmed[floorId]  = _copyKeys(snap.rearmed);
+    _total[floorId]    = snap.total | 0;
+  }
+
   return Object.freeze({
     onFloorLoad:    onFloorLoad,
     onTrapConsumed: onTrapConsumed,
@@ -181,6 +243,8 @@ var TrapRearm = (function () {
     getStats:       getStats,
     clearFloor:     clearFloor,
     reset:          reset,
+    serialize:      serialize,
+    deserialize:    deserialize,
     REARM_TIME_MS:  REARM_TIME_MS
   });
 })();

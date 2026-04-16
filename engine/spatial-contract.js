@@ -151,7 +151,16 @@ var SpatialContract = (function () {
                       //   thickness of the skirt band, reading as a real
                       //   sidewalk curb without the player needing a head
                       //   boost to clear it.
-        87: 0.04      // DECK — raised multi-tile platform (same lip as STOOP).
+        87: 0.04,     // DECK — raised multi-tile platform (same lip as STOOP).
+        // ── Living infrastructure offsets ──
+        40: 0.10,     // WELL — raised rim reads as "step up to lean over"
+        41: 0.03,     // BENCH — barely raised, seat-level
+        42: 0,        // NOTICE_BOARD — flush with ground (tall post)
+        43: 0.08,     // ANVIL — raised pedestal, smithy platform
+        44: 0.05,     // BARREL — slight raise, sits on a plank
+        45: 0.06,     // CHARGING_CRADLE — slight raise, conduit pedestal
+        47: 0.05,     // SOUP_KITCHEN — slight raise, brazier legs
+        48: 0         // COT — flush with floor (bedroll on ground)
       }), opts.tileHeightOffsets),
 
       // Step fill color: rendered in the gap where offset displaces the wall.
@@ -327,8 +336,12 @@ var SpatialContract = (function () {
         65: 'circle',  // CANOPY — round leaf pads above trunk (floating disc)
         66: 'circle', // CANOPY_MOSS — round moss clumps above trunk
         // CANOPY_MOSS_SQ (84) stays square — dungeon-beam variant
-        88: 'circle4'  // PILLAR_QUAD — 2×2 cluster of small round columns
+        88: 'circle4', // PILLAR_QUAD — 2×2 cluster of small round columns
                        //   with diagonal sight-gaps between the four pillars.
+        // ── Round living-infra props ──
+        40: 'circle',  // WELL — round stone rim (peek over dark water)
+        44: 'circle',  // BARREL — round oak cask
+        47: 'circle'   // SOUP_KITCHEN — round cauldron on brazier
       }, opts.tileShapes),
 
       // ── Wall textures ──
@@ -399,10 +412,20 @@ var SpatialContract = (function () {
                                     //   palette matches floor_flagstone on the cap.
         87: 'deck_face_beams',      // DECK — board + beam construction with dark
                                     //   gap-fill pockets showing framing beneath.
-        74: 'concrete'         // DOOR_FACADE — wall texture for the lintel band
+        74: 'concrete',        // DOOR_FACADE — wall texture for the lintel band
                                //   above the door opening. Per-tile override via
                                //   DoorSprites.getWallTexture() replaces this with
                                //   the building's own material.
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 'well_stone',        // WELL — circular stone rim
+        41: 'bench_wood',        // BENCH — wooden slat seat
+        42: 'notice_board_wood', // NOTICE_BOARD — posts + parchment
+        43: 'anvil_iron',        // ANVIL — dark iron block
+        44: 'barrel_wood',       // BARREL — banded oak staves
+        45: 'charging_cradle',   // CHARGING_CRADLE — steel frame + conduit
+        46: 'switchboard_panel', // SWITCHBOARD — brass toggle panel
+        47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
+        48: 'cot_canvas'         // COT — drab canvas bedroll
       }), opts.textures),
 
       // ── Floor texture ──
@@ -497,7 +520,7 @@ var SpatialContract = (function () {
                     //   heightOffset 0.04, the slab spans world 0.02 →
                     //   0.06 — a sidewalk curb, not a stair.
         87: 0.04,   // DECK  — same thin lip as STOOP for the platform edge.
-        73: 3.5     // WINDOW_TAVERN — 3.5x full building facade (matches WALL
+        73: 3.5,    // WINDOW_TAVERN — 3.5x full building facade (matches WALL
                     //   on all exterior biomes so the window cuts into the
                     //   wall plane without creating a notch). Freeform path
                     //   splits this into 0.90 sill + 0.75 glass slot at eye
@@ -506,6 +529,16 @@ var SpatialContract = (function () {
                     //   tileWallHeights MUST NOT re-list this key at a
                     //   different value or the freeform sandwich will fall
                     //   out of scale with the band world-unit extents.
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 0.50,   // WELL — circular stone rim, dark water centre
+        41: 0.35,   // BENCH — wooden slat seat on frame
+        42: 1.20,   // NOTICE_BOARD — tall wooden posts with pinned parchment
+        43: 0.50,   // ANVIL — iron block on stone pedestal
+        44: 0.60,   // BARREL — banded oak cask
+        45: 0.80,   // CHARGING_CRADLE — metal frame with conduit cables
+        46: 1.00,   // SWITCHBOARD — brass toggle panel (full base height)
+        47: 0.70,   // SOUP_KITCHEN — iron cauldron on brazier frame
+        48: 0.30    // COT — canvas bedroll on low frame
       }, opts.tileWallHeights),
 
       // ── Gameplay rules ──
@@ -574,7 +607,15 @@ var SpatialContract = (function () {
                       //   (legacy step-fill path; freeform path ignores this
                       //    offset when tileFreeform[29] is active)
         75: -0.10,    // TRAPDOOR_DN — sunken, hatch reads as hole in floor
-        76:  0.10     // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
+        76:  0.10,    // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
+        // ── Living infrastructure offsets ──
+        40: 0.05,     // WELL — subtle raised rim
+        41: 0.02,     // BENCH — barely raised seat
+        43: 0.05,     // ANVIL — raised pedestal
+        44: 0.03,     // BARREL — slight raise
+        45: 0.04,     // CHARGING_CRADLE — conduit pedestal
+        47: 0.03,     // SOUP_KITCHEN — slight raise (brazier legs)
+        48: 0         // COT — flush with floor
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#151518',
 
@@ -584,7 +625,11 @@ var SpatialContract = (function () {
       // opts.tileShapes if the rough-hewn aesthetic requires it.
       tileShapes: _mergeTileTable({
         10: 'circle',  // PILLAR — round interior column (marble / stonework)
-        88: 'circle4'  // PILLAR_QUAD — 2×2 cluster of round sub-pillars
+        88: 'circle4', // PILLAR_QUAD — 2×2 cluster of round sub-pillars
+        // ── Round living-infra props ──
+        40: 'circle',  // WELL — round stone rim
+        44: 'circle',  // BARREL — round oak cask
+        47: 'circle'   // SOUP_KITCHEN — round cauldron on brazier
       }, opts.tileShapes),
 
       // ── Freeform tile config (two-segment wall columns) ──────────
@@ -654,7 +699,17 @@ var SpatialContract = (function () {
         36: 'terminal_screen', // TERMINAL — CRT desk (retro-futuristic)
         82: 'stone_rough',     // WINDOW_ARROWSLIT — raw stone around the slit
         83: 'stone_rough',     // WINDOW_MURDERHOLE — raw stone around the hole
-        88: 'stone_rough'      // PILLAR_QUAD — 2×2 round sub-pillar cluster
+        88: 'stone_rough',     // PILLAR_QUAD — 2×2 round sub-pillar cluster
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 'well_stone',        // WELL — circular stone rim
+        41: 'bench_wood',        // BENCH — wooden slat seat
+        42: 'notice_board_wood', // NOTICE_BOARD — posts + parchment
+        43: 'anvil_iron',        // ANVIL — dark iron block
+        44: 'barrel_wood',       // BARREL — banded oak staves
+        45: 'charging_cradle',   // CHARGING_CRADLE — steel frame + conduit
+        46: 'switchboard_panel', // SWITCHBOARD — brass toggle panel
+        47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
+        48: 'cot_canvas'         // COT — drab canvas bedroll
       }), opts.textures),
 
       // ── Floor texture ──
@@ -697,7 +752,17 @@ var SpatialContract = (function () {
         76: 2.0,    // TRAPDOOR_UP — full interior wall height
         82: 2.0,    // WINDOW_ARROWSLIT — matches interior wall
         83: 2.0,    // WINDOW_MURDERHOLE — matches interior wall
-        88: 1.8     // PILLAR_QUAD — interior 2×2 sub-pillar cluster
+        88: 1.8,    // PILLAR_QUAD — interior 2×2 sub-pillar cluster
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 0.50,   // WELL — stone rim
+        41: 0.35,   // BENCH — wooden slat seat
+        42: 1.20,   // NOTICE_BOARD — tall wooden posts
+        43: 0.50,   // ANVIL — iron block on pedestal
+        44: 0.60,   // BARREL — banded oak cask
+        45: 0.80,   // CHARGING_CRADLE — conduit frame
+        46: 1.00,   // SWITCHBOARD — brass toggle panel
+        47: 0.70,   // SOUP_KITCHEN — cauldron on brazier
+        48: 0.30    // COT — canvas bedroll on low frame
       }, opts.tileWallHeights),
 
       // ── Per-face wall-height overrides ──
@@ -782,11 +847,24 @@ var SpatialContract = (function () {
         29: -0.40,    // HEARTH — deep sunken: fire cavity for sandwich rendering
         75: -0.10,    // TRAPDOOR_DN — sunken, hatch reads as hole in floor
         76:  0.10,    // TRAPDOOR_UP — raised, hatch reads as hole in ceiling
-        84:  0.85     // CANOPY_MOSS_SQ — dungeon ceiling moss. Slab spans 0.85–1.10,
+        84:  0.85,    // CANOPY_MOSS_SQ — dungeon ceiling moss. Slab spans 0.85–1.10,
                       //   tucked against ceiling of a 1.2-tall dungeon wall. Square
                       //   silhouette reads as moss clumps between stone beams.
+        // ── Living infrastructure offsets ──
+        40: 0.05,     // WELL — raised rim
+        43: 0.05,     // ANVIL — raised pedestal
+        44: 0.03,     // BARREL — slight raise
+        47: 0.03      // SOUP_KITCHEN — slight raise (brazier legs)
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#111',
+
+      // ── Tile shape overrides ──
+      tileShapes: _mergeTileTable({
+        10: 'circle',  // PILLAR — round dungeon column
+        40: 'circle',  // WELL — round stone rim
+        44: 'circle',  // BARREL — round oak cask
+        47: 'circle'   // SOUP_KITCHEN — round cauldron on brazier
+      }, opts.tileShapes),
 
       // ── Freeform tile config ──
       tileFreeform: _mergeTileTable({
@@ -876,8 +954,18 @@ var SpatialContract = (function () {
         84: 'canopy_moss',     // CANOPY_MOSS_SQ — hanging moss (reuse exterior texture)
         94: 'wood_dark',       // TUNNEL_RIB — warm damp planking for hobbit-hole feel
         95: 'stone_rough',     // TUNNEL_WALL — tight fieldstone side-wall
-        96: 'concrete'         // PORTHOLE_OCEAN — bulkhead plate (placeholder until
+        96: 'concrete',        // PORTHOLE_OCEAN — bulkhead plate (placeholder until
                                //   a dedicated rivet-steel texture is authored)
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 'well_stone',        // WELL — circular stone rim
+        41: 'bench_wood',        // BENCH — wooden slat seat
+        42: 'notice_board_wood', // NOTICE_BOARD — posts + parchment
+        43: 'anvil_iron',        // ANVIL — dark iron block
+        44: 'barrel_wood',       // BARREL — banded oak staves
+        45: 'charging_cradle',   // CHARGING_CRADLE — steel frame + conduit
+        46: 'switchboard_panel', // SWITCHBOARD — brass toggle panel
+        47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
+        48: 'cot_canvas'         // COT — drab canvas bedroll
       }), opts.textures),
 
       // ── Floor texture ──
@@ -892,6 +980,7 @@ var SpatialContract = (function () {
         19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
         23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
         39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
+        52: 'floor_fungal_patch',// FUNGAL_PATCH — bioluminescent loam w/ glowing caps
         75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
         76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch
         82: 'floor_stone',       // WINDOW_ARROWSLIT — stone at the slit base
@@ -912,7 +1001,17 @@ var SpatialContract = (function () {
                     //   reads above surrounding walls and the rib crosses
                     //   just above player eye (Y=1.0) during traversal
         95: 1.0,    // TUNNEL_WALL — matches baseline so niche sits at eye
-        96: 1.0     // PORTHOLE_OCEAN — matches baseline bulkhead height
+        96: 1.0,    // PORTHOLE_OCEAN — matches baseline bulkhead height
+        // ── Living infrastructure (tiles 40–48) ──
+        40: 0.50,   // WELL — stone rim
+        41: 0.35,   // BENCH — wooden slat seat
+        42: 1.00,   // NOTICE_BOARD — capped at dungeon baseline (posts don't poke through)
+        43: 0.50,   // ANVIL — iron block on pedestal
+        44: 0.60,   // BARREL — banded oak cask
+        45: 0.80,   // CHARGING_CRADLE — conduit frame
+        46: 1.00,   // SWITCHBOARD — brass toggle panel
+        47: 0.70,   // SOUP_KITCHEN — cauldron on brazier
+        48: 0.30    // COT — canvas bedroll on low frame
       }, opts.tileWallHeights),
 
       // ── Per-face wall-height overrides ──
@@ -1482,6 +1581,75 @@ var SpatialContract = (function () {
     return 'rgb(' + fog.r + ',' + fog.g + ',' + fog.b + ')';
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  TUNABLE SURFACE (Lighting Test-Harness §1)
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // Frozen per-floor contracts can't be mutated. Instead we store a
+  // _liveOverrides dict and expose resolveContract(contract) which
+  // returns a plain (non-frozen) copy with overrides merged. The
+  // harness calls resolveContract() on each slider change and feeds
+  // the result to Raycaster.setContract(). Gated: resolveContract
+  // returns the original frozen contract when _liveOverrides is null.
+
+  var _liveOverrides = null;   // null = no harness overrides active
+
+  /**
+   * Return a contract with live overrides merged in. When no
+   * overrides are active, returns the original frozen contract
+   * (zero-cost production path).
+   */
+  function resolveContract(contract) {
+    if (!_liveOverrides || !contract) return contract;
+    // Shallow copy — only override scalar rendering properties.
+    // Generator-only fields (gridSize, roomCount, etc.) are NOT
+    // overridable at runtime.
+    var c = {};
+    for (var k in contract) {
+      if (contract.hasOwnProperty(k)) c[k] = contract[k];
+    }
+    if (_liveOverrides.wallHeight      != null) c.wallHeight      = +_liveOverrides.wallHeight;
+    if (_liveOverrides.renderDistance   != null) c.renderDistance   = +_liveOverrides.renderDistance;
+    if (_liveOverrides.fogModel        != null) c.fogModel         = _liveOverrides.fogModel;
+    if (_liveOverrides.fogDistance      != null) c.fogDistance      = +_liveOverrides.fogDistance;
+    if (_liveOverrides.fogColor        != null) c.fogColor         = _liveOverrides.fogColor;
+    if (_liveOverrides.ceilingType     != null) c.ceilingType      = _liveOverrides.ceilingType;
+    return c;
+  }
+
+  function getTunables(contract) {
+    var base = contract || {};
+    var ov = _liveOverrides || {};
+    return {
+      wallHeight:      (ov.wallHeight      != null) ? +ov.wallHeight      : (base.wallHeight || 1.0),
+      renderDistance:   (ov.renderDistance   != null) ? +ov.renderDistance   : (base.renderDistance || 20),
+      fogModel:        (ov.fogModel        != null) ? ov.fogModel          : (base.fogModel || 'fade'),
+      fogDistance:      (ov.fogDistance      != null) ? +ov.fogDistance      : (base.fogDistance || 14),
+      fogColor:        (ov.fogColor        != null) ? ov.fogColor          : (base.fogColor || { r: 40, g: 50, b: 60 }),
+      ceilingType:     (ov.ceilingType     != null) ? ov.ceilingType       : (base.ceilingType || 'sky'),
+      _hasOverrides:   _liveOverrides !== null
+    };
+  }
+
+  function setTunables(patch) {
+    if (!patch || typeof patch !== 'object') return;
+    if (!_liveOverrides) _liveOverrides = {};
+    if (patch.wallHeight    != null)  _liveOverrides.wallHeight    = +patch.wallHeight;
+    if (patch.renderDistance != null)  _liveOverrides.renderDistance = +patch.renderDistance;
+    if (patch.fogModel      != null)  _liveOverrides.fogModel      = patch.fogModel;
+    if (patch.fogDistance    != null)  _liveOverrides.fogDistance   = +patch.fogDistance;
+    if (patch.fogColor      != null)  _liveOverrides.fogColor      = patch.fogColor;
+    if (patch.ceilingType   != null)  _liveOverrides.ceilingType   = patch.ceilingType;
+  }
+
+  /**
+   * Clear all live overrides — restores the frozen contract values.
+   * Called by the harness "Reset all" button.
+   */
+  function clearTunables() {
+    _liveOverrides = null;
+  }
+
   return {
     // Constructors
     exterior: exterior,
@@ -1500,6 +1668,17 @@ var SpatialContract = (function () {
     getTexture: getTexture,
     getTileFreeform: getTileFreeform,
     getTileShape: getTileShape,
-    getFloorTexture: getFloorTexture
+    getFloorTexture: getFloorTexture,
+
+    // Tunable surface
+    resolveContract: resolveContract,
+    getTunables:     getTunables,
+    setTunables:     setTunables,
+    clearTunables:   clearTunables,
+
+    // Enums (useful for harness dropdowns)
+    FOG:     FOG,
+    CEILING: CEILING,
+    DEPTH:   DEPTH
   };
 })();
