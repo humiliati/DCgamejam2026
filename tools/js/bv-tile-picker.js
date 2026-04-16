@@ -14,6 +14,39 @@ function buildTilePicker() {
   var el = document.getElementById('tile-picker');
   if (!EDIT.active) { el.style.display = 'none'; return; }
 
+  // M3: collect biome palette tile IDs from the current floor's payload
+  var biomeTileIds = {};  // id → true, for quick lookup
+  var biomeTileList = []; // ordered list for the "Biome" group
+  var payload = null;
+  if (typeof FLOORS !== 'undefined' && typeof currentFloorId === 'string' &&
+      FLOORS[currentFloorId] && FLOORS[currentFloorId]._payload) {
+    payload = FLOORS[currentFloorId]._payload;
+  }
+  if (payload && payload.biome && payload.biome.palette) {
+    var pal = payload.biome.palette;
+    var lists = [pal.wall, pal.floor, pal.light, pal.ceiling];
+    for (var li = 0; li < lists.length; li++) {
+      if (!Array.isArray(lists[li])) continue;
+      for (var pi = 0; pi < lists[li].length; pi++) {
+        var tid = lists[li][pi];
+        if (!biomeTileIds[tid]) { biomeTileIds[tid] = true; biomeTileList.push(tid); }
+      }
+    }
+    // Also include accent tiles and breakable set
+    if (payload.biome.accentTiles) {
+      for (var ai = 0; ai < payload.biome.accentTiles.length; ai++) {
+        var atid = payload.biome.accentTiles[ai];
+        if (!biomeTileIds[atid]) { biomeTileIds[atid] = true; biomeTileList.push(atid); }
+      }
+    }
+    if (payload.biome.breakableSet) {
+      for (var bi = 0; bi < payload.biome.breakableSet.length; bi++) {
+        var btid = payload.biome.breakableSet[bi];
+        if (!biomeTileIds[btid]) { biomeTileIds[btid] = true; biomeTileList.push(btid); }
+      }
+    }
+  }
+
   // Group ALL tiles by category — no filtering
   var groups = {};
   for (var id in TILE_SCHEMA) {
@@ -23,6 +56,22 @@ function buildTilePicker() {
   }
 
   var html = '';
+
+  // M3: render "Biome" group first if we have payload palette tiles
+  if (biomeTileList.length > 0) {
+    var biomeName = (payload && payload.biome && payload.biome.name) ? payload.biome.name : 'biome';
+    html += '<span class="tp-row tp-biome-row"><span class="tp-cat" style="color:#fc8;">\u2605 ' + biomeName + '</span>';
+    for (var bti = 0; bti < biomeTileList.length; bti++) {
+      var bid = biomeTileList[bti];
+      var bs = TILE_SCHEMA[bid];
+      if (!bs) continue;
+      var bsel = bid === EDIT.paintTile ? ' selected' : '';
+      html += '<span class="tp-tile' + bsel + '" data-tile="' + bid + '" style="background:' + bs.color + ';outline:1px solid #fc8;" title="' + bs.name + ' [' + bid + '] (biome)"><span class="tp-label">' + bs.name + '</span></span>';
+    }
+    html += '</span>';
+  }
+
+  // Standard category groups (unchanged)
   CAT_ORDER.forEach(function(cat) {
     if (!groups[cat]) return;
     groups[cat].sort(function(a,b){return a-b;});

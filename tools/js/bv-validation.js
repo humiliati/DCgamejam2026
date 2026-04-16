@@ -149,6 +149,82 @@ function validateFloor(floorId, floor) {
                  cells:[]});
   }
 
+  // ── C6 rule: every door/stair tile needs a doorTargets entry ──
+  // Upgrade from the info-level 'door-fallback' above: when a door-like
+  // tile relies on the engine's parent/child fallback, the fallback may
+  // point at a floor the author didn't intend. Warn unless the tile is a
+  // DOOR_FACADE (which is decorative, not a transition).
+  forEachCell(grid, function(x, y, tile) {
+    var s = TILE_SCHEMA[tile]; if (!s) return;
+    if (!isDoorLikeTileId(tile)) return;
+    if (s.name === 'DOOR_FACADE') return; // decorative — no target needed
+    var key = x+','+y;
+    if (!doorTargets[key]) {
+      issues.push({severity:'warn', floorId:floorId, kind:'door-no-target',
+                   msg:s.name+' at ('+x+','+y+') has no doorTargets entry — engine will guess parent/child, which may be wrong',
+                   cells:[{x:x,y:y}]});
+    }
+  });
+
+  // ── C6 rule: room interiors should not contain wall tiles ──
+  // GridGen-authored rooms carry {x,y,w,h}. A WALL inside a room rect
+  // is almost always a blockout error (leftover from resize or copy/paste).
+  var rooms = floor.rooms || [];
+  for (var ri = 0; ri < rooms.length; ri++) {
+    var rm = rooms[ri];
+    var wallCells = [];
+    for (var ry = rm.y; ry < rm.y + rm.h && ry < gh; ry++) {
+      var row = grid[ry]; if (!row) continue;
+      for (var rx = rm.x; rx < rm.x + rm.w && rx < gw; rx++) {
+        var ts = TILE_SCHEMA[row[rx]];
+        if (ts && ts.name === 'WALL') wallCells.push({x:rx, y:ry});
+      }
+    }
+    if (wallCells.length) {
+      issues.push({severity:'warn', floorId:floorId, kind:'room-has-walls',
+                   msg:'Room '+ri+' ('+rm.w+'×'+rm.h+' at '+rm.x+','+rm.y+') contains '+wallCells.length+' WALL tile'+(wallCells.length===1?'':'s')+' inside its bounds',
+                   cells:wallCells});
+    }
+  }
+
+  // ── C6 rule: tiles with tileHeightOffsets should have matching ──
+  // ── tileWallHeights in the spatial contract                   ──
+  // If a tile has a non-zero heightOffset but no tileWallHeights entry,
+  // the raycaster renders it at the default wallHeight plus the offset —
+  // which is usually wrong for short furniture or sunken stairs.
+  // We check against the three static contracts; the actual contract
+  // depends on floor depth, so we use the depth-appropriate one.
+  // NOTE: this check only runs when SpatialContract is available (browser
+  // BO-V context). CLI would need its own contract lookup.
+  if (typeof SpatialContract !== 'undefined') {
+    var contract = null;
+    if (depth === 1 && SpatialContract.exterior) contract = SpatialContract.exterior();
+    else if (depth === 2 && SpatialContract.interior) contract = SpatialContract.interior();
+    else if (depth >= 3 && SpatialContract.nestedDungeon) contract = SpatialContract.nestedDungeon();
+    if (contract && contract.tileHeightOffsets && contract.tileWallHeights) {
+      var offKeys = Object.keys(contract.tileHeightOffsets);
+      var heightMissing = [];
+      for (var oi = 0; oi < offKeys.length; oi++) {
+        var tid = parseInt(offKeys[oi], 10);
+        if (contract.tileHeightOffsets[tid] === 0) continue; // zero offset is fine
+        if (contract.tileWallHeights[tid] == null) {
+          // Only flag if this tile actually appears on this floor
+          var found = false;
+          forEachCell(grid, function(cx, cy, ct) { if (ct === tid) found = true; });
+          if (found) {
+            var tn = TILE_SCHEMA[tid] ? TILE_SCHEMA[tid].name : String(tid);
+            heightMissing.push(tn + ' (id ' + tid + ')');
+          }
+        }
+      }
+      if (heightMissing.length) {
+        issues.push({severity:'info', floorId:floorId, kind:'offset-no-height',
+                     msg:heightMissing.length+' tile type'+(heightMissing.length===1?'':'s')+' have tileHeightOffsets but no tileWallHeights entry: '+heightMissing.join(', '),
+                     cells:[]});
+      }
+    }
+  }
+
   return issues;
 }
 

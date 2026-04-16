@@ -1,8 +1,8 @@
 # PRESSURE_WASH_SYSTEM.md — Grime Grid, Spray, and Pointer-Aim Reference
 
-> **Status:** Living document. Describes the pressure washing pipeline as implemented through PW-3.
+> **Status:** Living document. Covers the pressure-washing pipeline through ROADMAP phases PW-1 through PW-3 (grime grid, hose state, spray interaction + brush + torch hit) plus post-jam Rungs 1 (spray droplet FX), 2A (HoseDecal visit ledger), and 2B (HoseOverlay stripe renderer). Active work continues in `PRESSURE_WASHING_PWS_TEARDOWN_BRIEF.md` under the Rung ladder; the ROADMAP's PW-4/PW-5 map to brief Rungs 8/9.
 > **Purpose:** Architectural reference for the grime/cleaning subsystems. Specifically structured to serve as the integration spec when building the LG Magic Remote test harness and expanding gyroscope/proprioceptive input.
-> Last verified against codebase: 2026-04-06.
+> Last verified against codebase: 2026-04-16.
 
 ---
 
@@ -339,7 +339,10 @@ The torch exemption at step 5 is critical: torch tiles skip the spray gate so OK
 | `engine/raycaster.js` | 2 | Render-loop grime tinting, castScreenRay pointer query |
 | `engine/torch-hit-resolver.js` | 3 | Collateral torch extinguish on spray (depth-3+ only) |
 | `engine/torch-state.js` | 2 | Dual extinguish: pressureWashExtinguish (destructive) vs extinguish (careful) |
-| `engine/hose-state.js` | 2 | Hose equip state, pressure multiplier |
+| `engine/hose-state.js` | 2 | Hose equip state, path recording, kink count, `attach`/`detach`/`step`/`pop`/`kink` events |
+| `engine/hose-decal.js` | 1 | Per-tile visit ledger keyed by `floorId → "x,y"`; subscribes to HoseState events; source of truth for minimap/floor-decal rendering (Rung 2A) |
+| `engine/hose-overlay.js` | 2 | Minimap stripe renderer — consumes HoseDecal, dispatches 6 visit shapes (seed/stub/straight/elbow/U-turn), renders crosses + head pulse (Rung 2B) |
+| `engine/spray-droplets-fx.js` | 2 | Particle FX on spray interaction (Rung 1) |
 | `engine/input.js` | 1 | getPointer(), isDown(), pointer active tracking |
 
 ---
@@ -372,3 +375,16 @@ Three nozzle types are defined but only `base` is active (nozzle equip slot not 
 | cyclone | 1 | spiral (oscillating offset) | 0.8× | 1.0× | Gyro jitter amplifies spiral amplitude |
 
 The fan nozzle is the strongest candidate for gyro interaction: physically rotating the remote rotates the cleaning line on the wall. Holding it flat → horizontal squeegee. Tilting 90° → vertical squeegee. This maps directly to how a real pressure washer fan tip works.
+
+---
+
+## 10. Cross-References and Active Work
+
+| Doc | Scope |
+|-----|-------|
+| `docs/PRESSURE_WASHING_ROADMAP.md` | Original PW-1 → PW-5 phasing. PW-1/2/3 shipped; §3.3 superseded by Rungs 2A/2B (see below); PW-4 and PW-5 map to brief Rungs 8 and 9 respectively. |
+| `docs/PRESSURE_WASHING_PWS_TEARDOWN_BRIEF.md` | Active work tracker. The **Rung ladder** (1 → 10) carries everything shipped and planned after PW-3. As of 2026-04-16: Rungs 1 (spray droplet FX), 2A (HoseDecal visit ledger), 2B (HoseOverlay stripe renderer) complete. Next rungs after browser feel-check: 2C (3D viewport floor decals), 2D (tile-step awareness), 2E (flow-squeeze mechanic), 2F (procgen contracts). Later rungs cover material-aware audio (Rung 3), sub-target readout, GyroInput module, reel-up, nozzles, adaptive feel histogram. |
+| `outputs/hose-decal-test.js` | 35/35 test harness for the visit ledger (Rung 2A). |
+| `outputs/hose-overlay-test.js` | 27/27 test harness for the stripe renderer (Rung 2B). Includes the edge-midpoint adjacency invariant. |
+
+When editing this SYSTEM doc, update the status banner at the top and add any new post-PW-3 module to §7 File Map. Architectural decisions that change behavior (not just add modules) should cross-reference the rung they shipped under so readers can trace the history.

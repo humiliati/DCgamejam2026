@@ -2,8 +2,11 @@
 // Sidecar wrapper so world-designer.html works under file:// (bypasses
 // Chromium CORS fetch block). Keep in sync with floor-data.json.
 window.FLOOR_DATA = {
-  "generated": "2026-04-15T17:15:42.271Z",
-  "floorCount": 20,
+  "generated": "2026-04-16T21:55:47.994Z",
+  "floorCount": 21,
+  "payloadCount": 0,
+  "questPayloadCount": 0,
+  "questCount": 0,
   "floors": {
     "0": {
       "floorId": "0",
@@ -1971,7 +1974,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "exterior",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "1": {
       "floorId": "1",
@@ -3938,7 +3942,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "promenade",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2": {
       "floorId": "2",
@@ -5910,7 +5915,8 @@ window.FLOOR_DATA = {
           "faction": "tide"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "3": {
       "floorId": "3",
@@ -8799,7 +8805,8 @@ window.FLOOR_DATA = {
           "faction": "admiralty"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "1.1": {
       "floorId": "1.1",
@@ -9080,7 +9087,8 @@ window.FLOOR_DATA = {
           "faction": "tide"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "1.2": {
       "floorId": "1.2",
@@ -9502,7 +9510,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "inn",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "1.3": {
       "floorId": "1.3",
@@ -9772,7 +9781,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "cellar_entry",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "1.6": {
       "floorId": "1.6",
@@ -10350,7 +10360,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "home",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.1": {
       "floorId": "2.1",
@@ -10608,7 +10619,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "office",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.2.1": {
       "floorId": "2.2.1",
@@ -11318,7 +11330,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "dungeon",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.2.2": {
       "floorId": "2.2.2",
@@ -11824,7 +11837,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "dungeon",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.2": {
       "floorId": "2.2",
@@ -12166,7 +12180,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "watchpost",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.3": {
       "floorId": "2.3",
@@ -12440,7 +12455,8 @@ window.FLOOR_DATA = {
           "faction": "foundry"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.4": {
       "floorId": "2.4",
@@ -12714,7 +12730,8 @@ window.FLOOR_DATA = {
           "faction": "tide"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.5": {
       "floorId": "2.5",
@@ -12992,7 +13009,8 @@ window.FLOOR_DATA = {
           "faction": "tide"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.6": {
       "floorId": "2.6",
@@ -13270,7 +13288,8 @@ window.FLOOR_DATA = {
           "faction": "admiralty"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "2.7": {
       "floorId": "2.7",
@@ -13556,7 +13575,8 @@ window.FLOOR_DATA = {
           "faction": "tide"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "3.1.1": {
       "floorId": "3.1.1",
@@ -14058,7 +14078,8 @@ window.FLOOR_DATA = {
       },
       "biome": "sealab",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "3.1": {
       "floorId": "3.1",
@@ -14392,7 +14413,8 @@ window.FLOOR_DATA = {
       "spawn": null,
       "biome": "armory",
       "shops": [],
-      "entities": []
+      "entities": [],
+      "quests": []
     },
     "3.2": {
       "floorId": "3.2",
@@ -14622,7 +14644,653 @@ window.FLOOR_DATA = {
           "faction": "admiralty"
         }
       ],
-      "entities": []
+      "entities": [],
+      "quests": []
+    },
+    "1.9": {
+      "floorId": "1.9",
+      "grid": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          40,
+          0,
+          1,
+          0,
+          0,
+          43,
+          0,
+          1,
+          0,
+          0,
+          47,
+          0,
+          1,
+          0,
+          0,
+          44,
+          0,
+          1,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          5,
+          42,
+          0,
+          1,
+          0,
+          0,
+          45,
+          0,
+          1,
+          0,
+          0,
+          46,
+          0,
+          1,
+          0,
+          0,
+          41,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          30,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          48,
+          0,
+          1,
+          0,
+          0,
+          26,
+          0,
+          1,
+          0,
+          0,
+          29,
+          0,
+          1,
+          0,
+          0,
+          28,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          30,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          52,
+          52,
+          0,
+          52,
+          0,
+          0,
+          18,
+          0,
+          0,
+          52,
+          0,
+          52,
+          52,
+          0,
+          0,
+          10,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          52,
+          0,
+          0,
+          0,
+          52,
+          0,
+          0,
+          0,
+          52,
+          0,
+          0,
+          0,
+          52,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          1
+        ]
+      ],
+      "gridW": 24,
+      "gridH": 20,
+      "rooms": [
+        {
+          "x": 1,
+          "y": 1,
+          "w": 4,
+          "h": 3,
+          "cx": 3,
+          "cy": 2
+        },
+        {
+          "x": 6,
+          "y": 1,
+          "w": 4,
+          "h": 3,
+          "cx": 8,
+          "cy": 2
+        },
+        {
+          "x": 11,
+          "y": 1,
+          "w": 4,
+          "h": 3,
+          "cx": 13,
+          "cy": 2
+        },
+        {
+          "x": 16,
+          "y": 1,
+          "w": 4,
+          "h": 3,
+          "cx": 18,
+          "cy": 2
+        },
+        {
+          "x": 1,
+          "y": 6,
+          "w": 4,
+          "h": 3,
+          "cx": 3,
+          "cy": 7
+        },
+        {
+          "x": 6,
+          "y": 6,
+          "w": 4,
+          "h": 3,
+          "cx": 8,
+          "cy": 7
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "w": 4,
+          "h": 3,
+          "cx": 13,
+          "cy": 7
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "w": 4,
+          "h": 3,
+          "cx": 18,
+          "cy": 7
+        },
+        {
+          "x": 1,
+          "y": 11,
+          "w": 4,
+          "h": 3,
+          "cx": 3,
+          "cy": 12
+        },
+        {
+          "x": 6,
+          "y": 11,
+          "w": 4,
+          "h": 3,
+          "cx": 8,
+          "cy": 12
+        },
+        {
+          "x": 11,
+          "y": 11,
+          "w": 4,
+          "h": 3,
+          "cx": 13,
+          "cy": 12
+        },
+        {
+          "x": 16,
+          "y": 11,
+          "w": 4,
+          "h": 3,
+          "cx": 18,
+          "cy": 12
+        },
+        {
+          "x": 1,
+          "y": 16,
+          "w": 19,
+          "h": 3,
+          "cx": 10,
+          "cy": 17
+        },
+        {
+          "x": 21,
+          "y": 1,
+          "w": 2,
+          "h": 18,
+          "cx": 21,
+          "cy": 10
+        }
+      ],
+      "doors": {
+        "stairsUp": null,
+        "stairsDn": null,
+        "doorExit": {
+          "x": 21,
+          "y": 19
+        }
+      },
+      "doorTargets": {
+        "21,19": "1",
+        "2,7": "1.9.1"
+      },
+      "doorFaces": {},
+      "procGenChildren": [],
+      "spawn": null,
+      "biome": "inn",
+      "shops": [],
+      "entities": [],
+      "quests": []
     }
   }
 };

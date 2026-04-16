@@ -229,7 +229,20 @@ var Game = (function () {
 
     // Wire Phase 2 extracted modules
     if (typeof HomeEvents !== 'undefined') {
-      HomeEvents.init({ isGateUnlocked: _gateUnlocked, onKeysPickedUp: _updateQuestTarget });
+      HomeEvents.init({
+        isGateUnlocked: _gateUnlocked,
+        onKeysPickedUp: function () {
+          // DOC-107 Phase 1: fan out to QuestChain before the legacy
+          // marker refresh. Order matters — item event first so any
+          // quest step keyed on the raw 'work_keys' card advances
+          // before steps gated on the gateUnlocked flag.
+          if (typeof QuestChain !== 'undefined') {
+            QuestChain.onItemAcquired('work_keys');
+            QuestChain.onFlagChanged('gateUnlocked', true);
+          }
+          _updateQuestTarget();
+        }
+      });
     }
     if (typeof CorpseActions !== 'undefined') {
       CorpseActions.init({
@@ -247,19 +260,9 @@ var Game = (function () {
         changeState: function (state) { _changeState(state === 'GAME_OVER' ? S.GAME_OVER : S.GAME_OVER); }
       });
     }
-    if (typeof QuestWaypoint !== 'undefined') {
-      QuestWaypoint.init({
-        getDispatcherPhase: function () {
-          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getPhase() : 'done';
-        },
-        getDispatcherEntity: function () {
-          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getEntity() : null;
-        },
-        findGateDoorPos: function () {
-          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.findGateDoorPos() : null;
-        }
-      });
-    }
+    // DOC-107 Phase 1: QuestWaypoint.init(...) is now a no-op shim —
+    // the dispatcher callback wiring lives in QuestChain.init(opts)
+    // further down in this file. No init call needed here.
 
     // ── Phase 1: Core systems (always needed) ──
     if (typeof ItemDB !== 'undefined') ItemDB.init();  // Sync-load data/items.json
@@ -470,6 +473,22 @@ var Game = (function () {
     // ── ESC toggle: pause ↔ gameplay ──
     InputManager.on('pause', function (type) {
       if (type !== 'press') return;
+
+      // PF-5: MinigameExit is always first responder when a captured-input
+      // minigame owns the viewport. First Back/Escape arms the confirm prompt;
+      // second commits the exit. Consumes the keypress so pause never fires
+      // while a minigame is live — exiting a minigame must be an explicit act.
+      if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+        if (MinigameExit.handleKey('Escape')) return;
+      }
+
+      // PeekShell intercept: a mounted peek/tableau consumes Escape to close
+      // itself rather than letting the pause screen cover it. See
+      // docs/MINIGAME_ROADMAP.md §0.3 — captures:false surfaces still dismiss
+      // on Escape; captures:true surfaces route through MinigameExit above.
+      if (typeof PeekShell !== 'undefined' && PeekShell.isActive()) {
+        if (PeekShell.handleKey('Escape')) return;
+      }
 
       // CobwebNode intercept: ESC dismisses spider deploy prompt before pause
       if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
@@ -815,6 +834,11 @@ var Game = (function () {
               // Bonfire position consumed — prevent double-rest
               _bonfirePendingX = -1;
               _bonfirePendingY = -1;
+              // M2.4: checkpoint autosave — bonfire is a safe rest point.
+              if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+                try { SaveState.autosave(); }
+                catch (e) { console.warn('[Game] autosave after bonfire rest failed:', e); }
+              }
             }
           } else if (hit.action === 'warp' && hit.warpTarget) {
             // §9f: Confirm dialog before warping
@@ -881,6 +905,20 @@ var Game = (function () {
         }
         return;
       }
+      // PF-5: MinigameExit [×] corner gets first dibs on any gameplay click so
+      // a captured-input minigame can never swallow the exit affordance. During
+      // the 300ms entry grace, handlePointerClick() silently consumes hits on
+      // [×] to avoid dual-action surprises. When confirm is armed, a second
+      // click on [×] commits the exit.
+      if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+        if (MinigameExit.handlePointerClick()) return;
+      }
+      // PeekShell pointer intercept — runs after MinigameExit so captured-input
+      // surfaces that also use PeekShell framing route through the exit overlay
+      // first. Non-capturing peeks consult their descriptor.onPointer hook.
+      if (typeof PeekShell !== 'undefined' && PeekShell.isActive()) {
+        if (PeekShell.handlePointerClick()) return;
+      }
       // CrateUI click during PeekSlots FILLING — route to slot hit-test
       if (typeof CrateUI !== 'undefined' && CrateUI.isOpen() && CrateUI.handleClick) {
         var ptr = InputManager.getPointer ? InputManager.getPointer() : null;
@@ -914,6 +952,20 @@ var Game = (function () {
     // ── Enter/Space to advance DialogBox during gameplay ──
     InputManager.on('interact', function (type) {
       if (type !== 'press') return;
+      // PF-5: while a captured-input minigame is mounted, Enter/OK is reserved
+      // for canceling the exit-confirm prompt. MinigameExit.handleKey returns
+      // true when it consumed the key (either during confirm or because the
+      // minigame is focused and this key is its own business).
+      if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+        if (MinigameExit.handleKey('Enter')) return;
+      }
+      // PeekShell interact intercept — Enter/OK forwards to the mounted
+      // descriptor's onInteract hook. Returning the string 'handoff' from
+      // onInteract auto-unmounts (use when the interaction kicks off a floor
+      // transition that replaces this surface).
+      if (typeof PeekShell !== 'undefined' && PeekShell.isActive()) {
+        if (PeekShell.handleKey('Enter')) return;
+      }
       // Dismiss combat report with Enter/Space
       if (typeof CombatReport !== 'undefined' && CombatReport.isVisible()) {
         CombatReport.dismiss();
@@ -991,8 +1043,13 @@ var Game = (function () {
       if (oldState === S.TITLE || oldState === S.SPLASH) {
         _initGameplay();
       }
-      // If coming from GAME_OVER (retry), reset and re-init
+      // If coming from GAME_OVER (retry), stash current seed then reset
       if (oldState === S.GAME_OVER) {
+        // Stash the run seed so _initGameplay → SeededRNG.beginRun re-uses
+        // the same seed (player chose "Retry", expects identical dungeon).
+        if (typeof SeededRNG !== 'undefined' && SeededRNG.runSeed) {
+          window._pendingRunSeed = SeededRNG.runSeed();
+        }
         Player.reset();
         SessionStats.reset();
         _initGameplay();
@@ -1209,6 +1266,97 @@ var Game = (function () {
     CardSystem.init();
     // Refresh status bar now that CardSystem has the starting hand/deck
     if (typeof StatusBar !== 'undefined') { StatusBar.updateDeck(); StatusBar.updateBag(); }
+
+    // ── Quest system (Phase 0 scaffold) ─────────────────────────
+    // Sync-XHR load of data/quests.json + merge of per-floor quest
+    // sidecars (tools/floor-payloads/<id>.quest.json) surfaced by
+    // extract-floors into floor-data.json[fid].quests. Docref:
+    // docs/QUEST_SYSTEM_ROADMAP.md §2 Target Architecture.
+    if (typeof QuestRegistry !== 'undefined') {
+      var _questPayload = null;
+      try {
+        var _qxhr = new XMLHttpRequest();
+        _qxhr.open('GET', 'data/quests.json', false);
+        _qxhr.send();
+        if (_qxhr.status === 200 || _qxhr.status === 0 /* file:// */) {
+          _questPayload = JSON.parse(_qxhr.responseText);
+        }
+      } catch (e) {
+        console.warn('[Game] quests.json load failed:', e && e.message);
+      }
+      // Harvest per-floor anchors from FloorManager (populated by
+      // extract-floors sidecar merge). Phase 1 wires this up; for now
+      // we just try the call and fall back to null.
+      var _floorAnchors = null;
+      if (typeof FloorManager !== 'undefined' && typeof FloorManager.getQuestAnchors === 'function') {
+        try { _floorAnchors = FloorManager.getQuestAnchors(); } catch (e) { _floorAnchors = null; }
+      }
+      QuestRegistry.init(_questPayload, _floorAnchors);
+
+      // DOC-107 Phase 1: wire runtime resolvers so resolveAnchor() can
+      // pull from floor data, live entities, NPCs, and the dump truck
+      // deployment. QuestRegistry is Layer 1 — we keep it decoupled
+      // from FloorManager/DispatcherChoreography/etc. by threading
+      // through these callbacks at Layer-4 boot.
+      if (QuestRegistry.setResolvers) {
+        QuestRegistry.setResolvers({
+          getFloorData: function (floorId) {
+            if (typeof FloorManager === 'undefined') return null;
+            if (FloorManager.getFloor && FloorManager.getFloor() === floorId) {
+              return FloorManager.getFloorData ? FloorManager.getFloorData() : null;
+            }
+            return FloorManager.getFloorCache ? FloorManager.getFloorCache(floorId) : null;
+          },
+          getEntity: function (modName, method) {
+            // Minimal module-dispatch; DispatcherChoreography is the
+            // only consumer in Phase 1 but the shape generalizes.
+            if (modName === 'DispatcherChoreography' &&
+                typeof DispatcherChoreography !== 'undefined' &&
+                typeof DispatcherChoreography[method] === 'function') {
+              return DispatcherChoreography[method]();
+            }
+            return null;
+          },
+          getNpcById: function (floorId, npcId) {
+            // NPC registry resolver stub — wired in Phase 3 when the
+            // NPC roster gains a floor-scoped lookup. Returns null so
+            // resolveAnchor cleanly yields null on an 'npc' spec.
+            return null;
+          },
+          getDumpTruck: function () {
+            if (typeof DumpTruckSpawner !== 'undefined' &&
+                DumpTruckSpawner.getDeployment) {
+              return DumpTruckSpawner.getDeployment();
+            }
+            return null;
+          },
+          getCurrentFloorId: function () {
+            if (typeof FloorManager !== 'undefined' && FloorManager.getFloor) {
+              return FloorManager.getFloor();
+            }
+            return null;
+          }
+        });
+      }
+    }
+    if (typeof QuestChain !== 'undefined') {
+      // DOC-107 Phase 1: QuestChain now absorbs QuestWaypoint's init
+      // opts (dispatcher callbacks). The QuestWaypoint.init call below
+      // is kept as a no-op shim until Slice 6 retires the module.
+      QuestChain.init({
+        getDispatcherPhase: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getPhase() : 'done';
+        },
+        getDispatcherEntity: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.getEntity() : null;
+        },
+        findGateDoorPos: function () {
+          return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.findGateDoorPos() : null;
+        }
+      });
+    }
+    if (typeof ReputationBar !== 'undefined') ReputationBar.init();
+
     MouseLook.init(_canvas);
     if (typeof ViewportRing !== 'undefined') ViewportRing.init();
 
@@ -1267,9 +1415,11 @@ var Game = (function () {
         // Close any open peek/restock UI before rescue transition
         _collapseAllPeeks();
 
-        // Transition to home floor after a brief delay
+        // Transition to home floor after a brief delay (M2.4: act-aware anchor)
         setTimeout(function () {
-          FloorTransition.go('1.6', 'retreat');
+          var home = (typeof SaveState !== 'undefined' && SaveState.getResidenceAnchor)
+            ? SaveState.getResidenceAnchor() : '1.6';
+          FloorTransition.go(home, 'retreat');
         }, 800);
       }
     });
@@ -1336,9 +1486,11 @@ var Game = (function () {
         // Close any open peek/restock UI before rescue transition
         _collapseAllPeeks();
 
-        // Transition to home floor after a brief delay (let combat log sink in)
+        // Transition to home floor after a brief delay (M2.4: act-aware anchor)
         setTimeout(function () {
-          FloorTransition.go('1.6', 'retreat');
+          var home = (typeof SaveState !== 'undefined' && SaveState.getResidenceAnchor)
+            ? SaveState.getResidenceAnchor() : '1.6';
+          FloorTransition.go(home, 'retreat');
         }, 800);
       });
     }
@@ -1574,7 +1726,9 @@ var Game = (function () {
         // Close any open peek/crate UI before curfew transition
         if (typeof PeekSlots !== 'undefined' && PeekSlots.isOpen()) PeekSlots.close();
 
-        // Forced transition to home + sleep
+        // Forced transition to home + sleep (M2.4: act-aware anchor)
+        var curfewHome = (typeof SaveState !== 'undefined' && SaveState.getResidenceAnchor)
+          ? SaveState.getResidenceAnchor() : '1.6';
         setTimeout(function () {
           if (typeof TransitionFX !== 'undefined') {
             TransitionFX.begin({
@@ -1588,13 +1742,20 @@ var Game = (function () {
                   DayCycle.advanceTime(DayCycle.ADVANCE.REST);
                 }
                 if (typeof Player !== 'undefined') Player.fullRestore();
-                FloorManager.setFloor('1.6');
+                FloorManager.setFloor(curfewHome);
                 FloorManager.generateCurrentFloor();
               },
               onComplete: function () {
                 _updateDayCounter();
                 if (typeof Toast !== 'undefined') {
                   Toast.show('\u2615 You wake up groggy. Don\'t make a habit of this.', 'info');
+                }
+
+                // M2.4: autosave after curfew — curfew bypasses FloorTransition.go,
+                // so the floor-transition autosave at onAfter doesn't fire.
+                if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+                  try { SaveState.autosave(); }
+                  catch (e) { console.warn('[Game] autosave after curfew failed:', e); }
                 }
               }
             });
@@ -1664,6 +1825,11 @@ var Game = (function () {
               Toast.show('\uD83D\uDCEC You have mail! Check your mailbox.', 'info');
             }
           }, 1500);
+        }
+        // M2.4: checkpoint autosave — home bed is the strongest save point.
+        if (typeof SaveState !== 'undefined' && SaveState.autosave) {
+          try { SaveState.autosave(); }
+          catch (e) { console.warn('[Game] autosave after bed wake failed:', e); }
         }
       });
     }
@@ -1774,6 +1940,20 @@ var Game = (function () {
         // QuestWaypoint.update() reads it on Floor 1.
         _onFloorArrive(FloorManager.getFloor());
 
+        // DOC-107 Phase 1: floor-arrive fan-out to QuestChain — lets
+        // 'floor' predicate steps advance when the player reaches a
+        // target tile (the spawn tile on the new floor). Marker
+        // refresh still runs after, so no visual regression.
+        if (typeof QuestChain !== 'undefined' && QuestChain.onFloorArrive) {
+          var _fidArrive = FloorManager.getFloor();
+          var _spawnTile = (typeof MC !== 'undefined' && MC.getGridPos) ? MC.getGridPos() : null;
+          QuestChain.onFloorArrive(
+            _fidArrive,
+            _spawnTile ? _spawnTile.x : 0,
+            _spawnTile ? _spawnTile.y : 0
+          );
+        }
+
         // Refresh quest waypoint for the new floor. Without this, the
         // minimap marker stays stuck at the previous floor's coordinates
         // and renders at a garbage tile on the new grid.
@@ -1848,6 +2028,15 @@ var Game = (function () {
     //
     // Resume path does none of this: the blob already captured it.
     if (!_loadedFromSave) {
+      // On retry, _pendingRunSeed was stashed in the GAME_OVER→GAMEPLAY
+      // transition. On fresh title deploy, TitleScreen._deploy already
+      // called beginRun, so _pendingRunSeed is null and this is a no-op
+      // guard. Either way: ensure beginRun has been called before seeding.
+      if (typeof SeededRNG !== 'undefined' && SeededRNG.beginRun &&
+          typeof window !== 'undefined' && window._pendingRunSeed != null) {
+        SeededRNG.beginRun(window._pendingRunSeed);
+        window._pendingRunSeed = null;
+      }
       _seedFreshRun(Player.state());
       CardAuthority.drawHand();
       HUD.updateCards(CardAuthority.getHand());
@@ -2373,6 +2562,16 @@ var Game = (function () {
   // refreshes the quest waypoint to point at the exit.
 
   function _onReadinessTierCross(tier, floorId) {
+    // DOC-107 Phase 1: fan out readiness crossings to QuestChain on
+    // every tier (not just tier 4) — predicates may be gated on 25%,
+    // 50%, or 75% thresholds. Uses the true score from ReadinessCalc
+    // so fractional predicates (e.g. >= 0.62) work too.
+    if (typeof QuestChain !== 'undefined' && QuestChain.onReadinessChange) {
+      var _rScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
+        ? (+ReadinessCalc.getCoreScore(floorId) || 0) : (tier * 0.25);
+      QuestChain.onReadinessChange(floorId, _rScore);
+    }
+
     if (tier === 4) {
       // Victory viewport glow — gold wash + rotating rays. Only for the
       // deep-dungeon clean-sites (depth ≥ 3). Shallower tiers crossing
@@ -2433,7 +2632,10 @@ var Game = (function () {
 
   // ── Quest waypoint — delegated to QuestWaypoint ────────────────
 
-  function _updateQuestTarget() { if (typeof QuestWaypoint !== 'undefined') QuestWaypoint.update(); }
+  // DOC-107 Phase 1: marker refresh routes through QuestChain directly.
+  // QuestWaypoint still owns evaluateCursorFxGating() until cursor-fx
+  // consolidation moves that shim into its own module.
+  function _updateQuestTarget() { if (typeof QuestChain !== 'undefined' && QuestChain.update) QuestChain.update(); }
   function _evaluateCursorFxGating() { if (typeof QuestWaypoint !== 'undefined') QuestWaypoint.evaluateCursorFxGating(); }
 
   // ── Movement callbacks ─────────────────────────────────────────────
@@ -3327,8 +3529,18 @@ var Game = (function () {
       );
     }
 
+    // Reanimated friendly verb-field tick — entities with _verbSet orbit
+    // nearby verb nodes. Handles both auto-populated dungeon nodes (§13.5)
+    // and hand-authored nodes on town floors. Entities without a _verbSet
+    // fall through to the legacy _tickFriendlyPatrol path below.
+    if (typeof ReanimatedBehavior !== 'undefined') {
+      ReanimatedBehavior.tick(deltaMs);
+    }
+
     // Friendly wander tick — reanimated entities patrol crate→torch→crate.
-    // Runs patrol-only movement (no awareness, no chase).
+    // Runs patrol-only movement (no awareness, no chase). Only fires for
+    // entities with a legacy `path` — reanimated creatures running the
+    // verb-field are handled above and have `path` cleared in assign().
     if (EnemyAI.tickFriendlyPatrol) {
       for (var _fri = 0; _fri < enemies.length; _fri++) {
         if (enemies[_fri].friendly && enemies[_fri].path) {
@@ -3622,6 +3834,34 @@ var Game = (function () {
       if (typeof ClickyMinigame !== 'undefined') ClickyMinigame.update(frameDt);
       if (typeof BedPeek !== 'undefined') BedPeek.update(frameDt);
       if (typeof MailboxPeek !== 'undefined') MailboxPeek.update(frameDt);
+
+      // PeekShell tick — Phase 0 shared outer frame for tile-interaction
+      // surfaces (docs/MINIGAME_ROADMAP.md §0.2). `face` is the tile the
+      // player is looking at this frame; PeekShell uses it for dwell-driven
+      // auto-mount when a descriptor registry is populated. Explicit mounts
+      // (via PeekShell.mount(...)) don't depend on `face` and stay mounted
+      // regardless until unmount() is called. Computed inline so the per-
+      // peek modules above can be retired one at a time.
+      if (typeof PeekShell !== 'undefined' && PeekShell.update) {
+        var _psFace = null;
+        if (typeof Player !== 'undefined' &&
+            typeof MovementController !== 'undefined' &&
+            typeof FloorManager !== 'undefined') {
+          var _psFloor = FloorManager.getFloorData && FloorManager.getFloorData();
+          if (_psFloor && _psFloor.grid) {
+            var _psPos = Player.getPos();
+            var _psDir = Player.getDir();
+            var _psFx  = _psPos.x + MovementController.DX[_psDir];
+            var _psFy  = _psPos.y + MovementController.DY[_psDir];
+            if (_psFx >= 0 && _psFx < _psFloor.gridW &&
+                _psFy >= 0 && _psFy < _psFloor.gridH) {
+              _psFace = { tile: _psFloor.grid[_psFy][_psFx], x: _psFx, y: _psFy };
+            }
+          }
+        }
+        PeekShell.update(frameDt, _psFace);
+      }
+
       if (typeof StatusEffectHUD !== 'undefined') StatusEffectHUD.update();
 
       // PeekSlots update (SEALED auto-dismiss timer + zone bounds sync)
@@ -3661,6 +3901,15 @@ var Game = (function () {
       if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
         CrateUI.update(frameDt);
         CrateUI.render(ctx, _canvas.width, _canvas.height);
+      }
+
+      // PF-5: MinigameExit chrome (top-edge input banner + [×] corner + confirm).
+      // Renders above captured minigame content so the exit affordance is always
+      // visible, but below DragDrop so a drag ghost stays on top. update() drives
+      // the 300ms entry grace, fade-in, and confirm auto-cancel countdown.
+      if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+        MinigameExit.update(frameDt);
+        MinigameExit.render(ctx, _canvas.width, _canvas.height);
       }
 
       // Drag-drop ghost overlay (renders above all other UI)
@@ -4121,6 +4370,22 @@ var Game = (function () {
       }
     }
 
+    // Raycaster pause gate — see docs/RAYCASTER_PAUSE_RESUME_ADR.md.
+    // Captured-input Tier-2 minigames with viewportMode: 'takeover' call
+    // Raycaster.pause() on mount to free the ~10-14ms/frame the world
+    // cluster spends on DDA, sprites, fog, and sibling effects. While
+    // paused we skip the ENTIRE world render: raycaster, spatial-debug,
+    // sprite-layer positioning, light orbs, spray-viewport FX, cobweb
+    // renderer, cobweb-node render, world popups. HUD + overlay
+    // renderers (MinigameExit, DialogBox, Toast, Minimap below) stay
+    // alive. World simulation (10Hz GameLoop AI + interrupt queue)
+    // continues ticking independently — only the visual render pauses.
+    // The minigame owns the backdrop: it either drawImage's
+    // Raycaster.getPausedFrame() onto the canvas or composites its own.
+    if (typeof Raycaster !== 'undefined' && Raycaster.isPaused && Raycaster.isPaused()) {
+      // Paused: render nothing in the world layer. Minimap + HUD overlays
+      // below this block still run normally.
+    } else {
     // Raycaster render — apply combat zoom if active
     var combatZoom = (typeof CombatFX !== 'undefined') ? CombatFX.getZoom() : 1;
     var ctx = _canvas.getContext('2d');
@@ -4214,8 +4479,10 @@ var Game = (function () {
       WorldPopup.update(frameDt);
       WorldPopup.render(ctx, _canvas.width, _canvas.height, _cobPlayer);
     }
+    } // end of `if (Raycaster.isPaused()) {} else {` world-render cluster
 
-    // Minimap render
+    // Minimap render (runs every frame, including during takeover pause —
+    // minimap is UI, not world-cluster)
     Minimap.render(
       { x: p.x, y: p.y, dir: MC.dirToAngle(p.dir) },
       floorData.grid, floorData.gridW, floorData.gridH,
@@ -4295,6 +4562,7 @@ var Game = (function () {
 })();
 
 // ── Boot ──
+// (cache-bust 2026-04-16: DOC-107 Phase 1 marker-refactor landed here)
 window.addEventListener('DOMContentLoaded', function () {
   Game.init();
 });

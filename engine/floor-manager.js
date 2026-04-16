@@ -2548,6 +2548,17 @@ var FloorManager = (function () {
       NoticeboardDecor.populate(_floorId, _floorData);
     }
 
+    // ── Dungeon verb-node auto-registration ─────────────────────────
+    // Dungeon floors (depth ≥3) are proc-gen and don't have authored
+    // verb-node lists. DungeonVerbNodes scans the tile grid and
+    // registers derived nodes via VerbNodes.register so reanimated
+    // friendly enemies (and any future verb-field actor on a dungeon
+    // floor) have spatial targets to orbit. Gated on depth inside the
+    // module; this call is unconditional. Idempotent on re-entry.
+    if (!fromCache && typeof DungeonVerbNodes !== 'undefined') {
+      DungeonVerbNodes.populate(_floorId, _floorData);
+    }
+
     // Compute per-cell door height overrides (building entrance vs archway rule).
     // Stored on floorData and passed to raycaster alongside the frozen contract.
     _floorData.cellHeights = SpatialContract.computeDoorHeights(

@@ -648,6 +648,10 @@ async function confirmSaveWrite() {
     }
   }
 
+  // M3: emit payload sidecar JSON if the floor has a payload
+  if (p.pendingFloorId) _emitPayloadSidecar(p.pendingFloorId);
+  else if (typeof currentFloorId === 'string') _emitPayloadSidecar(currentFloorId);
+
   // Scaffold success path — clear pending pool + show post-commit hints.
   if (p.isScaffold && p.pendingFloorId) {
     _clearPendingSpec(p.pendingFloorId);
@@ -707,6 +711,33 @@ async function confirmSaveWrite() {
   closeSaveModal();
 }
 
+/**
+ * M3: emit the §3.1 payload sidecar JSON for the current floor.
+ * Downloads as `floor-payloads/<floorId>.json`.
+ */
+function _emitPayloadSidecar(floorId) {
+  if (typeof FLOORS === 'undefined' || !FLOORS[floorId]) return;
+  var floor = FLOORS[floorId];
+  var payload = floor._payload;
+  if (!payload) return;
+
+  // Update dimensions from actual grid (may have been resized)
+  if (floor.grid && floor.grid[0]) {
+    payload.dimensions = { w: floor.grid[0].length, h: floor.grid.length };
+  }
+
+  var json = JSON.stringify(payload, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  // Sanitize floorId for filename (dots → dots, safe for filesystem)
+  a.href = url;
+  a.download = floorId + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  console.log('[save] emitted payload sidecar: ' + floorId + '.json');
+}
+
 function _downloadRecord(rec) {
   var blob = new Blob([rec.newText], { type: 'text/javascript' });
   var url = URL.createObjectURL(blob);
@@ -725,6 +756,10 @@ function downloadPendingSave() {
     _downloadRecord(p.secondary);
     suffix = ' + ' + p.secondary.fileName;
   }
+  // M3: emit payload sidecar JSON on download path too
+  if (p.pendingFloorId) _emitPayloadSidecar(p.pendingFloorId);
+  else if (typeof currentFloorId === 'string') _emitPayloadSidecar(currentFloorId);
+
   showCopyToast('Downloaded ' + p.fileName + suffix + ' — drop into engine/');
   if (p.isScaffold && p.pendingFloorId) {
     _clearPendingSpec(p.pendingFloorId);

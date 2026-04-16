@@ -1,7 +1,7 @@
 ﻿# Dungeon Gleaner - Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-14
-**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed
+**Created**: 2026-03-28 | **Updated**: 2026-04-16
+**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed, DOC-107 Phases 0 + 0b + 1 shipped
 **Goal**: Polish, post-jam vision execution, LG webOS deployment readiness
 
 ---
@@ -44,6 +44,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-74 | [ACT2_NARRATIVE_OUTLINE.md](#doc-74-act2_narrative_outlinemd) | docs/ |
 | DOC-75 | [HERO_FOYER_ENCOUNTER.md](#doc-75-hero_foyer_encountermd) | docs/ |
 | DOC-76 | [gameover.md](#doc-76-gameovermd) | docs/ |
+| DOC-107 | [QUEST_SYSTEM_ROADMAP.md](#doc-107-quest_system_roadmapmd) — Post-jam canonical quest system: QuestChain + QuestRegistry + ReputationBar (WoW-style faction/NPC standing) + Journal re-wire + settings toggles. Supersedes DOC-66 §6 post-jam spec. **Phases 0 + 0b + 1 shipped 2026-04-16** — QuestTypes/QuestRegistry/QuestChain live; QuestWaypoint reduced to cursor-fx shim; 3 named anchors in `quests.json`; Minimap pull-based marker wired. Phases 2–7 pending. | docs/ |
 
 ### Engine And Renderer Roadmaps
 
@@ -70,6 +71,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-101 | [WEATHER_MODULE_ROADMAP.md](#doc-101-weather_module_roadmapmd) — Planning: per-floor weather system (haze/rain/wind/debris) at configurable Z-depth in 3D viewport, punch-through terminus | docs/ |
 | DOC-104 | [DOC_GRAPH_BLOCKOUT_ARC.md](#doc-104-doc_graph_blockout_arcmd) — Mermaid document graph for the blockout refresh arc: prereqs → spec → engine files → downstream consumers; reading order for delegated engineers | docs/ |
 | DOC-105 | [POST_JAM_FOLLOWUP_ROADMAP.md](#doc-105-post_jam_followup_roadmapmd) — Consolidates deferred items from DOC-62/82/86/17/19/48/88/89/91/92 + legacy carryovers into 6 ordered waves aligned with Blockout → NPC → Living Shops arc | docs/ |
+| DOC-106 | [RAYCASTER_PAUSE_RESUME_ADR.md](#doc-106-raycaster_pause_resume_adrmd) — ADR for Raycaster.pause()/resume()/isPaused()/getPausedFrame() API; blocks `viewportMode: 'takeover'` minigames (MINIGAME_ROADMAP §4.6); ~150 LOC across 4 files | docs/ |
 
 ### Card, Inventory And Combat
 
@@ -207,6 +209,19 @@ north stars. Two new plans are coming next week:
 - **NPC_REFRESH_PLAN** (upcoming, follows BLOCKOUT) — reserve **DOC-103**. Populates
   per-NPC memories, creature verb-sets, faction relations matrix, Act 2 dispatcher/contact
   choreography. Target: living shops & economy visible before circling back to dungeoning.
+- **QUEST_SYSTEM_ROADMAP** (published 2026-04-16, follows NPC_REFRESH) — **DOC-107**. Replaces
+  imperative `QuestWaypoint` + hardcoded objectives with a data-driven QuestChain module,
+  registry JSON, ReputationBar (WoW-style faction/NPC standing evolving from readiness),
+  Journal re-wire, and system-settings toggles (markers on/off, hint verbosity, sidequest
+  opt-in). Parallel-track integration specs for pressure-washing, map editor, and minigame
+  owners included inline. **Phase 0 + Phase 0b + Phase 1 shipped 2026-04-16** — the engine
+  cutover is complete: QuestTypes (L0), QuestRegistry (L1) with six anchor resolvers,
+  QuestChain (L3) with predicate engine + absorbed DOC-66 §2 navigation state machine;
+  three named anchors migrated into `data/quests.json`; four game.js call-site fan-outs;
+  Minimap pull-based marker via `getCurrentMarker()`; QuestWaypoint reduced to a ~60-line
+  cursor-fx shim. Phases 2 (Journal UI), 3 (Reputation bars), 4 (Settings), 5 (Minigame
+  adapter), 6 (Floor sidecars), and 7 (Act-2 content) remain. DOC-66 §7 live-browser
+  verification walk still pending.
 
 ### Primary outstanding execution priorities
 

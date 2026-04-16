@@ -73,6 +73,19 @@ var Raycaster = (function () {
   var _lastHalfH = 0;      // horizon line from last render (pitch-shifted)
   var _zBuffer = [];
 
+  // Pause / resume state (see docs/RAYCASTER_PAUSE_RESUME_ADR.md).
+  // When paused, render() becomes a no-op and Game's render loop skips
+  // the world-render cluster (SpriteLayer, LightOrbs, CobwebRenderer,
+  // WorldPopup, etc.) via Raycaster.isPaused(). World simulation
+  // (10Hz GameLoop AI, 60Hz MovementController) continues unaffected.
+  // The paused frame is captured once on pause() and retained until
+  // resume() (canvas is kept allocated to avoid alloc churn on repeat
+  // takeover mounts). Resize invalidates the captured frame so a later
+  // pause() reallocates at the new size.
+  var _paused            = false;
+  var _pausedFrame       = null;  // HTMLCanvasElement — lazily allocated
+  var _pausedFrameValid  = false; // true while contents mirror the last drawn frame
+
   // ── Internal render resolution (pixel-cost lever) ────────────────
   // The raycaster is pure-JS per-pixel. Every doubling of either axis
   // roughly quadruples per-frame cost because _renderFloor paints every
@@ -384,6 +397,15 @@ var Raycaster = (function () {
     // next frame re-allocates at the new size.
     RaycasterFloor.resetBuffer();
     RaycasterWalls.resetBuffer();
+
+    // Paused-frame capture is tied to the main canvas dims. Invalidate
+    // so the next pause() reallocates at the new size. Safe to touch
+    // even when not paused — we only null the cached canvas ref.
+    // (ADR §3 Negative: risk of offscreen canvas going stale on resize.)
+    if (_pausedFrame) {
+      _pausedFrame      = null;
+      _pausedFrameValid = false;
+    }
   }
 
   // Public: change render scale at runtime. Clamps, persists, resizes.
@@ -425,6 +447,12 @@ var Raycaster = (function () {
    * @param {Object} [lightMap]
    */
   function render(player, grid, gridW, gridH, sprites, lightMap) {
+    // Pause short-circuit — Game.js already gates the world-render cluster
+    // behind isPaused(), but stray callers (debug overlays, editor tools)
+    // might invoke render() directly. No-op cleanly so we don't burn a
+    // ~10ms DDA pass while a takeover minigame owns the viewport.
+    if (_paused) return;
+
     // ── Per-frame perf probe handle (P1 CPU attribution) ──────────────
     // DebugPerfMonitor loads at Layer 5, after this IIFE parses, so we
     // can't cache it at module init. Look up once per frame; when the
@@ -3324,6 +3352,74 @@ var Raycaster = (function () {
     wallDecor:  function () { return _wallDecor; }
   });
 
+  // ── Pause / resume (ADR: docs/RAYCASTER_PAUSE_RESUME_ADR.md) ────────
+
+  /**
+   * Capture the current main-canvas frame into a retained offscreen
+   * canvas and mark the raycaster paused. The render loop in Game.js
+   * checks Raycaster.isPaused() and skips the entire world-render
+   * cluster while paused. Idempotent: second call while paused no-ops.
+   *
+   * Intended caller: MinigameExit.mount() when the mounting kind has
+   * viewportMode === 'takeover'. Must NOT be called mid floor
+   * transition — FloorTransition.go() asserts against this.
+   */
+  function pause() {
+    if (_paused) return;
+    if (!_canvas) return; // init() hasn't run yet — nothing to capture
+    // Lazy-allocate the offscreen frame canvas. Sized to the main
+    // canvas (full CSS resolution, not RENDER_SCALE offscreen) so the
+    // captured still matches what the player just saw pixel-for-pixel.
+    var w = _canvas.width, h = _canvas.height;
+    if (!_pausedFrame ||
+        _pausedFrame.width !== w ||
+        _pausedFrame.height !== h) {
+      if (typeof document !== 'undefined') {
+        _pausedFrame = document.createElement('canvas');
+      }
+      if (_pausedFrame) {
+        _pausedFrame.width  = Math.max(2, w);
+        _pausedFrame.height = Math.max(2, h);
+      }
+    }
+    if (_pausedFrame) {
+      var pctx = _pausedFrame.getContext('2d');
+      if (pctx) {
+        pctx.imageSmoothingEnabled = false;
+        if (pctx.webkitImageSmoothingEnabled !== undefined) pctx.webkitImageSmoothingEnabled = false;
+        pctx.clearRect(0, 0, _pausedFrame.width, _pausedFrame.height);
+        pctx.drawImage(_canvas, 0, 0);
+        _pausedFrameValid = true;
+      }
+    }
+    _paused = true;
+  }
+
+  /**
+   * Clear the paused flag; the next render() will draw normally. The
+   * offscreen frame canvas is retained (but its contents are no longer
+   * authoritative) so repeat pause()/resume() cycles avoid allocation
+   * churn. Idempotent.
+   */
+  function resume() {
+    if (!_paused) return;
+    _paused = false;
+    _pausedFrameValid = false;
+  }
+
+  /** True while pause() is in effect. Read by Game.js render loop. */
+  function isPaused() { return _paused; }
+
+  /**
+   * Returns the frozen-still offscreen canvas captured at pause() time,
+   * or null if not paused. Minigames in viewportMode: 'takeover' can
+   * drawImage() this onto the main canvas as a diegetic backdrop (or
+   * blur it via ctx.filter before drawImage — see ADR §2 for guidance).
+   */
+  function getPausedFrame() {
+    return (_paused && _pausedFrameValid) ? _pausedFrame : null;
+  }
+
   return {
     init: init,
     render: render,
@@ -3339,6 +3435,11 @@ var Raycaster = (function () {
     projectWorldToScreen: RaycasterProjection.projectWorldToScreen,
     findTileScreenRange: RaycasterProjection.findTileScreenRange,
     getZBuffer: function () { return _zBuffer; },
-    getCanvasSize: function () { return { w: _canvas ? _canvas.width : 320, h: _canvas ? _canvas.height : 200 }; }
+    getCanvasSize: function () { return { w: _canvas ? _canvas.width : 320, h: _canvas ? _canvas.height : 200 }; },
+    // Pause / resume — see docs/RAYCASTER_PAUSE_RESUME_ADR.md
+    pause:          pause,
+    resume:         resume,
+    isPaused:       isPaused,
+    getPausedFrame: getPausedFrame
   };
 })();

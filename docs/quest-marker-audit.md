@@ -3,6 +3,8 @@
 **Date:** 2026-04-04 (jam day −1)
 **Scope:** Why the minimap quest diamond "gets lost between floors" and what it takes to push a playtester cleanly through gate → house → keys → dungeon entrance → deeper door → next pending dungeon.
 
+> **Status banner (2026-04-16):** §1–5 remain canonical as the jam-day audit + patch notes. **§6 (Post-jam rework spec) is SUPERSEDED by `docs/QUEST_SYSTEM_ROADMAP.md` (DOC-107)** — DOC-107 replaces the QuestChain sketch in §6.2 with the full data-driven system, and the hardcoded anchor chain proposed in §6.4 has been generalized across six anchor resolver types. DOC-107 Phases 0 + 0b + 1 shipped on 2026-04-16; the imperative `_updateQuestTarget()` described in §1 is now a one-hop forwarder into `QuestChain.update()`, and `engine/quest-waypoint.js` has been reduced to a ~60-line cursor-fx shim. The §7 verification walk remains the live-browser acceptance test for DOC-107 Phase 1.
+
 ---
 
 ## 1. The systems in play
@@ -117,6 +119,8 @@ After the patch, the only states that legitimately produce `null` are:
 ---
 
 ## 6. Post-jam rework spec — data-driven quest tracking
+
+> **SUPERSEDED 2026-04-16.** The concrete implementation lives in `docs/QUEST_SYSTEM_ROADMAP.md` (DOC-107), which generalizes this sketch into a full module set (QuestTypes + QuestRegistry + QuestChain + ReputationBar) with six anchor resolver types, a predicate engine for six external event methods, a Journal UI re-wire, and Settings toggles. The ASCII chain diagram in §6.4 below is preserved as the original design intent; the actual chain resolves at runtime from `QuestChain.getCurrentMarker(floorId)` with the DOC-66 §2 navigation state machine absorbed verbatim as `_legacyNavigationMarker()`. Read §6 for historical context only; do not reference as current design.
 
 The jam patch is surgical. For post-jam, replace it with a proper quest-chain module.
 

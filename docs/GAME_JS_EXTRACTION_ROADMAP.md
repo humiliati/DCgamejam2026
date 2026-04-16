@@ -15,6 +15,14 @@
 > EX-14 (_onFloorArrive slimming) deferred — it's already a thin
 > orchestrator calling global modules + delegation stubs. Further
 > extraction yields diminishing returns.
+>
+> **Post-extraction update (2026-04-16, DOC-107 Phase 1):** EX-12
+> `quest-waypoint.js` has now been retired. Its 332-line body was
+> absorbed into `engine/quest-chain.js` (DOC-107 §2.1); the file
+> remains on disk as a ~60-line back-compat shim exposing only
+> `evaluateCursorFxGating()`. Delete the file entirely once the
+> cursor-fx consolidation moves that call into `cursor-fx.js`
+> (DOC-107 §7 Archival Candidates).
 
 ## Extraction cost model
 
@@ -136,11 +144,12 @@ These touch enough shared state that they need architectural prep work.
 - **Deps:** `_corpsePendingX/Y/Floor` (3 state vars), `_pendingMenuContext`, `_collapseAllPeeks`, `_refreshPanels`, `_canvas`
 - **Prereqs:** game-actions.js (for _refreshPanels, _collapseAllPeeks, _canvas). State vars can be owned internally.
 
-### EX-12: Quest Waypoint → `engine/quest-waypoint.js`
+### EX-12: Quest Waypoint → `engine/quest-waypoint.js` — retired 2026-04-16 (DOC-107 Phase 1)
 - **Lines:** 4846–5180 (~332 lines)
 - **Functions:** `_findDoorTo`, `_findProgressionDoorForward`, `_floorDepth`, `_evaluateCursorFxGating`, `_findCurrentDoorExit`, `_findTruckAnchorOnFloor`, `_commitQuestTarget`, `_updateQuestTarget`
 - **Deps:** `_gateUnlocked`, `_dispatcherEntity`, `_dispatcherPhase`, `_lastQuestTarget`, `_EXTERIOR_CHAIN`
 - **Prereqs:** Dispatcher state exposed or passed. `_floorDepth` is a pure utility — extract to a shared helper.
+- **Retirement:** The extraction landed as described. DOC-107 Phase 1 then absorbed the navigation helpers (`_findDoorTo`, `_findProgressionDoorForward`, `_findCurrentDoorExit`, `_findTruckAnchorOnFloor`, `_updateQuestTarget`, and the phase-based `update()`) into `engine/quest-chain.js` as `_legacyNavigationMarker` + inlined helpers. The file is now a ~60-line shim holding only `evaluateCursorFxGating()` + `floorDepth()`. Final deletion is gated on the cursor-fx consolidation.
 
 ### EX-13: Dispatcher Choreography → `engine/dispatcher-choreography.js`
 - **Lines:** 3682–4037 + state vars at 70–79 (~355+ lines)

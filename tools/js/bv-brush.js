@@ -35,11 +35,14 @@ function applyCellsToGrid(cells, newTile) {
   // Writes newTile to each (x,y) in cells, returning [{x,y,oldTile}] for changed cells only.
   if (!currentFloor || !currentFloor.grid) return [];
   var grid = currentFloor.grid;
+  // M3: skip pinned cells (required tiles from payload that cannot be painted over)
+  var pinned = currentFloor._pinnedCells || null;
   var changed = [];
   for (var i = 0; i < cells.length; i++) {
     var c = cells[i];
     if (c.y < 0 || c.y >= grid.length) continue;
     if (c.x < 0 || c.x >= grid[c.y].length) continue;
+    if (pinned && pinned[c.x + ',' + c.y]) continue; // M3: pinned lock
     var oldTile = grid[c.y][c.x];
     if (oldTile === newTile) continue;
     grid[c.y][c.x] = newTile;

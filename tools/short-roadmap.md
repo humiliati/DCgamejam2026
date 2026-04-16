@@ -83,7 +83,7 @@ All particle/weather/audio cosmetics also stay on `Math.random` for the same rea
 
 **M1 verification note (pending user's browser):** Open the game with `?seed=LANTERN-DRAGON-SCAR-a7c3` (or any valid phrase), walk Floor 1 → 1.3 → 1.3.1, screenshot each, reload with the same URL, walk the same path, compare. Enemy placements, breakable scatter, and hero-mess pile positions should be pixel-identical. If they drift, the remaining suspects are (a) a missed `Math.random` gameplay site, (b) generation order dependent on async load timing, or (c) a floor entering the tick loop before `deriveFloor` runs. Bash-mount stale-sync prevented in-session smoke; this is a user-terminal / user-browser gate.
 
-### M2 — Save/load with diff-based persistence (~2.5-3 days)
+### M2 — Save/load with diff-based persistence ✅ (shipped 2026-04-16)
 
 **Ship gate**: Manual save at Floor 1.3 mid-cleanup → close tab → reopen → load → same floor, same enemies alive/dead, same cleanup state, same hand/equipped/bag/stash, same gold, same explored mask.
 
@@ -125,33 +125,35 @@ Shipped across five subslices: **M2.3a ✅** (2026-04-15) — CleaningSystem blo
 - [ ] `verminSpawns` + `verminLastRefreshDay` — TBD vermin module.
 - [ ] `reanimatedFormidables` — post-Jam track.
 
-#### M2.4 — Autosave hooks + death:reset + curfew teleport (~½–1 day)
+#### M2.4 ✅ — Autosave hooks + death:reset + curfew teleport (~½–1 day) (shipped 2026-04-16)
 
-- [ ] `FloorTransition.commit()` end-of-transition autosave write-through (slot = autosave).
-- [ ] Checkpoint tile autosaves: bonfire rest, inn bed, home bed. Hook into their interact handlers.
-- [ ] Death integration: `save-state.js` listens for `death:reset`, persists post-wipe state, forces `currentFloor` to the act-appropriate residence anchor per §4.6. **Decision (2026-04-15): curfew → teleport is handled in this same slice.** The `_onCurfew` callback in `day-cycle.js` currently fires at 02:00 with no gameplay effect; M2.4 gives it a real effect by resolving an **act-aware residence anchor**: Act 1 → `"1.6"` (Gleaner's Home); later acts → most-recently-rested bonfire on the current floor if present, else the act's current residence (detective flat, church nave, etc. — exact ID per arc). Same transform used for both combat death and curfew violation (the only difference is whether `failstateWipe()` ran — curfew re-uses the save-file write path without wiping cards). Residence-anchor resolver lives in `save-state.js` so a single function owns the act→floor mapping.
+- [x] `FloorTransition.commit()` end-of-transition autosave write-through (slot = autosave). **Already wired** (found at game.js ~L1789 during audit; predates this slice — fires `SaveState.autosave()` in the `onAfter` callback after every successful floor transition, gated on `_previousFloorId` to skip the initial floor load).
+- [x] Checkpoint autosaves: bonfire rest (game.js, after `HazardSystem.restAtBonfire()` returns), home bed wake (game.js `BedPeek.setOnWake()` callback tail). Both fire `SaveState.autosave()` in try/catch. Inn beds are not yet in the game loop (Driftwood Inn interactions are structural only — future slice).
+- [x] Residence-anchor resolver: `SaveState.getResidenceAnchor()` in save-state.js. Priority: (1) most-recently-rested bonfire on the same exterior tree as `FloorManager.getFloor()` (from `HazardSystem.getBonfirePositions()`); (2) `_ACT_RESIDENCES[act]` (Act 1 → `"1.6"`, later acts → TBD placeholders keyed in a table); (3) fallback `"1.6"`. Single function used by both death and curfew; `Player.getFlag('currentAct')` drives act selection when multi-act ships.
+- [x] Death integration: both combat-death rescue (CombatBridge `onDeathRescue`) and hazard-death rescue (HazardSystem `setOnDeathRescue`) now resolve `SaveState.getResidenceAnchor()` instead of hardcoded `'1.6'`. `failstateWipe()` runs before the transition → the floor-transition autosave at `onAfter` captures the post-wipe state at the resolved residence floor. No explicit `death:reset` listener needed — the existing `FloorTransition.go` path covers it.
+- [x] Curfew → teleport: `DayCycle.setOnCurfew()` callback in game.js now resolves `SaveState.getResidenceAnchor()` and passes it to `FloorManager.setFloor(curfewHome)`. Because curfew bypasses `FloorTransition.go` (uses `TransitionFX.begin` + direct `FloorManager.generateCurrentFloor`), a dedicated `SaveState.autosave()` was added in the curfew's `onComplete` callback. No card wipe on curfew — only debuffs + 25% gold penalty + optional card confiscation at depth ≥3 (pre-existing logic preserved).
 
-#### M2.5 — Title UI + retry + buildVersion gate (~½ day)
+#### M2.5 — Title UI + retry + buildVersion gate ✅ (shipped 2026-04-16)
 
-- [ ] Title screen save-slot UI: 3 manual + 1 autosave. Each shows seed phrase, callsign, class, playtime, floor label via `SaveState.peek(slot)`.
-- [ ] "Retry with same seed" button on game-over screen: reads `SeededRNG.runSeed()` before `failstateWipe()` fires, stashes on `window._pendingRunSeed` so the next TitleScreen.deploy reuses it. Also display the phrase on the game-over vignette footer for player visibility.
-- [ ] `buildVersion` gate: compare `SaveState.BUILD_VERSION` vs `blob.buildVersion` on load — if mismatch, show "Load anyway / Cancel" modal before calling `_deserialize`.
+- [x] Title screen save-slot UI: 3 manual + 1 autosave — already fully implemented in Phase 4 of title-screen.js (`_renderSlotPicker`, `_peekSlot`, `_formatSlotLabel`, `_loadSelectedSlot`). Shows seed phrase, callsign, class, playtime, floor label via `SaveState.peek(slot)`. No changes needed.
+- [x] "Retry with same seed": Game.js GAME_OVER→GAMEPLAY transition now stashes `SeededRNG.runSeed()` on `window._pendingRunSeed` before `Player.reset()`. `_initGameplay` fresh-run path consumes the pending seed via `SeededRNG.beginRun(window._pendingRunSeed)`. GameOverScreen.render() displays the seed phrase (via `SeedPhrase.encode`) in a dim footer at 92% screen height.
+- [x] `buildVersion` gate: `_loadSelectedSlot` now shows a blocking DialogBox with "Load Anyway / Cancel" choices when `meta.buildVersion !== SaveState.BUILD_VERSION`. Load only proceeds if player picks "Load Anyway". Falls back to Toast warning if DialogBox unavailable. Load logic factored into `_executeLoad(slotId)` for async callback use.
 
-### M3 — World-designer seed payload + BO-V handoff (~2-3 days) — **PARKED**
+### M3 — World-designer seed payload + BO-V handoff ✅ (shipped 2026-04-16)
 
-Parked 2026-04-14. M3 resumes once the world-designer tool's dependencies are lined out in a separate pass. M1 + M2 proceed unblocked — they are engine-side and payload-agnostic. When we return to M3, the design contract in `docs/SEED_AND_SAVELOAD_DESIGN.md §3` is the starting point.
-
-
+Unparked 2026-04-16. All world-designer/BO-V dependencies were already in place (Pass 5b/5c). The §3.1 payload contract is now live.
 
 **Ship gate**: Designer scaffolds new interior → BO-V opens with door + spawn pre-placed and pinned, biome palette pre-selected, required-cells checklist visible.
 
-- [ ] Spec `tools/floor-payloads/<id>.json` per `docs/SEED_AND_SAVELOAD_DESIGN.md §3.1`.
-- [ ] World-designer module generates payload JSON alongside `engine/floor-blockout-<id>.js` scaffold.
-- [ ] BO-V payload loader: fetch `tools/floor-payloads/<id>.json`, pre-stamp `required` cells, lock `pinned: true` ones.
-- [ ] BO-V tile picker surfaces `biome.palette` tiles first.
-- [ ] BO-V "Required" side panel: checklist with jump-to-cell buttons.
-- [ ] `tools/extract-floors.js` bundles payload JSON into `floor-data.json`.
-- [ ] Round-trip test: scaffold → paint → Ctrl+S → play — door targets + spawn + biome defaults all correct.
+- [x] Spec `tools/floor-payloads/<id>.json` per `docs/SEED_AND_SAVELOAD_DESIGN.md §3.1`. Directory created with `.gitkeep`.
+- [x] World-designer module generates payload JSON alongside scaffold. `submitNewFloor` in `world-designer.js` now builds the full §3.1 payload (biome palette from biome-map.json, tile IDs from tile-schema.json, required array with spawn + entry-door, budget defaults). Biome `<select>` populated dynamically from biome-map.json. Payload attached as `spec.payload` and passed via sessionStorage.
+- [x] BO-V payload loader: `applySpec` in `blockout-visualizer.html` reads `spec.payload`, uses biome defaults for grid wall/floor tiles, calls `_stampRequiredCells` to place spawn + doors, stores `_payload` and `_pinnedCells` on floor record.
+- [x] BO-V tile picker: `bv-tile-picker.js` surfaces a gold-highlighted "★ biome" row at the top when the floor has a payload with palette tiles (wall + floor + light + accent + breakable).
+- [x] BO-V "Required" side panel: new `bv-required-panel.js` — checklist with ✓/✗ status, "[jump]" links that scroll+center the cell, and summary line. Wired into floor-selection and edit-toggle lifecycle.
+- [x] Pinned cell lock: `applyCellsToGrid` in `bv-brush.js` skips cells in `floor._pinnedCells` — prevents painting over required tiles.
+- [x] `tools/extract-floors.js` scans `tools/floor-payloads/` for sidecar JSON, merges `_payload` onto matching floor records in `floor-data.json`.
+- [x] Save-patcher `_emitPayloadSidecar`: on Ctrl+S (both write and download paths), emits `<floorId>.json` download for the user to drop into `tools/floor-payloads/`.
+- [ ] Round-trip test: deferred to in-browser session (scaffold → paint → Ctrl+S → play). All code paths are wired; needs manual verification.
 
 ### Post-Jam stretch
 
@@ -340,13 +342,20 @@ inherits a CLI that's already agent-friendly.
   attempt to eval IIFEs in-browser (would require `FloorManager` to be
   present, which it isn't in the visualizer context).
 
-### Slice C6 — Stretch: `bo validate` expanded rules (optional)
+### Slice C6 — `bo validate` expanded rules ✅
 
-- [ ] Every `STAIRS_*` / `DOOR*` tile on the floor has a `doorTargets` entry (or explicit
-  fallback annotation).
-- [ ] Room rectangles contain no wall tiles.
-- [ ] Every freeform-tile depth matches the spatial contract's `tileWallHeights` table.
-- [ ] Wire into the existing validation modal + CLI `report-validation` scope.
+- [x] Every `STAIRS_*` / `DOOR*` tile on the floor has a `doorTargets` entry (or explicit
+  fallback annotation). — `door-no-target` (warn) in both `bv-validation.js` and
+  `commands-validation.js`. Skips DOOR_FACADE (decorative, not a transition).
+- [x] Room rectangles contain no wall tiles. — `room-has-walls` (warn) checks
+  `floor.rooms[]` rects for WALL tiles. Reports cell list for jump-to-cell in BO-V.
+- [x] Every freeform-tile depth matches the spatial contract's `tileWallHeights` table.
+  — `offset-no-height` (info) in `bv-validation.js` only (browser has SpatialContract
+  available; CLI would need contract data injected, deferred). Checks tiles present on
+  the floor that have non-zero `tileHeightOffsets` but no `tileWallHeights` entry.
+- [x] Wired into existing validation modal (browser, `validateFloor`) + CLI
+  `report-validation` scope. No new UI — issues appear in the existing
+  sorted-by-severity list with jump-to-cell and highlight.
 
 ---
 

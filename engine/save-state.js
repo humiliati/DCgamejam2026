@@ -37,11 +37,11 @@
  *                     stubs retained for modules that don't exist yet
  *                     (doors, buttons, puzzles, vermin, formidables,
  *                     entities) — see _emptyFloorDiff for per-key status.
- *   M2.4 ⏳ — autosave hooks (FloorTransition + checkpoint tiles) +
- *             death:reset integration. Decision 2026-04-15: same slice
- *             wires curfew → teleport-to-residence using an act-aware
- *             anchor resolver (Act 1 → "1.6"; later acts → most-recent
- *             bonfire or the act's current residence).
+ *   M2.4 ✅ — autosave hooks (FloorTransition onAfter already wired;
+ *             added bonfire-rest + bed-wake + curfew-onComplete).
+ *             getResidenceAnchor() in this file: priority bonfire →
+ *             _ACT_RESIDENCES[act] → "1.6". Death + curfew in game.js
+ *             now call it instead of hardcoded "1.6".
  *   M2.5 ⏳ — title-screen slot UI + buildVersion gate + retry-with-seed
  *
  * Schema v1 top-level keys (see docs/SEED_AND_SAVELOAD_DESIGN.md §4 and
@@ -636,6 +636,82 @@ var SaveState = (function () {
   function getLoadedBlob() { return _lastLoadedBlob; }
 
   // ════════════════════════════════════════════════════════════════════════
+  // Residence-anchor resolver (M2.4)
+  //
+  // Both combat death and curfew collapse route the player to a "home"
+  // floor. The anchor is act-aware:
+  //   Act 1 → "1.6" (Gleaner's Home)
+  //   Later acts → the most-recently-rested bonfire for the current
+  //     act's floor tree, or the act's fixed residence (detective flat,
+  //     church nave, etc. — exact IDs defined when those acts ship).
+  //
+  // A single function owns this mapping so death, curfew, and any future
+  // teleport-to-home mechanic all resolve the same destination.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Per-act hardcoded residences. Only Act 1 exists today; later acts
+  // add entries here keyed by the act number. The resolver falls through
+  // to Act 1's value if the requested act isn't mapped.
+  var _ACT_RESIDENCES = {
+    1: '1.6'    // Gleaner's Home
+    // 2: '3.1' — detective flat (placeholder, TBD)
+    // 3: '4.2' — church nave   (placeholder, TBD)
+  };
+
+  /**
+   * Resolve the act-aware residence anchor.
+   *
+   * Priority:
+   *   1. Most-recently-rested bonfire on the current exterior tree (from
+   *      HazardSystem.getBonfirePositions). The "current exterior tree"
+   *      is the top-level segment of currentFloor — e.g. floor "2.2.1"
+   *      is on tree "2", so any bonfire rest on "2" or "2.x" qualifies.
+   *   2. The act's fixed residence (from _ACT_RESIDENCES).
+   *   3. Fallback: "1.6".
+   *
+   * @returns {string} floor ID
+   */
+  function getResidenceAnchor() {
+    // Determine current act (future: Player.getFlag('currentAct')).
+    // For now only Act 1 exists; default to 1.
+    var act = 1;
+    if (typeof Player !== 'undefined' && Player.getFlag) {
+      act = Player.getFlag('currentAct') || 1;
+    }
+
+    // Attempt bonfire-based anchor: most recent rest on the current
+    // exterior tree. This lets bonfires on later floors upgrade the
+    // home anchor without manual assignment.
+    if (typeof HazardSystem !== 'undefined' && HazardSystem.getBonfirePositions) {
+      var bfMap = HazardSystem.getBonfirePositions();
+      if (bfMap && typeof bfMap === 'object') {
+        // Current exterior tree root = first segment of currentFloor.
+        var curFloor = (typeof FloorManager !== 'undefined' && FloorManager.getFloor)
+          ? FloorManager.getFloor() : '';
+        var treeRoot = curFloor ? curFloor.split('.')[0] : '';
+
+        // Walk bonfire positions; prefer deepest floor on the same tree
+        // (closest to where the player was working).
+        var bestFloor = null;
+        var bestDepth = -1;
+        for (var bfFloorId in bfMap) {
+          if (!bfMap.hasOwnProperty(bfFloorId)) continue;
+          if (treeRoot && bfFloorId.split('.')[0] !== treeRoot) continue;
+          var d = bfFloorId.split('.').length;
+          if (d > bestDepth) {
+            bestDepth = d;
+            bestFloor = bfFloorId;
+          }
+        }
+        if (bestFloor) return bestFloor;
+      }
+    }
+
+    // Fall back to the act's fixed residence.
+    return _ACT_RESIDENCES[act] || _ACT_RESIDENCES[1] || '1.6';
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
   // Public slot API — used by title-screen UI and autosave hooks
   // ════════════════════════════════════════════════════════════════════════
 
@@ -714,6 +790,9 @@ var SaveState = (function () {
     consumeResuming: consumeResuming,
 
     getLoadedBlob: getLoadedBlob,
+
+    // M2.4 — residence-anchor resolver (death + curfew + future teleports)
+    getResidenceAnchor: getResidenceAnchor,
 
     // Exposed for tests + debug HUD
     _serialize:   _serialize,

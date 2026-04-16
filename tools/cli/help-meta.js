@@ -112,7 +112,7 @@ var META = {
     example: 'node tools/blockout-cli.js paint-line --floor 1.1 --from 0,0 --to 10,10 --tile WALL'
   },
   'flood-fill': {
-    description: 'Flood-fill all connected cells of the seed\'s tile type with a new tile.',
+    description: 'Flood-fill all connected cells of the seed\x27s tile type with a new tile.',
     args: [
       A('--floor <id>',   'Floor id.', true),
       A('--at <x,y>',     'Seed cell; its current tile type is the fill target.', true),
@@ -121,7 +121,7 @@ var META = {
     example: 'node tools/blockout-cli.js flood-fill --floor 1.1 --at 3,3 --tile EMPTY'
   },
   'replace': {
-    description: 'Replace every cell of the seed\'s tile type across the whole floor.',
+    description: 'Replace every cell of the seed\x27s tile type across the whole floor.',
     args: [
       A('--floor <id>',   'Floor id.', true),
       A('--at <x,y>',     'Seed cell; its tile type is the match target.', true),
@@ -132,7 +132,7 @@ var META = {
 
   // ── commands-perception.js ───────────────────────────────────
   'render-ascii': {
-    description: 'Render a floor as ASCII with glyph legend — the agent\'s primary vision.',
+    description: 'Render a floor as ASCII with glyph legend — the agent\x27s primary vision.',
     args: [
       A('--floor <id>',              'Floor id.', true),
       A('--viewport <x,y,WxH>',      'Optional window (e.g. 0,0,40x20). Default: whole floor.', false)
@@ -340,7 +340,7 @@ var META = {
     example: 'node tools/blockout-cli.js create-floor --id 4.1 --biome bazaar --template single-room'
   },
   'set-biome': {
-    description: 'Change a floor\'s biome tag (affects default tile palette).',
+    description: 'Change a floor\x27s biome tag (affects default tile palette).',
     args: [
       A('--floor <id>',   'Floor id.', true),
       A('--biome <name>', 'New biome tag.', true)
@@ -396,6 +396,49 @@ var META = {
     example: 'node tools/blockout-cli.js emit --floor 2.2.1 --as iife --out /tmp/rt.js'
   },
 
+  // ── commands-quest.js (Phase 0b) ─────────────────────────────
+  'add-quest': {
+    description: 'Create or update a quest entry in tools/floor-payloads/<floor>.quest.json. Does NOT write floor-data.json — run extract-floors.js to merge.',
+    args: [
+      A('--floor <id>',     'Floor id the quest is anchored to.', true),
+      A('--id <questId>',   'Quest id, must match /^[a-z0-9_.-]+$/ and be globally unique.', true),
+      A('--kind <kind>',    'One of: main | faction | side | tutorial.', true),
+      A('--title <key>',    'i18n key for the display title (default: quest.<kind>.<id>.title).', false),
+      A('--hook <key>',     'i18n key for the one-line NPC hook.', false),
+      A('--summary <key>',  'i18n key for the journal summary.', false),
+      A('--giver <npcId>',  'NPC who offers this quest (registered in NpcSystem).', false),
+      A('--color <hex>',    'Override minimap quest marker color.', false)
+    ],
+    example: 'node tools/blockout-cli.js add-quest --floor 1.3.1 --id side.1_3_1.scrub_boiler --kind side --giver janitor_9'
+  },
+  'place-waypoint': {
+    description: 'Append or update a step\x27s advanceWhen predicate on an existing quest. Writes to the same sidecar as add-quest.',
+    args: [
+      A('--floor <id>',     'Floor id (sidecar lookup).', true),
+      A('--quest <id>',     'Quest id the step belongs to (must exist via add-quest first).', true),
+      A('--step <id>',      'Step id within the quest (snake_case or step.N).', true),
+      A('--kind <kind>',    'Waypoint kind: floor | item | npc | flag | readiness | combat. Default floor.', false),
+      A('--at <x,y>',       'For --kind floor: the target cell.', false),
+      A('--radius <n>',     'For --kind floor: advance radius (default 1).', false),
+      A('--item <id>',      'For --kind item.', false),
+      A('--npc <id>',       'For --kind npc.', false),
+      A('--branch <id>',    'For --kind npc: dialogue branch id.', false),
+      A('--flag <name>',    'For --kind flag.', false),
+      A('--value <v>',      'For --kind flag (default true).', false),
+      A('--tier <frac>',    'For --kind readiness (e.g. 0.25 / 0.50).', false),
+      A('--enemy <id>',     'For --kind combat.', false),
+      A('--label <key>',    'Override step label i18n key.', false)
+    ],
+    example: 'node tools/blockout-cli.js place-waypoint --floor 1.3.1 --quest side.1_3_1.scrub_boiler --step step.1 --kind floor --at 12,7'
+  },
+  'validate-quest': {
+    description: 'Structural + referential validation of a floor\x27s .quest.json sidecar. Prints errors (exit 2) / warnings. Read-only.',
+    args: [
+      A('--floor <id>',     'Floor id to validate.', true)
+    ],
+    example: 'node tools/blockout-cli.js validate-quest --floor 1.3.1'
+  },
+
   // ── dispatcher-level ─────────────────────────────────────────
   'describe': {
     description: 'Dispatcher sanity dump: floor-data.json path, floor count, available commands.',
@@ -403,7 +446,7 @@ var META = {
     example: 'node tools/blockout-cli.js describe'
   },
   'help': {
-    description: 'Print help for all commands, or one command\'s args + example.',
+    description: 'Print help for all commands, or one command\x27s args + example.',
     args: [
       A('<command>',    'Optional. If omitted, lists every command.', false),
       A('--json',       'Emit as JSON (for agents) instead of human-readable text.', false)

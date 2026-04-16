@@ -101,14 +101,26 @@ var MinigameExit = (function () {
 
   // ── Lifecycle ───────────────────────────────────────────────────
 
+  // Remember the viewport mode the active mount declared so unmount() can
+  // issue the matching Raycaster.resume() regardless of re-reads from any
+  // external registry. 'overlay' | 'dimmed' | 'takeover' — see
+  // docs/MINIGAME_ROADMAP.md §4.6 and docs/RAYCASTER_PAUSE_RESUME_ADR.md §2.4.
+  var _viewportMode = 'overlay';
+
   /**
    * Mount the exit overlay. Starts the 300ms entry grace and fade-in.
    *
    * @param {Object}   cfg
-   * @param {string}   cfg.kindId    — Minigame kind id (for logging / harness)
-   * @param {Array}    cfg.controls  — [{ keys:['W','A','S','D'], label:'move' }, ...]
-   * @param {Function} cfg.onExit    — Called when the player commits exit; receives
-   *                                   a reason string ('user_confirm' | 'forced').
+   * @param {string}   cfg.kindId       — Minigame kind id (for logging / harness)
+   * @param {Array}    cfg.controls     — [{ keys:['W','A','S','D'], label:'move' }, ...]
+   * @param {Function} cfg.onExit       — Called when the player commits exit; receives
+   *                                      a reason string ('user_confirm' | 'forced').
+   * @param {string}   [cfg.viewportMode='overlay']  — 'overlay' | 'dimmed' | 'takeover'.
+   *                   See MINIGAME_ROADMAP.md §4.6. When 'takeover', this module
+   *                   automatically calls Raycaster.pause() so the minigame
+   *                   reclaims the world-render frame budget. unmount() always
+   *                   calls Raycaster.resume() as a belt-and-suspenders safety
+   *                   net even if the minigame author forgot.
    */
   function mount(cfg) {
     if (_active) {
@@ -122,6 +134,7 @@ var MinigameExit = (function () {
     _kindId        = (cfg && cfg.kindId) || '';
     _controls      = (cfg && Array.isArray(cfg.controls)) ? cfg.controls.slice() : [];
     _onExit        = (cfg && typeof cfg.onExit === 'function') ? cfg.onExit : null;
+    _viewportMode  = (cfg && cfg.viewportMode) || 'overlay';
     _graceT        = GRACE_MS;
     _fadeT         = 0;
     _confirmStage  = 'none';
@@ -129,18 +142,30 @@ var MinigameExit = (function () {
     _closeHitBox   = null;
     _closeHovered  = false;
     _bannerScrollX = 0;
+
+    // Takeover mode: pause the raycaster so the minigame owns the full
+    // frame budget. The paused frame is captured now (BEFORE the minigame
+    // composites anything) so getPausedFrame() returns a clean backdrop.
+    // See docs/RAYCASTER_PAUSE_RESUME_ADR.md §2.4.
+    if (_viewportMode === 'takeover' &&
+        typeof Raycaster !== 'undefined' && Raycaster.pause) {
+      Raycaster.pause();
+    }
   }
 
   /**
    * Unmount the exit overlay. Safe to call when already inactive (idempotent).
    * Does NOT invoke onExit — the minigame calls unmount on win/abandon; onExit
    * only fires when the player confirms an exit via the overlay itself.
+   * Always calls Raycaster.resume() regardless of viewportMode (idempotent on
+   * the raycaster side) — safety net per ADR §2.4.
    */
   function unmount() {
     _active        = false;
     _kindId        = '';
     _controls      = [];
     _onExit        = null;
+    _viewportMode  = 'overlay';
     _graceT        = 0;
     _fadeT         = 0;
     _confirmStage  = 'none';
@@ -148,6 +173,24 @@ var MinigameExit = (function () {
     _closeHitBox   = null;
     _closeHovered  = false;
     _bannerScrollX = 0;
+
+    // Always attempt resume — idempotent on the raycaster side. This is the
+    // safety net that guarantees the world-render never stays frozen past
+    // the overlay lifetime even if the minigame author forgot to call
+    // Raycaster.resume() on their own win/abandon path.
+    if (typeof Raycaster !== 'undefined' && Raycaster.resume) {
+      Raycaster.resume();
+    }
+  }
+
+  /**
+   * Proxy to Raycaster.getPausedFrame() — convenience so takeover-mode
+   * minigames don't need to reach into the rendering module for their
+   * backdrop. Returns the frozen-still HTMLCanvasElement or null.
+   */
+  function getPausedFrame() {
+    if (typeof Raycaster === 'undefined' || !Raycaster.getPausedFrame) return null;
+    return Raycaster.getPausedFrame();
   }
 
   /** True whenever the overlay is mounted (including during confirm stage). */
@@ -539,6 +582,8 @@ var MinigameExit = (function () {
     isInGrace:          isInGrace,
     isConfirming:       isConfirming,
     getKindId:          getKindId,
+    /** Proxy to Raycaster.getPausedFrame() for takeover-mode minigames. */
+    getPausedFrame:     getPausedFrame,
     // Exposed for test harness only — not for minigame authors
     _CONFIG: Object.freeze({
       GRACE_MS:        GRACE_MS,

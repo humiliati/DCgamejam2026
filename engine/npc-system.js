@@ -108,14 +108,12 @@ var NpcSystem = (function () {
   var SPAWN_STAGGER_MS = 400;   // Max random added to each NPC's first step timer
   var BARK_STAGGER_MS  = 8000;  // Max random offset to stagger initial bark window
 
-  // ── Verb-field tuning constants ──────────────────────────────────
-  // See VERB_FIELD_NPC_ROADMAP.md §6.2
+  // ── Verb-field tuning ────────────────────────────────────────────
+  // The DISTANCE_WEIGHT / NOISE_FACTOR / SATISFACTION_DROP / LINGER
+  // tuning now lives in engine/verb-field.js (the canonical home).
+  // Read them via VerbField.DISTANCE_WEIGHT etc. if needed here.
+  // See VERB_FIELD_NPC_ROADMAP.md §6.2.
 
-  var VF_DISTANCE_WEIGHT    = 0.15;   // How much distance penalises pull (lower = NPCs walk farther)
-  var VF_NOISE_FACTOR       = 0.05;   // Random perturbation on node score (breaks ties)
-  var VF_SATISFACTION_DROP   = 0.50;   // How much need drops on node arrival
-  var VF_LINGER_MIN         = 3000;   // Min ms NPC pauses at a node
-  var VF_LINGER_MAX         = 7000;   // Max ms NPC pauses at a node
   var VF_TRANSITION_BARK_P  = 0.20;   // Probability of solo transition bark on verb switch
 
   // ── Verb-field archetype presets ─────────────────────────────────
@@ -658,188 +656,20 @@ var NpcSystem = (function () {
   // On arrival, the matching verb's need drops (bloom collapse) and the
   // NPC lingers before other verbs pull them elsewhere.
 
+  // _tickVerbField is now a thin wrapper around VerbField.tick — the
+  // actor-agnostic implementation lives in engine/verb-field.js so it
+  // can be reused by reanimated friendly enemies and the future
+  // unified actor system. We pass an onStep callback so NPC footstep
+  // audio fires on every successful grid step.
   function _tickVerbField(npc, dt, grid, nodes) {
-    var verbs = npc._verbSet;
-    var keys = Object.keys(verbs);
-
-    // 1. Decay — increase all verb needs over time
-    for (var vi = 0; vi < keys.length; vi++) {
-      var v = verbs[keys[vi]];
-      v.need = Math.min(1.0, v.need + v.decayRate * dt);
-    }
-
-    // 2. Satisfaction linger — if paused at a node, don't move
-    if (npc._verbSatisfyTimer > 0) {
-      npc._verbSatisfyTimer -= dt;
-      return;
-    }
-
-    // 3. Step timer — respect the NPC's step interval cadence
-    npc._stepTimer -= dt;
-    if (npc._stepTimer > 0) return;
-    npc._stepTimer = npc._stepInterval + (Math.random() * 200 - 100);
-
-    // 4. Score all reachable nodes — find the strongest pull
-    var bestScore = -1;
-    var bestNode  = null;
-
-    for (var ni = 0; ni < nodes.length; ni++) {
-      var node = nodes[ni];
-
-      // Compute total pull from all verbs this node satisfies
-      var pull = 0;
-      for (var vi2 = 0; vi2 < keys.length; vi2++) {
-        var vb = verbs[keys[vi2]];
-        for (var si = 0; si < vb.satisfiers.length; si++) {
-          if (vb.satisfiers[si] === node.type) {
-            // Faction lock check: faction_post nodes only satisfy
-            // NPCs whose verbFaction matches the node's faction tag
-            if (node.type === 'faction_post' && node.faction) {
-              if (vb.factionLock && vb.factionLock !== node.faction) continue;
-              if (!vb.factionLock && npc.factionId !== node.faction) continue;
-            }
-            pull += vb.need;
-            break; // Each verb counts once per node
-          }
-        }
-      }
-
-      if (pull <= 0) continue;
-
-      // Distance penalty — closer nodes score higher
-      var dx = npc.x - node.x;
-      var dy = npc.y - node.y;
-      var dist = Math.abs(dx) + Math.abs(dy); // Manhattan
-      if (dist === 0) dist = 0.5; // Already at the node
-
-      var score = pull / (dist * VF_DISTANCE_WEIGHT);
-      // Small random perturbation to break ties and create variety
-      score += Math.random() * VF_NOISE_FACTOR;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestNode  = node;
-      }
-    }
-
-    // 5. Step toward the winning node
-    if (bestNode) {
-      npc._verbTarget = bestNode;
-      _stepToward(npc, bestNode.x, bestNode.y, grid);
-    }
-
-    // 6. Check arrival — are we at or adjacent to any node?
-    for (var ai = 0; ai < nodes.length; ai++) {
-      var arrNode = nodes[ai];
-      var adx = Math.abs(npc.x - arrNode.x);
-      var ady = Math.abs(npc.y - arrNode.y);
-      if (adx + ady > 1) continue; // Not at this node
-
-      // Find which verb(s) this node satisfies and reduce their need
-      var dominated = null;
-      var bestNeed  = -1;
-      for (var vk = 0; vk < keys.length; vk++) {
-        var verb = verbs[keys[vk]];
-        for (var sk = 0; sk < verb.satisfiers.length; sk++) {
-          if (verb.satisfiers[sk] === arrNode.type) {
-            // Faction check (same as scoring)
-            if (arrNode.type === 'faction_post' && arrNode.faction) {
-              if ((verb.factionLock || npc.factionId) !== arrNode.faction) continue;
-            }
-            verb.need = Math.max(0, verb.need - VF_SATISFACTION_DROP);
-            if (verb.need + VF_SATISFACTION_DROP > bestNeed) {
-              bestNeed = verb.need + VF_SATISFACTION_DROP;
-              dominated = keys[vk];
-            }
-            break;
-          }
-        }
-      }
-
-      // Linger at the node
-      npc._verbSatisfyTimer = VF_LINGER_MIN +
-        Math.random() * (VF_LINGER_MAX - VF_LINGER_MIN);
-      npc._currentNode  = arrNode;
-      npc._dominantVerb = dominated;
-      npc._verbTarget   = null;
-
-      // Face toward the node
-      _faceToward(npc, arrNode.x, arrNode.y);
-      break;
-    }
+    if (typeof VerbField === 'undefined') return;
+    VerbField.tick(npc, dt, grid, nodes, _NPC_VERB_OPTS);
   }
 
-  /**
-   * Move one greedy step toward (tx, ty). Extracted from _tickPatrol
-   * for reuse by both patrol and verb-field systems.
-   */
-  function _stepToward(npc, tx, ty, grid) {
-    var diffX = tx - npc.x;
-    var diffY = ty - npc.y;
-    if (diffX === 0 && diffY === 0) return;
-
-    var dx = 0, dy = 0;
-    // Move along dominant axis first; fall back to other if blocked
-    if (Math.abs(diffX) >= Math.abs(diffY) && diffX !== 0) {
-      dx = diffX > 0 ? 1 : -1;
-    } else if (diffY !== 0) {
-      dy = diffY > 0 ? 1 : -1;
-    } else if (diffX !== 0) {
-      dx = diffX > 0 ? 1 : -1;
-    }
-
-    var nx = npc.x + dx;
-    var ny = npc.y + dy;
-
-    // Wall / occupancy check
-    var blocked = false;
-    if (grid && grid[ny] && grid[ny][nx] !== undefined) {
-      var tile = grid[ny][nx];
-      if (typeof TILES !== 'undefined' && !TILES.isWalkable(tile)) {
-        blocked = true;
-      }
-    }
-
-    if (blocked) {
-      // Try the other axis as fallback
-      var dx2 = 0, dy2 = 0;
-      if (dx !== 0 && diffY !== 0) {
-        dy2 = diffY > 0 ? 1 : -1;
-      } else if (dy !== 0 && diffX !== 0) {
-        dx2 = diffX > 0 ? 1 : -1;
-      }
-      if (dx2 !== 0 || dy2 !== 0) {
-        nx = npc.x + dx2;
-        ny = npc.y + dy2;
-        blocked = false;
-        if (grid && grid[ny] && grid[ny][nx] !== undefined) {
-          var tile2 = grid[ny][nx];
-          if (typeof TILES !== 'undefined' && !TILES.isWalkable(tile2)) {
-            blocked = true;
-          }
-        }
-        if (!blocked) { dx = dx2; dy = dy2; }
-        else return; // Both axes blocked — stay put
-      } else {
-        return; // No fallback axis
-      }
-    }
-
-    // Commit the step
-    npc._prevX = npc.x;
-    npc._prevY = npc.y;
-    npc._lerpT = 0;
-
-    npc.x = nx;
-    npc.y = ny;
-
-    if      (dx > 0)  npc.facing = 'east';
-    else if (dx < 0)  npc.facing = 'west';
-    else if (dy > 0)  npc.facing = 'south';
-    else if (dy < 0)  npc.facing = 'north';
-
-    _playNpcStep(nx, ny);
-  }
+  // Cached options object — avoids per-tick allocation.
+  var _NPC_VERB_OPTS = {
+    onStep: function (npc, nx, ny) { _playNpcStep(nx, ny); }
+  };
 
   /**
    * Face NPC toward a specific grid position.

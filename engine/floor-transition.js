@@ -56,6 +56,23 @@ var FloorTransition = (function () {
     targetFloorId = String(targetFloorId);
     console.log('[FloorTransition] go(' + targetFloorId + ', ' + direction + ') — _transitioning=' + _transitioning);
     if (_transitioning) return;
+
+    // Raycaster pause guard (ADR docs/RAYCASTER_PAUSE_RESUME_ADR.md §2.4).
+    // Floor transitions rely on the raycaster drawing during the crossfade
+    // — a paused raycaster would leave the stale pre-pause frame frozen
+    // on screen behind the fade. If we ever arrive here while paused it
+    // means a takeover minigame leaked into a transition (interrupt queue
+    // bug or caller-side mount/unmount sequencing error). Resume as a
+    // recovery path so the transition at least renders correctly, and
+    // warn loudly so the regression surfaces.
+    if (typeof Raycaster !== 'undefined' && Raycaster.isPaused && Raycaster.isPaused()) {
+      if (typeof console !== 'undefined') {
+        console.warn('[FloorTransition] go() called while Raycaster is paused — ' +
+                     'forcing resume. Check MinigameExit.unmount / interrupt queue.');
+      }
+      if (Raycaster.resume) Raycaster.resume();
+    }
+
     _transitioning = true;
 
     // Compound span: covers door SFX + fade + gen + fade orchestration.

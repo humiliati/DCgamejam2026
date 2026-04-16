@@ -154,8 +154,17 @@ var CorpseActions = (function() {
               };
               FloorManager.getEnemies().push(_reanimEntity);
             }
-            // Assign wander path: mosey, then crate→torch→crate patrol
-            _assignWanderPath(_reanimEntity, fx, fy);
+            // Verb-field assignment — archetype-based orbit around nearby
+            // verb nodes. Falls back to the legacy _assignWanderPath bounce
+            // patrol on floors with no verb nodes within radius (keeps the
+            // pre-Phase-10 behaviour intact for un-populated floors).
+            if (typeof ReanimatedBehavior !== 'undefined') {
+              ReanimatedBehavior.assign(_reanimEntity, fx, fy, {
+                assignWanderPath: _assignWanderPath
+              });
+            } else {
+              _assignWanderPath(_reanimEntity, fx, fy);
+            }
             Toast.show(i18n.t('toast.reanimate', 'The fallen rises...'), 'loot');
           });
         }

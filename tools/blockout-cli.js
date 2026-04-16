@@ -29,6 +29,7 @@ var COMMANDS = Object.assign(
   require('./cli/commands-floor'),
   require('./cli/commands-ingest'),   // Slice C2: bo ingest
   require('./cli/commands-emit'),     // Slice C2: bo emit
+  require('./cli/commands-quest'),    // Phase 0b: bo add-quest/place-waypoint/validate-quest
   require('./cli/commands-help')      // Slice C3: bo help [<command>]
 );
 
@@ -141,7 +142,12 @@ var READ_ONLY = {
   // Slice C2: emit is read-only by default (stdout). --out / --overwrite
   // writes outside floor-data.json; those writes honor --dry-run via
   // S.isDryRun() inside commands-emit.
-  'emit': 1
+  'emit': 1,
+  // Phase 0b: quest commands write to tools/floor-payloads/*.quest.json
+  // (NOT floor-data.json) and honour --dry-run via S.isDryRun() inside
+  // commands-quest.js. From the dispatcher's perspective they leave
+  // floor-data.json untouched, so the dry-run envelope shows no diff.
+  'add-quest': 1, 'place-waypoint': 1, 'validate-quest': 1
 };
 
 function main() {

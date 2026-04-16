@@ -308,6 +308,49 @@ i18n.register('en', {
   'work.order_complete': 'Order complete!',
   'work.order_failed':   'Order incomplete',
 
+  // ── Quest system (Phase 0b stubs) ───────────────────────────────
+  // Namespace plan (docs/QUEST_SYSTEM_ROADMAP.md §4):
+  //   quest.main.<slug>.title   / .summary        — Act-1 spine quests
+  //   quest.faction.<fac>.<tier>.title            — rep-advancement chains
+  //   quest.sidequest.<slug>.title / .hook / .summary / .step.<n>.label
+  //   quest.tutorial.<slug>.title / .summary      — one-shot walkthroughs
+  // Concrete strings land quest-by-quest in Phase 1+. These are the
+  // headline UI chrome strings the HUD/journal panel needs from day 1.
+  'quest.panel.title':            'Quest Journal',
+  'quest.panel.empty':            'No active quests.',
+  'quest.panel.available':        'Available',
+  'quest.panel.active':           'Active',
+  'quest.panel.completed':        'Completed',
+  'quest.panel.failed':           'Failed',
+  'quest.marker.toggle_on':       'Quest markers: ON',
+  'quest.marker.toggle_off':      'Quest markers: OFF',
+  'quest.toast.accepted':         'Quest accepted',
+  'quest.toast.waypoint':         'Objective updated',
+  'quest.toast.completed':        'Quest complete',
+  'quest.toast.failed':           'Quest failed',
+  // Sidequest template strings — these echo data/quests.json `_templates.sidequest`
+  // so a freshly-stamped sidequest renders non-empty placeholders until
+  // real strings replace them.
+  'quest.sidequest._template.title':   '(untitled sidequest)',
+  'quest.sidequest._template.hook':    'An odd job needs doing.',
+  'quest.sidequest._template.summary': 'Details pending.',
+  'quest.sidequest._template.step.1.label': 'Reach the marked location',
+
+  // ── Reputation (Phase 0b stubs) ─────────────────────────────────
+  // Concrete per-faction strings land in Phase 2 when ReputationBar
+  // wires into the HUD/journal. Tier labels are canonical.
+  'reputation.faction_mss':       'MSS Dispatch',
+  'reputation.faction_pinkerton': 'Pinkerton Agency',
+  'reputation.faction_jesuit':    'Jesuit Order',
+  'reputation.faction_bprd':      'Dragon Network',
+  'reputation.tier.hated':        'Hated',
+  'reputation.tier.unfriendly':   'Unfriendly',
+  'reputation.tier.neutral':      'Neutral',
+  'reputation.tier.friendly':     'Friendly',
+  'reputation.tier.allied':       'Allied',
+  'reputation.tier.exalted':      'Exalted',
+  'reputation.tier_cross':        'Reputation changed',
+
   // ── Settings ────────────────────────────────────────────────────
   'settings.language':  'Language',
   'settings.lang_en':   'English',
@@ -316,5 +359,7 @@ i18n.register('en', {
   'settings.lang_ps':   'پښتو',
   'settings.sfx':       'SFX Volume',
   'settings.bgm':       'BGM Volume',
-  'settings.master':    'Master Volume'
+  'settings.master':    'Master Volume',
+  'settings.quest_markers':      'Quest markers',
+  'settings.quest_markers_hint': 'Show objective pips on the minimap.'
 });

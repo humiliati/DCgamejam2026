@@ -56,6 +56,7 @@ function toggleEditMode(force) {
   }
   if (typeof updateCursor === 'function')    updateCursor();
   if (typeof buildTilePicker === 'function') buildTilePicker();
+  if (typeof buildRequiredPanel === 'function') buildRequiredPanel();
   updateEditUI();
   draw();
 }

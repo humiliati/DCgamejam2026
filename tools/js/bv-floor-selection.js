@@ -92,5 +92,6 @@ function selectFloor(id) {
   updateEditUI();
   buildLegend();
   buildTilePicker();
+  if (typeof buildRequiredPanel === 'function') buildRequiredPanel();
   draw();
 }

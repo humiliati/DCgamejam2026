@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "_source": "quests.json",
+  "_docRef": "docs/QUEST_SYSTEM_ROADMAP.md",
+  "_notes": "Canonical quest registry. Read by engine/quest-registry.js via synchronous XHR at boot. Per-floor sidequests can also live in tools/floor-payloads/<floorId>.quest.json and are merged in by tools/extract-floors.js before serving.",
+
+  "_templates": {
+    "sidequest": {
+      "id": "side.<floor>.<slug>",
+      "kind": "side",
+      "title": "quest.sidequest.<slug>.title",
+      "hook":  "quest.sidequest.<slug>.hook",
+      "summary": "quest.sidequest.<slug>.summary",
+      "giver": {
+        "npcId": null,
+        "floorId": null
+      },
+      "prereq": {
+        "flags": {},
+        "minReadiness": null,
+        "minReputation": {}
+      },
+      "steps": [
+        {
+          "id": "step.1",
+          "kind": "floor",
+          "label": "quest.sidequest.<slug>.step.1.label",
+          "target": {
+            "floorId": null,
+            "x": null,
+            "y": null
+          },
+          "advanceWhen": {
+            "kind": "floor",
+            "floorId": null,
+            "x": null,
+            "y": null,
+            "radius": 1
+          }
+        }
+      ],
+      "rewards": {
+        "gold": 0,
+        "items": [],
+        "favor": {},
+        "flags": {}
+      },
+      "markerColor": null,
+      "notes": "Copy this block, replace <slug> with a snake_case id, fill giver + target floor + step predicates. Title/hook/summary strings go in data/strings/en.js under the matching key. `markerColor` overrides the default minimap quest marker color (HUD settings toggle still gates visibility)."
+    },
+
+    "main": {
+      "id": "main.<act>.<slug>",
+      "kind": "main",
+      "title": "quest.main.<slug>.title",
+      "summary": "quest.main.<slug>.summary",
+      "act": 1,
+      "steps": [],
+      "rewards": {},
+      "notes": "Main-quest spine — one per Act beat. Gated by flags + readiness tier."
+    },
+
+    "faction": {
+      "id": "faction.<faction>.<tier>",
+      "kind": "faction",
+      "title": "quest.faction.<faction>.<tier>.title",
+      "factionId": null,
+      "requiresTier": "neutral",
+      "grantsTier": "friendly",
+      "steps": [],
+      "rewards": {
+        "favor": {}
+      },
+      "notes": "Per-faction reputation-advancement chain. `factionId` must be one of QuestTypes.FACTIONS (mss, pinkerton, jesuit, bprd)."
+    }
+  },
+
+  "anchors": {
+    "promenade_home_door":  { "type": "literal", "floorId": "1",   "x": 22, "y": 27 },
+    "home_work_keys_chest": { "type": "literal", "floorId": "1.6", "x": 19, "y": 3 },
+    "dispatcher_entity":    { "type": "entity",  "module": "DispatcherChoreography", "method": "getEntity", "floorId": "1" }
+  },
+  "_anchorNotes": "Named anchors. Resolved by QuestRegistry.resolveAnchor(id). Spec shapes: { type:'literal',floorId,x,y } | { type:'floor-data',floorId,path } | { type:'entity',module,method,floorId? } | { type:'npc',floorId,npcId } | { type:'dump-truck',floorId? } | { type:'door-to',floorId,targetFloorId }. Floor-data/dump-truck with no floorId are resolver templates that must be supplied per-call by quests.json step targets (which embed the floorId).",
+  "quests": []
+}

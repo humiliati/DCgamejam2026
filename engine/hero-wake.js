@@ -70,19 +70,16 @@ var HeroWake = (function() {
         Player.setDir(3); // NORTH per direction convention
         if (Player.resetLookOffset) Player.resetLookOffset();
       }
-      if (typeof MovementController !== 'undefined' && MovementController.init) {
-        MovementController.init({
-          x: 11,
-          y: 20,
-          dir: 3,
-          collisionCheck: FloorManager.getCollisionCheck
-            ? FloorManager.getCollisionCheck()
-            : null,
-          onMoveStart: null,
-          onMoveFinish: null,
-          onBump: null,
-          onTurnFinish: null
-        });
+      // Use setPosition() rather than init() — init wipes the MC callbacks,
+      // which the Game orchestrator just wired in FloorTransition.onAfter
+      // (onMoveFinish → _onMoveFinish → HoseState.recordStep, MinimapNav,
+      // HoseReel, CobwebSystem, Player.setPos sync). Passing null callbacks
+      // here would freeze every per-move side-effect on 2.2.1 — notably the
+      // hose minimap trail, which stuck at the entry tile until we fixed it.
+      // setPosition() only resets position/queues; the callback refs remain
+      // whatever FloorTransition.onAfter installed. (movement.js §setPosition)
+      if (typeof MovementController !== 'undefined' && MovementController.setPosition) {
+        MovementController.setPosition(11, 20, 3);
       }
     }
 
@@ -109,6 +106,12 @@ var HeroWake = (function() {
     // warden will need to be re-placed manually on reload; acceptable
     // for jam scope).
     if (Player.setFlag) Player.setFlag('heroWakeArrival', true);
+
+    // DOC-107 Phase 1: fan out heroWakeArrival flag flip to QuestChain so
+    // any active quest step predicated on the hero reveal advances now.
+    if (typeof QuestChain !== 'undefined' && QuestChain.onFlagChanged) {
+      QuestChain.onFlagChanged('heroWakeArrival', true);
+    }
 
     _heroWakeState.phase = 'playing';
     _heroWakeState.combatTrigger = script.combatTrigger || null;

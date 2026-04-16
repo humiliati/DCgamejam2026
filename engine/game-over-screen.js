@@ -213,6 +213,18 @@ var GameOverScreen = (function () {
       }
     }
 
+    // Seed phrase footer — lets player see/share the run seed
+    if (typeof SeededRNG !== 'undefined' && SeededRNG.runSeed) {
+      var seedVal = SeededRNG.runSeed();
+      var seedStr = (typeof SeedPhrase !== 'undefined' && SeedPhrase.encode)
+        ? SeedPhrase.encode(seedVal)
+        : seedVal.toString(16).toUpperCase();
+      _ctx.fillStyle = '#555';
+      _ctx.font = '11px "Courier New", monospace';
+      _ctx.textAlign = 'center';
+      _ctx.fillText('seed: ' + seedStr, cx, h * 0.92);
+    }
+
     _ctx.globalAlpha = 1;
   }
 

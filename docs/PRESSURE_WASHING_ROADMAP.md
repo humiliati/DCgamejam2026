@@ -113,7 +113,24 @@ _visitedSet[key] = true;
 
 ### 3.3 Minimap Hose Rendering
 
-The hose path renders on the minimap as a colored line (e.g., yellow-green) connecting visited tiles. Kink points render as red dots. This uses the existing `Minimap.drawOverlay(ctx)` extension point or a new `HoseOverlay.draw(ctx, renderParams)` called after minimap base render.
+> **Superseded 2026-04-16 by Rungs 2A/2B in `PRESSURE_WASHING_PWS_TEARDOWN_BRIEF.md` §9.** The polyline-of-connected-tiles description below is retained as historical context; the shipped implementation is a per-tile edge-midpoint stripe renderer backed by a visit ledger (`HoseDecal`). See the brief for current behavior and the test harness covering it (`outputs/hose-overlay-test.js`, 27/27).
+
+**Original plan (historical):** The hose path renders on the minimap as a colored line (e.g., yellow-green) connecting visited tiles. Kink points render as red dots. This uses the existing `Minimap.drawOverlay(ctx)` extension point or a new `HoseOverlay.draw(ctx, renderParams)` called after minimap base render.
+
+**Shipped plan (Rungs 2A + 2B):**
+
+- **`HoseDecal` (Layer 1 data module, Rung 2A)** — per-tile visit ledger keyed by `floorId → "x,y" → { visits[{entryDir, exitDir, visitIndex}], crossCount }`. Wires itself to `HoseState` events (`attach`, `step`, `detach`, `pop`, `kink`) to record entry/exit direction pairs for every tile the hose crosses, with a monotonic `visitIndex` for head-of-hose queries. Direction constants match the project convention (0=E, 1=S, 2=W, 3=N). Public API: `getVisitsAt`, `isCrossed`, `iterateFloorVisits`, `getHead`, `getTileCount`, `getVersion`, `clearFloor`, `rebuildFromState`, `debugSnapshot`, `reset`. 35/35 tests pass.
+- **`HoseOverlay` (Layer 2, Rung 2B rewrite)** — consumes the ledger and renders each tile as one or more **edge-midpoint stripes** rather than a tile-centroid polyline. Dispatch table covers 6 visit shapes:
+  - `(entry=null, exit=null)` → seed dot at tile center (origin marker)
+  - `(entry=null, exit=D)` → center → edge-mid(D) half-stub (start of path)
+  - `(entry=D, exit=null)` → edge-mid(D) → center half-stub + head pulse halo
+  - `(entry=D, exit=opposite(D))` → straight stripe across the tile
+  - `(entry=D, exit=D)` → cubic-Bézier self-loop U-turn (depth 0.85, splay 0.75)
+  - otherwise → quadratic-Bézier 90° elbow with control at tile center
+  
+  Crossed tiles (visit count ≥ 2) render the base stripes plus an X diagonal in `CROSS_COLOR` (`rgba(80,200,255,0.85)`). Head pulse uses a sine-cycled halo (~0.9s) in `HEAD_HALO_BASE`. Legacy polyline fallback retained for the case where `HoseDecal` is absent.
+- **Seamless joints:** the edge-midpoint convention guarantees tile A's east-mid coincides with tile B's west-mid (and south↔north symmetrically), so adjacent visit shapes butt together with no sub-pixel gap or doubled endpoint — verified by an adjacency-invariant assertion in the test harness.
+- **Kink markers:** still planned but deferred to Rung 2D (tile-step awareness); the visit ledger already carries enough shape information that we can render them as a state overlay on top of any visit type without extra event plumbing.
 
 ---
 
@@ -421,7 +438,26 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 
 ## 11. Execution Plan
 
-### Phase PW-1: Grime Grid + Raycaster Integration (3h)
+> **Status as of 2026-04-16.** Phases PW-1, PW-2, and PW-3 shipped during the jam; the text below is retained as historical plan-of-record. Post-jam work has been re-scoped around the **Rung ladder in `PRESSURE_WASHING_PWS_TEARDOWN_BRIEF.md` §5 and §11.7** — see that table for current hour estimates and ship gates. PW-4 / PW-5 as originally scoped are superseded by Rungs 8 / 9 respectively, with Rungs 1–2F and 3–7 landing ahead of them. Quick map:
+>
+> | Original phase | Current status | Replacement / successor |
+> |---|---|---|
+> | PW-1 (grime grid + raycaster) | Shipped | — |
+> | PW-2 (hose state + truck) | Shipped | — |
+> | PW-3 (spray + brush + torch hit) | Shipped | — |
+> | — | — | **Rung 1** (spray droplet FX) ✓ shipped |
+> | — | — | **Rung 2A** (HoseDecal ledger) ✓ shipped |
+> | — | — | **Rung 2B** (minimap stripes) ✓ shipped |
+> | — | — | Rungs 2C–2F (3D decals → flow-squeeze → procgen contracts) |
+> | — | — | Rung 3 (material-aware audio) |
+> | — | — | Rung 4 (sub-target readout — Loop B) |
+> | — | — | Rungs 5–7 (GyroInput + brush-shape signals + thrust boost) |
+> | PW-4 (reel-up auto-exit) | Superseded | **Rung 8** (lands after 2F so the decal retracts visibly in 3D) |
+> | PW-5 (nozzles + readiness + regression) | Superseded | **Rung 9** (nozzle real-identity with Signals 2/4 wired) + Rung 10 (adaptive feel) |
+>
+> The hour estimates below are the original pre-jam budget and are **not** being tracked against new work. Current estimates live in the brief's §11.7 table (2A=2h · 2B=2h · 2C=1 day · 2D=3h · 2E=1 day · 2F=1 day + tuning), with Rungs 3–10 re-scoped after 2F lands.
+
+### Phase PW-1: Grime Grid + Raycaster Integration (3h) — **SHIPPED**
 
 1. `grime-grid.js` — Uint8Array per tile, allocate/clean/query API, dual resolution (4×4 floor, 16×16 wall)
 2. Raycaster wall grime — tint wall columns using grime subcell lookup in `_drawTiledColumn`
@@ -431,7 +467,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 **Depends on**: Nothing (can start immediately on existing codebase)
 **Unblocks**: PW-2 (need renderable grime before spray makes sense)
 
-### Phase PW-2: Hose State + Truck Spawn (2.5h)
+### Phase PW-2: Hose State + Truck Spawn (2.5h) — **SHIPPED**
 
 1. `hose-state.js` — attach/detach, path recording, kink detection, fatigue drain calc, building validation
 2. `cleaning-truck.js` — hero day spawn logic, TRUCK/TRUCK_HOSE tiles, bobbing 🧵 sprite inside truck panel using the **sprite-inside-wall technique** (see LIGHT_AND_TORCH_ROADMAP §2.5a): alpha-transparent cutout in `truck_panel` texture + cavity pre-fill + hose decor sprite with faint blue-white glow when pressurized
@@ -442,7 +478,7 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 **Depends on**: PW-1 (grime exists to clean), HeroSystem (hero day detection)
 **Unblocks**: PW-3 (need hose attached before spray/reel)
 
-### Phase PW-3: Spray Interaction + Brush System + Torch Hit (3h)
+### Phase PW-3: Spray Interaction + Brush System + Torch Hit (3h) — **SHIPPED**
 
 1. Spray input binding — hold button while facing grime tile → continuous cleaning
 2. Brush kernel system — base circular brush, apply to grime grid at aimed UV
@@ -454,7 +490,9 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 **Depends on**: PW-1 (grime grid), PW-2 (hose state for pressure calc), **LIGHT_AND_TORCH Phase 3a** (torch slot model must exist for torch-hit to modify slots)
 **Unblocks**: PW-4 (need spray working before reel-up makes sense as exit)
 
-### Phase PW-4: Hose Reel + MinimapNav Gate (2h)
+### Phase PW-4: Hose Reel + MinimapNav Gate (2h) — **SUPERSEDED → Rung 8**
+
+> This phase is now **Rung 8** in the brief's §5 ladder. Scope is unchanged (reverse path → MC queue → MinimapNav distance gate → fatigue-forced trigger) but the landing now comes **after** Rungs 2C–2F so the 3D floor decal retracts visually as the player reels — a satisfaction axis PWS cannot offer. The original prose below remains the functional spec for the reel mechanic; the minimap overlay sub-task is already covered by Rung 2B's shipped HoseOverlay rewrite.
 
 1. `hose-reel.js` — reverse path, feed to MC, normal forward pathing, floor transition handling
 2. `hose-overlay.js` — minimap hose path line + kink dots
@@ -465,7 +503,9 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 **Depends on**: PW-2 (hose path exists), PW-3 (spray working, game flow proven)
 **Unblocks**: PW-5 (full system operational for testing)
 
-### Phase PW-5: Nozzle Items + Polish + Regression (2h)
+### Phase PW-5: Nozzle Items + Polish + Regression (2h) — **SUPERSEDED → Rung 9 (+ Rung 10)**
+
+> Nozzle identity work now lives in **Rung 9** with real per-nozzle feel tied to gyro Signals 2 (roll-shaped brush) and 4 (thrust boost). Readiness score integration and regression sweeping roll into Rung 9's ship gate. **Rung 10** handles the adaptive-feel histogram (Signal 6) as a post-everything tuning pass. The CardAuthority registration, equipped-slot lookup, and loot table wiring described below are still the functional spec — what changes is that per-nozzle behavior is defined by the Signal 2/3/4 hooks rather than by static kernel constants.
 
 1. Register `nozzle_fan` and `nozzle_cyclone` in CardSystem registry + loot tables
 2. Equip slot integration (CardAuthority equipped zone)
@@ -475,7 +515,9 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 
 **Depends on**: PW-1 through PW-4, Sprint 0 (CardAuthority for nozzle items)
 
-### Total: ~12.5h
+### Total (original pre-jam budget): ~12.5h
+
+**Actual jam spend on PW-1 through PW-3**: tracked in session logs, not re-estimated here. Post-jam work tracked in `PRESSURE_WASHING_PWS_TEARDOWN_BRIEF.md` §11.7.
 
 ---
 

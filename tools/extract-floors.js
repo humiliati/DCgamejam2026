@@ -56,7 +56,6 @@ var sandbox = vm.createContext({
   fetch:function(){return Promise.resolve({ok:false,json:function(){return Promise.resolve({});}});},
   navigator:{userAgent:'node',language:'en-US'},
   localStorage:{getItem:function(){return null;},setItem:function(){},removeItem:function(){}},
-  // Engine module stubs — only need to exist as globals so IIFE evals don't crash
   MovementController:{dirToAngle:function(d){return d*Math.PI/2;},getGridPos:function(){return{x:0,y:0};},
     getAngle:function(){return 0;},isMoving:function(){return false;},WALK_TIME:500,ROT_TIME:250},
   GridGen:{generate:function(w,h){var g=[];for(var y=0;y<h;y++){g[y]=[];for(var x=0;x<w;x++)g[y][x]=0;}return{grid:g,rooms:[],doors:{}};}},
@@ -153,20 +152,10 @@ for (var id in builders) {
         doors: d.doors || {},
         doorTargets: d.doorTargets || {},
         doorFaces: d.doorFaces || {},
-        // Pass 5b.2: proc-gen slot manifest. Declared in the parent
-        // blockout file. Shape: [{ id, kind, label, doorCoord,
-        // biomeHint?, maxDepth? }]. Kinds: 'template' | 'composed' |
-        // 'random'. The world-designer renders these as ghost nodes;
-        // FloorManager + GridGen consume them at runtime to drive the
-        // proc-gen descent pipeline.
         procGenChildren: Array.isArray(d.procGenChildren) ? d.procGenChildren.slice() : [],
         spawn: d.spawn || null,
         biome: d.biome || '',
         shops: d.shops || [],
-        // Pass 5a: entities round-trip. Builders don't yet emit
-        // entities — preserve any that floor-data.json already
-        // carries (CLI-created or placed via bv-bo-floor) so that
-        // re-running extract doesn't wipe them. Merged downstream.
         entities: Array.isArray(d.entities) ? d.entities.slice() : null
       };
       console.log('  OK: "' + id + '" -- ' + floors[id].gridW + 'x' + floors[id].gridH);
@@ -179,11 +168,6 @@ for (var id in builders) {
 var outPath = path.join(__dirname, 'floor-data.json');
 
 // ── Pass 5a: merge entities from previous floor-data.json ────────
-// Engine builders don't emit `entities[]` yet — they are populated
-// purely by CLI place-entity / bv-bo-floor.placeEntity. If we just
-// overwrote floor-data.json every extract would wipe that state.
-// Preserve the previous entities array (and any CLI-only floors
-// that don't exist in the engine yet).
 try {
   if (fs.existsSync(outPath)) {
     var prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
@@ -191,12 +175,10 @@ try {
     Object.keys(prevFloors).forEach(function(id) {
       var p = prevFloors[id];
       if (!floors[id]) {
-        // CLI-only floor (no engine builder) — carry forward whole.
         floors[id] = p;
         console.log('  KEEP (CLI-only): "' + id + '"');
         return;
       }
-      // Engine-extracted — merge entities only (grid wins from engine).
       if (!floors[id].entities && Array.isArray(p.entities)) {
         floors[id].entities = p.entities.slice();
       }
@@ -211,16 +193,74 @@ Object.keys(floors).forEach(function(id) {
   if (!Array.isArray(floors[id].entities)) floors[id].entities = [];
 });
 
+// ── M3: merge payload sidecars from tools/floor-payloads/ ─────────
+var payloadDir = path.join(__dirname, 'floor-payloads');
+var payloadCount = 0;
+var questPayloadCount = 0;
+var questCount = 0;
+try {
+  if (fs.existsSync(payloadDir)) {
+    fs.readdirSync(payloadDir).forEach(function(file) {
+      if (!file.endsWith('.json')) return;
+
+      // Phase 0b: quest sidecars (<floorId>.quest.json) merge into
+      // floors[fid].quests rather than floors[fid]._payload. They
+      // must be routed FIRST because .quest.json also ends in .json.
+      if (file.endsWith('.quest.json')) {
+        try {
+          var qp = JSON.parse(fs.readFileSync(path.join(payloadDir, file), 'utf8'));
+          var qfid = qp.floorId || file.replace(/\.quest\.json$/, '');
+          if (floors[qfid]) {
+            var qlist = Array.isArray(qp.quests) ? qp.quests : [];
+            floors[qfid].quests = qlist;
+            questPayloadCount++;
+            questCount += qlist.length;
+          } else {
+            console.log('  quest sidecar ' + file + ': floor "' + qfid + '" not found in blockouts — skipped');
+          }
+        } catch (qe) {
+          console.warn('  WARN: could not parse quest sidecar ' + file + ': ' + qe.message);
+        }
+        return;
+      }
+
+      try {
+        var p = JSON.parse(fs.readFileSync(path.join(payloadDir, file), 'utf8'));
+        var fid = p.floorId || file.replace(/\.json$/, '');
+        if (floors[fid]) {
+          floors[fid]._payload = p;
+          payloadCount++;
+        } else {
+          console.log('  payload ' + file + ': floor "' + fid + '" not found in blockouts — skipped');
+        }
+      } catch (pe) {
+        console.warn('  WARN: could not parse payload ' + file + ': ' + pe.message);
+      }
+    });
+    if (payloadCount > 0) console.log('  Merged ' + payloadCount + ' payload sidecar(s) into floor data');
+    if (questPayloadCount > 0) console.log('  Merged ' + questPayloadCount + ' quest sidecar(s) (' + questCount + ' quests) into floor data');
+  }
+} catch (e) {
+  console.warn('  WARN: payload scan failed: ' + e.message);
+}
+
+// Normalize: any floor without quests[] gets an empty array.
+Object.keys(floors).forEach(function(id) {
+  if (!Array.isArray(floors[id].quests)) floors[id].quests = [];
+});
+
 var _floorPayload = JSON.stringify({
   generated: new Date().toISOString(),
   floorCount: Object.keys(floors).length,
+  payloadCount: payloadCount,
+  questPayloadCount: questPayloadCount,
+  questCount: questCount,
   floors: floors
 }, null, 2);
 fs.writeFileSync(outPath, _floorPayload);
 console.log('\nDone: ' + Object.keys(floors).length + ' floors -> tools/floor-data.json');
 
-// Sidecar .js wrapper — lets world-designer.html load floor data when opened
-// as file:// (Chromium blocks fetch() against file:// origins with CORS).
+// Sidecar .js wrapper
 var _jsPath = path.join(__dirname, 'floor-data.js');
 fs.writeFileSync(_jsPath,
   '// AUTO-GENERATED by tools/extract-floors.js — do not edit by hand.\n' +
@@ -231,9 +271,6 @@ console.log('Done: floor-data.js sidecar -> tools/floor-data.js');
 
 // ─────────────────────────────────────────────────────────────────────
 //  TILE SCHEMA EXTRACTION (Phase 3)
-//  Introspects TILES global — pulls constants + predicate flags live from
-//  engine/tiles.js so the visualizer never drifts behind new tile IDs.
-//  Color/glyph/category metadata lives here (editor-only concern).
 // ─────────────────────────────────────────────────────────────────────
 console.log('\nExtracting tile schema from engine/tiles.js...');
 var T_ = sandbox.TILES;
@@ -368,16 +405,13 @@ if (!T_) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-//  CARD + ENEMY + STRING MANIFESTS (Phase 3b)
-//  Lean sidecar indexes for entity palette + display-name resolution.
-//  These stay in separate files (lazy-load friendly); floor-data.json
-//  remains the hot path the visualizer loads on every boot.
+//  CARD + ENEMY MANIFESTS
 // ─────────────────────────────────────────────────────────────────────
 console.log('\nExtracting card manifest from data/cards.json...');
 try {
   var rawCards = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/cards.json'), 'utf8'));
   var cards = rawCards
-    .filter(function(c) { return c && c.id; })   // drop section-comment entries
+    .filter(function(c) { return c && c.id; })
     .map(function(c) {
       return {
         id: c.id,
@@ -406,7 +440,6 @@ try {
 console.log('\nExtracting enemy manifest from data/enemies.json...');
 try {
   var rawEnemies = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/enemies.json'), 'utf8'));
-  // enemies.json may be array or object keyed by id — normalize
   var enemyArr = Array.isArray(rawEnemies) ? rawEnemies : Object.keys(rawEnemies).map(function(k){
     var v = rawEnemies[k]; if (!v.id) v.id = k; return v;
   });

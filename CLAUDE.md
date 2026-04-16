@@ -76,7 +76,7 @@ String floor IDs are the primary identifier throughout the codebase. There is NO
 - `"N.N"` = depth 2, **interior** — solid ceiling, 2× tall walls, CLAMP fog
 - `"N.N.N"` = depth 3, **nested dungeon** — void ceiling, 1× tall walls, DARKNESS fog
 
-Current world map:
+stale picture of the world map:
 
 ```
 "0"       The Approach        (exterior — tutorial courtyard)
@@ -127,11 +127,11 @@ Modules in `engine/`, organized in 7 load layers (Layer 2 now includes 6 raycast
 
 | Layer | Purpose | Modules |
 |---|---|---|
-| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem`, `DoorSprites` |
-| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner` |
+| 0 | Zero-dependency foundations | `SeededRNG`, `TILES`, `i18n`, `AudioSystem`, `DoorSprites`, `QuestTypes` |
+| 1 | Core systems | `GridGen`, `DoorContracts`, `DoorContractAudio`, `Lighting`, `EnemyAI`, `CombatEngine`, `SynergyEngine`, `CardAuthority`, `CardTransfer`, `CardSystem`, `LootTables`, `WorldItems`, `InputManager`, `MovementController`, `Pathfind`, `SpatialContract`, `TextureAtlas`, `SessionStats`, `Salvage`, `BreakableSpawner`, `QuestRegistry` |
 | 2 | Rendering + UI | `UISprites`, `DoorAnimator`, `Skybox`, `RaycasterLighting`, `RaycasterTextures`, `RaycasterProjection`, `RaycasterFloor`, `RaycasterWalls`, `RaycasterSprites`, `Raycaster` (core), `Minimap`, `HUD`, `DialogBox`, `Toast`, `TransitionFX`, `CardFan`, `ScreenManager`, `MenuBox`, `SplashScreen`, `GameLoop` |
-| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen` |
-| 3.5 | Extracted game helpers | `GameActions`, `WeekStrip`, `EquipActions`, `QuickFill`, `DeckActions`, `Incinerator`, `PickupActions`, `ShopActions`, `HomeEvents`, `HeroWake`, `CorpseActions`, `DispatcherChoreography`, `QuestWaypoint` |
+| 3 | Game modules | `Player`, `MouseLook`, `FloorManager`, `FloorTransition`, `InputPoll`, `InteractPrompt`, `CombatBridge`, `HazardSystem`, `Shop`, `MenuFaces`, `TitleScreen`, `GameOverScreen`, `VictoryScreen`, `QuestChain` |
+| 3.5 | Extracted game helpers | `GameActions`, `WeekStrip`, `EquipActions`, `QuickFill`, `DeckActions`, `Incinerator`, `PickupActions`, `ShopActions`, `HomeEvents`, `HeroWake`, `CorpseActions`, `DispatcherChoreography`, `QuestWaypoint` (thin shim — cursor-fx only, see §Key subsystems) |
 | 4 | Orchestrator | `Game` |
 | 5 | Data | `data/strings/en.js` |
 
@@ -165,7 +165,11 @@ Layer 3.5 modules were extracted from `game.js` in three phases (see `docs/GAME_
 
 **Raycaster (split)** — The raycaster is 7 IIFEs loaded in Layer 2: `RaycasterLighting` (fog/tint helpers), `RaycasterTextures` (gap fillers + alpha cache), `RaycasterProjection` (editor/tool screen-space APIs), `RaycasterFloor` (floor/parallax/weather), `RaycasterWalls` (column drawing + face tests), `RaycasterSprites` (sprites, particles, wall decor), and `Raycaster` core (DDA, freeform, back-layer, orchestration, ~2,758 lines). Sub-modules own their own state and read the core's z-buffer/pedestal-occlusion arrays + contract + wall-decor map via `bind({getters})` called once near the end of core's IIFE. Core exposes aliases at its top (e.g. `var _renderSprites = RaycasterSprites.renderSprites;`) so hotpath call sites stay cheap. See `docs/RAYCASTER_EXTRACTION_ROADMAP.md`; Phase 4 (splitting the per-column DDA hotpath) is deferred until after post-Jam voting and gated on ≤2% framerate regression.
 
-**Minimap** — 160x160 canvas with per-floor fog-of-war caching. `_floorCache` maps floor IDs to explored tile hashes. `_floorStack` tracks the breadcrumb path from surface to current depth. Stairs render as colored tiles with directional chevrons.
+**Minimap** — 160x160 canvas with per-floor fog-of-war caching. `_floorCache` maps floor IDs to explored tile hashes. `_floorStack` tracks the breadcrumb path from surface to current depth. Stairs render as colored tiles with directional chevrons. Since DOC-107 Phase 1, the pulsing quest diamond is pulled each frame via `_pullMarker()` which prefers `QuestChain.getCurrentMarker(FloorManager.getFloor())`; the legacy `setQuestTarget()` push API is retained as a back-compat fallback.
+
+**QuestChain / QuestRegistry / QuestTypes** — Data-driven quest system (DOC-107). `QuestTypes` (Layer 0) holds frozen enums: `FACTIONS` (mss/pinkerton/jesuit/bprd), reputation tiers (hated→exalted), `WAYPOINT_KIND`, step kinds. `QuestRegistry` (Layer 1) loads `data/quests.json` via sync XHR, validates, and resolves anchors. Six anchor resolver types dispatch through `resolveAnchor(specOrId)`: `literal` (fixed floor+x+y), `floor-data` (queries cached floor data), `entity` (calls `Module.method(floorId)`), `npc` (looks up NPC by id/floorId), `dump-truck` (queries DumpTruckSpawner deploy site), `door-to` (finds doorTarget to a specific floor). Registry stays at Layer 1 via `setResolvers({getFloorData, getEntity, getNpcById, getDumpTruck, getCurrentFloorId})` callback injection at Game init — never imports Layer 3+ modules directly. `QuestChain` (Layer 3) owns per-quest step progress and the current-marker derivation. Predicate engine `_matches(predicate, evt)` dispatches the six external event methods: `onItemAcquired`, `onFlagChanged`, `onReadinessChange`, `onFloorArrive`, `onNpcTalk`, `onCombatKill`. `getCurrentMarker(floorId)` has a 3-priority fallback: pinned step override → resolved anchor → `_legacyNavigationMarker(floorId)` (the DOC-66 §2 five-phase state machine absorbed verbatim from the retired `QuestWaypoint.update()`). `ReputationBar` is scaffolded but deferred to Phase 3. See `docs/QUEST_SYSTEM_ROADMAP.md` (DOC-107) for the full phased rollout; Phases 0 + 0b + 1 shipped 2026-04-16.
+
+**QuestWaypoint (thin shim)** — DOC-107 Phase 1 reduced this Layer-3.5 module to ~60 lines. `update()` delegates to `QuestChain.update()`. The only unique surface left is `evaluateCursorFxGating()` — dispatches the `WaterCursorFX` active/inactive toggle on floor depth (dungeon ≥ depth 3) + hose state. Delete the file entirely after the cursor-fx consolidation (moves the gating call into `cursor-fx.js`). Do not extend this module — new quest logic belongs in QuestChain.
 
 ## Timing model
 
@@ -280,3 +284,47 @@ Delegated-work reading order:
 **Arc-scoped.** Full doc catalog lives at `docs/TABLE_OF_CONTENTS_CROSS_ROADMAP.md`.
 When the blockout arc closes, archive the graph and start a fresh one for the
 next cluster (likely NPC refresh → living economy).
+
+## Authoring pipeline (tools/)
+
+The project ships a three-stage floor authoring pipeline that runs entirely in the browser or Node CLI. Every new floor — hand-authored or agent-generated — flows through these tools.
+
+### World Designer (`tools/world-designer.html`)
+
+Browser UI for creating new floor specs. Loads `tools/biome-map.json` (12 biomes with tile palettes) and `tools/tile-schema.json` (97 tiles). Outputs a **§3.1 seed payload** containing biome palette, required cells (spawn + doors), dimension budget, and narrative hints. The payload is passed to BO-V via `sessionStorage['pendingFloorSpec']`.
+
+### Blockout Visualizer (`tools/blockout-visualizer.html`)
+
+Browser-based tile editor for floor grids. Consumes §3.1 payloads from World Designer, renders biome-aware tile picker, enforces pinned-cell locks on required cells, and shows a required-cells checklist panel. Supports lasso, copy/paste across floors, undo/redo, and diff-based save to `engine/floor-blockout-*.js` IIFEs. Emits payload sidecar JSON to `tools/floor-payloads/`.
+
+### Blockout CLI (`tools/blockout-cli.js`)
+
+Node.js headless interface to the same operations. Key commands:
+
+- `bo paint-rect`, `bo flood-fill`, `bo replace` — tile mutation
+- `bo stamp-room`, `bo stamp-corridor`, `bo stamp-torch-ring`, `bo stamp-tunnel-corridor`, `bo stamp-porthole-wall`, `bo stamp-alcove-flank` — composite stamps
+- `bo create-floor`, `bo set-biome`, `bo set-spawn`, `bo set-door-target` — floor lifecycle
+- `bo render-ascii`, `bo describe-cell`, `bo diff-ascii` — inspection
+- `bo validate`, `bo report-validation` — structural checks
+- `bo ingest`, `bo emit` — IIFE ↔ floor-data round-trip
+- `bo help <command>` — per-command docs (also `window.BO.help()` in browser)
+
+All mutating commands honor `--dry-run` (Slice C1).
+
+### Extract-Floors (`tools/extract-floors.js`)
+
+Rebuilds `tools/floor-data.json` from `engine/floor-blockout-*.js` IIFEs. Also merges `tools/floor-payloads/*.json` sidecars into the output. Run before serving (`node tools/extract-floors.js`).
+
+### Supporting data files
+
+| File | Purpose |
+|---|---|
+| `tools/biome-map.json` | 12 biomes — tile palettes, accent tiles, breakable sets, wall heights |
+| `tools/tile-schema.json` | 97 tiles — id, name, category, color, walkable/opaque flags |
+| `tools/floor-data.json` | Generated — all floor grids + metadata (do not hand-edit) |
+| `tools/stamps.json` | Saved stamp library for reuse across floors |
+| `tools/floor-payloads/*.json` | Per-floor §3.1 payload sidecars |
+
+### Agent workflow
+
+See `agents.md` at the project root for the recommended multi-pass workflow when an agent creates or modifies floors. The workflow covers World Designer → BO-V/CLI → validate → extract-floors → engine IIFE.

@@ -291,6 +291,116 @@ The `label` field on each action is what the input banner displays — it's the 
 
 ---
 
+### 4.6 World-pressure + viewport-mode axes
+
+A minigame is not just a mini-UI — it's a scene with a tonal and technical context. Two independent axes describe that context. Both are declared on the kind's registration alongside `captures` and `controlSchema` from §4.5, and together they drive how the world behaves *around* the minigame and how much frame budget the minigame itself gets to spend.
+
+#### Axis 1 — `worldPressure`: what the world does while you play
+
+The value is inherited from the floor depth the tile sits on by default, but a kind can override upward (a shop interior minigame that happens to be plot-critical can declare `scripted` to invite an interrupt) or downward (a dungeon minigame staged in a warded alcove can declare `invulnerable` to signal "safe beat").
+
+| Value | Time rule | Enemy AI | NPC dialogue init | Default floor depth | Example kinds |
+|---|---|---|---|---|---|
+| `invulnerable` | Frozen | No aggression ticks | Suppressed | Depth 2 (interiors: inn, shop, home) | SOUP_LADLE at the inn, BARREL_TAP at the tavern, CARD_SOLITAIRE at the bar, ANVIL_HAMMER at the smithy |
+| `warning` | Advances | Aggression ticks; entering aggression range raises an interrupt (§4.6.3) | Raises an interrupt | Depth 1 (boardwalk) and Depth 3+ (dungeons) | FUNGAL_HARVEST, CORPSE_TAG, SWEEP_MINE, WELL_PUMP on the Promenade |
+| `scripted` | Advances + scripted beat can fire | Combat can *start inside* the minigame as a narrative trigger | NPC scene can open directly over the minigame | Any depth — declared by narrative intent, not geometry | CORPSE_TAG on a reanimator corpse, CIPHER_DECRYPT when a handler arrives, CLUE_BOARD when the detective walks in |
+
+The key property of `warning` is that interruption is a **choice with cost**. The key property of `scripted` is that interruption is the **content** — the beat is designed around the interrupt, and the minigame is a camera angle on that moment.
+
+#### Axis 2 — `viewportMode`: how much of the world you can still see (and what we spend frames on)
+
+The cinematic default is a 70% transparent canvas overlay with the raycaster still running underneath — you see the dungeon corridor, you see the patrol, the minigame floats as a diegetic frame. The problem is that not every minigame can afford the raycaster's per-frame cost, especially the grid-heavy ones. This axis lets authors pick.
+
+This is also where we piggyback on the existing peek tier hierarchy (see `PEEK_SYSTEM_ROADMAP.md` §6 full peeks vs §13 micro-peeks). Micro-peek-adjacent minigames inherit `overlay`; full-peek minigames pick between `dimmed` and `takeover` based on how visually dense the minigame panel is.
+
+| Value | Behind the minigame | Raycaster state | Frame budget available to minigame | Use when |
+|---|---|---|---|---|
+| `overlay` | Full 3D view visible, minigame renders as a floating panel or HUD-style widget | Running normally (~60fps) | Low (minigame must stay under ~3ms/frame) | Quick, visually simple minigames where seeing the world matters. WELL_PUMP crank-wind, BARREL_TAP pour, ANVIL_HAMMER strike — player should still feel the environment. Micro-peek-adjacent. |
+| `dimmed` | 3D view visible at 30-50% opacity + vignette; minigame panel occupies center, raycaster still draws | Running, possibly at lower tick rate if needed | Medium (~8ms/frame available) | Moderate minigames where world-presence matters but focus is on the panel. FUNGAL_HARVEST when it's just a few mushrooms, SAFE_DIAL. Most `warning`-pressure kinds. |
+| `takeover` | Raycaster torn down; minigame owns the full viewport | Paused / not drawing | High (~14ms/frame available) | Dense grid-based minigames that need the budget. FUNGAL_HARVEST-as-minesweeper, TETRIS_STACK, LIGHTS_OUT, JEZZBALL_CLEAR, MATCH_THREE. The moment you enter, the world visually "goes away" and comes back on exit. |
+
+The `takeover` mode has a specific lifecycle: on `mount()`, the Raycaster is stopped (`Raycaster.pause()` — new API), the last-drawn frame is captured as a background still (optionally blurred), the minigame draws over that still. On `unmount()` or interrupt-commit, the still is released and the Raycaster resumes. This gives us a clean visual "dive in / surface" beat without compositing a live 3D world against a grid UI (which is both expensive and visually noisy).
+
+**World state continues to update** during `takeover` — enemy AI ticks, time passes, the interrupt queue is live. The player just can't *see* the world. The only channel to the world during a `takeover` minigame is the MinigameExit banner (which reflavors on interrupt per §4.6.3) and audio (footsteps, growls, the corpse groaning are still mixed diegetically at the player's position).
+
+#### 4.6.3 The interrupt queue (one mechanism, many sources)
+
+`MinigameExit` (engine/minigame-exit.js) gains a public `raiseInterrupt()` entry point. Any system that wants to pull the player out of a minigame — enemy AI, NPC system, narrative scripts, environmental triggers — posts to this queue instead of directly preempting. The overlay handles UX:
+
+```js
+MinigameExit.raiseInterrupt({
+  kind:        'combat',          // 'combat' | 'dialogue' | 'narrative' | 'environmental'
+  source:      { entityId: 'rat_42', x: 5, y: 7 },
+  urgency:     'high',            // 'low' | 'med' | 'high' → banner color + commit timer
+  label:       'A RAT CLOSES IN', // i18n key or pre-resolved string
+  commitMs:    3000,              // how long the player has to choose
+  onCommit:    function(reason) { /* player chose to exit to engage */ },
+  onTimeout:   function() { /* inaction → minigame auto-forfeits, caller takes control */ },
+  onCancel:    function() { /* player completed the minigame before the timer ran out */ }
+});
+```
+
+Banner behavior by `urgency`:
+
+| Urgency | Banner color | Audio cue | Controls |
+|---|---|---|---|
+| `low` | Amber pulse | `peek_chime_soft` | Back once to commit; no timeout |
+| `med` | Red tint + subtle shake | `peek_chime_warn` | Back twice to commit; timeout forfeits |
+| `high` | Red fill + vignette pulse | `peek_chime_alarm` | Back once commits; timeout forfeits with a position penalty (§4.6.4) |
+
+Only one interrupt can be active at a time. A higher-urgency interrupt can upgrade an active one (a dialogue interrupt gets shouldered aside by an incoming combat). If the player completes the minigame's win condition while an interrupt is armed, `onCancel` fires — the interrupt system gets a chance to react (the rat that was about to aggress finds its target already moving).
+
+#### 4.6.4 Preserve vs forfeit on interrupt
+
+When a `warning` or `scripted` minigame is interrupted, the kind declares what happens to its progress via two hooks the minigame module provides to `MinigameExit`:
+
+- `preserve()` — save state. The player can re-interact with the tile later and resume from where they left off. Appropriate when the fiction supports it (mushrooms still in the patch, dial still at the current number).
+- `forfeit()` — discard state and mark the tile `completed` or `consumed` as fiction dictates. Appropriate when the fiction says the minigame can't be resumed (corpse reanimated, mushrooms trampled during the fight, vault alarm tripped).
+
+The default for `warning`-pressure kinds is `preserve` on commit, `forfeit` on timeout. The default for `scripted` kinds is `forfeit` — the beat happened, no rewinding.
+
+`scripted` kinds with an `onTimeout` position penalty add a `distracted` debuff to the player on the combat/dialogue start (1 round reduced defense, 2s before they can act). This is the mechanical cost of trying to finish the mushroom basket while a rat bites your ankles.
+
+#### 4.6.5 Author-facing registration extension
+
+```js
+MinigameRegistry.register('FUNGAL_HARVEST', {
+  peek: { /* ... §4.5 ... */ },
+  minigame: {
+    module:        'FungalHarvestMinigame',
+    captures:      true,
+    worldPressure: 'warning',     // §4.6 axis 1 — floor-default, declared explicitly for clarity
+    viewportMode:  'takeover',    // §4.6 axis 2 — minesweeper-style grid needs the frame budget
+    controlSchema: { /* ... */ },
+    onInterrupt: {
+      preserve: function() { return { picked: _picked, grid: _grid }; },
+      forfeit:  function() { /* mushrooms trampled; tile marked consumed */ }
+    }
+  }
+});
+```
+
+Kinds with no `onInterrupt` block are implicitly `invulnerable` — the harness refuses to flag them shippable on `warning`/`scripted` floors until the block is provided. This forces authors to think about the world-pressure context before shipping a kind into a dungeon.
+
+#### 4.6.6 What the test harness verifies (§6 addition)
+
+Before a kind is flagged shippable, the harness must additionally verify:
+
+- `worldPressure` and `viewportMode` are both set and one of the enumerated values.
+- If `worldPressure !== 'invulnerable'`, both `onInterrupt.preserve` and `onInterrupt.forfeit` are present and callable.
+- If `viewportMode === 'takeover'`, the Raycaster pause/resume cycle completes cleanly (no dangling `requestAnimationFrame` callbacks, last-frame still released).
+- Simulated interrupt at `urgency: 'high'`: banner reflavors within 100ms, `commitMs` timer ticks, timeout fires `onTimeout` exactly once.
+- Interrupt during entry grace (first 300ms) is queued, not dropped, and becomes active when grace ends.
+
+#### 4.6.7 Open threads
+
+- **Raycaster.pause() / .resume() API** — design locked in [`RAYCASTER_PAUSE_RESUME_ADR.md`](RAYCASTER_PAUSE_RESUME_ADR.md). Four-method public surface on the Raycaster IIFE (`pause()`, `resume()`, `isPaused()`, `getPausedFrame()`), one gate branch in `game.js`'s render loop around the world-render cluster, offscreen canvas as the retained frozen still. ~150 LOC total. Must land before the first `takeover`-mode kind ships.
+- **Interrupt audio mixing** — during `takeover`, diegetic audio (footsteps, growls) should still pan and attenuate based on the enemy's world position relative to the (now-invisible-to-player) player position. This is a cue the player uses to decide whether to commit or keep playing.
+- **Interrupt stacking against peek-OPEN** — if the peek system has its own close grace, make sure the MinigameExit interrupt queue and the PeekSystem close path don't double-fire on forfeit. Pattern: interrupt commit calls `unmount()` first, which cleans the peek state, then hands control to `onCommit`.
+- **NPC dialogue init as interrupt** — NPCs that walk up to the player mid-minigame (friendly reanimated allies trying to warn you, a detective looking for a chat) should use the same queue. This wants a clean hook in `NPC.onApproachPlayer()` that checks `MinigameExit.isActive()` and routes through `raiseInterrupt({ kind: 'dialogue', ... })` instead of opening the dialogue tree directly.
+
+---
+
 ## 5. Per-kind spec rows (living table)
 
 This section will grow as kinds are spec'd. Each row: kind id · tile · visual recipe · peek variant · minigame module · reward profile · work-order hook · status.
@@ -440,7 +550,110 @@ These stay un-exported in production; adding them is a separate follow-up when t
 
 ## 7. Phased execution order
 
-**Phase 0 — Regroup (this doc).** Land this MINIGAME_ROADMAP.md, cross-reference from `TABLE_OF_CONTENTS_CROSS_ROADMAP.md` and `DOC_GRAPH_BLOCKOUT_ARC.md`. Lock the Tier 1 set. Open questions in §8.
+**Phase 0 — Interaction tableau unification (broken-UI minigame cleanup).**
+
+The jam playtest ([quoted in `UNIFIED_RESTOCK_SURFACE_ROADMAP.md` §0](UNIFIED_RESTOCK_SURFACE_ROADMAP.md)) didn't tell us the minigames were shallow — it told us the *minigames were invisible*, because the surfaces that host them read as broken menus rather than diegetic interaction windows. Restock then landed RS-1 through RS-5 and solved the data/routing layer, but the *tableau feel* — the chrome, the juice, the "you are doing a thing in the world" sensation — is still uneven across the interaction surfaces the game already ships. Before we add five new minigames in Phase 2, every existing interaction surface has to graduate to the same tableau tier we're promising new minigames will hit, or the new kinds will inherit the surrounding feel and feel worse for the comparison.
+
+This is the consolidation pass. No new interaction kinds in Phase 0 — only the unification of the ones that exist.
+
+**0.1 Inventory of broken-UI minigames (migration targets).** Every row here is an existing interaction surface declared a Phase 0 migration target. Source docs are cross-referenced so the work consolidates rather than forks.
+
+| # | Surface | Current state | Source doc(s) | Ship-state |
+|---|---|---|---|---|
+| 1 | Crate refill (BREAKABLE) | Unified through RestockBridge → RestockSurface | `UNIFIED_RESTOCK_SURFACE_ROADMAP.md` §3.1, `CRATEUI_INTERACTION_OVERHAUL.md`, `RESTOCK_AUDIT.md` #1 | Data unified, tableau pass needed |
+| 2 | Torch refuel + extinguish (TORCH_LIT/UNLIT) | RestockBridge → RestockSurface; hose extinguish discoverability still absent | `UNIFIED_RESTOCK_SURFACE_ROADMAP.md` §3.2, `LIGHT_AND_TORCH_ROADMAP.md`, `RESTOCK_AUDIT.md` #2 | Data unified, tableau pass needed; hose UI missing |
+| 3 | Corpse restock (CORPSE) | RestockBridge deposit + CorpseActions harvest | `UNIFIED_RESTOCK_SURFACE_ROADMAP.md` §3.3, `RESTOCK_AUDIT.md` #3 | Data unified, tableau pass needed; harvest vs restock mode clarity still soft |
+| 4 | Chest withdraw/deposit (CHEST) | Legacy CrateUI canvas; deposit path blocked | `CHEST_RESTOCK_AND_WORK_ORDERS.md`, `RESTOCK_AUDIT.md` #4 | 🔶 Planned — migrate to tableau as part of Phase 0, wire deposit mode |
+| 5 | Puzzle peek (PUZZLE) | Bespoke DOM overlay, "disorganize" framing unclear | `PEEK_SYSTEM_ROADMAP.md` §6.9, `RESTOCK_AUDIT.md` #5 | Tableau pass needed |
+| 6 | Bookshelf peek (BOOKSHELF) | DialogBox-based, inconsistent chrome | `PEEK_SYSTEM_ROADMAP.md` §6.7, `RESTOCK_AUDIT.md` #6 | Tableau pass needed |
+| 7 | Bar counter peek (BAR_COUNTER) | Toast-only stub; speed boost + cleanse debuff vague | `PEEK_SYSTEM_ROADMAP.md` §6.8, `RESTOCK_AUDIT.md` #7 | Tableau pass needed |
+| 8 | Bed peek (BED) | Hardcoded bespoke overlay; WELL_RESTED condition unexplained | `RESTOCK_AUDIT.md` #8 | Tableau pass needed |
+| 9 | Hose pickup + carry (DUMP_TRUCK → SpraySystem) | No UI affordance for pickup; continuous effect has no tableau | `PRESSURE_WASHING_ROADMAP.md`, `RESTOCK_AUDIT.md` "Hose extinguish discoverability" | Tableau pass needed (pickup surface) |
+
+**0.2 The gamified tableau standard (finally land PeekShell).**
+
+The one piece of shared infrastructure that blocks everything else is [`UNIFIED_RESTOCK_SURFACE_ROADMAP.md` §8b](UNIFIED_RESTOCK_SURFACE_ROADMAP.md) — the **PeekShell** outer-frame module, roadmapped but never built. Phase 0 finally builds it. PeekShell owns the shared tableau chrome so every surface in §0.1 can drop its bespoke framing and inherit a consistent one:
+
+- Dwell-detection state machine (timer → show, face-away → debounce → hide) — reused from current PeekSystem
+- DOM container positioning (absolute center, z-index 18) — standard
+- BoxAnim lifecycle for the frame itself (variant loads on show, lid/panel opens, close+destroy on hide)
+- Label overlay layer (flat div above 3D scene) — standard title/state-chip row per `PEEK_SYSTEM_ROADMAP.md` §12 multi-button overlay standard
+- Key routing (`Escape`/`Back` → close through `MinigameExit.handleKey` if active else shell's own handler; other keys forward to inner content)
+- Magic Remote pointer target enforcement (min 48px, per `INPUT_CONTROLLER_ROADMAP.md`)
+- Close affordance: the [×] corner target from the `MinigameExit` module (§4.5), reused as-is. Every tableau gets the same corner target in the same position — even tableaus that don't capture input.
+
+Each migrated surface provides only its **inner content renderer** and **interaction handler**. The shell owns the frame, the close affordance, the audio cues on open/close, and the overlay dim.
+
+**0.3 §4.6 axis assignment for Phase 0 surfaces.**
+
+Almost all of these are the same shape in the world-pressure/viewport-mode taxonomy: the player stays *vulnerable and aware but focused*. World visible behind at 30-50% opacity, enemies can still path and aggress, WASD still bound to player movement so the player can literally walk away from the tableau, interrupt queue live. That maps to:
+
+- **`worldPressure: 'warning'` by default** on depth 1 and depth 3+ floors (outside interiors). World ticks, enemy AI lives, interrupts can fire through the MinigameExit queue. On depth 2 floors (inn, shop, home) it becomes `'invulnerable'` automatically because the floor itself has no aggression ticks — same data surface, different tonal context.
+- **`viewportMode: 'dimmed'` uniformly** across all Phase 0 surfaces. The 3D viewport stays visible behind the tableau at ~50% opacity + vignette. This is the *core difference* from future captured-input grid minigames, which may choose `'takeover'` (§4.6) to free up frame budget — Phase 0 surfaces are visually simple enough that we keep the world alive behind them.
+- **`captures: false`** across all Phase 0 surfaces. WASD stays bound to the player, not remapped to slot navigation. The player can exit by walking away — the [×] corner is the explicit-intent exit, not the only exit. This is the contract that makes the tableau feel like a window into the world rather than a trap.
+
+Two exceptions worth calling out:
+
+- **Puzzle peek (#5)** may eventually promote to `captures: true` + `viewportMode: 'takeover'` if specific puzzle types grow dense enough to warrant it. Declare it `warning` + `dimmed` + `captures: false` for Phase 0; revisit per-puzzle-type in a later phase.
+- **Bar counter peek (#7)** stays `invulnerable` (interior) + `dimmed` + `captures: false`. The buff/drink selection wants to feel like picking something off a shelf, not entering a minigame — the lightest tableau in the set.
+
+**0.4 RestockSurface as the setup phase of any future minigame.**
+
+The most important long-term consequence of Phase 0 is *inverting* the relationship between RestockSurface and the minigame layer. Today RestockSurface reads as a peer to the (imagined future) minigame system — both open off an interaction, both overlay the viewport. Phase 0 reframes it: **RestockSurface is the inventory-binding phase that any minigame requiring a consumable input runs *before* the minigame body begins**. Structurally:
+
+```
+WELL_PUMP interaction:
+  1. Peek opens over WELL tile (PeekShell)                                 ← Phase 0 chrome
+  2. RestockSurface slot row asks: "place water container in slot"         ← Phase 0 surface
+  3. Player drags water skin from bag into slot                            ← Phase 0 interaction
+  4. Minigame body begins — crank cadence, 4/6/10 taps                     ← Phase 2 body
+  5. On win: container fills. PeekShell closes. Toast confirms.            ← Phase 0 + Phase 2
+
+FUNGAL_HARVEST interaction:
+  1. Peek opens over FUNGAL_PATCH tile (PeekShell)                         ← Phase 0 chrome
+  2. No slot prerequisite — the patch itself is the input                  ← Phase 2 body
+  3. Minigame body begins — pick N mushrooms                               ← Phase 2 body
+  4. On win: mushrooms go to bag. PeekShell closes. Toast confirms.        ← Phase 0 + Phase 2
+```
+
+This means the RestockSurface API gets one new entry point in Phase 0:
+
+```js
+RestockSurface.beginMinigameSetup({
+  kindId:    'WELL_PUMP',
+  slotSpec:  [{ slot: 'container', accepts: ['water_skin','bucket','flask'] }],
+  onFilled:  function(slotContents) { /* minigame body begins here */ },
+  onCancel:  function() { /* player abandoned before minigame body started */ }
+});
+```
+
+Minigame authors in Phase 2+ can optionally call this before starting their minigame body. Surfaces that don't need inventory binding (FUNGAL_HARVEST, MOP_CIRCLE, most puzzles) skip it. This gives us a single code path — and a single player-facing idiom — for "present a container, fill it, interact with it" across the entire game.
+
+**0.5 Juice-hook rule (no silent interactions).**
+
+`RESTOCK_AUDIT.md` "Resolved Issues" calls out that legacy CrateUI had *silent fills* — items disappeared from bag, container filled, no feedback. RS-4 fixed this for CrateUI. Phase 0 makes the rule universal: **every substantive interaction on any Phase 0 surface must fire at least one juice hook** — particle burst, box-anim phase transition, audio cue, glow pulse, or haptic bump (webOS Magic Remote has no haptics today, so ignore that one). The harness enforces this: a Phase 0 smoke test exercises every registered interaction on every surface and asserts at least one of `{ ParticleFX.emit, BoxAnim.phaseTransition, AudioSystem.play, LightOrbs.pulse }` fires within 50ms of the interaction. No exceptions for "trivial" interactions — drops, seals, OK presses all count.
+
+**0.6 Phase 0 exit criteria (what "done" looks like):**
+
+1. `engine/peek-shell.js` (Layer 2) exists and is the outer frame for all 9 surfaces in §0.1. Per-surface migration complete.
+2. All 9 surfaces declare `worldPressure` + `viewportMode` per §4.6 axes. The `minigame-registry.js` from Phase 1 can enumerate them.
+3. All 9 surfaces pass the juice-hook rule (§0.5).
+4. `RestockSurface.beginMinigameSetup()` exists and the test-harness floor (`1.9`) has a Null minigame that exercises it.
+5. Hose pickup has a tableau — a small PeekShell-framed "grab hose?" surface on DUMP_TRUCK face-interact. This closes the surviving discoverability gap called out in `RESTOCK_AUDIT.md` "Remaining from Original Audit."
+6. Phase-0 harness suite: for each surface, assert (a) opens on face, (b) dimmed viewport is visible behind, (c) simulated enemy approach raises a `warning`-urgency interrupt through MinigameExit's queue, (d) every interaction fires a juice hook within 50ms, (e) walking away dismisses the surface cleanly.
+
+**0.7 Scope fence (what Phase 0 does NOT do):**
+
+- Does not redesign the RestockSurface data layer — RS-1 through RS-5 stand.
+- Does not merge the 4-face menu system (`MENU_INTERACTIONS_CATALOG.md`) with the tableau system — pause/bonfire/shop faces are a separate surface and Phase 0 is about tile-interaction surfaces only.
+- Does not add new minigames, new rewards, or new work-order types. That's Phase 2+.
+- Does not change combat entry/exit, floor transitions, or the cinematic camera — only the interaction surfaces listed in §0.1.
+
+**Cross-references (docs Phase 0 consolidates):** `UNIFIED_RESTOCK_SURFACE_ROADMAP.md` (full), `CRATEUI_INTERACTION_OVERHAUL.md`, `PEEK_SYSTEM_ROADMAP.md` §§6, 8b, 12, 13, `RESTOCK_AUDIT.md`, `CHEST_RESTOCK_AND_WORK_ORDERS.md`, `LIGHT_AND_TORCH_ROADMAP.md`, `PRESSURE_WASHING_ROADMAP.md`, `MENU_INTERACTIONS_CATALOG.md` (for boundary, not scope).
+
+**Phase 0 admin carryover** (from the prior version of this section): land this MINIGAME_ROADMAP.md, cross-reference from `TABLE_OF_CONTENTS_CROSS_ROADMAP.md` and `DOC_GRAPH_BLOCKOUT_ARC.md`, lock the Tier 1 set — all complete as of 2026-04-16. The open questions list lives in §8b.
+
+---
 
 **Phase 1 — Modular infrastructure (no minigames yet).**
 1. `engine/minigame-registry.js` — Layer 1 IIFE. Register, lookup, iterate, validate controlSchema.

@@ -1513,17 +1513,47 @@ var TitleScreen = (function () {
       return;
     }
 
-    // Build-version advisory (non-blocking)
+    // ── Build-version gate ───────────────────────────────────────
+    // If the save's buildVersion differs from the running code, show a
+    // blocking "Load anyway / Cancel" dialog. The player must opt in
+    // because schema drift can silently corrupt state.
     var curBuild = SaveState.BUILD_VERSION || null;
     if (meta.buildVersion && curBuild && meta.buildVersion !== curBuild) {
-      if (typeof Toast !== 'undefined' && Toast.show) {
-        Toast.show('\u26A0 Save from build ' + meta.buildVersion +
-                   ' (current: ' + curBuild + '). Attempting load...', 'warning');
-      }
       console.warn('[TitleScreen] build mismatch: save=' + meta.buildVersion +
                    ' current=' + curBuild);
+      if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+        DialogBox.show({
+          text: '\u26A0 This save was created in build ' + meta.buildVersion +
+                ' (current: ' + curBuild + '). Loading may cause errors.',
+          speaker: 'SYSTEM',
+          instant: true,
+          choices: [
+            { text: 'Load Anyway', next: '__close' },
+            { text: 'Cancel',      next: '__close' }
+          ],
+          onChoice: function (idx) {
+            if (idx === 0) {
+              _executeLoad(slotId);
+            }
+            // idx === 1 (Cancel) — dialog closes, player stays in slot picker
+          }
+        });
+        return; // wait for player choice
+      }
+      // Fallback if DialogBox unavailable — proceed with warning toast
+      if (typeof Toast !== 'undefined' && Toast.show) {
+        Toast.show('\u26A0 Build mismatch — attempting load...', 'warning');
+      }
     }
 
+    _executeLoad(slotId);
+  }
+
+  /**
+   * Inner load-and-transition helper. Factored out of _loadSelectedSlot
+   * so the build-version DialogBox callback can invoke it asynchronously.
+   */
+  function _executeLoad(slotId) {
     // Attempt load — SaveState.load restores all subsystems in-place.
     var ok = false;
     try {

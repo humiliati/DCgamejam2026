@@ -788,19 +788,42 @@ var Minimap = (function () {
   // ── Quest waypoint marker ──────────────────────────────────────────
   // Draws a pulsing diamond on a target tile to guide the player toward
   // their current objective. The marker pulses via sine wave on alpha.
+  //
+  // DOC-107 Phase 1: marker is pulled from QuestChain.getCurrentMarker()
+  // each frame. The legacy push-based setQuestTarget() is preserved for
+  // back-compat but the pulled marker takes precedence when QuestChain
+  // resolves a target. Fallback order in _pullMarker:
+  //   1. QuestChain.getCurrentMarker(currentFloorId)   — authoritative
+  //   2. _questTarget                                  — legacy push path
 
-  var _questTarget = null; // { x, y } or null — set by Game
+  var _questTarget = null; // { x, y } or null — legacy push slot
 
   function setQuestTarget(target) {
     _questTarget = target; // { x, y } or null to clear
   }
 
+  // Per-frame marker query. Consulted by _drawQuestMarker so a single
+  // source of truth drives rendering regardless of how the marker got
+  // there (pull from QuestChain, push via setQuestTarget, or neither).
+  function _pullMarker() {
+    if (typeof QuestChain !== 'undefined' && QuestChain.getCurrentMarker &&
+        typeof FloorManager !== 'undefined' && FloorManager.getFloor) {
+      var fid = FloorManager.getFloor();
+      if (typeof fid === 'string') {
+        var m = QuestChain.getCurrentMarker(fid);
+        if (m && typeof m.x === 'number' && typeof m.y === 'number') return m;
+      }
+    }
+    return _questTarget;
+  }
+
   function _drawQuestMarker(ctx, ts, ox, oy) {
-    if (!_questTarget) return;
-    var key = _questTarget.x + ',' + _questTarget.y;
+    var marker = _pullMarker();
+    if (!marker) return;
+    var key = marker.x + ',' + marker.y;
     // Show marker even on unexplored tiles (it's a waypoint, not fog)
-    var cx = ox + _questTarget.x * ts + ts / 2;
-    var cy = oy + _questTarget.y * ts + ts / 2;
+    var cx = ox + marker.x * ts + ts / 2;
+    var cy = oy + marker.y * ts + ts / 2;
 
     // Pulsing alpha (0.4 → 0.9 over ~1.5s cycle)
     var pulse = 0.65 + 0.25 * Math.sin(performance.now() * 0.004);

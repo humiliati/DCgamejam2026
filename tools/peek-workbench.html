@@ -261,6 +261,19 @@
   #add-tpl-btn { background: #1a2a1a; border: 1px dashed #336633; color: #66aa66; font-size: 10px; padding: 3px 8px; cursor: pointer; border-radius: 4px; }
   #add-tpl-btn:hover { background: #2a3a2a; color: #88cc88; border-color: #44aa44; }
 
+  /* ── Template status chip (Phase 0 — BOXFORGE_AGENT_ROADMAP) ── */
+  .tpl-bar button .tpl-status {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+    box-shadow: 0 0 3px currentColor;
+  }
+  .tpl-bar button .tpl-status.shipped   { background: #5ed66a; color: #5ed66a; }
+  .tpl-bar button .tpl-status.primitive { background: #e8c14a; color: #e8c14a; }
+  .tpl-bar button .tpl-status.broken    { background: #e85454; color: #e85454; }
+  /* Dim broken templates slightly so the red dot is the first thing you see */
+  .tpl-bar button[data-status="broken"]    { opacity: 0.78; }
+  .tpl-bar button[data-status="primitive"] { font-style: italic; }
+
   /* ── Sub-Box panels ── */
   .sub-box-section {
     background: #16141e; border: 1px solid #3a2a5a; border-radius: 6px;
@@ -2678,6 +2691,198 @@
   };
 
   // ════════════════════════════════════════════════════
+  //  TEMPLATE STATUS  (Phase 0 — BOXFORGE_AGENT_ROADMAP)
+  // ════════════════════════════════════════════════════
+  //
+  // Every built-in template is classified as one of:
+  //   'shipped'   — wired into a working peek module in engine/*-peek.js
+  //                 (Chest, Bookshelf, Single/Double Door, Crate,
+  //                 Locked Door, Boss Door + Orb, Splash Cube).
+  //   'primitive' — reusable composite (orb / pyramid / dragonfire
+  //                 sprites) that other templates pull in but is not
+  //                 itself a wired-up peek variant.
+  //   'broken'    — template exists but its peek module is stubbed,
+  //                 missing CSS, or otherwise non-functional in-game.
+  //                 Fixing these is the Phase 3 ship-gate test in the
+  //                 BoxForge agent roadmap.
+  //
+  // Seed values per docs/BOXFORGE_AGENT_ROADMAP.md §1.3.
+  // Keep in sync whenever a template is added, fixed, or regresses.
+  var TEMPLATE_STATUS = {
+    'Splash Cube':          'shipped',
+    'Chest':                'shipped',
+    'Bookshelf':            'shipped',
+    'Single Door':          'shipped',
+    'Double Doors':         'shipped',
+    'Crate':                'shipped',
+    'Torch':                'broken',
+    'Torch (box)':          'broken',
+    'Corpse':               'broken',
+    'Locked Door':          'shipped',
+    'Boss Door + Orb':      'shipped',
+    'Torch + Orb':          'broken',
+    'Orb':                  'primitive',
+    'Pyramid':              'primitive',
+    'Torch Peek':           'broken',
+    'Dragonfire':           'primitive',
+    'Hearth + Dragonfire':  'primitive'
+  };
+
+  function getTemplateStatus(name) {
+    return TEMPLATE_STATUS[name] || null;
+  }
+
+  // ════════════════════════════════════════════════════
+  //  PEEK DESCRIPTOR REGISTRY  (Phase 1 — BOXFORGE_AGENT_ROADMAP)
+  // ════════════════════════════════════════════════════
+  //
+  // The descriptor block in a .boxforge.json carries everything the game
+  // needs to register a peek module against PeekSystem. Schema is sourced
+  // from docs/PEEK_SYSTEM_ROADMAP.md §2.1.
+  //
+  // In Phase 1 these values are *emitted* by the editor (serialized into
+  // every .boxforge.json) but not yet *edited* in the UI. Later phases
+  // will add sidebar controls for delay/label/juice tuning.
+  //
+  // Defaults come from a universal base, optionally overridden per-variant
+  // in PEEK_DESCRIPTOR_VARIANT_OVERRIDES below.
+
+  // Universal baseline every descriptor inherits from.
+  var PEEK_DESCRIPTOR_DEFAULTS = {
+    variant:         '',              // slugified name, filled at serialize time
+    tileMatch:       '',              // canonical TILES.* symbol name (e.g. 'CHEST')
+    showDelay:       300,             // ms — debounce before peek appears
+    openDelay:       150,             // ms — delay after appear before lid opens
+    holdTime:        0,               // 0 = hold while facing, >0 = auto-dismiss
+    innerLabelTpl:   '',              // runtime template e.g. '▸ Enter' or '${ctx.targetLabel}'
+    subLabelTpl:     '',              // optional secondary label template
+    glowColor:       'rgba(220,200,160,0.5)',
+    labelColor:      '#dcc8a0',
+    juice: {
+      entryAnim:   'fade',            // 'fade' | 'pop' | 'slide-up' | 'slam'
+      openAnim:    'swing',           // 'swing' | 'slide-off' | 'flip' | 'shatter'
+      glowPulse:   true,
+      particles:   null,              // null | 'sparkle' | 'dust' | 'embers' | 'smoke'
+      sound:       'peek_whoosh',     // AudioSystem key
+      haptic:      'light'            // 'none' | 'light' | 'medium' | 'heavy'
+    },
+    buildContext:    null,            // reserved — engine-side only (not editable)
+    jsHandoffModule: ''               // only relevant when peekType === 'face-js'
+  };
+
+  // Per-template overrides: only fields that differ from the universal baseline.
+  // Keys match TEMPLATES[] entries by name. Missing templates inherit defaults.
+  var PEEK_DESCRIPTOR_VARIANT_OVERRIDES = {
+    'Chest': {
+      variant: 'chest', tileMatch: 'CHEST',
+      innerLabelTpl: '▸ Open',
+      glowColor: 'rgba(255,200,80,0.55)', labelColor: '#ffc850',
+      juice: { entryAnim: 'pop',      openAnim: 'slide-off', glowPulse: true,  particles: 'sparkle', sound: 'peek_latch',   haptic: 'medium' }
+    },
+    'Bookshelf': {
+      variant: 'bookshelf', tileMatch: 'BOOKSHELF',
+      innerLabelTpl: '▸ Read',
+      glowColor: 'rgba(100,200,255,0.45)', labelColor: '#64c8ff',
+      juice: { entryAnim: 'fade',     openAnim: 'flip',      glowPulse: true,  particles: 'dust',    sound: 'peek_page',    haptic: 'light' }
+    },
+    'Single Door': {
+      variant: 'door', tileMatch: 'DOOR',
+      innerLabelTpl: '▸ Enter',
+      subLabelTpl:   'exiting ${ctx.currentLabel}\n↳ ${ctx.targetLabel}',
+      glowColor: 'rgba(220,200,160,0.5)', labelColor: '#dcc8a0',
+      juice: { entryAnim: 'slide-up', openAnim: 'swing',     glowPulse: true,  particles: null,      sound: 'peek_creak',   haptic: 'light' }
+    },
+    'Double Doors': {
+      variant: 'double-door', tileMatch: 'DOOR',
+      innerLabelTpl: '▸ Enter',
+      subLabelTpl:   'exiting ${ctx.currentLabel}\n↳ ${ctx.targetLabel}',
+      glowColor: 'rgba(220,200,160,0.5)', labelColor: '#dcc8a0',
+      juice: { entryAnim: 'slide-up', openAnim: 'swing',     glowPulse: true,  particles: null,      sound: 'peek_creak',   haptic: 'medium' }
+    },
+    'Locked Door': {
+      variant: 'locked-door', tileMatch: 'DOOR_LOCKED',
+      innerLabelTpl: '🔒 Locked',
+      glowColor: 'rgba(220,60,40,0.5)',  labelColor: '#dc3c28',
+      juice: { entryAnim: 'slam',     openAnim: 'swing',     glowPulse: false, particles: 'smoke',   sound: 'peek_rattle',  haptic: 'heavy' }
+    },
+    'Boss Door + Orb': {
+      variant: 'boss-door', tileMatch: 'DOOR_BOSS',
+      innerLabelTpl: '🐉 BOSS',
+      subLabelTpl:   '↳ ${ctx.targetLabel}',
+      glowColor: 'rgba(255,100,40,0.6)', labelColor: '#ff6622',
+      juice: { entryAnim: 'slam',     openAnim: 'swing',     glowPulse: true,  particles: 'embers',  sound: 'peek_rattle',  haptic: 'heavy' }
+    },
+    'Crate': {
+      variant: 'crate', tileMatch: 'CRATE',
+      innerLabelTpl: '▸ Open',
+      glowColor: 'rgba(220,200,160,0.5)', labelColor: '#dcc8a0',
+      juice: { entryAnim: 'pop',      openAnim: 'slide-off', glowPulse: true,  particles: 'dust',    sound: 'peek_slide',   haptic: 'medium' }
+    },
+    'Corpse': {
+      variant: 'corpse', tileMatch: 'CORPSE',
+      innerLabelTpl: '▸ Search',
+      glowColor: 'rgba(140,100,180,0.45)', labelColor: '#8c64b4',
+      juice: { entryAnim: 'fade',     openAnim: 'slide-off', glowPulse: true,  particles: 'dust',    sound: 'peek_settle',  haptic: 'light' }
+    },
+    'Torch': {
+      variant: 'torch', tileMatch: 'TORCH_LIT',
+      innerLabelTpl: '▸ Extinguish',
+      glowColor: 'rgba(255,140,50,0.55)', labelColor: '#dca032',
+      juice: { entryAnim: 'fade',     openAnim: 'swing',     glowPulse: true,  particles: 'embers',  sound: 'peek_whoosh',  haptic: 'light' }
+    },
+    'Torch (box)':   { variant: 'torch',      tileMatch: 'TORCH_LIT' },
+    'Torch + Orb':   { variant: 'torch',      tileMatch: 'TORCH_LIT' },
+    'Torch Peek':    { variant: 'torch',      tileMatch: 'TORCH_LIT' },
+    'Splash Cube':   { variant: 'splash',     tileMatch: ''        },
+    'Orb':           { variant: 'orb-primitive',     tileMatch: '' },
+    'Pyramid':       { variant: 'pyramid-primitive', tileMatch: '' },
+    'Dragonfire':              { variant: 'dragonfire',       tileMatch: '' },
+    'Hearth + Dragonfire':     { variant: 'hearth-dragonfire', tileMatch: 'HEARTH',
+      innerLabelTpl: '▸ Warm Yourself',
+      glowColor: 'rgba(255,100,30,0.55)', labelColor: '#ff6622',
+      juice: { entryAnim: 'fade',     openAnim: 'swing',     glowPulse: true,  particles: 'embers',  sound: 'peek_whoosh',  haptic: 'light' }
+    }
+  };
+
+  // Deep-merge the universal baseline with a per-template override.
+  // Shallow per key; `juice` is merged one level deeper.
+  function resolveDescriptor(templateName) {
+    var out = {};
+    for (var k in PEEK_DESCRIPTOR_DEFAULTS) {
+      out[k] = (typeof PEEK_DESCRIPTOR_DEFAULTS[k] === 'object' && PEEK_DESCRIPTOR_DEFAULTS[k] !== null)
+        ? JSON.parse(JSON.stringify(PEEK_DESCRIPTOR_DEFAULTS[k]))
+        : PEEK_DESCRIPTOR_DEFAULTS[k];
+    }
+    var override = PEEK_DESCRIPTOR_VARIANT_OVERRIDES[templateName];
+    if (override) {
+      for (var ok in override) {
+        if (ok === 'juice' && typeof override.juice === 'object' && override.juice !== null) {
+          for (var jk in override.juice) out.juice[jk] = override.juice[jk];
+        } else {
+          out[ok] = override[ok];
+        }
+      }
+    }
+    // If variant is still blank, slugify the template name
+    if (!out.variant && templateName) {
+      out.variant = templateName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+    return out;
+  }
+
+  // Build the meta block for the active template.
+  // Phase 1: status is sourced from TEMPLATE_STATUS; audit/owner/lastVerified
+  // start empty and can be filled by future UI or CLI edits.
+  function buildMeta(templateName) {
+    return {
+      status:       templateName ? getTemplateStatus(templateName) : null,
+      audit:        '',
+      owner:        '',
+      lastVerified: ''
+    };
+  }
+
+  // ════════════════════════════════════════════════════
   //  DOM REFS
   // ════════════════════════════════════════════════════
 
@@ -3929,7 +4134,20 @@
     // Built-in templates
     _BUILTIN_NAMES.forEach(function(name) {
       var btn = document.createElement('button');
-      btn.textContent = name;
+      var status = getTemplateStatus(name); // 'shipped' | 'primitive' | 'broken' | null
+      if (status) {
+        btn.setAttribute('data-status', status);
+        var dot = document.createElement('span');
+        dot.className = 'tpl-status ' + status;
+        dot.title = status === 'shipped'   ? 'Shipped — wired into a live peek module' :
+                    status === 'primitive' ? 'Primitive — reusable piece, not a standalone peek' :
+                    status === 'broken'    ? 'Broken — peek module stubbed / non-functional' :
+                                              '';
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(name));
+      } else {
+        btn.textContent = name;
+      }
       if (name === activeName) btn.classList.add('active');
       btn.addEventListener('click', function() {
         loadTemplateData(_builtinSnapshots[name], name);
@@ -5878,6 +6096,25 @@
     return { css: css, pf: pf };
   }
 
+  // Download a JSON sidecar alongside a CSS export (Phase 1 — BOXFORGE_AGENT_ROADMAP §4.1).
+  // Matches the <floorId>.json pattern from tools/short-roadmap.md Track B M3.
+  function _downloadSidecar(variantName) {
+    var data = serializeProject();
+    // Override variant in the descriptor so the sidecar name and the descriptor agree,
+    // even if the user typed a one-off variant name in the CSS export prompt.
+    if (data.descriptor) data.descriptor.variant = variantName;
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = variantName.replace(/[^a-zA-Z0-9_\-]/g, '-') + '.boxforge.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   document.getElementById('export-btn').addEventListener('click', function() {
     var name = prompt('Variant name (e.g. "double-door", "sconce"):', 'custom');
     if (!name) return;
@@ -5885,8 +6122,11 @@
     var out = document.getElementById('export-output');
     out.textContent = result.css;
     out.style.display = 'block';
+    // Phase 1 — sidecar download so CSS + descriptor travel together.
+    // Non-blocking: sidecar download fires in parallel with the clipboard write.
+    try { _downloadSidecar(name); } catch (e) { console.warn('[BoxForge] sidecar export failed:', e); }
     navigator.clipboard.writeText(result.css).then(function() {
-      document.getElementById('export-btn').textContent = 'Copied!';
+      document.getElementById('export-btn').textContent = 'Copied + JSON!';
       setTimeout(function() { document.getElementById('export-btn').textContent = 'Export CSS'; }, 1500);
     });
   });
@@ -6281,9 +6521,23 @@
   // ════════════════════════════════════════════════════
 
   function serializeProject() {
+    // Resolve status of the active template, if any.
+    // Falls back to null for user-saved templates / unsaved edits.
+    var tplName = _activeTplName || null;
+    var tplStatus = tplName ? getTemplateStatus(tplName) : null;
+    // Phase 1 — descriptor/meta blocks
+    var descriptor = resolveDescriptor(tplName);
+    // Bind the live peek-type + handoff values so edits in the editor
+    // flow through to the serialized descriptor without a manual sync.
+    descriptor.jsHandoffModule = jsHandoffModule || descriptor.jsHandoffModule || '';
+    var meta = buildMeta(tplName);
     return {
       _format: 'boxforge',
-      _version: 3,
+      _version: 4,
+      templateName:  tplName,           // Phase 0 — identifier for the bf CLI
+      templateStatus: tplStatus,        // Phase 0 — 'shipped' | 'primitive' | 'broken' | null
+      descriptor:    descriptor,        // Phase 1 — PeekSystem §2.1 schema
+      meta:          meta,              // Phase 1 — status/audit/owner/lastVerified
       shell:         JSON.parse(JSON.stringify(shell)),
       colors:        JSON.parse(JSON.stringify(colors)),
       panes:         JSON.parse(JSON.stringify(panes)),
@@ -6311,6 +6565,19 @@
     if (!data || data._format !== 'boxforge') {
       alert('Invalid BoxForge file — missing format header.');
       return false;
+    }
+    // Phase 1 — v3→v4 migration: fill in descriptor + meta blocks
+    // from defaults based on templateName. Older saves still load
+    // cleanly because descriptor/meta are additive and the rest of
+    // loadProject never reads them (Phase 1 is schema-only).
+    if (!data._version || data._version < 4) {
+      if (!data.descriptor) {
+        data.descriptor = resolveDescriptor(data.templateName || null);
+        if (data.jsHandoffModule) data.descriptor.jsHandoffModule = data.jsHandoffModule;
+      }
+      if (!data.meta) {
+        data.meta = buildMeta(data.templateName || null);
+      }
     }
     // Restore state
     shell = data.shell || { bw: 200, bh: 200, bd: 100, persp: 800, rx: -25, ry: 20 };
@@ -6487,8 +6754,100 @@
     this.value = ''; // Reset so same file can be re-loaded
   });
 
+  // ════════════════════════════════════════════════════
+  //  VALIDATE  (Phase 1 — BOXFORGE_AGENT_ROADMAP §4.1)
+  // ════════════════════════════════════════════════════
+  //
+  // Walks a serialized .boxforge.json shape and returns {ok, errors}.
+  // Errors are path-qualified strings so the CLI can point at the
+  // broken key. Non-fatal warnings go into `warnings`.
+  function _validateFormat(data, errors) {
+    if (!data || typeof data !== 'object') { errors.push('root: not an object'); return false; }
+    if (data._format !== 'boxforge') errors.push('_format: expected "boxforge"');
+    if (typeof data._version !== 'number' || data._version < 1) errors.push('_version: expected positive number');
+    return true;
+  }
+  function _validateShell(shell, errors) {
+    if (!shell || typeof shell !== 'object') { errors.push('shell: missing'); return; }
+    ['bw','bh','bd','persp'].forEach(function(k) {
+      if (typeof shell[k] !== 'number' || shell[k] < 0) errors.push('shell.' + k + ': expected non-negative number');
+    });
+  }
+  function _validatePanes(panes, errors) {
+    if (!Array.isArray(panes)) { errors.push('panes: expected array'); return; }
+    panes.forEach(function(p, i) {
+      var pre = 'panes[' + i + ']';
+      if (typeof p.id !== 'number') errors.push(pre + '.id: expected number');
+      if (typeof p.face !== 'string') errors.push(pre + '.face: expected string');
+      if (typeof p.name !== 'string') errors.push(pre + '.name: expected string');
+    });
+  }
+  function _validateDescriptor(d, errors, warnings) {
+    if (!d || typeof d !== 'object') { warnings.push('descriptor: missing (v<4 saves ok — add one before shipping)'); return; }
+    if (typeof d.variant !== 'string' || !d.variant) errors.push('descriptor.variant: required non-empty string');
+    if (typeof d.showDelay !== 'number' || d.showDelay < 0) errors.push('descriptor.showDelay: expected non-negative ms');
+    if (typeof d.openDelay !== 'number' || d.openDelay < 0) errors.push('descriptor.openDelay: expected non-negative ms');
+    if (typeof d.holdTime !== 'number' || d.holdTime < 0) errors.push('descriptor.holdTime: expected non-negative ms');
+    if (!d.juice || typeof d.juice !== 'object') { errors.push('descriptor.juice: required object'); return; }
+    var ENTRY = ['fade','pop','slide-up','slam'];
+    var OPEN  = ['swing','slide-off','flip','shatter'];
+    var HAPT  = ['none','light','medium','heavy'];
+    if (ENTRY.indexOf(d.juice.entryAnim) < 0) errors.push('descriptor.juice.entryAnim: expected one of ' + ENTRY.join('|'));
+    if (OPEN.indexOf(d.juice.openAnim) < 0)   errors.push('descriptor.juice.openAnim: expected one of ' + OPEN.join('|'));
+    if (HAPT.indexOf(d.juice.haptic) < 0)     errors.push('descriptor.juice.haptic: expected one of ' + HAPT.join('|'));
+  }
+  function _validateMeta(m, errors, warnings) {
+    if (!m || typeof m !== 'object') { warnings.push('meta: missing'); return; }
+    var STATUS = ['shipped','primitive','broken'];
+    if (m.status !== null && m.status !== undefined && STATUS.indexOf(m.status) < 0) {
+      errors.push('meta.status: expected one of ' + STATUS.join('|') + ' (got ' + JSON.stringify(m.status) + ')');
+    }
+  }
+  function _validateCrossRefs(data, errors, warnings) {
+    // If templateStatus is present, ensure it agrees with meta.status.
+    if (data.templateStatus && data.meta && data.meta.status &&
+        data.templateStatus !== data.meta.status) {
+      warnings.push('templateStatus (' + data.templateStatus + ') disagrees with meta.status (' + data.meta.status + ')');
+    }
+    // If peekType === 'face-js', expect a non-empty jsHandoffModule.
+    if (data.peekType === 'face-js') {
+      var jm = (data.descriptor && data.descriptor.jsHandoffModule) || data.jsHandoffModule;
+      if (!jm) errors.push('peekType is "face-js" but no jsHandoffModule set');
+    }
+  }
+  function validateProject(data) {
+    var errors = [];
+    var warnings = [];
+    if (!_validateFormat(data, errors)) {
+      return { ok: false, errors: errors, warnings: warnings };
+    }
+    _validateShell(data.shell, errors);
+    _validatePanes(data.panes, errors);
+    _validateDescriptor(data.descriptor, errors, warnings);
+    _validateMeta(data.meta, errors, warnings);
+    _validateCrossRefs(data, errors, warnings);
+    return { ok: errors.length === 0, errors: errors, warnings: warnings };
+  }
+
   // Expose for scripting / dev tools
-  window.BoxForge = { serialize: serializeProject, load: loadProject };
+  window.BoxForge = {
+    serialize: serializeProject,
+    load: loadProject,
+    // Phase 0 — template status introspection (BOXFORGE_AGENT_ROADMAP §4.0)
+    templateStatus: TEMPLATE_STATUS,
+    getTemplateStatus: getTemplateStatus,
+    listTemplates: function() {
+      return _BUILTIN_NAMES.map(function(n) {
+        return { name: n, status: getTemplateStatus(n) };
+      });
+    },
+    // Phase 1 — descriptor/meta/validate (BOXFORGE_AGENT_ROADMAP §4.1)
+    descriptorDefaults: PEEK_DESCRIPTOR_DEFAULTS,
+    descriptorOverrides: PEEK_DESCRIPTOR_VARIANT_OVERRIDES,
+    resolveDescriptor: resolveDescriptor,
+    buildMeta: buildMeta,
+    validate: validateProject
+  };
 
   // ════════════════════════════════════════════════════
   //  HELPERS

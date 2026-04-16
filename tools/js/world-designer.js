@@ -54,7 +54,9 @@
     layout: {},
     warnings: 0,
     selected: null,
-    jsp: null
+    jsp: null,
+    biomeMap: null,   // M3: biome-map.json data (keyed by biome name)
+    tileSchema: null  // M3: tile-schema.json data (keyed by tile id string)
   };
 
   function $(id) { return document.getElementById(id); }
@@ -90,6 +92,191 @@
       .then(function(r) { return r.ok ? r.json() : {}; })
       .catch(function() { return {}; })
       .then(function(j) { state.layout = j && j.positions ? j.positions : {}; });
+  }
+
+  // ── M3: biome-map + tile-schema loaders ──────────────────────
+  function loadBiomeMap() {
+    return fetch('./biome-map.json', { cache: 'no-store' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(j) {
+        state.biomeMap = (j && j.biomes) ? j.biomes : {};
+        console.log('[world-designer] biome-map loaded: ' + Object.keys(state.biomeMap).length + ' biomes');
+      })
+      .catch(function(e) {
+        console.warn('[world-designer] biome-map.json load failed:', e);
+        state.biomeMap = {};
+      });
+  }
+
+  function loadTileSchema() {
+    return fetch('./tile-schema.json', { cache: 'no-store' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(j) {
+        state.tileSchema = (j && j.tiles) ? j.tiles : {};
+        console.log('[world-designer] tile-schema loaded: ' + Object.keys(state.tileSchema).length + ' tiles');
+      })
+      .catch(function(e) {
+        console.warn('[world-designer] tile-schema.json load failed:', e);
+        state.tileSchema = {};
+      });
+  }
+
+  /** Resolve a tile name (e.g. "WALL") to its integer id, or null. */
+  function resolveTileName(name) {
+    if (!state.tileSchema || !name) return null;
+    for (var id in state.tileSchema) {
+      if (state.tileSchema.hasOwnProperty(id) && state.tileSchema[id].name === name) {
+        return parseInt(id, 10);
+      }
+    }
+    return null;
+  }
+
+  /** Build an array of tile IDs from an array of tile names. */
+  function resolveNameArray(names) {
+    if (!Array.isArray(names)) return [];
+    var out = [];
+    for (var i = 0; i < names.length; i++) {
+      var id = resolveTileName(names[i]);
+      if (id != null) out.push(id);
+    }
+    return out;
+  }
+
+  /**
+   * Populate the biome <select> dropdown from loaded biome-map.json.
+   * Called once after data loads and again when modal opens.
+   */
+  function populateBiomeSelect() {
+    var sel = $('nf-biome');
+    sel.innerHTML = '';
+    var biomes = state.biomeMap || {};
+    var keys = Object.keys(biomes).sort(function(a, b) {
+      // Sort by depth first, then alphabetically
+      var da = biomes[a].depth || 0, db = biomes[b].depth || 0;
+      if (da !== db) return da - db;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    if (keys.length === 0) {
+      // Fallback if biome-map didn't load
+      var fb = ['exterior', 'promenade', 'bazaar', 'inn', 'cellar', 'catacomb'];
+      for (var f = 0; f < fb.length; f++) {
+        var o = document.createElement('option');
+        o.value = fb[f]; o.textContent = fb[f];
+        sel.appendChild(o);
+      }
+      return;
+    }
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k];
+      var bm = biomes[key];
+      var o = document.createElement('option');
+      o.value = key;
+      o.textContent = key + ' (d' + (bm.depth || '?') + ' ' + (bm.type || '') + ')';
+      sel.appendChild(o);
+    }
+  }
+
+  /**
+   * Build the §3.1 seed payload for a new floor.
+   * Returns the enriched payload object or a minimal fallback if biome-map
+   * wasn't loaded.
+   */
+  function buildPayload(spec) {
+    var biome = state.biomeMap ? state.biomeMap[spec.biome] : null;
+    var depth = spec.depth || 1;
+
+    // Resolve biome tile names → IDs
+    var wallId  = resolveTileName(biome ? biome.wallTile  : 'WALL');
+    var floorId = resolveTileName(biome ? biome.floorTile : 'EMPTY');
+    var torchId = resolveTileName(biome ? biome.torchTile : 'TORCH_LIT');
+    var accentIds  = biome ? resolveNameArray(biome.accentTiles)  : [];
+    var breakIds   = biome ? resolveNameArray(biome.breakableSet) : [];
+
+    // Build palette tile lists (wall variants + floor variants + light variants)
+    // Include the primary tile + any accents that are wall-like or floor-like
+    var wallPalette  = wallId  != null ? [wallId]  : [];
+    var floorPalette = floorId != null ? [floorId] : [];
+    var lightPalette = torchId != null ? [torchId] : [];
+
+    // Add accent tiles to appropriate palette buckets based on their tile category
+    for (var a = 0; a < accentIds.length; a++) {
+      var aid = accentIds[a];
+      var ts = state.tileSchema ? state.tileSchema[String(aid)] : null;
+      if (!ts) continue;
+      var cat = ts.category || '';
+      if (cat === 'structure' || cat === 'wall') {
+        if (wallPalette.indexOf(aid) < 0) wallPalette.push(aid);
+      } else if (cat === 'floor' || cat === 'terrain') {
+        if (floorPalette.indexOf(aid) < 0) floorPalette.push(aid);
+      } else if (ts.isTorch) {
+        if (lightPalette.indexOf(aid) < 0) lightPalette.push(aid);
+      }
+    }
+
+    // ── Build required array ──────────────────────────────────
+    var required = [];
+
+    // Spawn is always required
+    required.push({
+      kind: 'spawn',
+      hint: 'center-south',
+      pinned: true
+    });
+
+    // Entry door — based on parent relationship
+    if (spec.parent) {
+      // Determine entry tile type from depth
+      var entryTile;
+      if (depth >= 3) {
+        entryTile = resolveTileName('STAIRS_UP');
+      } else {
+        entryTile = resolveTileName('DOOR_EXIT');
+      }
+      required.push({
+        kind: 'entry-door',
+        tile: entryTile,
+        faces: 'N',
+        pinned: true,
+        target: spec.parent
+      });
+    }
+
+    // Build the §3.1 payload
+    var payload = {
+      version: 1,
+      floorId: spec.id,
+      authorSeed: ((Date.now() & 0xFFFFFFFF) ^ Math.floor(Math.random() * 0xFFFFFFFF) >>> 0).toString(16),
+      parent: spec.parent || null,
+      depth: depth,
+      biome: {
+        name: spec.biome,
+        palette: {
+          wall:  wallPalette,
+          floor: floorPalette,
+          ceiling: null,
+          light: lightPalette
+        },
+        defaults: {
+          wallTile:  wallId  != null ? wallId  : 1,
+          floorTile: floorId != null ? floorId : 0,
+          torchTile: torchId != null ? torchId : null
+        },
+        accentTiles: accentIds,
+        breakableSet: breakIds
+      },
+      dimensions: { w: spec.w, h: spec.h },
+      required: required,
+      stamps: [],
+      budget: biome ? {
+        enemies:    { min: 0, max: depth >= 3 ? 6 : 3 },
+        breakables: { min: 2, max: depth >= 3 ? 8 : 6 },
+        lights:     { min: 1, max: depth >= 3 ? 2 : 4 }
+      } : null,
+      narrativeHints: []
+    };
+
+    return payload;
   }
 
   function depthOf(id)  { return id.split('.').length; }
@@ -663,6 +850,8 @@
       createdAt: new Date().toISOString(),
       createdBy: 'world-designer'
     };
+    // M3: attach the full §3.1 payload for BO-V consumption
+    spec.payload = buildPayload(spec);
     state.pendings[id] = spec;
     savePendings();
     closeNewFloorModal();
@@ -699,8 +888,8 @@
   function wire() {
     $('btn-reload').addEventListener('click', function() {
       setStatus('reloading…');
-      Promise.all([loadData(), loadLayout()])
-        .then(function() { rebuild(false); setStatus('reloaded', 'ok'); })
+      Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
+        .then(function() { populateBiomeSelect(); rebuild(false); setStatus('reloaded', 'ok'); })
         .catch(function(e) { setStatus('reload failed: ' + e.message, 'err'); });
     });
     $('btn-layout-reset').addEventListener('click', function() {
@@ -748,8 +937,12 @@
     }
     wire();
     loadPendings();
-    Promise.all([loadData(), loadLayout()])
-      .then(function() { rebuild(false); setStatus('ready', 'ok'); })
+    Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
+      .then(function() {
+        populateBiomeSelect();
+        rebuild(false);
+        setStatus('ready', 'ok');
+      })
       .catch(function(e) { setStatus('load failed: ' + e.message, 'err'); console.error(e); });
   }
 

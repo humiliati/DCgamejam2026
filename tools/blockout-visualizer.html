@@ -87,6 +87,10 @@
   <div id="windows-panel"></div>
   <div id="metadata-panel"></div>
   <div id="tile-picker"></div>
+  <div id="required-panel" style="display:none; position:fixed; top:44px; right:8px;
+       background:#1a1d22; border:1px solid #456; border-radius:4px;
+       padding:8px 12px; z-index:400; min-width:180px; max-width:260px;
+       font-family:Consolas,'Courier New',monospace;"></div>
   <div id="lasso-rect"></div>
 </div>
 
@@ -143,6 +147,7 @@
 <script src="js/bv-toolbar.js"></script>
 <script src="js/bv-scenes.js"></script>
 <script src="js/bv-validation.js"></script>
+<script src="js/bv-required-panel.js"></script>
 <script src="js/bv-meta-editor.js"></script>
 <script src="js/bv-ui-tooltip.js"></script>
 <script src="cli/help-meta.js"></script>
@@ -253,23 +258,113 @@ window.__validateSmokeTest = function(scope) {
       showBanner(spec, true);
       return;
     }
+
+    // M3: extract biome defaults from the §3.1 payload if present
+    var payload = spec.payload || null;
+    var wallTile  = 'WALL';
+    var floorTile = 'EMPTY';
+    if (payload && payload.biome && payload.biome.defaults) {
+      var defs = payload.biome.defaults;
+      // createFloor accepts tile names — resolve IDs back to names via TILE_SCHEMA
+      if (typeof TILE_SCHEMA !== 'undefined') {
+        if (defs.wallTile != null && TILE_SCHEMA[defs.wallTile])
+          wallTile = TILE_SCHEMA[defs.wallTile].name;
+        if (defs.floorTile != null && TILE_SCHEMA[defs.floorTile])
+          floorTile = TILE_SCHEMA[defs.floorTile].name;
+      }
+    }
+
     try {
       window.BO.run({
         action:   'createFloor',
         id:       spec.id,
-        biome:    spec.biome || 'boardwalk',
+        biome:    spec.biome || 'exterior',
         w:        spec.w | 0 || 50,
         h:        spec.h | 0 || 36,
-        wallTile: 'WALL',
-        floorTile:'EMPTY',
+        wallTile: wallTile,
+        floorTile: floorTile,
         select:   true
       });
+
+      // M3: pre-stamp required cells from the payload
+      if (payload && Array.isArray(payload.required)) {
+        _stampRequiredCells(spec.id, payload);
+      }
+
+      // M3: stash the payload on the floor record for tile-picker + required panel
+      if (typeof FLOORS !== 'undefined' && FLOORS[spec.id] && payload) {
+        FLOORS[spec.id]._payload = payload;
+      }
+
       showBanner(spec, false);
       console.log('[bv-pending] scaffolded new floor from handoff:', spec.id);
     } catch (e) {
       console.error('[bv-pending] createFloor failed', e);
       alert('Could not scaffold pending floor "' + spec.id + '": ' + e.message);
     }
+  }
+
+  /**
+   * M3: stamp required cells onto the freshly-created floor grid.
+   * Spawn gets placed at hint position; doors get their tile ID painted.
+   */
+  function _stampRequiredCells(floorId, payload) {
+    var floor = (typeof FLOORS !== 'undefined') ? FLOORS[floorId] : null;
+    if (!floor || !floor.grid) return;
+    var grid = floor.grid;
+    var w = grid[0] ? grid[0].length : 0;
+    var h = grid.length;
+    var required = payload.required;
+
+    for (var i = 0; i < required.length; i++) {
+      var req = required[i];
+
+      if (req.kind === 'spawn') {
+        // Place spawn at center-south or explicit coordinate
+        var sx, sy;
+        if (req.at) {
+          sx = req.at.x; sy = req.at.y;
+        } else {
+          sx = Math.floor(w / 2);
+          sy = Math.max(1, h - 3);
+        }
+        if (sx > 0 && sx < w - 1 && sy > 0 && sy < h - 1) {
+          floor.spawnX = sx;
+          floor.spawnY = sy;
+          floor.spawnDir = 0;
+          console.log('[bv-pending] spawn stamped at', sx, sy);
+        }
+      }
+
+      if (req.kind === 'entry-door' || req.kind === 'exit-door') {
+        if (req.at && req.tile != null) {
+          var dx = req.at.x, dy = req.at.y;
+          if (dx >= 0 && dx < w && dy >= 0 && dy < h) {
+            grid[dy][dx] = req.tile;
+            // Wire doorTarget
+            if (req.target) {
+              floor.doorTargets = floor.doorTargets || {};
+              floor.doorTargets[dx + ',' + dy] = req.target;
+            }
+            console.log('[bv-pending] door stamped at', dx, dy, 'tile=' + req.tile, 'target=' + (req.target || ''));
+          }
+        }
+      }
+    }
+
+    // Track pinned cells for the required panel (M3.4)
+    floor._pinnedCells = {};
+    for (var j = 0; j < required.length; j++) {
+      var rq = required[j];
+      if (!rq.pinned) continue;
+      var px, py;
+      if (rq.at) { px = rq.at.x; py = rq.at.y; }
+      else if (rq.kind === 'spawn' && floor.spawnX != null) { px = floor.spawnX; py = floor.spawnY; }
+      else continue;
+      floor._pinnedCells[px + ',' + py] = rq.kind;
+    }
+
+    if (typeof draw === 'function') draw();
   }
 
   // loadAllFloors is async — chain after it resolves.

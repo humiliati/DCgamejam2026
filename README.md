@@ -112,6 +112,20 @@ The raycaster was split from a single 4,729-line file into 6 sub-modules + a 2,7
 
 **Brainstorming & Design Iteration** -- GPT (OpenAI)
 
+## Development tools
+
+The project includes a browser + CLI authoring pipeline for creating and editing floor blockouts. No build step required — the browser tools are plain HTML/JS, the CLI runs on Node.
+
+**World Designer** (`tools/world-designer.html`) — Create new floor specs with biome selection, dimension budget, and narrative hints. Outputs a §3.1 seed payload that hands off to the Blockout Visualizer.
+
+**Blockout Visualizer** (`tools/blockout-visualizer.html`) — Tile-level floor editor with lasso, copy/paste, undo/redo, biome-aware palette, pinned-cell locks, and diff-based save. Writes `engine/floor-blockout-*.js` IIFEs directly.
+
+**Blockout CLI** (`tools/blockout-cli.js`) — Headless Node interface to the same operations: `bo paint-rect`, `bo stamp-room`, `bo validate`, `bo render-ascii`, `bo ingest`/`bo emit`, and more. All mutating commands support `--dry-run`. Run `bo help` for the full command index.
+
+**Extract-Floors** (`tools/extract-floors.js`) — Rebuilds `tools/floor-data.json` from engine IIFEs + payload sidecars. Run before serving: `node tools/extract-floors.js`.
+
+See `CLAUDE.md` for contributor conventions and `agents.md` for the recommended agent workflow when authoring new floors.
+
 ## Source lineage
 
 | System | Source | Notes |
