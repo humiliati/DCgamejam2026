@@ -122,6 +122,138 @@
     return changed;
   }
 
+  // ── Slice C1 — dry-run snapshot/restore ────────────────────────
+  // Any action run with `dryRun:true` wraps execution in a snapshot →
+  // execute → diff → restore cycle. The caller gets back the cell-level
+  // diff the command *would* have applied, but disk state, in-memory
+  // FLOORS, undo/redo stacks, and UI selection are all reverted.
+  //
+  // Read-only actions (listFloors, renderAscii, tile, describeCell, …)
+  // produce an empty diff under dryRun — that's fine and a cheap no-op.
+  // `save` and `downloadPendingSave` are explicitly blocked to keep
+  // dry-run a hermetic preview.
+  var DRY_RUN_BLOCK = { save: 1, downloadPendingSave: 1 };
+
+  function _deepCloneFloor(f) {
+    if (!f) return null;
+    return {
+      grid: (f.grid || []).map(function(r) { return r.slice(); }),
+      spawn: f.spawn ? { x: f.spawn.x, y: f.spawn.y, dir: f.spawn.dir } : null,
+      doorTargets: f.doorTargets ? Object.assign({}, f.doorTargets) : {},
+      biome: f.biome ? Object.assign({}, f.biome) : null,
+      rooms: f.rooms ? JSON.parse(JSON.stringify(f.rooms)) : null,
+      entities: f.entities ? JSON.parse(JSON.stringify(f.entities)) : null
+    };
+  }
+
+  function _snapshotAll() {
+    var floorSnaps = {};
+    for (var fid in FLOORS) {
+      if (Object.prototype.hasOwnProperty.call(FLOORS, fid)) {
+        floorSnaps[fid] = _deepCloneFloor(FLOORS[fid]);
+      }
+    }
+    return {
+      floorIds: Object.keys(FLOORS),
+      floors: floorSnaps,
+      currentFloorId: currentFloorId,
+      undoLen: (EDIT && EDIT.undoStack) ? EDIT.undoStack.length : 0,
+      redoLen: (EDIT && EDIT.redoStack) ? EDIT.redoStack.length : 0,
+      paintTile: EDIT ? EDIT.paintTile : null,
+      clipboard: (CLIPBOARD && CLIPBOARD.cells)
+        ? { w: CLIPBOARD.w, h: CLIPBOARD.h, sourceFloorId: CLIPBOARD.sourceFloorId,
+            cells: CLIPBOARD.cells.slice() }
+        : null
+    };
+  }
+
+  function _restoreAll(snap) {
+    if (!snap) return;
+    // Drop floors created during the action.
+    for (var fid in FLOORS) {
+      if (Object.prototype.hasOwnProperty.call(FLOORS, fid) &&
+          !Object.prototype.hasOwnProperty.call(snap.floors, fid)) {
+        delete FLOORS[fid];
+      }
+    }
+    // Restore each prior floor's state in place (preserves object identity
+    // for any external reference that may have cached `currentFloor`).
+    for (var sid in snap.floors) {
+      var src = snap.floors[sid];
+      var dst = FLOORS[sid];
+      if (!dst) { FLOORS[sid] = src; continue; }
+      dst.grid = (src.grid || []).map(function(r) { return r.slice(); });
+      dst.spawn = src.spawn ? Object.assign({}, src.spawn) : null;
+      dst.doorTargets = src.doorTargets ? Object.assign({}, src.doorTargets) : {};
+      if (src.biome)    dst.biome = Object.assign({}, src.biome);
+      if (src.rooms)    dst.rooms = JSON.parse(JSON.stringify(src.rooms));
+      if (src.entities) dst.entities = JSON.parse(JSON.stringify(src.entities));
+    }
+    // Reselect the pre-action floor so currentFloor binding is correct.
+    if (snap.currentFloorId && snap.currentFloorId !== currentFloorId &&
+        FLOORS[snap.currentFloorId] && typeof selectFloor === 'function') {
+      selectFloor(snap.currentFloorId);
+    }
+    // Truncate undo/redo to pre-action depth.
+    if (EDIT && EDIT.undoStack) {
+      while (EDIT.undoStack.length > snap.undoLen) EDIT.undoStack.pop();
+    }
+    if (EDIT && EDIT.redoStack) {
+      while (EDIT.redoStack.length > snap.redoLen) EDIT.redoStack.pop();
+    }
+    if (EDIT) EDIT.paintTile = snap.paintTile;
+    if (typeof updateEditUI === 'function') updateEditUI();
+    if (typeof draw === 'function') draw();
+  }
+
+  function _diffAgainstSnapshot(snap) {
+    // Per-floor cell diff: {[floorId]: [{x,y,oldTile,newTile}]}.
+    var out = { cells: {}, spawn: {}, doorTargets: {}, floorsAdded: [], floorsRemoved: [] };
+    var totalCells = 0;
+    // Added floors (present now but not in snap).
+    for (var fid in FLOORS) {
+      if (!Object.prototype.hasOwnProperty.call(snap.floors, fid)) {
+        out.floorsAdded.push(fid);
+      }
+    }
+    // Compare per-floor state.
+    for (var sid in snap.floors) {
+      if (!FLOORS[sid]) { out.floorsRemoved.push(sid); continue; }
+      var before = snap.floors[sid];
+      var after  = FLOORS[sid];
+      var bg = before.grid || [];
+      var ag = after.grid  || [];
+      var h = Math.max(bg.length, ag.length);
+      var changedCells = [];
+      for (var y = 0; y < h; y++) {
+        var br = bg[y] || [];
+        var ar = ag[y] || [];
+        var w = Math.max(br.length, ar.length);
+        for (var x = 0; x < w; x++) {
+          var ot = br[x], nt = ar[x];
+          if (ot !== nt) changedCells.push({ x: x, y: y, oldTile: ot == null ? null : ot, newTile: nt == null ? null : nt });
+        }
+      }
+      if (changedCells.length) { out.cells[sid] = changedCells; totalCells += changedCells.length; }
+      // Spawn diff.
+      var bs = before.spawn, as = after.spawn;
+      var spawnChanged = (!!bs !== !!as) ||
+        (bs && as && (bs.x !== as.x || bs.y !== as.y || bs.dir !== as.dir));
+      if (spawnChanged) out.spawn[sid] = { before: bs, after: as };
+      // Door-target diff (cheap JSON compare).
+      var bd = JSON.stringify(before.doorTargets || {});
+      var ad = JSON.stringify(after.doorTargets || {});
+      if (bd !== ad) out.doorTargets[sid] = { before: before.doorTargets || {}, after: after.doorTargets || {} };
+    }
+    out.totalCellsChanged = totalCells;
+    out.wouldChange = totalCells > 0
+      || Object.keys(out.spawn).length > 0
+      || Object.keys(out.doorTargets).length > 0
+      || out.floorsAdded.length > 0
+      || out.floorsRemoved.length > 0;
+    return out;
+  }
+
   // Pass 4: stamp grid transforms.
   function rotateCW(grid) {
     if (!grid.length || !grid[0].length) return grid.slice();
@@ -312,7 +444,16 @@
     // paginated.
     renderAscii: function(a) {
       var fm = ensureFloor(a.floor);
-      if (!fm) throw new Error('floor not loaded');
+      // Slice C5: if the floor isn't in FLOORS yet (e.g. freshly
+      // scaffolded via save-patcher and not reloaded), don't crash
+      // the agent's perception loop — return an actionable error
+      // payload listing known floors so the agent can self-correct.
+      if (!fm) {
+        var known = Object.keys(FLOORS).sort();
+        throw new Error('floor not loaded: "' + (a.floor || '<current>')
+          + '". Known floors: [' + known.join(', ')
+          + ']. If you just scaffolded engine/floor-blockout-<id>.js, reload the page or run `node tools/blockout-cli.js ingest --floor <id>` first.');
+      }
       var grid = fm.floor.grid;
       var gw = grid[0] ? grid[0].length : 0, gh = grid.length;
       var vp = a.viewport || { x: 0, y: 0, w: gw, h: gh };
@@ -661,6 +802,145 @@
       return { changed: changed.length, at: {x:cx,y:cy}, radius: radius, torchTile: torchTile, step: step };
     },
 
+    // ── Pass 5d Slice C4: biome-specific stamps ──────────────
+    // Three stamps targeting 3.1.1-class floors (pressurized submarine base):
+    //   stampTunnelCorridor  — ribbed freeform corridor with tapered mouths
+    //   stampPortholeWall    — alternating porthole/jamb row in a wall
+    //   stampAlcoveFlank     — symmetric wall pairs framing a centerline
+    // These are starter primitives the agent composes with paint-rect / stamp-room.
+    // Output is deterministic — identical args produce identical cells.
+
+    // stampTunnelCorridor({floor, at:{x,y}, len, dir?, ribTile?, wallTile?, floorTile?})
+    //   at  = top-left (or leading-end) cell of the corridor's bounding box
+    //   len = corridor length in tiles along its axis (min 4, so mouths can taper)
+    //   dir = 0 east (default) | 1 south | 2 west | 3 north — axis of travel
+    //   Geometry (dir=0): a 3-row band — north flank (ribbed), center walkway
+    //   (floor), south flank (ribbed with inverted phase). First 2 and last 2
+    //   columns override flanks with floorTile to taper the mouths to 3-wide.
+    //   Flank pattern alternates ribTile / wallTile every cell for the
+    //   pressure-vessel "ribbed" look seen in 3.1.1's engine-room corridor.
+    stampTunnelCorridor: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampTunnelCorridor: no floor loaded');
+      var at = a.at || {};
+      var x0 = at.x|0, y0 = at.y|0;
+      var len = Math.max(4, (a.len|0) || 6);
+      var dir = ((a.dir|0) % 4 + 4) % 4;
+      var ribTile   = resolveTileRef(a.ribTile   != null ? a.ribTile   : 'TUNNEL_RIB');
+      var wallTile  = resolveTileRef(a.wallTile  != null ? a.wallTile  : 'TUNNEL_WALL');
+      var floorTile = resolveTileRef(a.floorTile != null ? a.floorTile : 'EMPTY');
+      if (ribTile == null)   throw new Error('stampTunnelCorridor: unknown ribTile '   + a.ribTile);
+      if (wallTile == null)  throw new Error('stampTunnelCorridor: unknown wallTile '  + a.wallTile);
+      if (floorTile == null) throw new Error('stampTunnelCorridor: unknown floorTile ' + a.floorTile);
+      // Canonical (dir=0) layout then rotate offsets per dir.
+      // axis length along i (0..len-1), across j ∈ {0, 1, 2}.
+      //   j=0 (north flank): ribbed (rib on even i, wall on odd i)
+      //   j=1 (walkway):     floor
+      //   j=2 (south flank): ribbed (wall on even i, rib on odd i — offset phase)
+      // Mouth taper: for i in [0,1] ∪ [len-2,len-1], flanks become floorTile.
+      var cells = [];
+      function pushAt(i, j, tile) {
+        var dx, dy;
+        switch (dir) {
+          case 0: dx = i;        dy = j;        break;   // east:  i→+x, j→+y
+          case 1: dx = -j;       dy = i;        break;   // south: j→-x (flip), i→+y
+          case 2: dx = -i;       dy = -j;       break;   // west
+          case 3: dx = j;        dy = -i;       break;   // north
+        }
+        cells.push({ x: x0 + dx, y: y0 + dy, tile: tile });
+      }
+      for (var i = 0; i < len; i++) {
+        var atMouth = (i < 2 || i >= len - 2);
+        // North flank
+        if (atMouth) pushAt(i, 0, floorTile);
+        else         pushAt(i, 0, (i % 2 === 0) ? ribTile : wallTile);
+        // Walkway (always floor)
+        pushAt(i, 1, floorTile);
+        // South flank (inverted phase for visual rib "weave")
+        if (atMouth) pushAt(i, 2, floorTile);
+        else         pushAt(i, 2, (i % 2 === 0) ? wallTile : ribTile);
+      }
+      var changed = applyHeteroAndPush(cells);
+      return {
+        changed: changed.length, action: 'stampTunnelCorridor',
+        at: { x: x0, y: y0 }, len: len, dir: dir,
+        ribTile: ribTile, wallTile: wallTile, floorTile: floorTile
+      };
+    },
+
+    // stampPortholeWall({floor, at:{x,y}, side:'L'|'R', span, tile?, jambTile?})
+    //   at       = starting cell (center of the first porthole)
+    //   side     = 'R' (default) extends rightward (+x); 'L' extends leftward (-x)
+    //   span     = number of portholes; total footprint is 2*span-1 tiles long
+    //   tile     = PORTHOLE_OCEAN (default) — the pane
+    //   jambTile = TUNNEL_WALL (default) — masonry between panes
+    //   Pattern along axis: [tile, jamb, tile, jamb, …, tile].
+    //   Writes a single row at y=at.y. Callers can rotate the floor or paint
+    //   an adjacent backing wall separately to build vertical porthole rows.
+    stampPortholeWall: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampPortholeWall: no floor loaded');
+      var at = a.at || {};
+      var x0 = at.x|0, y0 = at.y|0;
+      var side = (a.side || 'R').toString().toUpperCase();
+      if (side !== 'L' && side !== 'R') throw new Error('stampPortholeWall: side must be "L" or "R" (got ' + a.side + ')');
+      var span = Math.max(1, (a.span|0) || 3);
+      var tile     = resolveTileRef(a.tile     != null ? a.tile     : 'PORTHOLE_OCEAN');
+      var jambTile = resolveTileRef(a.jambTile != null ? a.jambTile : 'TUNNEL_WALL');
+      if (tile == null)     throw new Error('stampPortholeWall: unknown tile '     + a.tile);
+      if (jambTile == null) throw new Error('stampPortholeWall: unknown jambTile ' + a.jambTile);
+      var sx = (side === 'R') ? 1 : -1;
+      var cells = [];
+      for (var i = 0; i < 2 * span - 1; i++) {
+        var t = (i % 2 === 0) ? tile : jambTile;
+        cells.push({ x: x0 + sx * i, y: y0, tile: t });
+      }
+      var changed = applyHeteroAndPush(cells);
+      return {
+        changed: changed.length, action: 'stampPortholeWall',
+        at: { x: x0, y: y0 }, side: side, span: span,
+        tile: tile, jambTile: jambTile, footprint: 2 * span - 1
+      };
+    },
+
+    // stampAlcoveFlank({floor, at:{x,y}, count, tile?, spacing?, depth?})
+    //   at      = anchor cell on the chamber centerline (vertical axis)
+    //   count   = number of alcove pairs (min 1)
+    //   tile    = TUNNEL_WALL (default) — the alcove face
+    //   spacing = 2 (default) — rows between successive alcove pairs
+    //   depth   = 1 (default) — how many tiles thick each flank face is
+    //   Geometry: for each pair i ∈ 0..count-1, paint a west flank segment at
+    //   (at.x-2, at.y + i*spacing .. at.y + i*spacing + depth - 1) and a
+    //   mirror east flank segment at (at.x+2, …). The 2-cell gutter between
+    //   centerline and flank is left untouched so the agent can fill the
+    //   chamber interior with whatever floor tile the biome prefers.
+    stampAlcoveFlank: function(a) {
+      var fm = ensureFloor(a.floor);
+      if (!fm) throw new Error('stampAlcoveFlank: no floor loaded');
+      var at = a.at || {};
+      var x0 = at.x|0, y0 = at.y|0;
+      var count   = Math.max(1, (a.count   |0) || 2);
+      var spacing = Math.max(1, (a.spacing |0) || 2);
+      var depth   = Math.max(1, (a.depth   |0) || 1);
+      var tile = resolveTileRef(a.tile != null ? a.tile : 'TUNNEL_WALL');
+      if (tile == null) throw new Error('stampAlcoveFlank: unknown tile ' + a.tile);
+      var cells = [];
+      for (var i = 0; i < count; i++) {
+        var yBase = y0 + i * spacing;
+        for (var d = 0; d < depth; d++) {
+          var yy = yBase + d;
+          cells.push({ x: x0 - 2, y: yy, tile: tile }); // west flank
+          cells.push({ x: x0 + 2, y: yy, tile: tile }); // east flank
+        }
+      }
+      var changed = applyHeteroAndPush(cells);
+      return {
+        changed: changed.length, action: 'stampAlcoveFlank',
+        at: { x: x0, y: y0 }, count: count, spacing: spacing, depth: depth,
+        tile: tile, pairs: count
+      };
+    },
+
     // ── Pass 4: stamp registry (named patterns) ──────────────
     saveStamp: function(a) {
       if (!a.name) throw new Error('saveStamp: needs name');
@@ -773,6 +1053,34 @@
       if (!name) throw new Error('missing action');
       var fn = ACTIONS[name];
       if (!fn) throw new Error('unknown action: ' + name);
+
+      // ── Slice C1: dry-run preflight ─────────────────────────────
+      if (cmd.dryRun) {
+        if (DRY_RUN_BLOCK[name]) {
+          throw new Error('dryRun not supported for action: ' + name +
+            ' (this action performs I/O that cannot be previewed)');
+        }
+        var snap = _snapshotAll();
+        var dryResult, dryErr = null;
+        try {
+          dryResult = fn(cmd);
+        } catch (inner) {
+          dryErr = inner;
+        }
+        var diff = _diffAgainstSnapshot(snap);
+        _restoreAll(snap);
+        if (dryErr) throw dryErr;
+        return {
+          ok: true,
+          action: name,
+          dryRun: true,
+          result: dryResult,
+          preview: diff,
+          wouldChange: diff.wouldChange,
+          cellsChanged: diff.totalCellsChanged
+        };
+      }
+
       var result = fn(cmd);
       var resp = { ok: true, action: name, result: result };
       if (cmd.postValidate) {
@@ -800,13 +1108,18 @@
   window.BO = {
     run: run,
     actions: Object.keys(ACTIONS).sort(),
-    version: '0.3.1',
+    version: '0.4.0',
     _register: registerAction,
     _helpers: {
       resolveTileRef: resolveTileRef,
       ensureFloor:    ensureFloor,
       applyAndPush:   applyAndPush,
-      currentFloorSnapshot: currentFloorSnapshot
+      currentFloorSnapshot: currentFloorSnapshot,
+      // Slice C1 — exposed for sibling modules that want to preview an
+      // action without running it (or write their own batched dry-run).
+      _snapshotAll:   _snapshotAll,
+      _restoreAll:    _restoreAll,
+      _diffAgainstSnapshot: _diffAgainstSnapshot
     },
     // ── Pass 3: direct helpers (no router wrap) ────────────────
     tile:       function(name)       { return ACTIONS.tile({ name: name }); },
@@ -816,7 +1129,30 @@
     // ── Pass 4: stamp helpers ──────────────────────────────────
     listStamps: function()           { return ACTIONS.listStamps({}); },
     exportStamps: function()         { return ACTIONS.exportStamps({}); },
-    importStamps: function(st, merge) { return ACTIONS.importStamps({ stamps: st, merge: merge !== false }); }
+    importStamps: function(st, merge) { return ACTIONS.importStamps({ stamps: st, merge: merge !== false }); },
+    // ── Pass 5d Slice C3: help ─────────────────────────────────
+    // window.BO.help()          → { ok, commands: {name: {description,args,example}} }
+    // window.BO.help('paint-rect') → { ok, command, meta }
+    // Same payload shape as `bo help --json` for parity with the CLI.
+    // Requires tools/cli/help-meta.js to be loaded via <script> tag
+    // (attaches to window.BlockoutHelpMeta); if absent, returns a stub.
+    help: function(action) {
+      var H = (typeof window !== 'undefined') && window.BlockoutHelpMeta;
+      if (!H) {
+        return { ok: false, action: 'help',
+          error: 'help-meta.js not loaded (add <script src="tools/cli/help-meta.js"> to the visualizer page)' };
+      }
+      if (action == null || action === '') {
+        var names = H.list();
+        var payload = {};
+        names.forEach(function(n) { payload[n] = H.get(n); });
+        return { ok: true, action: 'help', commands: payload };
+      }
+      var meta = H.get(action);
+      if (!meta) return { ok: false, action: 'help', command: action,
+        error: 'unknown command', available: H.list() };
+      return { ok: true, action: 'help', command: action, meta: meta };
+    }
   };
   Object.defineProperty(window.BO, 'currentFloorId', { get: function() { return currentFloorId; } });
   Object.defineProperty(window.BO, 'floors',         { get: function() { return Object.keys(FLOORS); } });
@@ -858,5 +1194,20 @@ window.__boSmokeTest = function(floorId) {
   // Undo the stamps we just dropped so the smoke test leaves no trace.
   window.BO.run({ action: 'undo' });
   window.BO.run({ action: 'undo' });
-  return { r1:r1, r2:r2, r3:r3, r4:r4, r5:r5, r6:r6, r7:r7, r8:r8, r9:r9, rA:rA, rB:rB, rC:rC, rD:rD };
+  // ── Slice C1 — dry-run preflight assertion ──────────────────────
+  // Snapshot grid, run a paintRect with dryRun:true, verify grid is
+  // byte-identical afterwards (preview reports the diff without mutation).
+  var floorBefore = JSON.stringify(FLOORS[fid].grid);
+  var undoBefore  = EDIT.undoStack.length;
+  var rDry = window.BO.run({ action:'paintRect', at:{x:2,y:2}, size:{w:3,h:3}, tile:'WALL', dryRun:true });
+  var floorAfter  = JSON.stringify(FLOORS[fid].grid);
+  var undoAfter   = EDIT.undoStack.length;
+  var dryOk = rDry && rDry.ok === true && rDry.dryRun === true
+    && rDry.wouldChange === true && rDry.cellsChanged > 0
+    && floorBefore === floorAfter && undoBefore === undoAfter;
+  console.log('[bo-smoke] dryRun paintRect →', rDry,
+    'grid preserved:', floorBefore === floorAfter,
+    'undo preserved:', undoBefore === undoAfter,
+    'PASS:', dryOk);
+  return { r1:r1, r2:r2, r3:r3, r4:r4, r5:r5, r6:r6, r7:r7, r8:r8, r9:r9, rA:rA, rB:rB, rC:rC, rD:rD, rDry:rDry, dryOk:dryOk };
 };

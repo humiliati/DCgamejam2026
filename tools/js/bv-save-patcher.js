@@ -19,6 +19,35 @@ var ENGINE_DIR_HANDLE = null;   // cached FileSystemDirectoryHandle for engine/
 var FS_API_AVAILABLE = (typeof window !== 'undefined' &&
                         typeof window.showDirectoryPicker === 'function');
 
+// Pass 5c — handoff keys shared with tools/js/world-designer.js.
+// PENDING_POOL_KEY holds { [floorId]: spec } for all in-flight new
+// floors authored in the graph but not yet committed to engine/.
+var PENDING_POOL_KEY = 'pendingFloorPool';
+
+// Read the pending-pool spec for a given floor id, or null.
+function _getPendingSpec(floorId) {
+  try {
+    var raw = sessionStorage.getItem(PENDING_POOL_KEY);
+    if (!raw) return null;
+    var pool = JSON.parse(raw);
+    return (pool && pool[floorId]) ? pool[floorId] : null;
+  } catch (e) { return null; }
+}
+
+// Remove a committed floor from the pending pool. Safe no-op when
+// sessionStorage is unavailable or the key is missing.
+function _clearPendingSpec(floorId) {
+  try {
+    var raw = sessionStorage.getItem(PENDING_POOL_KEY);
+    if (!raw) return;
+    var pool = JSON.parse(raw) || {};
+    if (pool[floorId]) {
+      delete pool[floorId];
+      sessionStorage.setItem(PENDING_POOL_KEY, JSON.stringify(pool));
+    }
+  } catch (e) { /* swallow */ }
+}
+
 function floorBlockoutFileName(floorId) {
   // Floor id "1.1.1" → "floor-blockout-1-1-1.js"
   return 'floor-blockout-' + String(floorId).replace(/\./g, '-') + '.js';
@@ -320,6 +349,144 @@ function scaffoldFloorBlockoutSource(floorId, floor) {
   return lines.join('\n');
 }
 
+// Look up a tile id by schema name (case-insensitive). Lightweight
+// local resolver so this module doesn't load-order-depend on the BO
+// router. Returns null if not found or TILE_SCHEMA unavailable.
+function _resolveTileByName(name) {
+  if (typeof TILE_SCHEMA === 'undefined' || !TILE_SCHEMA) return null;
+  var u = String(name).toUpperCase();
+  for (var id in TILE_SCHEMA) {
+    var s = TILE_SCHEMA[id];
+    if (s && s.name && s.name.toUpperCase() === u) return +id;
+  }
+  return null;
+}
+
+// Parse a "x,y" door coord string. Returns { x, y } or null.
+function _parseCoord(s) {
+  if (!s || typeof s !== 'string') return null;
+  var m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(s);
+  if (!m) return null;
+  return { x: parseInt(m[1], 10), y: parseInt(m[2], 10) };
+}
+
+// ── Pass 5c.2: also paint a DOOR tile on the parent grid ──────
+// Mutates `grid` in place (clone your input if you need immutability)
+// and returns { changed: bool, oldTile, doorTile, x, y, reason? }.
+// Skipped reasons: 'no-door-tile', 'bad-coord', 'out-of-bounds',
+// 'already-door'.
+function _stampDoorOnParentGrid(grid, doorCoord) {
+  var doorTile = _resolveTileByName('DOOR');
+  if (doorTile == null) return { changed: false, reason: 'no-door-tile' };
+  var c = _parseCoord(doorCoord);
+  if (!c) return { changed: false, reason: 'bad-coord' };
+  if (!Array.isArray(grid) || !grid[c.y] || c.x < 0 || c.x >= grid[c.y].length) {
+    return { changed: false, reason: 'out-of-bounds' };
+  }
+  var oldTile = grid[c.y][c.x];
+  if (oldTile === doorTile) {
+    return { changed: false, reason: 'already-door', x: c.x, y: c.y, doorTile: doorTile, oldTile: oldTile };
+  }
+  grid[c.y][c.x] = doorTile;
+  return { changed: true, x: c.x, y: c.y, doorTile: doorTile, oldTile: oldTile };
+}
+
+// ── Pass 5c: parent-side door wiring for pending floors ───────
+// When the user commits a scaffolded new floor, its parent's
+// floor-blockout file needs an extra entry in doorTargets so the
+// engine actually links the two. This helper reads the parent's
+// source (via FS handle if available, else fetch), merges the new
+// coord → childId into its doorTargets, and returns a save record
+// ready to be attached as SAVE_PENDING.secondary.
+//
+// Returns:
+//   { fileName, oldText, newText, fileHandle, isParentWiring,
+//     parentId, doorCoord, childId, skipped: 'reason'? }
+// A `.skipped` field means the patch was not applicable (e.g. parent
+// file lacks a doorTargets block). The caller should surface this as
+// a toast/warning but still allow the primary save to proceed.
+async function _prepareParentDoorPatch(parentId, doorCoord, childId) {
+  if (!parentId || !doorCoord || !childId) return null;
+  var fileName = floorBlockoutFileName(parentId);
+  var oldText = null, fileHandle = null;
+
+  if (FS_API_AVAILABLE && ENGINE_DIR_HANDLE) {
+    var read = await readFloorFileViaHandle(parentId);
+    if (read) { oldText = read.text; fileHandle = read.fileHandle; }
+  }
+  if (oldText == null) {
+    try {
+      var resp = await fetch('../engine/' + fileName);
+      if (resp.ok) oldText = await resp.text();
+    } catch (err) { /* fall through */ }
+  }
+  if (oldText == null) {
+    return {
+      fileName: fileName, oldText: '', newText: '', fileHandle: null,
+      isParentWiring: true, parentId: parentId, doorCoord: doorCoord,
+      childId: childId, skipped: 'parent-file-not-found'
+    };
+  }
+
+  // Extract existing doorTargets from the FLOORS in-memory model,
+  // falling back to an empty map. Merging against FLOORS avoids
+  // clobbering edits made in other authoring passes.
+  var existing = {};
+  if (typeof FLOORS !== 'undefined' && FLOORS[parentId] && FLOORS[parentId].doorTargets) {
+    Object.keys(FLOORS[parentId].doorTargets).forEach(function(k) {
+      existing[k] = FLOORS[parentId].doorTargets[k];
+    });
+  }
+  existing[doorCoord] = childId;
+
+  // Mirror the merge back into FLOORS so subsequent manual edits on
+  // the parent in BO-V see the new wiring without reloading.
+  if (typeof FLOORS !== 'undefined' && FLOORS[parentId]) {
+    FLOORS[parentId].doorTargets = existing;
+  }
+
+  // Pass 5c.2 — also stamp a DOOR tile onto the parent grid at
+  // doorCoord. We mutate a clone first, patch the source's GRID block
+  // if the stamp succeeded, then commit the mutation back to FLOORS
+  // so the parent floor shows the new door immediately if the user
+  // switches to it in BO-V.
+  var parentGrid = (typeof FLOORS !== 'undefined' && FLOORS[parentId] && FLOORS[parentId].grid)
+    ? FLOORS[parentId].grid : null;
+  var doorStamp = { changed: false, reason: 'no-parent-grid' };
+  var gridPatched = false;
+  var newText = patchDoorTargetsInSource(oldText, existing);
+  if (parentGrid) {
+    var clone = parentGrid.map(function(r) { return r.slice(); });
+    doorStamp = _stampDoorOnParentGrid(clone, doorCoord);
+    if (doorStamp.changed) {
+      var gridNew = patchGridInSource(newText, clone);
+      if (gridNew != null && gridNew !== newText) {
+        newText = gridNew;
+        gridPatched = true;
+        // Commit the mutation back to FLOORS so editing the parent
+        // floor in BO-V immediately shows the new DOOR tile.
+        FLOORS[parentId].grid = clone;
+      }
+    }
+  }
+
+  if (newText === oldText) {
+    return {
+      fileName: fileName, oldText: oldText, newText: oldText,
+      fileHandle: fileHandle, isParentWiring: true,
+      parentId: parentId, doorCoord: doorCoord, childId: childId,
+      doorStamp: doorStamp, gridPatched: gridPatched,
+      skipped: 'parent-missing-doorTargets-block'
+    };
+  }
+  return {
+    fileName: fileName, oldText: oldText, newText: newText,
+    fileHandle: fileHandle, isParentWiring: true,
+    parentId: parentId, doorCoord: doorCoord, childId: childId,
+    doorStamp: doorStamp, gridPatched: gridPatched
+  };
+}
+
 async function prepareSaveCurrentFloor() {
   if (!currentFloor || !currentFloorId) return;
   var fileName = floorBlockoutFileName(currentFloorId);
@@ -349,11 +516,51 @@ async function prepareSaveCurrentFloor() {
       return;
     }
     oldText = '';   // empty "before" → diff shows entire new file
+
+    // Pass 5c — detect whether this scaffold is a handoff from the
+    // world-designer's pending pool. If so, and the spec carries a
+    // parent + doorCoord, also prepare a secondary patch to wire the
+    // parent's doorTargets.
+    var spec = _getPendingSpec(currentFloorId);
+    var secondary = null;
+    if (spec && spec.parent && spec.doorCoord) {
+      secondary = await _prepareParentDoorPatch(spec.parent, spec.doorCoord, currentFloorId);
+    }
+
     var hunksS = makeUnifiedDiff(oldText, scaffolded, 3);
-    document.getElementById('save-diff').innerHTML = renderDiffHTML(hunksS, fileName);
+    var diffHTML = '<div class="diff-file-header" style="font-weight:bold;color:#fc8;margin-bottom:4px;">★ NEW FILE · ' + fileName + '</div>' +
+                   renderDiffHTML(hunksS, fileName);
+    if (secondary && !secondary.skipped) {
+      var hunks2 = makeUnifiedDiff(secondary.oldText, secondary.newText, 3);
+      var parts = ['doorTargets merge'];
+      if (secondary.gridPatched) parts.push('DOOR tile @ ' + secondary.doorCoord);
+      else if (secondary.doorStamp && secondary.doorStamp.reason === 'already-door') {
+        parts.push('DOOR already present');
+      } else if (secondary.doorStamp && secondary.doorStamp.reason) {
+        parts.push('grid unchanged: ' + secondary.doorStamp.reason);
+      }
+      diffHTML += '<hr style="border:0;border-top:1px dashed #444;margin:10px 0;">' +
+                  '<div class="diff-file-header" style="font-weight:bold;color:#8cf;margin-bottom:4px;">' +
+                  '↳ PARENT WIRING · ' + secondary.fileName + ' (' + parts.join(' + ') + ')</div>' +
+                  renderDiffHTML(hunks2, secondary.fileName);
+    } else if (secondary && secondary.skipped) {
+      diffHTML += '<hr style="border:0;border-top:1px dashed #444;margin:10px 0;">' +
+                  '<div style="color:#f88; font-size:11px;">⚠ Could not auto-wire parent <strong>' +
+                  secondary.parentId + '</strong> (' + secondary.skipped +
+                  '). Add <code>doorTargets[\'' + secondary.doorCoord + '\'] = \'' +
+                  currentFloorId + '\'</code> manually.</div>';
+    }
+    document.getElementById('save-diff').innerHTML = diffHTML;
+    document.getElementById('save-modal-title').textContent =
+      secondary && !secondary.skipped
+        ? 'Commit new floor — 2 files'
+        : 'Commit new floor — 1 file';
     SAVE_PENDING = {
       fileName: fileName, oldText: oldText, newText: scaffolded,
-      fileHandle: null, isScaffold: true
+      fileHandle: null, isScaffold: true,
+      pendingFloorId: currentFloorId,
+      secondary: (secondary && !secondary.skipped) ? secondary : null,
+      parentSkipReason: (secondary && secondary.skipped) ? secondary : null
     };
     document.getElementById('save-modal').classList.add('open');
     return;
@@ -383,50 +590,160 @@ async function prepareSaveCurrentFloor() {
 
 function closeSaveModal() {
   document.getElementById('save-modal').classList.remove('open');
+  // Reset title in case a prior pending-floor save customized it.
+  var title = document.getElementById('save-modal-title');
+  if (title) title.textContent = 'Save floor — confirm diff';
   SAVE_PENDING = null;
+}
+
+// ── Shared write helper — reduces duplication between primary and
+//    secondary writes. Returns true on success, false otherwise.
+async function _writeRecordToFile(rec, opts) {
+  opts = opts || {};
+  if (!rec.fileHandle && opts.createIfMissing && ENGINE_DIR_HANDLE) {
+    try {
+      rec.fileHandle = await ENGINE_DIR_HANDLE.getFileHandle(rec.fileName, { create: true });
+    } catch (e) {
+      console.warn('[save] create handle failed for', rec.fileName, e);
+    }
+  }
+  if (!rec.fileHandle) return false;
+  try {
+    var writable = await rec.fileHandle.createWritable();
+    await writable.write(rec.newText);
+    await writable.close();
+    return true;
+  } catch (err) {
+    console.warn('[save] write failed for', rec.fileName, err);
+    return false;
+  }
 }
 
 async function confirmSaveWrite() {
   if (!SAVE_PENDING) return;
   var p = SAVE_PENDING;
-  // Pass 5a: new-floor scaffold — acquire a create-handle if we have
-  // the engine directory picker handle cached.
-  if (!p.fileHandle && p.isScaffold && ENGINE_DIR_HANDLE) {
-    try {
-      p.fileHandle = await ENGINE_DIR_HANDLE.getFileHandle(p.fileName, { create: true });
-    } catch (e) {
-      console.warn('[save] create handle failed:', e);
+
+  // Primary write (may be scaffold or grid-patch)
+  var primaryOK = await _writeRecordToFile(p, { createIfMissing: !!p.isScaffold });
+  if (!primaryOK) {
+    showCopyToast('Write failed — falling back to download');
+    downloadPendingSave();
+    return;
+  }
+
+  // Secondary write (parent doorTargets wiring for pending-new floors)
+  var secondaryOK = true, secondaryName = null;
+  if (p.secondary) {
+    secondaryOK = await _writeRecordToFile(p.secondary, { createIfMissing: false });
+    secondaryName = p.secondary.fileName;
+    if (!secondaryOK) {
+      showCopyToast('Wrote ' + p.fileName + ' — parent wiring ' + secondaryName + ' failed; download instead');
+      // Re-run downloadPendingSave for the secondary only
+      var blob = new Blob([p.secondary.newText], { type: 'text/javascript' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = p.secondary.fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
     }
   }
-  if (p.fileHandle) {
-    try {
-      var writable = await p.fileHandle.createWritable();
-      await writable.write(p.newText);
-      await writable.close();
-      showCopyToast('Wrote ' + p.fileName);
-      // Re-baseline originalGrid so the dirty counter resets without losing undo history.
-      EDIT.originalGrid = snapshotGrid(currentFloor.grid);
-      updateEditUI();
-      closeSaveModal();
-      return;
-    } catch (err) {
-      console.warn('[save] write failed:', err);
-      showCopyToast('Write failed — falling back to download');
+
+  // Scaffold success path — clear pending pool + show post-commit hints.
+  if (p.isScaffold && p.pendingFloorId) {
+    _clearPendingSpec(p.pendingFloorId);
+    var hintParts = [];
+    hintParts.push('Wrote ' + p.fileName);
+    if (secondaryName && secondaryOK) hintParts.push(' + ' + secondaryName);
+    showCopyToast(hintParts.join(''));
+
+    // Pass 5c.2 — copy the index.html <script> line to clipboard
+    // so the user's only remaining manual step is a paste.
+    var scriptTag = '<script src="engine/' + p.fileName + '"></script>';
+    var clipboardCopied = false;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(scriptTag).then(function() {
+        clipboardCopied = true;
+      }).catch(function(err) {
+        console.warn('[save] clipboard write failed:', err);
+      });
     }
+
+    // If the parent grid was mutated (DOOR tile stamped), re-render
+    // so a subsequent switch to the parent floor shows the door
+    // without needing a reload. We only need draw() if the currently
+    // displayed floor IS the parent; otherwise selectFloor-on-switch
+    // will pick it up from the in-memory FLOORS.
+    if (p.secondary && p.secondary.gridPatched &&
+        typeof currentFloorId !== 'undefined' &&
+        currentFloorId === p.secondary.parentId &&
+        typeof draw === 'function') {
+      draw();
+    }
+
+    // Delayed reminder toast so it doesn't clobber the success toast.
+    setTimeout(function() {
+      var reminder = clipboardCopied
+        ? '📋 <script> tag copied — paste into index.html'
+        : '⚠ Add ' + scriptTag + ' to index.html';
+      if (p.parentSkipReason) {
+        reminder += ' · wire parent ' + p.parentSkipReason.parentId +
+                    ' doorTargets[\'' + p.parentSkipReason.doorCoord + '\']=\'' +
+                    p.pendingFloorId + '\' manually';
+      } else if (p.secondary && !p.secondary.gridPatched && p.secondary.doorCoord) {
+        // doorTargets patched but grid paint didn't land (no parent
+        // grid in memory, or coord out of bounds). Flag it.
+        reminder += ' · paint DOOR on parent ' + p.secondary.parentId +
+                    ' at ' + p.secondary.doorCoord;
+      }
+      showCopyToast(reminder);
+    }, 1800);
+  } else {
+    showCopyToast('Wrote ' + p.fileName);
   }
-  downloadPendingSave();
+
+  // Re-baseline originalGrid so the dirty counter resets without losing undo history.
+  EDIT.originalGrid = snapshotGrid(currentFloor.grid);
+  updateEditUI();
+  closeSaveModal();
+}
+
+function _downloadRecord(rec) {
+  var blob = new Blob([rec.newText], { type: 'text/javascript' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = rec.fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
 function downloadPendingSave() {
   if (!SAVE_PENDING) return;
   var p = SAVE_PENDING;
-  var blob = new Blob([p.newText], { type: 'text/javascript' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url; a.download = p.fileName;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
-  showCopyToast('Downloaded ' + p.fileName + ' — drop into engine/');
+  _downloadRecord(p);
+  var suffix = '';
+  if (p.secondary) {
+    _downloadRecord(p.secondary);
+    suffix = ' + ' + p.secondary.fileName;
+  }
+  showCopyToast('Downloaded ' + p.fileName + suffix + ' — drop into engine/');
+  if (p.isScaffold && p.pendingFloorId) {
+    _clearPendingSpec(p.pendingFloorId);
+    var scriptTag = '<script src="engine/' + p.fileName + '"></script>';
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(scriptTag).catch(function(err) {
+        console.warn('[save] clipboard write failed:', err);
+      });
+    }
+    if (p.secondary && p.secondary.gridPatched &&
+        typeof currentFloorId !== 'undefined' &&
+        currentFloorId === p.secondary.parentId &&
+        typeof draw === 'function') {
+      draw();
+    }
+    setTimeout(function() {
+      showCopyToast('📋 Paste into index.html: ' + scriptTag);
+    }, 1800);
+  }
   EDIT.originalGrid = snapshotGrid(currentFloor.grid);
   updateEditUI();
   closeSaveModal();

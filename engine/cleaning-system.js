@@ -355,6 +355,93 @@ var CleaningSystem = (function () {
     return _bloodMap[floorId] !== undefined;
   }
 
+  /**
+   * Harness / DebugBoot wrapper. Seeds grime around a single grid cell
+   * using the same splatter model as corpse-adjacent seeding. Callers
+   * (DebugBoot._seedGrimeAroundPlayer) walk the cells in a square and
+   * hit this for each one; intensity overrides the default falloff so
+   * testers can dial in a reproducible "dense grime" test zone.
+   *
+   * @param {string} floorId
+   * @param {number} cx — grid X of the cell to seed around
+   * @param {number} cy — grid Y
+   * @param {number} [intensity=180] — starting grime level at centre
+   *   (floor), tapers -30 per Manhattan step. Walls adjacent to centre
+   *   use intensity*0.9 - 40 per step.
+   */
+  function debugSeedAt(floorId, cx, cy, intensity) {
+    if (typeof GrimeGrid === 'undefined') return;
+    if (typeof FloorManager === 'undefined' || !FloorManager.getFloorData) return;
+    var fd = FloorManager.getFloorData();
+    if (!fd || !fd.grid) return;
+    var I = (intensity === undefined) ? 180 : (intensity | 0);
+    _seedGrimeAround(floorId, cx, cy, fd.grid, fd.gridW, fd.gridH);
+  }
+
+  // ── Save/Load (Track B M2.3a) ───────────────────────────────────
+  //
+  // Per-floor persistence of the discrete blood map + the full GrimeGrid
+  // sub-tile state. The `seeded` flag is preserved so a re-visit after
+  // load doesn't trigger a second seedFromCorpses pass.
+  //
+  // Shape:
+  //   { blood: {"x,y": level 1-3}, grime: <GrimeGrid.serialize>, seeded: bool }
+  //
+  // Returns null when the floor has no state worth persisting AND has
+  // never been seeded, so save-state.js can omit the keys entirely.
+
+  function serialize(floorId) {
+    var bloodSnap = null;
+    if (_bloodMap[floorId]) {
+      // Shallow copy so later mutations can't corrupt the saved blob.
+      bloodSnap = {};
+      var src = _bloodMap[floorId];
+      for (var k in src) {
+        if (src.hasOwnProperty(k)) bloodSnap[k] = src[k] | 0;
+      }
+    }
+    var grimeSnap = (typeof GrimeGrid !== 'undefined' && GrimeGrid.serialize)
+      ? GrimeGrid.serialize(floorId)
+      : {};
+    var hasGrime = false;
+    for (var g in grimeSnap) { if (grimeSnap.hasOwnProperty(g)) { hasGrime = true; break; } }
+    if (!bloodSnap && !hasGrime) return null;
+    return {
+      blood:  bloodSnap || {},
+      grime:  grimeSnap,
+      seeded: _bloodMap[floorId] !== undefined
+    };
+  }
+
+  function deserialize(floorId, snap) {
+    // Always wipe local state for this floor before hydrating — matches
+    // clearFloor semantics.
+    delete _bloodMap[floorId];
+    if (typeof GrimeGrid !== 'undefined' && GrimeGrid.clearFloor) {
+      GrimeGrid.clearFloor(floorId);
+    }
+    if (!snap || typeof snap !== 'object') return;
+
+    // Blood map — restore only if a blob exists OR the floor was marked
+    // seeded (an empty object still needs to exist to flip isSeeded()).
+    if (snap.seeded || (snap.blood && typeof snap.blood === 'object')) {
+      _bloodMap[floorId] = {};
+      if (snap.blood && typeof snap.blood === 'object') {
+        for (var k in snap.blood) {
+          if (!snap.blood.hasOwnProperty(k)) continue;
+          var lvl = snap.blood[k] | 0;
+          if (lvl > 0) _bloodMap[floorId][k] = Math.min(MAX_BLOOD, lvl);
+        }
+      }
+    }
+
+    // Grime grids — delegate to GrimeGrid, which handles base64 decode +
+    // size validation per-tile.
+    if (snap.grime && typeof GrimeGrid !== 'undefined' && GrimeGrid.deserialize) {
+      GrimeGrid.deserialize(floorId, snap.grime);
+    }
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   return Object.freeze({
@@ -369,6 +456,9 @@ var CleaningSystem = (function () {
     clearFloor:      clearFloor,
     seedFromCorpses: seedFromCorpses,
     isSeeded:        isSeeded,
+    debugSeedAt:     debugSeedAt,
+    serialize:       serialize,
+    deserialize:     deserialize,
     MAX_BLOOD:       MAX_BLOOD,
     TOOL_SPEED:      TOOL_SPEED
   });

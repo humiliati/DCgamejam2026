@@ -4,10 +4,14 @@ Canvas-based map editor for Dungeon Gleaner's ASCII blockout grids.
 Loads floor data from `floor-data.json` (extracted by `extract-floors.js`)
 and renders the post-builder grid — what the player actually sees.
 
-Current version: **v0.14** (April 2026). Full Tier 1 drawing + selection +
+Current version: **v0.15** (April 2026). Full Tier 1 drawing + selection +
 history, Tier 2 direct file write **and validation** (walkability, door
 contracts, spawn, required tiles) — `Ctrl+S` now patches **`GRID`,
-`SPAWN`, and `doorTargets`** in one pass, **Tier 3 per-floor metadata
+`SPAWN`, and `doorTargets`** in one pass, **Pass 5c** closes the
+world-designer → BO-V pending-floor handoff with scaffold-on-save
+(new `floor-blockout-<id>.js` IIFE generated from in-memory state) +
+parent-wiring (doorTargets merge + DOOR tile paint) + multi-file commit
+modal + clipboard-copied `<script>` tag for `index.html` paste, **Tier 3 per-floor metadata
 editor** (spawn drag-place, door target dropdowns, JSON snippet export),
 a Tier 4 window-scene editor first pass, a built-in **help modal**
 (`?` / F1) with 8 tabs, and **Tier 6 Passes 1 + 2 + 3 + 4** —
@@ -40,12 +44,13 @@ Meta panel (`M`) plus `Ctrl+S` is the canonical way to fix
 **Isn't:** a world-designer. Creating a brand-new floor — picking a
 biome, wiring the new node into the floor-ID tree, fixing which doors
 on which neighbors point at it — belongs in the **world-designer** tool
-(upstream of BO-V). The planned handoff: world-designer births a floor
-node with biome defaults, dimensions, pre-stamped required tiles, and
-pinned door targets, then opens BO-V on that seeded grid so the
-designer (or agent) can just cut the layout. Until that handoff lands,
-use the "Workflow: creating a new floor" section below as a manual
-stop-gap.
+(`tools/world-designer.html`, upstream of BO-V). **Pass 5c shipped the
+handoff** (April 2026): world-designer births a floor node with biome
+defaults, dimensions, and a door cell on the parent, then opens BO-V on
+a seeded grid via `sessionStorage['pendingFloorSpec']`. Ctrl+S
+scaffolds the new engine file, merges the parent's `doorTargets`, and
+paints the DOOR tile on the parent grid in one multi-file commit. See
+"Workflow: creating a new floor" below.
 
 **Also isn't:** a level-logic editor. Enemy placement, loot tables,
 card drops, quest wiring, NPC dialogue all live in their own data
@@ -627,16 +632,45 @@ compact per-cell delta.
 
 ## Workflow: creating a new floor
 
-**Planned model (post world-designer):** floor birth happens in the
-world-designer — pick the node in the floor-ID tree, pick a biome, pin
-which neighbor doors target it, set dimensions from the biome defaults.
-World-designer scaffolds `engine/floor-blockout-<id>.js` with the
-required tiles pre-stamped (entry door, spawn, the pinned doorTargets
-entries) and opens BO-V on the seeded grid. BO-V's job is then just to
-cut the layout.
+**Current model (shipped April 2026 — Pass 5c):** floor birth happens in
+the **world-designer** (`tools/world-designer.html`):
 
-**Manual stop-gap** until that handoff ships (use this for Floor 2
-rebuild, Floor 3 creation, and any one-offs):
+1. Click **＋ New Floor** on the designer toolbar. Fill the modal: parent,
+   floor ID, biome, W×H, and the door cell on the parent grid that opens
+   into the new floor.
+2. Submit — the designer writes a pending-floor spec to
+   `sessionStorage['pendingFloorPool']` and renders the new node in amber
+   ("PENDING") with a dashed parent→pending edge.
+3. Click the pending node → **Open in BO-V**. The visualizer boots,
+   consumes `sessionStorage['pendingFloorSpec']`, scaffolds the floor via
+   `window.BO.run({action:'createFloor', ...})`, and surfaces a "NEW FLOOR"
+   banner.
+4. Paint / lasso / bucket / stamp the layout. Set spawn via the Meta
+   panel (`M`).
+5. **Ctrl+S** — the save-patcher detects there's no `engine/floor-blockout-<id>.js`
+   yet and runs the Pass 5c flow:
+   - Scaffolds a complete IIFE from in-memory state (`var W/H/GRID/SPAWN`,
+     `DOOR_TARGETS`, `ENTITIES`, `build()`, `FloorManager.registerFloorBuilder`).
+   - Patches the **parent's** `engine/floor-blockout-<parent>.js` —
+     merges `doorTargets[doorCoord] = '<childId>'` and paints the DOOR
+     tile on the parent grid at that cell.
+   - Shows a **multi-file diff modal** ("Commit new floor — 2 files")
+     with both patches stacked. Cancel / Download / Write.
+   - On confirm: writes both files via FS API, copies the
+     `<script src="engine/floor-blockout-<id>.js"></script>` line to the
+     clipboard, clears the pending-pool entry, and triggers a parent
+     redraw if you happen to be on the parent floor.
+6. Paste the clipboard-copied `<script>` tag into `index.html` at the
+   Layer-3 position (the save toast reminds you with the exact line).
+7. Re-run `node tools/extract-floors.js` so the new floor persists into
+   `floor-data.json` for CLI access.
+
+The only manual step left is pasting the script tag. Spawn, door
+wiring on both sides, DOOR tile paint on the parent, grid scaffolding —
+all automated.
+
+**Manual stop-gap** (for floors born outside the designer, e.g. direct
+hand-authored IIFEs):
 
 1. Pick an existing floor of similar size as a starting point
 2. Use the resize controls to adjust dimensions
@@ -650,8 +684,10 @@ rebuild, Floor 3 creation, and any one-offs):
 9. Re-open BO-V on the new floor and run **Validate → All floors** to
    catch broken cross-references in neighbors
 
-See `tools/short-roadmap.md` for the pass that will promote step 5-8
-into the world-designer seed-payload flow.
+See `tools/short-roadmap.md` Track C for Pass 5d — the agent-feedback
+closeouts that will let the CLI drive the same pipeline (IIFE round-trip
+via `bo ingest` / `bo emit`, `--dry-run` on every mutator, biome-specific
+stamps).
 
 ## Workflow: authoring a window scene
 

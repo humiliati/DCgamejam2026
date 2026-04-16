@@ -92,6 +92,21 @@
 
 <div id="copy-toast"></div>
 
+<!-- Pass 5c — New-Floor handoff banner (shown when BO-V boots with a
+     pendingFloorSpec from the World Designer). Hidden by default. -->
+<div id="pending-banner" style="display:none; position:fixed; top:0; left:0; right:0;
+     background:linear-gradient(90deg,#3a2d1a,#2a1f10);
+     border-bottom:2px solid #fc8; color:#fc8;
+     padding:8px 16px; z-index: 500;
+     font-family: Consolas, 'Courier New', monospace; font-size:12px;
+     align-items:center; gap:14px;">
+  <strong style="letter-spacing:1px;">NEW FLOOR</strong>
+  <span id="pb-info" style="color:#ec9;">—</span>
+  <span style="flex:1;"></span>
+  <span style="color:#986; font-size:11px;">Paint the grid, then <kbd style="background:#222;border:1px solid #556;padding:0 4px;border-radius:2px;">Ctrl+S</kbd> to commit.</span>
+  <button id="pb-dismiss" style="background:transparent;border:1px solid #764;color:#fc8;padding:2px 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:3px;">Dismiss</button>
+</div>
+
 <div id="info-bar">
   <span><span class="ib-label">Cursor:</span> <span id="ib-pos">--</span></span>
   <span><span class="ib-label">Tile:</span> <span id="ib-tile">--</span></span>
@@ -130,6 +145,7 @@
 <script src="js/bv-validation.js"></script>
 <script src="js/bv-meta-editor.js"></script>
 <script src="js/bv-ui-tooltip.js"></script>
+<script src="cli/help-meta.js"></script>
 <script src="js/bv-bo-router.js"></script>
 <script src="js/bv-bo-floor.js"></script>
 <script src="js/bv-stamp-library.js"></script>
@@ -190,7 +206,85 @@ window.__validateSmokeTest = function(scope) {
 // [Pass 0.1] BO ROUTER → js/bv-bo-router.js
 // (inline block removed — subsplit into router/perception/tile-lookup/stamps deferred; ACTIONS closure is tightly interdependent)
 
-loadAllFloors();
+// Pass 5c — after floors load, check sessionStorage for a pendingFloorSpec
+// handed off from the World Designer. If present, scaffold the new floor,
+// select it, and show the pending banner.
+(function() {
+  var PENDING_KEY = 'pendingFloorSpec';
+
+  function consumePendingSpec() {
+    try {
+      var raw = sessionStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(PENDING_KEY);
+      var spec = JSON.parse(raw);
+      return (spec && typeof spec === 'object' && spec.id) ? spec : null;
+    } catch (e) {
+      console.warn('[bv-pending] parse failed', e);
+      return null;
+    }
+  }
+
+  function showBanner(spec, noteFloorExists) {
+    var bar  = document.getElementById('pending-banner');
+    var info = document.getElementById('pb-info');
+    if (!bar || !info) return;
+    var msg = spec.id + ' · ' + (spec.biome || '?') + ' · ' +
+              spec.w + '×' + spec.h + ' · depth ' + (spec.depth || '?');
+    if (spec.parent) msg += ' · parent ' + spec.parent;
+    if (spec.doorCoord) msg += ' · door@' + spec.doorCoord;
+    if (noteFloorExists) msg += ' (already existed — opened for editing)';
+    info.textContent = msg;
+    bar.style.display = 'flex';
+    var dismiss = document.getElementById('pb-dismiss');
+    if (dismiss) dismiss.addEventListener('click', function() { bar.style.display = 'none'; });
+  }
+
+  function applySpec(spec) {
+    if (!window.BO || typeof window.BO.run !== 'function') {
+      console.warn('[bv-pending] BO router not ready — cannot apply spec');
+      showBanner(spec, false);
+      return;
+    }
+    var exists = !!(typeof FLOORS !== 'undefined' && FLOORS[spec.id]);
+    if (exists) {
+      // Floor already authored — just jump to it and show the banner.
+      if (typeof selectFloor === 'function') selectFloor(spec.id);
+      showBanner(spec, true);
+      return;
+    }
+    try {
+      window.BO.run({
+        action:   'createFloor',
+        id:       spec.id,
+        biome:    spec.biome || 'boardwalk',
+        w:        spec.w | 0 || 50,
+        h:        spec.h | 0 || 36,
+        wallTile: 'WALL',
+        floorTile:'EMPTY',
+        select:   true
+      });
+      showBanner(spec, false);
+      console.log('[bv-pending] scaffolded new floor from handoff:', spec.id);
+    } catch (e) {
+      console.error('[bv-pending] createFloor failed', e);
+      alert('Could not scaffold pending floor "' + spec.id + '": ' + e.message);
+    }
+  }
+
+  // loadAllFloors is async — chain after it resolves.
+  var p = loadAllFloors();
+  if (p && typeof p.then === 'function') {
+    p.then(function() {
+      var spec = consumePendingSpec();
+      if (spec) applySpec(spec);
+    });
+  } else {
+    // Fallback: poll until FLOORS is populated, then apply.
+    var spec = consumePendingSpec();
+    if (spec) setTimeout(function() { applySpec(spec); }, 400);
+  }
+})();
 </script>
 <div id="validate-modal" role="dialog" aria-modal="true" aria-labelledby="validate-modal-title">
   <div id="validate-modal-inner">

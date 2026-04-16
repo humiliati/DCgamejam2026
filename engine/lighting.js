@@ -77,11 +77,15 @@ var Lighting = (function () {
     var tint = opts.tint !== undefined ? _resolveTint(opts.tint)
       : (opts.warmth && opts.warmth > 0 ? TINT.WARM : TINT.NONE);
     var flicker = opts.flicker || 'none';
-    // Infer kind from flicker if not explicit
+    // Infer LightOrbs kind from flicker + tint. Tint wins when it's
+    // unambiguously warm (home/dungeon hearth) because 'steady' flicker
+    // is shared between terminals (cool lantern) and hearths (warm disc).
     var kind = opts.kind;
     if (!kind) {
+      var tintStr = (typeof opts.tint === 'string') ? opts.tint : '';
       if (flicker === 'bonfire') kind = 'bonfire';
       else if (flicker === 'hearth-dungeon') kind = 'hearth';
+      else if (tintStr === 'home_hearth' || tintStr === 'dungeon_hearth') kind = 'hearth';
       else if (flicker === 'torch') kind = 'torch';
       else if (flicker === 'steady') kind = 'lantern';
       else kind = 'torch';
@@ -137,11 +141,24 @@ var Lighting = (function () {
       var peak = src.intensity * fM;
       if (peak <= 0.02 || eR <= 0.05) continue;
       var rgb = _TINT_RGB[src.tint] || _TINT_RGB[0];
+      // Emitter point: tile centre for omnidirectional sources, pushed
+      // 0.15 along the walkable-face normal for wall-mounted torches so
+      // the orb renders in open air in front of the flame instead of
+      // inside the wall tile.
+      var emWX = src.x + 0.5;
+      var emWY = src.y + 0.5;
+      if (src.dir) {
+        emWX += src.dir.x * 0.15;
+        emWY += src.dir.y * 0.15;
+      }
       _lightSnapshot.push({
         wx: src.x + 0.5, wy: src.y + 0.5,
+        emitterWX: emWX, emitterWY: emWY,
         r: rgb[0], g: rgb[1], b: rgb[2],
         radius: eR,
         peakA: peak,
+        kind: src.kind,
+        flickerType: src.flickerType,
         shape: src.shape || 'disc',
         dx: src.dir ? src.dir.x : 0,
         dy: src.dir ? src.dir.y : 0
@@ -182,13 +199,15 @@ var Lighting = (function () {
     var s = src._seed;
     switch (src.flickerType) {
       case 'torch':
-        // Subtle intensity-only shimmer ~3Hz, ±6%. The raycaster-side
-        // glow gradient (torch-niche.js) carries the visible flicker
-        // on the flame itself; keeping the grid lightmap near-steady
-        // prevents adjacent wall textures from pulsing when multiple
-        // torches share a wall. Radius is held steady by the caller
-        // for 'torch' flickerType so edge-of-range tiles don't pop.
-        return 0.94 + 0.06 * Math.sin(t * 18.85 + s);
+        // Visible torch shimmer ~3Hz, ±15%. This is the "raw" curve used
+        // for the flame sprite glow (torch-niche.js) and the dynamic
+        // floor-cone pass (raycaster-floor.js) — both of which SHOULD
+        // pulse visibly with the flame.
+        //
+        // The grid lightmap path (calculate()) further damps this to
+        // ±6% and holds radius steady, so adjacent wall textures don't
+        // pulse when several torches share a corridor.
+        return 0.85 + 0.15 * Math.sin(t * 18.85 + s);
       case 'bonfire':
         // Slow pulse ~1Hz ±10%, plus subtle fast shimmer
         return 0.90 + 0.10 * Math.sin(t * 6.28 + s)
@@ -280,11 +299,15 @@ var Lighting = (function () {
       var src = _lightSources[s];
       var flickMult = _flicker(src, t);
       // Torch: hold radius steady so edge-of-range tiles don't pop in/out
-      // and cause adjacent walls to pulse. Only modulate intensity.
-      // Other flicker types (bonfire, hearth-dungeon) keep full radius mod.
+      // and cause adjacent walls to pulse. Also damp intensity flicker
+      // to ~40% amplitude on the grid lightmap only — the full-amplitude
+      // flicker is carried by the flame sprite glow (torch-niche.js) and
+      // the floor cone pass (raycaster-floor.js via getFlickerLights).
+      // Other flicker types (bonfire, hearth-dungeon) keep full mod.
       var _torchSteady = (src.flickerType === 'torch');
       var effRadius = _torchSteady ? src.radius : src.radius * flickMult;
-      var effIntensity = src.intensity * flickMult;
+      var _gridMult = _torchSteady ? (1 + (flickMult - 1) * 0.4) : flickMult;
+      var effIntensity = src.intensity * _gridMult;
       var ir = Math.ceil(effRadius);
       var irSq = effRadius * effRadius;
       var srcTint = src.tint;

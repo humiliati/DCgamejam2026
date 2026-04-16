@@ -17,6 +17,30 @@ Deadline: Winter 2026 for LG Content Store webOS TV app driven by Magic Remote.
 
 The living design document is `docs/Biome Plan.html` (v5). It defines the world structure, biome palettes, enemy populations, quest items, and module wiring. `docs/STREET_CHRONICLES_NARRATIVE_OUTLINE.md` defines the faction structure, conspiracy arcs, and NPC roster.
 
+## Sandbox mount gotcha — DO NOT rewrite files based on stale bash reads
+
+The Linux sandbox exposes the Windows source via a `bindfs` FUSE mount. **The mount caches file contents at session boot, and Edit-tool writes on the Windows side do NOT invalidate that cache.** This means `cat`, `wc -l`, `node --check`, `grep`, and any other bash-side read of a file that existed at session start may return a **stale, truncated, or older version** — even after you've edited it successfully this session.
+
+Observed symptoms that trick agents:
+- `node --check engine/foo.js` reports `Unexpected end of input` at a line number that doesn't exist in the real file
+- `wc -l` shows fewer lines than the Read tool
+- `stat` shows an mtime from days/weeks ago on a file you just edited
+- Changes you know you made appear "missing" in bash output
+
+**The Read tool is authoritative. Bash is not.** If bash disagrees with Read, trust Read.
+
+**Do NOT**:
+- Rewrite a file from scratch because bash says it's broken/truncated
+- "Restore" content that bash claims is missing — it's almost certainly still there
+- Treat `node --check` failures as ground truth on pre-existing files mid-session
+
+**Workarounds if you genuinely need bash to see current content**:
+1. Read the file with the Read tool, then Write it back over itself — the fresh inode forces a cache refresh
+2. `cat > path << 'EOF' ... EOF` from bash with the known-current content (write-through works bidirectionally)
+3. Files *created* this session via the Write tool appear fresh in bash — only *pre-existing* files are affected
+
+`sudo sysctl vm.drop_caches`, remount, and `rm` on the mount are all blocked by the sandbox profile. There is no in-sandbox way to globally drop the bindfs cache.
+
 ## Hard rules
 
 - **Zero build tools.** No npm, no webpack, no esbuild, no TypeScript. The project is vanilla HTML5/JavaScript loaded via `<script>` tags. The browser is the only runtime.

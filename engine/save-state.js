@@ -15,12 +15,22 @@
  * Milestone state (updated as slices land):
  *   M2.1 ✅ — schema frozen, serialize/deserialize header, slot I/O,
  *             full skeleton for clock/shops/workOrders/debuffs/respawn
- *   M2.2 ⏳ — populate player, cards, clock, debuffs, respawn from live state
+ *   M2.2 ✅ — populate player, cards, clock, debuffs, respawn from live
+ *             state. Shop + WorkOrderSystem gained serialize()/deserialize()
+ *             (2026-04-15) and are wired in here. Quests/Factions remain
+ *             forward-compat stubs until their owning modules exist.
  *   M2.3 ⏳ — per-floor diffs (explored, cleanup, entity, chests, vermin,
- *             traps, doors, buttons, puzzles, reanimated formidables)
+ *             traps, doors, buttons, puzzles, reanimated formidables).
+ *             Partial progress: M2.3a landed CleaningSystem blood + grime
+ *             (base64 Uint8Array per allocated tile); M2.3c landed
+ *             Minimap.explored + CrateSystem containers; remaining
+ *             categories stubbed in _emptyFloorDiff.
  *   M2.4 ⏳ — autosave hooks (FloorTransition + checkpoint tiles) +
- *             death:reset integration
- *   M2.5 ⏳ — title-screen slot UI + buildVersion gate
+ *             death:reset integration. Decision 2026-04-15: same slice
+ *             wires curfew → teleport-to-residence using an act-aware
+ *             anchor resolver (Act 1 → "1.6"; later acts → most-recent
+ *             bonfire or the act's current residence).
+ *   M2.5 ⏳ — title-screen slot UI + buildVersion gate + retry-with-seed
  *
  * Schema v1 top-level keys (see docs/SEED_AND_SAVELOAD_DESIGN.md §4 and
  * the three game-loop docs referenced from it):
@@ -228,20 +238,36 @@ var SaveState = (function () {
   }
 
   function _serializeShops() {
-    // Authored constants (interval/offset) stay in engine. Save records
-    // lastRefreshDay + rolled inventory so loads don't re-roll.
+    // Per-faction `lastRefreshDay + inventory` cache is a forward-compat
+    // placeholder for a future multi-faction persistence refactor — the
+    // engine currently rebuilds inventory deterministically on each
+    // `Shop.open(faction, floor)` call from (faction, floor, repTier,
+    // cycleIdx), so there's nothing to store per-faction today. What we
+    // DO need to capture is the currently-open shop's live state (slot
+    // `sold` flags in particular — losing those on reload would let a
+    // player re-buy cards they already purchased).
+    var current = (typeof Shop !== 'undefined' && Shop.serialize) ? Shop.serialize() : null;
     return {
       tide:      { lastRefreshDay: 0, inventory: [] },
       foundry:   { lastRefreshDay: 0, inventory: [] },
-      admiralty: { lastRefreshDay: 0, inventory: [] }
+      admiralty: { lastRefreshDay: 0, inventory: [] },
+      current:   current
     };
   }
 
   function _serializeWorkOrders() {
+    // `{available, accepted, completed}` was a forward-compat stub shape;
+    // the actual engine layout is a floor-keyed `_orders` map plus three
+    // scalar counters. Persist the real shape under a `state` key and
+    // keep the stub fields as empty arrays for schema continuity.
+    var state = (typeof WorkOrderSystem !== 'undefined' && WorkOrderSystem.serialize)
+      ? WorkOrderSystem.serialize()
+      : null;
     return {
-      available: [],   // [{id, phase, slotRefs, expiresDay, …}]
+      available: [],
       accepted:  [],
-      completed: []
+      completed: [],
+      state:     state
     };
   }
 
@@ -312,18 +338,33 @@ var SaveState = (function () {
     // Layer container snapshots onto each floor (including any floors the
     // minimap hasn't seen yet — e.g. a shop that was entered but never
     // mapped).
-    if (typeof CrateSystem !== 'undefined' && CrateSystem.serializeFloor) {
-      // Walk every floor id either minimap has OR any known stack member.
-      var seenFloors = {};
-      for (var fid2 in out) if (out.hasOwnProperty(fid2)) seenFloors[fid2] = true;
-      var stack = mmSnap.floorStack || [];
-      for (var i = 0; i < stack.length; i++) seenFloors[stack[i]] = true;
+    // Walk every floor id either minimap has OR any known stack member.
+    var seenFloors = {};
+    for (var fid2 in out) if (out.hasOwnProperty(fid2)) seenFloors[fid2] = true;
+    var stack = mmSnap.floorStack || [];
+    for (var i = 0; i < stack.length; i++) seenFloors[stack[i]] = true;
 
+    if (typeof CrateSystem !== 'undefined' && CrateSystem.serializeFloor) {
       for (var fid3 in seenFloors) {
         if (!seenFloors.hasOwnProperty(fid3)) continue;
         if (!out[fid3]) out[fid3] = _emptyFloorDiff();
         var containers = CrateSystem.serializeFloor(fid3) || [];
         out[fid3].containers = containers;
+      }
+    }
+
+    // M2.3a — CleaningSystem: discrete blood map + sub-tile grime grids
+    // (base64-encoded Uint8Array per allocated tile). Only floors with
+    // real state get populated; empty floors stay on the stub.
+    if (typeof CleaningSystem !== 'undefined' && CleaningSystem.serialize) {
+      for (var fid4 in seenFloors) {
+        if (!seenFloors.hasOwnProperty(fid4)) continue;
+        var cleanSnap = CleaningSystem.serialize(fid4);
+        if (!cleanSnap) continue;
+        if (!out[fid4]) out[fid4] = _emptyFloorDiff();
+        out[fid4].blood  = cleanSnap.blood  || {};
+        out[fid4].grime  = cleanSnap.grime  || {};
+        out[fid4].seeded = !!cleanSnap.seeded;
       }
     }
 
@@ -334,6 +375,10 @@ var SaveState = (function () {
     return {
       explored:              {},  // sparse "x,y" → true bitmap
       containers:            [],  // CrateSystem.serializeFloor() output
+      // M2.3a — CleaningSystem per-floor state
+      blood:                 {},  // "x,y" → discrete blood level 1-3
+      grime:                 {},  // "x,y" → { res, b64(Uint8Array) }
+      seeded:                false, // CleaningSystem.isSeeded flag
       // TODO (M2.3 later slices) — stubbed fields keyed for forward compat
       cleanedTiles:          [],
       bloodTiles:            [],
@@ -462,9 +507,44 @@ var SaveState = (function () {
       }
     }
 
-    // shops / workOrders / quests / factions / other per-floor diff
-    // categories → M2.3+ hydrators pull from _lastLoadedBlob as their
-    // owning modules come online.
+    // M2.3a — CleaningSystem: restore blood + grime for every saved floor.
+    // Floor-keyed, like CrateSystem; does not depend on FloorManager having
+    // regenerated the floor yet. The seeded flag prevents a re-visit from
+    // triggering another seedFromCorpses pass.
+    if (blob.floors && typeof CleaningSystem !== 'undefined' && CleaningSystem.deserialize) {
+      for (var fidC in blob.floors) {
+        if (!blob.floors.hasOwnProperty(fidC)) continue;
+        var sliceC = blob.floors[fidC];
+        if (!sliceC) continue;
+        CleaningSystem.deserialize(fidC, {
+          blood:  sliceC.blood  || {},
+          grime:  sliceC.grime  || {},
+          seeded: !!sliceC.seeded
+        });
+      }
+    }
+
+    // Shop → restore only the currently-open shop's live state.
+    // `current` is null when no shop was open at save time; the stub
+    // per-faction fields (tide/foundry/admiralty) are forward-compat
+    // placeholders and ignored here.
+    if (blob.shops && blob.shops.current
+        && typeof Shop !== 'undefined' && Shop.deserialize) {
+      Shop.deserialize(blob.shops.current);
+    }
+
+    // WorkOrders → restore the floor-keyed orders map + cycle/counter
+    // triple. `state` is null for saves made before any orders were
+    // posted; legacy `{available, accepted, completed}` fields are
+    // ignored (they were never populated).
+    if (blob.workOrders && blob.workOrders.state
+        && typeof WorkOrderSystem !== 'undefined' && WorkOrderSystem.deserialize) {
+      WorkOrderSystem.deserialize(blob.workOrders.state);
+    }
+
+    // quests / factions / other per-floor diff categories → M2.3+
+    // hydrators pull from _lastLoadedBlob as their owning modules come
+    // online.
 
     return true;
   }

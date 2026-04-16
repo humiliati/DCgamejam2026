@@ -3627,6 +3627,16 @@ var Game = (function () {
         WaterCursorFX.render(ctx);
       }
 
+      // Spray droplet FX — in-world water bursting off the beam hit point
+      // while the hose trigger is held. Spawning is driven from
+      // spray-system.js (_burstFx); this module just advances physics and
+      // renders. Runs every frame so in-flight droplets finish their arcs
+      // after trigger release.
+      if (typeof SprayDropletsFX !== 'undefined') {
+        SprayDropletsFX.tick(frameDt);
+        SprayDropletsFX.render(ctx);
+      }
+
       // CrateUI slot overlay (renders during PeekSlots FILLING state)
       if (typeof CrateUI !== 'undefined' && CrateUI.isOpen()) {
         CrateUI.update(frameDt);

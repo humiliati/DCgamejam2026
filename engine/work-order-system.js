@@ -193,6 +193,63 @@ var WorkOrderSystem = (function () {
     _failedCount = 0;
   }
 
+  // ── Save/Load (Track B M2.2) ──────────────────────────────────────
+  //
+  // Capture the full module state: the floor-keyed orders map plus the
+  // three scalar counters. Everything is primitive/plain-object, so a
+  // single JSON round-trip is lossless.
+  //
+  // Note: the stub shape in save-state.js §4.2 was `{available, accepted,
+  // completed}` — that never matched the engine's actual layout (orders
+  // live in a floor-keyed map with a per-order `status` field, not three
+  // parallel arrays). We persist the real shape here and let save-state.js
+  // keep the forward-compat placeholder for future multi-queue designs.
+
+  function serialize() {
+    // Deep-copy orders so later mutation can't corrupt the saved blob.
+    var ordersCopy = {};
+    for (var fid in _orders) {
+      if (_orders.hasOwnProperty(fid)) {
+        var o = _orders[fid];
+        ordersCopy[fid] = {
+          target: o.target,
+          payout: o.payout,
+          bonus:  o.bonus,
+          status: o.status,
+          cycle:  o.cycle
+        };
+      }
+    }
+    return {
+      orders:         ordersCopy,
+      currentCycle:   _currentCycle,
+      completedCount: _completedCount,
+      failedCount:    _failedCount
+    };
+  }
+
+  function deserialize(snap) {
+    if (!snap || typeof snap !== 'object') return;
+    _orders = {};
+    if (snap.orders && typeof snap.orders === 'object') {
+      for (var fid in snap.orders) {
+        if (snap.orders.hasOwnProperty(fid)) {
+          var o = snap.orders[fid];
+          _orders[fid] = {
+            target: o.target,
+            payout: o.payout,
+            bonus:  o.bonus,
+            status: o.status,
+            cycle:  o.cycle
+          };
+        }
+      }
+    }
+    _currentCycle   = (typeof snap.currentCycle   === 'number') ? snap.currentCycle   : 1;
+    _completedCount = (typeof snap.completedCount === 'number') ? snap.completedCount : 0;
+    _failedCount    = (typeof snap.failedCount    === 'number') ? snap.failedCount    : 0;
+  }
+
   return Object.freeze({
     postOrders:      postOrders,
     evaluate:        evaluate,
@@ -203,6 +260,8 @@ var WorkOrderSystem = (function () {
     advanceCycle:    advanceCycle,
     getCycle:        getCycle,
     getStats:        getStats,
-    reset:           reset
+    reset:           reset,
+    serialize:       serialize,
+    deserialize:     deserialize
   });
 })();

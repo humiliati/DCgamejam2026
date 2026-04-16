@@ -27,9 +27,13 @@ editor would expect to find when they sit down at this tool.
 
 **Planned next:** Pass 0 (modularization — split the ~4,000-line visualizer into `tools/js/bv-*.js`
 IIFEs + manifest + `tools/` code-review-graph + CI file-size budgets) is a prerequisite for
-Pass 5b's world-graph editor. Pass 5a (vanilla floor primitives) can land before or after Pass 0;
-Pass 5b explicitly depends on Pass 0 to avoid compounding the monolith problem. See the Tier 6
-section for details.
+Pass 5b's world-graph editor. Pass 5a (vanilla floor primitives) **shipped April 2026**; Pass 5c
+(scaffold-on-save + parent-wiring multi-file commit) **shipped April 2026** and closes the
+world-designer → BO-V pending-floor handoff. Pass 5b explicitly depends on Pass 0 to avoid
+compounding the monolith problem. Pass 5d (agent-feedback closeouts — see the new section
+below) is the next designated slice; it cleans up CLI dry-run / IIFE round-trip / biome-specific
+stamps based on the field report in `tools/BO-V agent feedback.md`. See the Tier 6 section for
+details.
 
 ---
 
@@ -699,6 +703,141 @@ Deliverables:
    `floor-data.json`; extraction pass updated in `extract-floors.js`.
 4. Save patcher extended to emit a `registerFloorBuilder` skeleton + write `engine/floor-blockout-<id>.js`.
 
+### Pass 5c — Scaffold-on-save + parent wiring ✅ (shipped April 2026)
+
+The companion to Pass 5a for the **write-back** half of the loop. When an agent (or the
+world-designer handoff) births a floor that has no `engine/floor-blockout-<id>.js` yet, the
+save patcher now scaffolds it from in-memory state, wires the parent's `doorTargets`, and
+paints the DOOR tile on the parent grid — all from one Ctrl+S / `{action:'save'}`.
+
+**Shipped in `tools/js/bv-save-patcher.js`:**
+
+- **`scaffoldFloorBlockoutSource(floorId, floor)`** — generates a full IIFE matching the
+  hand-authored `floor-blockout-*.js` convention (`var W/H`, labeled `GRID` rows, `SPAWN`,
+  `ROOMS` / `DOOR_TARGETS` / `SHOPS` / `ENTITIES`, `build()` returning the standard shape,
+  trailing `FloorManager.registerFloorBuilder`). Called on save when the target file doesn't
+  exist yet.
+- **`_prepareParentDoorPatch(parentId, doorCoord, childId)`** — reads the parent file via
+  FS handle or fetch, merges `doorTargets` via `patchDoorTargetsInSource`, stamps a DOOR tile
+  on a parent grid clone, chains `patchGridInSource`. Mutates the in-memory `FLOORS[parentId]`
+  (grid + doorTargets) so the live view stays in sync. Returns a patch record that rides in
+  `SAVE_PENDING.secondary`.
+- **Multi-file save modal** — when a pending-floor spec is present, the confirm-diff modal
+  stacks two diff sections: "★ NEW FILE · floor-blockout-X.js" and "↳ PARENT WIRING ·
+  floor-blockout-P.js (doorTargets merge + DOOR tile @ x,y)". Title reads "Commit new floor
+  — 2 files". Cancel / Download / Write route both files.
+- **Clipboard-copied `<script>` tag** — after a successful scaffold write, the
+  `<script src="engine/floor-blockout-X.js"></script>` line lands in `navigator.clipboard`.
+  A delayed reminder toast surfaces the paste hint. Only manual step left is inserting the
+  line into `index.html` at the correct Layer-3 position.
+- **Live render refresh** — if the parent happens to be the currently-viewed floor, `draw()`
+  fires after the secondary patch so the newly-stamped DOOR tile shows up without a reload.
+- **Pending-pool cleanup** — `_clearPendingSpec(pendingFloorId)` drops the
+  `sessionStorage['pendingFloorPool']` entry so the world-designer node transitions from
+  amber "pending" back to a normal node on next reload.
+- **Fallback download** — if the FS handle write fails or isn't granted, both files fall
+  through to blob-downloads and the toast flags the miss.
+
+**World-designer side (`tools/js/world-designer.js`):**
+
+- `＋ New Floor` button opens a modal (parent dropdown, floor ID with live validation,
+  biome dropdown, W/H, door-coord).
+- Submit writes a spec to `sessionStorage['pendingFloorPool'][floorId]` and renders a
+  dashed amber node on the graph.
+- "Open in BO-V" action promotes the spec to `sessionStorage['pendingFloorSpec']` and
+  opens the visualizer, which consumes it at boot via `createFloor` and surfaces a
+  "NEW FLOOR" banner. Ctrl+S from there triggers the Pass 5c commit flow above.
+
+**Net effect:** spinning up a new floor is now *graph-click → modal-submit → paint in BO-V
+→ Ctrl+S → paste script tag*. No manual IIFE authoring, no hand-merging of parent
+doorTargets, no forgotten DOOR tile on the parent grid.
+
+### Pass 5d — Agent feedback closeouts ⬜
+
+Scoped from `tools/BO-V agent feedback.md` (Floor 3.1.1 field report, April 2026). The
+agent authored 3.1.1 raw rather than via the CLI because the toolchain still has five
+concrete friction points. This pass closes all five. Scope: **3–4 days**.
+
+**Blockers identified:**
+
+1. **No `--dry-run` on mutating CLI commands.** Every `paint-rect` / `stamp-room` / `set-spawn`
+   writes `floor-data.json` immediately. A 20×20 hand-designed floor needs commit-then-revert
+   loops to iterate.
+2. **Canonical state diverges.** Hand-authored `engine/floor-blockout-*.js` is the runtime
+   source; CLI operates on `tools/floor-data.json`. No documented round-trip means any CLI
+   edit lands in a JSON the engine doesn't read for hand-authored floors.
+3. **No per-command `--help`.** Arg grammar (`--name` vs `--ref`, coordinate order, tile-ID
+   vs tile-name) isn't discoverable without reading the module source.
+4. **Stamp library is generic.** `single-room`, `two-room-corridor`, `cellar-3x3-grid` don't
+   cover biome-specific primitives (`TUNNEL_RIB` corridor runs, `PORTHOLE_OCEAN` window
+   pairs, `TUNNEL_WALL` alcove flanks) that the submarine-base biome demanded.
+5. **`render-ascii` reads only `floor-data.json`.** Can't inspect a hand-authored IIFE
+   floor before loading it in-harness.
+
+**Deliverables (each maps to a blocker):**
+
+1. **`--dry-run` on every mutating action** (browser + CLI). Returns the ASCII diff the
+   command *would* produce, without touching `floor-data.json` or the grid. Implement as a
+   shared pre-flight path in `bv-bo-router.js` / `cli/commands-paint.js`; `dryRun:true` short-
+   circuits after `diffAscii` and skips the apply step. Lands as a top-level flag: `--dry-run`
+   on the CLI, `{action:'paintRect', dryRun:true, ...}` in the browser. Every mutator gets it.
+2. **`bo ingest` / `bo emit` IIFE round-trip.**
+   - `bo ingest --from engine/floor-blockout-<id>.js` — parses the IIFE via the existing
+     `extract-floors.js` VM sandbox, merges the result into `floor-data.json` as a normal
+     floor entry. Leaves the engine file untouched.
+   - `bo emit --as iife --floor <id> [--out <path>]` — reuses `scaffoldFloorBlockoutSource`
+     from `bv-save-patcher.js` (refactored into a shared `tools/cli/emit-iife.js`) to write
+     a fresh IIFE from `floor-data.json`. Overwrites `engine/floor-blockout-<id>.js` if
+     `--overwrite` is passed; otherwise writes to `--out` or stdout.
+   - One source of truth: agents can CLI-edit against JSON, then `bo emit` to refresh the
+     engine file. Pass 5c's save patcher already does the reverse for browser-driven edits;
+     this pass makes the CLI symmetric.
+3. **`bo help <command>` printing arg grammar + one worked example.** Store per-command
+   metadata (description, args, example) in a `CMD_META` table next to the dispatch table in
+   each `cli/commands-*.js`. `bo help` with no args lists commands; `bo help paint-rect`
+   prints its block. Ships as part of `cli/commands-help.js`. Add a matching
+   `window.BO.help(action)` in the browser that returns the same payload as JSON.
+4. **Biome-specific stamp expansion** — honor the agent's three asks verbatim:
+   - `stamp-tunnel-corridor --len N --width W [--rib-tile TUNNEL_RIB] [--floor-tile ...]`
+     — N-long corridor with ribbed flanks, mouths that taper from `W` to 1.
+   - `stamp-porthole-wall --side L|R --span N [--tile PORTHOLE_OCEAN]` — row of portholes
+     cut into an existing wall run, spaced to preserve jamb masonry between panes.
+   - `stamp-alcove-flank --count N [--tile TUNNEL_WALL]` — symmetric alcove pairs framing
+     a centerline; `--count` controls pair count.
+   Each exists as a parametric stamp in `bv-bo-stamps.js` + `cli/commands-stamps.js`, named
+   so they compose cleanly with the existing `stampRoom` / `stampCorridor` / `stampTorchRing`
+   vocabulary. Ship with a three-entry starter `tools/stamps.json` registry so agents don't
+   need to reinvent them.
+5. **IIFE-aware `render-ascii`.** When the target floor isn't in the loaded
+   `floor-data.json`, fall back to the `bo ingest` path internally — parse the engine file
+   on demand, render its grid, don't persist the ingest. Agent gets the ASCII view it wants
+   without a pre-step.
+
+**Stretch (if timeline allows):**
+
+- **`bo validate` expanded checklist** — explicit rules for: spawn walkable, every
+  `STAIRS_*` / `DOOR*` has a `doorTargets` entry, room rects contain no wall tiles, every
+  freeform-tile depth matches the contract's `tileWallHeights` table. The first three are
+  partially covered today; the fourth is net-new and closes the agent's "right now I eyeball
+  all four of those" note.
+- **Deprecate the hand-authored vs JSON split** — once `bo emit` / `bo ingest` is stable,
+  update `BO-V README.md` Workflow section to recommend a single JSON-first pipeline where
+  `bo emit` is the only path that writes IIFE. Hand-authored floors become a legacy case.
+
+**Dependencies:** Pass 0 (modularization) is NOT strictly required here — the CLI already
+splits into `tools/cli/commands-*.js`. But landing Pass 0 first makes the browser-side work
+cleaner because `bv-bo-router.js` and `bv-bo-stamps.js` would be freestanding files rather
+than sections of `blockout-visualizer.html`. Reasonable order: Pass 5d first if we want the
+agent feedback addressed before Pass 0's refactor churn; otherwise swap.
+
+**Exit criteria:**
+
+- Agent re-attempts the 3.1.1 floor build via the CLI and reports it was faster than raw.
+- `node tools/blockout-cli.js --dry-run paint-rect ...` never mutates `floor-data.json`.
+- `bo ingest` on an arbitrary hand-authored floor produces a `floor-data.json` entry that
+  round-trips via `bo emit` byte-identical (modulo comment whitespace).
+- `bo help stamp-tunnel-corridor` prints args + a worked `--len 12 --width 3` example.
+
 ### Pass 5b — World graph editor (portal port) ⬜
 
 Port the EyesOnly jsPlumb-based world designer into `tools/` and point it at Dungeon Gleaner's
@@ -929,16 +1068,24 @@ Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
     file-size budgets in CI. Defers `peek-workbench.html` and `boxforge.html` as tracked tech
     debt. Unlocks every later pass landing as 1–2 new files instead of monolith edits.
     Scope: ~3 days.
-16. ⬜ **Pass 5a — Floor semantics primitives.** `createFloor({id, biome, template})`,
-    `setBiome`, `placeEntity`, `gitSnapshot`. Depends on `tools/biome-map.json` (new side-car),
-    `tools/templates/` starter layouts, and the extended save patcher from item 7. Stays vanilla.
-    Lands as `bv-bo-floor.js` + `cli/commands-floor.js` post-Pass-0. Scope: 3–4 days.
-17. ⬜ **Pass 5b — World graph editor (portal port).** Port the EyesOnly jsPlumb world designer
+16. ✅ **Pass 5a — Floor semantics primitives (shipped).** `createFloor({id, biome, template})`,
+    `setBiome`, `placeEntity`. Ships in `tools/js/bv-bo-floor.js` + `tools/cli/commands-floor.js`
+    with `tools/biome-map.json` + `tools/templates/` seeded. `gitSnapshot` / `gitDiff` deferred.
+17. ✅ **Pass 5c — Scaffold-on-save + parent wiring (shipped).** `scaffoldFloorBlockoutSource`
+    + `_prepareParentDoorPatch` + multi-file save modal. Closes the world-designer → BO-V
+    pending-floor handoff via `sessionStorage['pendingFloorPool']`. Ctrl+S now writes the new
+    engine file, merges parent `doorTargets`, paints the DOOR tile on the parent grid, and
+    copies the `<script>` tag to the clipboard for `index.html` paste.
+18. ⬜ **Pass 5d — Agent feedback closeouts.** `--dry-run` on every mutator, `bo ingest` /
+    `bo emit` IIFE round-trip, `bo help <command>`, three biome-specific stamps
+    (`stamp-tunnel-corridor`, `stamp-porthole-wall`, `stamp-alcove-flank`), IIFE-aware
+    `render-ascii`. Scoped from `tools/BO-V agent feedback.md`. Scope: 3–4 days.
+19. ⬜ **Pass 5b — World graph editor (portal port).** Port the EyesOnly jsPlumb world designer
     into `tools/` and point it at `floor-data.json`. Six phases (0 vendor → 1 viewer → 2 BO bridge
     → 3 edit → 4 diff-apply + agent API → 5 polish). Adds the `applyWorldDiff` action so agents
     can describe whole dungeon arms in one call. **First pass that takes dev-time deps**
     (vendored jsPlumb). Lands as `bv-bo-world.js` + `tools/js/wd-*.js` post-Pass-0. Scope: ~1.5 weeks.
-18. ⬜ **Pass 6 — Procedural + live preview (post-launch).** Procgen recipe nodes,
+20. ⬜ **Pass 6 — Procedural + live preview (post-launch).** Procgen recipe nodes,
     embedded raycaster preview, playtest replay heatmaps, difficulty-curve plotting. Depends on
     Pass 5b's graph schema staying polymorphic. Scope: open-ended, post-Winter-2026.
 
@@ -952,9 +1099,16 @@ handles both the inline `doorTargets: { ... }` object on the builder return and 
 via `outputs/patcher_sim.js` with four cases: inline doorTargets, scaffold var, missing blocks (no-op),
 and full chain + VM parse.
 
-**Next recommended step:** Tier 4 window-scene engine consumption (raycaster reads `sceneGrid`, JSON
-re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance from spawn, lighting
-coverage).
+**Next recommended step:** Pass 5d (agent feedback closeouts). Three-to-four-day slice that
+addresses the five concrete blockers from `tools/BO-V agent feedback.md` — `--dry-run`, IIFE
+round-trip (`bo ingest` / `bo emit`), `bo help <command>`, biome-specific stamps
+(`stamp-tunnel-corridor` / `stamp-porthole-wall` / `stamp-alcove-flank`), and IIFE-aware
+`render-ascii`. After 5d, the CLI is competitive with raw authoring for the submarine-base
+class of floors and ships a single source of truth across the JSON ↔ IIFE boundary.
+
+Lower-priority follow-ups: Tier 4 window-scene engine consumption (raycaster reads `sceneGrid`,
+JSON re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance from spawn,
+lighting coverage).
 
 Items that are probably **never worth it** for DG's scope: collaborative editing, procedural recipe
 editor, history tree with branching, customizable shortcuts. A small team building one game doesn't

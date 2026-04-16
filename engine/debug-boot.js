@@ -253,6 +253,85 @@ var DebugBoot = (function () {
     }
   }
 
+  // ── Pressure Washing (Rung 0) ───────────────────────────────────────
+  //
+  // Collapses the "reload → walk to truck → grab hose → descend" loop
+  // into "deploy → already spraying in ~2s". Each helper is defensive:
+  // bails cleanly if the module isn't available (e.g. game loaded with
+  // the PW subsystem stripped out for a lighter build).
+  //
+  // HoseState.attach signature: (buildingId, exteriorFloorId, currentFloorId, startX, startY)
+  // For an exterior floor ("2"): building=current, exterior=current (hose
+  // originates at the same floor, survives descent). For an interior
+  // ("2.2"): building=current, exterior=parent ("2") — mirrors the normal
+  // truck-pickup flow where the truck sits on the exterior and the hose
+  // trails up the stairs.
+
+  function _attachHose() {
+    if (typeof HoseState === 'undefined' || !HoseState.attach) {
+      console.warn('[DebugBoot] HoseState missing — auto-attach skipped');
+      return;
+    }
+    if (typeof FloorManager === 'undefined' || !FloorManager.getFloor) return;
+    var fId = FloorManager.getFloor();
+    var parent = (FloorManager.parentId && FloorManager.parentId(fId)) || null;
+    // Exterior (depth 1, no parent): attach to self as both building and
+    // exterior. Interior/dungeon: parent is the exterior, current is the
+    // building id.
+    var originBuilding = fId;
+    var originExterior = parent || fId;
+    var pos = (typeof MC !== 'undefined' && MC.getGridPos) ? MC.getGridPos() : { x: 0, y: 0 };
+    if (HoseState.isActive && HoseState.isActive()) {
+      console.log('[DebugBoot] hose already active — skipping auto-attach');
+      return;
+    }
+    HoseState.attach(originBuilding, originExterior, fId, pos.x, pos.y);
+    console.log('[DebugBoot] hose attached', {
+      originBuilding: originBuilding,
+      originExterior: originExterior,
+      currentFloor:   fId,
+      startXY:        [pos.x, pos.y]
+    });
+  }
+
+  function _seedGrimeAroundPlayer(r) {
+    if (typeof CleaningSystem === 'undefined' || !CleaningSystem.debugSeedAt) {
+      console.warn('[DebugBoot] CleaningSystem.debugSeedAt missing — grime seed skipped');
+      return;
+    }
+    if (typeof MC === 'undefined' || !MC.getGridPos) return;
+    if (typeof FloorManager === 'undefined' || !FloorManager.getFloor) return;
+    var pos = MC.getGridPos();
+    var fId = FloorManager.getFloor();
+    var radius = r || 4;
+    var count = 0;
+    for (var dy = -radius; dy <= radius; dy++) {
+      for (var dx = -radius; dx <= radius; dx++) {
+        CleaningSystem.debugSeedAt(fId, pos.x + dx, pos.y + dy, 200);
+        count++;
+      }
+    }
+    console.log('[DebugBoot] seeded grime around', pos.x + ',' + pos.y,
+                '(' + count + ' cells, radius ' + radius + ')');
+  }
+
+  function _setStartingNozzle(type) {
+    if (typeof SpraySystem === 'undefined' || !SpraySystem.setNozzleType) {
+      console.warn('[DebugBoot] SpraySystem missing — nozzle select skipped');
+      return;
+    }
+    // SpraySystem.setNozzleType silently no-ops on unknown types; log so
+    // the operator sees a misconfigured harness immediately.
+    var before = SpraySystem.getNozzleType && SpraySystem.getNozzleType();
+    SpraySystem.setNozzleType(type);
+    var after = SpraySystem.getNozzleType && SpraySystem.getNozzleType();
+    if (after !== type) {
+      console.warn('[DebugBoot] nozzle set failed — unknown type', type, '(stayed on', after + ')');
+    } else {
+      console.log('[DebugBoot] starting nozzle', before, '→', after);
+    }
+  }
+
   function _applyPostLand() {
     console.log('[DebugBoot] applying post-land toggles');
     if (PARAMS.god === '1')       _enableGodMode();
@@ -269,6 +348,28 @@ var DebugBoot = (function () {
       SpatialDebug.setEnabled(true);
       console.log('[DebugBoot] spatial ruler enabled');
     }
+
+    // ── Pressure Washing order of operations ────────────────────────
+    // 1) Flip infinite mode BEFORE attaching so even the first-step
+    //    drain calc reads the flag.
+    // 2) Attach the hose (hoseInf implies hose).
+    // 3) Set the starting nozzle. SpraySystem accepts the setter at any
+    //    point; doing it after attach just matches "pickup → pick nozzle".
+    // 4) Seed grime last so the player has something to spray immediately.
+    // 5) Mount the nozzle panel. It's a passive listener; order doesn't
+    //    matter for correctness, but doing it last keeps the console log
+    //    sequence human-readable.
+    if (PARAMS.hoseInf === '1' && typeof HoseState !== 'undefined' && HoseState.setInfiniteMode) {
+      HoseState.setInfiniteMode(true);
+    }
+    if (PARAMS.hose === '1' || PARAMS.hoseInf === '1') _attachHose();
+    if (PARAMS.nozzle)                                  _setStartingNozzle(PARAMS.nozzle);
+    if (PARAMS.grime === '1')                           _seedGrimeAroundPlayer(4);
+    if (PARAMS.nozzlePanel === '1' && typeof DebugNozzlePanel !== 'undefined') {
+      DebugNozzlePanel.mount();
+      console.log('[DebugBoot] nozzle hotkey panel mounted (keys 1-5)');
+    }
+
     _updateBanner('READY @ ' + ((typeof FloorManager !== 'undefined') ? FloorManager.getFloor() : '?'));
   }
 

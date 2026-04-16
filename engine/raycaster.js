@@ -1382,6 +1382,38 @@ var Raycaster = (function () {
             (Math.floor(_rX) === mapX && Math.floor(_rY) === mapY)) {
           // Inset/protrusion hit — face renders at adjusted depth
           perpDist = _rPD;
+
+          // ── Torch narrow-aperture sidewall check ─────────────────
+          // For omnidirectional recess tiles (torches) the aperture is
+          // only [0.40, 0.60] of the face, NOT the full tile width. If
+          // the ray entered in the aperture range but during the recess
+          // advance crosses an aperture boundary, we hit the perpendicular
+          // sidewall — the thin masonry jamb between flush face and back
+          // plane. Solve for the crossing t, flip side so the column
+          // renders as a perpendicular wall column, mark _recessJamb so
+          // freeformCfg is suppressed and the normal wall-texture path
+          // runs at the sidewall depth.
+          if (_isOmniRecess) {
+            var _insetW;
+            if (side === 0) _insetW = _rY - Math.floor(_rY);
+            else            _insetW = _rX - Math.floor(_rX);
+            var _flipIns = ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0));
+            if (_flipIns) _insetW = 1 - _insetW;
+            if (_insetW < 0.40 || _insetW > 0.60) {
+              // Aperture edge (unflipped world coord) that was crossed.
+              var _edgeLocal = (_insetW < 0.40) ? 0.40 : 0.60;
+              var _edgeWorld = _flipIns ? (1 - _edgeLocal) : _edgeLocal;
+              var _tCross;
+              if (side === 0) {
+                _tCross = Math.abs((mapY + _edgeWorld - py) / (rayDirY || 1e-10));
+              } else {
+                _tCross = Math.abs((mapX + _edgeWorld - px) / (rayDirX || 1e-10));
+              }
+              perpDist = _tCross;
+              side = (side === 0) ? 1 : 0;
+              _recessJamb = true;
+            }
+          }
         } else {
           // Ray exits tile laterally before reaching inset → jamb wall.
           // EXCEPTION: if the adjacent tile is a double-door/arch partner,

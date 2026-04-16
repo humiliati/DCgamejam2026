@@ -19,9 +19,36 @@
   var FLOOR_DATA_URL   = './floor-data.json';
   var WORLD_LAYOUT_URL = './world-layout.json';
 
+  // ──────────────────────────────────────────────────────────
+  // pendingFloorSpec sessionStorage schema (Pass 5c handoff)
+  // ──────────────────────────────────────────────────────────
+  // Key:   'pendingFloorSpec'  (sessionStorage, per-origin/per-tab)
+  // Value: JSON object, shape:
+  //   {
+  //     id:          "1.4",            // unique dotted floor id
+  //     parent:      "1",              // parent id (dot-trimmed) or null for root
+  //     biome:       "boardwalk",      // biome key (see bv-floor-presets)
+  //     w:           50,               // grid width
+  //     h:           36,               // grid height
+  //     depth:       2,                // derived from dot-count
+  //     doorCoord:   "12,4",           // coord on PARENT where DOOR lives (optional)
+  //     createdAt:   "2026-04-15T…",   // ISO timestamp
+  //     createdBy:   "world-designer"  // source tool
+  //   }
+  // Consumers: tools/js/bv-floor-data.js reads this on boot and seeds
+  //            an empty grid + metadata, then clears the key.
+  // ──────────────────────────────────────────────────────────
+  var PENDING_KEY = 'pendingFloorSpec';
+
+  // Pending pool — pre-BO-V floors that the designer has authored in-memory
+  // but that have not been committed to floor-data.js yet. Persisted via
+  // sessionStorage under 'pendingFloorPool' so reload survives the tab.
+  var PENDING_POOL_KEY = 'pendingFloorPool';
+
   var state = {
     floors: {},
     ghosts: {},   // Pass 5b.2: synthesized slot records (proc-gen + planned)
+    pendings: {}, // Pass 5c: uncommitted authored floors awaiting BO-V
     nodes:  {},
     edges:  [],
     layout: {},
@@ -68,6 +95,60 @@
   function depthOf(id)  { return id.split('.').length; }
   function branchOf(id) { return id.split('.')[0]; }
 
+  // Pass 5c — floor-id helpers for New-Floor validation
+  function parentOf(id) {
+    if (!id) return null;
+    var parts = id.split('.');
+    if (parts.length <= 1) return null;
+    parts.pop();
+    return parts.join('.');
+  }
+  function isValidFloorId(id) {
+    if (typeof id !== 'string') return false;
+    if (!/^\d+(\.\d+)*$/.test(id)) return false;
+    // No leading zeros on any segment (except literal "0")
+    var parts = id.split('.');
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].length > 1 && parts[i].charAt(0) === '0') return false;
+    }
+    return true;
+  }
+  function isIdTaken(id) {
+    return !!(state.floors[id] || state.ghosts[id] || state.pendings[id]);
+  }
+  function isValidDoorCoord(s, w, h) {
+    if (s == null || s === '') return { ok: true, coord: null };
+    var m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(s);
+    if (!m) return { ok: false, msg: 'Door coord must be "x,y" integers.' };
+    var x = parseInt(m[1], 10), y = parseInt(m[2], 10);
+    if (x < 0 || y < 0) return { ok: false, msg: 'Door coord must be non-negative.' };
+    // We validate against the PARENT's grid, not the new floor's. Caller
+    // passes parent dimensions.
+    if (w != null && x >= w) return { ok: false, msg: 'Door x >= parent W (' + w + ').' };
+    if (h != null && y >= h) return { ok: false, msg: 'Door y >= parent H (' + h + ').' };
+    return { ok: true, coord: x + ',' + y };
+  }
+
+  // Pending-pool persistence — survives reload within a tab.
+  function loadPendings() {
+    try {
+      var raw = sessionStorage.getItem(PENDING_POOL_KEY);
+      if (!raw) { state.pendings = {}; return; }
+      var parsed = JSON.parse(raw);
+      state.pendings = (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) {
+      console.warn('[world-designer] pending pool load failed', e);
+      state.pendings = {};
+    }
+  }
+  function savePendings() {
+    try {
+      sessionStorage.setItem(PENDING_POOL_KEY, JSON.stringify(state.pendings));
+    } catch (e) {
+      console.warn('[world-designer] pending pool save failed', e);
+    }
+  }
+
   // Pass 5b.2: ghost-node synthesis. Walks every authored floor and
   // produces two classes of speculative slot:
   //   proc-gen: declared via parent.procGenChildren[] — carries kind/
@@ -103,7 +184,7 @@
       Object.keys(dt).forEach(function(coord) {
         var toId = dt[coord];
         if (!toId) return;
-        if (state.floors[toId] || ghosts[toId]) return;
+        if (state.floors[toId] || ghosts[toId] || state.pendings[toId]) return;
         ghosts[toId] = {
           id: toId, cls: 'planned', kind: 'planned', label: toId + ' (planned)',
           biomeHint: null, maxDepth: 1,
@@ -117,7 +198,7 @@
   function autoLayout() {
     // Layout includes authored floors + ghosts, grouped by branch so
     // proc-gen / planned slots sit in the column as their parent.
-    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts));
+    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings));
     var branches = {};
     all.forEach(function(id) {
       var b = branchOf(id);
@@ -148,7 +229,7 @@
     if (reset) return autoLayout();
     var auto = autoLayout();
     var out = {};
-    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts));
+    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings));
     all.forEach(function(id) {
       out[id] = state.layout[id] || auto[id] || { x: 40, y: 40 };
     });
@@ -201,6 +282,26 @@
     return el;
   }
 
+  function makePendingNode(id, p, pos) {
+    var d = depthOf(id);
+    var el = document.createElement('div');
+    el.className = 'dg-node dg-node-pending depth-' + Math.min(d, 3);
+    el.id = 'dg-node-' + id.replace(/\./g, '_');
+    el.style.left = pos.x + 'px';
+    el.style.top  = pos.y + 'px';
+    el.innerHTML =
+      '<div class="dg-node-badge">PENDING</div>' +
+      '<div class="dg-node-id">' + id + '</div>' +
+      '<div class="dg-node-biome">' + (p.biome || '?') + '</div>' +
+      '<div class="dg-node-size">' + (p.w || '?') + '×' + (p.h || '?') + ' · d' + d + '</div>';
+    el.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+    });
+    $('dg-canvas').appendChild(el);
+    return el;
+  }
+
   function renderNodes(positions) {
     $('dg-canvas').innerHTML = '';
     state.nodes = {};
@@ -214,6 +315,12 @@
       var g = state.ghosts[id];
       var el = makeGhostNode(id, g, pos);
       state.nodes[id] = { el: el, x: pos.x, y: pos.y, depth: depthOf(id), ghost: true, ghostCls: g.cls };
+    });
+    Object.keys(state.pendings).forEach(function(id) {
+      var pos = positions[id];
+      var p = state.pendings[id];
+      var el = makePendingNode(id, p, pos);
+      state.nodes[id] = { el: el, x: pos.x, y: pos.y, depth: depthOf(id), ghost: false, pending: true };
     });
   }
 
@@ -292,8 +399,17 @@
         if (conn) state.edges.push({ from: fromId, to: k.id, conn: conn, type: 'procgen-' + type, reciprocal: false });
       });
     });
+    // 4) Pending → parent edge (authored-but-uncommitted)
+    Object.keys(state.pendings).forEach(function(pid) {
+      var p = state.pendings[pid];
+      if (!p.parent || !state.nodes[p.parent]) return;
+      var conn = connectEdge(p.parent, pid, 'dg-edge-pending', false);
+      if (conn) state.edges.push({ from: p.parent, to: pid, conn: conn, type: 'pending', reciprocal: false });
+    });
+    var pendCount = Object.keys(state.pendings).length;
     $('sum-floors').textContent = Object.keys(state.floors).length +
-      ' (+' + Object.keys(state.ghosts).length + ' ghosts)';
+      ' (+' + Object.keys(state.ghosts).length + ' ghosts' +
+      (pendCount ? ', +' + pendCount + ' pending' : '') + ')';
     $('sum-doors').textContent  = state.edges.length;
     $('sum-warn').textContent   = state.warnings;
   }
@@ -339,6 +455,40 @@
           }
         });
       });
+      return;
+    }
+    // Pending (Pass 5c) — uncommitted authored floor
+    if (state.pendings[id]) {
+      var pf = state.pendings[id];
+      var parentHrefP = state.nodes[pf.parent]
+        ? '<a class="jump" data-jump="' + pf.parent + '">' + pf.parent + '</a>'
+        : (pf.parent || '(root)');
+      body.innerHTML =
+        '<div class="kv"><span class="k">Floor ID</span><span class="v">' + id + '</span></div>' +
+        '<div class="kv"><span class="k">Status</span><span class="v" style="color:#fc8;">PENDING</span></div>' +
+        '<div class="kv"><span class="k">Biome</span><span class="v">' + (pf.biome || '?') + '</span></div>' +
+        '<div class="kv"><span class="k">Depth</span><span class="v">' + depthOf(id) + '</span></div>' +
+        '<div class="kv"><span class="k">Grid</span><span class="v">' + pf.w + '&times;' + pf.h + '</span></div>' +
+        '<div class="kv"><span class="k">Parent</span><span class="v">' + parentHrefP + '</span></div>' +
+        (pf.doorCoord ? '<div class="kv"><span class="k">Parent door</span><span class="v">' + pf.doorCoord + '</span></div>' : '') +
+        '<div class="kv"><span class="k">Created</span><span class="v" style="font-size:10px;">' + (pf.createdAt || '') + '</span></div>' +
+        '<div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">' +
+          '<button data-pending-action="open" style="background:#3a2d1a;border:1px solid #764;color:#fc8;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">Open in BO-V</button>' +
+          '<button data-pending-action="discard" style="background:#2a1a1a;border:1px solid #633;color:#fcc;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">Discard</button>' +
+        '</div>' +
+        '<div style="margin-top:12px; color:#789; font-style:italic; font-size:11px;">' +
+          'This floor has been authored in the graph but has no grid yet. Open it in the Blockout-Visualizer to paint tiles, then commit to floor-data.js.' +
+        '</div>';
+      Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {
+        a.addEventListener('click', function() {
+          var to = a.getAttribute('data-jump');
+          if (state.nodes[to]) selectFloor(to);
+        });
+      });
+      var openBtn = body.querySelector('[data-pending-action="open"]');
+      var discardBtn = body.querySelector('[data-pending-action="discard"]');
+      if (openBtn) openBtn.addEventListener('click', function() { openPendingInBOV(id); });
+      if (discardBtn) discardBtn.addEventListener('click', function() { discardPending(id); });
       return;
     }
     var f = state.floors[id];
@@ -432,6 +582,120 @@
     });
   }
 
+  // ──────────────────────────────────────────────────────────
+  // New-Floor modal (Pass 5c)
+  // ──────────────────────────────────────────────────────────
+  function openNewFloorModal(preselectParent) {
+    var sel = $('nf-parent');
+    // Populate parent dropdown with authored floors only (no ghosts/pendings).
+    sel.innerHTML = '';
+    var rootOpt = document.createElement('option');
+    rootOpt.value = ''; rootOpt.textContent = '(root / no parent)';
+    sel.appendChild(rootOpt);
+    Object.keys(state.floors).sort().forEach(function(pid) {
+      var o = document.createElement('option');
+      o.value = pid; o.textContent = pid + ' — ' + (state.floors[pid].biome || '?');
+      sel.appendChild(o);
+    });
+    if (preselectParent && state.floors[preselectParent]) sel.value = preselectParent;
+    $('nf-id').value = suggestChildId(sel.value);
+    $('nf-door').value = '';
+    $('nf-err').textContent = '';
+    $('dg-modal-new').classList.add('show');
+    setTimeout(function() { $('nf-id').focus(); $('nf-id').select(); }, 30);
+  }
+  function closeNewFloorModal() {
+    $('dg-modal-new').classList.remove('show');
+  }
+  function suggestChildId(parentId) {
+    // Find lowest unused child index under parentId.
+    var prefix = parentId ? (parentId + '.') : '';
+    var used = {};
+    function scan(set) {
+      Object.keys(set).forEach(function(id) {
+        if (parentId === '' ? depthOf(id) === 1 : parentOf(id) === parentId) {
+          var last = parseInt(id.split('.').pop(), 10);
+          if (!isNaN(last)) used[last] = 1;
+        }
+      });
+    }
+    scan(state.floors); scan(state.ghosts); scan(state.pendings);
+    var n = (parentId === '') ? 0 : 1;  // root floors are conventionally 0-indexed; children 1-indexed
+    while (used[n]) n++;
+    return prefix + n;
+  }
+  function submitNewFloor() {
+    var errEl = $('nf-err'); errEl.textContent = '';
+    var parentId = $('nf-parent').value || '';
+    var id = ($('nf-id').value || '').trim();
+    var biome = $('nf-biome').value;
+    var w = parseInt($('nf-w').value, 10);
+    var h = parseInt($('nf-h').value, 10);
+    var doorRaw = ($('nf-door').value || '').trim();
+
+    if (!isValidFloorId(id)) { errEl.textContent = 'Invalid floor ID. Use dotted integers like "1.4" or "2.2.3".'; return; }
+    if (isIdTaken(id))       { errEl.textContent = 'ID "' + id + '" already exists (authored, ghost, or pending).'; return; }
+    if (parentId) {
+      if (!state.floors[parentId]) { errEl.textContent = 'Parent "' + parentId + '" not authored.'; return; }
+      if (parentOf(id) !== parentId) { errEl.textContent = 'ID "' + id + '" is not a child of "' + parentId + '". Expected "' + parentId + '.N".'; return; }
+    } else {
+      if (depthOf(id) !== 1) { errEl.textContent = 'Root floors must be depth 1 (no dots).'; return; }
+    }
+    if (isNaN(w) || w < 16 || w > 96) { errEl.textContent = 'W must be 16–96.'; return; }
+    if (isNaN(h) || h < 16 || h > 96) { errEl.textContent = 'H must be 16–96.'; return; }
+
+    var doorCoord = null;
+    if (doorRaw) {
+      var pf = parentId ? state.floors[parentId] : null;
+      var pw = pf ? pf.gridW : null, ph = pf ? pf.gridH : null;
+      var dv = isValidDoorCoord(doorRaw, pw, ph);
+      if (!dv.ok) { errEl.textContent = dv.msg; return; }
+      doorCoord = dv.coord;
+    }
+
+    var spec = {
+      id: id,
+      parent: parentId || null,
+      biome: biome,
+      w: w, h: h,
+      depth: depthOf(id),
+      doorCoord: doorCoord,
+      createdAt: new Date().toISOString(),
+      createdBy: 'world-designer'
+    };
+    state.pendings[id] = spec;
+    savePendings();
+    closeNewFloorModal();
+    rebuild(false);
+    selectFloor(id);
+    setStatus('pending floor created: ' + id, 'ok');
+  }
+
+  function openPendingInBOV(id) {
+    var spec = state.pendings[id];
+    if (!spec) { setStatus('pending not found: ' + id, 'err'); return; }
+    try {
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(spec));
+    } catch (e) {
+      setStatus('sessionStorage write failed: ' + e.message, 'err');
+      return;
+    }
+    setStatus('handoff → blockout-visualizer', 'ok');
+    // Same-origin navigation; BO-V reads PENDING_KEY on boot.
+    window.location.href = 'blockout-visualizer.html';
+  }
+
+  function discardPending(id) {
+    if (!state.pendings[id]) return;
+    if (!window.confirm('Discard pending floor "' + id + '"? This cannot be undone.')) return;
+    delete state.pendings[id];
+    savePendings();
+    if (state.selected === id) state.selected = null;
+    rebuild(false);
+    $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+    setStatus('pending discarded: ' + id, 'ok');
+  }
+
   function wire() {
     $('btn-reload').addEventListener('click', function() {
       setStatus('reloading…');
@@ -445,6 +709,28 @@
       setStatus('layout reset', 'ok');
     });
     $('btn-layout-save').addEventListener('click', downloadLayout);
+    $('btn-new-floor').addEventListener('click', function() {
+      // Preselect currently-selected authored floor as parent, if any.
+      var pre = (state.selected && state.floors[state.selected]) ? state.selected : '';
+      openNewFloorModal(pre);
+    });
+    $('nf-cancel').addEventListener('click', closeNewFloorModal);
+    $('nf-create').addEventListener('click', submitNewFloor);
+    $('nf-parent').addEventListener('change', function() {
+      // Auto-suggest child id when parent changes (only if user hasn't typed).
+      var id = $('nf-id').value.trim();
+      if (id === '' || state.pendings[id] || state.floors[id] || state.ghosts[id]) {
+        $('nf-id').value = suggestChildId($('nf-parent').value);
+      }
+    });
+    $('dg-modal-new').addEventListener('click', function(ev) {
+      if (ev.target === $('dg-modal-new')) closeNewFloorModal();
+    });
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape' && $('dg-modal-new').classList.contains('show')) {
+        closeNewFloorModal();
+      }
+    });
     $('dg-canvas-wrap').addEventListener('click', function() {
       if (state.selected && state.nodes[state.selected]) {
         state.nodes[state.selected].el.classList.remove('selected');
@@ -461,6 +747,7 @@
       return;
     }
     wire();
+    loadPendings();
     Promise.all([loadData(), loadLayout()])
       .then(function() { rebuild(false); setStatus('ready', 'ok'); })
       .catch(function(e) { setStatus('load failed: ' + e.message, 'err'); console.error(e); });

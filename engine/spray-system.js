@@ -37,7 +37,11 @@ var SpraySystem = (function () {
 
   // ── Timing ──────────────────────────────────────────────────────
   var TICK_MS = 100;         // cleaning tick interval while spraying
-  var FX_BURST_MS = 300;     // water burst FX interval (visual juice)
+  // Droplet burst cadence. 300ms was sparse — at 60fps that's one burst
+  // every 18 frames and the beam looks "blinky". 80ms guarantees at least
+  // one emission per cleaning tick (TICK_MS=100) and reads as a continuous
+  // curtain of water deflection while still staying under the pool cap.
+  var FX_BURST_MS = 80;      // water burst FX interval (visual juice)
 
   // ── Base cleaning strength ──────────────────────────────────────
   // Per tick, center of brush kernel subtracts this much grime (0–255).
@@ -86,6 +90,13 @@ var SpraySystem = (function () {
   var _lastToastTime = 0;    // throttle "tile cleaned!" toasts
   var _sfxPlaying = false;   // spray loop SFX state
   var _nozzleType = 'base';  // currently equipped nozzle
+
+  // Screen-space aim tracking for beam-hit droplet FX (Rung 1).
+  // Independent from _prevAim (which is subcell-space, used for stroke
+  // interpolation) — this tracks pixel position for velocity-driven
+  // spray emission so fast pointer sweeps fling more water.
+  var _lastScreenX = -9999;
+  var _lastScreenY = -9999;
 
   // ── Helpers ────────────────────────────────────────────────────
 
@@ -406,9 +417,41 @@ var SpraySystem = (function () {
   // volume 0.20-0.30. Randomise from 3-4 variants to avoid repetition at
   // 300ms FX_BURST_MS interval. Wall hits: brighter / more reverb (hard
   // surface reflection). Floor hits: duller / wetter thud.
-  function _burstFx(tx, ty) {
-    if (typeof WaterCursorFX !== 'undefined' && WaterCursorFX.spawnBurst) {
-      WaterCursorFX.spawnBurst(tx, ty, { count: 8, speedMult: 0.8, upward: false });
+  //
+  // Rung 1 (visual): beam-hit droplet FX at pointer-screen location.
+  // Delegates to SprayDropletsFX which handles pooled physics + render.
+  // We pass stroke velocity (screen-pixel delta since last burst) so the
+  // droplet count and spread direction reflect how fast the player is
+  // sweeping — static aim emits a gentle fan, fast sweeps fling a curtain.
+  //
+  // Tile args (tx, ty) are retained for the callsite contract but are no
+  // longer the spawn coordinates — the pointer is the source of truth for
+  // where the beam is actually impacting on screen.
+  function _burstFx(tx, ty, isWall) {
+    var sx = null, sy = null, vx = 0, vy = 0;
+
+    if (typeof InputManager !== 'undefined' && InputManager.getPointer) {
+      var ptr = InputManager.getPointer();
+      if (ptr && ptr.active) {
+        sx = ptr.x;
+        sy = ptr.y;
+        if (_lastScreenX > -9000) {
+          vx = sx - _lastScreenX;
+          vy = sy - _lastScreenY;
+        }
+        _lastScreenX = sx;
+        _lastScreenY = sy;
+      } else {
+        _lastScreenX = -9999;
+      }
+    }
+
+    if (sx != null && typeof SprayDropletsFX !== 'undefined' && SprayDropletsFX.spawn) {
+      SprayDropletsFX.spawn(sx, sy, {
+        strokeVx: vx,
+        strokeVy: vy,
+        surface:  isWall ? 'wall' : 'floor'
+      });
     }
   }
 
@@ -606,7 +649,7 @@ var SpraySystem = (function () {
     // ── Burst FX at intervals ──
     if (now - _lastFxTime >= FX_BURST_MS) {
       _lastFxTime = now;
-      _burstFx(aimTileX, aimTileY);
+      _burstFx(aimTileX, aimTileY, isWallTile);
     }
   }
 
@@ -697,6 +740,8 @@ var SpraySystem = (function () {
     _active = false;
     _sprayTime = 0;
     _prevAim = null;
+    _lastScreenX = -9999;   // reset so re-trigger doesn't read a stale velocity
+    _lastScreenY = -9999;
     _stopSpraySfx();
   }
 

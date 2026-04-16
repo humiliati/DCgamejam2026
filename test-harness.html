@@ -424,6 +424,40 @@
         </div>
       </fieldset>
 
+      <fieldset>
+        <legend>◇ Pressure Washing</legend>
+        <div class="toggles">
+          <label class="toggle">
+            <input type="checkbox" id="t-hose">
+            <span>Auto-attach hose on land<small>HoseState.attach() right after floor warp — no truck walk</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-hoseInf">
+            <span>Infinite hose<small>no fatigue drain, no combat cancel, pressureMult locked to 1.0 (auto-enables auto-attach)</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-nozzlePanel">
+            <span>Hotkey nozzle panel<small>bottom-left overlay; 1-5 hot-swap nozzle mid-spray</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-grime">
+            <span>Seed grime on land<small>dense grime grids allocated in a 9×9 area around spawn</small></span>
+          </label>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label for="sel-nozzle">Starting nozzle</label>
+            <select id="sel-nozzle" name="sel-nozzle">
+              <option value="base">base</option>
+              <option value="cone">cone</option>
+              <option value="beam">beam</option>
+              <option value="fan">fan</option>
+              <option value="cyclone">cyclone</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
       <div class="preview" id="preview"></div>
 
       <div class="actions">
@@ -764,10 +798,15 @@
         if (saved.floor)     floorIn.value = saved.floor;
         if (saved.callsign)  document.getElementById('callsign').value = saved.callsign;
         if (saved.klass)     document.getElementById('klass').value = saved.klass;
-        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon','spatialRuler'].forEach(function (k) {
+        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon','spatialRuler',
+         'hose','hoseInf','nozzlePanel','grime'].forEach(function (k) {
           var el = document.getElementById('t-' + k);
           if (el && typeof saved[k] === 'boolean') el.checked = saved[k];
         });
+        if (saved.nozzle) {
+          var nz = document.getElementById('sel-nozzle');
+          if (nz) nz.value = saved.nozzle;
+        }
       }
     } catch (e) { /* ignore */ }
 
@@ -785,7 +824,12 @@
         hideHud:    document.getElementById('t-hideHud').checked,
         logState:   document.getElementById('t-logState').checked,
         perfMon:    document.getElementById('t-perfMon').checked,
-        spatialRuler: document.getElementById('t-spatialRuler').checked
+        spatialRuler: document.getElementById('t-spatialRuler').checked,
+        hose:        document.getElementById('t-hose').checked,
+        hoseInf:     document.getElementById('t-hoseInf').checked,
+        nozzlePanel: document.getElementById('t-nozzlePanel').checked,
+        grime:       document.getElementById('t-grime').checked,
+        nozzle:      (document.getElementById('sel-nozzle').value || 'base')
       };
     }
 
@@ -807,6 +851,17 @@
       if (c.logState)   params.set('logState',   '1');
       if (c.perfMon)    params.set('perfMon',    '1');
       if (c.spatialRuler) params.set('spatialRuler', '1');
+      // ── Pressure Washing (Rung 0) ─────────────────────────────────
+      // hoseInf implies hose; DebugBoot also does its own OR but we set
+      // it explicitly here so URL readers don't need that contract.
+      if (c.hose || c.hoseInf) params.set('hose', '1');
+      if (c.hoseInf)           params.set('hoseInf', '1');
+      if (c.nozzlePanel)       params.set('nozzlePanel', '1');
+      if (c.grime)             params.set('grime', '1');
+      // Only emit `nozzle` when the operator picked a non-default. This
+      // keeps typical URLs short while still locking the setter when an
+      // exotic nozzle is chosen for iteration.
+      if (c.nozzle && c.nozzle !== 'base') params.set('nozzle', c.nozzle);
       return 'index.html?' + params.toString();
     }
 

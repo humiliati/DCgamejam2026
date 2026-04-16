@@ -51,6 +51,22 @@ var HoseState = (function () {
   var _kinkCount = 0;
   var _energyDrained = 0;         // Accumulated energy cost since attach
   var _lastCancelReason = null;   // String code for debug/UI messaging
+  // Debug / harness override. When enabled (via DebugBoot PARAMS.hoseInf):
+  //   • recordStep skips the fatigue drain accumulator
+  //   • onCombatDamage / wrong-building / dropped-exterior cancel paths no-op
+  //   • getPressureMult returns 1.0 regardless of kink count
+  // Kink counter stays valid so the minimap/debug overlays still show kinks;
+  // only their gameplay effect is neutralised. Toggled only by test harness.
+  var _infinite = false;
+  function setInfiniteMode(on) {
+    _infinite = !!on;
+    if (typeof console !== 'undefined') {
+      console.log('%c[HoseState] infinite mode ' + (_infinite ? 'ON' : 'OFF'),
+                  'background:#b8116e;color:#fcff1a;padding:2px 6px');
+    }
+  }
+  function isInfinite() { return _infinite; }
+
   var _enteredSubtree = false;    // True once the player has stepped into the
                                   // origin building subtree at least once. Used
                                   // to enforce the "ascend back to exterior
@@ -188,16 +204,17 @@ var HoseState = (function () {
   function recordStep(x, y, floorId) {
     if (!_active) return { kinked: false, drainThisStep: 0 };
 
-    // Floor change: validate building membership
+    // Floor change: validate building membership (skip cancel paths in
+    // infinite mode — harness wants the hose to survive any warp).
     if (floorId !== _currentFloorId) {
       _currentFloorId = floorId;
       var inSubtree = _isDescendantBuilding(floorId, _originBuildingId);
-      if (!inSubtree && floorId !== _originFloorId) {
+      if (!_infinite && !inSubtree && floorId !== _originFloorId) {
         // Player left the valid subtree entirely — hose snaps
         detach('wrong_building');
         return { kinked: false, drainThisStep: 0 };
       }
-      if (!inSubtree && floorId === _originFloorId && _enteredSubtree) {
+      if (!_infinite && !inSubtree && floorId === _originFloorId && _enteredSubtree) {
         // Ascended back to the origin exterior after having entered the
         // building subtree — spec §2.3: walking out without roll-up drops it.
         detach('dropped_exterior');
@@ -220,8 +237,11 @@ var HoseState = (function () {
     }
 
     // Accumulate drain BEFORE pushing the step so length penalty reflects
-    // the trail behind the new step, not the one including it.
-    var drain = BASE_DRAIN + (_path.length * LENGTH_PENALTY) + (_kinkCount * KINK_PENALTY);
+    // the trail behind the new step, not the one including it. Infinite
+    // mode zeroes drain (path still recorded so reel-up testing works).
+    var drain = _infinite
+      ? 0
+      : BASE_DRAIN + (_path.length * LENGTH_PENALTY) + (_kinkCount * KINK_PENALTY);
     _energyDrained += drain;
 
     _path.push({ x: x, y: y, floorId: floorId });
@@ -239,11 +259,11 @@ var HoseState = (function () {
     if (!_active) return false;
     _currentFloorId = newFloorId;
     var inSubtree = _isDescendantBuilding(newFloorId, _originBuildingId);
-    if (!inSubtree && newFloorId !== _originFloorId) {
+    if (!_infinite && !inSubtree && newFloorId !== _originFloorId) {
       detach('wrong_building');
       return false;
     }
-    if (!inSubtree && newFloorId === _originFloorId && _enteredSubtree) {
+    if (!_infinite && !inSubtree && newFloorId === _originFloorId && _enteredSubtree) {
       // Spec §2.3: ascending back to exterior without reel-up drops the hose.
       detach('dropped_exterior');
       return false;
@@ -260,7 +280,12 @@ var HoseState = (function () {
   /**
    * Called by combat system when player takes damage.
    */
-  function onCombatDamage() { detach('combat_damage'); }
+  function onCombatDamage() {
+    // Infinite mode: no-op so the harness operator can take hits while
+    // iterating on nozzle feel without losing the attachment.
+    if (_infinite) return;
+    detach('combat_damage');
+  }
 
   /**
    * Called by HoseReel after successful retract-exit.
@@ -304,6 +329,9 @@ var HoseState = (function () {
    * 0 kinks = 1.0, 1 kink = 0.7, 2 kinks = 0.49, 3 kinks = 0.343, etc.
    */
   function getPressureMult() {
+    // Infinite mode forces 1.0 regardless of kinks. Kink counter still
+    // ticks for debug/UI display; only the gameplay effect is neutralised.
+    if (_infinite) return MAX_PRESSURE;
     return Math.pow(PRESSURE_PER_KINK, _kinkCount) * MAX_PRESSURE;
   }
 
@@ -391,7 +419,9 @@ var HoseState = (function () {
     off:            off,
 
     // Debug / test
-    debugSnapshot:  debugSnapshot,
-    reset:          reset
+    debugSnapshot:   debugSnapshot,
+    reset:           reset,
+    setInfiniteMode: setInfiniteMode,
+    isInfinite:      isInfinite
   });
 })();

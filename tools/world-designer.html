@@ -62,6 +62,17 @@
         background:#2e2a1d !important;
         border-color:#c96 !important;
       }
+      /* Pass 5c — pending (uncommitted) authored floors awaiting BO-V. */
+      .dg-node.dg-node-pending {
+        background:#3a2d1a !important;
+        border:2px solid #fc8 !important;
+        border-style: solid !important;
+        opacity: 1;
+        box-shadow: 0 0 0 1px #fc8 inset, 0 2px 8px rgba(255,160,80,0.25);
+      }
+      .dg-node.dg-node-pending .dg-node-badge {
+        background:#fc8; color:#2a1d10; border-color:#fc8;
+      }
       .dg-node .dg-node-badge {
         position:absolute; top:3px; right:4px;
         font-size:8px; font-weight:bold;
@@ -90,13 +101,44 @@
       /* Proc-gen edges inherit depth color + dash pattern */
       svg.dg-edge-procgen path { stroke-dasharray: 4,3; opacity: 0.8; }
       svg.dg-edge-planned path { stroke: #c96; stroke-dasharray: 2,5; opacity: 0.85; }
+      svg.dg-edge-pending path { stroke: #fc8; stroke-width: 3px; }
+
+      /* New-Floor modal (Pass 5c) */
+      .dg-modal-backdrop {
+        position:fixed; inset:0; background:rgba(0,0,0,0.6);
+        display:none; align-items:center; justify-content:center; z-index:999;
+      }
+      .dg-modal-backdrop.show { display:flex; }
+      .dg-modal {
+        background:#1a1d22; border:1px solid #456; border-radius:6px;
+        padding:18px 22px; width: 420px; max-width: 92vw;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      }
+      .dg-modal h2 { margin:0 0 12px; font-size:14px; color:#fc8; letter-spacing:1px; }
+      .dg-modal .row { display:flex; gap:10px; margin:8px 0; align-items:center; }
+      .dg-modal .row label { flex: 0 0 110px; font-size:12px; color:#9ab; }
+      .dg-modal .row input, .dg-modal .row select {
+        flex:1; background:#0f1115; border:1px solid #456; color:#cfe;
+        padding:4px 6px; font-family:inherit; font-size:12px; border-radius:3px;
+      }
+      .dg-modal .row input:focus, .dg-modal .row select:focus { outline:1px solid #8ad; }
+      .dg-modal .hint { font-size:11px; color:#678; margin: 4px 0 0 110px; }
+      .dg-modal .err  { color:#f88; font-size:11px; margin: 6px 0 0 0; min-height: 14px; }
+      .dg-modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top: 14px; }
+      .dg-modal .actions button {
+        background:#2a3a4a; color:#cfe; border:1px solid #456;
+        padding:5px 14px; cursor:pointer; font-family:inherit; font-size:12px; border-radius:3px;
+      }
+      .dg-modal .actions button.primary { background:#3a2d1a; border-color:#764; color:#fc8; }
+      .dg-modal .actions button:hover { filter: brightness(1.2); }
     </style>
 </head>
 <body>
     <div class="dg-header">
       <h1>DUNGEON GLEANER — WORLD DESIGNER</h1>
-      <span class="sub">read-only viewer · Pass 5b.1</span>
+      <span class="sub">editor · Pass 5c</span>
       <div class="spacer"></div>
+      <button id="btn-new-floor" title="Create a new pending floor (hand off to Blockout-Visualizer)" style="background:#3a2d1a; border-color:#764; color:#fc8;">＋ New Floor</button>
       <button id="btn-reload" title="Reload floor-data.json from disk">Reload Data</button>
       <button id="btn-layout-reset" title="Reset node positions to auto-layout">Reset Layout</button>
       <button id="btn-layout-save" title="Save current positions to tools/world-layout.json (download)">Save Layout</button>
@@ -115,6 +157,7 @@
           <h3>Slot Legend</h3>
           <div class="legend-row"><div class="swatch" style="background:#2b1e34;border-color:#96b;border-style:dashed;"></div><span>Proc-gen slot</span></div>
           <div class="legend-row"><div class="swatch" style="background:#2e2a1d;border-color:#c96;border-style:dashed;"></div><span>Planned (not authored)</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#3a2d1a;border-color:#fc8;"></div><span>Pending (awaiting BO-V)</span></div>
           <div style="font-size:10px; color:#678; margin-top:4px;">Kinds: <span style="color:#8cf;">TEMPLATE</span> · <span style="color:#8cf;">COMPOSED</span> · <span style="color:#8cf;">RANDOM</span></div>
         </div>
         <div class="sect">
@@ -144,6 +187,55 @@
           <div class="empty">Click a floor node</div>
         </div>
       </aside>
+    </div>
+
+    <!-- New-Floor modal — Pass 5c -->
+    <div id="dg-modal-new" class="dg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="dg-modal-new-title">
+      <div class="dg-modal">
+        <h2 id="dg-modal-new-title">NEW FLOOR</h2>
+        <div class="row">
+          <label for="nf-parent">Parent</label>
+          <select id="nf-parent"></select>
+        </div>
+        <div class="row">
+          <label for="nf-id">Floor ID</label>
+          <input id="nf-id" type="text" placeholder="e.g. 1.4" autocomplete="off" />
+        </div>
+        <div class="hint">Depth = dot-count. Must be unique and a child of the selected parent (parent.&lt;N&gt;) or a sibling (root only).</div>
+        <div class="row">
+          <label for="nf-biome">Biome</label>
+          <select id="nf-biome">
+            <option value="boardwalk">boardwalk</option>
+            <option value="promenade">promenade</option>
+            <option value="lantern_row">lantern_row</option>
+            <option value="shop_interior">shop_interior</option>
+            <option value="inn_interior">inn_interior</option>
+            <option value="home_interior">home_interior</option>
+            <option value="office_interior">office_interior</option>
+            <option value="cellar">cellar</option>
+            <option value="catacombs">catacombs</option>
+            <option value="wake_dungeon">wake_dungeon</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="nf-w">Grid W</label>
+          <input id="nf-w" type="number" min="16" max="96" value="50" />
+        </div>
+        <div class="row">
+          <label for="nf-h">Grid H</label>
+          <input id="nf-h" type="number" min="16" max="96" value="36" />
+        </div>
+        <div class="row">
+          <label for="nf-door">Door coord</label>
+          <input id="nf-door" type="text" placeholder="x,y on parent (e.g. 12,4)" autocomplete="off" />
+        </div>
+        <div class="hint">Coordinate on the <em>parent</em> floor where the DOOR tile that leads here lives. Leave blank to wire later.</div>
+        <div class="err" id="nf-err"></div>
+        <div class="actions">
+          <button id="nf-cancel" type="button">Cancel</button>
+          <button id="nf-create" class="primary" type="button">Create &amp; Open in BO-V</button>
+        </div>
+      </div>
     </div>
 
     <script src="vendor/jsplumb/jsplumb.min.js"></script>

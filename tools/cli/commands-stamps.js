@@ -2,10 +2,25 @@
 //  tools/cli/commands-stamps.js — Parametric stamps + registry
 //  Pass 0.3 split: stamp-room, stamp-corridor, stamp-torch-ring,
 //                  save-stamp, apply-stamp, list-stamps, delete-stamp
+//  Pass 5d Slice C4: stamp-tunnel-corridor, stamp-porthole-wall,
+//                    stamp-alcove-flank (mirrors bv-bo-router.js).
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
 var S = require('./shared');
+
+// Slice C4 helper: apply a cells array with bounds checking, then save.
+function _applyStampCells(raw, f, cells) {
+  var changed = 0;
+  cells.forEach(function(c) {
+    if (c.y < 0 || c.y >= f.grid.length) return;
+    var row = f.grid[c.y];
+    if (c.x < 0 || c.x >= row.length) return;
+    if (row[c.x] !== c.tile) { row[c.x] = c.tile; changed++; }
+  });
+  S.saveFloors(raw);
+  return changed;
+}
 
 module.exports = {
   'stamp-room': function(args, raw, schema) {
@@ -151,5 +166,91 @@ module.exports = {
     delete stamps[args.name];
     S.saveStamps(stamps);
     process.stdout.write(JSON.stringify({ name: args.name, deleted: true, remaining: Object.keys(stamps).length }) + '\n');
+  },
+
+  // ── Slice C4: biome-specific stamps ──────────────────────────
+  // Geometry is documented in bv-bo-router.js next to the browser
+  // equivalents (stampTunnelCorridor / stampPortholeWall /
+  // stampAlcoveFlank). Keep the two sides in sync — the round-trip
+  // smoke test will eventually enforce identical output cells.
+
+  'stamp-tunnel-corridor': function(args, raw, schema) {
+    var f = S.requireFloor(raw, args.floor);
+    var at = S.parseCoord(args.at, '--at');
+    var len = Math.max(4, parseInt(args.len, 10) || 6);
+    var dir = ((parseInt(args.dir, 10) || 0) % 4 + 4) % 4;
+    var ribTile   = S.resolveTile(args['rib-tile']   != null ? args['rib-tile']   : 'TUNNEL_RIB',  schema);
+    var wallTile  = S.resolveTile(args['wall-tile']  != null ? args['wall-tile']  : 'TUNNEL_WALL', schema);
+    var floorTile = S.resolveTile(args['floor-tile'] != null ? args['floor-tile'] : 'EMPTY',        schema);
+    var cells = [];
+    function pushAt(i, j, tile) {
+      var dx, dy;
+      switch (dir) {
+        case 0: dx = i;  dy = j;  break;
+        case 1: dx = -j; dy = i;  break;
+        case 2: dx = -i; dy = -j; break;
+        case 3: dx = j;  dy = -i; break;
+      }
+      cells.push({ x: at.x + dx, y: at.y + dy, tile: tile });
+    }
+    for (var i = 0; i < len; i++) {
+      var atMouth = (i < 2 || i >= len - 2);
+      if (atMouth) pushAt(i, 0, floorTile);
+      else         pushAt(i, 0, (i % 2 === 0) ? ribTile : wallTile);
+      pushAt(i, 1, floorTile);
+      if (atMouth) pushAt(i, 2, floorTile);
+      else         pushAt(i, 2, (i % 2 === 0) ? wallTile : ribTile);
+    }
+    var changed = _applyStampCells(raw, f, cells);
+    process.stdout.write(JSON.stringify({
+      changed: changed, action: 'stamp-tunnel-corridor',
+      at: { x: at.x, y: at.y }, len: len, dir: dir,
+      ribTile: ribTile, wallTile: wallTile, floorTile: floorTile
+    }) + '\n');
+  },
+
+  'stamp-porthole-wall': function(args, raw, schema) {
+    var f = S.requireFloor(raw, args.floor);
+    var at = S.parseCoord(args.at, '--at');
+    var side = (args.side || 'R').toString().toUpperCase();
+    if (side !== 'L' && side !== 'R') S.fail(1, 'stamp-porthole-wall: --side must be L or R (got ' + args.side + ')');
+    var span = Math.max(1, parseInt(args.span, 10) || 3);
+    var tile     = S.resolveTile(args.tile        != null ? args.tile        : 'PORTHOLE_OCEAN', schema);
+    var jambTile = S.resolveTile(args['jamb-tile'] != null ? args['jamb-tile'] : 'TUNNEL_WALL',   schema);
+    var sx = (side === 'R') ? 1 : -1;
+    var cells = [];
+    for (var i = 0; i < 2 * span - 1; i++) {
+      cells.push({ x: at.x + sx * i, y: at.y, tile: (i % 2 === 0) ? tile : jambTile });
+    }
+    var changed = _applyStampCells(raw, f, cells);
+    process.stdout.write(JSON.stringify({
+      changed: changed, action: 'stamp-porthole-wall',
+      at: { x: at.x, y: at.y }, side: side, span: span,
+      tile: tile, jambTile: jambTile, footprint: 2 * span - 1
+    }) + '\n');
+  },
+
+  'stamp-alcove-flank': function(args, raw, schema) {
+    var f = S.requireFloor(raw, args.floor);
+    var at = S.parseCoord(args.at, '--at');
+    var count   = Math.max(1, parseInt(args.count,   10) || 2);
+    var spacing = Math.max(1, parseInt(args.spacing, 10) || 2);
+    var depth   = Math.max(1, parseInt(args.depth,   10) || 1);
+    var tile = S.resolveTile(args.tile != null ? args.tile : 'TUNNEL_WALL', schema);
+    var cells = [];
+    for (var i = 0; i < count; i++) {
+      var yBase = at.y + i * spacing;
+      for (var d = 0; d < depth; d++) {
+        var yy = yBase + d;
+        cells.push({ x: at.x - 2, y: yy, tile: tile });
+        cells.push({ x: at.x + 2, y: yy, tile: tile });
+      }
+    }
+    var changed = _applyStampCells(raw, f, cells);
+    process.stdout.write(JSON.stringify({
+      changed: changed, action: 'stamp-alcove-flank',
+      at: { x: at.x, y: at.y }, count: count, spacing: spacing, depth: depth,
+      tile: tile, pairs: count
+    }) + '\n');
   }
 };

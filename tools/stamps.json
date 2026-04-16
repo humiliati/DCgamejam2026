@@ -1,1 +1,47 @@
-{}
+{
+  "tunnel_corridor_8": {
+    "w": 8,
+    "h": 3,
+    "cells": [
+      [0, 0, 94, 95, 94, 95, 0, 0],
+      [0, 0,  0,  0,  0,  0, 0, 0],
+      [0, 0, 95, 94, 95, 94, 0, 0]
+    ],
+    "meta": {
+      "sourceFloor": "scaffold",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-15T00:00:00Z",
+      "origin": "Slice C4 seed — stampTunnelCorridor(len=8, dir=0)"
+    }
+  },
+  "porthole_wall_4": {
+    "w": 7,
+    "h": 1,
+    "cells": [
+      [96, 95, 96, 95, 96, 95, 96]
+    ],
+    "meta": {
+      "sourceFloor": "scaffold",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-15T00:00:00Z",
+      "origin": "Slice C4 seed — stampPortholeWall(side=R, span=4)"
+    }
+  },
+  "alcove_flank_3": {
+    "w": 5,
+    "h": 5,
+    "cells": [
+      [95, 0, 0, 0, 95],
+      [ 0, 0, 0, 0,  0],
+      [95, 0, 0, 0, 95],
+      [ 0, 0, 0, 0,  0],
+      [95, 0, 0, 0, 95]
+    ],
+    "meta": {
+      "sourceFloor": "scaffold",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-15T00:00:00Z",
+      "origin": "Slice C4 seed — stampAlcoveFlank(count=3, spacing=2, depth=1)"
+    }
+  }
+}

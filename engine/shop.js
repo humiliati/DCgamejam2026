@@ -633,6 +633,50 @@ var Shop = (function () {
     return item.baseValue || 1;
   }
 
+  // ── Save/Load (Track B M2.2) ──────────────────────────────────────
+  //
+  // Shop holds only the *currently-open* shop's live state — per-faction
+  // reputation lives in Player flags (via Salvage) and is persisted there.
+  // Inventory is deterministic on (faction, floor, repTier, cycleIdx) so a
+  // fresh open() rebuilds identical stock. The one thing we MUST persist is
+  // a mid-session open shop's inventory: individual slots carry a `sold`
+  // flag, and losing that on reload would let a player re-buy already
+  // purchased cards.
+  //
+  // serialize() returns null when no shop has been opened this session, so
+  // a cold-start save produces no shop payload. deserialize(null) is a
+  // safe no-op; deserialize(snap) restores the five module locals so
+  // reopening the shop picks up where it left off.
+
+  function serialize() {
+    if (!_factionId) return null;
+    // Deep-copy inventory so external mutation can't corrupt the live array.
+    var invCopy = _inventory.map(function (slot) {
+      if (!slot) return null;
+      return {
+        card:  slot.card ? JSON.parse(JSON.stringify(slot.card)) : null,
+        price: slot.price | 0,
+        sold:  !!slot.sold
+      };
+    });
+    return {
+      factionId: _factionId,
+      floor:     _floor,
+      inventory: invCopy,
+      cacheKey:  _cacheKey,
+      open:      !!_open
+    };
+  }
+
+  function deserialize(snap) {
+    if (!snap || typeof snap !== 'object') return;
+    _factionId = snap.factionId || null;
+    _floor     = (typeof snap.floor === 'number') ? snap.floor : 1;
+    _inventory = Array.isArray(snap.inventory) ? snap.inventory.slice() : [];
+    _cacheKey  = snap.cacheKey || null;
+    _open      = !!snap.open;
+  }
+
   // ── Public API ────────────────────────────────────────────────────
   return {
     open:              open,
@@ -653,6 +697,8 @@ var Shop = (function () {
     getCardSellPrice:  _calcSellPrice,
     buySupply:         buySupply,
     getSupplyStock:    getSupplyStock,
-    SUPPLY_STOCK:      SUPPLY_STOCK
+    SUPPLY_STOCK:      SUPPLY_STOCK,
+    serialize:         serialize,
+    deserialize:       deserialize
   };
 })();

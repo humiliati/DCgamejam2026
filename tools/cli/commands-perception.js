@@ -1,14 +1,60 @@
 // ═══════════════════════════════════════════════════════════════
 //  tools/cli/commands-perception.js — Read-only perception
 //  Pass 0.3 split: render-ascii, describe-cell, diff-ascii
+//  Pass 5d Slice C5: render-ascii + describe-cell fall back to an
+//                    in-memory `bo ingest` when the target floor
+//                    isn't in floor-data.json but the matching
+//                    engine/floor-blockout-<id>.js does exist.
+//                    Fallback is hermetic — floor-data.json is NOT
+//                    mutated on disk.
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
-var S = require('./shared');
+var fs   = require('fs');
+var path = require('path');
+var S    = require('./shared');
+
+// ── Slice C5: hermetic fallback loader ───────────────────────────
+// Tries raw.floors[id] first. If absent, boots the shared IIFE
+// sandbox, loads engine/floor-blockout-<id>.js, extracts the floor
+// payload via FloorManager._testGetBuilders, and returns the result.
+// Returns { floor, source } where source ∈ {'floor-data','iife'}.
+// Throws on miss — callers surface the error via S.fail(2, ...).
+//
+// Lazy require-d so the perception module stays cheap for the normal
+// path (no VM boot when the floor is already in floor-data.json).
+function _resolveFloor(raw, id) {
+  if (raw.floors && raw.floors[id]) {
+    return { floor: raw.floors[id], source: 'floor-data' };
+  }
+  // Try IIFE fallback.
+  var ingestMod  = require('./commands-ingest');
+  var sandboxMod = require('./iife-sandbox');
+  var fileName   = ingestMod._fileNameForFloor(id);
+  var relPath    = path.join('engine', fileName);
+  var absPath    = path.join(sandboxMod.ROOT, relPath);
+  if (!fs.existsSync(absPath)) {
+    throw new Error('unknown floor: ' + id
+      + ' (not in floor-data.json and ' + relPath + ' does not exist)');
+  }
+  var harness = sandboxMod.bootstrapForIngest();
+  var loadRes = harness.loadFile(relPath);
+  if (!loadRes.ok) throw new Error('iife fallback: eval failed for ' + relPath + ' — ' + loadRes.reason);
+  var extracted = sandboxMod.extractFloor(harness.sandbox, id);
+  if (!extracted) {
+    throw new Error('iife fallback: ' + relPath
+      + ' did not register a builder for "' + id + '"');
+  }
+  return { floor: extracted, source: 'iife' };
+}
 
 module.exports = {
   'render-ascii': function(args, raw, schema) {
-    var f = S.requireFloor(raw, args.floor);
+    if (!args.floor) S.fail(1, 'render-ascii needs --floor <id>');
+    var resolved;
+    try { resolved = _resolveFloor(raw, args.floor); }
+    catch (e) { S.fail(2, (e && e.message) || String(e)); }
+    var f = resolved.floor;
     var grid = f.grid;
     var gw = grid[0] ? grid[0].length : 0, gh = grid.length;
     var vp = { x: 0, y: 0, w: gw, h: gh };
@@ -44,12 +90,17 @@ module.exports = {
       viewport: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
       glyphs: rows.join('\n'),
       legend: legend,
-      spawn: f.spawn || null
+      spawn: f.spawn || null,
+      source: resolved.source  // 'floor-data' | 'iife' (Slice C5)
     }, null, 2) + '\n');
   },
 
   'describe-cell': function(args, raw, schema) {
-    var f = S.requireFloor(raw, args.floor);
+    if (!args.floor) S.fail(1, 'describe-cell needs --floor <id>');
+    var resolved;
+    try { resolved = _resolveFloor(raw, args.floor); }
+    catch (e) { S.fail(2, (e && e.message) || String(e)); }
+    var f = resolved.floor;
     var at = S.parseCoord(args.at, '--at');
     var grid = f.grid;
     if (at.y < 0 || at.y >= grid.length || at.x < 0 || at.x >= grid[at.y].length) {
@@ -73,7 +124,8 @@ module.exports = {
       category: s.cat || null, glyph: s.glyph || null,
       walk: s.walk === true, opaque: s.opq === true, color: s.color || null,
       doorTarget: dt, exteriorFace: df, rooms: rooms,
-      isSpawn: !!(f.spawn && f.spawn.x === at.x && f.spawn.y === at.y)
+      isSpawn: !!(f.spawn && f.spawn.x === at.x && f.spawn.y === at.y),
+      source: resolved.source  // 'floor-data' | 'iife' (Slice C5)
     }, null, 2) + '\n');
   },
 

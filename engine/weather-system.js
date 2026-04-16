@@ -874,7 +874,10 @@ var WeatherSystem = (function () {
     light_rain:     'hearth_smoke',
     boardwalk_wind: 'indoor_dust',
     lantern_haze:   'indoor_dust',
-    clear:          'clear'
+    // Interiors always carry a baseline dust presence — empty "clear"
+    // days inside rooms read as rendering bugs, not calm weather.
+    // Parallels the dungeon map where clear → dungeon_dust.
+    clear:          'indoor_dust'
   };
 
   // Dungeon presets: surface rain → ceiling drips, otherwise dust.

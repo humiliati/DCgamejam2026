@@ -250,6 +250,80 @@ var GrimeGrid = (function () {
     _grids = {};
   }
 
+  // ── Save/Load (Track B M2.3a) ────────────────────────────────
+  //
+  // Per-floor serialize / deserialize. Uint8Array grime data is
+  // base64-encoded so it survives JSON round-trip without ballooning
+  // into a comma-separated array (base64 ≈ 33% overhead vs ~4× for
+  // JSON-of-bytes). 4096-byte wall grids → ~5.5KB base64 each.
+  //
+  // Keyed output shape:
+  //   { "x,y": { res: number, b64: string }, ... }
+
+  function _bytesToB64(u8) {
+    // Chunked fromCharCode to avoid "Maximum call stack exceeded" on
+    // large (64×64 = 4096-byte) wall grids.
+    var CHUNK = 0x8000;
+    var parts = [];
+    for (var i = 0; i < u8.length; i += CHUNK) {
+      parts.push(String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK)));
+    }
+    return (typeof btoa === 'function') ? btoa(parts.join('')) : parts.join('');
+  }
+
+  function _b64ToBytes(b64) {
+    if (typeof atob !== 'function') {
+      // Non-browser fallback — treat as raw latin-1 string
+      var u0 = new Uint8Array(b64.length);
+      for (var j = 0; j < b64.length; j++) u0[j] = b64.charCodeAt(j) & 0xFF;
+      return u0;
+    }
+    var s = atob(b64);
+    var u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    return u;
+  }
+
+  /**
+   * Serialize every grime grid on `floorId` into a JSON-safe blob.
+   */
+  function serialize(floorId) {
+    var out = {};
+    var prefix = floorId + ':';
+    for (var key in _grids) {
+      if (key.indexOf(prefix) !== 0) continue;
+      var g = _grids[key];
+      var tileKey = key.substring(prefix.length);  // "x,y"
+      out[tileKey] = { res: g.res, b64: _bytesToB64(g.data) };
+    }
+    return out;
+  }
+
+  /**
+   * Clear the floor's grids and rehydrate from a serialize() blob.
+   * Accepts a null/undefined snap as "no grime on this floor".
+   */
+  function deserialize(floorId, snap) {
+    clearFloor(floorId);
+    if (!snap || typeof snap !== 'object') return;
+    for (var tileKey in snap) {
+      if (!snap.hasOwnProperty(tileKey)) continue;
+      var entry = snap[tileKey];
+      if (!entry || typeof entry !== 'object' || typeof entry.b64 !== 'string') continue;
+      var parts = tileKey.split(',');
+      var x = parseInt(parts[0], 10);
+      var y = parseInt(parts[1], 10);
+      if (!isFinite(x) || !isFinite(y)) continue;
+      var res = entry.res | 0;
+      if (res <= 0) continue;
+      var bytes = _b64ToBytes(entry.b64);
+      // Guard against corrupted blobs: size mismatch → skip.
+      if (bytes.length !== res * res) continue;
+      var g = allocate(floorId, x, y, res, 0);
+      g.data.set(bytes);
+    }
+  }
+
   // ── Debug ────────────────────────────────────────────────────
 
   /**
@@ -303,6 +377,10 @@ var GrimeGrid = (function () {
     // Lifecycle
     clearFloor:   clearFloor,
     clearAll:     clearAll,
+
+    // Save/Load (M2.3a)
+    serialize:    serialize,
+    deserialize:  deserialize,
 
     // Debug
     debugDump:    debugDump

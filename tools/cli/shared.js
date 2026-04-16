@@ -58,7 +58,20 @@ function loadFloors() {
   }
   return JSON.parse(fs.readFileSync(FLOOR_DATA_PATH, 'utf8'));
 }
+// ── Dry-run mode (Slice C1) ────────────────────────────────────
+// When the dispatcher sees --dry-run, it flips this flag ON before
+// the command runs. Every command calls S.saveFloors(raw) at the end;
+// in dry-run that write is swallowed and counted. The dispatcher then
+// diffs the pristine-on-disk floor-data against the mutated in-memory
+// raw and prints the preview instead of persisting.
+var _dryRun = false;
+var _saveCallCount = 0;
+function setDryRun(flag) { _dryRun = !!flag; _saveCallCount = 0; }
+function isDryRun()      { return _dryRun; }
+function saveCallCount() { return _saveCallCount; }
+
 function saveFloors(raw) {
+  if (_dryRun) { _saveCallCount++; return; }
   fs.writeFileSync(FLOOR_DATA_PATH, JSON.stringify(raw, null, 2));
 }
 function loadSchema() {
@@ -194,6 +207,7 @@ module.exports = {
            TILE_SCHEMA_PATH: TILE_SCHEMA_PATH, STAMPS_PATH: STAMPS_PATH },
   fail: fail, parseArgs: parseArgs, parseCoord: parseCoord,
   loadFloors: loadFloors, saveFloors: saveFloors, loadSchema: loadSchema,
+  setDryRun: setDryRun, isDryRun: isDryRun, saveCallCount: saveCallCount,
   loadStamps: loadStamps, saveStamps: saveStamps,
   resolveTile: resolveTile, requireFloor: requireFloor,
   applyCells: applyCells, cellsInRect: cellsInRect, cellsInLine: cellsInLine,
