@@ -175,6 +175,7 @@ var FloorManager = (function () {
       if (floor === '1.2') return 'inn';         // Driftwood Inn
       if (floor === '1.3') return 'cellar_entry'; // Storm Shelter (civic building, basement dungeon below)
       if (floor === '1.6') return 'home';        // Gleaner's Home (player bunk)
+      if (floor === '1.9') return 'inn';         // Test Gallery (minigame tile showroom)
       if (floor === '2.1') return 'office';      // Dispatcher's Office
       if (floor === '2.2') return 'watchpost';   // Watchman's Post
       if (floor === '2.3') return 'shop';        // Armorer's Workshop (Foundry shop)
@@ -2318,6 +2319,9 @@ var FloorManager = (function () {
     // Clear LightOrbs tracking so smoothed positions from the previous
     // floor don't bleed into the new one.
     if (typeof LightOrbs !== 'undefined' && LightOrbs.reset) LightOrbs.reset();
+    // Clear viewport spatter so drops from the previous floor
+    // don't persist across transitions.
+    if (typeof SprayViewportFX !== 'undefined' && SprayViewportFX.clear) SprayViewportFX.clear();
 
     var isExterior = contract && contract.depth === 'exterior';
     var isInterior = contract && contract.depth === 'interior';
@@ -2532,6 +2536,16 @@ var FloorManager = (function () {
         _floorData.biome || getBiome(_floorId),
         _floorData.contract || contract
       );
+    }
+
+    // ── Noticeboard dungeon preview billboards ──────────────────────
+    // Replace the generic decor_pinned_note on NOTICE_BOARD tiles near
+    // STAIRS_DN with a minimap preview of the target dungeon floor.
+    // Runs after wallDecor is built so the pinned_note entries exist,
+    // and before Raycaster.setContract so the preview textures are
+    // registered in TextureAtlas before the first render frame.
+    if (!fromCache && typeof NoticeboardDecor !== 'undefined') {
+      NoticeboardDecor.populate(_floorId, _floorData);
     }
 
     // Compute per-cell door height overrides (building entrance vs archway rule).
@@ -3133,6 +3147,91 @@ var FloorManager = (function () {
     getFloorCache: function (floorId) {
       var entry = _floorCache[String(floorId)];
       return entry ? entry.floorData : null;
+    },
+
+    /**
+     * Peek at a floor's grid data without switching the active floor.
+     * Returns { grid, gridW, gridH } or null if the floor can't be generated.
+     *
+     * Priority: _floorCache → _registeredBuilders → built-in builders.
+     * If the floor hasn't been visited yet, runs the builder and caches
+     * the result so the actual transition later is instant.
+     *
+     * Used by NoticeboardDecor to render minimap previews of upcoming
+     * dungeon floors on notice board wall decor billboards.
+     */
+    peekFloorGrid: function (floorId) {
+      var fid = String(floorId);
+
+      // 1. Already cached — return immediately
+      var entry = _floorCache[fid];
+      if (entry && entry.floorData && entry.floorData.grid) {
+        var fd = entry.floorData;
+        return { grid: fd.grid, gridW: fd.gridW, gridH: fd.gridH };
+      }
+
+      // 2. Registered builder — run it, cache, return grid
+      if (_registeredBuilders[fid]) {
+        var built = _registeredBuilders[fid]();
+        if (built && built.grid) {
+          var depth = _depth(fid);
+          var contract = SpatialContract.resolveContract(depth);
+          built.contract = contract;
+          var enemies = depth >= 3
+            ? (typeof EnemyAI !== 'undefined' && EnemyAI.spawnEnemies
+               ? EnemyAI.spawnEnemies(built, fid, null)
+               : [])
+            : [];
+          if (enemies.length > 0 && typeof EnemyAI !== 'undefined' && EnemyAI.assignBarkPools) {
+            EnemyAI.assignBarkPools(enemies, fid);
+          }
+          _floorCache[fid] = { floorData: built, enemies: enemies };
+          return { grid: built.grid, gridW: built.gridW, gridH: built.gridH };
+        }
+      }
+
+      // 3. Built-in builders (floors 0, 1)
+      var builtIn = null;
+      if (fid === '0') builtIn = _buildFloor0();
+      else if (fid === '1') builtIn = _buildFloor1();
+      if (builtIn && builtIn.grid) {
+        var d2 = _depth(fid);
+        builtIn.contract = SpatialContract.resolveContract(d2);
+        _floorCache[fid] = { floorData: builtIn, enemies: [] };
+        return { grid: builtIn.grid, gridW: builtIn.gridW, gridH: builtIn.gridH };
+      }
+
+      // 4. Proc-gen fallback — generate via GridGen
+      var d3 = _depth(fid);
+      var c3 = SpatialContract.resolveContract(d3);
+      if (c3 && c3.gridSize && typeof GridGen !== 'undefined') {
+        var opts = {
+          width: c3.gridSize.w,
+          height: c3.gridSize.h,
+          biome: getBiome(fid),
+          floor: fid,
+          floorId: fid,
+          placeStairsUp: true,
+          placeStairsDn: true,
+          roomCount: typeof SeededRNG !== 'undefined'
+            ? SeededRNG.randInt(c3.roomCount.min, c3.roomCount.max)
+            : c3.roomCount.min
+        };
+        if (d3 === 3) opts.stairDnTile = TILES.TRAPDOOR_DN;
+        var gen = GridGen.generate(opts);
+        if (gen && gen.grid) {
+          gen.contract = c3;
+          var en = d3 >= 3
+            ? (typeof EnemyAI !== 'undefined' && EnemyAI.spawnEnemies
+               ? EnemyAI.spawnEnemies(gen, fid, null)
+               : [])
+            : [];
+          _floorCache[fid] = { floorData: gen, enemies: en };
+          return { grid: gen.grid, gridW: gen.gridW, gridH: gen.gridH };
+        }
+      }
+
+      return null;
     },
 
     // Expose raw floor builders for tooling (blockout visualizer, extractor).

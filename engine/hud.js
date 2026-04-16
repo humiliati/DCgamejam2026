@@ -30,6 +30,87 @@ var HUD = (function () {
     for (var i = 0; i < 5; i++) {
       _els.cardSlots.push(document.getElementById('card-' + i));
     }
+    // ── Footer-aware placement refs (PF-1) ─────────────────────────
+    // Cached so canvas-rendered prompts (InteractPrompt, CobwebNode,
+    // Toast, future minigame chrome) can compute a safe bottom Y that
+    // stays clear of the #status-bar DOM overlay — including when the
+    // bar is toggled into .sb-expanded mode (up to 50vh).
+    _els.statusBar   = document.getElementById('status-bar');
+    _els.viewCanvas  = document.getElementById('view-canvas');
+  }
+
+  // ── Footer-safe placement (PF-1) ─────────────────────────────────
+  //
+  // Canvas-rendered prompts (InteractPrompt, CobwebNode, etc.) paint
+  // into #view-canvas. The #status-bar DOM overlay sits on top of the
+  // bottom 128px of that canvas (more when .sb-expanded). Any prompt
+  // placed below the bar's top edge is invisible to the player.
+  //
+  // getSafeBottom(canvasHeight) returns the lowest Y (in canvas
+  // drawing-buffer pixels) that is guaranteed to be visible — i.e.
+  // the top edge of the status bar, mapped through the canvas
+  // client-size → buffer-size scale factor.
+  //
+  // Callers should render their widget bottom at or above this Y.
+  // Fallback: if the DOM refs are missing or the bar is hidden, the
+  // full canvas height is safe.
+
+  function getSafeBottom(canvasHeight) {
+    var cvs = _els.viewCanvas || document.getElementById('view-canvas');
+    var bar = _els.statusBar  || document.getElementById('status-bar');
+    if (!cvs || !bar) return canvasHeight;
+
+    // Bar hidden → whole canvas is safe
+    if (bar.offsetParent === null) return canvasHeight;
+
+    var cRect = cvs.getBoundingClientRect();
+    var bRect = bar.getBoundingClientRect();
+    if (cRect.height <= 0 || bRect.height <= 0) return canvasHeight;
+
+    var scaleY = canvasHeight / cRect.height;
+    var safeY  = (bRect.top - cRect.top) * scaleY;
+
+    // Clamp to [0, canvasHeight] — bar above the canvas would be weird
+    if (safeY < 0) return 0;
+    if (safeY > canvasHeight) return canvasHeight;
+    return safeY;
+  }
+
+  function getFooterHeight(canvasHeight) {
+    var cvs = _els.viewCanvas || document.getElementById('view-canvas');
+    var bar = _els.statusBar  || document.getElementById('status-bar');
+    if (!cvs || !bar) return 0;
+    if (bar.offsetParent === null) return 0;
+
+    var cRect = cvs.getBoundingClientRect();
+    var bRect = bar.getBoundingClientRect();
+    if (cRect.height <= 0) return 0;
+
+    var scaleY = canvasHeight / cRect.height;
+    return bRect.height * scaleY;
+  }
+
+  // PF-5: mirror of getSafeBottom for the top edge. Captured-input
+  // minigames draw an input banner at the top of the viewport; if a
+  // future top-edge DOM overlay is added (e.g. debug ribbon, combat
+  // announce) we need to dodge it the same way. Today no such element
+  // is mounted, so this returns 0 — but callers should use it anyway
+  // instead of hard-coding 0, to future-proof placement.
+  function getSafeTop(canvasHeight) {
+    var cvs = _els.viewCanvas || document.getElementById('view-canvas');
+    var top = document.getElementById('top-bar');  // reserved, may be null
+    if (!cvs || !top) return 0;
+    if (top.offsetParent === null) return 0;
+
+    var cRect = cvs.getBoundingClientRect();
+    var tRect = top.getBoundingClientRect();
+    if (cRect.height <= 0 || tRect.height <= 0) return 0;
+
+    var scaleY = canvasHeight / cRect.height;
+    var bottomOfHeader = (tRect.bottom - cRect.top) * scaleY;
+    if (bottomOfHeader < 0) return 0;
+    if (bottomOfHeader > canvasHeight) return canvasHeight;
+    return bottomOfHeader;
   }
 
   function updatePlayer(player) {
@@ -816,6 +897,9 @@ var HUD = (function () {
     setAdvantage: setAdvantage,
     renderReadinessBar: renderReadinessBar,
     triggerReadinessSweep: triggerReadinessSweep,
-    setOnTierCross: function (fn) { _onTierCross = fn; }
+    setOnTierCross: function (fn) { _onTierCross = fn; },
+    getSafeBottom: getSafeBottom,
+    getFooterHeight: getFooterHeight,
+    getSafeTop: getSafeTop
   };
 })();

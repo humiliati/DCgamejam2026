@@ -196,6 +196,17 @@ var Toast = (function () {
       var RING_FRAC = 0.315;
       var ringR = RING_FRAC * Math.min(vpW, vpH);
       var ringBottom = vpH / 2 + ringR + 10;  // 10px gap below ring
+
+      // PF-3: keep the stack clear of the #status-bar tooltip footer.
+      // If the bottom-most toast would paint under the bar (collapsed
+      // 128px or .sb-expanded up to 50vh), shift the whole stack up.
+      var _stackH = _toasts.length * (TOAST_H + TOAST_GAP);
+      var _safeBot = (typeof HUD !== 'undefined' && HUD.getSafeBottom)
+        ? HUD.getSafeBottom(vpH) - TOAST_MARGIN
+        : vpH - TOAST_MARGIN;
+      if (ringBottom + _stackH > _safeBot) ringBottom = _safeBot - _stackH;
+      if (ringBottom < TOAST_MARGIN) ringBottom = TOAST_MARGIN;
+
       var tx = (vpW - toastW) / 2;
       var ty = ringBottom + i * (TOAST_H + TOAST_GAP);
 

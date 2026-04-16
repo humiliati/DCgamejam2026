@@ -331,6 +331,291 @@
       text-align: center;
       letter-spacing: 1px;
     }
+
+    /* ── Lighting Drawer ─────────────────────────────────────────── */
+    .lt-drawer {
+      position: fixed;
+      top: 0; right: 0;
+      width: 320px;
+      height: 100vh;
+      z-index: 9999;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #e0f0ff;
+      background: rgba(8,10,22,0.94);
+      border-left: 2px solid #2afce0;
+      box-shadow: -4px 0 24px rgba(42,252,224,0.15);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s ease;
+      overflow: hidden;
+    }
+    .lt-drawer.collapsed {
+      transform: translateX(278px);
+    }
+    .lt-drawer-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(42,252,224,0.25);
+      background: rgba(12,6,25,0.85);
+      flex-shrink: 0;
+    }
+    .lt-drawer-hdr h2 {
+      font-size: 13px;
+      color: #fcff1a;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      flex: 1;
+      margin: 0;
+    }
+    .lt-drawer-hdr button {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      background: rgba(42,252,224,0.1);
+      border: 1px solid rgba(42,252,224,0.45);
+      color: #2afce0;
+      padding: 4px 8px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    .lt-drawer-hdr button:hover {
+      background: rgba(252,80,198,0.2);
+      border-color: #fc50c6;
+      color: #fff;
+    }
+    .lt-drawer-toggle {
+      background: none !important;
+      border: none !important;
+      font-size: 16px !important;
+      padding: 2px 6px !important;
+      color: #2afce0 !important;
+      cursor: pointer;
+    }
+    .lt-drawer-toggle:hover {
+      color: #fcff1a !important;
+    }
+
+    .lt-drawer-presets {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(42,252,224,0.15);
+      background: rgba(0,0,0,0.25);
+      flex-shrink: 0;
+    }
+    .lt-drawer-presets select {
+      flex: 1;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.4);
+      color: #2afce0;
+      padding: 4px 6px;
+    }
+    .lt-drawer-presets button {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      background: rgba(42,252,224,0.08);
+      border: 1px solid rgba(42,252,224,0.35);
+      color: #2afce0;
+      padding: 3px 6px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    .lt-drawer-presets button:hover {
+      background: rgba(252,80,198,0.2);
+      border-color: #fc50c6;
+      color: #fff;
+    }
+
+    .lt-drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(42,252,224,0.4) rgba(0,0,0,0.3);
+    }
+    .lt-drawer-body::-webkit-scrollbar       { width: 8px; }
+    .lt-drawer-body::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+    .lt-drawer-body::-webkit-scrollbar-thumb { background: rgba(42,252,224,0.4); border-radius: 4px; }
+
+    .lt-drawer-body details {
+      margin-bottom: 6px;
+      border: 1px solid rgba(42,252,224,0.15);
+      border-radius: 3px;
+      background: rgba(0,0,0,0.2);
+    }
+    .lt-drawer-body details[open] {
+      border-color: rgba(42,252,224,0.35);
+    }
+    .lt-drawer-body summary {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #2afce0;
+      user-select: none;
+      list-style: none;
+    }
+    .lt-drawer-body summary::-webkit-details-marker { display: none; }
+    .lt-drawer-body summary::before {
+      content: '▸ ';
+      color: rgba(42,252,224,0.6);
+    }
+    .lt-drawer-body details[open] > summary::before {
+      content: '▾ ';
+    }
+    .lt-drawer-body summary:hover {
+      background: rgba(42,252,224,0.06);
+    }
+    .lt-section-body {
+      padding: 6px 10px 10px;
+    }
+    .lt-knob-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .lt-knob-row label {
+      flex: 0 0 110px;
+      font-size: 10px;
+      color: #b7a8e0;
+      text-transform: none;
+      letter-spacing: 0.5px;
+      margin: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .lt-knob-row label.lt-star::before {
+      content: '⭐';
+      font-size: 8px;
+      margin-right: 3px;
+    }
+    .lt-knob-row input[type="range"] {
+      flex: 1;
+      min-width: 60px;
+      accent-color: #2afce0;
+      cursor: pointer;
+      height: 14px;
+    }
+    .lt-knob-row input[type="number"] {
+      width: 52px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.35);
+      color: #2afce0;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 2px 4px;
+      text-align: right;
+    }
+    .lt-knob-row input[type="number"]:focus {
+      border-color: #fcff1a;
+      outline: none;
+    }
+    .lt-knob-row .lt-revert {
+      flex: 0 0 auto;
+      background: none;
+      border: none;
+      color: rgba(42,252,224,0.5);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .lt-knob-row .lt-revert:hover { color: #fcff1a; }
+    .lt-kind-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+    .lt-kind-table th, .lt-kind-table td {
+      font-size: 10px;
+      padding: 2px 4px;
+      text-align: center;
+      border-bottom: 1px solid rgba(42,252,224,0.1);
+    }
+    .lt-kind-table th {
+      color: #2afce0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .lt-kind-table td input {
+      width: 48px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.25);
+      color: #e0f0ff;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 2px 3px;
+      text-align: right;
+    }
+    .lt-kind-table td input:focus {
+      border-color: #fcff1a;
+      outline: none;
+    }
+    .lt-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .lt-toggle-row input[type="checkbox"] {
+      accent-color: #fc50c6;
+      cursor: pointer;
+    }
+    .lt-toggle-row span {
+      font-size: 10px;
+      color: #d6cff0;
+    }
+    .lt-select-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .lt-select-row label {
+      flex: 0 0 110px;
+      font-size: 10px;
+      color: #b7a8e0;
+      margin: 0;
+      text-transform: none;
+    }
+    .lt-select-row select {
+      flex: 1;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(42,252,224,0.35);
+      color: #2afce0;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      padding: 3px 4px;
+    }
+    .lt-color-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .lt-color-row label {
+      flex: 0 0 110px;
+      font-size: 10px;
+      color: #b7a8e0;
+      margin: 0;
+      text-transform: none;
+    }
+    .lt-color-row input[type="color"] {
+      width: 32px;
+      height: 20px;
+      border: 1px solid rgba(42,252,224,0.4);
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -420,6 +705,10 @@
           <label class="toggle">
             <input type="checkbox" id="t-spatialRuler">
             <span>Spatial ruler<small>world-Y ruler on 3D viewport (SpatialDebug)</small></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="t-lightPanel">
+            <span>Lighting panel<small>right-hand tuning drawer over canvas (all lighting knobs)</small></span>
           </label>
         </div>
       </fieldset>
@@ -798,7 +1087,7 @@
         if (saved.floor)     floorIn.value = saved.floor;
         if (saved.callsign)  document.getElementById('callsign').value = saved.callsign;
         if (saved.klass)     document.getElementById('klass').value = saved.klass;
-        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon','spatialRuler',
+        ['skipMono','skipSplash','god','noEnemies','gold','fullHp','hideHud','logState','perfMon','spatialRuler','lightPanel',
          'hose','hoseInf','nozzlePanel','grime'].forEach(function (k) {
           var el = document.getElementById('t-' + k);
           if (el && typeof saved[k] === 'boolean') el.checked = saved[k];
@@ -825,6 +1114,7 @@
         logState:   document.getElementById('t-logState').checked,
         perfMon:    document.getElementById('t-perfMon').checked,
         spatialRuler: document.getElementById('t-spatialRuler').checked,
+        lightPanel:  document.getElementById('t-lightPanel').checked,
         hose:        document.getElementById('t-hose').checked,
         hoseInf:     document.getElementById('t-hoseInf').checked,
         nozzlePanel: document.getElementById('t-nozzlePanel').checked,
@@ -851,6 +1141,7 @@
       if (c.logState)   params.set('logState',   '1');
       if (c.perfMon)    params.set('perfMon',    '1');
       if (c.spatialRuler) params.set('spatialRuler', '1');
+      if (c.lightPanel)  params.set('lightPanel',  '1');
       // ── Pressure Washing (Rung 0) ─────────────────────────────────
       // hoseInf implies hose; DebugBoot also does its own OR but we set
       // it explicitly here so URL readers don't need that contract.
@@ -889,6 +1180,167 @@
     form.addEventListener('change', updatePreview);
     updatePreview();
     highlightSelected();
+  })();
+  </script>
+
+  <!-- ── Lighting Tuning Drawer ─────────────────────────────────── -->
+  <div class="lt-drawer collapsed" id="lt-drawer">
+    <div class="lt-drawer-hdr">
+      <button class="lt-drawer-toggle" id="lt-toggle" title="Collapse / expand">◀</button>
+      <h2>Lighting</h2>
+      <button id="lt-reset" title="Reset all knobs to compile-time defaults">Reset</button>
+    </div>
+    <div class="lt-drawer-presets">
+      <select id="lt-preset-sel"><option value="">(none)</option></select>
+      <button id="lt-preset-load">Load</button>
+      <button id="lt-preset-save">Save</button>
+      <button id="lt-preset-copy">Copy</button>
+    </div>
+    <div class="lt-drawer-body" id="lt-body">
+
+      <!-- ▸ Orbs (LightOrbs) -->
+      <details id="lt-sec-orbs">
+        <summary>Orbs (LightOrbs)</summary>
+        <div class="lt-section-body" id="lt-orbs-body">
+          <!-- Populated by script -->
+        </div>
+      </details>
+
+      <!-- ▸ Flicker (Lighting) -->
+      <details id="lt-sec-flicker">
+        <summary>Flicker (Lighting)</summary>
+        <div class="lt-section-body" id="lt-flicker-body">
+        </div>
+      </details>
+
+      <!-- ▸ Grid lightmap (Lighting) -->
+      <details id="lt-sec-grid">
+        <summary>Grid lightmap (Lighting)</summary>
+        <div class="lt-section-body" id="lt-grid-body">
+        </div>
+      </details>
+
+      <!-- ▸ Weather modifiers -->
+      <details id="lt-sec-weather">
+        <summary>Weather modifiers</summary>
+        <div class="lt-section-body" id="lt-weather-body">
+        </div>
+      </details>
+
+      <!-- ▸ Depth modifiers -->
+      <details id="lt-sec-depth">
+        <summary>Depth modifiers</summary>
+        <div class="lt-section-body" id="lt-depth-body">
+        </div>
+      </details>
+
+      <!-- ▸ Day cycle -->
+      <details id="lt-sec-daycycle">
+        <summary>Day cycle</summary>
+        <div class="lt-section-body" id="lt-daycycle-body">
+        </div>
+      </details>
+
+      <!-- ▸ Per-kind (torch / bonfire / hearth / lantern / brazier) -->
+      <details id="lt-sec-kinds">
+        <summary>Per-kind (torch / bonfire / ...)</summary>
+        <div class="lt-section-body" id="lt-kinds-body">
+        </div>
+      </details>
+
+      <!-- ▸ Spatial contract overrides -->
+      <details id="lt-sec-spatial">
+        <summary>Spatial contract</summary>
+        <div class="lt-section-body" id="lt-spatial-body">
+        </div>
+      </details>
+
+      <!-- ▸ Debug overlays -->
+      <details id="lt-sec-debug">
+        <summary>Debug overlays</summary>
+        <div class="lt-section-body" id="lt-debug-body">
+        </div>
+      </details>
+
+    </div>
+  </div>
+
+  <script>
+  // ── Lighting Drawer — scaffold + localStorage persistence ──────
+  (function () {
+    'use strict';
+
+    var STORAGE_KEY = 'testharness.lighting.panel';
+    var drawer  = document.getElementById('lt-drawer');
+    var toggle  = document.getElementById('lt-toggle');
+    var body    = document.getElementById('lt-body');
+
+    // ── Collapse / expand ─────────────────────────────────────────
+    toggle.addEventListener('click', function () {
+      var isCollapsed = drawer.classList.toggle('collapsed');
+      toggle.textContent = isCollapsed ? '◀' : '▶';
+      _saveState();
+    });
+
+    // ── <details> section expand state persistence ────────────────
+    var sections = body.querySelectorAll('details');
+    sections.forEach(function (det) {
+      det.addEventListener('toggle', _saveState);
+    });
+
+    // ── Save panel state ──────────────────────────────────────────
+    function _saveState() {
+      var state = {
+        collapsed: drawer.classList.contains('collapsed'),
+        sections: {}
+      };
+      sections.forEach(function (det) {
+        state.sections[det.id] = det.open;
+      });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      catch (e) { /* ignore */ }
+    }
+
+    // ── Restore panel state ───────────────────────────────────────
+    function _restoreState() {
+      try {
+        var state = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (!state) return;
+        if (state.collapsed === false) {
+          drawer.classList.remove('collapsed');
+          toggle.textContent = '▶';
+        }
+        if (state.sections) {
+          sections.forEach(function (det) {
+            if (state.sections[det.id] === true) det.open = true;
+            else if (state.sections[det.id] === false) det.open = false;
+          });
+        }
+      } catch (e) { /* ignore */ }
+    }
+    _restoreState();
+
+    // ── Preset bar stub (wired in Phase 6) ────────────────────────
+    var presetSel  = document.getElementById('lt-preset-sel');
+    var presetLoad = document.getElementById('lt-preset-load');
+    var presetSave = document.getElementById('lt-preset-save');
+    var presetCopy = document.getElementById('lt-preset-copy');
+    var resetBtn   = document.getElementById('lt-reset');
+
+    presetLoad.addEventListener('click', function () {
+      console.log('[LT-Drawer] Load preset:', presetSel.value, '(stub — Phase 6)');
+    });
+    presetSave.addEventListener('click', function () {
+      var name = prompt('Preset name:');
+      if (name) console.log('[LT-Drawer] Save preset:', name, '(stub — Phase 6)');
+    });
+    presetCopy.addEventListener('click', function () {
+      console.log('[LT-Drawer] Copy JSON (stub — Phase 6)');
+    });
+    resetBtn.addEventListener('click', function () {
+      console.log('[LT-Drawer] Reset all (stub — Phase 3+)');
+    });
+
   })();
   </script>
 </body>

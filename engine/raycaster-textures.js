@@ -183,7 +183,45 @@ var RaycasterTextures = (function () {
         ctx.fillStyle = 'rgba(70, 130, 200, ' + glowA.toFixed(3) + ')';
         ctx.fillRect(col, gapStart, 1, gapH);
       }
-    }
+    },
+
+    // WELL water cavity: dark blue-black surface with faint ripple
+    // shimmer. The cavity is see-through (floor prepass + back layers
+    // show through), tinted with a deep-water blue. A subtle per-column
+    // sine shimmer on the alpha reads as water surface without needing
+    // a full reflection render pass. Used at the base of the 0.50-unit
+    // circular stone rim — player looks at the well from the side and
+    // sees dark water below the lip.
+    well_water: function (ctx, col, gapStart, gapH, info) {
+      if (gapH <= 0) return;
+      var fogFade = 1 - Math.min(0.85, info.fogFactor);
+      var t = Date.now();
+      // Slow ripple shimmer — subtle enough to read as "surface glint"
+      var shimmer = 0.85 + 0.15 * Math.sin(
+        t * 0.004 + col * 0.47 + info.mapX * 2.1 + info.mapY * 1.3
+      );
+      var a = 0.35 * info.brightness * fogFade * shimmer;
+      if (a > 0.01) {
+        ctx.fillStyle = 'rgba(8, 18, 35, ' + a.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, gapH);
+      }
+    },
+
+    // CHARGING_CRADLE conduit glow: bright blue energy stripe visible
+    // through the frame's cavity. Same transparent-base pattern as
+    // hearth_fire / truck_spool_cavity. Flickers at mains frequency
+    // (~60 Hz visual, modulated down to a visible 2-3 Hz rate).
+    cradle_conduit: function (ctx, col, gapStart, gapH, info) {
+      if (gapH <= 0) return;
+      var fogFade = 1 - Math.min(0.85, info.fogFactor);
+      var t = Date.now();
+      var pulse = 0.7 + 0.3 * Math.sin(t * 0.008 + col * 0.15 + info.mapY * 0.5);
+      var a = 0.22 * info.brightness * fogFade * pulse;
+      if (a > 0.01) {
+        ctx.fillStyle = 'rgba(50, 140, 220, ' + a.toFixed(3) + ')';
+        ctx.fillRect(col, gapStart, 1, gapH);
+      }
+    },
 
     // NOTE: window_tavern_interior and related window fillers are
     // registered at Layer 3 init time from engine/window-sprites.js via

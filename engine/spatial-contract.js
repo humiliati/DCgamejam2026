@@ -305,7 +305,45 @@ var SpatialContract = (function () {
         // the dark interior + door frame on the exterior face, transparent
         // on the interior face, masonry on side faces (same model as
         // WINDOW_TAVERN's three-face treatment).
-        74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door', recessD: 0.25 })
+        74: Object.freeze({ hUpper: 2.20, hLower: 0.00, fillGap: 'facade_door', recessD: 0.25 }),
+        // SOUP_KITCHEN (47) — round cauldron on open tripod brazier.
+        // hLower 0.10 = thin brazier-leg band at ground level.
+        // hUpper 0.35 = pot body + rim (dominant mass).
+        // Gap 0.25 = fire cavity between legs and belly — see-through
+        // so the player looks under the pot at the fire/ground behind.
+        // Combined with 'circle' tileShape → round cross-section.
+        47: Object.freeze({ hUpper: 0.35, hLower: 0.10, fillGap: '_transparent' }),
+        // WELL (40) — circular stone rim with dark water visible below.
+        // hUpper 0.25 = stone lip (dominant visual mass above water line).
+        // hLower 0.00 = water meets the floor — no base band.
+        // Gap 0.25 = dark water cavity. Combined with 'circle' tileShape
+        // the well reads as a round stone ring with a pool inside.
+        40: Object.freeze({ hUpper: 0.25, hLower: 0.00, fillGap: 'well_water' }),
+        // CHARGING_CRADLE (45) — metal frame with glowing conduit slot.
+        // hUpper 0.35 = frame + cable housing above the conduit slot.
+        // hLower 0.15 = squat base legs.
+        // Gap 0.30 = blue conduit energy visible through the frame.
+        45: Object.freeze({ hUpper: 0.35, hLower: 0.15, fillGap: 'cradle_conduit' }),
+        // BENCH (41) — wooden slat seat over leg cavity.
+        // hUpper 0.15 = seat slab + backrest.
+        // hLower 0.05 = foot rail near ground.
+        // Gap 0.15 = see-through under the seat (floor/back layers).
+        41: Object.freeze({ hUpper: 0.15, hLower: 0.05, fillGap: '_transparent' }),
+        // ANVIL (43) — iron body over narrow-waist gap above pedestal.
+        // hUpper 0.25 = horn + face + body (dominant mass).
+        // hLower 0.10 = stone pedestal base.
+        // Gap 0.15 = throat/waist gap — see-through like a real anvil.
+        43: Object.freeze({ hUpper: 0.25, hLower: 0.10, fillGap: '_transparent' }),
+        // COT (48) — canvas bedroll over frame-leg gap.
+        // hUpper 0.15 = canvas top + pillow bump.
+        // hLower 0.00 = no base band (legs touch floor).
+        // Gap 0.15 = under-cot cavity.
+        48: Object.freeze({ hUpper: 0.15, hLower: 0.00, fillGap: '_transparent' }),
+        // NOTICE_BOARD (42) — pinboard above see-through post legs.
+        // hUpper 0.60 = parchment board + top frame + overhang.
+        // hLower 0.15 = post feet / ground-level bracing.
+        // Gap 0.45 = open air between posts and board.
+        42: Object.freeze({ hUpper: 0.60, hLower: 0.15, fillGap: '_transparent' })
       }, opts.tileFreeform),
 
       // ── Per-tile shape overrides ──
@@ -454,6 +492,12 @@ var SpatialContract = (function () {
         68: 'floor_cobble',      // PERGOLA — plaza flagstones below the beam lattice (biome-overridable)
         69: 'floor_cobble',      // CITY_BONFIRE — plaza flagstones around the community pyre
         70: 'floor_cobble',      // PERGOLA_BEAM — plaza flagstones under the beam canopy
+        40: 'floor_well_water',   // WELL — dark water surface viewed from above
+        41: 'floor_bench_top',   // BENCH — wooden slat seat from above
+        43: 'floor_anvil_top',   // ANVIL — polished iron work surface
+        44: 'floor_barrel_lid',  // BARREL — wooden lid viewed from above
+        47: 'floor_soup_top',    // SOUP_KITCHEN — broth surface from above
+        48: 'floor_cot_top',     // COT — canvas bedroll from above
         71: 'floor_stone',       // ARCH_DOORWAY — stone threshold under the arch
         72: 'floor_cobble',      // PORTHOLE — cobblestones below the porthole wall
         73: 'floor_cobble',      // WINDOW_TAVERN — street cobblestones outside the facade
@@ -677,7 +721,21 @@ var SpatialContract = (function () {
         // above eye line). hLower 1.20 + hUpper 0.50 leaves a 0.30 gap.
         // Same recessD + filler as the dungeon variant — see torch-niche.js.
         30: Object.freeze({ hUpper: 0.50, hLower: 1.20, fillGap: 'torch_niche', recessD: 0.22 }),
-        31: Object.freeze({ hUpper: 0.50, hLower: 1.20, fillGap: 'torch_niche', recessD: 0.22 })
+        31: Object.freeze({ hUpper: 0.50, hLower: 1.20, fillGap: 'torch_niche', recessD: 0.22 }),
+        // SOUP_KITCHEN — pot-on-brazier freeform (same as exterior)
+        47: Object.freeze({ hUpper: 0.35, hLower: 0.10, fillGap: '_transparent' }),
+        // WELL — circular rim with dark water below the lip
+        40: Object.freeze({ hUpper: 0.25, hLower: 0.00, fillGap: 'well_water' }),
+        // CHARGING_CRADLE — conduit glow through frame cavity
+        45: Object.freeze({ hUpper: 0.35, hLower: 0.15, fillGap: 'cradle_conduit' }),
+        // BENCH — seat slab over leg cavity
+        41: Object.freeze({ hUpper: 0.15, hLower: 0.05, fillGap: '_transparent' }),
+        // ANVIL — iron body over narrow-waist gap above pedestal
+        43: Object.freeze({ hUpper: 0.25, hLower: 0.10, fillGap: '_transparent' }),
+        // COT — canvas bedroll over frame-leg gap
+        48: Object.freeze({ hUpper: 0.15, hLower: 0.00, fillGap: '_transparent' }),
+        // NOTICE_BOARD — pinboard above see-through post legs
+        42: Object.freeze({ hUpper: 0.60, hLower: 0.15, fillGap: '_transparent' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -729,7 +787,13 @@ var SpatialContract = (function () {
         75: 'floor_stone',      // TRAPDOOR_DN — stone around hatch
         76: 'floor_stone',      // TRAPDOOR_UP — stone around hatch
         82: 'floor_stone',      // WINDOW_ARROWSLIT — stone at the slit base
-        83: 'floor_stone'       // WINDOW_MURDERHOLE — stone at the wall base
+        83: 'floor_stone',      // WINDOW_MURDERHOLE — stone at the wall base
+        40: 'floor_well_water', // WELL — dark water surface viewed from above
+        41: 'floor_bench_top',  // BENCH — wooden slat seat
+        43: 'floor_anvil_top',  // ANVIL — iron work surface
+        44: 'floor_barrel_lid', // BARREL — wooden lid
+        47: 'floor_soup_top',   // SOUP_KITCHEN — broth surface
+        48: 'floor_cot_top'     // COT — canvas bedroll
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -931,7 +995,21 @@ var SpatialContract = (function () {
         // amber radial glow + flame silhouette. TORCH_UNLIT renders the
         // same cavity with a charred wick stub instead of flame.
         30: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'torch_niche', recessD: 0.22 }),
-        31: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'torch_niche', recessD: 0.22 })
+        31: Object.freeze({ hUpper: 0.25, hLower: 0.70, fillGap: 'torch_niche', recessD: 0.22 }),
+        // SOUP_KITCHEN — pot-on-brazier freeform (same as exterior)
+        47: Object.freeze({ hUpper: 0.35, hLower: 0.10, fillGap: '_transparent' }),
+        // WELL — circular rim with dark water below the lip
+        40: Object.freeze({ hUpper: 0.25, hLower: 0.00, fillGap: 'well_water' }),
+        // CHARGING_CRADLE — conduit glow through frame cavity
+        45: Object.freeze({ hUpper: 0.35, hLower: 0.15, fillGap: 'cradle_conduit' }),
+        // BENCH — seat slab over leg cavity
+        41: Object.freeze({ hUpper: 0.15, hLower: 0.05, fillGap: '_transparent' }),
+        // ANVIL — iron body over narrow-waist gap above pedestal
+        43: Object.freeze({ hUpper: 0.25, hLower: 0.10, fillGap: '_transparent' }),
+        // COT — canvas bedroll over frame-leg gap
+        48: Object.freeze({ hUpper: 0.15, hLower: 0.00, fillGap: '_transparent' }),
+        // NOTICE_BOARD — pinboard above see-through post legs (capped at 1.0 dungeon)
+        42: Object.freeze({ hUpper: 0.45, hLower: 0.15, fillGap: '_transparent' })
       }, opts.tileFreeform),
 
       // ── Wall textures ──
@@ -980,6 +1058,12 @@ var SpatialContract = (function () {
         19: 'floor_corpse',      // CORPSE — bloodstained stone with bone fragments
         23: 'floor_puzzle',      // PUZZLE — etched grid with arcane runes
         39: 'floor_detritus',    // DETRITUS — scattered adventurer debris
+        40: 'floor_well_water',   // WELL — dark water surface viewed from above
+        41: 'floor_bench_top',   // BENCH — wooden slat seat
+        43: 'floor_anvil_top',   // ANVIL — iron work surface
+        44: 'floor_barrel_lid',  // BARREL — wooden lid
+        47: 'floor_soup_top',    // SOUP_KITCHEN — broth surface
+        48: 'floor_cot_top',     // COT — canvas bedroll
         52: 'floor_fungal_patch',// FUNGAL_PATCH — bioluminescent loam w/ glowing caps
         75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
         76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch

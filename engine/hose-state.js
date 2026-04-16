@@ -80,7 +80,9 @@ var HoseState = (function () {
     attach: [],    // fn(originBuildingId, originFloorId)
     detach: [],    // fn(reason)
     step:   [],    // fn({x, y, floorId}, pathLength)
-    kink:   []     // fn(kinkCount, {x, y, floorId})
+    kink:   [],    // fn(kinkCount, {x, y, floorId})
+    pop:    []     // fn({x, y, floorId}, newPathLength) — fired by popLastStep()
+                   // so HoseReel-driven retraction notifies observers (HoseDecal, etc.)
   };
 
   function _emit(event, a, b) {
@@ -310,6 +312,9 @@ var HoseState = (function () {
     var last = _path.pop();
     var key = last.floorId + ':' + last.x + ',' + last.y;
     delete _visitedKeys[key];
+    // Notify observers (HoseDecal maintains a per-tile visit ledger that must
+    // stay in lockstep with the path during HoseReel retraction).
+    _emit('pop', last, _path.length);
     return last;
   }
 

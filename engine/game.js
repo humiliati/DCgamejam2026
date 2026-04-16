@@ -4181,6 +4181,18 @@ var Game = (function () {
                        renderPos.angle + p.lookOffset + shakeOffset);
     }
 
+    // Spray viewport FX — blue hose-carry overlay + wet spatter
+    // that catches LightOrbs reflections on indoor floors.
+    if (typeof SprayViewportFX !== 'undefined' && SprayViewportFX.render) {
+      SprayViewportFX.tick(frameDt);
+      SprayViewportFX.buildLightSnapshot(
+        _canvas.width, _canvas.height,
+        renderPos.x, renderPos.y,
+        renderPos.angle + p.lookOffset + shakeOffset
+      );
+      SprayViewportFX.render(ctx, _canvas.width, _canvas.height);
+    }
+
     // Cobweb rendering (after raycaster, before minimap)
     var _cobFloorId = FloorManager.getCurrentFloorId();
     var _cobPlayer = { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset };

@@ -19,9 +19,12 @@ var InteractPrompt = (function () {
   var BOX_H     = 60;    // Prompt box height (Magic Remote tactile target)
   var BOX_PAD   = 24;    // Horizontal padding
   var BOX_RAD   = 10;    // Corner radius
-  var BOX_Y_FRAC = 0.60;  // Vertical position as fraction of viewport height (0.5=center)
-                          // 0.60 sits just below the ViewportRing bottom edge,
-                          // well above the tooltip footer bar.
+  var BOX_BOTTOM_MARGIN = 16;  // px above the status-bar footer
+  var BOX_Y_FRAC = 0.60;  // Legacy fallback — used only when HUD.getSafeBottom
+                          // is unavailable (e.g. HUD not yet initialised during
+                          // early boot). Normal path: bottom-anchored via
+                          // HUD.getSafeBottom() so the prompt rides up when
+                          // the tooltip footer expands (.sb-expanded).
 
   // ── Colors ──────────────────────────────────────────────────────
   var COL_BG      = 'rgba(10,8,18,0.88)';
@@ -44,6 +47,37 @@ var InteractPrompt = (function () {
   var _hovered    = false;   // Pointer is over the prompt
   var _clickFlash = 0;       // Click feedback flash timer (ms remaining)
   var _inactive   = false;   // True when tile is non-interactive (empty bookshelf)
+
+  // PF-4: rising-edge "approaching a new interactable" signal
+  // When the player starts facing a new interactable tile, ask the status bar
+  // to collapse its expanded tooltip footer — but only if they aren't engaged
+  // in dialogue (StatusBar.collapseIfIdle already respects _dialogueActive).
+  // Tracking the "approach key" (fx,fy,tile) lets us fire once per approach
+  // rather than every frame, so if the player manually re-expands the footer
+  // while still facing the same tile we don't fight them.
+  var _lastApproachKey = null;
+
+  /**
+   * PF-4: Signal that the player has started facing a (potentially new)
+   * interactable tile. Fires StatusBar.collapseIfIdle() on the rising edge
+   * only — i.e. when (fx, fy, tile) changes from the previous facing key.
+   * Staying adjacent to the same tile does NOT re-fire, so a player who
+   * manually re-expands the footer while adjacent keeps it open.
+   */
+  function _signalApproach(fx, fy, tile) {
+    var key = fx + ',' + fy + ':' + tile;
+    if (key !== _lastApproachKey) {
+      _lastApproachKey = key;
+      if (typeof StatusBar !== 'undefined' && typeof StatusBar.collapseIfIdle === 'function') {
+        StatusBar.collapseIfIdle();
+      }
+    }
+  }
+
+  /** Clear the approach key when nothing interactable is in front. */
+  function _clearApproach() {
+    _lastApproachKey = null;
+  }
 
   /**
    * Check if any peek overlay with its own action button is active.
@@ -127,6 +161,15 @@ var InteractPrompt = (function () {
   function check() {
     if (typeof FloorManager === 'undefined') { _visible = false; return; }
 
+    // PF-5 — Yield to MinigameExit while a captured-input minigame owns the viewport.
+    // The exit banner + [×] corner + confirm prompt are the only controls the player
+    // should see; any stale tile hint must not bleed through.
+    if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+      _visible = false;
+      _clearApproach();
+      return;
+    }
+
     // Yield to CobwebNode's spider-deployment prompt to prevent overlap
     if (typeof CobwebNode !== 'undefined' && CobwebNode.isPromptVisible()) {
       _visible = false; return;
@@ -154,6 +197,7 @@ var InteractPrompt = (function () {
     var entry = ACTION_MAP[tile];
 
     if (entry) {
+      _signalApproach(fx, fy, tile);
       _visible = true;
       _inactive = false;
       _actionText = i18n.t(entry.action, entry.action.split('.')[1]);
@@ -219,6 +263,7 @@ var InteractPrompt = (function () {
     if (typeof TrapRearm !== 'undefined') {
       var trFlId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
       if (TrapRearm.canRearm(fx, fy, trFlId)) {
+        _signalApproach(fx, fy, 'rearm');
         // Phase 2: show count of trap consumables in bag
         var _trapKitCount = 0;
         if (typeof CardAuthority !== 'undefined') {
@@ -239,6 +284,7 @@ var InteractPrompt = (function () {
     if (typeof CleaningSystem !== 'undefined') {
       var clFlId = (typeof FloorManager !== 'undefined') ? FloorManager.getCurrentFloorId() : '';
       if (CleaningSystem.isDirty(fx, fy, clFlId)) {
+        _signalApproach(fx, fy, 'clean');
         _visible = true;
         var bloodLvl = CleaningSystem.getBlood(fx, fy, clFlId);
         _actionText = i18n.t('interact.clean', 'Scrub') + ' (' + bloodLvl + '/' + CleaningSystem.MAX_BLOOD + ')';
@@ -254,6 +300,7 @@ var InteractPrompt = (function () {
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
       if (e.hp > 0 && e.x === fx && e.y === fy && e.npcType) {
+        _signalApproach(fx, fy, 'npc:' + (e.id || e.npcType));
         _visible = true;
         _actionText = i18n.t(e.talkable ? 'interact.talk' : 'interact.listen', e.talkable ? 'Talk' : 'Listen');
         _iconText = e.emoji || '';
@@ -266,6 +313,7 @@ var InteractPrompt = (function () {
     for (var j = 0; j < enemies.length; j++) {
       var ef = enemies[j];
       if (ef.hp > 0 && ef.x === fx && ef.y === fy && ef.friendly && ef.talkable && !ef.npcType) {
+        _signalApproach(fx, fy, 'friendly:' + (ef.id || ''));
         _visible = true;
         _actionText = i18n.t('interact.talk', 'Talk');
         _iconText = ef.emoji || '';
@@ -276,6 +324,7 @@ var InteractPrompt = (function () {
 
     _visible = false;
     _hintText = '';
+    _clearApproach();
   }
 
   /**
@@ -312,7 +361,17 @@ var InteractPrompt = (function () {
     var actW = ctx.measureText('  ' + fullText).width;
     var boxW = BOX_PAD * 2 + keyW + actW;
     var boxX = (vpW - boxW) / 2;
-    var boxY = vpH * BOX_Y_FRAC;
+
+    // PF-1: anchor prompt bottom just above the tooltip footer so it
+    // stays visible whether the bar is collapsed (128px) or expanded
+    // (up to 50vh). Fall back to BOX_Y_FRAC when HUD isn't ready.
+    var boxY;
+    if (typeof HUD !== 'undefined' && typeof HUD.getSafeBottom === 'function') {
+      boxY = HUD.getSafeBottom(vpH) - BOX_H - BOX_BOTTOM_MARGIN;
+      if (boxY < 0) boxY = vpH * BOX_Y_FRAC;  // defensive clamp
+    } else {
+      boxY = vpH * BOX_Y_FRAC;
+    }
 
     // Store hit zone for pointer click
     _hitBox = { x: boxX, y: boxY, w: boxW, h: BOX_H };

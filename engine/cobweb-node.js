@@ -112,6 +112,15 @@ var CobwebNode = (function () {
 
     _lastFloorId = floorId;
 
+    // PF-5 — Yield while a captured-input minigame owns the viewport.
+    // Fade any active spider-deployment prompt out and skip the
+    // facing/eligibility scan; the exit banner is the only UI that
+    // should be visible during a Tier 2+ minigame.
+    if (typeof MinigameExit !== 'undefined' && MinigameExit.isActive()) {
+      _promptAlpha = Math.max(0, _promptAlpha - dt / FADE_OUT_SPEED);
+      return;
+    }
+
     // Nodes are only active in nested dungeons (depth ≥ 3)
     if (_depth(floorId) < 3) {
       _promptAlpha = Math.max(0, _promptAlpha - dt / FADE_OUT_SPEED);
@@ -151,6 +160,18 @@ var CobwebNode = (function () {
     // Reset dismiss when player turns away from an eligible tile
     if (!_facingElig && wasFacing) {
       _dismissed = false;
+    }
+
+    // PF-4: rising-edge approach — when the player starts facing a fresh
+    // eligible install node (not suppressed by a manual dismiss), ask the
+    // status bar to collapse its expanded tooltip footer. collapseIfIdle()
+    // respects dialogue state, so conversations stay open. Firing only on
+    // the rising edge means the player can manually re-expand while
+    // adjacent without us snapping it closed again.
+    if (_facingElig && !wasFacing && !_dismissed) {
+      if (typeof StatusBar !== 'undefined' && typeof StatusBar.collapseIfIdle === 'function') {
+        StatusBar.collapseIfIdle();
+      }
     }
 
     // Fade prompt in/out based on facing eligibility + dismiss state
@@ -362,7 +383,17 @@ var CobwebNode = (function () {
     var BOX_W    = PAD * 2 + keyW + txtW + CLOSE_W;
     var BOX_H    = 48;
     var BOX_X    = (vpW - BOX_W) / 2;
-    var BOX_Y    = vpH - 140;
+
+    // PF-1: anchor box bottom just above the tooltip footer so the
+    // [BACK] hint that renders at BOX_Y + BOX_H + 13 is also clear.
+    // Footprint = BOX_H + ~14px hint line + 10px breathing room.
+    var BOX_Y;
+    if (typeof HUD !== 'undefined' && typeof HUD.getSafeBottom === 'function') {
+      BOX_Y = HUD.getSafeBottom(vpH) - BOX_H - 24;
+      if (BOX_Y < 0) BOX_Y = vpH - 140;  // defensive clamp
+    } else {
+      BOX_Y = vpH - 140;
+    }
 
     // Store hit boxes
     _promptHitBox  = { x: BOX_X, y: BOX_Y, w: BOX_W - CLOSE_W, h: BOX_H };

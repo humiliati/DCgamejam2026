@@ -369,6 +369,10 @@ var DebugBoot = (function () {
       DebugNozzlePanel.mount();
       console.log('[DebugBoot] nozzle hotkey panel mounted (keys 1-5)');
     }
+    if (PARAMS.lightPanel === '1' && typeof DebugLightingPanel !== 'undefined') {
+      DebugLightingPanel.mount();
+      console.log('[DebugBoot] lighting tuning panel mounted');
+    }
 
     _updateBanner('READY @ ' + ((typeof FloorManager !== 'undefined') ? FloorManager.getFloor() : '?'));
   }

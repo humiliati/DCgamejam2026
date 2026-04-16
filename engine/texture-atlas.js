@@ -889,6 +889,53 @@ var TextureAtlas = (function () {
       sporeR: 180, sporeG: 255, sporeB: 230        // Drifting spore specks
     });
 
+    // Anvil top — dark iron face with hammer-strike wear marks. Used as
+    // tileFloorTexture for ANVIL so looking down shows the iron surface.
+    _genFloorAnvilTop('floor_anvil_top', {
+      ironR: 52, ironG: 52, ironB: 56,               // Dark iron base
+      wearR: 72, wearG: 74, wearB: 80,               // Polished wear marks
+      scaleR: 35, scaleG: 30, scaleB: 28              // Dark hammer scale
+    });
+
+    // Cot top — wrinkled canvas bedroll viewed from above.
+    _genFloorCotTop('floor_cot_top', {
+      canvasR: 115, canvasG: 108, canvasB: 90,        // Drab canvas
+      foldR: 95,  foldG: 88,  foldB: 72,             // Fold shadow creases
+      strapR: 70, strapG: 50, strapB: 30              // Leather tie-down straps
+    });
+
+    // Bench top — wooden slat seat viewed from above.
+    _genFloorBenchTop('floor_bench_top', {
+      slatR: 95, slatG: 68, slatB: 40,               // Warm wood slats
+      gapR: 22,  gapG: 18,  gapB: 12,                // Dark gaps between slats
+      wearR: 80, wearG: 58, wearB: 35                 // Worn centre path
+    });
+
+    // Soup cauldron top — dark liquid surface with steam bubbles.
+    _genFloorSoupTop('floor_soup_top', {
+      brothR: 55, brothG: 35, brothB: 18,             // Dark brown broth
+      steamR: 110, steamG: 105, steamB: 95,           // Steam wisps
+      bubbleR: 75, bubbleG: 50, bubbleB: 28           // Bubble highlights
+    });
+
+    // Well water — dark pool surface viewed from above. Used as the
+    // tileFloorTexture for WELL tiles so the player looking over the
+    // stone rim sees water, not cobblestone.
+    _genFloorWellWater('floor_well_water', {
+      deepR: 6,   deepG: 12,  deepB: 25,            // Near-black deep water
+      surfR: 12,  surfG: 22,  surfB: 40,             // Slightly lighter surface
+      glintR: 35, glintG: 55, glintB: 80             // Rare surface glints
+    });
+
+    // Barrel lid — wooden planks with iron rim viewed from above.
+    // Used as tileFloorTexture for BARREL so looking over the cask
+    // shows a wooden lid, not the floor beneath.
+    _genFloorBarrelLid('floor_barrel_lid', {
+      staveR: 90, staveG: 62, staveB: 34,            // Oak stave planks
+      bandR: 55,  bandG: 53,  bandB: 50,             // Iron rim ring
+      centerR: 75, centerG: 50, centerB: 28           // Darker bung centre
+    });
+
     // ── Environmental floor textures ───────────────────────────────
 
     // Corpse — bloodstained stone with bone fragments
@@ -5701,6 +5748,246 @@ var TextureAtlas = (function () {
         r: _clamp(lr + mn * 0.6),
         g: _clamp(lg + mn),
         b: _clamp(lb + mn * 0.8)
+      };
+    });
+  }
+
+  // ── Well water floor ─────────────────────────────────────────────
+
+  // Dark pool surface. Near-black with radial-from-center depth:
+  // deepest at centre, slightly lighter towards edges, with very
+  // rare surface glints. No mortar grid — this is water, not stone.
+  function _genFloorWellWater(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cx = TEX_SIZE / 2, cy = TEX_SIZE / 2;
+      var dx = x - cx, dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var maxR = TEX_SIZE * 0.45;     // Slightly inside the circle rim
+
+      // Radial depth — darker at centre, lighter at rim
+      var depthT = Math.min(1, dist / maxR);
+      var pn = (_hash(x + 12000, y + 12100) - 0.5) * 4;
+      // Subtle concentric ripple
+      var ripple = Math.sin(dist * 0.6 + (_hash(x + 12200, y) - 0.5) * 2) * 2;
+
+      var r = p.deepR + (p.surfR - p.deepR) * depthT + pn * 0.3 + ripple * 0.2;
+      var g = p.deepG + (p.surfG - p.deepG) * depthT + pn * 0.4 + ripple * 0.3;
+      var b = p.deepB + (p.surfB - p.deepB) * depthT + pn * 0.8 + ripple * 0.5;
+
+      // Rare glint
+      if (_hash(x + 12300, y + 12301) > 0.993) {
+        r = p.glintR; g = p.glintG; b = p.glintB;
+      }
+
+      return { r: _clamp(r), g: _clamp(g), b: _clamp(b) };
+    });
+  }
+
+  // ── Barrel lid floor ────────────────────────────────────────────
+
+  // Top of a sealed barrel: circular lid with radiating stave planks,
+  // outer iron rim ring, and a darker centre bung.
+  function _genFloorBarrelLid(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cx = TEX_SIZE / 2, cy = TEX_SIZE / 2;
+      var dx = x - cx, dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var maxR = TEX_SIZE * 0.47;
+
+      // Iron rim ring — 2px wide at the perimeter
+      if (dist > maxR - 2 && dist <= maxR) {
+        var bn = (_hash(x + 12400, y + 12401) - 0.5) * 4;
+        return {
+          r: _clamp(p.bandR + bn),
+          g: _clamp(p.bandG + bn),
+          b: _clamp(p.bandB + bn)
+        };
+      }
+
+      // Outside the barrel circle — transparent/dark
+      if (dist > maxR) {
+        return { r: 20, g: 18, b: 15 };
+      }
+
+      // Bung centre — darker circle in the middle
+      var bungR = TEX_SIZE * 0.08;
+      if (dist < bungR) {
+        var cn = (_hash(x + 12500, y + 12501) - 0.5) * 3;
+        return {
+          r: _clamp(p.centerR + cn),
+          g: _clamp(p.centerG + cn),
+          b: _clamp(p.centerB + cn)
+        };
+      }
+
+      // Stave planks — angular sectors (8 staves radiating out)
+      var angle = Math.atan2(dy, dx);
+      var sector = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 8);
+      var sectorEdge = (((angle + Math.PI) / (2 * Math.PI)) * 8) % 1;
+      var isGap = sectorEdge < 0.04 || sectorEdge > 0.96;
+
+      var pn = (_hash(x + 12600, y + 12601) - 0.5) * 6;
+      var sn = (_hash(sector + 12700, 0) - 0.5) * 10;  // Per-stave colour shift
+
+      if (isGap) {
+        // Dark line between staves
+        return { r: _clamp(p.centerR - 5), g: _clamp(p.centerG - 5), b: _clamp(p.centerB - 5) };
+      }
+
+      return {
+        r: _clamp(p.staveR + sn + pn),
+        g: _clamp(p.staveG + sn * 0.7 + pn * 0.8),
+        b: _clamp(p.staveB + sn * 0.5 + pn * 0.6)
+      };
+    });
+  }
+
+  // ── Anvil top floor ──────────────────────────────────────────────
+
+  // Dark iron work surface with radial hammer-strike wear. Centre is
+  // polished from repeated strikes; edges carry dark scale. No mortar
+  // grid — solid iron casting.
+  function _genFloorAnvilTop(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cx = TEX_SIZE / 2, cy = TEX_SIZE / 2;
+      var dx = x - cx, dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var maxR = TEX_SIZE * 0.42;
+
+      // Radial wear — more polished at centre
+      var wearT = 1 - Math.min(1, dist / maxR);
+      wearT = wearT * wearT;  // Concentrate polish at centre
+      var pn = (_hash(x + 13000, y + 13100) - 0.5) * 5;
+
+      // Hammer scale patches at edges
+      var scaleSeed = _hash(x + 13200, y + 13201);
+      if (dist > maxR * 0.7 && scaleSeed > 0.75) {
+        return {
+          r: _clamp(p.scaleR + pn * 0.4),
+          g: _clamp(p.scaleG + pn * 0.3),
+          b: _clamp(p.scaleB + pn * 0.2)
+        };
+      }
+
+      return {
+        r: _clamp(p.ironR + (p.wearR - p.ironR) * wearT + pn * 0.5),
+        g: _clamp(p.ironG + (p.wearG - p.ironG) * wearT + pn * 0.5),
+        b: _clamp(p.ironB + (p.wearB - p.ironB) * wearT + pn * 0.7)
+      };
+    });
+  }
+
+  // ── Cot top floor ──────────────────────────────────────────────
+
+  // Wrinkled canvas bedroll. Parallel fold creases running lengthwise
+  // with occasional leather tie-down straps crossing.
+  function _genFloorCotTop(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var pn = (_hash(x + 13300, y + 13400) - 0.5) * 5;
+
+      // Fold creases — horizontal lines every ~8px
+      var foldY = y % 8;
+      if (foldY < 1) {
+        return {
+          r: _clamp(p.foldR + pn * 0.5),
+          g: _clamp(p.foldG + pn * 0.4),
+          b: _clamp(p.foldB + pn * 0.3)
+        };
+      }
+
+      // Leather straps — vertical lines at 1/3 and 2/3
+      var strapZone = (x > TEX_SIZE * 0.30 && x < TEX_SIZE * 0.34) ||
+                      (x > TEX_SIZE * 0.64 && x < TEX_SIZE * 0.68);
+      if (strapZone) {
+        var sn = (_hash(x + 13500, y + 13501) - 0.5) * 4;
+        return {
+          r: _clamp(p.strapR + sn),
+          g: _clamp(p.strapG + sn * 0.8),
+          b: _clamp(p.strapB + sn * 0.6)
+        };
+      }
+
+      // Plain canvas
+      var weave = (_hash(Math.floor(x / 2) + 13600, Math.floor(y / 2) + 13601) - 0.5) * 4;
+      return {
+        r: _clamp(p.canvasR + pn + weave),
+        g: _clamp(p.canvasG + pn * 0.9 + weave * 0.9),
+        b: _clamp(p.canvasB + pn * 0.7 + weave * 0.7)
+      };
+    });
+  }
+
+  // ── Bench top floor ─────────────────────────────────────────────
+
+  // Wooden slat seat viewed from above. Parallel planks with dark
+  // gaps between them and a worn centre stripe.
+  function _genFloorBenchTop(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // 4 slats across 64px
+      var slatW = 16;
+      var localX = x % slatW;
+      var slatIdx = Math.floor(x / slatW);
+
+      // Gap between slats
+      if (localX < 1) {
+        return { r: p.gapR, g: p.gapG, b: p.gapB };
+      }
+
+      var pn = (_hash(x + 13700, y + 13701) - 0.5) * 5;
+      var sn = (_hash(slatIdx + 13800, 0) - 0.5) * 8;
+
+      // Worn centre stripe (middle two slats)
+      var cx = TEX_SIZE / 2;
+      var wearDist = Math.abs(x - cx);
+      var wearT = Math.max(0, 1 - wearDist / (TEX_SIZE * 0.25));
+      wearT *= wearT;
+
+      return {
+        r: _clamp(p.slatR + sn + pn + (p.wearR - p.slatR) * wearT),
+        g: _clamp(p.slatG + sn * 0.7 + pn * 0.8 + (p.wearR - p.slatG) * wearT * 0.7),
+        b: _clamp(p.slatB + sn * 0.5 + pn * 0.6 + (p.wearR - p.slatB) * wearT * 0.5)
+      };
+    });
+  }
+
+  // ── Soup cauldron top floor ─────────────────────────────────────
+
+  // Dark broth surface with steam wisp spots and occasional bubbles.
+  // Viewed from above when looking over the SOUP_KITCHEN rim.
+  function _genFloorSoupTop(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var cx = TEX_SIZE / 2, cy = TEX_SIZE / 2;
+      var dx = x - cx, dy = y - cy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var maxR = TEX_SIZE * 0.45;
+      var pn = (_hash(x + 13900, y + 14000) - 0.5) * 4;
+
+      // Outside the pot circle — dark (iron rim)
+      if (dist > maxR) {
+        return { r: 35, g: 32, b: 30 };
+      }
+
+      // Steam wisps — clustered blobs near centre
+      var steamSeed = _hash(Math.floor(x / 5) + 14100, Math.floor(y / 5) + 14101);
+      if (steamSeed > 0.82 && dist < maxR * 0.6) {
+        var sn = (_hash(x + 14200, y + 14201) - 0.5) * 8;
+        return {
+          r: _clamp(p.steamR + sn),
+          g: _clamp(p.steamG + sn),
+          b: _clamp(p.steamB + sn * 0.8)
+        };
+      }
+
+      // Bubble highlights — rare
+      if (_hash(x + 14300, y + 14301) > 0.992) {
+        return { r: p.bubbleR, g: p.bubbleG, b: p.bubbleB };
+      }
+
+      // Broth surface
+      return {
+        r: _clamp(p.brothR + pn * 0.5),
+        g: _clamp(p.brothG + pn * 0.4),
+        b: _clamp(p.brothB + pn * 0.3)
       };
     });
   }
