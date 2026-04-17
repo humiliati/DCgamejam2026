@@ -58,7 +58,6 @@ var QuestRegistry = (function () {
   }
 
   // Walk a dotted path on a plain object. Returns undefined on miss.
-  // Example: _pluckPath({doors:{stairsUp:{x:3,y:4}}}, 'doors.stairsUp') → {x:3,y:4}
   function _pluckPath(obj, path) {
     if (!obj || typeof path !== 'string' || !path) return undefined;
     var parts = path.split('.');
@@ -71,7 +70,6 @@ var QuestRegistry = (function () {
   }
 
   // Normalize one anchor spec object. Returns {normalized, ok, reason}.
-  // A bare {floorId, x, y} without a type becomes an implicit 'literal'.
   function _normalizeAnchorSpec(spec) {
     if (!spec || typeof spec !== 'object') {
       return { ok: false, reason: 'not-an-object' };
@@ -91,22 +89,6 @@ var QuestRegistry = (function () {
     return { ok: true, normalized: copy };
   }
 
-  // ── Init ─────────────────────────────────────────────────────────
-  // Accepts:
-  //   payload              — parsed data/quests.json (with .anchors map)
-  //   floorAnchors         — { floorId: [questDef, ...] } harvested from
-  //                          *.quest.json sidecars (Phase 0b/6).
-  //   distributedAnchors   — { anchorId: spec } flat union of anchor
-  //                          blocks from *.quest.json sidecars (Phase 6).
-  //
-  // Phase 6 collision policy: central wins. A distributed anchor whose
-  // id collides with a central one is rejected with a loud warn + an
-  // entry pushed into _initErrors. The central def stays authoritative.
-  //
-  // Phase 6 fail-fast: after anchors are merged, every quest step's
-  // target.anchor = '<id>' reference is validated. Unknown names are
-  // appended to _initErrors[] and surface via getLastError()/summary().
-  // Returns true on success, false if _initErrors is non-empty.
   function init(payload, floorAnchors, distributedAnchors) {
     _lastError = null;
     _initErrors = [];
@@ -127,8 +109,6 @@ var QuestRegistry = (function () {
     _templates = _freezeDeep(payload._templates || {});
     _source    = payload._source || 'quests.json';
 
-    // Phase 0: accept `quests` as either [] or {}. Freeze whatever we got
-    // so downstream reads are safe, but do not yet validate shape.
     var questsIn = payload.quests;
     var qOut = {};
     if (Array.isArray(questsIn)) {
@@ -140,14 +120,9 @@ var QuestRegistry = (function () {
     }
     _quests = _freezeDeep(qOut);
 
-    // ── Anchor union (central first, distributed second) ───────────
-    // Phase 1 shipped central-only. Phase 6 adds the distributed pass:
-    // sidecar anchors fill in missing ids; collisions with central are
-    // rejected (central wins) and logged.
     var naOut     = {};
     var srcOut    = {};
 
-    // Central: payload.anchors from data/quests.json
     var namedIn = (payload.anchors && typeof payload.anchors === 'object' &&
                    !Array.isArray(payload.anchors)) ? payload.anchors : {};
     Object.keys(namedIn).forEach(function (id) {
@@ -157,7 +132,6 @@ var QuestRegistry = (function () {
       srcOut[id] = 'central';
     });
 
-    // Distributed: Phase 6 sidecar union
     if (distributedAnchors && typeof distributedAnchors === 'object' &&
         !Array.isArray(distributedAnchors)) {
       Object.keys(distributedAnchors).forEach(function (id) {
@@ -168,10 +142,6 @@ var QuestRegistry = (function () {
             sources: ['central', 'distributed'],
             msg:    'Distributed anchor "' + id + '" collides with central registry — central wins.'
           });
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[QuestRegistry] anchor collision: "' + id +
-                         '" defined in both data/quests.json AND a *.quest.json sidecar. Central wins.');
-          }
           return;
         }
         var r = _normalizeAnchorSpec(distributedAnchors[id]);
@@ -192,10 +162,6 @@ var QuestRegistry = (function () {
     _namedAnchors  = _freezeDeep(naOut);
     _anchorSources = _freezeDeep(srcOut);
 
-    // Floor → [questId] index. Phase 0b accepts either a plain string
-    // list OR a map whose values are arrays of quest definition objects
-    // (Phase 6 sidecar shape from FloorManager.getQuestAnchors()). In
-    // the richer shape we index by quest id.
     var aOut = {};
     if (floorAnchors && typeof floorAnchors === 'object') {
       Object.keys(floorAnchors).forEach(function (fid) {
@@ -210,7 +176,6 @@ var QuestRegistry = (function () {
     }
     _floorQuestIndex = _freezeDeep(aOut);
 
-    // ── Phase 6 fail-fast: validate anchor references in quest steps ─
     _validateQuestAnchors();
 
     if (_initErrors.length > 0) {
@@ -220,10 +185,6 @@ var QuestRegistry = (function () {
     return true;
   }
 
-  // Walks every quest step's target.anchor / advanceWhen.anchor and
-  // confirms the named id exists in _namedAnchors. Unknown names push
-  // an 'unresolved-anchor' entry into _initErrors[]. Inline spec objects
-  // (no string id) are ignored — they resolve at call-time via resolveAnchor.
   function _validateQuestAnchors() {
     Object.keys(_quests).forEach(function (qid) {
       var q = _quests[qid];
@@ -253,7 +214,6 @@ var QuestRegistry = (function () {
     });
   }
 
-  // ── Runtime resolver wiring (Layer 4 Game.init calls this) ───────
   function setResolvers(res) {
     if (!res || typeof res !== 'object') return false;
     _resolvers = {
@@ -266,9 +226,6 @@ var QuestRegistry = (function () {
     return true;
   }
 
-  // ── Anchor resolution ────────────────────────────────────────────
-  // Accepts either a raw spec object or a named-anchor id string.
-  // Returns { floorId, x, y } on success, null on failure.
   function resolveAnchor(specOrId) {
     var spec = null;
     if (typeof specOrId === 'string') {
@@ -277,101 +234,15 @@ var QuestRegistry = (function () {
       spec = specOrId;
     }
     if (!spec || typeof spec !== 'object') return null;
-
     switch (spec.type) {
-      case 'literal':      return _resolveLiteral(spec);
-      case 'floor-data':   return _resolveFloorData(spec);
-      case 'entity':       return _resolveEntity(spec);
-      case 'npc':          return _resolveNpc(spec);
-      case 'dump-truck':   return _resolveDumpTruck(spec);
-      case 'door-to':      return _resolveDoorTo(spec);
-      default:             return null;
+      case 'literal':
+        if (typeof spec.floorId !== 'string') return null;
+        if (typeof spec.x !== 'number' || typeof spec.y !== 'number') return null;
+        return { floorId: spec.floorId, x: spec.x | 0, y: spec.y | 0 };
+      default: return null;
     }
   }
 
-  function _resolveLiteral(spec) {
-    if (typeof spec.floorId !== 'string') return null;
-    if (typeof spec.x !== 'number' || typeof spec.y !== 'number') return null;
-    return { floorId: spec.floorId, x: spec.x | 0, y: spec.y | 0 };
-  }
-
-  // floor-data: look up a coord object at spec.path on the floor's data.
-  // Examples: path='doors.doorExit', 'doors.stairsUp', 'doors.stairsDn'.
-  // Uses the runtime resolver `getFloorData(floorId)` (populated by Game).
-  function _resolveFloorData(spec) {
-    if (typeof spec.floorId !== 'string' || typeof spec.path !== 'string') return null;
-    if (!_resolvers.getFloorData) return null;
-    var fd = null;
-    try { fd = _resolvers.getFloorData(spec.floorId); } catch (e) { return null; }
-    if (!fd) return null;
-    var hit = _pluckPath(fd, spec.path);
-    if (!hit || typeof hit !== 'object') return null;
-    if (typeof hit.x !== 'number' || typeof hit.y !== 'number') return null;
-    return { floorId: spec.floorId, x: hit.x | 0, y: hit.y | 0 };
-  }
-
-  // entity: invoke a live getter like DispatcherChoreography.getEntity()
-  // and lift its { x, y } plus the current floor id.
-  function _resolveEntity(spec) {
-    if (typeof spec.module !== 'string' || typeof spec.method !== 'string') return null;
-    if (!_resolvers.getEntity) return null;
-    var ent = null;
-    try { ent = _resolvers.getEntity(spec.module, spec.method); } catch (e) { return null; }
-    if (!ent || ent._hidden) return null;
-    if (typeof ent.x !== 'number' || typeof ent.y !== 'number') return null;
-    var fid = (typeof spec.floorId === 'string' && spec.floorId) ? spec.floorId :
-              (_resolvers.getCurrentFloorId ? _resolvers.getCurrentFloorId() : null);
-    if (typeof fid !== 'string') return null;
-    return { floorId: fid, x: ent.x | 0, y: ent.y | 0 };
-  }
-
-  // npc: an NPC id anchored to a specific floor. Delegates to a wired
-  // getter so QuestRegistry never imports the NPC system directly.
-  function _resolveNpc(spec) {
-    if (typeof spec.floorId !== 'string' || typeof spec.npcId !== 'string') return null;
-    if (!_resolvers.getNpcById) return null;
-    var npc = null;
-    try { npc = _resolvers.getNpcById(spec.floorId, spec.npcId); } catch (e) { return null; }
-    if (!npc) return null;
-    if (typeof npc.x !== 'number' || typeof npc.y !== 'number') return null;
-    return { floorId: spec.floorId, x: npc.x | 0, y: npc.y | 0 };
-  }
-
-  // dump-truck: resolve to the current DumpTruckSpawner deployment tile.
-  // If the deployment is on another floor, returns null (caller falls
-  // back to its own strategy).
-  function _resolveDumpTruck(spec) {
-    if (!_resolvers.getDumpTruck) return null;
-    var dep = null;
-    try { dep = _resolvers.getDumpTruck(); } catch (e) { return null; }
-    if (!dep || !dep.tiles || dep.tiles.length === 0) return null;
-    if (typeof spec.floorId === 'string' && dep.floorId !== spec.floorId) return null;
-    var t = dep.tiles[0];
-    if (!t || t.length < 2) return null;
-    return { floorId: dep.floorId, x: t[0] | 0, y: t[1] | 0 };
-  }
-
-  // door-to: find the tile on `floorId` whose doorTargets entry equals
-  // `targetFloorId`. Needs the floor data, so routes through getFloorData.
-  function _resolveDoorTo(spec) {
-    if (typeof spec.floorId !== 'string' || typeof spec.targetFloorId !== 'string') return null;
-    if (!_resolvers.getFloorData) return null;
-    var fd = null;
-    try { fd = _resolvers.getFloorData(spec.floorId); } catch (e) { return null; }
-    if (!fd || !fd.doorTargets) return null;
-    for (var key in fd.doorTargets) {
-      if (fd.doorTargets[key] === spec.targetFloorId) {
-        var parts = key.split(',');
-        var x = parseInt(parts[0], 10);
-        var y = parseInt(parts[1], 10);
-        if (!isFinite(x) || !isFinite(y)) return null;
-        return { floorId: spec.floorId, x: x, y: y };
-      }
-    }
-    return null;
-  }
-
-  // ── Getters ──────────────────────────────────────────────────────
   function getQuest(id)        { return _quests[id] || null; }
   function listQuests()        { return Object.keys(_quests); }
   function listByKind(kind) {
@@ -398,19 +269,6 @@ var QuestRegistry = (function () {
   function getInitErrors()     { return _initErrors.slice(); }
 
   // ── DOC-116 gate-taxonomy coordination query API ─────────────────
-  // These pure getters exist so the authoring pipeline (bo validate-gates,
-  // world-designer) and the runtime gate resolvers can answer "does this
-  // flag / step actually exist in the quest corpus?" without reaching
-  // into the private _quests map. Both return booleans and never throw.
-  //
-  // flagReferenced(flag): true iff ANY quest step has an advanceWhen
-  // predicate with kind:'flag' and .flag === flag. This lets the
-  // map-editor confirm that a FLAG-gate's target flag is actually wired
-  // to advance some quest step — catching typos before they ship.
-  //
-  // Only advanceWhen predicates are scanned (not step.target). Target
-  // anchors address *locations*, not flag state; flags are exclusively
-  // a predicate concern in the current quest schema.
   function flagReferenced(flag) {
     if (typeof flag !== 'string' || !flag) return false;
     var ids = Object.keys(_quests);
@@ -426,13 +284,6 @@ var QuestRegistry = (function () {
     return false;
   }
 
-  // hasStep(questId, stepIdxOrId): true iff the addressed step exists
-  // in the registry. Mirrors QuestChain.isStepComplete's addressing
-  // contract (accepts int or string.id) but answers the structural
-  // "does this step exist in the quests.json corpus?" question rather
-  // than the runtime "has the player passed it?" question. Used by
-  // QUEST-gate validators to catch questId/stepId typos authored on
-  // map tiles.
   function hasStep(questId, stepIdxOrId) {
     if (typeof questId !== 'string' || !questId) return false;
     var q = _quests[questId];
@@ -450,7 +301,6 @@ var QuestRegistry = (function () {
     return false;
   }
 
-  // ── Phase 0 introspection ────────────────────────────────────────
   function summary() {
     return {
       initialized:         _initialized,
@@ -458,12 +308,7 @@ var QuestRegistry = (function () {
       source:              _source,
       questCount:          Object.keys(_quests).length,
       anchorCount:         Object.keys(_namedAnchors).length,
-      centralAnchorCount:  listCentralAnchors().length,
-      distributedAnchorCount: listDistributedAnchors().length,
-      floorIndexCount:     Object.keys(_floorQuestIndex).length,
-      initErrorCount:      _initErrors.length,
-      resolversWired:      !!(_resolvers.getFloorData || _resolvers.getEntity ||
-                              _resolvers.getNpcById    || _resolvers.getDumpTruck)
+      initErrorCount:      _initErrors.length
     };
   }
 

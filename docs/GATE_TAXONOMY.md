@@ -496,7 +496,10 @@ delegated to engine/UI agents:
 | BV meta panel gate inspector | Tools agent (this session) | §5.2 |
 | CLI gate commands | Tools agent (this session) | §5.3 |
 | Gate validation in `bo validate` | Tools agent (this session) | §5.3 |
-| `ReputationBar` module | Engine agent | §2.3 (deferred to DOC-107 Phase 3) |
+| `ReputationBar` module | ✅ Shipped 2026-04-16 via DOC-107 Phase 3 (reputation-bar.js). `ReputationBar.getTier(factionId)` / `getFavor(factionId)` accessible from `evaluateGate()` for FACTION gate evaluation. Scaffolded at DOC-107 Phase 0 (2026-04-16), fully wired at Phase 3. | §2.3 |
+| `QuestChain.isStepComplete(questId, stepIdOrIdx)` | ✅ Shipped 2026-04-17 via DOC-116 slice. Int-or-string addressed completion query used by QUEST gate evaluation. Accepts `stepId` (preferred, survives reorder) or `stepIdx` (backward compat). | §8a.2 |
+| `QuestChain.onGateOpened(floorId, x, y, gateType)` | ✅ Shipped 2026-04-17 via DOC-116 slice. 7th external event; fans out `{kind:'gate-opened', floorId, x, y, gateType}` to every active quest. Predicate kind `gate-opened` added to `QuestTypes.WAYPOINT_KIND`. | §8a.3 |
+| `QuestRegistry.flagReferenced(flag)` + `hasStep(questId, stepIdOrIdx)` | ✅ Shipped 2026-04-17 via DOC-116 slice. Pure query API for `bo validate-gates` to verify that flag/step references in authored gates correspond to real quest step predicates. | §5.3 |
 | `TimeManager` module | Engine agent | §2.4 (new module, gated on day/night cycle) |
 
 ---
@@ -558,23 +561,28 @@ All three tooling surfaces have been updated:
 - BV meta panel quest fields default to `stepId`
 - World Designer edge inspector emits `stepId`
 
-### 8a.3 Reserved event shape: `gate-opened`
+### 8a.3 Reserved event shape: `gate-opened` ✅ SHIPPED 2026-04-17
 
 The following predicate shape is reserved for quest step predicates:
 
 ```js
-{ kind: "gate-opened", gateType?: string, floorId?: string, count?: number }
+{ kind: "gate-opened", gateType?: string, floorId?: string, x?: number, y?: number, count?: number }
 ```
 
 Semantics: fires via `QuestChain.onGateOpened(floorId, x, y, gateType)`
-after any gate passes evaluation and `onGateUnlock()` completes. If
-`gateType` is specified, only gates of that type match. If `floorId` is
-specified, only gates on that floor match. `count` enables "open N locked
-doors" quest steps.
+after any gate passes evaluation and `onGateUnlock()` completes. Predicate
+filters are AND-joined; absent filters wildcard. If `gateType` is
+specified, only gates of that type match. If `floorId` is specified, only
+gates on that floor match. If `x`/`y` are both numbers, only the gate at
+that exact tile matches. `count` (≥ 2) enables "open N locked doors"
+quest steps via the `stepProgress` accumulator (consistent with
+`kind:'minigame'` count-gating).
 
-The `gate-opened` kind should be added to `QuestTypes.KIND` when the quest
-engineer ships `onGateOpened`. Gate tooling validation (`bo validate-gates`)
-will check for this kind in quest predicates once available.
+The kind has been added to `QuestTypes.WAYPOINT_KIND` (not `KIND` — that
+holds quest-level kinds main/faction/side/tutorial). Gate tooling
+validation (`bo validate-gates`) can check for this kind in quest
+predicates via `QuestRegistry.hasStep()` + structural inspection of step
+`advanceWhen` blocks.
 
 ### 8a.4 Migration sequencing
 
@@ -585,11 +593,22 @@ The `lockedDoors → gates` migration (§6.1) is **staged**:
    of `lockedDoors` for `type: "key"` entries. These are self-contained —
    no quest or reputation dependency.
 
-2. **QUEST/FACTION gates: blocked on quest system.** Do not ship quest-type
-   or faction-type gates on any floor until:
-   - `QuestChain.isStepComplete(questId, stepId)` is landed
-   - `QuestChain.onGateOpened()` event dispatch is landed
-   - `ReputationBar.getTier(factionId)` is accessible from `evaluateGate()`
+2. **QUEST/FACTION gates: UNBLOCKED as of 2026-04-17.** All three prereqs
+   shipped:
+   - ✅ `QuestChain.isStepComplete(questId, stepIdxOrId)` — DOC-116 slice,
+     2026-04-17. Accepts string stepId (preferred) or integer stepIdx. Returns
+     true for COMPLETED-state quests (universal), false for LOCKED/AVAILABLE.
+   - ✅ `QuestChain.onGateOpened(floorId, x, y, gateType)` — DOC-116 slice,
+     2026-04-17. Fans out `{kind:'gate-opened', …}` via `_dispatch` to active
+     quests; predicate engine handles `gate-opened` with floorId/x/y/gateType
+     filters.
+   - ✅ `ReputationBar.getTier(factionId)` / `getFavor(factionId)` — DOC-107
+     Phase 3, 2026-04-16. Accessible from `evaluateGate()`.
+
+   Map editors may now author QUEST and FACTION gates on any floor. The
+   engine-side `evaluateGate()` / `onGateUnlock()` implementation (see §7
+   delegation table) remains the only outstanding work item for those gate
+   types.
 
 3. **SCHEDULE gates: blocked on TimeManager.** No schedule gates until the
    day/night cycle module exists.
@@ -598,8 +617,10 @@ The `lockedDoors → gates` migration (§6.1) is **staged**:
    / `Player.getFlag` is self-contained. The suit-check depends on
    `CombatEngine` card suit resolution but doesn't need quest system.
 
-Tooling validation (`bo validate-gates`) will warn if a floor uses
-quest/faction/schedule gate types before the engine modules exist.
+Tooling validation (`bo validate-gates`) can now use
+`QuestRegistry.hasStep(questId, stepIdOrIdx)` + `flagReferenced(flag)` to
+verify authored QUEST gate references point at real quest steps or flags.
+Warnings for schedule-type gates stay until TimeManager exists.
 
 ---
 

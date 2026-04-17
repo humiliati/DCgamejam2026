@@ -569,6 +569,7 @@ var QuestChain = (function () {
   //   { kind:'combat',          archetype }
   //   { kind:'minigame',        kindId, reason?, subTargetId?, floorId? }
   //   { kind:'reputation-tier', factionId, tier, direction? }
+  //   { kind:'gate-opened',     floorId?, x?, y?, gateType? }  // DOC-116
   //
   // `event` is a plain object mirroring the fired event:
   //   { kind:'floor',           floorId, x, y }       from onFloorArrive
@@ -581,6 +582,8 @@ var QuestChain = (function () {
   //                                                   from onMinigameExit
   //   { kind:'reputation-tier', factionId, fromTier, toTier, tier, direction }
   //                                                   from onReputationTierCross
+  //   { kind:'gate-opened',     floorId, x, y, gateType }
+  //                                                   from onGateOpened (DOC-116)
   //
   // Count semantics (DOC-107 Phase 5): any predicate may carry
   // `count: N` (integer ≥ 2). When set, `_matches()` still returns true
@@ -658,6 +661,26 @@ var QuestChain = (function () {
         // completes on item acquisition. Fires via onItemAcquired().
         if (!predicate.itemId || predicate.itemId !== event.itemId) return false;
         if (predicate.floorId && predicate.floorId !== event.floorId) return false;
+        return true;
+
+      case 'gate-opened':
+        // DOC-116 gate taxonomy coordination. Advances when a gate tile
+        // (KEY/QUEST/FACTION/SCHEDULE/BREAKABLE/COMPOSITE) opens. All
+        // predicate fields are optional so a step can match "any gate
+        // anywhere" (count: N for an open-N-gates tutorial) or narrow
+        // to a specific gate by floorId + coordinates + type.
+        //
+        // Field semantics:
+        //   floorId  — exact string match on event.floorId (optional)
+        //   x, y     — both required together; match only if both int-
+        //              equal the event coords (optional)
+        //   gateType — one of 'key'|'quest'|'faction'|'schedule'|
+        //              'breakable'|'composite'; exact match on event.gateType
+        if (predicate.floorId && predicate.floorId !== event.floorId) return false;
+        if (typeof predicate.x === 'number' && typeof predicate.y === 'number') {
+          if ((event.x | 0) !== predicate.x || (event.y | 0) !== predicate.y) return false;
+        }
+        if (predicate.gateType && predicate.gateType !== event.gateType) return false;
         return true;
 
       default:
@@ -756,6 +779,28 @@ var QuestChain = (function () {
       if (typeof payload.y === 'number') event.y = payload.y | 0;
     }
     return _dispatch(event);
+  }
+
+  // Gate-opened fan-out (DOC-116 gate taxonomy coordination). Called by
+  // the gate-resolution pipeline (door-contracts / gate-authority) after
+  // a gate tile successfully opens. gateType is one of 'key' | 'quest' |
+  // 'faction' | 'schedule' | 'breakable' | 'composite' (see
+  // docs/GATE_TAXONOMY.md §4). x/y are the tile coordinates of the gate
+  // in the current floor's grid. The current floorId is REQUIRED here —
+  // unlike onFloorArrive we don't fall back to FloorManager because
+  // gates are tile-addressed and must carry their provenance explicitly
+  // so step predicates can narrow on (floorId,x,y).
+  function onGateOpened(floorId, x, y, gateType) {
+    if (typeof floorId !== 'string' || !floorId) return false;
+    if (typeof x !== 'number' || typeof y !== 'number') return false;
+    var gt = (typeof gateType === 'string' && gateType) ? gateType : null;
+    return _dispatch({
+      kind:     'gate-opened',
+      floorId:  floorId,
+      x:        x | 0,
+      y:        y | 0,
+      gateType: gt
+    });
   }
 
   // Reputation tier-cross fan-out (DOC-107 Phase 3). Called by Game
@@ -1005,6 +1050,48 @@ var QuestChain = (function () {
   function getStepIndex(questId) {
     return _active[questId] ? _active[questId].stepIndex : -1;
   }
+
+  // DOC-116 coordination API. Returns true if the addressed step of the
+  // addressed quest has been completed (passed). Accepts either an
+  // integer step index or a string step.id. Semantics:
+  //   - Unknown quest            → false
+  //   - Quest in COMPLETED state → true for any in-range step or
+  //                                 known step.id (every step passed)
+  //   - Quest in ACTIVE state    → true iff the resolved step index is
+  //                                 strictly less than rec.stepIndex
+  //                                 (the current step is NOT complete,
+  //                                 only previous steps are)
+  //   - Any other state          → false (locked / available / failed /
+  //                                 expired — no steps have "passed")
+  //   - Unknown step.id          → false
+  //   - Out-of-range int         → false
+  //
+  // This is the single-source-of-truth predicate used by QUEST-gate
+  // resolvers (GATE_TAXONOMY.md §8a.2) to decide whether a gate should
+  // open. Keeping the stepIdx/stepId normalization here — rather than
+  // duplicating it in each gate resolver — avoids drift as the quest
+  // system evolves.
+  function isStepComplete(questId, stepIdxOrId) {
+    var rec = _active[questId];
+    if (!rec) return false;
+    var def = (typeof QuestRegistry !== 'undefined') ? QuestRegistry.getQuest(questId) : null;
+    if (!def || !Array.isArray(def.steps) || def.steps.length === 0) return false;
+
+    var idx = -1;
+    if (typeof stepIdxOrId === 'number' && isFinite(stepIdxOrId)) {
+      idx = stepIdxOrId | 0;
+    } else if (typeof stepIdxOrId === 'string' && stepIdxOrId.length > 0) {
+      for (var i = 0; i < def.steps.length; i++) {
+        var s = def.steps[i];
+        if (s && s.id === stepIdxOrId) { idx = i; break; }
+      }
+    }
+    if (idx < 0 || idx >= def.steps.length) return false;
+
+    if (rec.state === QuestTypes.STATE.COMPLETED) return true;
+    if (rec.state === QuestTypes.STATE.ACTIVE)    return idx < rec.stepIndex;
+    return false;
+  }
   function listActive() {
     var out = [];
     Object.keys(_active).forEach(function (id) {
@@ -1080,10 +1167,12 @@ var QuestChain = (function () {
     onCombatKill:            onCombatKill,
     onMinigameExit:          onMinigameExit,
     onReputationTierCross:   onReputationTierCross,
+    onGateOpened:            onGateOpened,
     getCurrentMarker:        getCurrentMarker,
     update:                  update,
     getState:                getState,
     getStepIndex:            getStepIndex,
+    isStepComplete:          isStepComplete,
     listActive:              listActive,
     snapshot:                snapshot,
     summary:                 summary,
