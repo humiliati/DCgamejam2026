@@ -22,7 +22,7 @@
 //  MUST load AFTER DOM ready.
 //
 //  Exposes globals:
-//    selectTool(), window.__clipboardSmokeTest
+//    selectTool(), buildQuickbar(), window.__clipboardSmokeTest
 // ═══════════════════════════════════════════════════════════════
 'use strict';
 
@@ -57,6 +57,7 @@ function toggleEditMode(force) {
   if (typeof updateCursor === 'function')    updateCursor();
   if (typeof buildTilePicker === 'function') buildTilePicker();
   if (typeof buildRequiredPanel === 'function') buildRequiredPanel();
+  if (typeof buildQuickbar === 'function') buildQuickbar();
   updateEditUI();
   draw();
 }
@@ -64,6 +65,73 @@ function toggleEditMode(force) {
 document.getElementById('btn-edit').addEventListener('click', function() {
   toggleEditMode();
 });
+
+// ── Quickbar — compact tile buttons in the toolbar ──────────────
+// Two banks: base (keys 0-9) and Shift (Shift+0-9).
+// Shows a row of small colored squares with key labels for instant tile picking.
+var _QB_BASE  = [
+  { id: 0,  key: '0', label: 'E' },   // EMPTY
+  { id: 1,  key: '1', label: '#' },   // WALL
+  { id: 34, key: '2', label: ',' },   // GRASS
+  { id: 32, key: '3', label: '=' },   // ROAD
+  { id: 33, key: '4', label: ':' },   // PATH
+  { id: 21, key: '5', label: 'Y' },   // TREE
+  { id: 22, key: '6', label: 'h' },   // SHRUB
+  { id: 30, key: '7', label: 'i' },   // TORCH_LIT
+  { id: 10, key: '8', label: 'O' },   // PILLAR
+  { id: 65, key: '9', label: '@' }    // CANOPY
+];
+var _QB_INFRA = [
+  { id: 40, key: '⇧0', label: 'W' },  // WELL
+  { id: 41, key: '⇧1', label: '_' },  // BENCH
+  { id: 42, key: '⇧2', label: 'N' },  // NOTICE_BOARD
+  { id: 43, key: '⇧3', label: 'A' },  // ANVIL
+  { id: 44, key: '⇧4', label: 'Q' },  // BARREL
+  { id: 45, key: '⇧5', label: 'Z' },  // CHARGING_CRADLE
+  { id: 46, key: '⇧6', label: '~' },  // SWITCHBOARD
+  { id: 47, key: '⇧7', label: 'U' },  // SOUP_KITCHEN
+  { id: 48, key: '⇧8', label: '-' },  // COT
+  { id: 49, key: '⇧9', label: 'r' }   // ROOST
+];
+var _qbBank = 'base'; // 'base' or 'infra'
+
+function buildQuickbar() {
+  var el = document.getElementById('quickbar');
+  if (!el) return;
+  if (!EDIT.active) { el.style.display = 'none'; return; }
+  el.style.display = 'inline-flex';
+  var bank = _qbBank === 'infra' ? _QB_INFRA : _QB_BASE;
+  var html = '<button class="qb-bank" id="qb-toggle-bank" title="Switch bank (Tab)">' +
+             (_qbBank === 'infra' ? 'Infra' : 'Base') + '</button>';
+  for (var i = 0; i < bank.length; i++) {
+    var t = bank[i];
+    var s = TILE_SCHEMA[t.id];
+    if (!s) continue;
+    var sel = t.id === EDIT.paintTile ? ' qb-sel' : '';
+    html += '<span class="qb-tile' + sel + '" data-tile="' + t.id + '" ' +
+            'style="background:' + s.color + ';" ' +
+            'title="' + s.name + ' [' + t.key + ']">' +
+            '<span class="qb-key">' + t.key.replace('⇧', '') + '</span></span>';
+  }
+  el.innerHTML = html;
+  // Wire clicks
+  el.querySelectorAll('.qb-tile').forEach(function(tile) {
+    tile.addEventListener('click', function() {
+      EDIT.paintTile = parseInt(this.dataset.tile);
+      tilePickerTrackRecent(EDIT.paintTile);
+      updateEditUI();
+      buildQuickbar();
+      buildTilePicker();
+    });
+  });
+  var bankBtn = document.getElementById('qb-toggle-bank');
+  if (bankBtn) {
+    bankBtn.addEventListener('click', function() {
+      _qbBank = _qbBank === 'infra' ? 'base' : 'infra';
+      buildQuickbar();
+    });
+  }
+}
 
 function selectTool(tool) {
   if (!EDIT.active) return;
@@ -176,6 +244,13 @@ window.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && document.getElementById('save-modal').classList.contains('open')) { closeSaveModal(); return; }
   if (e.key === 'Escape' && LASSO.floating) { clearLasso(); draw(); }
   if (e.key === 'Enter' && LASSO.floating) { lassoCommit(); draw(); }
+  // Tab toggles quickbar bank
+  if (e.key === 'Tab' && EDIT.active) {
+    e.preventDefault();
+    _qbBank = _qbBank === 'infra' ? 'base' : 'infra';
+    buildQuickbar();
+    return;
+  }
   // Tool shortcuts (edit mode only — override base-view bindings like 'r' for Rooms).
   if (EDIT.active) {
     if (e.key === 'p') { selectTool('paint');   return; }
@@ -194,9 +269,18 @@ window.addEventListener('keydown', function(e) {
     }
   }
   if (EDIT.active && /^[0-9]$/.test(e.key)) {
-    var qs = [0,1,34,32,33,21,22,30,10,65];
     var ix = parseInt(e.key, 10);
-    if (qs[ix] != null) { EDIT.paintTile = qs[ix]; updateEditUI(); }
+    if (e.shiftKey) {
+      // Shift+0–9: infrastructure & creature tiles
+      // 0=WELL 1=BENCH 2=NOTICE_BOARD 3=ANVIL 4=BARREL
+      // 5=CHARGING_CRADLE 6=SWITCHBOARD 7=SOUP_KITCHEN 8=COT 9=ROOST
+      var infraQs = [40,41,42,43,44,45,46,47,48,49];
+      if (infraQs[ix] != null) { EDIT.paintTile = infraQs[ix]; _qbBank = 'infra'; updateEditUI(); buildQuickbar(); buildTilePicker(); }
+    } else {
+      // 0–9: core tiles
+      var qs = [0,1,34,32,33,21,22,30,10,65];
+      if (qs[ix] != null) { EDIT.paintTile = qs[ix]; _qbBank = 'base'; updateEditUI(); buildQuickbar(); buildTilePicker(); }
+    }
   }
 });
 

@@ -92,7 +92,8 @@
       ]),
       section('Brush & quick-select', [
         pHtml('Cycle brush size with <kbd>[</kbd> / <kbd>]</kbd>. Sizes: 1×1, 2×2, 3×3, 5×5 (Paint / Rect / Line).'),
-        pHtml('Number keys <kbd>0</kbd>–<kbd>9</kbd> quick-select common tiles: 0 EMPTY · 1 WALL · 2 DOOR · 3 TREE · 4 SHRUB · 5 ROAD · 6 PATH · 7 GRASS · 8 FENCE · 9 PILLAR.'),
+        pHtml('Number keys <kbd>0</kbd>–<kbd>9</kbd> quick-select core tiles: 0 EMPTY · 1 WALL · 2 GRASS · 3 ROAD · 4 PATH · 5 TREE · 6 SHRUB · 7 TORCH_LIT · 8 PILLAR · 9 CANOPY.'),
+        pHtml('<kbd>Shift</kbd>+<kbd>0</kbd>–<kbd>9</kbd> quick-select infrastructure/creature tiles: 0 WELL · 1 BENCH · 2 NOTICE_BOARD · 3 ANVIL · 4 BARREL · 5 CHARGING_CRADLE · 6 SWITCHBOARD · 7 SOUP_KITCHEN · 8 COT · 9 ROOST.'),
         pHtml('<kbd>Right-click</kbd> a cell to eyedropper-pick its tile into the brush.')
       ]),
       section('Selection & clipboard', [

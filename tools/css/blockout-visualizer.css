@@ -413,6 +413,30 @@ canvas { display: block; }
 /* Recently-used row */
 #tile-picker .tp-recent-row { }
 
+/* ── Quickbar — compact tile buttons in toolbar ──────────── */
+#quickbar {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-left: 6px; padding: 1px 3px; background: #1a1a2a;
+  border-radius: 3px; border: 1px solid #333;
+}
+#quickbar .qb-bank {
+  font-size: 9px; padding: 1px 4px; margin-right: 2px;
+  background: #2a2a4a; color: #8cf; border: 1px solid #446;
+  border-radius: 2px; cursor: pointer;
+}
+#quickbar .qb-bank:hover { background: #3a3a6a; }
+#quickbar .qb-tile {
+  width: 18px; height: 18px; border: 1px solid #444;
+  border-radius: 2px; cursor: pointer; position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+#quickbar .qb-tile:hover { border-color: #fff; }
+#quickbar .qb-tile.qb-sel { border-color: #e8c547; box-shadow: 0 0 4px #e8c547; }
+#quickbar .qb-key {
+  font-size: 8px; color: #fff; text-shadow: 0 0 2px #000;
+  font-family: Consolas, monospace; pointer-events: none;
+}
+
 /* ── Lasso selection ─────────────────────────────────────── */
 #lasso-rect {
   position: absolute;
