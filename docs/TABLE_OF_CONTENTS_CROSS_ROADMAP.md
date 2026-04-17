@@ -1,7 +1,7 @@
 ﻿# Dungeon Gleaner - Cross-Roadmap Execution Order
 
-**Created**: 2026-03-28 | **Updated**: 2026-04-16
-**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed, DOC-107 Phases 0 + 0b + 1 shipped
+**Created**: 2026-03-28 | **Updated**: 2026-04-17
+**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed, DOC-107 Phases 0 + 0b + 1 shipped, **stale roadmap triage complete** (20+ orphaned docs absorbed into DOC-105 waves)
 **Goal**: Polish, post-jam vision execution, LG webOS deployment readiness
 
 ---
@@ -15,12 +15,12 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 
 | # | Document | Status | Folder |
 |---|----------|--------|--------|
-| DOC-82 | [POST_JAM_EXECUTION_ORDER.md](#doc-82-post_jam_execution_ordermd) | ðŸ”´ Active â€” patch target 2026-04-25 | docs/ |
-| DOC-32 | [UNIFIED_EXECUTION_ORDER.md (v3)](#doc-32-unified_execution_ordermd-v3) | ðŸŸ¢ Sprint 0 âœ…, Tracks A/B/PW âœ… (superseded by DOC-82) | docs/ |
-| DOC-1 | [GAP_COVERAGE_TO_DEPLOYABILITY.md](#doc-1-gap_coverage_to_deployabilitymd) | ðŸŸ¡ T0 âœ…, T1 4/6, T2 0/6 | docs/ |
+| DOC-82 | [POST_JAM_EXECUTION_ORDER.md](#doc-82-post_jam_execution_ordermd) | ðŸ”´ Active â€” P1–P5 complete (closed ledger) — DOC-105 is the active execution plan | docs/ |
+| DOC-32 | [UNIFIED_EXECUTION_ORDER.md (v3)](#doc-32-unified_execution_ordermd-v3) | ðŸŸ¢ Sprint 0 âœ…, Tracks A/B/PW âœ… (superseded by DOC-82; archive candidate — see DOC-105 Appendix A) | docs/ |
+| DOC-1 | [GAP_COVERAGE_TO_DEPLOYABILITY.md](#doc-1-gap_coverage_to_deployabilitymd) | ðŸŸ¡ T0 âœ…, T1 4/6, T2 0/6 — T2 → DOC-105 Wave 5 | docs/ |
 | DOC-3 | [GONE_ROGUE_ASSET_UTILIZATION_ROADMAP.md](#doc-3-gone_rogue_asset_utilization_roadmapmd) | ðŸŸ¢ Pass 1â€“3 âœ…, Pass 4 post-jam | docs/ |
 | DOC-17 | [SKYBOX_ROADMAP.md (v2)](#doc-17-skybox_roadmapmd-v2) | ðŸŸ¢ Ph 1â€“4 âœ…, Ph 5 after F3 blockout | docs/ |
-| DOC-33 | [GAP_ANALYSIS.md](#doc-33-gap_analysismd) | ðŸŸ¡ Living audit | docs/ |
+| DOC-33 | [GAP_ANALYSIS.md](#doc-33-gap_analysismd) | ðŸŸ¡ Living audit — needs refresh pass → DOC-105 Wave 5 | docs/ |
 | DOC-35 | [DEBUG_NOTES_SCREENER.md](#doc-35-debug_notes_screenermd) | ðŸŸ¡ Living checklist | docs/ |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | ðŸŸ¡ Living debug log | docs/ |
 | DOC-53 | [PLAYTEST_AND_BLOCKOUT_PROCEDURE.md](#doc-53-playtest_and_blockout_proceduremd) | ðŸŸ¢ Blockout order + playtest cycle + tester guide | docs/ |
@@ -70,7 +70,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-96 | [TEST_HARNESS_ROADMAP.md](#doc-96-test_harness_roadmapmd) — Phase 0 shipped: DebugPerfMonitor (FPS, frame time, stutter log, subsystem probes) via test-harness.html | docs/ |
 | DOC-101 | [WEATHER_MODULE_ROADMAP.md](#doc-101-weather_module_roadmapmd) — Planning: per-floor weather system (haze/rain/wind/debris) at configurable Z-depth in 3D viewport, punch-through terminus | docs/ |
 | DOC-104 | [DOC_GRAPH_BLOCKOUT_ARC.md](#doc-104-doc_graph_blockout_arcmd) — Mermaid document graph for the blockout refresh arc: prereqs → spec → engine files → downstream consumers; reading order for delegated engineers | docs/ |
-| DOC-105 | [POST_JAM_FOLLOWUP_ROADMAP.md](#doc-105-post_jam_followup_roadmapmd) — Consolidates deferred items from DOC-62/82/86/17/19/48/88/89/91/92 + legacy carryovers into 6 ordered waves aligned with Blockout → NPC → Living Shops arc | docs/ |
+| DOC-105 | [POST_JAM_FOLLOWUP_ROADMAP.md](#doc-105-post_jam_followup_roadmapmd) — **Active execution plan.** Consolidates deferred items from DOC-62/82/86/17/19/48/88/89/91/92 + legacy carryovers + **20+ stale roadmaps triaged 2026-04-17** into 6 ordered waves aligned with Blockout → NPC → Living Shops arc. See Appendix A for full triage ledger. | docs/ |
 | DOC-106 | [RAYCASTER_PAUSE_RESUME_ADR.md](#doc-106-raycaster_pause_resume_adrmd) — ADR for Raycaster.pause()/resume()/isPaused()/getPausedFrame() API; blocks `viewportMode: 'takeover'` minigames (MINIGAME_ROADMAP §4.6); ~150 LOC across 4 files | docs/ |
 
 ### Card, Inventory And Combat
@@ -78,24 +78,24 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | # | Document | Folder |
 |---|----------|--------|
 | DOC-46 | [INVENTORY_CARD_MENU_REWORK.md](#doc-46-inventory_card_menu_reworkmd) | docs/ |
-| DOC-45 | [INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md](#doc-45-inventory_system_audit_and_roadmapmd) | docs/ |
+| DOC-45 | [INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md](#doc-45-inventory_system_audit_and_roadmapmd) | docs/ | ✅ Resolved Apr 1 — archive candidate |
 | DOC-26 | [UNIFIED_INVENTORY_METADATA_CONTRACT.md](#doc-26-unified_inventory_metadata_contractmd) | docs/ |
 | DOC-24 | [B5_INVENTORY_INTERACTION_DESIGN.md](#doc-24-b5_inventory_interaction_designmd) | docs/ |
 | DOC-25 | [B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md](#doc-25-b6_slot_wheel_and_transaction_layoutmd) | docs/ |
 | DOC-36 | [FACE2_INVENTORY_POLISH.md](#doc-36-face2_inventory_polishmd) | docs/ |
 | DOC-20 | [COMBAT_DRAG_SYSTEM.md](#doc-20-combat_drag_systemmd) | docs/ |
-| DOC-16 | [SUIT_SYSTEM_ROADMAP.md](#doc-16-suit_system_roadmapmd) | docs/ |
-| DOC-57 | [CRATEUI_INTERACTION_OVERHAUL.md](#doc-57-crateui_interaction_overhaulmd) | docs/ |
+| DOC-16 | [SUIT_SYSTEM_ROADMAP.md](#doc-16-suit_system_roadmapmd) | docs/ | 8/12 passes — remaining → DOC-105 Wave 4 |
+| DOC-57 | [CRATEUI_INTERACTION_OVERHAUL.md](#doc-57-crateui_interaction_overhaulmd) | docs/ | → DOC-105 Wave 4 |
 
 ### HUD, UI And Menus
 
 | # | Document | Folder | Status |
 |---|----------|--------|--------|
-| DOC-22 | [HUD_ROADMAP.md](#doc-22-hud_roadmapmd) | docs/ | Active |
-| DOC-23 | [UI_ROADMAP.md](#doc-23-ui_roadmapmd) | docs/ | Active |
-| DOC-21 | [GAME_FLOW_ROADMAP.md](#doc-21-game_flow_roadmapmd) | docs/ | Active |
-| DOC-32b | [TOOLTIP_BARK_ROADMAP.md](#doc-32-tooltip_bark_roadmapmd) | docs/ | Active |
-| DOC-12 | [PEEK_SYSTEM_ROADMAP.md](#doc-12-peek_system_roadmapmd) | docs/ | Active |
+| DOC-22 | [HUD_ROADMAP.md](#doc-22-hud_roadmapmd) | docs/ | → DOC-105 Wave 6 |
+| DOC-23 | [UI_ROADMAP.md](#doc-23-ui_roadmapmd) | docs/ | → DOC-105 Wave 6 |
+| DOC-21 | [GAME_FLOW_ROADMAP.md](#doc-21-game_flow_roadmapmd) | docs/ | → DOC-105 Wave 6 |
+| DOC-32b | [TOOLTIP_BARK_ROADMAP.md](#doc-32-tooltip_bark_roadmapmd) | docs/ | → DOC-105 Wave 3 |
+| DOC-12 | [PEEK_SYSTEM_ROADMAP.md](#doc-12-peek_system_roadmapmd) | docs/ | → DOC-105 Wave 6 |
 | DOC-51 | [CINEMATIC_CAMERA_ROADMAP](#doc-51-cinematic-camera) | engine/cinematic-camera.js | Engine built, 3/7 presets wired |
 | DOC-55 | [MENU_INTERACTIONS_CATALOG.md](#doc-55-menu_interactions_catalogmd) | docs/ | Active |
 | DOC-29 | [hud-ui-debugging-notes.md](#doc-29-hud-ui-debugging-notesmd) | docs/ | Reference |
@@ -108,30 +108,30 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 
 ### Gleaner Systems (Cleaning, Restocking, Traps)
 
-| # | Document | Folder |
-|---|----------|--------|
-| DOC-48 | [PRESSURE_WASHING_ROADMAP.md](#doc-48-pressure_washing_roadmapmd) | docs/ |
-| DOC-67 | [PRESSURE_WASH_SYSTEM.md](#doc-67-pressure_wash_systemmd) | docs/ |
-| DOC-31b | [COBWEB_TRAP_STRATEGY_ROADMAP.md](#doc-31-cobweb_trap_strategy_roadmapmd) | docs/ |
-| DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ |
-| DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ |
-| DOC-52 | [READINESS_BAR_ROADMAP.md](#doc-52-readiness_bar_roadmapmd) | docs/ |
-| DOC-59 | [DEPTH3_CLEANING_LOOP_BALANCE.md](#doc-59-depth3_cleaning_loop_balancemd) | docs/ |
-| DOC-68 | [CHEST_RESTOCK_AND_WORK_ORDERS.md](#doc-68-chest_restock_and_work_ordersmd) | docs/ |
-| DOC-69 | [RESTOCK_AUDIT.md](#doc-69-restock_auditmd) | docs/ |
-| DOC-70 | [UNIFIED_RESTOCK_SURFACE_ROADMAP.md](#doc-70-unified_restock_surface_roadmapmd) | docs/ |
-| DOC-71 | [SPATIAL_CONTRACTS.md](#doc-71-spatial_contractsmd) | docs/ |
-| DOC-97 | [FATIGUE_SYSTEM_ROADMAP.md](#doc-97-fatigue_system_roadmapmd) | docs/ |
+| # | Document | Folder | Exec Slot |
+|---|----------|--------|-----------|
+| DOC-48 | [PRESSURE_WASHING_ROADMAP.md](#doc-48-pressure_washing_roadmapmd) | docs/ | PW-1–5 ✅; gauge → Wave 2, gyro → Wave 5 |
+| DOC-67 | [PRESSURE_WASH_SYSTEM.md](#doc-67-pressure_wash_systemmd) | docs/ | — |
+| DOC-31b | [COBWEB_TRAP_STRATEGY_ROADMAP.md](#doc-31-cobweb_trap_strategy_roadmapmd) | docs/ | Ph 1–2 ✅; Ph 3/5–7 → Wave 1 |
+| DOC-30 | [BONFIRE_POLISH_STEPS.md](#doc-30-bonfire_polish_stepsmd) | docs/ | Warp threshold → Wave 2 (DOC-52 dep) |
+| DOC-39 | [SHOP_REFRESH_ECONOMY.md](#doc-39-shop_refresh_economymd) | docs/ | → Wave 4 (shop refresh spec) |
+| DOC-52 | [READINESS_BAR_ROADMAP.md](#doc-52-readiness_bar_roadmapmd) | docs/ | → Wave 2 (constellation FX + reporting) |
+| DOC-59 | [DEPTH3_CLEANING_LOOP_BALANCE.md](#doc-59-depth3_cleaning_loop_balancemd) | docs/ | → Wave 3 (D3-specific tuning) |
+| DOC-68 | [CHEST_RESTOCK_AND_WORK_ORDERS.md](#doc-68-chest_restock_and_work_ordersmd) | docs/ | — |
+| DOC-69 | [RESTOCK_AUDIT.md](#doc-69-restock_auditmd) | docs/ | RS-1–5 ✅; reference only |
+| DOC-70 | [UNIFIED_RESTOCK_SURFACE_ROADMAP.md](#doc-70-unified_restock_surface_roadmapmd) | docs/ | — |
+| DOC-71 | [SPATIAL_CONTRACTS.md](#doc-71-spatial_contractsmd) | docs/ | — |
+| DOC-97 | [FATIGUE_SYSTEM_ROADMAP.md](#doc-97-fatigue_system_roadmapmd) | docs/ | → Wave 6 (deferred polish) |
 
 ### NPCs, Barks And Audio
 
-| # | Document | Folder |
-|---|----------|--------|
-| DOC-9 | [NPC_SYSTEM_ROADMAP.md](#doc-9-npc_system_roadmapmd) | docs/ |
-| DOC-11 | [NPC_FACTION_BOOK_AUDIT.md](#doc-11-npc_faction_book_auditmd) | docs/ |
-| DOC-10 | [COZY_INTERIORS_DESIGN.md](#doc-10-cozy_interiors_designmd) | docs/ |
-| DOC-6 | [AUDIO_ENGINE.md](#doc-6-audio_enginemd) | docs/ |
-| DOC-50 | [SPATIAL_AUDIO_BARK_ROADMAP.md](#doc-50-spatial_audio_bark_roadmapmd) | docs/ |
+| # | Document | Folder | Exec Slot |
+|---|----------|--------|-----------|
+| DOC-9 | [NPC_SYSTEM_ROADMAP.md](#doc-9-npc_system_roadmapmd) | docs/ | → Wave 3 (NPC Refresh spec source) |
+| DOC-11 | [NPC_FACTION_BOOK_AUDIT.md](#doc-11-npc_faction_book_auditmd) | docs/ | — |
+| DOC-10 | [COZY_INTERIORS_DESIGN.md](#doc-10-cozy_interiors_designmd) | docs/ | — |
+| DOC-6 | [AUDIO_ENGINE.md](#doc-6-audio_enginemd) | docs/ | — |
+| DOC-50 | [SPATIAL_AUDIO_BARK_ROADMAP.md](#doc-50-spatial_audio_bark_roadmapmd) | docs/ | → Wave 5 (stereo panning → Phase G) |
 | DOC-44 | [EYESONLYS_TOOLTIP_SPACE_CANON.md](#doc-44-eyesonlys_tooltip_space_canonmd) | docs/ |
 | DOC-60 | [AUDIO_SFX_COMMISSIONING_AUDIT.docx](#doc-60-audio_sfx_commissioning_auditdocx) | docs/ |
 | DOC-81 | [AUDIO_COMMISSIONING.md](#doc-81-audio_commissioningmd) | EyesOnly/docs/ |
@@ -141,12 +141,12 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 
 ### Sprites And Visual Assets
 
-| # | Document | Folder |
-|---|----------|--------|
-| DOC-15 | [SPRITE_STACK_ROADMAP.md](#doc-15-sprite_stack_roadmapmd) | docs/ |
-| DOC-40 | [SPRITE_COMMISSIONING_MAP.md](#doc-40-sprite_commissioning_mapmd) | docs/ |
-| DOC-41 | [SPRITE_LIBRARY_PLAN.md](#doc-41-sprite_library_planmd) | docs/ |
-| DOC-42 | [SPRITE_STUB_ROADMAP.md](#doc-42-sprite_stub_roadmapmd) | docs/ |
+| # | Document | Folder | Exec Slot |
+|---|----------|--------|-----------|
+| DOC-15 | [SPRITE_STACK_ROADMAP.md](#doc-15-sprite_stack_roadmapmd) | docs/ | → Wave 6 (blocked on artist sprites) |
+| DOC-40 | [SPRITE_COMMISSIONING_MAP.md](#doc-40-sprite_commissioning_mapmd) | docs/ | — |
+| DOC-41 | [SPRITE_LIBRARY_PLAN.md](#doc-41-sprite_library_planmd) | docs/ | → Wave 6 (particle FX) |
+| DOC-42 | [SPRITE_STUB_ROADMAP.md](#doc-42-sprite_stub_roadmapmd) | docs/ | → Wave 6 (emoji-to-artist migration) |
 
 ### Level Design And Blockouts
 
@@ -225,31 +225,44 @@ north stars. Two new plans are coming next week:
 
 ### Primary outstanding execution priorities
 
-1. Run DOC-82 POST_JAM_EXECUTION_ORDER.md as the active patch plan (P1–P5).
-2. **Expand dungeon tile library** — DOC-84 §12.2 creature tiles 49–54 land in `tiles.js`
-   + biome textures + `enemies.json` verb-sets (blocks "loot feels weighted" payoff).
-3. **Expand DOC-95 MINIGAME_TILES** — lock Tier 1 implementation order (WELL, ANVIL,
-   SOUP_KITCHEN, BARREL, FUNGAL_PATCH); flesh out Tier 2 UI flow for SWITCHBOARD +
-   NOTICE_BOARD; define overflow/failure states + juice/particle hooks; reconcile with
-   DOC-84 verb-node list (same tile, consistent treatment).
-4. **Register verb-nodes on Floors 2 & 3** (DOC-84 §5.2c/§6.2c) — 22 + 16 nodes, unblocks
-   surface-level economy visibility as soon as it lands.
-5. Implement DOC-74 Act 2 housing reassignment arc (§5.4) with DOC-10 / DOC-84 interior
-   + living-infrastructure hooks. Resolve Act 2 open questions (§12): hero-cycle faction
-   colors, faction re-alignment escape hatch, Act 2 climax fight mechanics (Seaway 0.1.2).
-6. Execute depth-3 reliability work from DOC-85 (AI disposition contract, proc-gen
-   invariants, acceptance tests). **Feed §12.6 creature-tile placement rules into the
-   D3 Phase 4 composer** — this is the integration point where dungeon-creature economy
-   becomes non-negotiable.
-7. Cross-floor verb attenuation (DOC-83 Phase 11) — prevents reanimated constructs from
-   stampeding upstairs, without which ENERGY_CONDUIT→CHARGING_CRADLE pulls dominate.
-8. Close legacy carryovers from archived jam plan:
+> **Canonical execution plan: `POST_JAM_FOLLOWUP_ROADMAP.md` (DOC-105)**. The numbered list below is a summary — see DOC-105 for wave sequencing, gates, and exit criteria. Items marked *(→ Wave N)* show their DOC-105 wave assignment.
+
+1. ~~Run DOC-82 POST_JAM_EXECUTION_ORDER.md as the active patch plan (P1–P5).~~ ✅ Complete — DOC-82 is a closed ledger. DOC-105 is the active plan.
+2. **Expand dungeon tile library** — DOC-84 §12.2 creature tiles 49–54 *(→ Wave 1)*
+3. **Expand DOC-95 MINIGAME_TILES** — Tier 1 order + Tier 2 UI flow *(→ Wave 1)*
+4. **Register verb-nodes on Floors 2 & 3** (DOC-84 §5.2c/§6.2c) *(→ Wave 1)*
+5. Implement DOC-74 Act 2 housing reassignment arc *(→ Wave 4 CP5)*
+6. Execute depth-3 reliability work from DOC-85 *(→ Wave 3)*
+7. Cross-floor verb attenuation (DOC-83 Phase 11) *(→ Wave 3)*
+8. Close legacy carryovers *(→ Wave 5)*:
    - E1/E2 (hero boss encounter + hero deck)
    - E5.8/E5.9/E5.10 (chest interaction + playtest gate)
-   - Phase F (economy tuning + tool progression)
+   - Phase F (economy tuning + tool progression) — DOC-39 is the spec *(→ Wave 4)*
    - Phase G (audio, LG validation, submission polish)
-9. Run DOC-86 critical path sequencing for legacy roadmap triage and dependency closure
-   before new renderer/living-infra expansions.
+9. Run DOC-86 critical path sequencing *(→ Wave 1–2 gates)*
+
+### Stale roadmap triage (2026-04-17)
+
+20+ docs created before April 8 had open work with no execution slot. All have been triaged and absorbed into DOC-105 waves. Key assignments:
+
+| Doc | Wave | Summary |
+|-----|------|---------|
+| DOC-31b Cobweb/Trap Strategy | Wave 1 | Phases 3/5–7 feed blockout readiness |
+| DOC-52 Readiness Bar | Wave 2 | Constellation-tracer FX + reporting engine |
+| DOC-9 NPC System | Wave 3 | Spec source for NPC Refresh (§5–§9) |
+| DOC-32b Tooltip Bark | Wave 3 | Scrollable log + inline choices |
+| DOC-59 D3 Cleaning Balance | Wave 3 | Depth-3 specific tuning |
+| DOC-39 Shop Refresh Economy | Wave 4 | Staggered shop cycles — THE shop spec |
+| DOC-16 Suit System | Wave 4 | 4 remaining passes, suit synergies |
+| DOC-57 CrateUI Overhaul | Wave 4 | Work order integration |
+| DOC-1 Gap Coverage T2 | Wave 5 | Deployability checklist |
+| DOC-50 Spatial Audio Bark | Wave 5 | Stereo panning for Phase G audio |
+| DOC-37 Input Controller | Wave 5 | Magic Remote gaps → Phase G |
+| DOC-15/42/41 Sprite system | Wave 6 | Blocked on artist sprites |
+| DOC-22/23 HUD/UI | Wave 6 | No phases sequenced, visual polish |
+
+Full triage ledger: DOC-105 Appendix A.
+Archive candidates: DOC-45 (INVENTORY_SYSTEM_AUDIT — resolved), DOC-32 (UNIFIED_EXECUTION_ORDER — superseded), DOC-27 (JAM_COMPLIANCE — jam submitted).
 
 ### Recently shipped / archived
 
