@@ -1054,6 +1054,57 @@ var TextureAtlas = (function () {
       lightR: 180, lightG: 50, lightB: 30,         // Red indicator light
       lightGR: 50, lightGG: 160, lightGB: 60       // Green indicator light
     });
+
+    // ── Creature verb-node wall textures (DOC-115 §2b) ─────────────
+    // Three wall-like tiles that anchor creature behavior on dungeon
+    // floors. Mirror existing infrastructure generators for tonal
+    // consistency — _genCot for NEST (low mound), _genChargingCradle
+    // for DEN (frame + dark cavity) and ENERGY_CONDUIT (frame + glow).
+
+    // Nest — chunky woven debris pile, ground-level (0.3× short wall)
+    _genNestDebris('nest_debris', {
+      debrisR: 110, debrisG: 85,  debrisB: 50,     // Mid tan woven sticks
+      shadowR: 55,  shadowG: 38,  shadowB: 22,     // Dark brown shadow bands
+      boneR:   195, boneG:   180, boneB:   150,    // Off-white bone chips
+      earthR:  65,  earthG:  50,  earthB:  35      // Dark earth base ring
+    });
+
+    // Den — hollowed alcove in cave wall (0.5× short wall)
+    _genDenAlcove('den_alcove', {
+      stoneR:  100, stoneG: 95,  stoneB: 88,        // Med grey arch stones
+      mortarR: 50,  mortarG: 45, mortarB: 38,        // Dark mortar joints
+      voidR:   12,  voidG:   14, voidB:   18        // Near-black cavity
+    });
+
+    // Energy conduit — retrofuturistic pipe junction (0.8× tall wall)
+    _genEnergyConduit('energy_conduit', {
+      brassR:  130, brassG: 95,  brassB: 45,        // Worn brass frame
+      brassHiR: 175, brassHiG: 140, brassHiB: 70,   // Brass edge highlight
+      rivetR:  85,  rivetG:  70,  rivetB:  40,      // Darker rivet cap
+      darkR:   28,  darkG:   30,  darkB:   36,      // Dark interior cavity
+      glowR:   60,  glowG:   180, glowB:   220,     // Cyan energy glow
+      glowHiR: 210, glowHiG: 240, glowHiB: 255      // Bright spark core
+    });
+
+    // Creature verb-node FLOOR textures (DOC-115 §2a — walkable, 0.0× wall).
+    // Both sit on a standard flagstone base to blend visually with
+    // floor_stone on neighbouring tiles.
+
+    // Roost shadow — circular cast-down shadow from an overhead hook,
+    // with a chain-link pattern radiating from center.
+    _genRoostShadow('roost_shadow', {
+      stoneR:  82,  stoneG:  80,  stoneB:  74,       // Dungeon floor stone
+      shadowR: 22,  shadowG: 20,  shadowB: 18,       // Near-black pool shadow
+      chainR:  45,  chainG:  42,  chainB:  38        // Iron chain-link tint
+    });
+
+    // Territorial mark — three diagonal claw gouges with scorched edges
+    // and displaced stone chips along the rim.
+    _genTerritorialMark('territorial_mark', {
+      stoneR:  82,  stoneG:  80,  stoneB:  74,       // Dungeon floor stone
+      gougeR:  18,  gougeG:  16,  gougeB:  14,       // Deep cut / scorch core
+      chipR:   180, chipG:   172, chipB:   155       // Displaced stone chip
+    });
   }
 
   // ── Texture generators ─────────────────────────────────────────
@@ -6635,6 +6686,439 @@ var TextureAtlas = (function () {
         r: _clamp(p.panelR + baseNoise + pn),
         g: _clamp(p.panelG + baseNoise * 0.8 + pn * 0.9),
         b: _clamp(p.panelB + baseNoise * 0.6 + pn * 0.8)
+      };
+    });
+  }
+
+  // ── Creature verb-node textures (DOC-115 §2b) ─────────────────────
+  // Three wall-like tiles rendered as opaque columns on dungeon floors.
+  // Each mirrors an existing infrastructure generator for tonal
+  // consistency while carrying a distinct silhouette so the player can
+  // read "rest point / alcove / power junction" at a glance from TV
+  // distance.
+
+  // Nest — chunky woven debris pile. Low mound silhouette (wider at
+  // base, narrowing to a rounded top). Horizontal stick bands with
+  // occasional bone-white chip highlights. Mirrors _genCot's low-
+  // profile frame+body split but uses a mound shape and transparent
+  // border so the wall behind shows through above the pile.
+  function _genNestDebris(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Mound silhouette — wider at bottom, narrower at top. yFrac
+      // 0=top, 1=bottom. Radius grows from ~0.35*cx at top to ~0.95*cx
+      // at base. Above the mound cap the wall is transparent.
+      var yFrac = y / S;
+      var halfW = cx * (0.35 + 0.60 * yFrac);
+      var dx = Math.abs(x - cx);
+      if (dx > halfW) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+
+      // Dark earth ring around the base (bottom 15%)
+      if (yFrac > 0.85) {
+        var en = (_hash(x + 14100, y + 14101) - 0.5) * 5;
+        return {
+          r: _clamp(p.earthR + en),
+          g: _clamp(p.earthG + en * 0.9),
+          b: _clamp(p.earthB + en * 0.8)
+        };
+      }
+
+      // Horizontal shadow bands — every 7px a dark stripe reads as the
+      // shadow line between layers of woven sticks. Band spacing is
+      // irregular via a per-row hash.
+      var bandRow = Math.floor(y / 7);
+      var bandShift = (_hash(bandRow + 14200, 0) - 0.5) * 10;
+      var bandLocalY = y % 7;
+      var isShadow = bandLocalY < 2;
+
+      if (isShadow) {
+        var sn = (_hash(x + 14300, y + 14301) - 0.5) * 5;
+        return {
+          r: _clamp(p.shadowR + bandShift + sn),
+          g: _clamp(p.shadowG + bandShift * 0.9 + sn),
+          b: _clamp(p.shadowB + bandShift * 0.8 + sn)
+        };
+      }
+
+      // Bone-white chip highlights — sparse scattering. ~4% of pixels
+      // in the upper 60% of the mound flip to bone tone.
+      var chipRoll = _hash(x + 14400, y + 14401);
+      if (yFrac < 0.60 && chipRoll > 0.96) {
+        var bn = (_hash(x + 14500, y + 14501) - 0.5) * 8;
+        return {
+          r: _clamp(p.boneR + bn),
+          g: _clamp(p.boneG + bn),
+          b: _clamp(p.boneB + bn * 0.9)
+        };
+      }
+
+      // Debris body — tan woven sticks with curvature shading (darker
+      // at silhouette edges so the mound reads as three-dimensional).
+      var curveDim = 1.0 - (dx / halfW) * 0.30;
+      var grain = _hash(x + 14600, Math.floor(y / 2) + 14601);
+      var gn = (grain - 0.5) * 8;
+      return {
+        r: _clamp((p.debrisR + bandShift * 0.5 + gn) * curveDim),
+        g: _clamp((p.debrisG + bandShift * 0.4 + gn * 0.9) * curveDim),
+        b: _clamp((p.debrisB + bandShift * 0.3 + gn * 0.7) * curveDim)
+      };
+    });
+  }
+
+  // Den — hollowed rock alcove. Stone arch frame surrounding a near-
+  // black cavity. The arch is a rounded keystone (semicircle at top,
+  // straight jambs descending to floor). Mirrors _genChargingCradle's
+  // outer-frame + interior-cavity split, with _genWellStone's masonry
+  // pattern driving the arch stones.
+  function _genDenAlcove(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Arch aperture — semicircle at top (radius ~22), straight
+      // vertical jambs below. archY is the pivot where the arch curve
+      // meets the straight jamb. Aperture half-width = 22 at/below
+      // archY, narrower above (following a semicircle).
+      var archR = 22;
+      var archY = S * 0.35; // top 35% is the arch curve
+      var apertureHalfW;
+      if (y < archY - archR) {
+        // Above the arch entirely — solid stone frame
+        apertureHalfW = -1;
+      } else if (y < archY) {
+        // Inside the arch curve — semicircle
+        var dy = archY - y;
+        apertureHalfW = Math.sqrt(Math.max(0, archR * archR - dy * dy));
+      } else {
+        // Below the arch — straight jambs
+        apertureHalfW = archR;
+      }
+
+      var dx = Math.abs(x - cx);
+
+      // Interior cavity (inside the aperture) — near-black with subtle noise
+      if (dx < apertureHalfW) {
+        // Subtle edge darkening at the bottom (alcove floor)
+        var floorDim = y > S * 0.85 ? 0.7 : 1.0;
+        var vn = (_hash(x + 14700, y + 14701) - 0.5) * 4;
+        return {
+          r: _clamp(p.voidR * floorDim + vn),
+          g: _clamp(p.voidG * floorDim + vn),
+          b: _clamp(p.voidB * floorDim + vn * 0.9)
+        };
+      }
+
+      // Stone arch frame — masonry blocks (10×7 brick with odd-row offset)
+      var stoneW = 10, stoneH = 7;
+      var rowOff = (Math.floor(y / stoneH) % 2 === 0) ? 0 : stoneW / 2;
+      var sCol = Math.floor((x + rowOff) / stoneW);
+      var sRow = Math.floor(y / stoneH);
+      var slx = (x + rowOff) - sCol * stoneW;
+      var sly = y - sRow * stoneH;
+
+      // Mortar joints
+      if (slx < 1 || slx >= stoneW - 1 || sly < 1 || sly >= stoneH - 1) {
+        var mn = (_hash(x + 14800, y + 14801) - 0.5) * 4;
+        return {
+          r: _clamp(p.mortarR + mn),
+          g: _clamp(p.mortarG + mn),
+          b: _clamp(p.mortarB + mn)
+        };
+      }
+
+      // Stone face — edge-darkening shade near the aperture so the
+      // arch reads as inset (stone leaning toward the cavity).
+      var apertureEdgeDist = dx - apertureHalfW; // positive outside aperture
+      var rimFade = apertureEdgeDist < 4 ? 0.75 + apertureEdgeDist * 0.06 : 1.0;
+      var blockId = sRow * 9 + sCol;
+      var bt = (_hash(blockId + 14900, sRow + 14901) - 0.5) * 14;
+      var pn = (_hash(x + 15000, y + 15001) - 0.5) * 3;
+      return {
+        r: _clamp((p.stoneR + bt) * rimFade + pn),
+        g: _clamp((p.stoneG + bt) * rimFade + pn * 0.9),
+        b: _clamp((p.stoneB + bt) * rimFade + pn * 0.8)
+      };
+    });
+  }
+
+  // Energy conduit — exposed power junction. Brass pipe frame with
+  // rivet studs along the border, a dark interior cavity, and a
+  // central glowing cyan slit with animated-feeling sparking highlights.
+  // Mirrors _genChargingCradle's frame + interior pattern but collapses
+  // three cables into a single central slit and adds rivet detail
+  // ported from _genAnvil / _genDoorIron.
+  function _genEnergyConduit(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+
+      // Brass frame — outer border (5px on each side). Darker at the
+      // very edge, brighter on the inner bevel so the frame reads
+      // three-dimensional.
+      var frameW = 5;
+      var isFrame = x < frameW || x >= S - frameW || y < frameW || y >= S - frameW;
+      if (isFrame) {
+        // Rivet studs — centered along each edge, 12px spacing
+        var edgeDist = Math.min(x, S - 1 - x, y, S - 1 - y);
+        var isRivet = false;
+        if (edgeDist < 2) {
+          // Near outer edge — place rivet stud centers every 12px
+          var rivetSpacing = 12;
+          var rivetHalf = 2;
+          var onHorizEdge = (y < frameW || y >= S - frameW);
+          var onVertEdge = (x < frameW || x >= S - frameW);
+          if (onHorizEdge) {
+            var rx = (x + rivetSpacing / 2) % rivetSpacing;
+            if (rx < rivetHalf * 2) isRivet = true;
+          } else if (onVertEdge) {
+            var ry = (y + rivetSpacing / 2) % rivetSpacing;
+            if (ry < rivetHalf * 2) isRivet = true;
+          }
+        }
+        if (isRivet) {
+          var rn = (_hash(x + 15100, y + 15101) - 0.5) * 4;
+          return {
+            r: _clamp(p.rivetR + rn),
+            g: _clamp(p.rivetG + rn * 0.9),
+            b: _clamp(p.rivetB + rn * 0.7)
+          };
+        }
+        var fn = (_hash(x + 15200, y + 15201) - 0.5) * 5;
+        var edgeTier = (edgeDist < 1) ? 0.75 : (edgeDist < 3 ? 1.15 : 0.95);
+        return {
+          r: _clamp(p.brassR * edgeTier + fn),
+          g: _clamp(p.brassG * edgeTier + fn * 0.9),
+          b: _clamp(p.brassB * edgeTier + fn * 0.6)
+        };
+      }
+
+      // Interior cavity — central vertical glowing slit (4px wide)
+      var slitHalfW = 4;
+      var sdx = Math.abs(x - cx);
+      if (sdx < slitHalfW) {
+        var glowFalloff = 1.0 - sdx / slitHalfW; // 1 at center, 0 at slit edge
+        // Vertical spark segments — every 11px alternate bright/dim
+        var sparkBand = Math.floor(y / 11);
+        var sparkSeed = _hash(sparkBand + 15300, 0);
+        var sparkHot = sparkSeed > 0.55;
+        var sparkLocal = y % 11;
+        var isCore = sparkLocal > 2 && sparkLocal < 9;
+        var cn = (_hash(x + 15400, y + 15401) - 0.5) * 6;
+        if (isCore && sparkHot) {
+          // Bright cyan core — mix glow with highlight
+          return {
+            r: _clamp(p.glowR + glowFalloff * (p.glowHiR - p.glowR) + cn),
+            g: _clamp(p.glowG + glowFalloff * (p.glowHiG - p.glowG) + cn),
+            b: _clamp(p.glowB + glowFalloff * (p.glowHiB - p.glowB) + cn)
+          };
+        }
+        // Dim sections — glow color with falloff into dark cavity
+        return {
+          r: _clamp(p.darkR + glowFalloff * (p.glowR - p.darkR) * 0.6 + cn),
+          g: _clamp(p.darkG + glowFalloff * (p.glowG - p.darkG) * 0.6 + cn),
+          b: _clamp(p.darkB + glowFalloff * (p.glowB - p.darkB) * 0.6 + cn)
+        };
+      }
+
+      // Flanking dark cavity with horizontal banding (looks like
+      // ribbed backplate behind the glowing core)
+      var bandY = y % 6;
+      var isBand = bandY < 2;
+      var dn = (_hash(x + 15500, y + 15501) - 0.5) * 4;
+      if (isBand) {
+        return {
+          r: _clamp(p.darkR * 0.6 + dn),
+          g: _clamp(p.darkG * 0.6 + dn),
+          b: _clamp(p.darkB * 0.6 + dn)
+        };
+      }
+      // Subtle cyan ambient bleed onto the flanking plate (further
+      // from slit = less bleed)
+      var bleedAmount = Math.max(0, 1.0 - sdx / (cx * 0.7)) * 0.20;
+      return {
+        r: _clamp(p.darkR + bleedAmount * (p.glowR - p.darkR) + dn),
+        g: _clamp(p.darkG + bleedAmount * (p.glowG - p.darkG) + dn),
+        b: _clamp(p.darkB + bleedAmount * (p.glowB - p.darkB) + dn)
+      };
+    });
+  }
+
+  // ── Creature verb-node floor textures (DOC-115 §2a) ──────────────
+  //
+  // These are floor-only textures for walkable creature anchors (ROOST,
+  // TERRITORIAL_MARK). They do not register a wall texture — the tiles
+  // render as textured floor patches and the raycaster looks through
+  // them. Base is standard flagstone masonry so the overlay reads as
+  // a pattern burned / etched into the dungeon floor.
+
+  // Roost — overhead hook/perch point. Rendered as a circular floor
+  // shadow (the chain is above the camera, never visible head-on).
+  // 3 radial tiers: dark shadow core (d<8) → mid shadow with chain-link
+  // spokes (8-18) → fading outer vignette (18-28) → plain floor stone.
+  function _genRoostShadow(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2;
+      var cy = S / 2;
+
+      // Stone flagstone base — matches _genFloorStone block geometry so
+      // ROOST tiles sit visually flush with adjacent floor_stone tiles.
+      var blockW = 16, blockH = 12;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? 8 : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      var isMortar = (lx < 1 || ly < 1);
+
+      var dx = x - cx;
+      var dy = y - cy;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      var theta = Math.atan2(dy, dx);
+
+      // Shadow intensity profile. shadowT in [0,1], 1 = darkest.
+      var shadowT;
+      if (d < 8) {
+        shadowT = 1.0;
+      } else if (d < 18) {
+        shadowT = 1.0 - (d - 8) / 10 * 0.35;
+      } else if (d < 28) {
+        shadowT = 0.65 * (1.0 - (d - 18) / 10);
+      } else {
+        shadowT = 0;
+      }
+
+      // Chain-link spokes — 6 radial arms with cross-beads every 4px.
+      // Spoke width widens near center (suggests a hanging chain foreshortened).
+      var chainHit = false;
+      if (d >= 6 && d <= 20) {
+        var spokeAngle = theta * 3 / Math.PI;
+        var spokeLocal = spokeAngle - Math.round(spokeAngle);
+        var spokeWidth = 1.2 / (d * 0.28 + 1);
+        var onSpoke = Math.abs(spokeLocal) < spokeWidth;
+        var ringLocal = d % 4;
+        var onRing = ringLocal < 1.4 && d >= 7;
+        if (onSpoke && onRing) chainHit = true;
+      }
+
+      // Base stone tone (mirrors _genFloorStone noise recipe)
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var blockNoise = (_hash(blockId + 15600, row + 15601) - 0.5) * 12;
+      var pn = (_hash(x + 15700, y + 15701) - 0.5) * 6;
+      var baseR, baseG, baseB;
+      if (isMortar) {
+        baseR = p.stoneR * 0.4;
+        baseG = p.stoneG * 0.4;
+        baseB = p.stoneB * 0.4;
+      } else {
+        baseR = p.stoneR + blockNoise + pn;
+        baseG = p.stoneG + blockNoise + pn;
+        baseB = p.stoneB + blockNoise + pn * 0.9;
+      }
+
+      if (chainHit) {
+        var cn = (_hash(x + 15800, y + 15801) - 0.5) * 6;
+        return {
+          r: _clamp(p.chainR + cn),
+          g: _clamp(p.chainG + cn),
+          b: _clamp(p.chainB + cn * 0.9)
+        };
+      }
+
+      // Shadow blend — lerp base toward shadow color by shadowT.
+      return {
+        r: _clamp(baseR * (1 - shadowT) + p.shadowR * shadowT),
+        g: _clamp(baseG * (1 - shadowT) + p.shadowG * shadowT),
+        b: _clamp(baseB * (1 - shadowT) + p.shadowB * shadowT)
+      };
+    });
+  }
+
+  // Territorial mark — three diagonal claw/scorch gouges on stone.
+  // Each slash has a deep dark core, a scorched edge fading into the
+  // base stone, and scattered bone-white stone chips along the rim.
+  function _genTerritorialMark(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      // Stone flagstone base (same geometry as _genRoostShadow).
+      var blockW = 16, blockH = 12;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? 8 : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      var isMortar = (lx < 1 || ly < 1);
+
+      // Three diagonal slashes. A slash line is y = x + offset; perpendicular
+      // distance is |y - x - offset| / sqrt(2). Offsets spread the slashes
+      // across the 64px tile; a y-banded warp keeps lines from feeling ruled.
+      var slashOffsets = [-36, -8, 20];
+      var slashWidth = 2.0;
+      var slashEdge = 1.0;
+      var warp = (_hash(Math.floor(y / 4) + 15900, 0) - 0.5) * 3.0;
+
+      var bestCoreDist = 999;
+      for (var i = 0; i < slashOffsets.length; i++) {
+        var perp = Math.abs(y - x - slashOffsets[i] - warp) / Math.SQRT2;
+        if (perp < bestCoreDist) bestCoreDist = perp;
+      }
+
+      // Chip highlights — 1-2px bright pixels along the scorched rim,
+      // representing displaced stone chipped out by the claws.
+      var chipRoll = _hash(x + 16000, y + 16001);
+      var isChip = bestCoreDist > slashWidth &&
+                   bestCoreDist < slashWidth + 1.6 &&
+                   chipRoll > 0.82;
+
+      // Base stone tone
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var blockNoise = (_hash(blockId + 16100, row + 16101) - 0.5) * 12;
+      var pn = (_hash(x + 16200, y + 16201) - 0.5) * 6;
+      var baseR, baseG, baseB;
+      if (isMortar) {
+        baseR = p.stoneR * 0.4;
+        baseG = p.stoneG * 0.4;
+        baseB = p.stoneB * 0.4;
+      } else {
+        baseR = p.stoneR + blockNoise + pn;
+        baseG = p.stoneG + blockNoise + pn;
+        baseB = p.stoneB + blockNoise + pn * 0.9;
+      }
+
+      if (bestCoreDist < slashWidth) {
+        // Deep gouge core — near-black claw cut.
+        var gn = (_hash(x + 16300, y + 16301) - 0.5) * 5;
+        return {
+          r: _clamp(p.gougeR + gn),
+          g: _clamp(p.gougeG + gn),
+          b: _clamp(p.gougeB + gn)
+        };
+      }
+      if (bestCoreDist < slashWidth + slashEdge) {
+        // Scorched edge — linear blend from gouge color back to a dimmed
+        // fraction of the base stone, so the cut feels recessed.
+        var eT = (bestCoreDist - slashWidth) / slashEdge;
+        var en = (_hash(x + 16400, y + 16401) - 0.5) * 4;
+        return {
+          r: _clamp(p.gougeR * (1 - eT) + baseR * 0.55 * eT + en),
+          g: _clamp(p.gougeG * (1 - eT) + baseG * 0.55 * eT + en),
+          b: _clamp(p.gougeB * (1 - eT) + baseB * 0.55 * eT + en * 0.9)
+        };
+      }
+      if (isChip) {
+        var cn = (_hash(x + 16500, y + 16501) - 0.5) * 8;
+        return {
+          r: _clamp(p.chipR + cn),
+          g: _clamp(p.chipG + cn),
+          b: _clamp(p.chipB + cn * 0.9)
+        };
+      }
+
+      return {
+        r: _clamp(baseR),
+        g: _clamp(baseG),
+        b: _clamp(baseB)
       };
     });
   }

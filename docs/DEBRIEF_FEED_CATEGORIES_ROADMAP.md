@@ -445,9 +445,22 @@ Add NPC rows, wire `favor-change` (not just `tier-cross`), finalize the subject-
 
 Target: ~22 assertions. Plus live-browser check: run dispatcher cinematic end-to-end, verify relationships category appears with BPRD friendly.
 
-### Phase 5 — Auto-retract on activity
+### Phase 5 — Auto-retract on activity — **SHIPPED 2026-04-17**
 
 The retract policy. Deliberately its own phase because it's where UX tuning lives.
+
+**Status**: Shipped. Constants, helpers, and wire-ins live in `engine/debrief-feed.js`; fresh-inode harness (`tools/_phase5-cache/verify-phase5.js`) is 30/30 green across 9 test groups. Regression suite (Phases 0–4 + sprint-timer) all green post-ship.
+
+**What shipped**:
+
+- `CATEGORY_MIN_EXPAND_WINDOW_MS = 600` (grace window after expand) and `CATEGORY_RETRACT_DELAY_MS = 600` (debounced collapse delay) surfaced at the top of the module.
+- `expandCategory` / `toggleCategory`-to-expand stamp `cat.expandedAtTs = Date.now()` on the flip to expanded. Idempotent expand (cat already expanded) does NOT re-stamp — keeps the grace window honest even if an event fires two expands in a row.
+- `_maybeScheduleRetract(catId)` gate: no-op if cat is unexpanded or still inside the grace window; otherwise `_scheduleRetract(catId)` arms a `setTimeout` that calls `collapseCategory(catId)` after `CATEGORY_RETRACT_DELAY_MS`.
+- Debounce: a second `updateReadiness` / `updateRelationship` call for the same category before the timer fires cancels the in-flight handle and re-arms a fresh 600ms timer (still 1 pending timer, measured from the latest update).
+- Explicit `collapseCategory(catId)` or `toggleCategory(catId)`-to-collapse cancels any pending retract timer (user intent wins).
+- Scoped per-category (`_retractTimers[catId]` map); updates to readiness don't touch relationships's timer and vice-versa. Two categories can carry independent pending retracts.
+- Retract preserves `revealed` (sticky gate) — it's a collapse, not an un-reveal.
+- Harness-only introspection: `_getPendingRetractCount([catId])` exposed in the public API so Node harness can count pending retracts without time-travel.
 
 **Files touched**: `engine/debrief-feed.js` only.
 

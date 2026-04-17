@@ -33,6 +33,7 @@ var COMMANDS = Object.assign(
   require('./cli/commands-world'),    // Phase 5b.4: bo export-world-graph/apply-world-diff
   require('./cli/commands-procgen'),  // Pass 6: bo procgen/list-recipes
   require('./cli/commands-bake'),     // Pass 6: bo bake/bake-all/bake-multi (recipe → IIFE pipeline)
+  require('./cli/commands-gates'),     // DOC-116: bo set-gate/clear-gate/set-edge-gate/show-gates/validate-gates
   require('./cli/commands-help')      // Slice C3: bo help [<command>]
 );
 

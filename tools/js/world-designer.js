@@ -804,6 +804,254 @@
     return html;
   }
 
+  // ── DOC-116: Gate constants for edge inspector ──────────────
+  var _GATE_TYPES = ['none', 'key', 'quest', 'faction', 'schedule', 'breakable'];
+  var _GATE_ICONS = { key: '\uD83D\uDD11', quest: '\uD83D\uDCDC', faction: '\uD83D\uDEE1\uFE0F', schedule: '\u23F0', breakable: '\uD83D\uDCA5' };
+  var _FACTION_IDS = ['mss', 'pinkerton', 'jesuit', 'bprd'];
+  var _FACTION_TIERS = ['hated','unfriendly','neutral','friendly','allied','exalted'];
+
+  function _gateLabel(g) {
+    if (!g) return 'none';
+    var icon = _GATE_ICONS[g.type] || '';
+    var det = '';
+    if (g.type === 'key') det = g.keyId || 'any key';
+    else if (g.type === 'quest') det = g.flag || (g.questId + (g.stepId ? ':' + g.stepId : g.stepIdx != null ? '#' + g.stepIdx : ''));
+    else if (g.type === 'faction') det = g.factionId + ' \u2265 ' + g.minTier;
+    else if (g.type === 'schedule') det = g.openHour + ':00\u2013' + g.closeHour + ':00';
+    else if (g.type === 'breakable') det = (g.suit || 'any') + ' \u00D7' + (g.hits || 1);
+    return icon + ' ' + g.type + (det ? ' (' + det + ')' : '');
+  }
+
+  // ── Edge inspector (DOC-116 §5.1) ─────────────────────────
+  function showEdgeInspector(edgeObj) {
+    // Deselect any selected node
+    if (state.selected && state.nodes[state.selected]) {
+      state.nodes[state.selected].el.classList.remove('selected');
+    }
+    state.selected = null;
+
+    var body = $('dg-inspector-body');
+    var fromFloor = state.floors[edgeObj.from];
+    var toFloor = state.floors[edgeObj.to];
+    if (!fromFloor) { body.innerHTML = '<div class="empty">Source floor not found: ' + edgeObj.from + '</div>'; return; }
+
+    var edgeGates = fromFloor.edgeGates || {};
+    var currentGate = edgeGates[edgeObj.to] || null;
+
+    var html =
+      '<div class="kv"><span class="k">Edge</span><span class="v">' +
+        '<a class="jump" data-jump="' + edgeObj.from + '">' + edgeObj.from + '</a>' +
+        ' \u2192 ' +
+        '<a class="jump" data-jump="' + edgeObj.to + '">' + edgeObj.to + '</a>' +
+      '</span></div>' +
+      '<div class="kv"><span class="k">Type</span><span class="v">' + edgeObj.type + '</span></div>' +
+      '<div class="kv"><span class="k">Reciprocal</span><span class="v" style="color:' + (edgeObj.reciprocal ? '#9c6' : '#f66') + ';">' + (edgeObj.reciprocal ? 'yes' : 'NO') + '</span></div>' +
+      '<h3 style="margin-top:14px;">Edge Gate (DOC-116)</h3>' +
+      '<div class="kv"><span class="k">Current</span><span class="v" style="color:' + (currentGate ? '#fc8' : '#567') + ';">' + _gateLabel(currentGate) + '</span></div>' +
+      '<div id="dg-edge-gate-controls" style="margin-top:8px;"></div>';
+
+    body.innerHTML = html;
+
+    // Wire jump links
+    Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {
+      a.addEventListener('click', function() {
+        var to = a.getAttribute('data-jump');
+        if (state.nodes[to]) {
+          selectFloor(to);
+          var n = state.nodes[to];
+          var wrap = $('dg-canvas-wrap');
+          wrap.scrollLeft = Math.max(0, n.x - wrap.clientWidth / 2 + 75);
+          wrap.scrollTop  = Math.max(0, n.y - wrap.clientHeight / 2 + 27);
+        }
+      });
+    });
+
+    // Build gate editor controls
+    var controls = $('dg-edge-gate-controls');
+    _buildEdgeGateControls(controls, edgeObj.from, edgeObj.to, currentGate);
+  }
+
+  function _buildEdgeGateControls(container, fromId, toId, currentGate) {
+    container.innerHTML = '';
+    var gate = currentGate ? JSON.parse(JSON.stringify(currentGate)) : null;
+
+    // Type selector
+    var typeRow = document.createElement('div');
+    typeRow.style.cssText = 'display:flex; gap:4px; align-items:center; margin-bottom:6px;';
+    var typeLbl = document.createElement('span');
+    typeLbl.textContent = 'Type:';
+    typeLbl.style.cssText = 'color:#789; font-size:11px;';
+    typeRow.appendChild(typeLbl);
+    var typeSel = document.createElement('select');
+    typeSel.style.cssText = 'flex:1; background:#111; color:#cfe; border:1px solid #444; padding:3px; font-size:11px; font-family:inherit;';
+    _GATE_TYPES.forEach(function(t) {
+      var o = document.createElement('option');
+      o.value = t; o.textContent = (_GATE_ICONS[t] || '') + ' ' + t;
+      typeSel.appendChild(o);
+    });
+    typeSel.value = gate ? gate.type : 'none';
+    typeRow.appendChild(typeSel);
+    container.appendChild(typeRow);
+
+    var fields = document.createElement('div');
+    container.appendChild(fields);
+
+    function renderFields() {
+      fields.innerHTML = '';
+      var t = typeSel.value;
+      if (t === 'none') {
+        gate = null;
+        return;
+      }
+      if (!gate || gate.type !== t) {
+        gate = { type: t };
+      }
+      var pairs = [];
+      if (t === 'key') {
+        pairs = [
+          ['keyId', gate.keyId || '', 'text'],
+          ['keyName', gate.keyName || '', 'text'],
+          ['consume', gate.consume !== false ? 'true' : 'false', 'bool']
+        ];
+      } else if (t === 'quest') {
+        pairs = [
+          ['flag', gate.flag || '', 'text'],
+          ['questId', gate.questId || '', 'text'],
+          ['stepId', gate.stepId || '', 'text']
+        ];
+      } else if (t === 'faction') {
+        pairs = [
+          ['factionId', gate.factionId || 'mss', 'select:' + _FACTION_IDS.join(',')],
+          ['minTier', gate.minTier || 'neutral', 'select:' + _FACTION_TIERS.join(',')]
+        ];
+      } else if (t === 'schedule') {
+        pairs = [
+          ['openHour', String(gate.openHour != null ? gate.openHour : 8), 'text'],
+          ['closeHour', String(gate.closeHour != null ? gate.closeHour : 20), 'text'],
+          ['days (csv)', gate.days ? gate.days.join(',') : '', 'text']
+        ];
+      } else if (t === 'breakable') {
+        pairs = [
+          ['suit', gate.suit || '', 'text'],
+          ['hits', String(gate.hits || 1), 'text']
+        ];
+      }
+      pairs.push(['rejectHint', gate.rejectHint || '', 'text']);
+
+      pairs.forEach(function(p) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; gap:4px; margin:2px 0; font-size:10px;';
+        var lbl = document.createElement('span');
+        lbl.textContent = p[0] + ':';
+        lbl.style.cssText = 'color:#789; min-width:70px;';
+        row.appendChild(lbl);
+
+        if (p[2] === 'bool') {
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = p[1] === 'true';
+          cb.addEventListener('change', function() { gate[p[0]] = cb.checked; });
+          row.appendChild(cb);
+        } else if (p[2] && p[2].indexOf('select:') === 0) {
+          var sel = document.createElement('select');
+          sel.style.cssText = 'flex:1; background:#111; color:#cfe; border:1px solid #444; padding:2px; font-size:10px; font-family:inherit;';
+          p[2].slice(7).split(',').forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v; opt.textContent = v;
+            sel.appendChild(opt);
+          });
+          sel.value = p[1];
+          sel.addEventListener('change', function() { gate[p[0]] = sel.value; });
+          row.appendChild(sel);
+        } else {
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.value = p[1];
+          inp.style.cssText = 'flex:1; background:#111; color:#cfe; border:1px solid #444; padding:2px 4px; font-size:10px; font-family:inherit;';
+          inp.addEventListener('input', function() {
+            var k = p[0];
+            var v = inp.value;
+            if (k === 'days (csv)') { gate.days = v ? v.split(',').map(function(d){return d.trim();}) : null; }
+            else if (k === 'openHour' || k === 'closeHour' || k === 'hits') { gate[k] = parseInt(v, 10) || 0; }
+            else { gate[k] = v; }
+          });
+          row.appendChild(inp);
+        }
+        fields.appendChild(row);
+      });
+    }
+
+    typeSel.addEventListener('change', renderFields);
+    renderFields();
+
+    // Save button
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex; gap:4px; margin-top:8px;';
+    var saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save edge gate';
+    saveBtn.style.cssText = 'background:#2a3a2a; border:1px solid #4a6a4a; color:#9c6; padding:4px 10px; font-size:11px; cursor:pointer; font-family:inherit; border-radius:3px;';
+    saveBtn.addEventListener('click', function() {
+      var floor = state.floors[fromId];
+      if (!floor) return;
+      floor.edgeGates = floor.edgeGates || {};
+      if (gate) {
+        floor.edgeGates[toId] = gate;
+      } else {
+        delete floor.edgeGates[toId];
+        if (Object.keys(floor.edgeGates).length === 0) delete floor.edgeGates;
+      }
+      setStatus('edge gate ' + (gate ? 'set' : 'cleared') + ': ' + fromId + ' \u2192 ' + toId, 'ok');
+      // Refresh edge visual
+      _refreshEdgeBadges();
+      // Re-show inspector with updated data
+      showEdgeInspector({ from: fromId, to: toId, type: 'authored', reciprocal: true });
+    });
+    btnRow.appendChild(saveBtn);
+
+    if (currentGate) {
+      var clearBtn = document.createElement('button');
+      clearBtn.textContent = 'Remove gate';
+      clearBtn.style.cssText = 'background:#2a1a1a; border:1px solid #633; color:#fcc; padding:4px 10px; font-size:11px; cursor:pointer; font-family:inherit; border-radius:3px;';
+      clearBtn.addEventListener('click', function() {
+        var floor = state.floors[fromId];
+        if (!floor) return;
+        floor.edgeGates = floor.edgeGates || {};
+        delete floor.edgeGates[toId];
+        if (Object.keys(floor.edgeGates).length === 0) delete floor.edgeGates;
+        setStatus('edge gate cleared: ' + fromId + ' \u2192 ' + toId, 'ok');
+        _refreshEdgeBadges();
+        showEdgeInspector({ from: fromId, to: toId, type: 'authored', reciprocal: true });
+      });
+      btnRow.appendChild(clearBtn);
+    }
+    container.appendChild(btnRow);
+  }
+
+  // Refresh gate icon badges on edges (called after gate edit)
+  function _refreshEdgeBadges() {
+    state.edges.forEach(function(e) {
+      if (!e.conn) return;
+      var floor = state.floors[e.from];
+      if (!floor) return;
+      var eg = (floor.edgeGates || {})[e.to];
+      // Remove existing gate overlay if present
+      e.conn.removeOverlays && e.conn.getOverlays && Object.keys(e.conn.getOverlays()).forEach(function(oid) {
+        if (oid.indexOf('gate-') === 0) e.conn.removeOverlay(oid);
+      });
+      if (eg) {
+        var icon = _GATE_ICONS[eg.type] || '\uD83D\uDD12';
+        try {
+          e.conn.addOverlay(['Label', {
+            label: icon,
+            id: 'gate-' + e.from + '-' + e.to,
+            cssClass: 'dg-gate-badge',
+            location: 0.3
+          }]);
+        } catch (ex) { /* jsPlumb overlay API varies by version */ }
+      }
+    });
+  }
+
   function selectFloor(id) {
     if (state.selected && state.nodes[state.selected]) {
       state.nodes[state.selected].el.classList.remove('selected');
@@ -1058,6 +1306,19 @@
       });
       renderEdges();
     });
+    // DOC-116: Wire edge click → edge inspector
+    jsp.bind('click', function(conn, originalEvent) {
+      // Find the edge object matching this jsPlumb connection
+      var match = null;
+      state.edges.forEach(function(e) {
+        if (e.conn === conn) match = e;
+      });
+      if (match) {
+        showEdgeInspector(match);
+      }
+    });
+    // Add gate badges to edges that have edge gates
+    _refreshEdgeBadges();
   }
 
   // ──────────────────────────────────────────────────────────
@@ -2214,6 +2475,8 @@
     // Phase 6.3 recipe helpers
     openRecipeModal: openRecipeModal,
     expandRecipe: expandRecipe,
-    discardRecipe: discardRecipe
+    discardRecipe: discardRecipe,
+    // DOC-116 gate helpers
+    showEdgeInspector: showEdgeInspector
   };
 })();

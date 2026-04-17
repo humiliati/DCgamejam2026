@@ -22,6 +22,21 @@ var DebriefFeed = (function () {
   var MODE_NAMES    = ['STATUS'];
   var MAX_FEED_LINES = 40;
 
+  // ── DOC-109 Phase 5 — Auto-retract tuning ───────────────────────
+  // Expanded categories auto-collapse after an incoming update, so
+  // the "most recent" summary line reappears once the flash finishes.
+  // Policy: see docs/DEBRIEF_FEED_CATEGORIES_ROADMAP.md Phase 5.
+  //   - MIN_EXPAND_WINDOW_MS: no auto-retract during this grace window
+  //                           after expandCategory/toggleCategory open
+  //                           (protects "I just opened it, let me read").
+  //   - RETRACT_DELAY_MS:    wait this long after the triggering update
+  //                           before collapsing. Lets the bump/tier-cross
+  //                           keyframe play out before the row disappears.
+  // Explicit collapseCategory() or toggleCategory()-to-collapse always
+  // wins, cancelling any pending retract timer.
+  var CATEGORY_MIN_EXPAND_WINDOW_MS = 600;
+  var CATEGORY_RETRACT_DELAY_MS     = 600;
+
   // EyesOnly pip-bar characters
   var BAR_FULL    = '\u2588';   // █
   var BAR_PARTIAL = '\u2592';   // ▒
@@ -155,7 +170,8 @@ var DebriefFeed = (function () {
       expanded:     false,
       revealed:     false,
       mostRecentId: null,
-      _lastUpdateAt: 0          // reserved for Phase 5 auto-retract
+      _lastUpdateAt: 0,         // wall-clock ms at last row write
+      expandedAtTs: 0           // Phase 5 — stamped on expand; drives min-window suppression
     },
     relationships: {
       id:           'relationships',
@@ -165,9 +181,15 @@ var DebriefFeed = (function () {
       expanded:     false,
       revealed:     false,
       mostRecentId: null,
-      _lastUpdateAt: 0
+      _lastUpdateAt: 0,
+      expandedAtTs: 0
     }
   };
+
+  // Phase 5 — per-category pending retract timer handle. Keyed by catId;
+  // value is whatever the sandbox's setTimeout returns (or null). Flushed
+  // on explicit collapse/toggle-to-collapse, overwritten on debounce.
+  var _retractTimers = {};
 
   // Parse a rowId of the form 'kind:subjectId' into its parts. Legacy
   // callers pass a bare faction id (no ':'), which we map to 'faction:<id>'
@@ -706,11 +728,21 @@ var DebriefFeed = (function () {
   // Mark a category as expanded (shows full body). Also reveals it if
   // it wasn't already — expanding an unrevealed category is a valid
   // entry point (e.g. the dispatcher-cinematic reveal path).
+  //
+  // Phase 5: stamps expandedAtTs on the first-flip-to-expanded so the
+  // auto-retract logic can suppress retract during the grace window.
+  // Idempotent expand (already expanded) does not re-stamp — that
+  // would reset the grace window on every programmatic expand.
   function expandCategory(catId) {
     var cat = _categories[catId];
     if (!cat) return false;
+    var wasExpanded = cat.expanded;
     cat.revealed = true;
     cat.expanded = true;
+    if (!wasExpanded) {
+      cat.expandedAtTs = _now();
+      _cancelRetract(catId);
+    }
     if (_visible) render();
     return true;
   }
@@ -719,20 +751,100 @@ var DebriefFeed = (function () {
     var cat = _categories[catId];
     if (!cat) return false;
     cat.expanded = false;
+    _cancelRetract(catId);          // Phase 5 — explicit action wins
     if (_visible) render();
     return true;
   }
 
   // Click-handler target from _renderCategoryRow. Flips expanded.
+  //
+  // Phase 5: flip-to-expanded stamps expandedAtTs (grace window); the
+  // reverse flip cancels any pending retract timer so a user click
+  // doesn't get overridden 600 ms later by a stale scheduled collapse.
   function toggleCategory(catId) {
     var cat = _categories[catId];
     if (!cat) return false;
     cat.expanded = !cat.expanded;
+    if (cat.expanded) {
+      cat.expandedAtTs = _now();
+      _cancelRetract(catId);
+    } else {
+      _cancelRetract(catId);
+    }
     if (_visible) render();
     return cat.expanded;
   }
 
+  // ── DOC-109 Phase 5 — Auto-retract machinery ────────────────────
+
+  // Monotonic clock helper — sandboxed harnesses swap the sandbox's
+  // Date object wholesale to drive the min-expand window forward, so
+  // the module reads Date.now() on every call rather than caching.
+  function _now() {
+    return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
+  }
+
+  // Clear any pending retract for catId. Safe to call when nothing is
+  // scheduled — used both by explicit collapse/toggle-to-collapse and
+  // by _scheduleRetract itself to debounce back-to-back updates.
+  function _cancelRetract(catId) {
+    var t = _retractTimers[catId];
+    if (t === undefined || t === null) return;
+    if (typeof clearTimeout === 'function') {
+      try { clearTimeout(t); } catch (e) { /* noop */ }
+    }
+    delete _retractTimers[catId];
+  }
+
+  // Arm (or re-arm) the retract timer for catId. Each new call clears
+  // the previous handle, implementing debounce — if updates keep
+  // arriving within RETRACT_DELAY_MS, the clock resets. When the
+  // timer finally fires, it re-checks the category's expanded state
+  // (a racing manual collapse may have already closed it).
+  function _scheduleRetract(catId) {
+    _cancelRetract(catId);
+    if (typeof setTimeout !== 'function') return;
+    _retractTimers[catId] = setTimeout(function () {
+      delete _retractTimers[catId];
+      var cat = _categories[catId];
+      if (!cat || !cat.expanded) return;
+      cat.expanded = false;
+      if (_visible) render();
+    }, CATEGORY_RETRACT_DELAY_MS);
+  }
+
+  // Entry point called from updateReadiness / updateRelationship
+  // after the row write lands. Only arms the timer when the category
+  // is actually expanded AND we're past the min-expand grace window.
+  // Everything else is a silent no-op — the collapsed-row mostRecent
+  // summary already updated via render(); no retract needed.
+  function _maybeScheduleRetract(catId) {
+    var cat = _categories[catId];
+    if (!cat || !cat.expanded) return;
+    var since = _now() - (cat.expandedAtTs || 0);
+    if (since < CATEGORY_MIN_EXPAND_WINDOW_MS) return;
+    _scheduleRetract(catId);
+  }
+
+  // Harness-only inspection of the pending retract handle map. Returns
+  // a count, not the handles themselves, so tests stay decoupled from
+  // whatever object shape setTimeout returns (Node vs browser).
+  function _getPendingRetractCount(catId) {
+    if (catId) {
+      return (_retractTimers[catId] !== undefined && _retractTimers[catId] !== null) ? 1 : 0;
+    }
+    var n = 0;
+    for (var k in _retractTimers) {
+      if (_retractTimers.hasOwnProperty(k) &&
+          _retractTimers[k] !== undefined && _retractTimers[k] !== null) n++;
+    }
+    return n;
+  }
+
   // Get read-only category state (tests + save serialization).
+  //
+  // Phase 5: `expandedAtTs` surfaces the grace-window anchor so
+  // harnesses can probe it without reaching into `_categories`.
   function getCategoryState(catId) {
     var cat = _categories[catId];
     if (!cat) return null;
@@ -742,7 +854,8 @@ var DebriefFeed = (function () {
       expanded:     !!cat.expanded,
       revealed:     !!cat.revealed,
       mostRecentId: cat.mostRecentId,
-      order:        cat.order.slice()
+      order:        cat.order.slice(),
+      expandedAtTs: cat.expandedAtTs || 0
     };
   }
 
@@ -1174,6 +1287,7 @@ var DebriefFeed = (function () {
       if (meta.tierCrossed) data.flair = { tierCrossed: true };
     }
     var row = _setRelationshipRow(kind, subjectId, data);
+    _maybeScheduleRetract('relationships');  // Phase 5 — arm auto-retract if expanded past grace window
     if (_visible) render();
     return row;
   }
@@ -1218,6 +1332,7 @@ var DebriefFeed = (function () {
     // Sticky reveal gate — first update anywhere in the category
     // flips the readiness wrapper visible. Subsequent updates are no-op.
     _categories.readiness.revealed = true;
+    _maybeScheduleRetract('readiness');  // Phase 5 — arm auto-retract if expanded past grace window
     if (_visible) render();
     return row;
   }
@@ -1486,6 +1601,11 @@ var DebriefFeed = (function () {
     collapseCategory: collapseCategory,
     toggleCategory:   toggleCategory,
     getCategoryState: getCategoryState,
+
+    // DOC-109 Phase 5 — Auto-retract introspection (harness-only; no
+    // production caller should depend on this. Returns count of pending
+    // setTimeout handles either across all categories or scoped by catId.)
+    _getPendingRetractCount: _getPendingRetractCount,
 
     // DOC-109 Phase 3 — Readiness rows
     updateReadiness:   updateReadiness,

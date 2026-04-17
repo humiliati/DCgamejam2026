@@ -918,7 +918,11 @@ var SpatialContract = (function () {
         40: 0.05,     // WELL — raised rim
         43: 0.05,     // ANVIL — raised pedestal
         44: 0.03,     // BARREL — slight raise
-        47: 0.03      // SOUP_KITCHEN — slight raise (brazier legs)
+        47: 0.03,     // SOUP_KITCHEN — slight raise (brazier legs)
+        // ── Creature verb-node offsets (DOC-115 §2d) ──
+        50: 0.03,     // NEST — ground debris pile, slight raise reads as mound base
+        51: 0.04,     // DEN — hollowed alcove, slight raise sets the lintel apart from floor
+        53: 0.05      // ENERGY_CONDUIT — junction frame sits proud of surrounding stone
       }), opts.tileHeightOffsets),
       stepColor:        opts.stepColor || '#111',
 
@@ -1043,7 +1047,11 @@ var SpatialContract = (function () {
         45: 'charging_cradle',   // CHARGING_CRADLE — steel frame + conduit
         46: 'switchboard_panel', // SWITCHBOARD — brass toggle panel
         47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
-        48: 'cot_canvas'         // COT — drab canvas bedroll
+        48: 'cot_canvas',        // COT — drab canvas bedroll
+        // ── Creature verb-node walls (DOC-115 §2b) ──
+        50: 'nest_debris',       // NEST — chunky woven debris mound
+        51: 'den_alcove',        // DEN — stone arch over dark cavity
+        53: 'energy_conduit'     // ENERGY_CONDUIT — brass frame + cyan slit
       }), opts.textures),
 
       // ── Floor texture ──
@@ -1064,7 +1072,10 @@ var SpatialContract = (function () {
         44: 'floor_barrel_lid',  // BARREL — wooden lid
         47: 'floor_soup_top',    // SOUP_KITCHEN — broth surface
         48: 'floor_cot_top',     // COT — canvas bedroll
+        // ── Creature verb-node floor overlays (DOC-115 §2a) ──
+        49: 'roost_shadow',      // ROOST — cast-down shadow w/ chain-link pattern
         52: 'floor_fungal_patch',// FUNGAL_PATCH — bioluminescent loam w/ glowing caps
+        54: 'territorial_mark',  // TERRITORIAL_MARK — three diagonal claw gouges
         75: 'floor_stone',       // TRAPDOOR_DN — stone around hatch
         76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch
         82: 'floor_stone',       // WINDOW_ARROWSLIT — stone at the slit base
@@ -1095,7 +1106,11 @@ var SpatialContract = (function () {
         45: 0.80,   // CHARGING_CRADLE — conduit frame
         46: 1.00,   // SWITCHBOARD — brass toggle panel
         47: 0.70,   // SOUP_KITCHEN — cauldron on brazier
-        48: 0.30    // COT — canvas bedroll on low frame
+        48: 0.30,   // COT — canvas bedroll on low frame
+        // ── Creature verb-node heights (DOC-115 §2b) ──
+        50: 0.30,   // NEST — low debris mound, ground-level silhouette
+        51: 0.50,   // DEN — hollowed alcove, half-height recess in cave wall
+        53: 0.80    // ENERGY_CONDUIT — tall junction frame, near full height
       }, opts.tileWallHeights),
 
       // ── Per-face wall-height overrides ──
