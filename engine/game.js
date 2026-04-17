@@ -1354,6 +1354,40 @@ var Game = (function () {
           return (typeof DispatcherChoreography !== 'undefined') ? DispatcherChoreography.findGateDoorPos() : null;
         }
       });
+
+      // ── DOC-113 Phase C — Sprint timer UI wiring ──────────────
+      // QuestChain emits 'timer-*' events when a fetch-kind quest step
+      // activates. DebriefFeed renders the countdown bar row. Both
+      // modules are guarded (module may load before the other in
+      // alternate boot orders / headless tests).
+      if (typeof DebriefFeed !== 'undefined') {
+        QuestChain.on('timer-start', function (data) {
+          if (!data) return;
+          DebriefFeed.showTimer(data.questId, data.totalMs, data.heroArchetype);
+        });
+        QuestChain.on('timer-tick', function (data) {
+          if (!data) return;
+          DebriefFeed.updateTimer(data.remainMs, data.pct, data.zone);
+        });
+        QuestChain.on('timer-zone', function (data) {
+          if (!data) return;
+          // Zone transition — the latest timer-tick already updated
+          // remainMs/pct; this event exists for consumers (SFX, screen
+          // tint) that care about the prev/next zone pair. DebriefFeed
+          // just re-asserts the zone so a missed tick-tock can't leave
+          // us rendering stale colours.
+          var snap = (typeof QuestChain.getActiveTimer === 'function') ? QuestChain.getActiveTimer() : null;
+          if (snap) DebriefFeed.updateTimer(snap.remainMs, snap.pct, data.zone);
+        });
+        QuestChain.on('timer-expired', function (data) {
+          DebriefFeed.updateTimer(0, 0, 'expired');
+          // Phase D (hero spawn) wires HeroSystem from here — out of
+          // scope for this UI-side handoff.
+        });
+        QuestChain.on('timer-cancel', function () {
+          DebriefFeed.hideTimer();
+        });
+      }
     }
     if (typeof ReputationBar !== 'undefined') ReputationBar.init();
 
@@ -1787,6 +1821,35 @@ var Game = (function () {
     // DungeonSchedule — staggered per-group hero days (§9–§13)
     if (typeof DungeonSchedule !== 'undefined') {
       DungeonSchedule.init();
+    }
+
+    // ── DOC-109 Phase 3 — Readiness category wire-up ─────────────
+    // ReadinessCalc emits 'group-score-change' whenever a mutation site
+    // calls markDirty() and the microtask flush detects the group's
+    // aggregate moved. Fan that into DebriefFeed.updateReadiness so the
+    // Readiness category row tracks live progress. Seed with a deferred
+    // invalidate() so the initial bars (all 0.0 at a fresh boot) appear
+    // in the HUD without the player having to clean anything first.
+    //
+    // Both modules are guarded: ReadinessCalc lives in Layer 1 (loaded
+    // unconditionally) and DebriefFeed in Layer 2, but typeof checks
+    // keep the subscription safe for headless boots / unit tests that
+    // may instantiate game.js without the HUD stack.
+    if (typeof ReadinessCalc !== 'undefined' &&
+        typeof DebriefFeed   !== 'undefined' &&
+        typeof ReadinessCalc.on === 'function') {
+      ReadinessCalc.on('group-score-change', function (groupId, prev, next) {
+        if (typeof DebriefFeed.updateReadiness === 'function') {
+          DebriefFeed.updateReadiness(groupId, next);
+        }
+      });
+      // Deferred seed — runs after every Game.init module has
+      // initialized (DungeonSchedule + subsystems) so ReadinessCalc
+      // can walk the schedule and emit one 'group-score-change' per
+      // registered group, populating all three rows at boot.
+      if (typeof ReadinessCalc.invalidate === 'function') {
+        ReadinessCalc.invalidate();
+      }
     }
 
     // DumpTruckSpawner — deploy truck on active hero day floor
@@ -3931,6 +3994,12 @@ var Game = (function () {
   function _renderGameplay(frameDt, now) {
     // Tick combat bridge (facing timer + CombatEngine phase auto-advance)
     CombatBridge.update(frameDt);
+
+    // DOC-113 Phase C: tick the sprint timer each frame so countdown
+    // stays smooth and pause checks are evaluated continuously.
+    if (typeof QuestChain !== 'undefined' && QuestChain.tickTimer) {
+      QuestChain.tickTimer(frameDt);
+    }
 
     var floorData = FloorManager.getFloorData();
     if (!floorData) return;

@@ -55,6 +55,13 @@ var QuestTypes = (function () {
   //                     (required), tier (required — exact match on the
   //                     *destination* tier id), direction? ('up'|'down'|'any'
   //                     default 'up'). Fires once per tier-cross event.
+  // 'fetch'           — advance when the player acquires a specific item on
+  //                     a specific floor (DOC-113 sprint dungeons). Compound
+  //                     predicate: itemId (required), floorId (optional).
+  //                     Timer + hero data (timerMs, sentinelGraceMs,
+  //                     heroArchetype) are carried on the step for runtime
+  //                     use by QuestChain/HeroSystem but do NOT affect the
+  //                     predicate match — the step advances on item pickup.
   var WAYPOINT_KIND = Object.freeze({
     FLOOR:           'floor',
     ITEM:            'item',
@@ -63,7 +70,8 @@ var QuestTypes = (function () {
     READINESS:       'readiness',
     COMBAT:          'combat',
     MINIGAME:        'minigame',
-    REPUTATION_TIER: 'reputation-tier'
+    REPUTATION_TIER: 'reputation-tier',
+    FETCH:           'fetch'
   });
 
   // ── Reputation tiers ────────────────────────────────────────────

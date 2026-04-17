@@ -135,15 +135,28 @@ var DungeonVerbNodes = (function () {
       }
     }
 
-    if (newNodes.length > 0) {
-      VerbNodes.register(floorId, newNodes);
+    // ── DOC-110 P3 Ch.2 stretch: per-floor override merge ─────
+    // Overrides can patch (type/faction/contested), remove, or
+    // append nodes before registration. If VerbNodeOverrides is
+    // not loaded (sidecar missing), apply() is a no-op via the
+    // typeof guard below.
+    var finalNodes = newNodes;
+    if (typeof VerbNodeOverrides !== 'undefined' && VerbNodeOverrides.apply) {
+      finalNodes = VerbNodeOverrides.apply(floorId, newNodes);
+    }
+
+    if (finalNodes.length > 0) {
+      VerbNodes.register(floorId, finalNodes);
     }
 
     _populated[floorId] = true;
 
     if (typeof console !== 'undefined' && console.log) {
+      var overrideNote = (finalNodes !== newNodes)
+        ? ' (' + newNodes.length + ' auto + overrides → ' + finalNodes.length + ')'
+        : '';
       console.log('[DungeonVerbNodes] ' + floorId +
-        ' → ' + newNodes.length + ' nodes registered');
+        ' → ' + finalNodes.length + ' nodes registered' + overrideNote);
     }
   }
 

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-17T07:47:36.044Z",
+  "generated": "2026-04-17T17:10:52.519Z",
   "source": "data/npcs.json",
   "schema": "tools/actor-schema.json#/definitions/npcActor (v1.1.0)",
   "npcCount": 45,

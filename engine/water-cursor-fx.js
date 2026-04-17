@@ -70,6 +70,55 @@ var WaterCursorFX = (function () {
   var _lastPointerX = -9999;
   var _lastPointerY = -9999;
 
+  // ── Droplet sprite cache (perf) ──────────────────────────────
+  // createRadialGradient per-droplet-per-frame is a Canvas2D tall pole:
+  // object allocation + 3 addColorStop calls + string concat every render.
+  // A 22-droplet pickup burst with ~40-frame lives was tanking FPS; when
+  // the dungeon trail gate kicked in with up to 180 droplets, it pegged.
+  // Fix: bake the gradient body into an offscreen canvas at init and
+  // draw it with ctx.drawImage + globalAlpha per droplet (~20x cheaper).
+  // Specular pip stays as a live arc fill — it's cheap and needs the
+  // crisp highlight contrast that a scaled sprite would blur out.
+  var _sprite = null;          // { canvas, size, rBase } — built lazily
+  var SPRITE_R_BASE = 10;      // render sprite at this world-pixel radius
+  var SPRITE_PAD    = 2;       // ensure the alpha=0 edge has a margin
+
+  function _buildSprite() {
+    var r    = SPRITE_R_BASE;
+    var pad  = SPRITE_PAD;
+    var size = r * 2 + pad * 2;
+    var c    = document.createElement('canvas');
+    c.width  = size;
+    c.height = size;
+    var cx   = c.getContext('2d');
+    var cxC  = size * 0.5;
+    var cyC  = size * 0.5;
+
+    var g = cx.createRadialGradient(
+      cxC - r * 0.3, cyC - r * 0.3, 0,
+      cxC, cyC, r
+    );
+    // alpha=1 in the sprite itself; per-droplet fade is applied at draw
+    // time via ctx.globalAlpha on the viewport canvas.
+    g.addColorStop(0,
+      'rgba(' + COLOR_CORE[0] + ',' + COLOR_CORE[1] + ',' + COLOR_CORE[2] + ',1)');
+    g.addColorStop(0.55,
+      'rgba(' + COLOR_EDGE[0] + ',' + COLOR_EDGE[1] + ',' + COLOR_EDGE[2] + ',0.85)');
+    g.addColorStop(1,
+      'rgba(' + COLOR_RIM[0]  + ',' + COLOR_RIM[1]  + ',' + COLOR_RIM[2]  + ',0)');
+
+    cx.fillStyle = g;
+    cx.beginPath();
+    cx.arc(cxC, cyC, r, 0, Math.PI * 2);
+    cx.fill();
+    return { canvas: c, size: size, rBase: r };
+  }
+
+  function _getSprite() {
+    if (!_sprite) _sprite = _buildSprite();
+    return _sprite;
+  }
+
   // ── Helpers ──────────────────────────────────────────────────
 
   function _rand(lo, hi) { return lo + Math.random() * (hi - lo); }
@@ -227,8 +276,17 @@ var WaterCursorFX = (function () {
   function render(ctx) {
     if (_droplets.length === 0) return;
 
+    var sprite = _getSprite();
+    var spriteCanvas = sprite.canvas;
+    var spriteSize   = sprite.size;
+    var spriteRBase  = sprite.rBase;
+    // Sprite was built with a 1-radius-unit of transparent padding on each
+    // side; compensate so the visible body scales to r, not size/2.
+    var spriteScale = spriteSize / (spriteRBase * 2);
+
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
+    var prevAlpha = ctx.globalAlpha;
 
     for (var i = 0; i < _droplets.length; i++) {
       var d = _droplets[i];
@@ -246,32 +304,26 @@ var WaterCursorFX = (function () {
       var r = d.r;
       if (lifeFrac < 0.3) r = d.r * (0.4 + lifeFrac * 2);  // shrink toward 0.4*r0
 
-      // Radial gradient: bright center, cyan body, dark outer rim
-      var grad = ctx.createRadialGradient(
-        d.x - r * 0.3, d.y - r * 0.3, 0,   // highlight offset top-left
-        d.x, d.y, r
-      );
-      grad.addColorStop(0,
-        'rgba(' + COLOR_CORE[0] + ',' + COLOR_CORE[1] + ',' + COLOR_CORE[2] + ',' + alpha.toFixed(3) + ')');
-      grad.addColorStop(0.55,
-        'rgba(' + COLOR_EDGE[0] + ',' + COLOR_EDGE[1] + ',' + COLOR_EDGE[2] + ',' + (alpha * 0.85).toFixed(3) + ')');
-      grad.addColorStop(1,
-        'rgba(' + COLOR_RIM[0]  + ',' + COLOR_RIM[1]  + ',' + COLOR_RIM[2]  + ',0)');
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      // Cached sprite draw — replaces the per-frame createRadialGradient.
+      var drawSize = r * 2 * spriteScale;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(spriteCanvas,
+        d.x - drawSize * 0.5, d.y - drawSize * 0.5,
+        drawSize, drawSize);
 
       // Bright specular pip for sheen (only larger droplets)
+      // Kept as a live arc — it's a single small fill and the crisp
+      // highlight sells the "wet" look. Alpha is handled by globalAlpha.
       if (r > 3.5 && alpha > 0.4) {
-        ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.7).toFixed(3) + ')';
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(d.x - r * 0.35, d.y - r * 0.35, r * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
+    ctx.globalAlpha = prevAlpha;
     ctx.restore();
   }
 

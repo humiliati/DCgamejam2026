@@ -493,6 +493,198 @@ function _applyCombatStrategy(grid, rooms, corridorCells, floorTile, wallTile, w
   }
 }
 
+function _applyFetchStrategy(grid, rooms, corridorCells, floorTile, wallTile, weight, rng, recipe) {
+  // Fetch strategy (DOC-113 §6.2): tree-structured maze for timed sprint runs.
+  // The MST tree enforcement is handled at recipe level (extraConnections=0).
+  // This decorator:
+  //   1. Carves dead-end branch stubs off corridors (red herrings)
+  //   2. Builds room adjacency graph + BFS to find objective/exit rooms
+  //   3. Annotates result with _fetchMeta for post-processing entity placement
+
+  var W = grid[0].length, H = grid.length;
+  var entCfg = recipe.entities || {};
+
+  // ── 1. Branch stubs (dead-end red herrings) ─────────────────
+  // Similar to cobweb strategy but intentionally creates dead ends
+  var branchCount = Math.round(rooms.length * 1.5 * weight);
+  var branchEndCells = [];  // track ends of stubs for decoy placement
+
+  for (var b = 0; b < branchCount; b++) {
+    if (corridorCells.length === 0) break;
+    var cell = rng.pick(corridorCells);
+    var dirs = rng.shuffle([
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+    ]);
+    for (var d = 0; d < dirs.length; d++) {
+      var len = rng.intBetween(3, 6);
+      var ok = true;
+      var stubCells = [];
+      for (var step = 1; step <= len; step++) {
+        var nx = cell.x + dirs[d].dx * step;
+        var ny = cell.y + dirs[d].dy * step;
+        if (nx <= 0 || nx >= W - 1 || ny <= 0 || ny >= H - 1) { ok = false; break; }
+        if (_getTile(grid, nx, ny) !== wallTile) { ok = false; break; }
+        var px = nx + dirs[d].dy, py = ny + dirs[d].dx;
+        var qx = nx - dirs[d].dy, qy = ny - dirs[d].dx;
+        if (_getTile(grid, px, py) === floorTile && step > 1) { ok = false; break; }
+        if (_getTile(grid, qx, qy) === floorTile && step > 1) { ok = false; break; }
+        stubCells.push({ x: nx, y: ny });
+      }
+      if (ok && stubCells.length >= 3) {
+        for (var s = 0; s < stubCells.length; s++) {
+          _setTile(grid, stubCells[s].x, stubCells[s].y, floorTile);
+          corridorCells.push(stubCells[s]);
+        }
+        // Mark the end cell of this stub for potential decoy placement
+        branchEndCells.push(stubCells[stubCells.length - 1]);
+        break;
+      }
+    }
+  }
+
+  // ── 2. Build room adjacency graph (BFS on room centers via MST) ──
+  // Since rooms are connected by MST in order, room i is adjacent to
+  // whichever room it was connected to during Prim's. We approximate
+  // adjacency by flood-fill reachability between room interiors.
+  var roomAdjacency = [];
+  for (var ri = 0; ri < rooms.length; ri++) roomAdjacency.push([]);
+
+  // For each pair of rooms, check if they share a corridor connection
+  // (BFS from room center, stop when we hit another room)
+  for (var ai = 0; ai < rooms.length; ai++) {
+    for (var bi = ai + 1; bi < rooms.length; bi++) {
+      // Check if rooms are connected by corridor (manhattan heuristic on
+      // room centers — rooms connected by MST have corridors between them)
+      var ca = _roomCenter(rooms[ai]);
+      var cb = _roomCenter(rooms[bi]);
+      // Walk the grid from ca to cb; if we can reach cb without going
+      // through another room's interior, they're directly connected.
+      // Simpler approximation: check if any corridor cell is adjacent to
+      // both rooms' boundaries.
+      var connected = false;
+      for (var ci = 0; ci < corridorCells.length && !connected; ci++) {
+        var cc = corridorCells[ci];
+        var nearA = (cc.x >= rooms[ai].x - 1 && cc.x <= rooms[ai].x + rooms[ai].w &&
+                     cc.y >= rooms[ai].y - 1 && cc.y <= rooms[ai].y + rooms[ai].h);
+        var nearB = (cc.x >= rooms[bi].x - 1 && cc.x <= rooms[bi].x + rooms[bi].w &&
+                     cc.y >= rooms[bi].y - 1 && cc.y <= rooms[bi].y + rooms[bi].h);
+        if (nearA && nearB) connected = true;
+      }
+      // Fallback: use corridor proximity if direct adjacency check fails
+      if (!connected) {
+        var touchA = false, touchB = false;
+        for (var cj = 0; cj < corridorCells.length; cj++) {
+          var ct = corridorCells[cj];
+          if (!touchA && ct.x >= rooms[ai].x - 1 && ct.x <= rooms[ai].x + rooms[ai].w &&
+              ct.y >= rooms[ai].y - 1 && ct.y <= rooms[ai].y + rooms[ai].h) touchA = true;
+          if (!touchB && ct.x >= rooms[bi].x - 1 && ct.x <= rooms[bi].x + rooms[bi].w &&
+              ct.y >= rooms[bi].y - 1 && ct.y <= rooms[bi].y + rooms[bi].h) touchB = true;
+        }
+        // For MST with no extra connections, if manhattan distance is short
+        // and both rooms touch corridors, they're likely connected
+        var md = Math.abs(ca.x - cb.x) + Math.abs(ca.y - cb.y);
+        if (touchA && touchB && md < (W + H) / 2) connected = true;
+      }
+      if (connected) {
+        roomAdjacency[ai].push(bi);
+        roomAdjacency[bi].push(ai);
+      }
+    }
+  }
+
+  // ── 3. BFS from room 0 to find distances ────────────────────
+  var dist = [];
+  for (var di = 0; di < rooms.length; di++) dist.push(-1);
+  dist[0] = 0;
+  var queue = [0];
+  var qi = 0;
+  while (qi < queue.length) {
+    var curr = queue[qi++];
+    var neighbors = roomAdjacency[curr];
+    for (var ni = 0; ni < neighbors.length; ni++) {
+      if (dist[neighbors[ni]] === -1) {
+        dist[neighbors[ni]] = dist[curr] + 1;
+        queue.push(neighbors[ni]);
+      }
+    }
+  }
+
+  // Find farthest room (objective placement)
+  var farthestRoom = 0;
+  var farthestDist = 0;
+  for (var fi = 0; fi < rooms.length; fi++) {
+    if (dist[fi] > farthestDist) {
+      farthestDist = dist[fi];
+      farthestRoom = fi;
+    }
+  }
+
+  // Find a leaf room NOT on the critical path (entry→objective) for secondary exit
+  // Critical path: BFS parent trace from farthestRoom back to room 0
+  var parent = [];
+  for (var pi = 0; pi < rooms.length; pi++) parent.push(-1);
+  // Re-BFS to get parent pointers
+  var dist2 = [];
+  for (var d2i = 0; d2i < rooms.length; d2i++) dist2.push(-1);
+  dist2[0] = 0;
+  var queue2 = [0];
+  var q2i = 0;
+  while (q2i < queue2.length) {
+    var curr2 = queue2[q2i++];
+    var nbrs2 = roomAdjacency[curr2];
+    for (var n2 = 0; n2 < nbrs2.length; n2++) {
+      if (dist2[nbrs2[n2]] === -1) {
+        dist2[nbrs2[n2]] = dist2[curr2] + 1;
+        parent[nbrs2[n2]] = curr2;
+        queue2.push(nbrs2[n2]);
+      }
+    }
+  }
+
+  // Trace critical path
+  var criticalPath = {};
+  var traceNode = farthestRoom;
+  while (traceNode !== -1) {
+    criticalPath[traceNode] = true;
+    traceNode = parent[traceNode];
+  }
+
+  // Find leaf rooms (degree 1 in adjacency) not on critical path
+  var secondaryExitRoom = -1;
+  var secondaryExitDist = 0;
+  for (var li = 0; li < rooms.length; li++) {
+    if (criticalPath[li]) continue;
+    if (roomAdjacency[li].length <= 1 && dist[li] > secondaryExitDist) {
+      secondaryExitDist = dist[li];
+      secondaryExitRoom = li;
+    }
+  }
+  // Fallback: any non-critical-path room
+  if (secondaryExitRoom === -1) {
+    for (var fi2 = 0; fi2 < rooms.length; fi2++) {
+      if (!criticalPath[fi2] && dist[fi2] > secondaryExitDist) {
+        secondaryExitDist = dist[fi2];
+        secondaryExitRoom = fi2;
+      }
+    }
+  }
+
+  // ── 4. Store fetch metadata for post-processing ──────────────
+  // This metadata is consumed by the entity placement phase and
+  // the result assembly to place objective, secondary exit, and
+  // cobweb slots.
+  grid._fetchMeta = {
+    objectiveRoom: farthestRoom,
+    objectiveCenter: _roomCenter(rooms[farthestRoom]),
+    secondaryExitRoom: secondaryExitRoom,
+    secondaryExitCenter: secondaryExitRoom >= 0 ? _roomCenter(rooms[secondaryExitRoom]) : null,
+    criticalPath: criticalPath,
+    branchEndCells: branchEndCells,
+    roomDistances: dist
+  };
+}
+
 // ── Entity placement ───────────────────────────────────────────
 
 function _placeTorches(grid, rooms, wallTile, torchTile, density, rng) {
@@ -855,6 +1047,9 @@ function generate(recipe, opts) {
     case 'combat':
       _applyCombatStrategy(grid, rooms, corridorCells, floorTile, wallTile, stratWeight, rng);
       break;
+    case 'fetch':
+      _applyFetchStrategy(grid, rooms, corridorCells, floorTile, wallTile, stratWeight, rng, recipe);
+      break;
     case 'mixed':
       // Apply all three at reduced weight
       var w3 = stratWeight / 3;
@@ -921,11 +1116,75 @@ function generate(recipe, opts) {
   var corpses    = _placeCorpses(grid, rooms, floorTile, corpseRange[0], corpseRange[1], rng);
   var enemies    = _generateEnemySpawns(rooms, floorTile, grid, enemyRange[0], enemyRange[1], rng);
 
+  // ── 9b. Fetch-specific entities (DOC-113 §6.2) ───────────────
+  var fetchMeta = grid._fetchMeta || null;
+  var decoys = [];
+  var secondaryExitPos = null;
+  var objectivePos = null;
+  if (fetchMeta && strategy.primary === 'fetch') {
+    // Place objective marker at center of farthest room
+    objectivePos = fetchMeta.objectiveCenter;
+
+    // Place decoy containers in dead-end branch stubs
+    var decoyRange = entCfg.decoyCount || [1, 3];
+    var decoyCount = rng.intBetween(decoyRange[0], decoyRange[1]);
+    var branchEnds = rng.shuffle(fetchMeta.branchEndCells.slice());
+    for (var dec = 0; dec < decoyCount && dec < branchEnds.length; dec++) {
+      var dpos = branchEnds[dec];
+      if (_getTile(grid, dpos.x, dpos.y) === floorTile) {
+        // Place a chest tile as decoy (empty chest — looted appearance)
+        var chestTile = _resolveTile('CHEST');
+        if (chestTile != null) {
+          _setTile(grid, dpos.x, dpos.y, chestTile);
+          decoys.push({ x: dpos.x, y: dpos.y, kind: 'decoy_chest' });
+        }
+      }
+    }
+
+    // Place secondary exit if enabled
+    var wantSecondaryExit = entCfg.secondaryExit !== false; // default true
+    if (wantSecondaryExit && fetchMeta.secondaryExitRoom >= 0 && fetchMeta.secondaryExitCenter) {
+      var secRoom = rooms[fetchMeta.secondaryExitRoom];
+      // Place a DOOR_EXIT at the edge of this room nearest the outer wall
+      var secX = secRoom.x;
+      var secY = secRoom.y;
+      // Find a wall-adjacent cell in this room
+      var secCandidates = [];
+      for (var sy = secRoom.y; sy < secRoom.y + secRoom.h; sy++) {
+        for (var sx = secRoom.x; sx < secRoom.x + secRoom.w; sx++) {
+          // Check if this cell borders the map edge (within 2 tiles)
+          if (sx <= 1 || sx >= W - 2 || sy <= 1 || sy >= H - 2) {
+            secCandidates.push({ x: sx, y: sy });
+          }
+        }
+      }
+      if (secCandidates.length > 0) {
+        secondaryExitPos = rng.pick(secCandidates);
+      } else {
+        // Fallback: center of secondary exit room
+        secondaryExitPos = fetchMeta.secondaryExitCenter;
+      }
+      if (secondaryExitPos) {
+        var doorExitTile = _resolveTile('DOOR_EXIT');
+        if (doorExitTile != null) {
+          _setTile(grid, secondaryExitPos.x, secondaryExitPos.y, doorExitTile);
+        }
+      }
+    }
+
+    // Clean up temporary metadata
+    delete grid._fetchMeta;
+  }
+
   // ── 10. Build doorTargets ────────────────────────────────────
   var doorTargets = {};
   doorTargets[entryPos.x + ',' + entryPos.y] = '__parent__';
   if (exitPos) {
     doorTargets[exitPos.x + ',' + exitPos.y] = '__child__';
+  }
+  // Secondary exit (fetch strategy) also targets parent
+  if (secondaryExitPos) {
+    doorTargets[secondaryExitPos.x + ',' + secondaryExitPos.y] = '__parent__';
   }
 
   // ── 11. Assemble result ──────────────────────────────────────
@@ -952,10 +1211,21 @@ function generate(recipe, opts) {
         traps: traps.length,
         chests: chests.length,
         corpses: corpses.length,
-        enemySpawns: enemies.length
+        enemySpawns: enemies.length,
+        decoys: decoys.length,
+        hasSecondaryExit: !!secondaryExitPos,
+        hasObjective: !!objectivePos
       }
     }
   };
+
+  // Add fetch-specific metadata to result
+  if (objectivePos) {
+    result.meta.fetchObjective = { x: objectivePos.x, y: objectivePos.y };
+  }
+  if (secondaryExitPos) {
+    result.meta.secondaryExit = { x: secondaryExitPos.x, y: secondaryExitPos.y };
+  }
 
   // Build doors array for template compatibility
   result.doors.push({
@@ -966,6 +1236,12 @@ function generate(recipe, opts) {
     result.doors.push({
       x: exitPos.x, y: exitPos.y,
       key: 'exit', kind: exitTileName, target: '__child__'
+    });
+  }
+  if (secondaryExitPos) {
+    result.doors.push({
+      x: secondaryExitPos.x, y: secondaryExitPos.y,
+      key: 'secondary_exit', kind: 'DOOR_EXIT', target: '__parent__'
     });
   }
 

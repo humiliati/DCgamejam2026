@@ -75,6 +75,8 @@ function paintCell(gx, gy) {
 function flushStroke() {
   if (EDIT.stroke && EDIT.stroke.cells.length) {
     pushUndo({ type: 'bulk', cells: EDIT.stroke.cells, newTile: EDIT.paintTile });
+    // Track recently-used tile for tile picker MRU row
+    if (typeof tilePickerTrackRecent === 'function') tilePickerTrackRecent(EDIT.paintTile);
   }
   EDIT.stroke = null;
 }

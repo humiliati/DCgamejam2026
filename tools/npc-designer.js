@@ -1316,6 +1316,79 @@ var NpcDesigner = (function () {
   // Save — diff + blob download
   // ────────────────────────────────────────────────────────────
 
+  // ── DOC-110 Phase 1.1 — Schema validation ───────────────────────────
+  // Walks every NPC in the bundle and runs each through
+  // SchemaValidator.validateActor(), returning a flat failure list.
+  // Injects discriminator fields (kind='npc', floorId=<key>) the same
+  // way tools/validate-npcs-preflight.js does — NPCs inside the bundle
+  // are grouped by floor and don't carry those fields on disk.
+  //
+  // Graceful degradation: if SchemaValidator or ACTOR_SCHEMA is not
+  // loaded, returns { skipped: true } so _download() can fall through
+  // without blocking the user. (Prevents a half-installed tooling
+  // state from locking authors out of their own save flow.)
+  function _validateBundle(bundle) {
+    if (typeof SchemaValidator === 'undefined' || !SchemaValidator ||
+        typeof window.ACTOR_SCHEMA !== 'object' || !window.ACTOR_SCHEMA) {
+      return { ok: true, skipped: true, failures: [], checked: 0 };
+    }
+    var schema = window.ACTOR_SCHEMA;
+    var byFloor = bundle.npcsByFloor || {};
+    var fids = Object.keys(byFloor);
+    var failures = [];
+    var checked = 0;
+    for (var i = 0; i < fids.length; i++) {
+      var fid = fids[i];
+      var list = byFloor[fid] || [];
+      for (var j = 0; j < list.length; j++) {
+        var npc = list[j];
+        checked++;
+        var candidate = Object.assign({}, npc);
+        if (candidate.kind == null)    candidate.kind    = 'npc';
+        if (candidate.floorId == null) candidate.floorId = fid;
+        var res;
+        try {
+          res = SchemaValidator.validate(schema, candidate, schema);
+        } catch (e) {
+          res = { ok: false, errors: [{ path: '', keyword: 'throw',
+            message: String(e && e.message || e) }] };
+        }
+        if (!res.ok) {
+          failures.push({
+            floorId: fid,
+            id:      npc.id || '(no id)',
+            errors:  res.errors || []
+          });
+        }
+      }
+    }
+    return { ok: failures.length === 0, skipped: false, failures: failures, checked: checked };
+  }
+
+  // Format a validation report into a confirm()-friendly multi-line
+  // string. Capped at 8 NPCs / 1 error each to keep the dialog
+  // readable — full details are always dumped to the console.
+  function _formatValidationReport(report) {
+    var lines = [];
+    lines.push('Schema validation FAILED for ' + report.failures.length +
+      ' of ' + report.checked + ' NPC(s):');
+    lines.push('');
+    var cap = Math.min(report.failures.length, 8);
+    for (var i = 0; i < cap; i++) {
+      var f = report.failures[i];
+      var first = f.errors[0] || { path: '', keyword: '?', message: 'unknown' };
+      lines.push('  [' + f.floorId + '] ' + f.id + '  →  ' +
+        (first.path || '/') + '  ' + first.message);
+    }
+    if (report.failures.length > cap) {
+      lines.push('  …and ' + (report.failures.length - cap) + ' more (see console).');
+    }
+    lines.push('');
+    lines.push('OK = download anyway (data/npcs.json will load but the ' +
+      'runtime may reject these NPCs). Cancel = fix them first.');
+    return lines.join('\n');
+  }
+
   function _download() {
     // Re-sort each floor's NPC list by id for stable diffs (matches
     // extract-npcs.js output).
@@ -1341,6 +1414,35 @@ var NpcDesigner = (function () {
       npcsByFloor: sorted
     };
 
+    // ── Schema validation gate (DOC-110 P1.1) ────────────────────────
+    var report = _validateBundle(out);
+    if (report.skipped) {
+      console.warn('[NpcDesigner] Schema validator not loaded — download proceeded without validation.');
+    } else if (!report.ok) {
+      // Log full details to console, show summary in confirm().
+      console.group('[NpcDesigner] Schema validation failures (' +
+        report.failures.length + ' / ' + report.checked + ' NPCs)');
+      for (var i = 0; i < report.failures.length; i++) {
+        var f = report.failures[i];
+        console.warn('[' + f.floorId + '] ' + f.id, f.errors);
+      }
+      console.groupEnd();
+      var proceed = confirm(_formatValidationReport(report));
+      if (!proceed) {
+        _toast('warn', 'Download cancelled — ' + report.failures.length +
+          ' NPC(s) fail schema. See console for details.');
+        return;
+      }
+      // Annotate the meta so downstream consumers can detect it.
+      out._meta.validation = {
+        ok: false,
+        failureCount: report.failures.length,
+        overriddenAt: new Date().toISOString()
+      };
+    } else {
+      out._meta.validation = { ok: true, checked: report.checked };
+    }
+
     var text = JSON.stringify(out, null, 2) + '\n';
     var blob = new Blob([text], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -1352,8 +1454,13 @@ var NpcDesigner = (function () {
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
 
-    _toast('good', 'Downloaded npcs.json (' + out._meta.npcCount + ' NPCs, ' +
-      Object.keys(_state.dirty).length + ' edited). Save to data/npcs.json then re-run extract-npcs.js.');
+    var okSuffix = report.skipped ? ' (validation skipped)'
+                 : report.ok     ? ' (schema OK)'
+                                 : ' ⚠ override — ' + report.failures.length + ' schema failure(s)';
+    _toast(report.ok || report.skipped ? 'good' : 'warn',
+      'Downloaded npcs.json (' + out._meta.npcCount + ' NPCs, ' +
+      Object.keys(_state.dirty).length + ' edited)' + okSuffix +
+      '. Save to data/npcs.json then re-run extract-npcs.js.');
 
     // Reset dirty tracking after download (user committed to the file).
     _state.dirty = {};
@@ -1385,6 +1492,478 @@ var NpcDesigner = (function () {
       _state.activeId = null;
     }
     _toast('good', 'Reverted to last loaded state.');
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Import — CSV / JSON roster (DOC-110 Phase 1.1)
+  // ────────────────────────────────────────────────────────────
+  //
+  // Accepts three on-disk shapes:
+  //   1. Full bundle:   { _meta, npcsByFloor: { "0": [...], ... } }
+  //   2. Flat array:    [ { kind:'npc', id, floorId, ... }, ... ]
+  //   3. CSV:           header row → field names, rows → NPCs.
+  //
+  // Every candidate is routed through SchemaValidator.validate()
+  // against window.ACTOR_SCHEMA *before* it touches _state.working.
+  // Validation failures are rejected with a per-row reason dumped
+  // to the console; the user sees a roll-up in a confirm() summary.
+  //
+  // ID collisions prompt a single choice for the whole batch:
+  //   OK      → overwrite (keep existing disk order, swap fields)
+  //   Cancel  → rename (append _imported_N suffix via _uniqueId)
+  //
+  // Skip-all can be achieved by cancelling the outer "proceed?"
+  // prompt after the summary.
+
+  function _importTriggerFile() {
+    var el = $('#import-file-input');
+    if (!el) return;
+    el.value = '';                      // reset so selecting same file re-fires change
+    el.click();
+  }
+
+  function _importOnFile(evt) {
+    var file = evt.target && evt.target.files && evt.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      _importFromText(String(reader.result || ''), file.name);
+    };
+    reader.onerror = function () {
+      _toast('err', 'Failed to read ' + file.name);
+    };
+    reader.readAsText(file);
+  }
+
+  function _importFromText(text, filename) {
+    var parsed;
+    try {
+      parsed = _parseImport(text, filename);
+    } catch (e) {
+      console.error('[NpcDesigner] Import parse failure', e);
+      _toast('err', 'Parse failed: ' + (e && e.message || e));
+      return;
+    }
+    if (!parsed.items.length) {
+      _toast('warn', 'No NPC rows found in ' + filename + '.');
+      return;
+    }
+    _processImportBatch(parsed.items, parsed.sourceKind, filename);
+  }
+
+  // Return { items: [{floorId, npc}], sourceKind: 'json-bundle'|'json-flat'|'csv' }
+  function _parseImport(text, filename) {
+    var trimmed = (text || '').replace(/^\ufeff/, '').trim();
+    if (!trimmed) throw new Error('empty file');
+
+    var looksJson = trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[';
+    if (looksJson) {
+      var obj = JSON.parse(trimmed);
+      if (Array.isArray(obj)) {
+        return { items: _flattenFlatArray(obj), sourceKind: 'json-flat' };
+      }
+      if (obj && obj.npcsByFloor && typeof obj.npcsByFloor === 'object') {
+        return { items: _flattenBundle(obj.npcsByFloor), sourceKind: 'json-bundle' };
+      }
+      throw new Error('JSON root is neither an array nor a { npcsByFloor } bundle');
+    }
+
+    // Fall back to CSV
+    return { items: _parseCsvRows(trimmed), sourceKind: 'csv' };
+  }
+
+  function _flattenBundle(byFloor) {
+    var out = [];
+    Object.keys(byFloor).forEach(function (fid) {
+      (byFloor[fid] || []).forEach(function (npc) {
+        var cand = Object.assign({}, npc);
+        if (cand.floorId == null) cand.floorId = fid;
+        if (cand.kind == null)    cand.kind    = 'npc';
+        out.push({ floorId: String(cand.floorId), npc: cand });
+      });
+    });
+    return out;
+  }
+
+  function _flattenFlatArray(arr) {
+    return arr.filter(function (n) { return n && typeof n === 'object'; })
+              .map(function (n) {
+      var cand = Object.assign({}, n);
+      if (cand.kind == null) cand.kind = 'npc';
+      return { floorId: String(cand.floorId != null ? cand.floorId : ''), npc: cand };
+    });
+  }
+
+  // ── CSV parser ──
+  // Supports RFC-4180-ish quoted fields with escaped "" inside
+  // quotes. Header row is mandatory. Column names become property
+  // names. Empty cells become undefined (not empty-string) so the
+  // schema's default values kick in.
+  function _parseCsvRows(text) {
+    var lines = _splitCsvRecords(text);
+    if (!lines.length) throw new Error('CSV has no rows');
+    var header = lines[0].map(function (h) { return h.trim(); });
+    if (!header.length) throw new Error('CSV header row is empty');
+    var out = [];
+    for (var i = 1; i < lines.length; i++) {
+      var row = lines[i];
+      if (!row.length || (row.length === 1 && row[0] === '')) continue; // skip blank
+      var obj = {};
+      for (var c = 0; c < header.length; c++) {
+        var key = header[c];
+        if (!key) continue;
+        var raw = row[c];
+        if (raw === undefined || raw === '') continue;
+        obj[key] = _csvCoerce(key, raw);
+      }
+      if (obj.kind == null) obj.kind = 'npc';
+      out.push({ floorId: String(obj.floorId != null ? obj.floorId : ''), npc: obj });
+    }
+    return out;
+  }
+
+  // Walk the CSV text character-by-character — handles quoted
+  // fields, doubled-quote escapes, and \r\n / \n line endings.
+  function _splitCsvRecords(text) {
+    var records = [];
+    var cur = [''];
+    var field = 0;
+    var inQ = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (inQ) {
+        if (ch === '"') {
+          if (text.charAt(i + 1) === '"') { cur[field] += '"'; i++; }
+          else { inQ = false; }
+        } else {
+          cur[field] += ch;
+        }
+        continue;
+      }
+      if (ch === '"') { inQ = true; continue; }
+      if (ch === ',') { field++; cur[field] = ''; continue; }
+      if (ch === '\r') continue;
+      if (ch === '\n') {
+        records.push(cur);
+        cur = ['']; field = 0;
+        continue;
+      }
+      cur[field] += ch;
+    }
+    if (cur.length && !(cur.length === 1 && cur[0] === '')) records.push(cur);
+    return records;
+  }
+
+  // Per-field type coercion. Boolean + integer + numeric + JSON
+  // (for nested patrolPoints / stack / sprites values). Strings
+  // fall through unchanged.
+  var _CSV_INT_FIELDS    = { x:1, y:1, stepInterval:1, barkInterval:1 };
+  var _CSV_NUM_FIELDS    = { barkRadius:1 };
+  var _CSV_BOOL_FIELDS   = { talkable:1, blocksMovement:1, home16Locked:1 };
+  var _CSV_OBJ_FIELDS    = { patrolPoints:1, stack:1, sprites:1, gateCheck:1,
+                             verbSet:1, brain:1 };
+
+  function _csvCoerce(key, raw) {
+    var v = String(raw);
+    if (_CSV_BOOL_FIELDS[key]) {
+      var lc = v.toLowerCase();
+      if (lc === 'true' || lc === '1' || lc === 'yes') return true;
+      if (lc === 'false' || lc === '0' || lc === 'no' || lc === '') return false;
+      return v;
+    }
+    if (_CSV_INT_FIELDS[key]) {
+      var i = parseInt(v, 10); return isNaN(i) ? v : i;
+    }
+    if (_CSV_NUM_FIELDS[key]) {
+      var f = parseFloat(v);   return isNaN(f) ? v : f;
+    }
+    if (_CSV_OBJ_FIELDS[key]) {
+      try { return JSON.parse(v); }
+      catch (e) { return v; } // leave as string so schema flags it
+    }
+    if (v === 'null') return null;
+    return v;
+  }
+
+  // ── Batch processor — validate → resolve collisions → merge ──
+  function _processImportBatch(items, sourceKind, filename) {
+    // 1. Per-item schema validation
+    var valid = [];
+    var failed = [];
+    var schema = typeof window !== 'undefined' && window.ACTOR_SCHEMA;
+    var validator = typeof SchemaValidator !== 'undefined' && SchemaValidator;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var cand = Object.assign({}, it.npc);
+      if (cand.kind == null)    cand.kind    = 'npc';
+      if (cand.floorId == null && it.floorId) cand.floorId = it.floorId;
+      if (validator && schema) {
+        var res;
+        try { res = validator.validate(schema, cand, schema); }
+        catch (e) { res = { ok: false, errors: [{ path: '', keyword: 'throw',
+          message: String(e && e.message || e) }] }; }
+        if (!res.ok) {
+          failed.push({ row: i + 1, id: cand.id || '(no id)', errors: res.errors });
+          continue;
+        }
+      }
+      valid.push(cand);
+    }
+
+    // 2. Split valid into { new, collisions }
+    var added = [];
+    var collisions = [];
+    for (var j = 0; j < valid.length; j++) {
+      var n = valid[j];
+      if (n.id && _state.byId[n.id]) collisions.push(n);
+      else                           added.push(n);
+    }
+
+    // 3. Collision resolution prompt (batch-wide choice)
+    var collisionMode = 'rename';
+    if (collisions.length > 0) {
+      var overwrite = confirm(collisions.length + ' NPC(s) in ' + filename +
+        ' collide with existing ids. OK = overwrite in place, Cancel = rename (append _imported_N).');
+      collisionMode = overwrite ? 'overwrite' : 'rename';
+    }
+
+    // 4. Summary gate
+    var summaryLines = [
+      'Import from ' + filename + ' (' + sourceKind + ')',
+      '',
+      '  parsed rows ....... ' + items.length,
+      '  passed schema ..... ' + valid.length,
+      '  failed schema ..... ' + failed.length,
+      '  new ids ........... ' + added.length,
+      '  collisions ........ ' + collisions.length + ' (' + collisionMode + ')',
+      ''
+    ];
+    if (failed.length) {
+      summaryLines.push('First failure: row ' + failed[0].row + ' ("' +
+        failed[0].id + '") → ' + (failed[0].errors[0] && failed[0].errors[0].message || '?'));
+      summaryLines.push('');
+    }
+    summaryLines.push('Proceed with import? (Failed rows are always skipped; see console for full details.)');
+    if (failed.length) {
+      console.group('[NpcDesigner] Import validation failures (' + failed.length + ')');
+      failed.forEach(function (f) { console.warn('row ' + f.row, f.id, f.errors); });
+      console.groupEnd();
+    }
+    if (!added.length && !collisions.length) {
+      _toast('warn', 'Nothing to import — all ' + items.length + ' rows failed schema.');
+      return;
+    }
+    if (!confirm(summaryLines.join('\n'))) {
+      _toast('', 'Import cancelled.');
+      return;
+    }
+
+    // 5. Merge
+    var mergedCount = 0;
+    added.forEach(function (npc) {
+      var fid = String(npc.floorId || _state.floorIds[0] || '0');
+      if (!_state.working.npcsByFloor[fid]) _state.working.npcsByFloor[fid] = [];
+      _state.working.npcsByFloor[fid].push(npc);
+      _state.byId[npc.id] = npc;
+      _state.dirty[npc.id] = true;
+      mergedCount++;
+    });
+    collisions.forEach(function (npc) {
+      var fid = String(npc.floorId || _state.floorIds[0] || '0');
+      if (!_state.working.npcsByFloor[fid]) _state.working.npcsByFloor[fid] = [];
+      if (collisionMode === 'overwrite') {
+        // Find existing and replace in-place (preserves floor + order)
+        var existing = _state.byId[npc.id];
+        var existingFid = String(existing.floorId || fid);
+        var list = _state.working.npcsByFloor[existingFid] || [];
+        var idx = list.indexOf(existing);
+        if (idx >= 0) list[idx] = npc;
+        else list.push(npc);
+        _state.byId[npc.id] = npc;
+        _state.dirty[npc.id] = true;
+        mergedCount++;
+      } else {
+        // Rename + append
+        var originalId = npc.id;
+        npc.id = _uniqueId(originalId + '_imported');
+        _state.working.npcsByFloor[fid].push(npc);
+        _state.byId[npc.id] = npc;
+        _state.dirty[npc.id] = true;
+        mergedCount++;
+      }
+    });
+
+    _renderFloorChips();
+    _renderNpcList();
+    _updateStatus();
+    _toast('good', 'Imported ' + mergedCount + ' NPC(s) from ' + filename +
+      (failed.length ? ' (' + failed.length + ' rejected)' : ''));
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Stamp from archetype (P1.1.2 — bulk-add)
+  // ────────────────────────────────────────────────────────────
+  //
+  // Reads tools/archetype-registry.js (window.ARCHETYPE_REGISTRY) and
+  // stamps N NPCs from a chosen archetype onto a target floor. Each
+  // stamp:
+  //   • clones archetype.defaults
+  //   • rotates emoji from archetype.emojiPool
+  //   • jitters barkInterval by ±barkIntervalJitter
+  //   • substitutes {n} in idPattern + namePattern using a per-archetype
+  //     suffix counter that surveys existing _state.byId for collisions
+  //   • validates against window.ACTOR_SCHEMA (if loaded) — rejects fail
+  //   • grid-spreads positions 3 wide × N tall from the anchor
+  // Collisions on id are avoided via _uniqueId. Batch is gated behind a
+  // confirm() showing the built count + any rejections.
+
+  var _stampState = { open: false };
+
+  function _stampOpen() {
+    var panel = $('#stamp-panel');
+    if (!panel) return;
+    var reg = typeof window !== 'undefined' && window.ARCHETYPE_REGISTRY;
+    if (!reg || !Array.isArray(reg.archetypes) || !reg.archetypes.length) {
+      _toast('err', 'archetype-registry.js not loaded or empty.');
+      return;
+    }
+    var sel = $('#stamp-archetype'); sel.innerHTML = '';
+    reg.archetypes.forEach(function (a) {
+      var o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.displayName + '  (' + a.category + ')';
+      sel.appendChild(o);
+    });
+    sel.onchange = _stampSyncDesc;
+
+    var fs = $('#stamp-floor'); fs.innerHTML = '';
+    var preferred = _state.filter.floor || _state.floorIds[0];
+    _state.floorIds.forEach(function (fid) {
+      var o = document.createElement('option');
+      o.value = fid; o.textContent = fid;
+      if (fid === preferred) o.selected = true;
+      fs.appendChild(o);
+    });
+
+    _stampSyncDesc();
+    panel.classList.remove('hidden');
+    _stampState.open = true;
+  }
+
+  function _stampSyncDesc() {
+    var reg = window.ARCHETYPE_REGISTRY;
+    if (!reg) return;
+    var id = $('#stamp-archetype').value;
+    var a = reg.archetypes.filter(function (x) { return x.id === id; })[0];
+    if (!a) return;
+    $('#stamp-desc').textContent = a.description || '';
+    if (Array.isArray(a.recommendedCount) && a.recommendedCount.length === 2) {
+      var lo = a.recommendedCount[0], hi = a.recommendedCount[1];
+      $('#stamp-count').value = lo;
+      $('#stamp-count').min = 1;
+      $('#stamp-count').max = Math.max(hi, 25);
+      $('#stamp-count-hint').textContent = 'recommended ' + lo + '–' + hi;
+    } else {
+      $('#stamp-count-hint').textContent = '';
+    }
+  }
+
+  function _stampClose() {
+    var panel = $('#stamp-panel');
+    if (panel) panel.classList.add('hidden');
+    _stampState.open = false;
+  }
+
+  function _stampApply() {
+    var reg = window.ARCHETYPE_REGISTRY;
+    if (!reg) { _toast('err', 'Archetype registry unavailable.'); return; }
+    var archId = $('#stamp-archetype').value;
+    var archetype = reg.archetypes.filter(function (x) { return x.id === archId; })[0];
+    if (!archetype) { _toast('err', 'Archetype not found: ' + archId); return; }
+
+    var count = Math.max(1, Math.min(25, parseInt($('#stamp-count').value, 10) || 1));
+    var floorId = String($('#stamp-floor').value);
+    var ax = Math.max(0, Math.min(127, parseInt($('#stamp-x').value, 10) || 0));
+    var ay = Math.max(0, Math.min(127, parseInt($('#stamp-y').value, 10) || 0));
+
+    // idPattern may reference {floorId} and {n}
+    var idPattern = (archetype.idPattern || (archetype.id + '_{n}')).replace('{floorId}', floorId);
+
+    // Find the highest existing {n} suffix for this archetype+floor
+    // prefix so we don't stomp existing ids even before _uniqueId runs.
+    var prefix = idPattern.replace('{n}', '');
+    var maxN = 0;
+    Object.keys(_state.byId).forEach(function (id) {
+      if (id.indexOf(prefix) !== 0) return;
+      var m = id.substring(prefix.length).match(/^(\d+)/);
+      if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+    });
+
+    var built = [];
+    var stampFailures = [];
+    var schema = typeof window !== 'undefined' && window.ACTOR_SCHEMA;
+    var validator = typeof SchemaValidator !== 'undefined' && SchemaValidator;
+
+    for (var i = 0; i < count; i++) {
+      var n = maxN + i + 1;
+      var npc = JSON.parse(JSON.stringify(archetype.defaults || {}));
+      npc.floorId = floorId;
+      // Grid spread: 3 wide × N tall
+      npc.x = Math.min(127, ax + (i % 3));
+      npc.y = Math.min(127, ay + Math.floor(i / 3));
+      if (Array.isArray(archetype.emojiPool) && archetype.emojiPool.length) {
+        npc.emoji = archetype.emojiPool[i % archetype.emojiPool.length];
+      } else {
+        npc.emoji = npc.emoji || '🧑';
+      }
+      if (archetype.barkIntervalJitter && typeof npc.barkInterval === 'number') {
+        var j = Math.round((Math.random() - 0.5) * 2 * archetype.barkIntervalJitter);
+        npc.barkInterval = Math.max(1000, npc.barkInterval + j);
+      }
+      npc.id   = _uniqueId(idPattern.replace('{n}', String(n)));
+      npc.name = (archetype.namePattern || (archetype.displayName + ' {n}')).replace('{n}', String(n));
+
+      if (validator && schema) {
+        var res;
+        try { res = validator.validate(schema, npc, schema); }
+        catch (e) { res = { ok: false, errors: [{ path: '', keyword: 'throw', message: String(e.message || e) }] }; }
+        if (!res.ok) {
+          stampFailures.push({ idx: i, id: npc.id, errors: res.errors });
+          continue;
+        }
+      }
+      built.push(npc);
+    }
+
+    if (stampFailures.length) {
+      console.group('[NpcDesigner] Stamp schema failures (' + stampFailures.length + ')');
+      stampFailures.forEach(function (f) { console.warn('stamp', f.idx, f.id, f.errors); });
+      console.groupEnd();
+    }
+    if (!built.length) {
+      _toast('warn', 'Stamp produced 0 valid NPCs (all ' + count + ' rejected).');
+      return;
+    }
+
+    var ok = confirm('Stamp ' + built.length + ' "' + archetype.displayName +
+      '" NPC(s) onto floor ' + floorId + ' starting at (' + ax + ',' + ay + ')?' +
+      (stampFailures.length ? '\n(' + stampFailures.length + ' rejected by schema — see console)' : ''));
+    if (!ok) { _toast('', 'Stamp cancelled.'); return; }
+
+    built.forEach(function (npc) {
+      if (!_state.working.npcsByFloor[floorId]) _state.working.npcsByFloor[floorId] = [];
+      _state.working.npcsByFloor[floorId].push(npc);
+      _state.byId[npc.id] = npc;
+      _state.dirty[npc.id] = true;
+    });
+
+    _renderFloorChips();
+    _renderNpcList();
+    _updateStatus();
+    _stampClose();
+    _toast('good', 'Stamped ' + built.length + ' "' + archetype.id +
+      '" NPC(s) on floor ' + floorId +
+      (stampFailures.length ? ' (' + stampFailures.length + ' rejected)' : ''));
   }
 
   // ────────────────────────────────────────────────────────────
@@ -1505,6 +2084,33 @@ var NpcDesigner = (function () {
     $('#btn-download').addEventListener('click', _download);
     $('#btn-revert').addEventListener('click', _revert);
     $('#btn-new-npc').addEventListener('click', _newNpc);
+
+    // Import (.json bundle / flat array / .csv)
+    var _btnImport = $('#btn-import');
+    var _importInput = $('#import-file-input');
+    if (_btnImport && _importInput) {
+      _btnImport.addEventListener('click', _importTriggerFile);
+      _importInput.addEventListener('change', _importOnFile);
+    }
+
+    // Stamp from archetype (bulk add)
+    var _btnStamp = $('#btn-stamp');
+    if (_btnStamp) {
+      _btnStamp.addEventListener('click', function () {
+        if (_stampState.open) _stampClose();
+        else                  _stampOpen();
+      });
+      var _btnStampClose  = $('#btn-stamp-close');
+      var _btnStampCancel = $('#btn-stamp-cancel');
+      var _btnStampApply  = $('#btn-stamp-apply');
+      if (_btnStampClose)  _btnStampClose .addEventListener('click', _stampClose);
+      if (_btnStampCancel) _btnStampCancel.addEventListener('click', _stampClose);
+      if (_btnStampApply)  _btnStampApply .addEventListener('click', _stampApply);
+      // Esc closes the panel
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _stampState.open) _stampClose();
+      });
+    }
 
     // Editor-header buttons
     $('#btn-duplicate').addEventListener('click', _duplicate);

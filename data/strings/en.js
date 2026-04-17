@@ -419,6 +419,42 @@ i18n.register('en', {
   'quest.sidequest.watchman_roll_call.step.3.label': 'Descend deeper to Hero\u2019s Wake B2',
   'quest.sidequest.watchman_roll_call.step.4.label': 'Wait for the hero\u2019s arrival signal',
 
+  // DOC-113 Phase B sprint sidequests — timed fetch runs with hero pursuit.
+  // Exercises the 'fetch' waypoint kind (kind:"fetch" predicate in QuestChain).
+  // Timer/hero data on the fetch step is consumed by QuestChain + HeroSystem
+  // at runtime (DOC-113 Phases C-D); the quest data is data-complete now.
+
+  // 4. Cellar fetch — sprint run in the Soft Cellar. Retrieve a dispatch
+  //    ledger before The Seeker returns. Gated behind cellar_owner_mop.
+  'quest.sidequest.cellar_fetch.title':          'Quick Hands',
+  'quest.sidequest.cellar_fetch.hook':           'There\u2019s a ledger down there the owner needs back. Problem is, the hero\u2019s due any minute.',
+  'quest.sidequest.cellar_fetch.summary':        'The cellar owner needs a dispatch ledger retrieved from the Soft Cellar before the hero returns. You have 75 seconds. If the timer runs out, The Seeker blocks the exit \u2014 find the secondary passage or fight through.',
+  'quest.sidequest.cellar_fetch.step.1.label':   'Get the briefing from the Cellar Owner',
+  'quest.sidequest.cellar_fetch.step.2.label':   'Retrieve the Dispatch Ledger (75s)',
+  'quest.sidequest.cellar_fetch.step.3.label':   'Return the ledger to the Cellar Owner',
+
+  // 5. Wake dispatch — sprint run in Hero\u2019s Wake B1. Retrieve a BPRD
+  //    containment report before The Crusader returns. Harder/longer.
+  //    Gated behind watchman_roll_call.
+  'quest.sidequest.wake_dispatch.title':         'Dead Drop',
+  'quest.sidequest.wake_dispatch.hook':          'The watchman says BPRD left something in the Wake. Get it before the Crusader does.',
+  'quest.sidequest.wake_dispatch.summary':       'A BPRD containment report is buried somewhere in Hero\u2019s Wake B1. The Crusader is sweeping floors below \u2014 you have 90 seconds before they resurface. The report is evidence of what the hero really does to dragons.',
+  'quest.sidequest.wake_dispatch.step.1.label':  'Get the briefing from the Watchman',
+  'quest.sidequest.wake_dispatch.step.2.label':  'Retrieve the BPRD Report (90s)',
+  'quest.sidequest.wake_dispatch.step.3.label':  'Deliver the report to the Watchman',
+
+  // Sprint dungeon timer UI strings (DOC-113 Phase C — consumed by HUD timer element)
+  'quest.sprint.timer_label':     'TIME',
+  'quest.sprint.timer_expired':   'TIME\u2019S UP',
+  'quest.sprint.hero_sentinel':   'blocks the exit',
+  'quest.sprint.hero_pursuit':    'is hunting you',
+  'quest.sprint.escaped':         'Escaped!',
+  'quest.sprint.objective_found': 'Got it \u2014 head for the exit!',
+  // Act-flavored hero appearance toasts (DOC-113 §8.2)
+  'quest.sprint.hero_spawn_act1': 'Heavy footsteps echo from below. Someone \u2014 something \u2014 is coming up the stairs.',
+  'quest.sprint.hero_spawn_act2': '{hero} appears at the exit.',
+  'quest.sprint.hero_spawn_act3': '{hero} appears at the exit. But this time, you\u2019re ready.',
+
   // Navigation-hint fallback (Phase 2). Used when QuestChain has no active
   // quests and `getJournalEntries()` synthesizes a hint from the legacy
   // floor/gate state machine. Preserves jam-build parity while the real

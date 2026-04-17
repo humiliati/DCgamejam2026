@@ -5,7 +5,7 @@
 // FloorManager.getQuestAnchors(). QuestRegistry.init unions these with
 // data/quests.json.anchors; central wins on collision (Phase 6 policy).
 window.QUEST_SIDECARS = {
-  "generated": "2026-04-17T07:47:35.978Z",
+  "generated": "2026-04-17T17:10:52.507Z",
   "anchors": {
     "pentagram_chamber": {
       "type": "literal",

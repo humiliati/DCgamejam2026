@@ -37,8 +37,9 @@ IIFE that attaches to a single named global.
 | 20 | `bv-ui-tooltip.js` | 101 | hover tooltips (self-contained IIFE) | 11 |
 | 21 | `bv-bo-router.js` | 846 | `window.BO` agent-facing API; ACTIONS closure (router/perception/tile-lookup/stamps) | 01–10, 15, 18 |
 | 22 | `bv-stamp-library.js` | 273 | `STAMP_LIB` (localStorage `bv.stamps.v1`) — injects `★ Stamps` toolbar button | 08, 16 |
+| 23 | `bv-verb-nodes.js` | 847 | `VN` verb-node stamper (render layer + template stamper + faction palette + export to `data/verb-nodes.json`). Monkey-patches `draw` and `selectFloor`; injects `🛠 Nodes` toolbar button. Consumes sidecars `window.VERB_NODES_DATA` (`../data/verb-nodes.js`) and `window.VERB_NODE_TEMPLATES` (`verb-node-templates.js`) — both loaded in `blockout-visualizer.html` before this module. | 01, 02, 03, 09, 11, 12, 15, 16, sidecars |
 
-Inline `<script>` in `blockout-visualizer.html` after the 22 modules: just
+Inline `<script>` in `blockout-visualizer.html` after the 23 modules: just
 `__validateSmokeTest` thin wrapper + `loadAllFloors()` kickoff. All other
 bodies were removed in Pass 0.1 cleanup.
 

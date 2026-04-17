@@ -29,7 +29,26 @@
  * The HUD readiness bar shows the combined (overhealing) score.
  *
  * Layer 1 — depends on: CrateSystem, CleaningSystem, TorchState,
- *           TrapRearm, CobwebSystem (all Layer 1)
+ *           TrapRearm, CobwebSystem (all Layer 1), DungeonSchedule
+ *           (same layer, loaded after this one — accessed lazily via
+ *           typeof guard only inside the microtask flush, never at init).
+ *
+ * ── Event bus (DOC-109 Phase 1, 2026-04-17) ───────────────────────
+ * Smartwatch debrief-feed HUD needs to re-render when any floor's core
+ * readiness changes, and when a hero-day group's aggregate crosses a
+ * threshold. Mutation sites call `markDirty(floorId)`; a microtask
+ * (`Promise.resolve().then`) batches per-tick dirty floors into a
+ * single flush that diffs against `_lastCoreScore` / `_lastGroupScore`
+ * and emits `'score-change'` (floorId, prev, next) per changed floor
+ * plus `'group-score-change'` (groupId, prev, next) per changed group.
+ * `invalidate()` forces re-emit for every scheduled floor + group,
+ * used when subsystem data is rebuilt wholesale (save load, new cycle).
+ * Listeners register via `on(event, fn)` / unsubscribe via `off`.
+ *
+ * Wiring to real mutation sites (breakable-spawner, cleaning-system,
+ * torch-state, trap-rearm, cobweb-system) is deferred to a later
+ * slice — Phase 1 only ships the API surface so the debrief-feed can
+ * adopt the subscription model without scattered callsite edits.
  */
 var ReadinessCalc = (function () {
   'use strict';
@@ -85,6 +104,15 @@ var ReadinessCalc = (function () {
 
   // ── Snapshot storage (frozen readiness at hero arrival) ─────────
   var _snapshots = {};  // { floorId: { core, extra, total, breakdown } }
+
+  // ── Event-bus state (DOC-109 Phase 1) ──────────────────────────
+  // See file-level JSDoc for the debrief-feed subscription model.
+  var _listeners         = { 'score-change': [], 'group-score-change': [] };
+  var _lastCoreScore     = {};    // { floorId: number } — last emitted core
+  var _lastGroupScore    = {};    // { groupId: number } — last emitted mean
+  var _pendingDirty      = {};    // { floorId: true }
+  var _flushScheduled    = false;
+  var _pendingInvalidate = false;
 
   // ── Score helpers ──────────────────────────────────────────────
 
@@ -327,6 +355,152 @@ var ReadinessCalc = (function () {
     return bd;
   }
 
+  // ── Event bus (DOC-109 Phase 1) ────────────────────────────────
+
+  function on(event, fn) {
+    if (!_listeners[event] || typeof fn !== 'function') return false;
+    _listeners[event].push(fn);
+    return true;
+  }
+  function off(event, fn) {
+    if (!_listeners[event]) return false;
+    var i = _listeners[event].indexOf(fn);
+    if (i !== -1) { _listeners[event].splice(i, 1); return true; }
+    return false;
+  }
+  function _emit(event /*, ...args */) {
+    var list = _listeners[event];
+    if (!list) return;
+    var args = Array.prototype.slice.call(arguments, 1);
+    for (var i = 0; i < list.length; i++) {
+      try { list[i].apply(null, args); }
+      catch (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[ReadinessCalc] ' + event + ' listener threw:', e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Mark a floor's readiness state dirty. Scheduled mutation sites call
+   * this; a microtask-deferred flush recomputes the core score, diffs
+   * against cache, and emits 'score-change' (+ any affected group's
+   * 'group-score-change'). Multiple markDirty calls in the same tick
+   * collapse into a single flush via the `_flushScheduled` guard.
+   *
+   * @param {string} floorId
+   * @returns {boolean} true if scheduled, false on bad input
+   */
+  function markDirty(floorId) {
+    if (typeof floorId !== 'string' || !floorId) return false;
+    _pendingDirty[floorId] = true;
+    _schedule();
+    return true;
+  }
+
+  function _schedule() {
+    if (_flushScheduled) return;
+    _flushScheduled = true;
+    Promise.resolve().then(_flush);
+  }
+
+  function _flush() {
+    _flushScheduled = false;
+    var forceAll    = _pendingInvalidate;
+    var dirtyFloors = Object.keys(_pendingDirty);
+    _pendingDirty = {};
+    _pendingInvalidate = false;
+
+    // On invalidate, walk every floor we know about: already-cached
+    // floors + every floor listed in the schedule. This guarantees
+    // the debrief-feed rebuilds cleanly after a save load.
+    if (forceAll) {
+      var all = {};
+      for (var a = 0; a < dirtyFloors.length; a++) all[dirtyFloors[a]] = true;
+      Object.keys(_lastCoreScore).forEach(function (f) { all[f] = true; });
+      if (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getSchedule) {
+        var sched = DungeonSchedule.getSchedule();
+        for (var s = 0; s < sched.length; s++) {
+          var fids = sched[s].floorIds || [];
+          for (var j = 0; j < fids.length; j++) all[fids[j]] = true;
+        }
+      }
+      dirtyFloors = Object.keys(all);
+    }
+
+    var changedFloors = {};
+    for (var k = 0; k < dirtyFloors.length; k++) {
+      var fid  = dirtyFloors[k];
+      var next = getCoreScore(fid);
+      var had  = _lastCoreScore.hasOwnProperty(fid);
+      var prev = had ? _lastCoreScore[fid] : null;
+      if (forceAll || !had || prev !== next) {
+        _lastCoreScore[fid] = next;
+        changedFloors[fid]  = next;
+        _emit('score-change', fid, had ? prev : null, next);
+      }
+    }
+
+    // Group aggregates — recompute only groups whose floors moved
+    // (or every group under invalidate).
+    if (typeof DungeonSchedule === 'undefined' || !DungeonSchedule.getSchedule) return;
+    var schedule = DungeonSchedule.getSchedule();
+    for (var m = 0; m < schedule.length; m++) {
+      var g = schedule[m];
+      var touched = forceAll;
+      if (!touched) {
+        var gfids = g.floorIds || [];
+        for (var n = 0; n < gfids.length; n++) {
+          if (changedFloors.hasOwnProperty(gfids[n])) { touched = true; break; }
+        }
+      }
+      if (!touched) continue;
+      var gNext = _computeGroupScore(g);
+      var gHad  = _lastGroupScore.hasOwnProperty(g.groupId);
+      var gPrev = gHad ? _lastGroupScore[g.groupId] : null;
+      if (forceAll || !gHad || gPrev !== gNext) {
+        _lastGroupScore[g.groupId] = gNext;
+        _emit('group-score-change', g.groupId, gHad ? gPrev : null, gNext);
+      }
+    }
+  }
+
+  function _computeGroupScore(group) {
+    var fids = group && group.floorIds;
+    if (!fids || !fids.length) return 0;
+    var sum = 0;
+    for (var i = 0; i < fids.length; i++) sum += getCoreScore(fids[i]);
+    return sum / fids.length;
+  }
+
+  /**
+   * Read-through mean of a hero-day group's per-floor core scores.
+   * Resolves the group via DungeonSchedule.getSchedule(); returns 0 if
+   * the schedule module isn't loaded or the groupId is unknown.
+   *
+   * @param {string} groupId — 'club' | 'spade' | 'diamond'
+   * @returns {number} 0.0–1.0
+   */
+  function getGroupScore(groupId) {
+    if (typeof DungeonSchedule === 'undefined' || !DungeonSchedule.getSchedule) return 0;
+    var schedule = DungeonSchedule.getSchedule();
+    for (var i = 0; i < schedule.length; i++) {
+      if (schedule[i].groupId === groupId) return _computeGroupScore(schedule[i]);
+    }
+    return 0;
+  }
+
+  /**
+   * Force a flush that re-emits for every scheduled floor + group,
+   * regardless of whether the cached score matches. Use after wholesale
+   * data rebuilds (save load, cycle reset).
+   */
+  function invalidate() {
+    _pendingInvalidate = true;
+    _schedule();
+  }
+
   return Object.freeze({
     getScore:       getScore,
     getCoreScore:   getCoreScore,
@@ -340,6 +514,12 @@ var ReadinessCalc = (function () {
     logBreakdown:      logBreakdown,
     setWeightOverride: setWeightOverride,
     getWeights:        _getWeights,
+    // Event bus (DOC-109 Phase 1)
+    on:             on,
+    off:            off,
+    markDirty:      markDirty,
+    getGroupScore:  getGroupScore,
+    invalidate:     invalidate,
     CORE_WEIGHTS: Object.freeze({
       crate: C_CRATE, clean: C_CLEAN, torch: C_TORCH, trap: C_TRAP
     }),

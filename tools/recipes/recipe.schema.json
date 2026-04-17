@@ -114,6 +114,34 @@
       "additionalProperties": false
     },
 
+    "expansion": {
+      "type": "object",
+      "description": "Multi-floor expansion. When present, `bo bake-multi` generates N sibling floors from this recipe, each a depth level deeper, with auto-wired stair door targets between them and a per-level difficulty ramp.",
+      "properties": {
+        "floorCount": { "type": "integer", "minimum": 2, "maximum": 10, "default": 3, "description": "Number of sibling floors to generate." },
+        "idPattern":  { "type": "string", "default": "{parent}.{n}", "description": "Floor ID template. {parent} = parent floor ID, {n} = 1-indexed depth. E.g. '2.2.{n}' → 2.2.1, 2.2.2, 2.2.3." },
+        "lastFloorExit": {
+          "type": "string",
+          "enum": ["none", "boss", "open"],
+          "default": "none",
+          "description": "What happens at the deepest floor's exit. 'none' = dead end (no exit door). 'boss' = BOSS_DOOR. 'open' = normal STAIRS_DN placeholder for future extension."
+        },
+        "ramp": {
+          "type": "object",
+          "description": "Per-level difficulty scaling. Values are multipliers applied to the base recipe per floor depth (1-indexed). Floor 1 = base values, floor N = base × (1 + (N-1) × factor).",
+          "properties": {
+            "enemyBudget":      { "type": "number", "minimum": 0, "maximum": 2, "default": 0.3, "description": "Enemy count grows by this fraction per level." },
+            "trapDensity":      { "type": "number", "minimum": 0, "maximum": 2, "default": 0.2, "description": "Trap density grows by this fraction per level." },
+            "breakableDensity": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.1, "description": "Breakable density grows by this fraction per level." },
+            "chestCount":       { "type": "number", "minimum": 0, "maximum": 2, "default": 0.2, "description": "Chest count grows by this fraction per level." },
+            "torchDensity":     { "type": "number", "minimum": -1, "maximum": 1, "default": -0.1, "description": "Torch density changes per level (negative = darker deeper floors)." }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
     "seed": {
       "type": ["integer", "null"],
       "default": null,

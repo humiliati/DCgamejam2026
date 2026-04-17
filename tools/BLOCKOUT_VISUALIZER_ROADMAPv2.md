@@ -1018,12 +1018,28 @@ builds the generation layer on top.
 - Balance entity densities per biome × strategy combination.
 - Playtest-driven iteration: generate → play → adjust knobs → regenerate.
 
-**Phase 6.3 — World designer recipe node UI** ⬜
+**Phase 6.3 — World designer recipe node UI** ✅ (shipped 2026-04-17)
 
-- Recipe node type in world designer (distinct from ghost/pending/authored).
-- Recipe editor panel: form UI for all knobs, preview thumbnail via `procgenPreview` action.
-- "Expand" button: generates concrete floor, converts recipe node → authored node.
-- Multi-floor recipe expansion: "grow a 3-level cellar" expands into N sibling floors.
+- **Recipe node type** in world designer — teal-themed solid nodes (`dg-node-recipe`), distinct from
+  ghost/pending/authored. `state.recipes` pool persisted via sessionStorage (`recipePool` key).
+- **Recipe editor modal** — full form UI for all recipe schema knobs: id, title, parent floor, biome,
+  faction, strategy (with weight), grid size, rooms (count range), corridors (style/width/extra loops),
+  entities (torch/breakable/trap density, chest/enemy ranges), doors (entry/exit wall, boss gate),
+  timer section (budget/sentinelGrace/heroArchetype — for fetch strategy), and RNG seed.
+- **Recipe inspector panel** — displays all knobs organized by category with Expand/Edit/Discard buttons.
+- **"Expand" button** — converts recipe → pending floor via WDBridge `procgen` action (if bridge ready)
+  or direct conversion (stashes full recipe in pending metadata for later BO-V use).
+- **Recipe edges** — dashed teal lines from parent floor to recipe node (`dg-edge-recipe`).
+- **Context menu** — "Expand Recipe (generate)" action for recipe nodes.
+- **Full lifecycle** — create, edit (pre-fill modal from existing recipe), discard (with confirm),
+  delete (via delete modal). `isIdTaken`, `autoLayout`, `resolvePositions`, `suggestChildId` all
+  recipe-aware. `DG_WORLD` debug global extended.
+- ✅ **Shipped 2026-04-17:** Multi-floor recipe expansion — `expansion` schema knobs
+  (`floorCount`, `idPattern`, `lastFloorExit`, `ramp`), `bo bake-multi` CLI command,
+  world designer expand button creates N pending sibling floors with auto-wired edges,
+  per-level difficulty ramp (enemies, traps, breakables, chests, torches), cross-floor
+  door target resolution (`__parent__`/`__child__` → real floor IDs).
+- ⬜ **Deferred:** Preview thumbnail via `procgenPreview` action. Phase 6.4 stretch.
 
 **Phase 6.4 — Live preview + analytics (stretch)** ⬜
 
@@ -1067,15 +1083,28 @@ builds the generation layer on top.
 Things that would be lovely but aren't shipping before Winter 2026 webOS launch. Note: procedural
 generation has graduated from this list into Pass 6 (active).
 
+*Last reviewed: 2026-04-17. Relevance notes for Winter 2026 webOS launch.*
+
 - **Procedural + handcrafted hybrid** — hand-place the entry + boss rooms, let the editor fill the
-  middle with procgen, preview the result (partially addressed by Pass 6 recipe nodes)
-- **Multi-floor view** — render the full world graph as a 3D stack of floors
-- **Collaborative editing** — multiple designers on the same floor (probably overkill; DG is small team)
-- **Playtesting instrumentation** — in the editor, replay player paths from analytics, see heatmaps
-  of actual player movement (Pass 6 stretch item)
+  middle with procgen, preview the result. *Mostly addressed:* Phase 6.3 recipe nodes let you
+  define procgen blueprints alongside authored floors; Phase 6.1 BSP generator fills the middle.
+  The remaining gap is the pinned-cell-aware generation (procgen respecting hand-placed anchor
+  tiles) — promote if sprint dungeons need it.
+- **Multi-floor view** — render the full world graph as a 3D stack of floors. *Low priority for
+  webOS.* The 2D world designer graph (Pass 5b) covers the navigation use case. A 3D stack
+  visualization is a "wow" demo feature, not a production tool need.
+- **Collaborative editing** — multiple designers on the same floor. *Not needed.* DG is a solo/duo
+  project. Drop from the list.
+- **Playtesting instrumentation** — replay player paths from analytics, see heatmaps of actual
+  player movement. *High value for webOS launch QA.* Promoted to Phase 6.4 stretch. Needs the
+  game to log `(floorId, x, y, dir, t)` tuples first — a ~50-line instrumentation pass in
+  `engine/game.js`.
 - **Accessibility check** — validate against WCAG-adjacent rules: contrast between walkable and
-  non-walkable, color-blind-safe tile palette, glyph readability
-- **i18n preview** — swap `data/strings/en.js` for other locales to check UI overflow
+  non-walkable, color-blind-safe tile palette, glyph readability. *Relevant for webOS
+  certification.* LG's webOS app review may flag contrast issues. Consider a light-touch pass
+  (palette contrast audit, not full WCAG machinery).
+- **i18n preview** — swap `data/strings/en.js` for other locales to check UI overflow. *Relevant
+  only if DG ships localized.* Currently English-only. Defer unless localization is scoped.
 
 ---
 
@@ -1161,8 +1190,10 @@ Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
 20. 🟡 **Pass 6 — Procedural generation.** Phase 6.1 shipped 2026-04-16: recipe schema, BSP
     generator (`tools/procgen.js`), three strategy archetypes (cobweb/combat/pressure-wash),
     three starter recipes, CLI `bo procgen`/`bo list-recipes`, browser `procgen` BO action.
-    Next: Phase 6.2 (strategy formula tuning), 6.3 (recipe node UI in world designer),
-    6.4 (live preview + analytics, stretch).
+    Phase 6.3 shipped 2026-04-17: recipe node UI in world designer (teal nodes, form modal,
+    inspector, expand/edit/discard lifecycle, sessionStorage persistence). Recipe schema also
+    extended with `fetch` strategy + `timer` knobs (DOC-113).
+    Next: Phase 6.2 (strategy formula tuning), 6.4 (live preview + analytics, stretch).
 
 **Recommended next step:** ✅ **Done (2026-04-14).** The save patcher (`tools/js/bv-save-patcher.js`)
 now rewrites `spawn:` and `doorTargets:` inside the `registerFloorBuilder` block in addition to the
@@ -1174,14 +1205,19 @@ handles both the inline `doorTargets: { ... }` object on the builder return and 
 via `outputs/patcher_sim.js` with four cases: inline doorTargets, scaffold var, missing blocks (no-op),
 and full chain + VM parse.
 
-**Next recommended step:** Phase 6.2 — strategy formula tuning. The procgen infrastructure is
-live (Phase 6.1 shipped). The generator produces playable layouts for all three strategy types,
-but the strategy decorators use placeholder heuristics. Next step is playtesting generated floors,
-refining the cobweb corridor-length distribution and dead-end budgets, tuning the pressure-wash
-loop circumference targets, and balancing entity densities per biome × strategy. This is an
-iterative loop: generate → play → adjust knobs → regenerate. Phase 6.3 (recipe node UI in the
-world designer) can proceed in parallel since it's purely tooling chrome on top of the existing
-`procgen` BO action.
+**Next recommended step:** Phase 6.2 — strategy formula tuning, or DOC-113 Phase A (fetch
+strategy decorator). Phase 6.3 (recipe node UI) shipped 2026-04-17, so the tooling chrome is
+complete. Two parallel tracks are now open:
+
+- **Phase 6.2** — refine the three existing strategy decorators (cobweb corridor-length
+  distribution, pressure-wash loop circumference, combat room aspect ratios). Iterative loop:
+  generate → play → adjust knobs → regenerate.
+- **DOC-113 Phase A** — implement the fourth strategy decorator (`_applyFetchStrategy` in
+  `tools/procgen.js`): BSP tree maze with zero extra connections, dead-end decoys, objective at
+  deepest leaf, secondary exit in non-critical-path leaf room. The recipe schema knobs (`timer`,
+  `entities.decoyCount`, `entities.secondaryExit`) are already in place.
+
+Either can proceed independently. Phase A unlocks the sprint dungeon game loop (Phases B–E).
 
 **Also open (lower priority):**
 - Pass 0.6 — file-size budget CI check (tracked tech debt, low urgency).
@@ -1191,6 +1227,8 @@ world designer) can proceed in parallel since it's purely tooling chrome on top 
 - Tier 3 polish — rooms array editor, biome picker, save-patcher for full metadata.
 - Tier 4 — tile height offset editor (1–2 days when needed).
 - Quest system — DOC-107 Phases 2–4 (see `docs/QUEST_SYSTEM_ROADMAP.md`).
+- Sprint dungeon runtime — DOC-113 Phases B–E: quest data, timer runtime, hero pursuit, polish.
+- Phase 6.3 deferred items — `procgenPreview` thumbnail (multi-floor expansion shipped 2026-04-17).
 
 Items that are probably **never worth it** for DG's scope: collaborative editing, history tree
 with branching, customizable shortcuts. A small team building one game doesn't need those.

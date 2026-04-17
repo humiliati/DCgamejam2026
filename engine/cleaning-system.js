@@ -36,6 +36,17 @@ var CleaningSystem = (function () {
   var _bloodMap = {};
   var _lastCleanTime = 0;
 
+  // ── ReadinessCalc event-bus bridge (DOC-109 Phase 1 wiring) ─────
+  // Fire a microtask-debounced dirty mark whenever blood/grime state
+  // changes in a way that could move the cleaning readiness score.
+  // ReadinessCalc.markDirty coalesces multiple calls per tick into a
+  // single score-change emit, so the per-site cost is trivial.
+  function _markDirty(floorId) {
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.markDirty) {
+      ReadinessCalc.markDirty(floorId);
+    }
+  }
+
   // ── Blood placement ─────────────────────────────────────────────
 
   /**
@@ -75,6 +86,7 @@ var CleaningSystem = (function () {
         map[key] = Math.min(MAX_BLOOD, current + amount);
       }
     }
+    _markDirty(floorId);
   }
 
   /**
@@ -83,6 +95,7 @@ var CleaningSystem = (function () {
   function setBlood(x, y, floorId, layers) {
     if (!_bloodMap[floorId]) _bloodMap[floorId] = {};
     _bloodMap[floorId][x + ',' + y] = Math.min(MAX_BLOOD, Math.max(0, layers));
+    _markDirty(floorId);
   }
 
   // ── Cleaning ────────────────────────────────────────────────────
@@ -164,6 +177,7 @@ var CleaningSystem = (function () {
 
     if (bloodCleaned || grimeCleaned) {
       _lastCleanTime = now;
+      _markDirty(floorId);
     }
     return bloodCleaned || grimeCleaned;
   }
@@ -278,6 +292,7 @@ var CleaningSystem = (function () {
    */
   function clearFloor(floorId) {
     delete _bloodMap[floorId];
+    _markDirty(floorId);
   }
 
   /**
@@ -440,6 +455,7 @@ var CleaningSystem = (function () {
     if (snap.grime && typeof GrimeGrid !== 'undefined' && GrimeGrid.deserialize) {
       GrimeGrid.deserialize(floorId, snap.grime);
     }
+    _markDirty(floorId);
   }
 
   // ── Public API ──────────────────────────────────────────────────

@@ -32,6 +32,7 @@ var COMMANDS = Object.assign(
   require('./cli/commands-quest'),    // Phase 0b: bo add-quest/place-waypoint/validate-quest
   require('./cli/commands-world'),    // Phase 5b.4: bo export-world-graph/apply-world-diff
   require('./cli/commands-procgen'),  // Pass 6: bo procgen/list-recipes
+  require('./cli/commands-bake'),     // Pass 6: bo bake/bake-all/bake-multi (recipe → IIFE pipeline)
   require('./cli/commands-help')      // Slice C3: bo help [<command>]
 );
 
@@ -83,6 +84,8 @@ function printHelp() {
     '  node tools/blockout-cli.js procgen --recipe recipes/cobweb-cellar.json --ascii',
     '  node tools/blockout-cli.js procgen --recipe recipes/cobweb-cellar.json --floor 3.1 --seed 42',
     '  node tools/blockout-cli.js list-recipes',
+    '  node tools/blockout-cli.js bake-multi --recipe recipes/cellar-deep.json --parent 2.2',
+    '  node tools/blockout-cli.js bake-multi --recipe recipes/cellar-deep.json --parent 2.2 --ascii',
     '  node tools/blockout-cli.js help         paint-rect',
     ''
   ].join('\n'));

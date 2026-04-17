@@ -456,6 +456,8 @@ This means hose users get more granular readiness progress (cleaning 60% of subc
 > | PW-5 (nozzles + readiness + regression) | Superseded | **Rung 9** (nozzle real-identity with Signals 2/4 wired) + Rung 10 (adaptive feel) |
 >
 > The hour estimates below are the original pre-jam budget and are **not** being tracked against new work. Current estimates live in the brief's §11.7 table (2A=2h · 2B=2h · 2C=1 day · 2D=3h · 2E=1 day · 2F=1 day + tuning), with Rungs 3–10 re-scoped after 2F lands.
+>
+> **2026-04-17 update — first-person weapon decision (revised same day).** `docs/ADR-001-PRESSURE_WASHER_FPS_WEAPON.md` (Accepted) adds a Doom-style nozzle sprite + Mario-Sunshine-feel water-jet projectile system, adapted from `EyesOnly/public/js/projectile-system.js` and `raycast.js-master/src/refactor/engine/a_player.js`. Water blobs arc (per-frame gravity), ricochet, paint on every bounce via `HoseDecal._paintStripe`. Ammo is hose energy (`SPRAY_DRAIN_MULT = 3.0` on top of existing `HoseState` drain) — not per-shot cards. Brandish toggle lives in a new `'brandish'` mode on `NchWidget` (joker-stack button swaps to water-gun button when hose attached + not in combat). Adds ~1.75 dev days between Rung 2F and Rung 8 (new `pw-nozzle.js`, `pw-projectile.js`, `pw-fire-controller.js`, plus NchWidget third-mode wiring). Hero interaction: "shoot the torch lights out" routes projectile hits into the already-shipped `TorchHitResolver.onHoseHit` at depth ≥ 3 — no new `Lighting` methods invented. See the ADR for module layering, state machine, ammo model, kink-jitter readout, and action items.
 
 ### Phase PW-1: Grime Grid + Raycaster Integration (3h) — **SHIPPED**
 

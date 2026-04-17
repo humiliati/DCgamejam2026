@@ -1,6 +1,6 @@
 # NPC & Enemy Tooling Roadmap
 
-> **Status**: Phase 0 Ch.1–5 ✅ shipped (schema v1.1.0 + runtime cutover + manifest pipeline + **inline fallback retired**); Phase 1 MVP ✅ shipped (`tools/npc-designer.html` — CRUD every NPC via UI, plus stack + sprite commission authoring); `data/npcs.json` is now the sole source of truth at runtime. P2 (Bark Workbench) + P3 (Verb-Node Stamper) + P4 (Dialogue Workbench) unblocked.
+> **Status**: Phase 0 Ch.1–5 ✅ shipped (schema v1.1.0 + runtime cutover + manifest pipeline + **inline fallback retired** + **in-browser smoke test green**); Phase 1 MVP ✅ shipped (`tools/npc-designer.html` — CRUD every NPC via UI, plus stack + sprite commission authoring); **Phase 1.1 schema validation on save ✅ shipped** (`tools/schema-validator.js` + `tools/actor-schema.js` sidecar + Designer `_download()` gate); **Phase 1.1.1 post-P1.1 follow-ups ✅ shipped** (pre-commit sidecar auto-regen + CSV/JSON import in the Designer); **Phase 1.1.2 archetype registry + stamp UI ✅ shipped** (9 archetypes, validator, sidecar, pre-commit guard, "📚 Stamp" overlay panel); **Phase 3 Ch.0 data foundation ✅ shipped 2026-04-17** (`data/verb-nodes.json` sole source of truth for hand-authored spatial nodes, inline `_registerBuiltinNodes()` retired, schema + validator + sidecar generator + seed loader + pre-commit §1c — 60 nodes across 6 floors); **Phase 3 Ch.1 template registry ✅ shipped 2026-04-17** (6 starter templates — town_square, soup_kitchen_congregation, faction_post, market_row, guard_checkpoint, dungeon_rest_ring — with factionSlot parametrics, generator + structural/synthesized-stamp validator + pre-commit §1d, 26 template nodes all schema-clean); `data/npcs.json` + `data/verb-nodes.json` are now the sole sources of truth at runtime. **All P1.1 deltas closed.** P2 (Bark Workbench) + P3 Ch.2 (BO-V verb-node stamper layer) + P4 (Dialogue Workbench) unblocked.
 
 > **Created**: 2026-04-16
 > **Owner**: Tooling / Authoring Pipeline
@@ -372,9 +372,9 @@ Closed the schema gap surfaced by [NPC_TOOLING_DEPENDENCY_AUDIT §4](NPC_TOOLING
 | Dialogue tab — tree/node editor (full) | **superseded by P4 Dialogue Workbench** |
 | Commerce tab — vendor inventory & pricing | **superseded by P5 Vendor Workbench** |
 | Reanim-Tier tab — T1/T2/T3 picker + attenuation curve editor | **superseded by P4 (verb-field workbench) + P6** |
-| Bulk "add from archetype" stamps (spawn 5 matching NPCs) | pending |
-| Schema validation on save (use `tools/actor-schema.json`) | pending — currently trust-on-input |
-| CSV/JSON import of NPC rosters | pending |
+| Bulk "add from archetype" stamps (spawn 5 matching NPCs) | ✅ **SHIPPED 2026-04-17** (see Phase 1.1.2 — Archetype Registry + Stamp UI below) |
+| Schema validation on save (use `tools/actor-schema.json`) | ✅ **SHIPPED 2026-04-17** (see Phase 1.1 — Schema Validation below) |
+| CSV/JSON import of NPC rosters | ✅ **SHIPPED 2026-04-17** (see Phase 1.1.1 — Post-P1.1 Follow-ups below) |
 
 #### Phase 1.2 Addendum — Sprite Commissioning Authoring ✅ SHIPPED 2026-04-17
 
@@ -426,13 +426,110 @@ The ~740-line inline `_registerBuiltinPopulations()` block was removed from `eng
 - `node tools/npc-cli.js list` → 72 actors (45 NPC + 27 enemy)
 - Zero executable references to `_registerBuiltinPopulations` anywhere in `engine/`, `tools/`, or `index.html` — only historical mentions in documentation comments.
 
-**Follow-ups opened**:
+**Follow-ups**:
 
-- In-browser playthrough smoke test on Brave (verify `[NpcSystem] Populated from data/npcs.json via NpcSeed (45 NPCs / 9 floors).` in console; walk Floor 0 / 1 / 3 to confirm NPC placement matches pre-cutover)
-- `docs/NPC_SYSTEM_ROADMAP.md` has three stale `_registerBuiltinPopulations` references (lines 159, 377, 396, 493) — schedule a sweep on the next roadmap revision pass
-- `docs/SPRITE_COMMISSIONING_MAP.md` line 240 "Known limitation" block can be marked resolved once the cleanup pass reaches it
+- ✅ In-browser playthrough smoke test on Brave — verified 2026-04-17. Console logs confirmed the clean cutover path:
+  - `[NpcSeed] Populated 45 NPCs across 9 floor(s) from data/npcs.json`
+  - `[NpcSystem] Populated from data/npcs.json via NpcSeed (45 NPCs / 9 floors).`
+  - `[NpcSystem] Initialised. Floors with NPC definitions: 0, 1, 2, 3, 1.1, 1.2, 1.3, 2.1, 2.2`
+  - Per-floor spawns match pre-cutover counts (`Spawned 6 NPC(s) on floor 0`, `Spawned 5 NPC(s) on floor 1` + DispatcherChoreography gate at (47,17)).
+  - No fallback messages, no schema warnings, no NPC-side exceptions. Floors 0 through 2 plus several interiors walked without incident.
+- ✅ `docs/NPC_SYSTEM_ROADMAP.md` §4.3 + §9.2 + §9.4 code sample + §cross-refs updated 2026-04-17 — the three present-tense references to `_registerBuiltinPopulations()` now point at `data/npcs.json` + `NpcSeed.populate()`, with historical context preserved where it belongs.
+- ✅ `docs/SPRITE_COMMISSIONING_MAP.md` §236 "Known limitation" block marked resolved 2026-04-17 — renamed to "Round-trip status", points at Ch.5 + Phase 1.1 for the full story.
 
 Once P4/P5/P6 ship their own dedicated editors, the three stub tabs in the Designer can be rewired to launch those editors for the selected NPC. The Designer stays as the "grand-central" index; the specialized tools own deep editing.
+
+#### Phase 1.1 — Schema Validation on Save ✅ SHIPPED 2026-04-17
+
+`tools/actor-schema.json` is now enforced on the NPC Designer save path. Every NPC in the working bundle is validated against its discriminator-routed oneOf branch before the download-blob is generated; on failure the author sees a `confirm()` dialog summarising the problems and may either cancel or explicitly "download anyway" (useful for intentional schema migrations).
+
+| Task | File | Outcome |
+|------|------|---------|
+| Write a Draft-07 subset validator in vanilla JS (no Ajv — zero-build hard rule) | `tools/schema-validator.js` (NEW) | ✅ ~340 lines. Supports `$ref` (local), `type` (single/array), `const`, `enum` (incl. null), `pattern`, min/max numeric + string-length + array-length, `required`, `additionalProperties:false`, `properties`, `patternProperties` (added during pre-flight when the sprites schema needed it), tuple-form `items`, `anyOf`, `oneOf`. CommonJS-exports `{ validate, validateActor }` at tail for Node test harnesses. |
+| Write the Node pre-flight harness — validate all 45 NPCs in `data/npcs.json` before wiring the UI gate | `tools/validate-npcs-preflight.js` (NEW) | ✅ Exits 0 if every NPC passes, non-zero + JSON-pointer-located errors otherwise. Used to find two schema bugs before shipping (see below). |
+| Ship schema fixes surfaced by pre-flight | `tools/actor-schema.json` | ✅ (1) `patrolPoints maxItems: 2` was blocking legitimate multi-waypoint patrols (`floor3_admiralty_patrol` 4 points, `floor3_urchin_1` 3 points) → raised to 16. (2) `npcActor` had no `stack`/`sprites` definitions despite Phase 1.2 wiring them end-to-end → added `npcStack`, `stackSlot`, `spriteFrame`, `npcSprites` definitions (new count: 30) and attached them to `npcActor` via `anyOf [null, …]`. Baseline after fix: 45/45 NPCs pass. |
+| Generate `tools/actor-schema.js` sidecar for file:// load (Chromium blocks `fetch('actor-schema.json')` under `file://`) | `tools/generate-schema-sidecar.js` (NEW) + `tools/actor-schema.js` (generated) | ✅ Same pattern as `data/npcs.js`. 1-line IIFE header attaching the parsed schema to `window.ACTOR_SCHEMA`. Re-run after every schema edit. |
+| Load the schema + validator scripts in `tools/npc-designer.html` | modify | ✅ Inserted after `npc-composer.js`, before `npc-designer.js`, so `_download()` sees both `window.ACTOR_SCHEMA` and `SchemaValidator` at save time. |
+| Wire validation into `NpcDesigner._download()` with confirm-based override | `tools/npc-designer.js` | ✅ New helpers `_validateBundle(bundle)` (walks every NPC, injects `kind='npc'` + `floorId=<key>` the same way the pre-flight does) and `_formatValidationReport(report)` (caps the confirm text at 8 failures — full dump always goes to the console). Graceful degradation: if `SchemaValidator` or `ACTOR_SCHEMA` is unavailable, the save proceeds with a `console.warn` rather than blocking the author. On failure the dialog shows `[floorId] id → /path keyword-message` lines, and a successful override writes `_meta.validation.ok = false` to the emitted JSON so downstream consumers can detect it. |
+| Extend roadmap | `docs/NPC_TOOLING_ROADMAP.md` (this doc) | ✅ Section added; delta table entry flipped to shipped. |
+
+**Smoke test baseline**:
+
+- `node --check tools/schema-validator.js` → clean
+- `node --check tools/generate-schema-sidecar.js` → clean
+- `node --check tools/validate-npcs-preflight.js` → clean
+- `node --check tools/npc-designer.js` → clean
+- `node tools/generate-schema-sidecar.js` → `[schema-sidecar] wrote tools/actor-schema.js (30 definitions, 28024 bytes)`
+- `node tools/validate-npcs-preflight.js` → `PASS — all NPCs validate cleanly.` (45/45)
+- Sidecar round-trip (simulate browser load order) → 45/45 pass
+- Negative-regression: 8/8 injected corruptions caught (missing id, bad id pattern, unknown factionId, negative barkRadius, unknown field, malformed sprite frame, out-of-range patrol point, 1-point patrol)
+
+**Known limitations / follow-ups**:
+
+- `anyOf` error messages surface the *shortest* branch error, which for nullable fields (e.g. `sprites: anyOf [null, object]`) sometimes leads to `expected type null` rather than the deeper property-level error. The per-branch detail is always logged via `console.group('[NpcDesigner] Schema validation failures')`, so the UX regression is cosmetic. A smarter "prefer non-type branch" heuristic is deferred until a user actually hits it.
+- The confirm() dialog is the same cheap modal pattern the designer uses for `_revert()`. A dedicated review panel with one-click-jump-to-offender is opt-in P1.1.1 work, not blocking.
+- `assets/sprites/npcs/` PNG path strings aren't checked for filesystem existence — schema enforces shape only. That reconciliation belongs in the sprite studio (P5), not here.
+- `tools/actor-schema.js` is now a generated artifact. It ships committed like `data/npcs.js` so file:// opens work zero-setup, but it must be regenerated after every schema edit. ✅ **Resolved 2026-04-17** — `tools/.githooks/pre-commit` now auto-runs `tools/generate-schema-sidecar.js` + `git add`s the sidecar whenever `tools/actor-schema.json` is in the staged set. See Phase 1.1.1 below.
+
+#### Phase 1.1.1 — Post-P1.1 Follow-ups ✅ SHIPPED 2026-04-17
+
+Two leftover P1.1 deltas (one tech-debt hook, one import path) shipped the same day as the schema-validation gate. Both were self-contained and re-used the just-landed `SchemaValidator` + `window.ACTOR_SCHEMA` globals.
+
+| Task | File | Outcome |
+|------|------|---------|
+| Auto-regen the schema sidecar in pre-commit when `actor-schema.json` is staged | `tools/.githooks/pre-commit` | ✅ Prepended a `git diff --cached --name-only | grep -qxF 'tools/actor-schema.json'` guard. On hit, runs `node tools/generate-schema-sidecar.js`, then `git add`s the regenerated `tools/actor-schema.js`. Fails loudly with override instructions (`git commit --no-verify`) if the generator errors. Budget check still runs after. |
+| CSV/JSON import of NPC rosters | `tools/npc-designer.html` + `tools/npc-designer.js` (`_Import` block, ~260 lines) | ✅ New "📥 Import" button in the header + hidden `<input type="file" accept=".json,.csv,…">`. Auto-detects input: `{` or `[` → JSON parse (accepts either `{npcsByFloor:{…}}` bundle or flat `[{…}]` array); anything else → CSV parse. RFC-4180-ish CSV parser handles quoted fields, doubled-quote escapes, and `\r\n` / `\n` line endings. Per-field type coercion via whitelists (`_CSV_INT_FIELDS`, `_CSV_NUM_FIELDS`, `_CSV_BOOL_FIELDS`, `_CSV_OBJ_FIELDS`). Every imported NPC flows through `SchemaValidator.validate()`; failures are logged to `console.group('[NpcDesigner] Import validation failures')` and counted in the summary dialog. Batch-wide collision resolution via `confirm()` (OK = overwrite in place, Cancel = rename with `_imported` suffix via `_uniqueId()`). Merges into `_state.working.npcsByFloor[fid]`, updates `_state.byId`, marks every touched id dirty, and re-renders floor chips + NPC list. Graceful degradation if schema globals are missing (warns, imports unvalidated). |
+
+**Smoke test baseline** (Node harness, all 45 live NPCs):
+
+- `node --check tools/npc-designer.js` → clean
+- Bundle round-trip (`data/npcs.json` → `_flattenBundle()` → `SchemaValidator`) → 45/45 pass
+- Flat-array round-trip (same source, coerced to `[…]`) → 45/45 pass
+- CSV round-trip (fabricated 2-row fixture with `"Sam, the ""Saltcrust"" sage"` + embedded commas/quotes) → 2/2 pass, booleans coerced to `boolean` type, integers to `number`
+
+**Known limitations / follow-ups**:
+
+- The collision prompt is batch-wide (one choice for all colliding ids). A per-row review-and-approve UI is future work, gated on real author demand.
+- CSV type coercion is whitelist-driven — fields not in the four coercion tables stay as strings. Schema validation catches type errors, but authors with bespoke CSV exports may hit surprises on numeric dialogue flags. Documented in the CSV section header comment.
+
+#### Phase 1.1.2 — Archetype Registry + Stamp UI ✅ SHIPPED 2026-04-17
+
+Closes the last P1.1 leftover delta. Authors can now spawn a cohesive batch of NPCs (N × "admiralty background", N × "promenade vendors", etc.) from a single reusable template rather than CRUDing each one by hand. Registry shape + schema integration mirrors the schema sidecar pattern from P1.1.
+
+**Registry.** `tools/archetype-registry.json` ships 9 archetypes covering the three patterns surfaced by a histogram pass across the live 45-NPC roster:
+
+| Category | Archetypes |
+|----------|-----------|
+| `faction_background` (ambient, verbArchetype-driven) | `admiralty_member`, `foundry_member`, `tide_member` |
+| `ambient_context` (roleless, dialoguePool-driven) | `promenade_vendor`, `pier_wanderer`, `resident_annoyed`, `watchpost_guard`, `innkeeper_ambient` |
+| `interactive_scaffold` | `named_interactive_scaffold` |
+
+Each archetype carries: `id`, `displayName`, `category`, `description`, `defaults` (full NPC shape minus id/x/y/name/emoji — those are generated per stamp), `emojiPool` (rotation for visual variety), `barkIntervalJitter` (±ms randomness on bark timing), `idPattern` (`{floorId}_admiralty_{n}`), `namePattern` (`Admiralty Operative {n}`), `recommendedCount` (`[min, max]` for the count input default + hint).
+
+| Task | File | Outcome |
+|------|------|---------|
+| Draft the archetype registry data | `tools/archetype-registry.json` (NEW) | ✅ 9 archetypes, all three categories covered. Shape derived from a histogram of live NPCs (`role`, `verbArchetype`, `dialoguePool`, `factionId`) — not invented from scratch. |
+| Sidecar generator for file:// load | `tools/generate-archetype-sidecar.js` (NEW) | ✅ Mirrors `generate-schema-sidecar.js`. Emits `tools/archetype-registry.js` attaching the parsed registry to `window.ARCHETYPE_REGISTRY`. |
+| Schema-conformance validator | `tools/validate-archetypes.js` (NEW) | ✅ Runs every `archetype.defaults` (with id/floorId/x/y/name/emoji injected the same way the stamp does) through `SchemaValidator` against `actor-schema.json`'s `npcActor` branch. Also checks structural shape (unique ids, idPattern includes `{n}`, emojiPool non-empty, recommendedCount is `[lo, hi]`). PASS baseline: 9/9. |
+| Pre-commit auto-regen + validation | `tools/.githooks/pre-commit` | ✅ New §1b block mirrors the schema-sidecar §1 block. When `tools/archetype-registry.json` is staged, runs validator first (blocks commit on schema violations), then regenerates + stages the sidecar. |
+| Stamp UI in the Designer — button + overlay panel | `tools/npc-designer.html` | ✅ New "📚 Stamp" button next to Import. Absolutely-positioned overlay panel shows archetype dropdown, live description, target floor dropdown, count input (pre-filled from `recommendedCount[0]`), anchor (x, y), Stamp/Cancel/✕/Esc. Matches the Designer's existing dark-theme CSS variables. |
+| Stamp logic — `_Stamp` block (~170 lines) | `tools/npc-designer.js` | ✅ `_stampOpen()` populates selects, `_stampSyncDesc()` live-updates description + count hint on archetype change, `_stampApply()` builds each NPC by (a) deep-cloning `archetype.defaults`, (b) grid-spreading positions 3-wide-by-N-tall from the anchor, (c) rotating `emoji` from `emojiPool`, (d) jittering `barkInterval` by ±`barkIntervalJitter`, (e) substituting `{n}` in `idPattern`/`namePattern` using a per-archetype suffix counter that surveys `_state.byId` to skip existing numbers, (f) running each through `SchemaValidator` and collecting rejects. Confirm-before-merge gate shows built + rejected counts. Re-renders floor chips + NPC list and closes the panel on success. |
+
+**Smoke test baseline**:
+
+- `node --check tools/npc-designer.js` → clean
+- `node --check tools/generate-archetype-sidecar.js` → clean
+- `node --check tools/validate-archetypes.js` → clean
+- `node tools/generate-archetype-sidecar.js` → `wrote tools/archetype-registry.js (9 archetypes, 10167 bytes)`
+- `node tools/validate-archetypes.js` → PASS 9/9
+- End-to-end stamp pipeline harness (each archetype × 3 stamps → 27 NPCs → schema) → 27/27 pass, 0 rejects
+- `sh -n tools/.githooks/pre-commit` → clean
+
+**Known limitations / follow-ups**:
+
+- Position conflict detection isn't built in — stamp writes `(ax+i%3, ay+i/3)` regardless of whether those tiles are walkable or already occupied. Authors verify placement visually on the editor's per-floor picker after stamping. Adding a floor-grid-aware collision pre-check is future work (needs the Designer to load `tools/floor-data.js` for the target floor, which it already does for the minimap — straightforward extension).
+- Archetypes themselves aren't hand-editable in the Designer — `archetype-registry.json` is the source of truth and edited manually. A future "Archetype Studio" could slot in as a sibling tool if real authoring demand surfaces; for DOC-110 the jam-scope answer is "9 archetypes is enough, open the JSON if you need a tenth."
+- `dialoguePool` strings in archetypes reference entries that must exist in `data/barks/en.js` (or wherever the bark pool is defined). Validation of pool existence is P2 Bark Workbench scope — today a typo in `dialoguePool` passes schema but fires empty at runtime.
 
 ### Phase 2 — Bark Workbench (1 day)
 
@@ -449,14 +546,201 @@ Once P4/P5/P6 ship their own dedicated editors, the three stub tabs in the Desig
 
 > **Note**: Phase 3 is independent of Phase 1 (no schema dependency). Both consume Phase 0's output. Run in parallel to compress Wave 3 entry.
 
-| Task | File | Est. |
-|------|------|------|
-| Add verb-node layer toggle + pin rendering to blockout-visualizer | modify | 1h |
-| Author 6 template stamps in `tools/verb-node-templates.json` | NEW | 1h |
-| Stamper tool + click-to-place handlers | modify | 1h |
-| Round-trip to `engine/verb-nodes.js` (authored) + `tools/verb-node-overrides/*.json` (procgen) | modify | 1h |
+**Revised sequencing (2026-04-17):** the original 4-task list was written
+before the Phase 0 Ch.5 NPC cutover pattern proved out. P3 has been
+resliced into three chapters that mirror the NPC path (retire-inline →
+JSON source of truth → generated sidecar → seed loader → stamper UI on
+top). Ch.0 shipped 2026-04-17.
 
-**Deliverable**: Drop a `town_square` stamp on Floor 1 and its 6 nodes register — no JSON hand-edit.
+#### Ch.0 — Data Foundation ✅ **SHIPPED 2026-04-17**
+
+Retire the ~150-line inline `_registerBuiltinNodes()` block in
+`engine/verb-nodes.js`; make `data/verb-nodes.json` the sole source of
+truth for hand-authored floors (depth 1-2); depth ≥3 continues to
+auto-derive via `engine/dungeon-verb-nodes.js`.
+
+| Task | File | Status |
+|------|------|--------|
+| `data/verb-nodes.json` — extract 60 nodes across 6 floors from the inline block | NEW | ✅ |
+| `tools/verb-node-schema.json` — JSON-Schema Draft-07 subset (9 node types, 7 factions) | NEW | ✅ |
+| `tools/generate-verb-node-schema-sidecar.js` — mirrors `generate-schema-sidecar.js` | NEW | ✅ |
+| `tools/verb-node-schema.js` — generated sidecar for browser tooling under `file://` | gen | ✅ |
+| `tools/extract-verb-nodes.js` — JSON normaliser + `data/verb-nodes.js` sidecar emit | NEW | ✅ |
+| `tools/validate-verb-nodes.js` — schema check + unique-id + same-tile collision guard | NEW | ✅ |
+| `engine/verb-node-seed.js` — loader IIFE populating VerbNodes.register() at boot | NEW | ✅ |
+| Retire inline `_registerBuiltinNodes()` in `engine/verb-nodes.js` | modify | ✅ |
+| `index.html` — load `data/verb-nodes.js` + `engine/verb-node-seed.js` after core | modify | ✅ |
+| `tools/.githooks/pre-commit` §1c — validate+regen on `data/verb-nodes.json` or schema stage | modify | ✅ |
+| Node smoke test — 60 nodes register, `findById()` returns faction-bearing entries | verify | ✅ |
+
+**Verification**: `node tools/validate-verb-nodes.js` → *PASS — 60
+node(s) across 6 floor(s)*. Boot smoke test logs
+`[VerbNodeSeed] Populated 60 spatial node(s) across 6 floor(s) from
+data/verb-nodes.json`. Negative test with an injected bad-enum +
+duplicate-id fails the validator (2 issues) as expected.
+
+**Size delta**: `engine/verb-nodes.js` 257 → 113 lines (−144).
+**Cutover pattern parity**: mirrors Phase 0 Ch.5 NPC cutover
+(inline retirement + JSON sole-source + sync-XHR/sidecar loader).
+
+#### Ch.1 — Template Registry ✅ **SHIPPED 2026-04-17**
+
+Six starter templates covering the major spatial patterns in the live
+60-node corpus. Each template is a relative cluster keyed by `{dx, dy}`
+offsets from an author-picked anchor; faction-parametric templates
+(`faction_post`, `guard_checkpoint`) expose `factionSlots` with sensible
+defaults that the Ch.2 stamper will prompt for at apply time.
+
+| Task | File | Status |
+|------|------|--------|
+| 6 templates (`town_square`, `soup_kitchen_congregation`, `faction_post`, `market_row`, `guard_checkpoint`, `dungeon_rest_ring`) in `tools/verb-node-templates.json` | NEW | ✅ |
+| `tools/generate-verb-node-template-sidecar.js` — sidecar emit + `_meta.templateCount`/`generatedAt` refresh | NEW | ✅ |
+| `tools/verb-node-templates.js` — generated sidecar for browser tooling | gen | ✅ |
+| `tools/validate-verb-node-templates.js` — structural (unique ids, unique suffix within template, dx/dy bounds, factionSlot declarations) + synthesized-stamp schema check against `tools/verb-node-schema.json` | NEW | ✅ |
+| `tools/.githooks/pre-commit` §1d — validate+regen on template JSON stage (blocks on violation) | modify | ✅ |
+| Node stamp-simulation smoke test — 6 scenarios × 26 nodes, faction slots resolve to `tide`/`foundry`/`admiralty`, every resulting node passes the per-node schema | verify | ✅ |
+
+**Verification**: `node tools/validate-verb-node-templates.js` →
+*PASS — 6 template(s), 26 node(s) total, all synthesized stamps pass
+tools/verb-node-schema.json*. Stamp-simulation harness exercises every
+template with realistic prefixes (`promenade_east`, `garrison_slum`,
+`lantern_tide`, `boardwalk_a`, `border_alpha`, `crypt_lvl2`) and
+confirms `{prefix}_{suffix}` ids, coord translation, and default-faction
+resolution all round-trip cleanly. Negative test (injected unknown
+type + undeclared factionSlot + duplicate suffix on `town_square`)
+surfaces 3 issues as expected.
+
+**Template shape**:
+
+```
+{
+  id:            "<template_id>",
+  displayName:   "<UI label>",
+  category:      "civic" | "faction" | "commerce" | "nested_dungeon",
+  description:   "<author context>",
+  anchorDescription: "<which tile the anchor represents>",
+  recommendedBiomes: [ "<biome>"... ],
+  factionSlots:  [{ slot, label, default }, ...],   // empty when non-parametric
+  nodes: [
+    { suffix, type, dx, dy, factionSlot? }, ...
+  ]
+}
+```
+
+**Node count by template**: town_square 6 | soup_kitchen_congregation 5
+| faction_post 2 | market_row 5 | guard_checkpoint 3 | dungeon_rest_ring 5.
+
+#### Ch.2 — BO-V Layer ✅ **SHIPPED 2026-04-17**
+
+Browser-based verb-node stamper integrated into the Blockout Visualizer.
+An author toggles a `🛠 Nodes` toolbar button (or Shift+N), picks a
+template from the dropdown (or switches to Single mode + a type), and
+clicks the grid to place nodes. Collision guard + id-uniquing matches
+the Ch.0 validator rules. Save writes the full payload shape back to
+`data/verb-nodes.json` via the File System Access API (or falls back to
+a download), where the pre-commit Ch.0 hook regenerates the sidecar on
+next stage.
+
+| Task | File | Status |
+|------|------|--------|
+| `tools/js/bv-verb-nodes.js` — render layer + toolbar toggle + click-to-place + template dropdown + faction-slot picker + per-floor node list | NEW | ✅ |
+| `tools/blockout-visualizer.html` — load `data/verb-nodes.js` + `tools/verb-node-templates.js` + `js/bv-verb-nodes.js` sidecars | modify | ✅ |
+| `tools/js/MODULES.md` — register module #23 with LOC + deps + monkey-patch note | modify | ✅ |
+| `tools/check-budgets.js` — dedicated budget row (warn 750 / fail 950, matching `bv-meta-editor.js` pattern) | modify | ✅ |
+| Save path — direct FS-API write to `data/verb-nodes.json` when `_dataDirHandle` granted; graceful fallback to Downloads | impl | ✅ |
+| Round-trip contract — `buildJsonPayload()` output shape matches `tools/extract-verb-nodes.js` emit; validator PASS on stamped output | verify | ✅ |
+| Optional `tools/verb-node-overrides/*.json` per-floor overrides for procgen dungeon tweaks | NEW | ✅ (Ch.2 stretch — see below) |
+
+**Verification**: Headless smoke test (`VN.applyTemplate('town_square',
+40, 20)` on floor 1) placed 6 nodes / skipped 0; `buildJsonPayload()`
+produced 66 total nodes across 6 floors which the Ch.0 validator
+(`tools/validate-verb-nodes.js`) accepts without modification.
+Faction-slot resolution confirmed on `guard_checkpoint` (defaults
+`tide`/`admiralty`; override `{left:'foundry', right:'pinkerton'}`
+substitutes correctly). Collision guard rejects same-tile duplicates
+with a toast. Pre-commit gate sweep green (8 pre-existing FAILs
+unchanged; new module in WARN at 847 LOC).
+
+**Module architecture**: Self-contained IIFE attaching to global `VN`.
+Monkey-patches `draw` (appends `renderLayer()` for node dots + glyphs)
+and `selectFloor` (refreshes panel on floor switch). Capture-phase
+`mousedown` + `contextmenu` on `#canvas-wrap` preempts the
+`bv-interaction` paint handler when `_mode !== 'off'`. Public API:
+`list`, `floors`, `stats`, `templates`, `addNode`, `removeNodeAt`,
+`nodeAt`, `applyTemplate`, `buildJsonPayload`, `saveToFs`,
+`requestDataDir`, `togglePanel`, `setMode`, `setPendingTemplate`,
+`render`.
+
+**Deliverable realised**: Drop a `town_square` stamp on Floor 1 and its
+6 nodes register — no JSON hand-edit. Save writes
+`data/verb-nodes.json` directly; pre-commit regenerates the sidecar;
+next boot picks them up via `engine/verb-node-seed.js`.
+
+#### Ch.2 stretch — Per-floor overrides for procgen dungeons ✅ **SHIPPED 2026-04-17**
+
+Lets authors tweak the `DungeonVerbNodes.populate()` auto-derivation
+(depth≥3) without hand-editing `data/verb-nodes.json` (which is
+reserved for hand-authored depth 1-2 floors). One JSON file per
+floor under `tools/verb-node-overrides/`, filename-matches-floorId
+enforced by the validator. Three ops per file — `add`, `remove`,
+`replace` — applied inside `DungeonVerbNodes.populate()` before
+the list is handed to `VerbNodes.register()`.
+
+| Task | File | Status |
+|------|------|--------|
+| `tools/verb-node-overrides-schema.json` — Draft-07 schema (9 node-type enum, 7-faction enum, patch semantics for `replace[]`) | NEW | ✅ |
+| `tools/generate-verb-node-overrides-schema-sidecar.js` — emits schema sidecar for browser tooling | NEW | ✅ |
+| `tools/verb-node-overrides-schema.js` — generated sidecar (`window.VERB_NODE_OVERRIDES_SCHEMA`) | gen | ✅ |
+| `tools/verb-node-overrides/README.md` — authoring guide, op semantics, pipeline diagram | NEW | ✅ |
+| `tools/verb-node-overrides/2.2.1.json` — real Hero's Wake B1 example (Tide faction_post add + rest_spot remove) | NEW | ✅ |
+| `tools/extract-verb-node-overrides.js` — scans `tools/verb-node-overrides/*.json`, normalises, emits bundle sidecar | NEW | ✅ |
+| `data/verb-node-overrides.js` — generated bundle sidecar (`window.VERB_NODE_OVERRIDES_DATA`) | gen | ✅ |
+| `tools/validate-verb-node-overrides.js` — schema check + filename↔floorId↔`_meta.floorId` three-way match + add-id uniqueness + add/remove overlap rejection + replace-overlap rejection | NEW | ✅ |
+| `engine/verb-node-overrides-seed.js` — Layer 1 IIFE exposing `VerbNodeOverrides.apply(floorId, nodes) → nodes'` | NEW | ✅ |
+| `engine/dungeon-verb-nodes.js` — hook call before `VerbNodes.register(...)` so overrides patch the auto-derived list | modify | ✅ |
+| `index.html` — load bundle sidecar + overrides seed + (newly added) `engine/dungeon-verb-nodes.js` script tag itself | modify | ✅ |
+| `tools/.githooks/pre-commit` §1e — validate+regen on `tools/verb-node-overrides/*.json` or schema stage | modify | ✅ |
+| Node smoke test — 4 scenarios covering no-op passthrough, live override (add+remove), synthetic replace+contested, duplicate-add guard | verify | ✅ |
+
+**Verification**:
+`node tools/validate-verb-node-overrides.js` → *PASS — 1 file(s), 2 op(s)
+validated against tools/verb-node-overrides-schema.json*.
+`node tools/extract-verb-node-overrides.js` → bundle with 1 floor / 2 ops
+emitted to `data/verb-node-overrides.js`.
+`node tools/smoke-verb-node-overrides.js` → *PASS — 4 scenarios covered*:
+(1) no-override floor returns identity array,
+(2) live `2.2.1.json` removes `dvn_2.2.1_rest_4_4` + adds
+`wake_b1_tide_post(faction_post, tide)`,
+(3) synthetic bundle exercises `replace[]` for both type+faction
+change and isolated `contested: true` patch while preserving
+untouched fields + coordinates,
+(4) duplicate-add id against an already-derived node is skipped
+with a console warning.
+Negative validation test (filename ≠ `_meta.floorId` + duplicate
+add-id + add∩remove overlap) surfaces 4 issues as expected. Bug
+caught during build: the `0 is falsy` pitfall on the
+`seenAdd[id] = 0` → `if (seenAdd[id])` pattern was using truthiness;
+switched to `in` checks so index 0 is no longer silently unique.
+
+**Op semantics** (applied in order inside `DungeonVerbNodes.populate`
+before `VerbNodes.register` is called):
+`replace` mutates `type`/`faction`/`contested` on matching ids
+(coords intentionally non-patchable — move = remove+add);
+`remove` drops ids from the auto-derived list (silent no-op on
+non-existent ids so overrides can target eventual-consistency
+auto-scan output); `add` appends new nodes with id-collision
+guard against the surviving set.
+
+**Runtime failure mode**: if the sidecar doesn't load (missing
+file, CORS under odd file:// configs), `VerbNodeOverrides.apply()`
+becomes an identity function and `DungeonVerbNodes.populate`
+registers its auto-derived list unchanged — no crash, no log spam.
+
+**Also fixed in passing**: `engine/dungeon-verb-nodes.js` had no
+`<script src>` tag in `index.html` (it was referenced by
+`floor-manager.js` via `typeof` guard but never actually loaded at
+runtime). The override-stretch PR adds it — dungeon verb-node
+auto-derivation now ships for real.
 
 ### Phase 4 — Archetype Studio (1.5 days)
 
@@ -645,6 +929,14 @@ engine/
 ---
 
 **Document Version**: 1.1
+**Revised**: 2026-04-17 (v1.13 — **Phase 3 Ch.2 stretch — Per-floor overrides for procgen dungeons shipped**: New per-floor override layer lets authors tweak the `DungeonVerbNodes.populate()` auto-derivation (depth ≥3) without hand-editing `data/verb-nodes.json`. One JSON file per floor under `tools/verb-node-overrides/{floorId}.json`, filename-matches-floorId enforced. Three ops per file — `replace` (patch type/faction/contested on matching ids, coords non-patchable), `remove` (drop ids from the auto-derived list, silent no-op on non-existent), `add` (append new nodes with id-collision guard). Full pipeline: `tools/verb-node-overrides-schema.json` (Draft-07) → `tools/generate-verb-node-overrides-schema-sidecar.js` → `tools/verb-node-overrides-schema.js` (window.VERB_NODE_OVERRIDES_SCHEMA) → authored JSON files → `tools/validate-verb-node-overrides.js` (schema + three-way filename/floorId/`_meta.floorId` match + add-id uniqueness + add∩remove overlap rejection + replace-overlap rejection) → `tools/extract-verb-node-overrides.js` (scan + normalise + emit bundle) → `data/verb-node-overrides.js` (window.VERB_NODE_OVERRIDES_DATA) → `engine/verb-node-overrides-seed.js` (Layer 1 IIFE exposing `VerbNodeOverrides.apply(floorId, nodes) → nodes'`) → `engine/dungeon-verb-nodes.js` hook in `populate()` before `VerbNodes.register()`. Pre-commit §1e validates + regenerates on stage. Starter content: `tools/verb-node-overrides/2.2.1.json` — Hero's Wake B1 gets a Tide `faction_post` added at (5,7) and the auto-derived `dvn_2.2.1_rest_4_4` removed (supports reanimated-friendly tutorial combat per DOC-110 §15 reveal). Smoke baseline: 4-scenario headless harness (no-op passthrough / live override / synthetic replace+contested / duplicate-add guard) PASS; negative validation test with filename-mismatch + duplicate-add + add∩remove overlap surfaces 4 issues as expected. Bug caught and fixed during build: `seenAdd[id] = 0` then `if (seenAdd[id])` used truthiness — switched to `in` checks so index 0 is no longer silently unique. **Also fixed in passing**: `engine/dungeon-verb-nodes.js` was referenced by `floor-manager.js` via `typeof` guard but never actually loaded at runtime (no `<script src>` tag in `index.html`) — this PR adds the script tag, so dungeon verb-node auto-derivation now ships for real. **Phase 3 complete including stretch.** Next actionable parallel tracks: P2 Bark Workbench, P4 Archetype Studio, P5 Enemy Hydrator.)
+**Revised**: 2026-04-17 (v1.12 — **Phase 3 Ch.2 BO-V Verb-Node Stamper Layer shipped**: `tools/js/bv-verb-nodes.js` (847 LOC, registered as MODULES.md row #23) — self-contained IIFE attaching to global `VN` with a `🛠 Nodes` toolbar button (+ Shift+N shortcut) that opens an overlay panel with three modes (Off / Single / Stamp), a type picker (9 node types with color dots + glyphs), a template dropdown auto-populated from `window.VERB_NODE_TEMPLATES`, a faction-slot picker wired to each template's `factionSlots[]`, a per-floor node list with jump-on-click + dblclick-to-remove, and a Save button that writes `data/verb-nodes.json` directly via the File System Access API (with graceful download fallback). Monkey-patches `draw` (appends `renderLayer()` for per-node dots + glyphs) and `selectFloor` (refreshes panel on floor switch); capture-phase `mousedown` + `contextmenu` on `#canvas-wrap` preempts the `bv-interaction` paint handler when a placement mode is active. Collision guard + id-uniquing match the Ch.0 validator; `buildJsonPayload()` produces the exact shape `tools/extract-verb-nodes.js` emits (round-trip PASS through `tools/validate-verb-nodes.js`). Sidecars `data/verb-nodes.js` + `tools/verb-node-templates.js` loaded in `blockout-visualizer.html` before the module (3 new `<script>` tags). `tools/check-budgets.js` updated with dedicated row (warn 750 / fail 950, matching `bv-meta-editor.js` precedent); pre-commit gate sweep shows 8 pre-existing FAILs unchanged and this module in WARN. Headless smoke test (VN.applyTemplate('town_square', 40, 20) on floor 1) places 6/6 nodes with 0 skipped; resulting 66-node payload validates without modification. Optional `tools/verb-node-overrides/*.json` per-floor procgen overrides deferred as Ch.2 stretch. **Phase 3 complete.** P2 Bark Workbench + P4 Archetype Studio remain the next actionable parallel tracks.)
+**Revised**: 2026-04-17 (v1.11 — **Phase 3 Ch.1 Template Registry shipped**: `tools/verb-node-templates.json` with 6 starter templates — `town_square` (6 nodes: bonfire + 2 benches + noticeboard + 2 shops), `soup_kitchen_congregation` (5 nodes: 2 soup_kitchens + 2 benches + notice), `faction_post` (2 nodes: faction_post + work_station, `post` faction slot), `market_row` (5 nodes: 4 shops at +0/+6/+12/+18 east + central notice), `guard_checkpoint` (3 nodes: work_station + flanking faction_posts with `left`/`right` slots), `dungeon_rest_ring` (5 nodes: bonfire + 4 rest_spots in a cross) — 26 template nodes total. Templates use `{dx, dy}` offsets from an author-picked anchor, `factionSlots: [{slot, label, default}]` for parametric factions, and `{prefix}_{suffix}` id construction. Added `tools/generate-verb-node-template-sidecar.js` (emits `tools/verb-node-templates.js` + refreshes `_meta.templateCount` + `_meta.generatedAt` in-place), `tools/validate-verb-node-templates.js` (unique template ids, unique node suffix within each template, dx/dy bounds [-255,255], factionSlot-declaration check, synthesized-stamp schema validation against `tools/verb-node-schema.json`), `tools/.githooks/pre-commit` §1d (validate-then-regen on stage). Smoke baseline: 6/6 templates × 26/26 nodes all schema-clean; stamp-simulation harness exercises realistic prefixes (promenade_east, garrison_slum, lantern_tide, boardwalk_a, border_alpha, crypt_lvl2) with faction slots resolving to tide/foundry/admiralty. Negative test (injected unknown type + undeclared factionSlot + duplicate suffix) surfaces 3 issues as expected. Pattern parity with Phase 1.1.2 archetype registry. **Phase 3 Ch.2 (BO-V verb-node stamper UI)** now unblocked.)
+**Revised**: 2026-04-17 (v1.10 — **Phase 3 Ch.0 Data Foundation shipped**: inline `_registerBuiltinNodes()` retired from `engine/verb-nodes.js` (257 → 113 lines, −144). `data/verb-nodes.json` is now the sole source of truth for hand-authored spatial nodes (60 nodes across 6 floors — 0, 1, 1.1, 1.2, 2, 3); depth ≥3 continues to auto-derive via `engine/dungeon-verb-nodes.js`. Added `tools/verb-node-schema.json` (Draft-07 subset — 9 node-type enum: bonfire/well/bench/shop_entrance/bulletin_board/faction_post/work_station/rest_spot/soup_kitchen; 7-faction enum; unique-id + same-tile collision guards in the validator), `tools/generate-verb-node-schema-sidecar.js`, `tools/extract-verb-nodes.js` (JSON normaliser with deterministic sort + sidecar emit), `tools/validate-verb-nodes.js` (schema + structural preflight), `engine/verb-node-seed.js` (IIFE loader — prefers `window.VERB_NODES_DATA` sidecar, falls back to sync XHR; mirrors `NpcSeed` pattern from Phase 0 Ch.5), `tools/.githooks/pre-commit` §1c (validator-then-regen block — blocks commit on schema violation, auto-regens sidecars on JSON/schema stage). Smoke baseline: Node harness boots all 60 nodes, `findById('lantern_soup')` + `findById('garrison_admiralty_post')` round-trip with faction intact; negative test (injected bad enum + duplicate id) correctly fails with 2 issues. Cutover pattern parity with Phase 0 Ch.5 (inline retirement + JSON sole-source + sidecar-or-XHR loader). **Phase 3 Ch.1 (template registry)** and **Ch.2 (BO-V verb-node layer)** unblocked.)
+**Revised**: 2026-04-17 (v1.9.3 — Phase 1.1.2 Archetype Registry + Stamp UI shipped: `tools/archetype-registry.json` (9 archetypes, 3 categories — faction_background / ambient_context / interactive_scaffold — derived from a histogram of the live 45-NPC roster) + `tools/archetype-registry.js` sidecar + `tools/generate-archetype-sidecar.js` generator + `tools/validate-archetypes.js` (validates every archetype's `defaults` against `actor-schema.json`'s `npcActor` branch) + pre-commit §1b guard (validator-then-regen, blocks on violation). "📚 Stamp" overlay panel in the Designer with archetype dropdown, live description, target floor, count (pre-filled from `recommendedCount`), anchor x/y, Esc-to-close. `_Stamp` JS block (~170 lines) clones defaults, rotates emoji from `emojiPool`, jitters bark by `barkIntervalJitter`, substitutes `{n}` with a collision-aware suffix counter, grid-spreads positions, schema-validates each stamp, confirm-gated merge. Smoke baseline: 9/9 archetypes × 3 stamps = 27/27 schema-pass. **All P1.1 deltas now closed.**)
+**Revised**: 2026-04-17 (v1.9.2 — Phase 1.1.1 Post-P1.1 follow-ups shipped: (1) `tools/.githooks/pre-commit` now auto-regenerates + stages `tools/actor-schema.js` whenever `tools/actor-schema.json` is in the staged set — closes the "remember to regen the sidecar" tech debt surfaced in §1.1 Known limitations. (2) CSV/JSON import in the Designer: new "📥 Import" button, hidden file input, ~260-line `_Import` block in `tools/npc-designer.js` covering bundle-JSON / flat-array-JSON / RFC-4180-ish CSV parsing, schema-validated per-row with `SchemaValidator`, batch-wide collision resolution (overwrite vs rename). Node smoke baseline: 45/45 live NPCs round-trip through both JSON modes; fabricated CSV fixture parses with quoted-comma + doubled-quote escapes intact. Bulk "add from archetype" stamps remain deferred → P1.1.2 candidate.)
+**Revised**: 2026-04-17 (v1.9.1 — Ch.5 follow-up doc sweep: `docs/NPC_SYSTEM_ROADMAP.md` §4.3, §9.2, §9.4 code sample, and §cross-refs updated to reference `data/npcs.json` + `NpcSeed.populate()` as the live path; `docs/SPRITE_COMMISSIONING_MAP.md` §236 "Known limitation" block renamed to "Round-trip status" and marked resolved. Follow-ups ledger in §Phase 0 Ch.5 updated with ✅/⏳ checkmarks.)
+**Revised**: 2026-04-17 (v1.9 — Phase 1.1 Schema Validation shipped: `tools/schema-validator.js` (Draft-07 subset, ~340 lines, vanilla JS) + `tools/actor-schema.js` sidecar (via `tools/generate-schema-sidecar.js`) + `tools/validate-npcs-preflight.js` Node harness; `_download()` in the Designer now validates every NPC against the schema and surfaces failures via confirm-with-override; pre-flight run caught two schema bugs — `patrolPoints maxItems:2` → 16, and missing `stack`/`sprites` definitions on `npcActor` — and both are fixed. Baseline 45/45 NPCs pass.)
 **Revised**: 2026-04-17 (v1.8 — Phase 0 Chapter 5 shipped: inline `_registerBuiltinPopulations()` retired from `engine/npc-system.js`; `data/npcs.json` is the sole runtime source of truth; `tools/extract-npcs.js` rewritten as a JSON→sidecar normaliser preserving `stack` + `sprites`; `scanNpcSystemJs()` dead code removed from `tools/npc-cli.js`)
 **Revised**: 2026-04-17 (v1.7 — Phase 1.2 Sprite Commissioning Authoring shipped: `_StackEditor` + `_SpriteEditor` on Identity tab; new optional `stack` / `sprites` fields on NPC records; manifest-fragment export)
 
@@ -654,4 +946,4 @@ engine/
 **Revised**: 2026-04-16 (v1.3 — Phase 0 Chapter 4 shipped, schema v1.1.0; Phase 1+ unblocked)
 **Revised**: 2026-04-16 (v1.2 — cross-roadmap dependency audit linked + Phase 0 Chapter 4 added)
 **Created**: 2026-04-16
-**Status**: Phase 0 Ch.1–5 ✅ shipped (all inline fallbacks retired); Phase 1 MVP ✅ shipped; P2 (Bark Workbench) + P3 (Verb-Node Stamper) + P4 (Dialogue Workbench) unblocked and can begin in parallel
+**Status**: Phase 0 Ch.1–5 ✅ shipped (all inline fallbacks retired); Phase 1 MVP ✅ shipped; Phase 1.1 Schema Validation ✅ shipped; Phase 1.1.1 Post-P1.1 follow-ups ✅ shipped; Phase 1.1.2 Archetype Registry + Stamp UI ✅ shipped; **Phase 3 Ch.0 Data Foundation ✅ shipped** (inline `_registerBuiltinNodes()` retired, `data/verb-nodes.json` sole source of truth, 60 nodes across 6 hand-authored floors); **Phase 3 Ch.1 Template Registry ✅ shipped** (6 starter templates, 26 template nodes, validator + sidecar generator + pre-commit guard); **Phase 3 Ch.2 BO-V Verb-Node Stamper Layer ✅ shipped** (`tools/js/bv-verb-nodes.js` 847 LOC, template dropdown + faction-slot picker + per-floor node list + FS-API save, round-trip through Ch.0 validator PASS); **Phase 3 Ch.2 stretch — per-floor overrides ✅ shipped** (tools/verb-node-overrides/* authoring surface + validator + bundle sidecar + runtime seed + DungeonVerbNodes hook + pre-commit §1e; also added the missing `<script src="engine/dungeon-verb-nodes.js">` tag in index.html that had been silently absent). **All P1.1 deltas closed. Phase 3 fully complete including stretch.** P2 (Bark Workbench) + P4 (Archetype Studio) + P5 (Enemy Hydrator) unblocked and can begin in parallel

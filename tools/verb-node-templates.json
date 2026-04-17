@@ -1,0 +1,278 @@
+{
+  "_meta": {
+    "generatedFrom": "tools/verb-node-templates.json (hand-authored)",
+    "generatedAt": "2026-04-17T19:54:19.475Z",
+    "generator": "tools/generate-verb-node-template-sidecar.js (DOC-110 P3 Ch.1)",
+    "schemaRef": "tools/verb-node-schema.json (per-node shape) + §Template shape below",
+    "note": "Reusable spatial-node stamps. Each template is a relative cluster — the stamper translates {dx, dy} offsets from an anchor tile the author picks on the grid. Faction-parametric templates expose `factionSlots` that the stamper prompts for at apply time. IDs are built as `{prefix}_{suffix}` where `prefix` is the instance label the author types (e.g. `promenade_east`) and `suffix` comes from each node entry. Consumed by the future BO-V verb-node layer (DOC-110 P3 Ch.2).",
+    "templateCount": 6
+  },
+  "templates": [
+    {
+      "id": "town_square",
+      "displayName": "Town Square",
+      "category": "civic",
+      "description": "Central gathering ring: bonfire at anchor, benches east/west, noticeboard north, two shop entrances on the south approach. Derived from the Promenade bonfire cluster.",
+      "anchorDescription": "Center tile of the square — the bonfire goes here.",
+      "recommendedBiomes": [
+        "exterior",
+        "plaza",
+        "promenade"
+      ],
+      "factionSlots": [],
+      "nodes": [
+        {
+          "suffix": "bonfire",
+          "type": "bonfire",
+          "dx": 0,
+          "dy": 0
+        },
+        {
+          "suffix": "bench_w",
+          "type": "bench",
+          "dx": -3,
+          "dy": 0
+        },
+        {
+          "suffix": "bench_e",
+          "type": "bench",
+          "dx": 3,
+          "dy": 0
+        },
+        {
+          "suffix": "notice",
+          "type": "bulletin_board",
+          "dx": 0,
+          "dy": -3
+        },
+        {
+          "suffix": "shop_w",
+          "type": "shop_entrance",
+          "dx": -2,
+          "dy": 3
+        },
+        {
+          "suffix": "shop_e",
+          "type": "shop_entrance",
+          "dx": 2,
+          "dy": 3
+        }
+      ]
+    },
+    {
+      "id": "soup_kitchen_congregation",
+      "displayName": "Soup Kitchen Congregation",
+      "category": "civic",
+      "description": "Eat-verb anchor with two soup_kitchen tiles side-by-side (serving line) plus flanking benches and a notice. Derived from the Garrison slum soup_a/soup_b pair.",
+      "anchorDescription": "Left edge of the serving line (soup_a). soup_b lands at +1 east.",
+      "recommendedBiomes": [
+        "slum",
+        "garrison",
+        "nested_dungeon"
+      ],
+      "factionSlots": [],
+      "nodes": [
+        {
+          "suffix": "soup_a",
+          "type": "soup_kitchen",
+          "dx": 0,
+          "dy": 0
+        },
+        {
+          "suffix": "soup_b",
+          "type": "soup_kitchen",
+          "dx": 1,
+          "dy": 0
+        },
+        {
+          "suffix": "bench_w",
+          "type": "bench",
+          "dx": -2,
+          "dy": 0
+        },
+        {
+          "suffix": "bench_e",
+          "type": "bench",
+          "dx": 3,
+          "dy": 0
+        },
+        {
+          "suffix": "notice",
+          "type": "bulletin_board",
+          "dx": 1,
+          "dy": -2
+        }
+      ]
+    },
+    {
+      "id": "faction_post",
+      "displayName": "Faction Post",
+      "category": "faction",
+      "description": "Single faction-locked duty anchor with an adjacent work_station. Faction slot prompted at stamp time. Derived from the tide_post / foundry_post / admiralty_post triplet on the Promenade.",
+      "anchorDescription": "The faction_post tile (banner / ensign location).",
+      "recommendedBiomes": [
+        "exterior",
+        "interior",
+        "nested_dungeon"
+      ],
+      "factionSlots": [
+        {
+          "slot": "post",
+          "label": "Patrol faction",
+          "default": "admiralty"
+        }
+      ],
+      "nodes": [
+        {
+          "suffix": "post",
+          "type": "faction_post",
+          "dx": 0,
+          "dy": 0,
+          "factionSlot": "post"
+        },
+        {
+          "suffix": "station",
+          "type": "work_station",
+          "dx": 1,
+          "dy": 0
+        }
+      ]
+    },
+    {
+      "id": "market_row",
+      "displayName": "Market Row",
+      "category": "commerce",
+      "description": "Four shop_entrances along a north facade with a central bulletin_board. Derived from the Lantern Row 6-shop arcade (subset — grows by template composition).",
+      "anchorDescription": "West-most shop entrance. Other shops tile east at +6/+12/+18.",
+      "recommendedBiomes": [
+        "exterior",
+        "commercial",
+        "boardwalk"
+      ],
+      "factionSlots": [],
+      "nodes": [
+        {
+          "suffix": "shop_a",
+          "type": "shop_entrance",
+          "dx": 0,
+          "dy": 0
+        },
+        {
+          "suffix": "shop_b",
+          "type": "shop_entrance",
+          "dx": 6,
+          "dy": 0
+        },
+        {
+          "suffix": "shop_c",
+          "type": "shop_entrance",
+          "dx": 12,
+          "dy": 0
+        },
+        {
+          "suffix": "shop_d",
+          "type": "shop_entrance",
+          "dx": 18,
+          "dy": 0
+        },
+        {
+          "suffix": "notice",
+          "type": "bulletin_board",
+          "dx": 9,
+          "dy": 3
+        }
+      ]
+    },
+    {
+      "id": "guard_checkpoint",
+      "displayName": "Guard Checkpoint",
+      "category": "faction",
+      "description": "Two-faction contested corridor: opposing faction_posts flanking a central work_station. Use for border crossings, contested district lines, or Act-2 contested overlays.",
+      "anchorDescription": "Center tile — the work_station / checkpoint booth.",
+      "recommendedBiomes": [
+        "exterior",
+        "interior",
+        "nested_dungeon"
+      ],
+      "factionSlots": [
+        {
+          "slot": "left",
+          "label": "West-side faction",
+          "default": "tide"
+        },
+        {
+          "slot": "right",
+          "label": "East-side faction",
+          "default": "admiralty"
+        }
+      ],
+      "nodes": [
+        {
+          "suffix": "station",
+          "type": "work_station",
+          "dx": 0,
+          "dy": 0
+        },
+        {
+          "suffix": "post_west",
+          "type": "faction_post",
+          "dx": -2,
+          "dy": 0,
+          "factionSlot": "left"
+        },
+        {
+          "suffix": "post_east",
+          "type": "faction_post",
+          "dx": 2,
+          "dy": 0,
+          "factionSlot": "right"
+        }
+      ]
+    },
+    {
+      "id": "dungeon_rest_ring",
+      "displayName": "Dungeon Rest Ring",
+      "category": "nested_dungeon",
+      "description": "Bonfire at centre with four rest_spots in a cross pattern. For depth>=3 overrides when the auto-derivation from DungeonVerbNodes doesn't produce enough rest satisfiers. Derived from the Garrison cot cluster.",
+      "anchorDescription": "Bonfire tile — the ring centre.",
+      "recommendedBiomes": [
+        "nested_dungeon",
+        "crypt",
+        "cavern"
+      ],
+      "factionSlots": [],
+      "nodes": [
+        {
+          "suffix": "bonfire",
+          "type": "bonfire",
+          "dx": 0,
+          "dy": 0
+        },
+        {
+          "suffix": "cot_n",
+          "type": "rest_spot",
+          "dx": 0,
+          "dy": -2
+        },
+        {
+          "suffix": "cot_s",
+          "type": "rest_spot",
+          "dx": 0,
+          "dy": 2
+        },
+        {
+          "suffix": "cot_w",
+          "type": "rest_spot",
+          "dx": -2,
+          "dy": 0
+        },
+        {
+          "suffix": "cot_e",
+          "type": "rest_spot",
+          "dx": 2,
+          "dy": 0
+        }
+      ]
+    }
+  ]
+}

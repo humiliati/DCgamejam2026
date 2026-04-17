@@ -41,6 +41,15 @@ var TorchState = (function () {
   // TORCH_LIT/TORCH_UNLIT values match the saved state.
   var _loaded = {};
 
+  // ── ReadinessCalc event-bus bridge (DOC-109 Phase 1 wiring) ─────
+  // Torch extinguish/fill/hydrate all feed TorchState.getReadiness,
+  // which ReadinessCalc rolls into the core score. Microtask-debounced.
+  function _markDirty(floorId) {
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.markDirty) {
+      ReadinessCalc.markDirty(floorId);
+    }
+  }
+
   // ── Fuel classification helpers ──────────────────────────────────
 
   function isTorchFuel(itemId) {
@@ -199,6 +208,7 @@ var TorchState = (function () {
         }
       }
     }
+    _markDirty(floorId);
   }
 
   function _nearSet(x, y, posSet, radius) {
@@ -263,6 +273,7 @@ var TorchState = (function () {
       : { state: 'empty', item: null };
 
     _setUnlit(torch, grid);
+    _markDirty(floorId);
     return true;
   }
 
@@ -320,6 +331,7 @@ var TorchState = (function () {
     }
 
     _setUnlit(torch, grid);
+    _markDirty(floorId);
     return { extinguished: true, slotsRuined: ruined, slotsSurvived: survived };
   }
 
@@ -341,6 +353,7 @@ var TorchState = (function () {
       // Non-fuel junk (bandage, cloth, etc.)
       torch.slots[slotIdx] = { state: 'fuel_dry', item: { id: itemId, junk: true } };
     }
+    _markDirty(floorId);
     return true;
   }
 
@@ -355,6 +368,7 @@ var TorchState = (function () {
     if (torch.slots[slotIdx].state !== 'fuel_dry') return false;
 
     torch.slots[slotIdx].state = 'fuel_hydrated';
+    _markDirty(floorId);
     return true;
   }
 
@@ -441,6 +455,7 @@ var TorchState = (function () {
   function clearFloor(floorId) {
     delete _floors[floorId];
     delete _loaded[floorId];
+    _markDirty(floorId);
   }
 
   /**
@@ -449,6 +464,9 @@ var TorchState = (function () {
   function reset() {
     _floors = {};
     _loaded = {};
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.invalidate) {
+      ReadinessCalc.invalidate();
+    }
   }
 
   // ── Save/Load (Track B M2.3b) ────────────────────────────────────
@@ -510,6 +528,7 @@ var TorchState = (function () {
     if (!any) return;
     _floors[floorId] = restored;
     _loaded[floorId] = true;
+    _markDirty(floorId);
   }
 
   // ── Public API ───────────────────────────────────────────────────

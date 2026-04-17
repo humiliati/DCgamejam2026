@@ -1,12 +1,15 @@
 {
+  "_comment": "Stamp library for Blockout Visualizer. Built-in stamps have 'builtin:true' and a 'category' tag. User-captured stamps are appended by bv-stamp-library.js.",
+
   "tunnel_corridor_8": {
-    "w": 8,
-    "h": 3,
+    "w": 8, "h": 3,
     "cells": [
       [0, 0, 94, 95, 94, 95, 0, 0],
       [0, 0,  0,  0,  0,  0, 0, 0],
       [0, 0, 95, 94, 95, 94, 0, 0]
     ],
+    "category": "corridor",
+    "builtin": true,
     "meta": {
       "sourceFloor": "scaffold",
       "at": { "x": 0, "y": 0 },
@@ -15,11 +18,12 @@
     }
   },
   "porthole_wall_4": {
-    "w": 7,
-    "h": 1,
+    "w": 7, "h": 1,
     "cells": [
       [96, 95, 96, 95, 96, 95, 96]
     ],
+    "category": "wall",
+    "builtin": true,
     "meta": {
       "sourceFloor": "scaffold",
       "at": { "x": 0, "y": 0 },
@@ -28,8 +32,7 @@
     }
   },
   "alcove_flank_3": {
-    "w": 5,
-    "h": 5,
+    "w": 5, "h": 5,
     "cells": [
       [95, 0, 0, 0, 95],
       [ 0, 0, 0, 0,  0],
@@ -37,11 +40,172 @@
       [ 0, 0, 0, 0,  0],
       [95, 0, 0, 0, 95]
     ],
+    "category": "room",
+    "builtin": true,
     "meta": {
       "sourceFloor": "scaffold",
       "at": { "x": 0, "y": 0 },
       "createdAt": "2026-04-15T00:00:00Z",
       "origin": "Slice C4 seed — stampAlcoveFlank(count=3, spacing=2, depth=1)"
+    }
+  },
+
+  "sprint_entry_vestibule": {
+    "w": 7, "h": 7,
+    "cells": [
+      [ 1,  1,  1,  1,  1,  1,  1],
+      [ 1,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  1],
+      [ 4,  0,  0, 13,  0,  0,  0],
+      [ 1,  0,  0,  0,  0,  0,  1],
+      [ 1,  0, 30,  0,  0, 30,  1],
+      [ 1,  1,  1,  1,  1,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint dungeon entry vestibule — DOOR_EXIT west, SPAWN center, torches flanking, open east wall for corridor attach"
+    }
+  },
+
+  "sprint_t_junction": {
+    "w": 7, "h": 7,
+    "cells": [
+      [ 1,  1,  0,  0,  0,  1,  1],
+      [ 1,  1,  0,  0,  0,  1,  1],
+      [ 0,  0,  0,  0,  0,  0,  0],
+      [ 0,  0,  0,  0,  0,  0,  0],
+      [ 0,  0,  0,  0,  0,  0,  0],
+      [ 1,  1,  0,  0,  0,  1,  1],
+      [ 1,  1,  0,  0,  0,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint T-junction — 3-way fork for tree-structured mazes. Open north/south/east, closed corners."
+    }
+  },
+
+  "sprint_dead_end_chest": {
+    "w": 5, "h": 5,
+    "cells": [
+      [ 1,  1,  1,  1,  1],
+      [ 1,  0,  0,  0,  1],
+      [ 0,  0,  0,  0,  1],
+      [ 1,  0,  7,  0,  1],
+      [ 1,  1,  1,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint dead-end room with chest — red herring or fetch target. Open west for corridor attach."
+    }
+  },
+
+  "sprint_trap_corridor": {
+    "w": 9, "h": 3,
+    "cells": [
+      [ 1,  1,  1,  1,  1,  1,  1,  1,  1],
+      [ 0,  0, 97,  0, 99,  0, 97,  0,  0],
+      [ 1,  1,  1,  1,  1,  1,  1,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint trapped corridor — pressure plates + tripwire alternating. Slows the player during timed runs."
+    }
+  },
+
+  "sprint_fetch_chamber": {
+    "w": 9, "h": 9,
+    "cells": [
+      [ 1,  1,  1,  1,  1,  1,  1,  1,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  1,  0, 30,  0,  1,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  0,  1],
+      [ 0,  0, 30,  0, 20,  0, 30,  0,  0],
+      [ 1,  0,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  1,  0, 30,  0,  1,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  1,  1,  1,  1,  1,  1,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint fetch target chamber — COLLECTIBLE center, 4 torches, corner pillars, open west for approach. The farthest room in the tree."
+    }
+  },
+
+  "sprint_breakable_shortcut": {
+    "w": 5, "h": 3,
+    "cells": [
+      [ 1,  1, 11,  1,  1],
+      [ 0,  0,  0,  0,  0],
+      [ 1,  1, 11,  1,  1]
+    ],
+    "category": "sprint",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "sprint-template",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Sprint breakable shortcut — corridor with breakable walls top/bottom for observant players to smash through and save time on the return trip."
+    }
+  },
+
+  "torch_ring_5x5": {
+    "w": 5, "h": 5,
+    "cells": [
+      [ 0,  0, 30,  0,  0],
+      [ 0,  0,  0,  0,  0],
+      [30,  0,  0,  0, 30],
+      [ 0,  0,  0,  0,  0],
+      [ 0,  0, 30,  0,  0]
+    ],
+    "category": "lighting",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "scaffold",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "4-torch ring at compass points — overlay on any 5x5+ room for even lighting"
+    }
+  },
+
+  "room_8x8_basic": {
+    "w": 8, "h": 8,
+    "cells": [
+      [ 1,  1,  1,  1,  1,  1,  1,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  1],
+      [ 0,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  0],
+      [ 1,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  0,  0,  0,  0,  0,  0,  1],
+      [ 1,  1,  1,  1,  1,  1,  1,  1]
+    ],
+    "category": "room",
+    "builtin": true,
+    "meta": {
+      "sourceFloor": "scaffold",
+      "at": { "x": 0, "y": 0 },
+      "createdAt": "2026-04-17T00:00:00Z",
+      "origin": "Basic 8x8 room — open left-center + right-center for corridor attachment"
     }
   }
 }

@@ -96,6 +96,48 @@
     .nd-header .status.dirty { color: var(--warn); }
     .nd-header .status.err   { color: var(--err); }
 
+    /* ─── Stamp overlay panel ─── */
+    .nd-stamp-panel {
+      position: absolute;
+      top: 48px;
+      right: 12px;
+      width: 380px;
+      background: var(--bg-side);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+      z-index: 50;
+      display: flex; flex-direction: column; gap: 8px;
+      font-size: 12px;
+    }
+    .nd-stamp-panel.hidden { display: none; }
+    .nd-stamp-header { display: flex; align-items: center; border-bottom: 1px solid var(--divider); padding-bottom: 6px; }
+    .nd-stamp-header .spacer { flex: 1; }
+    .nd-stamp-header button { background: transparent; border: 0; color: var(--text-em); cursor: pointer; font-size: 14px; }
+    .nd-stamp-row { display: flex; align-items: center; gap: 8px; }
+    .nd-stamp-row label { width: 96px; color: var(--text-dim); flex-shrink: 0; }
+    .nd-stamp-row input, .nd-stamp-row select {
+      background: var(--bg-input); border: 1px solid var(--border-mid);
+      color: var(--text-em); padding: 4px 6px;
+      font-family: inherit; font-size: 12px; border-radius: 3px;
+      flex: 1;
+    }
+    .nd-stamp-row input:focus, .nd-stamp-row select:focus { outline: 1px solid var(--accent); }
+    .nd-stamp-hint { color: var(--accent-dim); font-size: 11px; }
+    .nd-stamp-desc { color: var(--text-dim); font-style: italic; font-size: 11px; line-height: 1.4; }
+    .nd-stamp-actions { justify-content: flex-end; }
+    .nd-stamp-actions .spacer { flex: 1; }
+    .nd-stamp-actions button {
+      background: var(--btn-bg); border: 1px solid var(--border-mid);
+      color: var(--text-em); padding: 4px 10px; cursor: pointer; border-radius: 3px;
+      font-family: inherit; font-size: 12px;
+    }
+    .nd-stamp-actions button.primary {
+      background: var(--btn-primary-bg); border-color: var(--btn-primary-border); color: var(--btn-primary-fg);
+    }
+    .nd-stamp-actions button:hover { background: var(--btn-bg-hover); }
+
     /* ─── Three-pane container ─── */
     .nd-container {
       display: flex;
@@ -743,9 +785,48 @@
     <span class="sub">DOC-110 P1 · MVP</span>
     <div class="spacer"></div>
     <button id="btn-new-npc">＋ New NPC</button>
+    <button id="btn-import" title="Import NPCs from JSON (bundle or flat array) or CSV">📥 Import</button>
+    <button id="btn-stamp" title="Stamp N NPCs from an archetype template onto a floor">📚 Stamp</button>
     <button id="btn-revert" title="Discard all unsaved edits">Revert</button>
     <button id="btn-download" class="primary" title="Download data/npcs.json (save over the original)">Download npcs.json</button>
     <span id="status-indicator" class="status">loading…</span>
+    <input id="import-file-input" type="file" accept=".json,.csv,application/json,text/csv" style="display:none">
+  </div>
+
+  <!-- Stamp overlay panel — hidden by default, anchored below header -->
+  <div id="stamp-panel" class="nd-stamp-panel hidden">
+    <div class="nd-stamp-header">
+      <strong>📚 Stamp from archetype</strong>
+      <span class="spacer"></span>
+      <button id="btn-stamp-close" title="Close (Esc)">✕</button>
+    </div>
+    <div class="nd-stamp-row">
+      <label>Archetype</label>
+      <select id="stamp-archetype"></select>
+    </div>
+    <div class="nd-stamp-row">
+      <span class="nd-stamp-desc" id="stamp-desc"></span>
+    </div>
+    <div class="nd-stamp-row">
+      <label>Target floor</label>
+      <select id="stamp-floor"></select>
+    </div>
+    <div class="nd-stamp-row">
+      <label>Count</label>
+      <input id="stamp-count" type="number" min="1" max="25" value="3">
+      <span class="nd-stamp-hint" id="stamp-count-hint">recommended 3–7</span>
+    </div>
+    <div class="nd-stamp-row">
+      <label>Anchor (x, y)</label>
+      <input id="stamp-x" type="number" min="0" max="127" value="0" style="width:60px">
+      <input id="stamp-y" type="number" min="0" max="127" value="0" style="width:60px">
+      <span class="nd-stamp-hint">auto-spread right + down from anchor</span>
+    </div>
+    <div class="nd-stamp-row nd-stamp-actions">
+      <span class="spacer"></span>
+      <button id="btn-stamp-cancel">Cancel</button>
+      <button id="btn-stamp-apply" class="primary">Stamp</button>
+    </div>
   </div>
 
   <!-- Main container ─────────────────────────────────────── -->
@@ -1129,6 +1210,13 @@
 
   <!-- Optional: NpcComposer for live composer-preview fallback values -->
   <script src="../engine/npc-composer.js"></script>
+
+  <!-- DOC-110 Phase 1.1 schema validation: schema sidecar + validator.
+       Loaded before the application so _download() can call
+       SchemaValidator.validateActor() against window.ACTOR_SCHEMA. -->
+  <script src="actor-schema.js"></script>
+  <script src="schema-validator.js"></script>
+  <script src="archetype-registry.js"></script>
 
   <!-- Application code -->
   <script src="npc-designer.js"></script>

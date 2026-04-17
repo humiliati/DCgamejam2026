@@ -233,11 +233,17 @@ series first, ship, then add `torso_walk` next week.
 An NPC that never fights (a vendor) leaves the combat row empty; the
 Hero's Wake dungeon NPCs fill all four.
 
-### Known limitation
+### Round-trip status (resolved 2026-04-17)
 
-`tools/extract-npcs.js` currently strips `stack` and `sprites` via its
-whitelist `cleanDef()`. That's harmless today because the engine's
-inline `_registerBuiltinPopulations()` doesn't emit them. When Phase 0
-Chapter 5 retires the inline fallback and `data/npcs.json` becomes the
-sole source of truth, cleanDef must preserve both fields — tracked on
-the Ch.5 closeout ticket in NPC_TOOLING_ROADMAP §4.1 Phase 1.2.
+`tools/extract-npcs.js` preserves both `stack` and `sprites` end-to-end
+as of DOC-110 Phase 0 Chapter 5. The normaliser's `normaliseStack()`
+and `normaliseSprites()` helpers validate slot/intent keys and frame
+shape on write, and `engine/npc-seed.js::_toRuntimeDef` forwards both
+fields verbatim to `NpcSystem.register()` on read. `data/npcs.json` is
+the sole runtime source of truth — the inline
+`_registerBuiltinPopulations()` fallback was retired in the same
+commit window. DOC-110 Phase 1.1 (2026-04-17) added `npcStack` /
+`npcSprites` definitions to `tools/actor-schema.json` so both fields
+are now schema-validated in the NPC Designer save path. See
+NPC_TOOLING_ROADMAP (DOC-110) §4.1 Phase 1.2 + Phase 0 Chapter 5 +
+Phase 1.1.

@@ -25,6 +25,15 @@ var TrapRearm = (function () {
 
   function _key(x, y) { return x + ',' + y; }
 
+  // ── ReadinessCalc event-bus bridge (DOC-109 Phase 1 wiring) ─────
+  // Trap consume/rearm both move the trap readiness contribution to
+  // ReadinessCalc. Microtask-debounced on the receiving side.
+  function _markDirty(floorId) {
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.markDirty) {
+      ReadinessCalc.markDirty(floorId);
+    }
+  }
+
   // ── Floor lifecycle ─────────────────────────────────────────────
 
   /**
@@ -90,6 +99,7 @@ var TrapRearm = (function () {
     _consumed[floorId][key] = true;
     // Reset rearmed flag — trap must be re-armed again for readiness
     delete _rearmed[floorId][key];
+    _markDirty(floorId);
   }
 
   /**
@@ -125,6 +135,7 @@ var TrapRearm = (function () {
     grid[y][x] = TILES.TRAP;
     _rearmed[floorId][_key(x, y)] = true;
     _lastRearmTime = now;
+    _markDirty(floorId);
     return true;
   }
 
@@ -181,6 +192,7 @@ var TrapRearm = (function () {
     delete _consumed[floorId];
     delete _rearmed[floorId];
     delete _total[floorId];
+    _markDirty(floorId);
   }
 
   /**
@@ -191,6 +203,9 @@ var TrapRearm = (function () {
     _rearmed  = {};
     _total    = {};
     _lastRearmTime = 0;
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.invalidate) {
+      ReadinessCalc.invalidate();
+    }
   }
 
   // ── Save/Load (Track B M2.3d) ───────────────────────────────────
@@ -232,6 +247,7 @@ var TrapRearm = (function () {
     _consumed[floorId] = _copyKeys(snap.consumed);
     _rearmed[floorId]  = _copyKeys(snap.rearmed);
     _total[floorId]    = snap.total | 0;
+    _markDirty(floorId);
   }
 
   return Object.freeze({

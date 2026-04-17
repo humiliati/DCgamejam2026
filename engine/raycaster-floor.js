@@ -121,6 +121,12 @@ var RaycasterFloor = (function () {
   // ray lands in and used to paint dirt accumulation. Without a grid,
   // falls back to flat per-tile blood tint.
   //
+  // Hose decal (Rung 2C): after the grime branch, the same per-tile
+  // cache feeds a sub-tile hose stripe sampled from HoseDecal's 16×16
+  // bitmap. Cyan-green paint at the stripe body; the head tile gets a
+  // brighter tint. Bitmap returns null when HoseDecal's feature flag
+  // (_RUNG_2C_RENDER) is off, cleanly bypassing the blend.
+  //
   // WATER tiles bypass texture sampling entirely and write the
   // contract's waterColor (fog-blended, distance-darkened) so water
   // reads as deep ocean even under warm amber fog palettes.
@@ -176,6 +182,22 @@ var RaycasterFloor = (function () {
 
     var bloodFloorId = _s ? _s.bloodFloorId() : null;
 
+    // ── Hose decal snapshot (Rung 2C) ──────────────────────────────
+    // Per-frame pull of hose floor id, head visit index, pressure mult,
+    // and palette constants. getBitmap() returns null when HoseDecal's
+    // _RUNG_2C_RENDER feature flag is off, so the per-pixel block below
+    // short-circuits cleanly without needing a separate guard.
+    var _hasHoseDecal = (typeof HoseDecal !== 'undefined');
+    var hoseFloorId = _hasHoseDecal ? bloodFloorId : null;
+    var hoseHeadIdx = hoseFloorId ? HoseDecal.getHeadVisitIndex(hoseFloorId) : -1;
+    var hosePressure = (typeof HoseState !== 'undefined' && HoseState.getPressureMult)
+      ? HoseState.getPressureMult() : 1.0;
+    var HOSE_RES = _hasHoseDecal ? HoseDecal.HOSE_RES : 16;
+    var HOSE_R = 40, HOSE_G = 220, HOSE_B = 200;         // cyan-green stripe color
+    var HOSE_HEAD_R = 140, HOSE_HEAD_G = 255, HOSE_HEAD_B = 230;  // head pulse tint
+    var HOSE_AGE_FALLOFF_STEPS = 30;   // hose fades to floor over 30 visits behind head
+    var HOSE_MIN_BRIGHT = 0.28;        // floor brightness past the falloff tail
+
     // ── Dynamic flickering light contribution (per-pixel add) ──────
     // Pull the per-frame snapshot from Lighting. Each entry carries its
     // flicker-adjusted peak, warm RGB, radius, shape, and direction.
@@ -224,9 +246,13 @@ var RaycasterFloor = (function () {
       // getBlood() does string concat + hash lookup — expensive per-pixel.
       // Cache the result and only re-query when the tile coordinate changes.
       // PW-1: also caches floor grime grid for sub-tile tinting.
+      // Rung 2C: also caches hose decal bitmap + age multiplier + head flag.
       var prevTileGX = -1, prevTileGY = -1;
       var cachedBlood = 0;
       var cachedFloorGrime = null;  // PW-1: { data: Uint8Array, res: number } or null
+      var cachedHoseBmp = null;      // Rung 2C: { data: Uint8Array, visitIndexAtPaint, crossCount }
+      var cachedHoseAgeMul = 1.0;    // Rung 2C: age-based brightness multiplier
+      var cachedHoseIsHead = false;  // Rung 2C: head-pulse tint flag
       var _hasGrimeGrid = (typeof GrimeGrid !== 'undefined');
 
       // ── PERF-1: Row-level dynamic-light culling ───────────────────
@@ -331,24 +357,43 @@ var RaycasterFloor = (function () {
         var g = curTexData[texIdx + 1] * bright;
         var b = curTexData[texIdx + 2] * bright;
 
-        // ── Dirt/grime tint — blood overlay or sub-tile grime grid ──
-        // Per-tile cache: only re-query when tile coordinate changes.
-        // PW-1: when GrimeGrid exists for this tile, use subcell grime
-        // tint instead of flat blood level. No grid = old blood fallback.
+        // ── Per-tile cache invalidation (grime + hose) ──
+        // Re-query the per-tile artifacts only when the floor ray crosses
+        // a tile boundary. Both grime and hose pay here; the per-pixel
+        // blocks below read the cached values without calling into
+        // CleaningSystem / GrimeGrid / HoseDecal per pixel.
         if (bloodFloorId && typeof CleaningSystem !== 'undefined') {
           if (tileGX !== prevTileGX || tileGY !== prevTileGY) {
             cachedBlood = CleaningSystem.getBlood(tileGX, tileGY, bloodFloorId);
             cachedFloorGrime = _hasGrimeGrid
               ? GrimeGrid.get(bloodFloorId, tileGX, tileGY) : null;
+            // Rung 2C: hose bitmap lookup. Returns null when no visits or
+            // when HoseDecal._RUNG_2C_RENDER is false (A/B perf harness).
+            cachedHoseBmp = hoseFloorId
+              ? HoseDecal.getBitmap(hoseFloorId, tileGX, tileGY) : null;
+            cachedHoseAgeMul = 1.0;
+            cachedHoseIsHead = false;
+            if (cachedHoseBmp) {
+              var hAge = hoseHeadIdx - cachedHoseBmp.visitIndexAtPaint;
+              if (hAge < 0) hAge = 0;  // clamp in case of re-seeding
+              var hAgeLerp = 1 - Math.min(1, hAge / HOSE_AGE_FALLOFF_STEPS);
+              cachedHoseAgeMul = HOSE_MIN_BRIGHT + (1 - HOSE_MIN_BRIGHT) * hAgeLerp;
+              cachedHoseIsHead = (hAge === 0);
+            }
             prevTileGX = tileGX;
             prevTileGY = tileGY;
           }
+        }
 
+        // UV within tile = fractional part of world floor coords.
+        // Hoisted out of the grime branch so the hose block below can reuse.
+        var floorFracX = floorX - tileGX;
+        var floorFracY = floorY - tileGY;
+
+        // ── Dirt/grime tint — blood overlay or sub-tile grime grid ──
+        if (bloodFloorId && typeof CleaningSystem !== 'undefined') {
           if (cachedFloorGrime) {
             // PW-1 §5.3: sub-tile grime tint (4×4 floor grid)
-            // UV within tile = fractional part of world floor coords
-            var floorFracX = floorX - tileGX;
-            var floorFracY = floorY - tileGY;
             var fgRes = cachedFloorGrime.res;
             var fgSubX = Math.floor(floorFracX * fgRes);
             var fgSubY = Math.floor(floorFracY * fgRes);
@@ -369,6 +414,32 @@ var RaycasterFloor = (function () {
             r = r * (1 - bloodAlpha) + 140 * bloodAlpha;
             g = g * (1 - bloodAlpha * 1.3);
             b = b * (1 - bloodAlpha * 1.3);
+          }
+        }
+
+        // ── Hose decal (Rung 2C) — floor-painting visit stripe ──
+        // Bitmap is HOSE_RES×HOSE_RES×2 interleaved (coverage, intensity).
+        // Coverage gates the blend; intensity mirrors coverage in 2C (2E
+        // reserves channel 1 for live pressure-field propagation). Age
+        // and kink multipliers are per-tile cached above.
+        if (cachedHoseBmp) {
+          var hx = Math.floor(floorFracX * HOSE_RES);
+          var hy = Math.floor(floorFracY * HOSE_RES);
+          if (hx >= HOSE_RES) hx = HOSE_RES - 1;
+          if (hy >= HOSE_RES) hy = HOSE_RES - 1;
+          if (hx < 0) hx = 0;
+          if (hy < 0) hy = 0;
+          var hIdx = (hy * HOSE_RES + hx) * 2;
+          var hCov = cachedHoseBmp.data[hIdx];
+          if (hCov > 0) {
+            var hStrength = (hCov / 255) * cachedHoseAgeMul * hosePressure;
+            if (hStrength > 1) hStrength = 1;
+            var hrC = cachedHoseIsHead ? HOSE_HEAD_R : HOSE_R;
+            var hgC = cachedHoseIsHead ? HOSE_HEAD_G : HOSE_G;
+            var hbC = cachedHoseIsHead ? HOSE_HEAD_B : HOSE_B;
+            r = r * (1 - hStrength) + hrC * hStrength;
+            g = g * (1 - hStrength) + hgC * hStrength;
+            b = b * (1 - hStrength) + hbC * hStrength;
           }
         }
 

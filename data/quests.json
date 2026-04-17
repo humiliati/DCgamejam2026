@@ -148,6 +148,72 @@
       "rewards": { "gold": 50, "items": [], "favor": { "bprd": 75, "jesuit": 25 }, "flags": { "side_watchman_roll_call_done": true } },
       "markerColor": null,
       "_notes": "npc -> floor -> floor -> flag(heroWakeArrival). Gated gateUnlocked=true."
+    },
+    {
+      "id": "side.1.3.1.cellar_fetch",
+      "kind": "side",
+      "title": "quest.sidequest.cellar_fetch.title",
+      "hook":  "quest.sidequest.cellar_fetch.hook",
+      "summary": "quest.sidequest.cellar_fetch.summary",
+      "giver": { "npcId": "cellar_resident", "floorId": "1.3" },
+      "prereq": { "flags": { "side_cellar_owner_mop_done": true }, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "npc",
+          "label": "quest.sidequest.cellar_fetch.step.1.label",
+          "target": { "anchor": { "type": "npc", "floorId": "1.3", "npcId": "cellar_resident" } },
+          "advanceWhen": { "kind": "npc", "npcId": "cellar_resident", "branch": "cellar_fetch_brief" } },
+        { "id": "step.2", "kind": "fetch",
+          "label": "quest.sidequest.cellar_fetch.step.2.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": {
+            "kind": "fetch",
+            "itemId": "ITM-042",
+            "floorId": "1.3.1",
+            "timerMs": 75000,
+            "sentinelGraceMs": 12000,
+            "heroArchetype": "seeker"
+          } },
+        { "id": "step.3", "kind": "npc",
+          "label": "quest.sidequest.cellar_fetch.step.3.label",
+          "target": { "anchor": { "type": "npc", "floorId": "1.3", "npcId": "cellar_resident" } },
+          "advanceWhen": { "kind": "npc", "npcId": "cellar_resident", "branch": "cellar_fetch_complete" } }
+      ],
+      "rewards": { "gold": 60, "items": [], "favor": { "bprd": 50 }, "flags": { "side_cellar_fetch_done": true } },
+      "markerColor": "#e8a",
+      "_notes": "DOC-113 Phase B sprint sidequest. npc(brief) -> fetch(ITM-042, 75s timer, seeker hero) -> npc(complete). Gated behind cellar_owner_mop completion. Timer/hero data on step.2 consumed by QuestChain + HeroSystem at runtime (Phases C-D)."
+    },
+    {
+      "id": "side.2.2.1.wake_dispatch",
+      "kind": "side",
+      "title": "quest.sidequest.wake_dispatch.title",
+      "hook":  "quest.sidequest.wake_dispatch.hook",
+      "summary": "quest.sidequest.wake_dispatch.summary",
+      "giver": { "npcId": "watchpost_watchman", "floorId": "2.2" },
+      "prereq": { "flags": { "side_watchman_roll_call_done": true }, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "npc",
+          "label": "quest.sidequest.wake_dispatch.step.1.label",
+          "target": { "anchor": { "type": "npc", "floorId": "2.2", "npcId": "watchpost_watchman" } },
+          "advanceWhen": { "kind": "npc", "npcId": "watchpost_watchman", "branch": "wake_dispatch_brief" } },
+        { "id": "step.2", "kind": "fetch",
+          "label": "quest.sidequest.wake_dispatch.step.2.label",
+          "target": { "floorId": "2.2.1" },
+          "advanceWhen": {
+            "kind": "fetch",
+            "itemId": "ITM-061",
+            "floorId": "2.2.1",
+            "timerMs": 90000,
+            "sentinelGraceMs": 15000,
+            "heroArchetype": "crusader"
+          } },
+        { "id": "step.3", "kind": "npc",
+          "label": "quest.sidequest.wake_dispatch.step.3.label",
+          "target": { "anchor": { "type": "npc", "floorId": "2.2", "npcId": "watchpost_watchman" } },
+          "advanceWhen": { "kind": "npc", "npcId": "watchpost_watchman", "branch": "wake_dispatch_complete" } }
+      ],
+      "rewards": { "gold": 80, "items": [], "favor": { "bprd": 75, "jesuit": 25 }, "flags": { "side_wake_dispatch_done": true } },
+      "markerColor": "#e8a",
+      "_notes": "DOC-113 Phase B sprint sidequest #2. Harder: Hero's Wake B1, 90s timer, Crusader hero. Gated behind watchman_roll_call. BPRD document retrieval — ties into conspiracy layer."
     }
   ]
 }

@@ -1,7 +1,8 @@
 #!/bin/sh
 # ============================================================
 # tools/.githooks/pre-commit
-# File-size budget check (Pass 0.6).
+# Pass 0.6 — file-size budget check.
+# DOC-110 P1.1 follow-up — schema sidecar regeneration.
 # Install: git config core.hooksPath tools/.githooks
 # Skip:    git commit --no-verify
 # ============================================================
@@ -9,10 +10,170 @@ set -e
 
 repo_root="$(git rev-parse --show-toplevel)"
 if ! command -v node >/dev/null 2>&1; then
-  echo "[pre-commit] node not on PATH — skipping budget check" >&2
+  echo "[pre-commit] node not on PATH — skipping budget + schema checks" >&2
   exit 0
 fi
 
+# ── 1. Schema-sidecar auto-regen ────────────────────────────
+# When tools/actor-schema.json is in the staged set, regenerate
+# tools/actor-schema.js (the file:// sidecar consumed by
+# tools/npc-designer.html) and stage it alongside. This prevents
+# the JSON + JS pair from drifting out of sync, which would let a
+# schema edit land in a commit but leave the Designer running
+# against the old validator shape.
+#
+# Shape: AUTO-GENERATED — hand-edits to tools/actor-schema.js are
+# always wrong (see the header banner in the generated file).
+if git diff --cached --name-only | grep -qxF 'tools/actor-schema.json'; then
+  echo "[pre-commit] tools/actor-schema.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-schema-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Schema-sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-schema-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/tools/actor-schema.js"
+  echo "[pre-commit] tools/actor-schema.js regenerated + staged." >&2
+fi
+
+# ── 1b. Archetype-sidecar auto-regen ────────────────────────
+# Same pattern — keeps tools/archetype-registry.js in lockstep
+# with tools/archetype-registry.json. Also validates that every
+# archetype's `defaults` still passes the actor-schema npcActor
+# branch, so an archetype edit that violates the live schema
+# blocks the commit rather than silently shipping a bad stamp
+# template.
+if git diff --cached --name-only | grep -qxF 'tools/archetype-registry.json'; then
+  echo "[pre-commit] tools/archetype-registry.json staged — validating + regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/validate-archetypes.js"; then
+    echo "" >&2
+    echo "[pre-commit] Archetype validation FAILED." >&2
+    echo "  - Run manually: node tools/validate-archetypes.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  if ! node "$repo_root/tools/generate-archetype-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Archetype sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-archetype-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/tools/archetype-registry.js"
+  echo "[pre-commit] tools/archetype-registry.js regenerated + staged." >&2
+fi
+
+# ── 1c. Verb-node sidecar auto-regen ────────────────────────
+# Same pattern as §1/§1b — keeps data/verb-nodes.js in lockstep
+# with data/verb-nodes.json. Validator runs first so a schema
+# violation (unknown type enum, missing x/y, duplicate id, etc.)
+# blocks the commit before the sidecar picks up bad data.
+#
+# Shape: data/verb-nodes.js is AUTO-GENERATED — hand edits are
+# always wrong (see the header banner in the generated file).
+# Also regenerates the verb-node-schema sidecar when the schema
+# JSON itself is staged, so browser tooling stays in sync.
+if git diff --cached --name-only | grep -qxF 'tools/verb-node-schema.json'; then
+  echo "[pre-commit] tools/verb-node-schema.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-verb-node-schema-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node schema-sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-verb-node-schema-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/tools/verb-node-schema.js"
+  echo "[pre-commit] tools/verb-node-schema.js regenerated + staged." >&2
+fi
+
+if git diff --cached --name-only | grep -qxF 'data/verb-nodes.json'; then
+  echo "[pre-commit] data/verb-nodes.json staged — validating + regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/validate-verb-nodes.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node validation FAILED." >&2
+    echo "  - Run manually: node tools/validate-verb-nodes.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  if ! node "$repo_root/tools/extract-verb-nodes.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/extract-verb-nodes.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/verb-nodes.json" "$repo_root/data/verb-nodes.js"
+  echo "[pre-commit] data/verb-nodes.{json,js} regenerated + staged." >&2
+fi
+
+# ── 1d. Verb-node template sidecar auto-regen ──────────────
+# Same pattern as §1/§1b/§1c. Validator runs first so an authoring
+# mistake — unknown type, undeclared factionSlot, duplicate suffix,
+# out-of-bounds dx/dy — blocks the commit. Then the sidecar is
+# regenerated + staged alongside the JSON (the generator also
+# refreshes _meta.templateCount and _meta.generatedAt in-place so
+# hand-edits that forget to bump those never drift).
+if git diff --cached --name-only | grep -qxF 'tools/verb-node-templates.json'; then
+  echo "[pre-commit] tools/verb-node-templates.json staged — validating + regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/validate-verb-node-templates.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node template validation FAILED." >&2
+    echo "  - Run manually: node tools/validate-verb-node-templates.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  if ! node "$repo_root/tools/generate-verb-node-template-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node template sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-verb-node-template-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/tools/verb-node-templates.json" "$repo_root/tools/verb-node-templates.js"
+  echo "[pre-commit] tools/verb-node-templates.{json,js} regenerated + staged." >&2
+fi
+
+# ── 1e. Verb-node overrides auto-regen ─────────────────────
+# Same pattern as §1c/§1d. Validator runs first so an authoring
+# mistake (filename ≠ floorId, duplicate add/remove id, schema
+# violation) blocks the commit before the bundle picks up bad
+# data. Also handles the schema JSON itself — regenerate the
+# sidecar when tools/verb-node-overrides-schema.json is staged.
+if git diff --cached --name-only | grep -qxF 'tools/verb-node-overrides-schema.json'; then
+  echo "[pre-commit] tools/verb-node-overrides-schema.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-verb-node-overrides-schema-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node-overrides schema-sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-verb-node-overrides-schema-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/tools/verb-node-overrides-schema.js"
+  echo "[pre-commit] tools/verb-node-overrides-schema.js regenerated + staged." >&2
+fi
+
+if git diff --cached --name-only | grep -qE '^tools/verb-node-overrides/.+\.json$'; then
+  echo "[pre-commit] tools/verb-node-overrides/*.json staged — validating + regenerating bundle..." >&2
+  if ! node "$repo_root/tools/validate-verb-node-overrides.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node-overrides validation FAILED." >&2
+    echo "  - Run manually: node tools/validate-verb-node-overrides.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  if ! node "$repo_root/tools/extract-verb-node-overrides.js"; then
+    echo "" >&2
+    echo "[pre-commit] Verb-node-overrides bundle regen FAILED." >&2
+    echo "  - Run manually: node tools/extract-verb-node-overrides.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/verb-node-overrides.js"
+  echo "[pre-commit] data/verb-node-overrides.js regenerated + staged." >&2
+fi
+
+# ── 2. File-size budget check ───────────────────────────────
 node "$repo_root/tools/check-budgets.js" || {
   echo "" >&2
   echo "[pre-commit] File-size budget FAIL." >&2

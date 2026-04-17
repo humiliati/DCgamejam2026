@@ -44,13 +44,11 @@ var DebriefFeed = (function () {
   var INCINERATOR_ZONE   = 'debrief-incinerator';
 
   // ── DOC-107 Phase 3 — faction reputation strip ─────────────────
-  // Each entry is one expandable faction row appended after the
-  // buffs block in _renderUnified. The strip starts collapsed (no
-  // entries shown) — the first faction reveals via expandFaction()
-  // at the end of the dispatcher cinematic. Collapsing a faction
-  // hides its row but preserves favor/tier so re-expanding restores
-  // the bar in its current state.
-  var _factions = {};   // factionId → { favor, tier, expanded, justRevealed, justBumped, justTierCrossed }
+  // Per-faction row state lives in _categories.relationships.rows (see
+  // DOC-109 Phase 2 below). The legacy faction-only dict was migrated
+  // out because the relationships category will also hold 'npc:<id>'
+  // rows starting in Phase 6, and keeping two parallel state stores
+  // was the main source of bugs in the EyesOnly prototype.
   // Faction colors — matched to Biome Plan §19.1 suit alignment.
   // The internal ids are Street Chronicles codenames retained for
   // narrative ambiguity; the displayed colors read from their
@@ -102,6 +100,108 @@ var DebriefFeed = (function () {
     friendly:   'Friendly',
     allied:     'Allied',
     exalted:    'Exalted'
+  };
+
+  // ── DOC-109 Phase 3 — Readiness group display data ─────────────
+  // Dungeon-group metadata for the three ♠ ♣ ♦ hero-day contracts
+  // tracked by DungeonSchedule. Each group corresponds to a faction's
+  // biome palette (coral-teal ♠ / lamp-amethyst ♣ / brass-forge ♦)
+  // that matches FACTION_COLORS above, so the row tint feels like it
+  // belongs in the same widget family as the relationships rows.
+  //
+  // The groupId strings match DungeonSchedule's JAM_CONTRACTS entries
+  // ('club'/'spade'/'diamond'), so the ReadinessCalc 'group-score-change'
+  // event's `groupId` maps straight into this table without translation.
+  var GROUP_DATA = {
+    spade: {
+      label: 'Coral Cellars',
+      suit:  '\u2660', // ♠
+      tint:  '#5F9EA0' // coral-teal (matches mss)
+    },
+    club: {
+      label: 'Hero\u2019s Wake',
+      suit:  '\u2663', // ♣
+      tint:  '#6B5BA8' // lamp amethyst (matches jesuit)
+    },
+    diamond: {
+      label: 'Ironhold Depths',
+      suit:  '\u2666', // ♦
+      tint:  '#B87333' // brass (matches pinkerton)
+    }
+  };
+  // Deterministic render order (matches the ♠ ♣ ♦ print order).
+  var GROUP_ORDER = ['spade', 'club', 'diamond'];
+
+  // ── DOC-109 Phase 2 — category wrapper ─────────────────────────
+  // Two expandable categories ('readiness' and 'relationships') that
+  // collapse their rows into a single "most recently updated" summary
+  // line when closed, and fan out into all rows when open. Phase 2
+  // wires relationships only (readiness arrives in Phase 3).
+  //
+  // Row storage: rows[rowId] holds the per-subject data and animation
+  // flags. For relationships, rowId is namespaced as 'faction:<id>' to
+  // match the Phase 0 ReputationBar subject-kind scheme — Phase 6 will
+  // add 'npc:<id>' rows under the same category.
+  //
+  // Expansion state lives on the category, not on individual rows. The
+  // legacy expandFaction/collapseFaction surface delegates into the
+  // category so existing callers keep working unchanged.
+  var _categories = {
+    readiness: {
+      id:           'readiness',
+      label:        'Readiness',
+      rows:         {},         // rowId → row state (Phase 3)
+      order:        [],         // display order (Phase 3)
+      expanded:     false,
+      revealed:     false,
+      mostRecentId: null,
+      _lastUpdateAt: 0          // reserved for Phase 5 auto-retract
+    },
+    relationships: {
+      id:           'relationships',
+      label:        'Relationships',
+      rows:         {},         // rowId → { kind, subjectId, favor, tier, justRevealed, justBumped, justTierCrossed }
+      order:        [],
+      expanded:     false,
+      revealed:     false,
+      mostRecentId: null,
+      _lastUpdateAt: 0
+    }
+  };
+
+  // Parse a rowId of the form 'kind:subjectId' into its parts. Legacy
+  // callers pass a bare faction id (no ':'), which we map to 'faction:<id>'
+  // transparently so the migration is invisible upstream.
+  function _parseRowId(rowId) {
+    if (typeof rowId !== 'string' || !rowId) return { kind: '', subjectId: '' };
+    var colonAt = rowId.indexOf(':');
+    if (colonAt < 0) return { kind: 'faction', subjectId: rowId };
+    return { kind: rowId.slice(0, colonAt), subjectId: rowId.slice(colonAt + 1) };
+  }
+  function _makeRowId(kind, subjectId) { return kind + ':' + subjectId; }
+
+  // ── DOC-113 Phase C — Sprint timer state ─────────────────────────
+  // Populated via showTimer()/updateTimer() which subscribe to
+  // QuestChain's 'timer-*' event bus (wiring lives in Game.init).
+  // Rendered above the category strip when non-null.
+  //
+  // Shape when active:
+  //   { questId, totalMs, remainMs, pct, zone, paused, heroArchetype, heroName }
+  //
+  // zone is one of 'green' | 'yellow' | 'red' | 'expired'. heroName is
+  // the display label looked up from i18n on showTimer() so we don't
+  // have to re-resolve it every tick.
+  var _timerState = null;
+
+  // Archetype → hero display label for the expired message. Keys match
+  // the QuestChain.timer.heroArchetype values emitted in 'timer-start'.
+  // Wrapped in i18n.t() at render time so translators can override via
+  // 'quest.sprint.hero_name.<archetype>' keys when those land.
+  var _HERO_NAMES = {
+    seeker:   'The Seeker',
+    sentinel: 'The Sentinel',
+    pursuer:  'The Pursuer',
+    hunter:   'The Hunter'
   };
 
   // MOK avatar state
@@ -442,23 +542,22 @@ var DebriefFeed = (function () {
       }
     }
 
-    // ── Faction reputation strip (DOC-107 Phase 3) ──────────────
-    // Render only expanded factions. Collapsed rows are not in the DOM,
-    // so they cost zero render budget. Below readiness/buffs, above
-    // the feed tail divider — interior + dungeon visibility is gated
-    // upstream by Game (per scope clarification: HUD is the debrief
-    // feed; faction strip lives inside it, not under the HUD bar).
-    var factionIds = [];
-    for (var fid in _factions) {
-      if (_factions.hasOwnProperty(fid) && _factions[fid].expanded) factionIds.push(fid);
-    }
-    if (factionIds.length > 0) {
-      html += '<div class="df-faction-strip">';
-      for (var fi2 = 0; fi2 < factionIds.length; fi2++) {
-        html += _factionRow(factionIds[fi2], _factions[factionIds[fi2]]);
-      }
-      html += '</div>';
-    }
+    // ── Sprint timer (DOC-113 Phase C) ──────────────────────────
+    // Urgent-priority countdown row for fetch-kind quest steps. Sits
+    // ABOVE the category wrappers so the player never has to expand a
+    // category to see how long they have left. _timerState is null when
+    // no sprint dungeon is active; see showTimer()/updateTimer()/hideTimer().
+    if (_timerState) html += _renderTimerRow(_timerState);
+
+    // ── Category wrapper strip (DOC-109 Phase 2 + 3) ────────────
+    // Both categories share a single render path. Readiness lands
+    // first so the dungeon scorecard reads above the standing bars —
+    // "how clean is the place right now" before "how do people feel
+    // about you". Readiness gate self-reveals on first updateReadiness;
+    // Relationships gate opens via the dispatcher cinematic (Phase 4).
+    // Click the category head → toggleCategory(id).
+    html += _renderCategoryRow(_categories.readiness);
+    html += _renderCategoryRow(_categories.relationships);
 
     // Compact feed tail — last 2 events (avatar + 2-line event feed)
     if (_feedLog.length > 0) {
@@ -531,6 +630,199 @@ var DebriefFeed = (function () {
       '<span class="df-label">' + label + '</span>' +
       '<span' + pipsId + ' style="color:' + color + ';letter-spacing:2px;font-size:1.05em">' + pips + '</span>' +
       '</div>';
+  }
+
+  // ── DOC-109 Phase 2 — category render + toggle helpers ────────
+
+  // Render a category block. Returns '' when the category is not revealed.
+  // When collapsed, emits a single "most recent" summary row under the
+  // category head. When expanded, emits all rows in cat.order.
+  function _renderCategoryRow(cat) {
+    if (!cat || !cat.revealed) return '';
+
+    var chevron   = cat.expanded ? '\u25BE' : '\u25B8';  // ▾ vs ▸
+    var chevCls   = 'df-cat-chevron' + (cat.expanded ? ' df-cat-chev-open' : '');
+    var headId    = 'df-cat-head-' + cat.id;
+    var bodyId    = 'df-cat-body-' + cat.id;
+    var catCls    = 'df-category df-category-' + cat.id;
+    if (cat.expanded) catCls += ' df-category-expanded';
+
+    // Category header — always visible when revealed. Click toggles expand.
+    var head = '<div class="df-category-head" id="' + headId +
+               '" data-cat-id="' + cat.id + '" onclick="DebriefFeed.toggleCategory(\'' +
+               cat.id + '\')" role="button" tabindex="0">' +
+                 '<span class="' + chevCls + '">' + chevron + '</span>' +
+                 '<span class="df-cat-label">' + _escape(cat.label) + '</span>' +
+               '</div>';
+
+    var body = '';
+    if (cat.expanded) {
+      // Expanded: render every row in display order.
+      body = '<div class="df-category-body" id="' + bodyId + '">';
+      for (var i = 0; i < cat.order.length; i++) {
+        body += _renderRowByKind(cat, cat.order[i]);
+      }
+      body += '</div>';
+    } else if (cat.mostRecentId && cat.rows[cat.mostRecentId]) {
+      // Collapsed: render only the most-recently-updated row.
+      body = '<div class="df-cat-collapsed-row" id="' + bodyId + '">' +
+               _renderRowByKind(cat, cat.mostRecentId) +
+             '</div>';
+    }
+
+    return '<div class="' + catCls + '" data-cat-id="' + cat.id + '">' +
+             head + body +
+           '</div>';
+  }
+
+  // Dispatch a row render by kind. Faction rows go through the existing
+  // _factionRow helper so visual parity with the DOC-107 strip is exact.
+  // Phase 6 will add 'npc' dispatch here.
+  function _renderRowByKind(cat, rowId) {
+    var row = cat.rows[rowId];
+    if (!row) return '';
+    if (row.kind === 'faction') {
+      return _factionRow(row.subjectId, row);
+    }
+    if (row.kind === 'readiness') {
+      return _readinessRow(row.subjectId, row);
+    }
+    // Unknown kind — emit nothing rather than crashing.
+    return '';
+  }
+
+  // Mark a category as revealed (first-time reveal on next render).
+  function revealCategory(catId) {
+    var cat = _categories[catId];
+    if (!cat) return false;
+    cat.revealed = true;
+    if (_visible) render();
+    return true;
+  }
+
+  // Mark a category as expanded (shows full body). Also reveals it if
+  // it wasn't already — expanding an unrevealed category is a valid
+  // entry point (e.g. the dispatcher-cinematic reveal path).
+  function expandCategory(catId) {
+    var cat = _categories[catId];
+    if (!cat) return false;
+    cat.revealed = true;
+    cat.expanded = true;
+    if (_visible) render();
+    return true;
+  }
+
+  function collapseCategory(catId) {
+    var cat = _categories[catId];
+    if (!cat) return false;
+    cat.expanded = false;
+    if (_visible) render();
+    return true;
+  }
+
+  // Click-handler target from _renderCategoryRow. Flips expanded.
+  function toggleCategory(catId) {
+    var cat = _categories[catId];
+    if (!cat) return false;
+    cat.expanded = !cat.expanded;
+    if (_visible) render();
+    return cat.expanded;
+  }
+
+  // Get read-only category state (tests + save serialization).
+  function getCategoryState(catId) {
+    var cat = _categories[catId];
+    if (!cat) return null;
+    return {
+      id:           cat.id,
+      label:        cat.label,
+      expanded:     !!cat.expanded,
+      revealed:     !!cat.revealed,
+      mostRecentId: cat.mostRecentId,
+      order:        cat.order.slice()
+    };
+  }
+
+  // Write a single relationships-category row. Creates the row if it's
+  // new, updates favor/tier/animation flags otherwise, and moves the row
+  // to mostRecentId. Kind is 'faction' (Phase 2) or 'npc' (Phase 6).
+  function _setRelationshipRow(kind, subjectId, data) {
+    var cat = _categories.relationships;
+    var rowId = _makeRowId(kind, subjectId);
+    var existing = cat.rows[rowId];
+    var now = (typeof Date !== 'undefined') ? Date.now() : 0;
+
+    if (!existing) {
+      cat.rows[rowId] = {
+        kind:             kind,
+        subjectId:        subjectId,
+        favor:            (data && typeof data.favor === 'number') ? data.favor : 0,
+        tier:             (data && data.tier) || 'neutral',
+        expanded:         true,  // back-compat with getFactionState
+        justRevealed:     !!(data && data.justRevealed),
+        justBumped:       false,
+        justTierCrossed:  false
+      };
+      cat.order.push(rowId);
+    } else {
+      var prevFavor = existing.favor;
+      var prevTier  = existing.tier;
+      if (data && typeof data.favor === 'number') existing.favor = data.favor;
+      if (data && typeof data.tier === 'string')  existing.tier  = data.tier;
+      if (existing.favor > prevFavor) existing.justBumped = true;
+      if (existing.tier !== prevTier) existing.justTierCrossed = true;
+      if (data && data.justRevealed)  existing.justRevealed = true;
+    }
+
+    cat.mostRecentId   = rowId;
+    cat._lastUpdateAt  = now;
+    return cat.rows[rowId];
+  }
+
+  // ── DOC-109 Phase 3 — Readiness row write/update ───────────────
+
+  // Write a single readiness row (one per dungeon group). Creates the
+  // row on first call, updates score + animation flags on subsequent
+  // calls, bumps mostRecentId so the collapsed-state summary line
+  // always shows whichever group just moved. `meta` is optional and
+  // folds into the row — future callers can stash display overrides
+  // (label/suit/tint) for ad-hoc groups that aren't in GROUP_DATA.
+  function _setReadinessRow(groupId, coreScore, meta) {
+    var cat = _categories.readiness;
+    var rowId = _makeRowId('readiness', groupId);
+    var existing = cat.rows[rowId];
+    var now = (typeof Date !== 'undefined') ? Date.now() : 0;
+    var score = +coreScore;
+    if (!isFinite(score)) score = 0;
+
+    if (!existing) {
+      cat.rows[rowId] = {
+        kind:             'readiness',
+        subjectId:        groupId,
+        score:            score,
+        prevScore:        score,
+        label:            (meta && meta.label) || null,
+        suit:             (meta && meta.suit)  || null,
+        tint:             (meta && meta.tint)  || null,
+        justRevealed:     true,
+        justBumped:       false
+      };
+      cat.order.push(rowId);
+    } else {
+      var prevScore = existing.score;
+      existing.prevScore = prevScore;
+      existing.score     = score;
+      if (meta) {
+        if (meta.label) existing.label = meta.label;
+        if (meta.suit)  existing.suit  = meta.suit;
+        if (meta.tint)  existing.tint  = meta.tint;
+      }
+      if (score > prevScore) existing.justBumped = true;
+    }
+
+    cat.mostRecentId  = rowId;
+    cat._lastUpdateAt = now;
+    return cat.rows[rowId];
   }
 
   // ── DOC-107 Phase 3 — faction-row helpers ──────────────────────
@@ -617,24 +909,100 @@ var DebriefFeed = (function () {
     '</div>';
   }
 
+  // ── DOC-109 Phase 3 — readiness row renderer ───────────────────
+  // Mirrors _factionRow visual language: suit glyph (♠/♣/♦) in the
+  // classic card-suit color + biome-tinted label + progress bar.
+  // The bar fill clamps at 100% visually, but when the underlying
+  // score exceeds 1.0 a ★ accent overlays the end of the bar to
+  // match ReadinessCalc.getPercent()'s "142% ★" convention.
+  function _readinessRow(groupId, rdata) {
+    var meta = GROUP_DATA[groupId] || {};
+    var label = rdata.label || meta.label ||
+                _i18n('readiness.group.' + groupId + '.label', groupId.toUpperCase());
+    var suit  = rdata.suit  || meta.suit  || '';
+    var suitColor = SUIT_COLORS[suit] || '#888888';
+    var tint  = rdata.tint  || meta.tint  || '#888888';
+
+    var scoreNum = +rdata.score;
+    if (!isFinite(scoreNum)) scoreNum = 0;
+    var rawPct     = Math.round(scoreNum * 100);
+    var fillPct    = Math.max(0, Math.min(100, rawPct));
+    var overHealed = scoreNum > 1;
+    var pctLabel   = overHealed ? (rawPct + '% \u2605') : (rawPct + '%');
+
+    var classes = 'df-readiness-row';
+    if (rdata.justRevealed) classes += ' df-readiness-reveal';
+    if (rdata.justBumped)   classes += ' df-readiness-bump';
+    if (overHealed)         classes += ' df-readiness-overhealed';
+    rdata.justRevealed = false;
+    rdata.justBumped   = false;
+
+    var rowIdAttr   = ' id="df-rd-row-'   + groupId + '"';
+    var nameIdAttr  = ' id="df-rd-name-'  + groupId + '"';
+    var suitIdAttr  = ' id="df-rd-suit-'  + groupId + '"';
+    var pctIdAttr   = ' id="df-rd-pct-'   + groupId + '"';
+    var fillIdAttr  = ' id="df-rd-fill-'  + groupId + '"';
+    var starIdAttr  = ' id="df-rd-star-'  + groupId + '"';
+
+    var suitHtml = '';
+    if (suit) {
+      suitHtml = '<span class="df-readiness-suit"' + suitIdAttr +
+        ' style="color:' + suitColor + '">' + _escape(suit) + '</span>';
+    }
+    var starHtml = overHealed
+      ? '<span class="df-readiness-star"' + starIdAttr + ' aria-hidden="true">\u2605</span>'
+      : '';
+
+    return '<div class="' + classes + '"' + rowIdAttr + '>' +
+      '<div class="df-readiness-head">' +
+        suitHtml +
+        '<span class="df-readiness-name"' + nameIdAttr + ' style="color:' + tint + '">' + _escape(label) + '</span>' +
+        '<span class="df-readiness-pct"'  + pctIdAttr  + '>' + _escape(pctLabel) + '</span>' +
+      '</div>' +
+      '<div class="df-readiness-track">' +
+        '<div class="df-readiness-fill"' + fillIdAttr + ' style="width:' + fillPct + '%;background:' + tint + '"></div>' +
+        starHtml +
+      '</div>' +
+    '</div>';
+  }
+
   // Public — expand a faction row in the strip. Triggers reveal
   // animation on next render. opts.animate defaults to true.
+  //
+  // DOC-109 Phase 2: delegates through _categories.relationships so the
+  // legacy surface keeps working while the category wrapper drives the
+  // actual render. First-time expansion reveals the category and sets
+  // the subject row's justRevealed flag (reveal slide/grow animation).
   function expandFaction(factionId, opts) {
     if (typeof factionId !== 'string' || !factionId) return;
-    if (!_factions[factionId]) {
-      _factions[factionId] = { favor: 0, tier: 'neutral', expanded: false, justRevealed: false, justBumped: false, justTierCrossed: false };
-    }
-    var rec = _factions[factionId];
+    var cat = _categories.relationships;
+    var rowId = _makeRowId('faction', factionId);
+    var existed = !!cat.rows[rowId];
     var animate = !opts || opts.animate !== false;
-    if (!rec.expanded && animate) rec.justRevealed = true;
-    rec.expanded = true;
+
+    // Create the row lazily if the caller expands before ever calling
+    // updateFaction — matches legacy behavior (favor:0, tier:neutral).
+    _setRelationshipRow('faction', factionId, animate && !existed ? { justRevealed: true } : {});
+
+    cat.revealed = true;
+    cat.expanded = true;
+    // Also flip the per-row expanded flag so getFactionState matches
+    // its legacy contract (expanded=true after expandFaction).
+    cat.rows[rowId].expanded = true;
     if (_visible) render();
   }
 
   // Public — hide a faction row without losing its favor/tier state.
+  // DOC-109 Phase 2: individual-row collapse now means "collapse the
+  // relationships category". The subject row itself is preserved in
+  // cat.rows so its favor/tier survive; getFactionState returns
+  // expanded=false via the category's expanded flag.
   function collapseFaction(factionId) {
-    if (!_factions[factionId]) return;
-    _factions[factionId].expanded = false;
+    var cat = _categories.relationships;
+    var rowId = _makeRowId('faction', factionId);
+    if (!cat.rows[rowId]) return;
+    cat.expanded = false;
+    cat.rows[rowId].expanded = false;
     if (_visible) render();
   }
 
@@ -643,27 +1011,73 @@ var DebriefFeed = (function () {
   // Auto-expands the row if the favor/tier delta is non-trivial AND
   // the caller passed opts.expandOnUpdate (default false — explicit
   // expand via expandFaction is the canonical reveal path).
+  //
+  // DOC-109 Phase 2: delegates to _setRelationshipRow, which handles
+  // bump/tier-cross animation flags and mostRecentId tracking for the
+  // relationships category's collapsed-view summary line.
   function updateFaction(factionId, favor, tier, opts) {
     if (typeof factionId !== 'string' || !factionId) return;
-    if (!_factions[factionId]) {
-      _factions[factionId] = { favor: 0, tier: 'neutral', expanded: false, justRevealed: false, justBumped: false, justTierCrossed: false };
+    var row = _setRelationshipRow('faction', factionId, {
+      favor: +favor || 0,
+      tier:  tier || 'neutral'
+    });
+    if (opts && opts.expandOnUpdate) {
+      _categories.relationships.revealed = true;
+      _categories.relationships.expanded = true;
+      if (row) row.expanded = true;
     }
-    var rec = _factions[factionId];
-    var prevFavor = rec.favor;
-    var prevTier  = rec.tier;
-    rec.favor = +favor || 0;
-    rec.tier  = tier || rec.tier || 'neutral';
-    if (rec.favor > prevFavor) rec.justBumped = true;
-    if (rec.tier !== prevTier) rec.justTierCrossed = true;
-    if (opts && opts.expandOnUpdate) rec.expanded = true;
     if (_visible) render();
   }
 
   // Public — read-only snapshot for tests / save serialization.
+  // DOC-109 Phase 2: expanded now reflects the per-row flag (which
+  // mirrors the category's expanded flag). Preserves the legacy
+  // { favor, tier, expanded } shape so existing test assertions pass.
   function getFactionState(factionId) {
-    if (!_factions[factionId]) return null;
-    var r = _factions[factionId];
+    var cat = _categories.relationships;
+    var rowId = _makeRowId('faction', factionId);
+    var r = cat.rows[rowId];
+    if (!r) return null;
     return { favor: r.favor, tier: r.tier, expanded: !!r.expanded };
+  }
+
+  // ── DOC-109 Phase 3 — readiness public API ─────────────────────
+
+  // Public — push an updated core readiness score for a dungeon group
+  // row. Called from Game.init's subscription to
+  // ReadinessCalc's 'group-score-change' event. First call auto-reveals
+  // the readiness category (sticky reveal gate). `meta` is optional;
+  // rows fall back to the GROUP_DATA table for label/suit/tint when
+  // not supplied, so the standard ♠/♣/♦ groups render correctly with
+  // just (groupId, coreScore).
+  //
+  // Returns the row record for test/debug convenience, or null if the
+  // groupId is not a non-empty string.
+  function updateReadiness(groupId, coreScore, meta) {
+    if (typeof groupId !== 'string' || !groupId) return null;
+    var row = _setReadinessRow(groupId, coreScore, meta);
+    // Sticky reveal gate — first update anywhere in the category
+    // flips the readiness wrapper visible. Subsequent updates are no-op.
+    _categories.readiness.revealed = true;
+    if (_visible) render();
+    return row;
+  }
+
+  // Public — read-only snapshot of a readiness row. Mirrors
+  // getFactionState's shape so harnesses can probe state without
+  // reaching into the category internals.
+  function getReadinessState(groupId) {
+    var cat = _categories.readiness;
+    var rowId = _makeRowId('readiness', groupId);
+    var r = cat.rows[rowId];
+    if (!r) return null;
+    return {
+      score:     r.score,
+      prevScore: r.prevScore,
+      label:     r.label || (GROUP_DATA[groupId] && GROUP_DATA[groupId].label) || null,
+      suit:      r.suit  || (GROUP_DATA[groupId] && GROUP_DATA[groupId].suit)  || null,
+      tint:      r.tint  || (GROUP_DATA[groupId] && GROUP_DATA[groupId].tint)  || null
+    };
   }
 
   // ── Feed mode ───────────────────────────────────────────────────
@@ -740,6 +1154,142 @@ var DebriefFeed = (function () {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // ── DOC-113 Phase C — Sprint timer row ──────────────────────────
+
+  // i18n helper — falls back to the fallback string when i18n is
+  // unavailable (Layer 0 unit tests, early boot). Mirrors the pattern
+  // used by _factionRow/_renderCategoryRow.
+  function _timerI18n(key, fallback, params) {
+    if (typeof i18n !== 'undefined' && i18n.t) {
+      try { return i18n.t(key, params); } catch (e) { /* fall through */ }
+    }
+    if (params && fallback) {
+      var out = fallback;
+      for (var k in params) {
+        if (Object.prototype.hasOwnProperty.call(params, k)) {
+          out = out.replace('{' + k + '}', params[k]);
+        }
+      }
+      return out;
+    }
+    return fallback;
+  }
+
+  // Format milliseconds as mm:ss with a zero-padded seconds component.
+  // Ceiling seconds so the display reads "1:00" until the tick that
+  // crosses into the next second — matches the behaviour players expect
+  // from rally-rally-style timers. Negative/NaN inputs render as '0:00'.
+  function _formatMMSS(ms) {
+    ms = +ms;
+    if (!isFinite(ms) || ms <= 0) return '0:00';
+    var totalSec = Math.ceil(ms / 1000);
+    var mins = Math.floor(totalSec / 60);
+    var secs = totalSec - mins * 60;
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }
+
+  function _renderTimerRow(t) {
+    if (!t) return '';
+    var zone = t.zone || 'green';
+    var pctClamped = Math.max(0, Math.min(1, +t.pct || 0));
+    var fillPct = (zone === 'expired') ? 0 : (pctClamped * 100);
+    var rowClasses = 'df-timer-row df-timer-zone-' + zone;
+    if (zone === 'expired') rowClasses += ' df-timer-expired';
+    if (t.paused) rowClasses += ' df-timer-paused';
+
+    var html = '';
+    html += '<div class="' + rowClasses + '" role="timer" aria-live="off">';
+    html += '<div class="df-timer-head">';
+    html += '<span class="df-timer-icon" aria-hidden="true">\u23F1</span>';
+
+    if (zone === 'expired') {
+      var heroName = t.heroName || _HERO_NAMES[t.heroArchetype] || 'The Hero';
+      html += '<span class="df-timer-label">' + _escape(_timerI18n('quest.sprint.timer_expired', 'TIME\u2019S UP')) + '</span>';
+      html += '<span class="df-timer-time" aria-hidden="true">0:00</span>';
+      html += '</div>'; // close head
+      html += '<div class="df-timer-track"><div class="df-timer-fill" style="width:0%"></div></div>';
+      html += '<div class="df-timer-hero-msg">' +
+              _escape(heroName + ' ' + _timerI18n('quest.sprint.hero_sentinel', 'blocks the exit')) +
+              '</div>';
+    } else {
+      html += '<span class="df-timer-label">' + _escape(_timerI18n('quest.sprint.timer_label', 'TIME')) + '</span>';
+      html += '<span class="df-timer-time">' + _formatMMSS(t.remainMs) + '</span>';
+      html += '</div>'; // close head
+      html += '<div class="df-timer-track">' +
+                '<div class="df-timer-fill" style="width:' + fillPct.toFixed(2) + '%"></div>' +
+              '</div>';
+    }
+    html += '</div>'; // close row
+    return html;
+  }
+
+  // Public: reveal the timer row. Called by Game.init's subscription to
+  // QuestChain's 'timer-start' event. Resets any prior timer state.
+  function showTimer(questId, totalMs, heroArchetype) {
+    if (typeof questId !== 'string' || !questId) return false;
+    var total = +totalMs;
+    if (!isFinite(total) || total <= 0) return false;
+    var arche = (typeof heroArchetype === 'string' && heroArchetype) ? heroArchetype : 'seeker';
+    _timerState = {
+      questId:       questId,
+      totalMs:       total,
+      remainMs:      total,
+      pct:           1,
+      zone:          'green',
+      paused:        false,
+      heroArchetype: arche,
+      heroName:      _HERO_NAMES[arche] || 'The Hero'
+    };
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Public: update fill + zone from a 'timer-tick' / 'timer-expired'
+  // event. Ignores updates when no timer is active (prevents spurious
+  // stray ticks from repainting a hidden row). opts.paused is optional;
+  // when omitted the existing paused state is preserved so the Game.init
+  // subscriber doesn't need to re-read paused on every tick.
+  function updateTimer(remainMs, pct, zone, opts) {
+    if (!_timerState) return false;
+    var rem = Math.max(0, +remainMs || 0);
+    var pctNum = Math.max(0, Math.min(1, +pct));
+    if (!isFinite(pctNum)) pctNum = (_timerState.totalMs > 0) ? (rem / _timerState.totalMs) : 0;
+    var z = (zone === 'green' || zone === 'yellow' || zone === 'red' || zone === 'expired')
+      ? zone
+      : _timerState.zone;
+    _timerState.remainMs = rem;
+    _timerState.pct      = pctNum;
+    _timerState.zone     = z;
+    if (opts && typeof opts.paused === 'boolean') _timerState.paused = opts.paused;
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Public: tear down the timer row — called on 'timer-cancel' when
+  // the player leaves the floor or completes the objective.
+  function hideTimer() {
+    if (!_timerState) return false;
+    _timerState = null;
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Test/debug helper — exposed so the Node harness can read state
+  // without poking at the private variable directly.
+  function getTimerState() {
+    if (!_timerState) return null;
+    return {
+      questId:       _timerState.questId,
+      totalMs:       _timerState.totalMs,
+      remainMs:      _timerState.remainMs,
+      pct:           _timerState.pct,
+      zone:          _timerState.zone,
+      paused:        _timerState.paused,
+      heroArchetype: _timerState.heroArchetype,
+      heroName:      _timerState.heroName
+    };
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   return {
@@ -767,7 +1317,25 @@ var DebriefFeed = (function () {
     updateFaction:   updateFaction,
     getFactionState: getFactionState,
 
+    // DOC-109 Phase 2 — Category wrapper
+    revealCategory:   revealCategory,
+    expandCategory:   expandCategory,
+    collapseCategory: collapseCategory,
+    toggleCategory:   toggleCategory,
+    getCategoryState: getCategoryState,
+
+    // DOC-109 Phase 3 — Readiness rows
+    updateReadiness:   updateReadiness,
+    getReadinessState: getReadinessState,
+
+    // DOC-113 Phase C — Sprint timer row
+    showTimer:     showTimer,
+    updateTimer:   updateTimer,
+    hideTimer:     hideTimer,
+    getTimerState: getTimerState,
+
     // Incinerator
     updateIncineratorBounds: _updateIncineratorBounds
   };
 })();
+// eof

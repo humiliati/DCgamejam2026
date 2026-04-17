@@ -213,6 +213,59 @@
       "enum": ["quest_giver", "vendor", "dispatcher", "faction_contact", "ambient", "hero"],
       "description": "DOC-107 quest anchor + DOC-110 §9 population planner filter. Distinguishes narrative-beat NPCs from world-dressing ambient NPCs. Every NPC referenced by a data/quests.json anchor must carry a non-ambient questRole."
     },
+    "stackSlot": {
+      "description": "Single slot on an NpcComposer stack. String form is a shorthand glyph; object form carries render tweaks.",
+      "anyOf": [
+        { "type": "string", "maxLength": 8 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "glyph":   { "type": "string", "maxLength": 8 },
+            "scale":   { "type": "number", "minimum": 0, "maximum": 4 },
+            "offsetX": { "type": "number" },
+            "behind":  { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "npcStack": {
+      "type": "object",
+      "description": "SPRITE_STACK_ROADMAP §3 / DOC-110 Phase 1.2 pinned emoji stack. null on the parent = composer mode (runtime seed-generates from id). Object = pinned — every field optional; absent slots fall back to composer defaults.",
+      "additionalProperties": false,
+      "properties": {
+        "head":         { "$ref": "#/definitions/stackSlot" },
+        "torso":        { "$ref": "#/definitions/stackSlot" },
+        "legs":         { "$ref": "#/definitions/stackSlot" },
+        "hat":          { "$ref": "#/definitions/stackSlot" },
+        "frontWeapon":  { "$ref": "#/definitions/stackSlot" },
+        "backWeapon":   { "$ref": "#/definitions/stackSlot" },
+        "death":        { "$ref": "#/definitions/stackSlot" },
+        "tintHue":      { "type": ["number", "null"], "minimum": 0, "maximum": 360 }
+      }
+    },
+    "spriteFrame": {
+      "type": "object",
+      "description": "A single commissioned PNG frame. assetId is the registry key; path is the runtime load URL (null until the sprite studio writes to disk).",
+      "additionalProperties": false,
+      "required": ["assetId"],
+      "properties": {
+        "assetId": { "type": "string", "minLength": 1 },
+        "path":    { "type": ["string", "null"] }
+      }
+    },
+    "npcSprites": {
+      "type": "object",
+      "description": "DOC-110 Phase 1.2 sprite commission manifest. Keys match `<slot>_<intent>` where slot ∈ {head,torso,legs,hat,frontWeapon,backWeapon} and intent ∈ {locomotion,interaction,dialogue,combat}. Values are ordered frame series. Empty series are dropped by the normaliser (tools/extract-npcs.js:172).",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(head|torso|legs|hat|frontWeapon|backWeapon)_(locomotion|interaction|dialogue|combat)$": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/spriteFrame" }
+        }
+      }
+    },
     "npcActor": {
       "type": "object",
       "description": "NPC actor envelope. Maps 1:1 to NpcSystem._normalise() output (engine/npc-system.js:185-227).",
@@ -228,14 +281,27 @@
         "facing":      { "$ref": "#/definitions/facing" },
         "name":        { "type": "string", "maxLength": 64 },
         "emoji":       { "type": "string", "maxLength": 8 },
-        "stack":       { "type": ["object", "null"], "description": "NpcComposer sprite stack. null → seed-driven from id." },
+        "stack":       {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/npcStack" }
+          ],
+          "description": "NpcComposer sprite stack (DOC-110 Phase 1.2). null → seed-driven from id; object → pinned per-slot glyphs."
+        },
+        "sprites":     {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/npcSprites" }
+          ],
+          "description": "Per-intent PNG commission manifest (DOC-110 Phase 1.2). Keys `<slot>_<intent>` → ordered frame series. null/absent → renderer falls through to emoji stack."
+        },
         "role":        { "type": ["string", "null"], "description": "NpcComposer role key (e.g., 'tide_member', 'guard', 'citizen')." },
         "patrolPoints": {
           "type": ["array", "null"],
           "items": { "$ref": "#/definitions/patrolPoint" },
           "minItems": 2,
-          "maxItems": 2,
-          "description": "Two-point bounce patrol. null → stationary or verb-field driven."
+          "maxItems": 16,
+          "description": "Patrol waypoints in traversal order. 2 = bounce patrol; 3+ = multi-waypoint loop (movementMode='patrol'). null → stationary or verb-field driven."
         },
         "stepInterval": { "type": "integer", "minimum": 100, "default": 1200, "description": "ms between patrol steps." },
         "barkPool":     { "type": ["string", "null"], "description": "BarkLibrary pool key for proximity barks." },

@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "floorId":     "2.2.1",
+    "description": "Hero's Wake B1 — plant a Tide faction_post near the entry so reanimated dragon-sympathisers have a faction anchor to orbit during the tutorial combat scene (supports DOC-110 §15 — reanimated friendly path through the Hero reveal). Remove the first rest_spot the auto-scan produces at (4,4) to clear sightlines to the Hero corpse.",
+    "generatedAt": "2026-04-17T00:00:00Z",
+    "schemaRef":   "tools/verb-node-overrides-schema.json"
+  },
+  "floorId": "2.2.1",
+  "add": [
+    {
+      "id":      "wake_b1_tide_post",
+      "type":    "faction_post",
+      "x":       5,
+      "y":       7,
+      "faction": "tide"
+    }
+  ],
+  "remove": [
+    "dvn_2.2.1_rest_4_4"
+  ],
+  "replace": []
+}

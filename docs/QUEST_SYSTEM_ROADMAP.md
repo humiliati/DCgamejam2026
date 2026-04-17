@@ -3,7 +3,7 @@
 **DOC-107**
 **Created**: 2026-04-16
 **Last updated**: 2026-04-17
-**Status**: Phases 0 + 0b + 1 + 2 + 3 + 4 + 5 + 5b shipped (2026-04-16). Phases 6, 7 pending. Supersedes the "deferred QuestChain" section of DOC-66 quest-marker-audit.md
+**Status**: Phases 0 + 0b + 1 + 2 + 3 + 4 + 5 + 5b + 6 + 8a shipped. Phases 7, 8b pending. Supersedes the "deferred QuestChain" section of DOC-66 quest-marker-audit.md
 **Depends on**: DOC-2 Tutorial_world_roadmap, DOC-13 STREET_CHRONICLES_NARRATIVE_OUTLINE, DOC-52 READINESS_BAR_ROADMAP, DOC-55 MENU_INTERACTIONS_CATALOG, DOC-66 quest-marker-audit, DOC-74 ACT2_NARRATIVE_OUTLINE, DOC-9 NPC_SYSTEM_ROADMAP, DOC-95 MINIGAME_TILES
 **Informs**: DOC-22 HUD_ROADMAP (quest marker toggle, reputation bar stack), DOC-55 MENU_INTERACTIONS_CATALOG (Journal face), DOC-103 NPC_REFRESH_PLAN (faction contact choreography), DOC-95 MINIGAME_TILES (sidequest completion contract), DOC-113 SPRINT_DUNGEON_DESIGN (timer-as-quest-step contract, `kind:"fetch"` step kind, `onTimerExpired` 9th event entry point)
 **Audience**: Quest-system track owner + parallel track liaisons (pressure washing, map editor, minigame design)
@@ -673,17 +673,42 @@ Now data-only:
 
 No engine work. Each beat is a PR against `data/quests.json` + optional new floor sidecars.
 
-### Phase 8 — Sprint dungeon quest support (DOC-113 Phases B–D)
+### Phase 8 — Sprint dungeon quest support (DOC-113 Phases B–D) — Phases 8a+8b ✅ SHIPPED 2026-04-17
 
-Sprint / fetch sidequests require engine extensions to QuestChain:
+Sprint / fetch sidequests require engine extensions to QuestChain plus quest data.
 
-1. New step kind `"fetch"` in `QuestTypes.STEP_KINDS` — timed objective with hero approach on expiry
-2. `QuestChain.onTimerExpired(questId, floorId)` — 9th event entry point, fires when a `kind:"fetch"` step countdown reaches zero
-3. Timer HUD element (countdown bar with green/yellow/red zones, heartbeat SFX)
-4. `HeroSystem.spawnPursuitHero(floorId, archetype, actScaling)` — sentinel → pursuit two-phase hero behavior
-5. Act-based hero stat scaling (impractical in Acts 1–2, viable in Act 3) — see DOC-113 §4 for the full table
+**Phase 8a — Quest data (DOC-113 Phase B) ✅ SHIPPED 2026-04-17**
 
-This phase depends on DOC-113 Phase A (procgen `fetch` strategy) landing first so sprint dungeon floor layouts exist. See DOC-113 for the complete design spec, implementation phases, and quest data templates.
+1. ✅ `QuestTypes.WAYPOINT_KIND.FETCH` — 9th waypoint kind in `engine/quest-types.js`. Predicate fields: `itemId` (required), `floorId` (optional). Timer/hero data (`timerMs`, `sentinelGraceMs`, `heroArchetype`) ride on the step for runtime use but do NOT gate advancement — the step completes on item pickup.
+2. ✅ `case 'fetch'` in `QuestChain._matches()` — matches `itemId` + optional `floorId`.
+3. ✅ `onItemAcquired` dual fan-out — now dispatches both `{kind:'item', itemId}` and `{kind:'fetch', itemId, floorId}` events so `kind:"fetch"` steps match item pickups without breaking existing `kind:"item"` steps.
+4. ✅ `side.1.3.1.cellar_fetch` — three-step arc `npc(cellar_resident, branch:cellar_fetch_brief) → fetch(ITM-042, floorId:1.3.1, timerMs:75000, sentinelGraceMs:12000, heroArchetype:seeker) → npc(cellar_resident, branch:cellar_fetch_complete)`. Prereq `side_cellar_owner_mop_done=true`. Reward 60 gold + `{favor:{bprd:50}}` + `side_cellar_fetch_done` flag. Marker color `#e8a`.
+5. ✅ `side.2.2.1.wake_dispatch` — three-step arc `npc(watchpost_watchman, branch:wake_dispatch_brief) → fetch(ITM-061, floorId:2.2.1, timerMs:90000, sentinelGraceMs:15000, heroArchetype:crusader) → npc(watchpost_watchman, branch:wake_dispatch_complete)`. Prereq `side_watchman_roll_call_done=true`. Reward 80 gold + `{favor:{bprd:75, jesuit:25}}` + `side_wake_dispatch_done` flag.
+6. ✅ i18n keys — 21 new strings: 12 per-quest (`quest.sidequest.{cellar_fetch,wake_dispatch}.*` title/hook/summary/step labels) + 9 timer UI chrome (`quest.sprint.timer_label`, `quest.sprint.timer_expired`, `quest.sprint.hero_sentinel`, `quest.sprint.hero_pursuit`, `quest.sprint.escaped`, `quest.sprint.objective_found`, `quest.sprint.hero_spawn_act{1,2,3}`). Act-flavored spawn toasts use `{hero}` placeholder.
+7. ✅ Verification — JSON structure validated (6 total quests, both new quests match `_templates.sidequest` shape), all 21 i18n keys confirmed present, QuestTypes.isWaypointKind('fetch') returns true, fetch step predicates carry complete timer/hero runtime data.
+
+**Landing notes (Phase 8a):** Phase 8a is data-complete. Both sprint sidequests are structurally valid and their fetch steps will auto-advance on `onItemAcquired` via the dual fan-out the moment the player picks up the target item on the target floor. The timer/hero data embedded in each fetch step's `advanceWhen` is inert until Phase 8b wires `onTimerExpired` + HeroSystem pursuit — until then, sprint dungeons play as untimed fetch quests (functional but missing the tension mechanic). The quest data was authored alongside DOC-113 Phase A (procgen `fetch` strategy) so both sprint sidequests target real floors with fetch-strategy topology.
+
+**Phase 8b — Timer engine (DOC-113 Phase C) — ✅ shipped 2026-04-17**
+
+1. ✅ `_timer` state object + `_TIMER_ZONE_THRESHOLDS` + `_computeZone(pct)` — zone classification (green >60%, yellow 30–60%, red <30%, expired =0)
+2. ✅ `_startTimer(questId, step)` — initializes countdown from fetch step's `advanceWhen.timerMs`, emits `timer-start`
+3. ✅ `_cancelTimer()` — clears timer, emits `timer-cancel`
+4. ✅ `_tickTimerInternal(dt)` — per-frame countdown with 6-system pause contract (ScreenManager, MenuBox, DialogBox, FloorTransition, CombatEngine, CinematicCamera), 1/sec `timer-tick` emission, zone-transition `timer-zone` emission, expiry detection with `timer-expired` emission
+5. ✅ `tickTimer(dt)` / `getActiveTimer()` / `onTimerExpired(questId, floorId)` — public API (frozen exports)
+6. ✅ Wiring in `advance()` — auto-starts timer when newly-current step is `kind:'fetch'`
+7. ✅ Wiring in `complete()` / `fail()` / `expire()` — auto-cancels timer on quest state change
+8. ✅ Wiring in `onFloorArrive()` — auto-cancels timer when player leaves the timer's floor
+9. ✅ Game.js `_renderGameplay()` calls `QuestChain.tickTimer(frameDt)` each frame
+10. ✅ 5 new event types: `timer-start`, `timer-tick`, `timer-zone`, `timer-expired`, `timer-cancel`
+
+**Phase 8c — Timer HUD + hero runtime (DOC-113 Phases C-UI + D) — pending**
+
+1. Timer HUD element (countdown bar with green/yellow/red zones, heartbeat SFX) — see `docs/SPRINT_TIMER_UI_HANDOFF.md`
+2. `HeroSystem.spawnPursuitHero(floorId, archetype, actScaling)` — sentinel → pursuit two-phase hero behavior
+3. Act-based hero stat scaling (impractical in Acts 1–2, viable in Act 3) — see DOC-113 §4 for the full table
+
+Phase 8c depends on DOC-113 Phases A (✅), B (✅), and C engine (✅). See DOC-113 for the complete design spec and `docs/SPRINT_TIMER_UI_HANDOFF.md` for the DebriefFeed integration contract.
 
 ---
 
@@ -701,6 +726,9 @@ Per phase:
 | 5 | Demo sidequest: "wash three pentagram tiles on 1.3.1" — appears, tracks, clears, stays out after completion |
 | 6 | Removing a sidecar produces a startup validation error naming the missing anchor and the quests that referenced it |
 | 7 | (Per beat) ACT2 §5.4 Move Night plays through end-to-end with the described four-step structure |
+| 8a | `QuestTypes.isWaypointKind('fetch')` → true; both sprint sidequests parse valid with fetch step carrying timer/hero data; all 21 i18n keys resolve; `onItemAcquired` dual fan-out dispatches both `kind:'item'` and `kind:'fetch'` events |
+| 8b | ✅ `QuestChain.getActiveTimer()` returns non-null during fetch step; timer ticks down each frame; zone transitions fire at 60%/30%/0% thresholds; timer cancels on quest complete/fail/expire and floor leave; `onTimerExpired` force-expire API works; Game.js calls `tickTimer(frameDt)` per frame; 28/28 unit assertions pass |
+| 8c | Timer countdown bar visible in DebriefFeed; hero spawns at exit on timer expiry; sentinel → pursuit phase transition fires; Act 3 hero is beatable |
 
 **Final acceptance test**: a playtester runs Act 1 onboarding → spade contract → club contract → diamond contract with **Quest markers = Off**, reporting after the session whether they got stuck. If the diegetic NPC barks + Journal alone aren't enough, DOC-9 NPC_SYSTEM_ROADMAP barks need another pass. This is the coupling test between quest system and NPC system that we intentionally want to run.
 

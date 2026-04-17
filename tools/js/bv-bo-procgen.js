@@ -304,6 +304,118 @@
     }
   }
 
+  // ── Fetch strategy (DOC-113 §6.2) ────────────────────────────
+  // Tree-structured maze for timed sprint runs. Mirrors
+  // _applyFetchStrategy in tools/procgen.js.
+  function _fetchStrat(g,rooms,cc,ft,wt,weight,rng,recipe){
+    var W=g[0].length,H=g.length;
+    var entCfg=recipe.entities||{};
+    // 1. Branch stubs (dead-end red herrings)
+    var branchCount=Math.round(rooms.length*1.5*weight);
+    var branchEndCells=[];
+    for(var b=0;b<branchCount;b++){
+      if(!cc.length)break;
+      var cell=rng.pick(cc);
+      var dirs=rng.shuffle([{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}]);
+      for(var d=0;d<dirs.length;d++){
+        var len=rng.intBetween(3,6),ok=true,br=[];
+        for(var s=1;s<=len;s++){
+          var nx=cell.x+dirs[d].dx*s,ny=cell.y+dirs[d].dy*s;
+          if(nx<=0||nx>=W-1||ny<=0||ny>=H-1){ok=false;break;}
+          if(_get(g,nx,ny)!==wt){ok=false;break;}
+          var px=nx+dirs[d].dy,py=ny+dirs[d].dx;
+          var qx=nx-dirs[d].dy,qy=ny-dirs[d].dx;
+          if(_get(g,px,py)===ft&&s>1){ok=false;break;}
+          if(_get(g,qx,qy)===ft&&s>1){ok=false;break;}
+          br.push({x:nx,y:ny});
+        }
+        if(ok&&br.length>=3){
+          for(var k=0;k<br.length;k++){_set(g,br[k].x,br[k].y,ft);cc.push(br[k]);}
+          branchEndCells.push(br[br.length-1]);
+          break;
+        }
+      }
+    }
+    // 2. Build room adjacency graph
+    var adj=[];
+    for(var ri=0;ri<rooms.length;ri++)adj.push([]);
+    for(var ai=0;ai<rooms.length;ai++){
+      for(var bi=ai+1;bi<rooms.length;bi++){
+        var connected=false;
+        for(var ci=0;ci<cc.length&&!connected;ci++){
+          var c=cc[ci];
+          var nearA=(c.x>=rooms[ai].x-1&&c.x<=rooms[ai].x+rooms[ai].w&&
+                     c.y>=rooms[ai].y-1&&c.y<=rooms[ai].y+rooms[ai].h);
+          var nearB=(c.x>=rooms[bi].x-1&&c.x<=rooms[bi].x+rooms[bi].w&&
+                     c.y>=rooms[bi].y-1&&c.y<=rooms[bi].y+rooms[bi].h);
+          if(nearA&&nearB)connected=true;
+        }
+        if(!connected){
+          var tA=false,tB=false;
+          for(var cj=0;cj<cc.length;cj++){
+            var ct=cc[cj];
+            if(!tA&&ct.x>=rooms[ai].x-1&&ct.x<=rooms[ai].x+rooms[ai].w&&
+               ct.y>=rooms[ai].y-1&&ct.y<=rooms[ai].y+rooms[ai].h)tA=true;
+            if(!tB&&ct.x>=rooms[bi].x-1&&ct.x<=rooms[bi].x+rooms[bi].w&&
+               ct.y>=rooms[bi].y-1&&ct.y<=rooms[bi].y+rooms[bi].h)tB=true;
+          }
+          var ca=_rc(rooms[ai]),cb=_rc(rooms[bi]);
+          var md=Math.abs(ca.x-cb.x)+Math.abs(ca.y-cb.y);
+          if(tA&&tB&&md<(W+H)/2)connected=true;
+        }
+        if(connected){adj[ai].push(bi);adj[bi].push(ai);}
+      }
+    }
+    // 3. BFS from room 0
+    var dist=[];
+    for(var di=0;di<rooms.length;di++)dist.push(-1);
+    dist[0]=0;var queue=[0],qi=0;
+    while(qi<queue.length){
+      var cur=queue[qi++],nbrs=adj[cur];
+      for(var ni=0;ni<nbrs.length;ni++){
+        if(dist[nbrs[ni]]===-1){dist[nbrs[ni]]=dist[cur]+1;queue.push(nbrs[ni]);}
+      }
+    }
+    var farthestRoom=0,farthestDist=0;
+    for(var fi=0;fi<rooms.length;fi++){
+      if(dist[fi]>farthestDist){farthestDist=dist[fi];farthestRoom=fi;}
+    }
+    // BFS parent trace for critical path
+    var par=[];
+    for(var pi=0;pi<rooms.length;pi++)par.push(-1);
+    var dist2=[];for(var d2=0;d2<rooms.length;d2++)dist2.push(-1);
+    dist2[0]=0;var q2=[0],q2i=0;
+    while(q2i<q2.length){
+      var c2=q2[q2i++],nb2=adj[c2];
+      for(var n2=0;n2<nb2.length;n2++){
+        if(dist2[nb2[n2]]===-1){dist2[nb2[n2]]=dist2[c2]+1;par[nb2[n2]]=c2;q2.push(nb2[n2]);}
+      }
+    }
+    var criticalPath={},tn=farthestRoom;
+    while(tn!==-1){criticalPath[tn]=true;tn=par[tn];}
+    // Secondary exit room (leaf, not on critical path)
+    var secRoom=-1,secDist=0;
+    for(var li=0;li<rooms.length;li++){
+      if(criticalPath[li])continue;
+      if(adj[li].length<=1&&dist[li]>secDist){secDist=dist[li];secRoom=li;}
+    }
+    if(secRoom===-1){
+      for(var f2=0;f2<rooms.length;f2++){
+        if(!criticalPath[f2]&&dist[f2]>secDist){secDist=dist[f2];secRoom=f2;}
+      }
+    }
+    // 4. Store metadata
+    g._fetchMeta={
+      objectiveRoom:farthestRoom,
+      objectiveCenter:_rc(rooms[farthestRoom]),
+      secondaryExitRoom:secRoom,
+      secondaryExitCenter:secRoom>=0?_rc(rooms[secRoom]):null,
+      criticalPath:criticalPath,
+      branchEndCells:branchEndCells,
+      roomDistances:dist
+    };
+  }
+
   // ── Entity placement ─────────────────────────────────────────
   function _placeTorches(g,rooms,wt,tt,dens,rng){
     var placed=[];
@@ -462,6 +574,7 @@
       case 'cobweb': _cobwebStrat(grid,rooms,cc,floorTile,wallTile,sw,rng); break;
       case 'pressure-wash': _pwStrat(grid,rooms,cc,floorTile,wallTile,sw,rng); break;
       case 'combat': _combatStrat(grid,rooms,cc,floorTile,wallTile,sw,rng); break;
+      case 'fetch': _fetchStrat(grid,rooms,cc,floorTile,wallTile,sw,rng,recipe); break;
       case 'mixed':
         var w3=sw/3;
         _cobwebStrat(grid,rooms,cc,floorTile,wallTile,w3,rng);
@@ -515,17 +628,53 @@
     var corpses=_placeCorpses(grid,rooms,floorTile,coR[0],coR[1],rng);
     var enemies=_genEnemies(rooms,floorTile,grid,enR[0],enR[1],rng);
 
+    // ── Fetch-specific entities (DOC-113 §6.2) ────────────────
+    var fetchMeta=grid._fetchMeta||null;
+    var decoys=[],secondaryExitPos=null,objectivePos=null;
+    if(fetchMeta&&strategy.primary==='fetch'){
+      objectivePos=fetchMeta.objectiveCenter;
+      // Place decoy containers in branch stub ends
+      var decoyRange=enCfg.decoyCount||[1,3];
+      var decoyCount=rng.intBetween(decoyRange[0],decoyRange[1]);
+      var branchEnds=rng.shuffle(fetchMeta.branchEndCells.slice());
+      for(var dec=0;dec<decoyCount&&dec<branchEnds.length;dec++){
+        var dpos=branchEnds[dec];
+        if(_get(grid,dpos.x,dpos.y)===floorTile){
+          var chestTile2=_resolveTile('CHEST');
+          if(chestTile2!=null){_set(grid,dpos.x,dpos.y,chestTile2);decoys.push({x:dpos.x,y:dpos.y,kind:'decoy_chest'});}
+        }
+      }
+      // Place secondary exit
+      var wantSecExit=enCfg.secondaryExit!==false;
+      if(wantSecExit&&fetchMeta.secondaryExitRoom>=0&&fetchMeta.secondaryExitCenter){
+        var secRm=rooms[fetchMeta.secondaryExitRoom];
+        var secCands=[];
+        for(var sy=secRm.y;sy<secRm.y+secRm.h;sy++){
+          for(var sx=secRm.x;sx<secRm.x+secRm.w;sx++){
+            if(sx<=1||sx>=W-2||sy<=1||sy>=H-2)secCands.push({x:sx,y:sy});
+          }
+        }
+        secondaryExitPos=secCands.length?rng.pick(secCands):fetchMeta.secondaryExitCenter;
+        if(secondaryExitPos){var deT=_resolveTile('DOOR_EXIT');if(deT!=null)_set(grid,secondaryExitPos.x,secondaryExitPos.y,deT);}
+      }
+      delete grid._fetchMeta;
+    }
+
     var dt={};
     dt[entryPos.x+','+entryPos.y]='__parent__';
     if(exitPos)dt[exitPos.x+','+exitPos.y]='__child__';
+    if(secondaryExitPos)dt[secondaryExitPos.x+','+secondaryExitPos.y]='__parent__';
 
-    return {
+    var doors=[
+      {x:entryPos.x,y:entryPos.y,key:'entry',kind:entryName,target:'__parent__'},
+      exitPos?{x:exitPos.x,y:exitPos.y,key:'exit',kind:exitName,target:'__child__'}:null
+    ].filter(Boolean);
+    if(secondaryExitPos)doors.push({x:secondaryExitPos.x,y:secondaryExitPos.y,key:'secondary_exit',kind:'DOOR_EXIT',target:'__parent__'});
+
+    var resultObj={
       grid:grid,gridW:W,gridH:H,spawn:spawn,doorTargets:dt,
       biome:recipe.biome,
-      doors:[
-        {x:entryPos.x,y:entryPos.y,key:'entry',kind:entryName,target:'__parent__'},
-        exitPos?{x:exitPos.x,y:exitPos.y,key:'exit',kind:exitName,target:'__child__'}:null
-      ].filter(Boolean),
+      doors:doors,
       entities:enemies,
       rooms:rooms.map(function(r){return{x:r.x,y:r.y,w:r.w,h:r.h};}),
       meta:{
@@ -533,9 +682,13 @@
         faction:recipe.faction||'neutral',
         stats:{roomCount:rooms.length,corridorCells:cc.length,torches:torches.length,
                breakables:breakables.length,traps:traps.length,chests:chests.length,
-               corpses:corpses.length,enemySpawns:enemies.length}
+               corpses:corpses.length,enemySpawns:enemies.length,
+               decoys:decoys.length,hasSecondaryExit:!!secondaryExitPos,hasObjective:!!objectivePos}
       }
     };
+    if(objectivePos)resultObj.meta.fetchObjective={x:objectivePos.x,y:objectivePos.y};
+    if(secondaryExitPos)resultObj.meta.secondaryExit={x:secondaryExitPos.x,y:secondaryExitPos.y};
+    return resultObj;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -602,7 +755,8 @@
       builtIn: [
         { id: 'cobweb-cellar',         title: 'Cobweb Cellar',         biome: 'cellar',   strategy: 'cobweb' },
         { id: 'pressure-wash-catacomb', title: 'Pressure Wash Catacomb', biome: 'catacomb', strategy: 'pressure-wash' },
-        { id: 'combat-depths',         title: 'Combat Depths Arena',   biome: 'depths',   strategy: 'combat' }
+        { id: 'combat-depths',         title: 'Combat Depths Arena',   biome: 'depths',   strategy: 'combat' },
+        { id: 'sprint-cellar',         title: 'Sprint Cellar',         biome: 'cellar',   strategy: 'fetch' }
       ]
     };
   });

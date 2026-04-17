@@ -70,6 +70,17 @@ var CobwebSystem = (function () {
   var _cobwebs  = {};
   var _tornByPlayer = {};  // { floorId: count } — player self-tears (not enemy/hero)
 
+  // ── ReadinessCalc event-bus bridge (DOC-109 Phase 1 wiring) ─────
+  // Cobweb install/destroy/player-tear all feed CobwebSystem.getIntact +
+  // getPlayerTornCount → ReadinessCalc cobweb extra-credit score. The
+  // microtask coalesces bursts (e.g. multi-tile hero path destroying
+  // several cobwebs in one tick) into one score-change emit.
+  function _markDirty(floorId) {
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.markDirty) {
+      ReadinessCalc.markDirty(floorId);
+    }
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────
 
   function _key(x, y) { return x + ',' + y; }
@@ -250,6 +261,7 @@ var CobwebSystem = (function () {
       corridorDir: dirOverride || getCorridorDir(x, y, floorId) || 'H',
       installedAt: Date.now()
     };
+    _markDirty(floorId);
     return true;
   }
 
@@ -269,6 +281,7 @@ var CobwebSystem = (function () {
     var cob = _cobwebs[floorId][_key(x, y)];
     if (!cob || cob.state !== 'intact') return false;
     cob.state = 'destroyed';
+    _markDirty(floorId);
     return true;
   }
 
@@ -358,6 +371,7 @@ var CobwebSystem = (function () {
    */
   function recordPlayerTear(floorId) {
     _tornByPlayer[floorId] = (_tornByPlayer[floorId] || 0) + 1;
+    _markDirty(floorId);
   }
 
   /**
@@ -397,6 +411,7 @@ var CobwebSystem = (function () {
   function resetFloor(floorId) {
     _cobwebs[floorId] = {};
     _tornByPlayer[floorId] = 0;
+    _markDirty(floorId);
   }
 
   // ── Exposed constants and API ────────────────────────────────────

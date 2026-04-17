@@ -156,7 +156,7 @@ NPC entities are enemy-compatible objects pushed into `FloorManager.getEnemies()
 
 ### 4.3 Built-in Populations
 
-Registered in `_registerBuiltinPopulations()` at `init()`:
+Loaded from `data/npcs.json` by `NpcSeed.populate()` during `NpcSystem.init()` (DOC-110 Phase 0 Ch.5, 2026-04-17). The inline `_registerBuiltinPopulations()` bootstrap was retired in the same cutover — `data/npcs.json` is now the sole source of truth at runtime. Authoring flows through `tools/npc-designer.html`.
 
 | Floor | NPC | Type | Bark Pool |
 |-------|-----|------|-----------|
@@ -374,7 +374,7 @@ Each building interior has a small, curated roster of NPCs with **building-speci
 
 ### 9.2 Current State
 
-`NpcSystem._registerBuiltinPopulations()` includes:
+`data/npcs.json` (loaded by `NpcSeed.populate()` — see §4.3) ships:
 - Floor 1.1 (Coral Bazaar): 2 market patrons → `interior.bazaar`
 - Floor 1.6 (Gleaner's Home): No ambient NPCs (private)
 
@@ -393,7 +393,12 @@ Each building interior has a small, curated roster of NPCs with **building-speci
 Each interior NPC definition includes `homeFloor` (its assigned building). Future day/night system uses this to make NPCs disappear when their building is "closed" and reappear at dawn. For jam scope, NPCs are always present.
 
 ```javascript
-// In engine/npc-system.js _registerBuiltinPopulations():
+// Authored in tools/npc-designer.html → persisted to data/npcs.json.
+// At runtime NpcSeed.populate() calls NpcSystem.register() with the
+// per-floor lists below; no code in engine/ hand-registers NPCs any
+// more (DOC-110 Phase 0 Ch.5, 2026-04-17).
+//
+// On floor 1.3 the authored payload is equivalent to:
 register('1.3', [
   {
     id: 'guild_clerk',
@@ -490,4 +495,4 @@ These items must work for a playable DC Jam submission (April 5):
 | §8 Hero NPCs | → CORE_GAME_LOOP §5 (hero cycle) | 3-day hero cycle timing |
 | §9 Interior NPCs | → TUTORIAL_WORLD_ROADMAP §3.1 | Floor registry |
 | §11 Bare Min | → TABLE_OF_CONTENTS_CROSS_ROADMAP Phase A.0 | Delivery schedule |
-| **Authoring tooling** | → **NPC_TOOLING_ROADMAP.md (DOC-110)** | The NPC entity schema documented in §4.2 + dialogue trees in §5 + dispatcher choreography in §7 are all authored through the seven-tool suite (NPC Designer, Bark Workbench, Archetype Studio, Enemy Hydrator, Sprite Studio, Population Planner). Replaces hand-editing of `_registerBuiltinPopulations()`. |
+| **Authoring tooling** | → **NPC_TOOLING_ROADMAP.md (DOC-110)** | The NPC entity schema documented in §4.2 + dialogue trees in §5 + dispatcher choreography in §7 are all authored through the seven-tool suite (NPC Designer, Bark Workbench, Archetype Studio, Enemy Hydrator, Sprite Studio, Population Planner). `data/npcs.json` is the runtime source of truth; the inline `_registerBuiltinPopulations()` bootstrap was retired in DOC-110 Phase 0 Ch.5 (2026-04-17). |

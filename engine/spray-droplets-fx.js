@@ -68,6 +68,50 @@ var SprayDropletsFX = (function () {
   // ── State ────────────────────────────────────────────────────
   var _droplets = [];
 
+  // ── Droplet sprite cache (perf) ──────────────────────────────
+  // Mirror of the WaterCursorFX sprite-cache fix. SprayDropletsFX fires
+  // every 100ms tick while the hose trigger is held, so the per-frame
+  // createRadialGradient cost was stacking with WaterCursorFX's and
+  // tanking FPS during pressure-wash. Bake the gradient into an
+  // offscreen canvas at init; render via drawImage + globalAlpha.
+  var _sprite = null;
+  var SPRITE_R_BASE = 8;       // max droplet radius is ~7 + shrink buffer
+  var SPRITE_PAD    = 2;
+
+  function _buildSprite() {
+    var r    = SPRITE_R_BASE;
+    var pad  = SPRITE_PAD;
+    var size = r * 2 + pad * 2;
+    var c    = document.createElement('canvas');
+    c.width  = size;
+    c.height = size;
+    var cx   = c.getContext('2d');
+    var cxC  = size * 0.5;
+    var cyC  = size * 0.5;
+
+    var g = cx.createRadialGradient(
+      cxC - r * 0.3, cyC - r * 0.3, 0,
+      cxC, cyC, r
+    );
+    g.addColorStop(0,
+      'rgba(' + COLOR_CORE[0] + ',' + COLOR_CORE[1] + ',' + COLOR_CORE[2] + ',1)');
+    g.addColorStop(0.55,
+      'rgba(' + COLOR_EDGE[0] + ',' + COLOR_EDGE[1] + ',' + COLOR_EDGE[2] + ',0.85)');
+    g.addColorStop(1,
+      'rgba(' + COLOR_RIM[0]  + ',' + COLOR_RIM[1]  + ',' + COLOR_RIM[2]  + ',0)');
+
+    cx.fillStyle = g;
+    cx.beginPath();
+    cx.arc(cxC, cyC, r, 0, Math.PI * 2);
+    cx.fill();
+    return { canvas: c, size: size, rBase: r };
+  }
+
+  function _getSprite() {
+    if (!_sprite) _sprite = _buildSprite();
+    return _sprite;
+  }
+
   // ── Helpers ──────────────────────────────────────────────────
 
   function _rand(lo, hi) { return lo + Math.random() * (hi - lo); }
@@ -187,8 +231,15 @@ var SprayDropletsFX = (function () {
   function render(ctx) {
     if (_droplets.length === 0) return;
 
+    var sprite = _getSprite();
+    var spriteCanvas = sprite.canvas;
+    var spriteSize   = sprite.size;
+    var spriteRBase  = sprite.rBase;
+    var spriteScale  = spriteSize / (spriteRBase * 2);
+
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
+    var prevAlpha = ctx.globalAlpha;
 
     for (var i = 0; i < _droplets.length; i++) {
       var d = _droplets[i];
@@ -204,31 +255,24 @@ var SprayDropletsFX = (function () {
       var r = d.r;
       if (lifeFrac < 0.3) r = d.r * (0.4 + lifeFrac * 2);
 
-      var grad = ctx.createRadialGradient(
-        d.x - r * 0.3, d.y - r * 0.3, 0,
-        d.x, d.y, r
-      );
-      grad.addColorStop(0,
-        'rgba(' + COLOR_CORE[0] + ',' + COLOR_CORE[1] + ',' + COLOR_CORE[2] + ',' + alpha.toFixed(3) + ')');
-      grad.addColorStop(0.55,
-        'rgba(' + COLOR_EDGE[0] + ',' + COLOR_EDGE[1] + ',' + COLOR_EDGE[2] + ',' + (alpha * 0.85).toFixed(3) + ')');
-      grad.addColorStop(1,
-        'rgba(' + COLOR_RIM[0]  + ',' + COLOR_RIM[1]  + ',' + COLOR_RIM[2]  + ',0)');
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      // Cached sprite draw — replaces the per-frame createRadialGradient.
+      var drawSize = r * 2 * spriteScale;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(spriteCanvas,
+        d.x - drawSize * 0.5, d.y - drawSize * 0.5,
+        drawSize, drawSize);
 
       // Specular pip — sells the "wet" look on larger droplets
       if (r > 3.5 && alpha > 0.4) {
-        ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.75).toFixed(3) + ')';
+        ctx.globalAlpha = alpha * 0.75;
+        ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.arc(d.x - r * 0.35, d.y - r * 0.35, r * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
+    ctx.globalAlpha = prevAlpha;
     ctx.restore();
   }
 

@@ -98,6 +98,16 @@ var CrateSystem = (function () {
     return floorId + ':' + x + ':' + y;
   }
 
+  // ── ReadinessCalc event-bus bridge (DOC-109 Phase 1 wiring) ──────
+  // Crate / corpse / chest mutations feed both getReadinessByType.crate
+  // and .corpse — the primary core-score and extra-credit drivers for
+  // most floors. Microtask coalesces (e.g. seal + coin award emits once).
+  function _markDirty(floorId) {
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.markDirty) {
+      ReadinessCalc.markDirty(floorId);
+    }
+  }
+
   // ── Container creation ─────────────────────────────────────────────
 
   /**
@@ -486,6 +496,7 @@ var CrateSystem = (function () {
       }
     }
 
+    _markDirty(floorId);
     return item;
   }
 
@@ -525,6 +536,7 @@ var CrateSystem = (function () {
       slot.matched = suitMatch;
 
       // Suit card slots yield 0 coins (the reward is reanimation)
+      _markDirty(floorId);
       return { coins: 0, matched: suitMatch, suitMatch: suitMatch };
     }
 
@@ -546,6 +558,7 @@ var CrateSystem = (function () {
     }
 
     c.coinTotal += coins;
+    _markDirty(floorId);
     return { coins: coins, matched: matched, suitMatch: false };
   }
 
@@ -625,6 +638,7 @@ var CrateSystem = (function () {
       }
     }
 
+    _markDirty(floorId);
     return {
       bonusCoins: bonus,
       totalCoins: c.coinTotal,
@@ -673,6 +687,7 @@ var CrateSystem = (function () {
       }
     }
 
+    _markDirty(floorId);
     return {
       bonusCoins: bonus,
       totalCoins: c.coinTotal,
@@ -773,10 +788,14 @@ var CrateSystem = (function () {
         delete _containers[key];
       }
     }
+    _markDirty(floorId);
   }
 
   function clearAll() {
     _containers = {};
+    if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.invalidate) {
+      ReadinessCalc.invalidate();
+    }
   }
 
   // ── Slot info helpers (for UI) ─────────────────────────────────────
@@ -865,6 +884,7 @@ var CrateSystem = (function () {
       c.depleted = false;
       c.phase = 'loot';
       c.lootedDay = null;  // Reset stamp for next cycle
+      _markDirty(floorId);
     }
 
     return rehydrated > 0;

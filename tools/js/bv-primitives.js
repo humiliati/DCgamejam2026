@@ -95,6 +95,8 @@ function commitBulk(cells) {
   var changed = applyCellsToGrid(cells, EDIT.paintTile);
   if (changed.length) {
     pushUndo({ type: 'bulk', cells: changed, newTile: EDIT.paintTile });
+    // Track recently-used tile for tile picker MRU row
+    if (typeof tilePickerTrackRecent === 'function') tilePickerTrackRecent(EDIT.paintTile);
     updateEditUI();
     draw();
   }

@@ -362,4 +362,4 @@ GDD (frozen)
 - When a node exits, mark it ✅ and update the milestone table.
 - When a cross-track interface changes, update §4 so downstream tracks aren't surprised.
 - This doc survives arc boundaries — it's scoped to terminus, not to the blockout arc. When DOC-104 archives, this doc stays.
-- Next DOC number after this: **DOC-109**.
+- Next DOC number after this: **DOC-114**. (DOC-109 claimed 2026-04-17 for DEBRIEF_FEED_CATEGORIES_ROADMAP — HUD debrief-feed category wrapper, Roadmap A of the quest-tracking-UI split; Roadmap B = future JOURNAL_V2 at DOC-110 slot target. DOC-110 NPC_TOOLING_ROADMAP, DOC-111 NPC_TOOLING_DEPENDENCY_AUDIT, DOC-112 BOXFORGE_PEEK_COVERAGE_MATRIX, and DOC-113 SPRINT_DUNGEON_DESIGN were already claimed before this line's previous pointer at DOC-109 was consumed.)

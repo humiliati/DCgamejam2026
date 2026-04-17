@@ -45,10 +45,14 @@
   // sessionStorage under 'pendingFloorPool' so reload survives the tab.
   var PENDING_POOL_KEY = 'pendingFloorPool';
 
+  // Phase 6.3: recipe pool — procgen blueprints that haven't been expanded yet.
+  var RECIPE_POOL_KEY = 'recipePool';
+
   var state = {
     floors: {},
     ghosts: {},   // Pass 5b.2: synthesized slot records (proc-gen + planned)
     pendings: {}, // Pass 5c: uncommitted authored floors awaiting BO-V
+    recipes: {},  // Phase 6.3: procgen recipe blueprints (not yet expanded)
     nodes:  {},
     edges:  [],
     layout: {},
@@ -301,7 +305,7 @@
     return true;
   }
   function isIdTaken(id) {
-    return !!(state.floors[id] || state.ghosts[id] || state.pendings[id]);
+    return !!(state.floors[id] || state.ghosts[id] || state.pendings[id] || state.recipes[id]);
   }
   function isValidDoorCoord(s, w, h) {
     if (s == null || s === '') return { ok: true, coord: null };
@@ -333,6 +337,26 @@
       sessionStorage.setItem(PENDING_POOL_KEY, JSON.stringify(state.pendings));
     } catch (e) {
       console.warn('[world-designer] pending pool save failed', e);
+    }
+  }
+
+  // Phase 6.3: Recipe-pool persistence — survives reload within a tab.
+  function loadRecipes() {
+    try {
+      var raw = sessionStorage.getItem(RECIPE_POOL_KEY);
+      if (!raw) { state.recipes = {}; return; }
+      var parsed = JSON.parse(raw);
+      state.recipes = (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) {
+      console.warn('[world-designer] recipe pool load failed', e);
+      state.recipes = {};
+    }
+  }
+  function saveRecipes() {
+    try {
+      sessionStorage.setItem(RECIPE_POOL_KEY, JSON.stringify(state.recipes));
+    } catch (e) {
+      console.warn('[world-designer] recipe pool save failed', e);
     }
   }
 
@@ -371,7 +395,7 @@
       Object.keys(dt).forEach(function(coord) {
         var toId = dt[coord];
         if (!toId) return;
-        if (state.floors[toId] || ghosts[toId] || state.pendings[toId]) return;
+        if (state.floors[toId] || ghosts[toId] || state.pendings[toId] || state.recipes[toId]) return;
         ghosts[toId] = {
           id: toId, cls: 'planned', kind: 'planned', label: toId + ' (planned)',
           biomeHint: null, maxDepth: 1,
@@ -385,7 +409,7 @@
   function autoLayout() {
     // Layout includes authored floors + ghosts, grouped by branch so
     // proc-gen / planned slots sit in the column as their parent.
-    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings));
+    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings), Object.keys(state.recipes));
     var branches = {};
     all.forEach(function(id) {
       var b = branchOf(id);
@@ -416,7 +440,7 @@
     if (reset) return autoLayout();
     var auto = autoLayout();
     var out = {};
-    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings));
+    var all = [].concat(Object.keys(state.floors), Object.keys(state.ghosts), Object.keys(state.pendings), Object.keys(state.recipes));
     all.forEach(function(id) {
       out[id] = state.layout[id] || auto[id] || { x: 40, y: 40 };
     });
@@ -533,6 +557,34 @@
     return el;
   }
 
+  // Phase 6.3: recipe node factory
+  function makeRecipeNode(id, rcp, pos) {
+    var el = document.createElement('div');
+    el.className = 'dg-node dg-node-recipe';
+    el.id = 'dg-node-' + id.replace(/\./g, '_');
+    el.style.left = pos.x + 'px';
+    el.style.top  = pos.y + 'px';
+    var stratLabel = rcp.strategy ? rcp.strategy.primary : '?';
+    var sizeLabel = (rcp.size ? rcp.size.width + '×' + rcp.size.height : '?');
+    el.innerHTML =
+      '<div class="dg-node-badge">RECIPE</div>' +
+      '<div class="dg-node-id">' + (rcp.title || id) + '</div>' +
+      '<div class="dg-node-biome">' + (rcp.biome || '?') + '</div>' +
+      '<div class="dg-node-size">' + sizeLabel + ' · ' + stratLabel + '</div>' +
+      (rcp.faction && rcp.faction !== 'neutral' ? '<div class="dg-node-meta">' + rcp.faction + '</div>' : '');
+    el.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+    });
+    el.addEventListener('contextmenu', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+      showContextMenu(ev, id);
+    });
+    $('dg-canvas').appendChild(el);
+    return el;
+  }
+
   function renderNodes(positions) {
     $('dg-canvas').innerHTML = '';
     state.nodes = {};
@@ -552,6 +604,13 @@
       var p = state.pendings[id];
       var el = makePendingNode(id, p, pos);
       state.nodes[id] = { el: el, x: pos.x, y: pos.y, depth: depthOf(id), ghost: false, pending: true };
+    });
+    // Phase 6.3: recipe nodes
+    Object.keys(state.recipes).forEach(function(id) {
+      var pos = positions[id];
+      var rcp = state.recipes[id];
+      var el = makeRecipeNode(id, rcp, pos);
+      state.nodes[id] = { el: el, x: pos.x, y: pos.y, depth: depthOf(id), ghost: false, pending: false, recipe: true };
     });
   }
 
@@ -637,10 +696,26 @@
       var conn = connectEdge(p.parent, pid, 'dg-edge-pending', false);
       if (conn) state.edges.push({ from: p.parent, to: pid, conn: conn, type: 'pending', reciprocal: false });
     });
+    // 5) Phase 6.3: Recipe → parent edge
+    Object.keys(state.recipes).forEach(function(rid) {
+      var rcp = state.recipes[rid];
+      if (!rcp._parent || !state.nodes[rcp._parent]) return;
+      var conn = connectEdge(rcp._parent, rid, 'dg-edge-recipe', false);
+      if (conn) state.edges.push({ from: rcp._parent, to: rid, conn: conn, type: 'recipe', reciprocal: false });
+    });
+    // 6) Phase 6.4: Pending → sibling pending edges (multi-floor expansion chain)
+    Object.keys(state.pendings).forEach(function(pid) {
+      var p = state.pendings[pid];
+      if (!p._siblingNext || !state.nodes[p._siblingNext]) return;
+      var conn = connectEdge(pid, p._siblingNext, 'dg-edge-pending dg-edge-sibling', false);
+      if (conn) state.edges.push({ from: pid, to: p._siblingNext, conn: conn, type: 'sibling', reciprocal: false });
+    });
     var pendCount = Object.keys(state.pendings).length;
+    var rcpCount = Object.keys(state.recipes).length;
     $('sum-floors').textContent = Object.keys(state.floors).length +
       ' (+' + Object.keys(state.ghosts).length + ' ghosts' +
-      (pendCount ? ', +' + pendCount + ' pending' : '') + ')';
+      (pendCount ? ', +' + pendCount + ' pending' : '') +
+      (rcpCount ? ', +' + rcpCount + ' recipe' : '') + ')';
     $('sum-doors').textContent  = state.edges.length;
     $('sum-warn').textContent   = state.warnings;
   }
@@ -716,6 +791,11 @@
         '<div class="kv"><span class="k">Grid</span><span class="v">' + pf.w + '&times;' + pf.h + '</span></div>' +
         '<div class="kv"><span class="k">Parent</span><span class="v">' + parentHrefP + '</span></div>' +
         (pf.doorCoord ? '<div class="kv"><span class="k">Parent door</span><span class="v">' + pf.doorCoord + '</span></div>' : '') +
+        (pf._expansionIndex ? '<div class="kv"><span class="k">Chain</span><span class="v" style="color:#e8a;">floor ' + pf._expansionIndex + ' / ' + pf._expansionTotal + '</span></div>' : '') +
+        (pf._siblingPrev ? '<div class="kv"><span class="k">Prev sibling</span><span class="v">' +
+          (state.nodes[pf._siblingPrev] ? '<a class="jump" data-jump="' + pf._siblingPrev + '">' + pf._siblingPrev + '</a>' : pf._siblingPrev) + '</span></div>' : '') +
+        (pf._siblingNext ? '<div class="kv"><span class="k">Next sibling</span><span class="v">' +
+          (state.nodes[pf._siblingNext] ? '<a class="jump" data-jump="' + pf._siblingNext + '">' + pf._siblingNext + '</a>' : pf._siblingNext) + '</span></div>' : '') +
         '<div class="kv"><span class="k">Created</span><span class="v" style="font-size:10px;">' + (pf.createdAt || '') + '</span></div>' +
         '<div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">' +
           '<button data-pending-action="open" style="background:#3a2d1a;border:1px solid #764;color:#fc8;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">Open in BO-V</button>' +
@@ -734,6 +814,87 @@
       var discardBtn = body.querySelector('[data-pending-action="discard"]');
       if (openBtn) openBtn.addEventListener('click', function() { openPendingInBOV(id); });
       if (discardBtn) discardBtn.addEventListener('click', function() { discardPending(id); });
+      return;
+    }
+    // Phase 6.3: Recipe inspector
+    if (state.recipes[id]) {
+      var rcp = state.recipes[id];
+      var parentHrefR = (rcp._parent && state.nodes[rcp._parent])
+        ? '<a class="jump" data-jump="' + rcp._parent + '">' + rcp._parent + '</a>'
+        : (rcp._parent || '(none)');
+      var strat = rcp.strategy || {};
+      var rooms = rcp.rooms || {};
+      var corridors = rcp.corridors || {};
+      var entities = rcp.entities || {};
+      var doors = rcp.doors || {};
+      var timer = rcp.timer || {};
+      var isFetch = strat.primary === 'fetch';
+      body.innerHTML =
+        '<div class="kv"><span class="k">Recipe ID</span><span class="v" style="color:#aef;">' + (rcp.id || id) + '</span></div>' +
+        '<div class="kv"><span class="k">Title</span><span class="v">' + (rcp.title || '—') + '</span></div>' +
+        '<div class="kv"><span class="k">Status</span><span class="v" style="color:#6cb;">RECIPE</span></div>' +
+        '<div class="kv"><span class="k">Biome</span><span class="v">' + (rcp.biome || '?') + '</span></div>' +
+        (rcp.faction ? '<div class="kv"><span class="k">Faction</span><span class="v">' + rcp.faction + '</span></div>' : '') +
+        '<div class="kv"><span class="k">Size</span><span class="v">' + (rcp.size ? rcp.size.width + '&times;' + rcp.size.height : '?') + '</span></div>' +
+        '<div class="kv"><span class="k">Strategy</span><span class="v">' + (strat.primary || '?') + ' (' + (strat.weight != null ? strat.weight : 1) + ')</span></div>' +
+        '<div class="kv"><span class="k">Parent</span><span class="v">' + parentHrefR + '</span></div>' +
+        '<h3 style="margin-top:10px; color:#6cb;">Rooms</h3>' +
+        '<div class="kv"><span class="k">Count</span><span class="v">' + (rooms.count ? rooms.count.join('–') : '3–7') + '</span></div>' +
+        '<h3 style="margin-top:10px; color:#6cb;">Corridors</h3>' +
+        '<div class="kv"><span class="k">Style</span><span class="v">' + (corridors.style || 'random') + '</span></div>' +
+        '<div class="kv"><span class="k">Width</span><span class="v">' + (corridors.width || 1) + '</span></div>' +
+        '<div class="kv"><span class="k">Extra loops</span><span class="v">' + (corridors.extraConnections != null ? corridors.extraConnections : 0.2) + '</span></div>' +
+        '<h3 style="margin-top:10px; color:#6cb;">Entities</h3>' +
+        '<div class="kv"><span class="k">Torch dens.</span><span class="v">' + (entities.torchDensity != null ? entities.torchDensity : 0.3) + '</span></div>' +
+        '<div class="kv"><span class="k">Enemies</span><span class="v">' + (entities.enemyBudget ? entities.enemyBudget.join('–') : '2–6') + '</span></div>' +
+        '<h3 style="margin-top:10px; color:#6cb;">Doors</h3>' +
+        '<div class="kv"><span class="k">Entry</span><span class="v">' + (doors.entry || 'auto') + '</span></div>' +
+        '<div class="kv"><span class="k">Exit</span><span class="v">' + (doors.exit || 'auto') + '</span></div>' +
+        (doors.bossGate ? '<div class="kv"><span class="k">Boss gate</span><span class="v">yes</span></div>' : '') +
+        (isFetch ? '<h3 style="margin-top:10px; color:#6cb;">Timer</h3>' +
+          '<div class="kv"><span class="k">Budget</span><span class="v">' + (timer.budgetMs || 60000) + 'ms</span></div>' +
+          '<div class="kv"><span class="k">Sentinel grace</span><span class="v">' + (timer.sentinelGraceMs || 12000) + 'ms</span></div>' +
+          '<div class="kv"><span class="k">Hero</span><span class="v">' + (timer.heroArchetype || 'seeker') + '</span></div>' : '') +
+        (rcp.seed != null ? '<div class="kv"><span class="k">Seed</span><span class="v">' + rcp.seed + '</span></div>' : '') +
+        (rcp.expansion ? '<h3 style="margin-top:10px; color:#e8a;">Expansion</h3>' +
+          '<div class="kv"><span class="k">Floors</span><span class="v">' + (rcp.expansion.floorCount || 3) + '</span></div>' +
+          '<div class="kv"><span class="k">ID pattern</span><span class="v">' + (rcp.expansion.idPattern || '{parent}.{n}') + '</span></div>' +
+          '<div class="kv"><span class="k">Last exit</span><span class="v">' + (rcp.expansion.lastFloorExit || 'none') + '</span></div>' +
+          (rcp.expansion.ramp ? '<div class="kv"><span class="k">Ramp enemies</span><span class="v">+' + ((rcp.expansion.ramp.enemyBudget || 0) * 100).toFixed(0) + '%/lvl</span></div>' +
+            '<div class="kv"><span class="k">Ramp torches</span><span class="v">' + ((rcp.expansion.ramp.torchDensity || 0) * 100).toFixed(0) + '%/lvl</span></div>' : '') : '') +
+        '<div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">' +
+          '<button data-recipe-action="expand" style="background:#1a2a2a;border:1px solid #3a6a5a;color:#6cb;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">' +
+            (rcp.expansion ? 'Expand (' + (rcp.expansion.floorCount || 3) + ' floors)' : 'Expand (generate)') + '</button>' +
+          '<button data-recipe-action="edit" style="background:#2a3a4a;border:1px solid #456;color:#cfe;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">Edit</button>' +
+          '<button data-recipe-action="discard" style="background:#2a1a1a;border:1px solid #633;color:#fcc;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;border-radius:3px;">Discard</button>' +
+        '</div>' +
+        '<div style="margin-top:12px; color:#789; font-style:italic; font-size:11px;">' +
+          (rcp.expansion
+            ? 'Multi-floor recipe. "Expand" creates ' + (rcp.expansion.floorCount || 3) + ' pending floors with auto-wired stair targets. For disk output:<br>' +
+              '<code style="color:#6cb; font-size:10px;">bo bake-multi --recipe recipes/' + (rcp.id || id) + '.json --parent &lt;parentId&gt;</code>'
+            : 'Procgen recipe blueprint. "Expand" converts to a pending floor via the bridge. For disk output:<br>' +
+              '<code style="color:#6cb; font-size:10px;">bo bake --recipe recipes/' + (rcp.id || id) + '.json --id &lt;floorId&gt;</code>') +
+        '</div>';
+      // Wire jump links
+      Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {
+        a.addEventListener('click', function() {
+          var to = a.getAttribute('data-jump');
+          if (state.nodes[to]) {
+            selectFloor(to);
+            var n = state.nodes[to];
+            var wrap = $('dg-canvas-wrap');
+            wrap.scrollLeft = Math.max(0, n.x - wrap.clientWidth / 2 + 75);
+            wrap.scrollTop  = Math.max(0, n.y - wrap.clientHeight / 2 + 27);
+          }
+        });
+      });
+      // Wire action buttons
+      var expandBtn = body.querySelector('[data-recipe-action="expand"]');
+      var editBtn = body.querySelector('[data-recipe-action="edit"]');
+      var discardBtn2 = body.querySelector('[data-recipe-action="discard"]');
+      if (expandBtn) expandBtn.addEventListener('click', function() { expandRecipe(id); });
+      if (editBtn) editBtn.addEventListener('click', function() { openRecipeModal(id); });
+      if (discardBtn2) discardBtn2.addEventListener('click', function() { discardRecipe(id); });
       return;
     }
     var f = state.floors[id];
@@ -865,7 +1026,7 @@
         }
       });
     }
-    scan(state.floors); scan(state.ghosts); scan(state.pendings);
+    scan(state.floors); scan(state.ghosts); scan(state.pendings); scan(state.recipes);
     var n = (parentId === '') ? 0 : 1;  // root floors are conventionally 0-indexed; children 1-indexed
     while (used[n]) n++;
     return prefix + n;
@@ -1395,6 +1556,7 @@
     var isAuthored = !!state.floors[floorId];
     var isPending = !!state.pendings[floorId];
     var isGhost = !!state.ghosts[floorId];
+    var isRecipe = !!state.recipes[floorId];
     var childCount = 0;
     if (isAuthored) {
       var prefix = floorId + '.';
@@ -1404,6 +1566,7 @@
     }
     var info = 'Floor: <b style="color:#fc8;">' + floorId + '</b>';
     if (isAuthored) info += ' <span style="color:#9c6;">(authored)</span>';
+    else if (isRecipe) info += ' <span style="color:#6cb;">(recipe)</span>';
     else if (isPending) info += ' <span style="color:#fc8;">(pending)</span>';
     else if (isGhost) info += ' <span style="color:#789;">(ghost)</span>';
     if (childCount > 0) info += '<br>This floor has <b>' + childCount + '</b> descendant(s) in the tree.';
@@ -1421,6 +1584,18 @@
     if (!_deleteTarget) return;
     var floorId = _deleteTarget;
     var cascade = $('del-cascade').value;
+
+    // Recipe nodes just get removed from local pool
+    if (state.recipes[floorId]) {
+      delete state.recipes[floorId];
+      saveRecipes();
+      closeDeleteModal();
+      if (state.selected === floorId) state.selected = null;
+      rebuild(false);
+      $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+      setStatus('recipe deleted: ' + floorId, 'ok');
+      return;
+    }
 
     // Pending floors just get removed from local pool
     if (state.pendings[floorId]) {
@@ -1472,6 +1647,328 @@
       rebuild(false);
       $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
       setStatus('deleted locally (bridge not ready): ' + floorId, 'ok');
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Phase 6.3: Recipe modal + expand / edit / discard
+  // ──────────────────────────────────────────────────────────
+  var _editingRecipeId = null; // set when editing an existing recipe
+
+  function openRecipeModal(editId) {
+    _editingRecipeId = editId || null;
+    // Populate parent dropdown
+    var sel = $('rcp-parent');
+    sel.innerHTML = '';
+    var rootOpt = document.createElement('option');
+    rootOpt.value = ''; rootOpt.textContent = '(no parent)';
+    sel.appendChild(rootOpt);
+    Object.keys(state.floors).sort().forEach(function(pid) {
+      var o = document.createElement('option');
+      o.value = pid; o.textContent = pid + ' — ' + (state.floors[pid].biome || '?');
+      sel.appendChild(o);
+    });
+
+    if (_editingRecipeId && state.recipes[_editingRecipeId]) {
+      // Pre-fill from existing recipe
+      var r = state.recipes[_editingRecipeId];
+      $('rcp-id').value = r.id || _editingRecipeId;
+      $('rcp-title').value = r.title || '';
+      if (r._parent) sel.value = r._parent;
+      $('rcp-biome').value = r.biome || 'cellar';
+      $('rcp-faction').value = r.faction || 'neutral';
+      var st = r.strategy || {};
+      $('rcp-strategy').value = st.primary || 'mixed';
+      $('rcp-weight').value = st.weight != null ? st.weight : 1;
+      $('rcp-w').value = r.size ? r.size.width : 30;
+      $('rcp-h').value = r.size ? r.size.height : 30;
+      var rm = r.rooms || {};
+      $('rcp-room-min').value = rm.count ? rm.count[0] : 3;
+      $('rcp-room-max').value = rm.count ? rm.count[1] : 7;
+      var co = r.corridors || {};
+      $('rcp-corr-style').value = co.style || 'random';
+      $('rcp-corr-width').value = co.width || 1;
+      $('rcp-corr-extra').value = co.extraConnections != null ? co.extraConnections : 0.2;
+      var en = r.entities || {};
+      $('rcp-torch').value = en.torchDensity != null ? en.torchDensity : 0.3;
+      $('rcp-breakable').value = en.breakableDensity != null ? en.breakableDensity : 0.15;
+      $('rcp-trap').value = en.trapDensity != null ? en.trapDensity : 0.05;
+      $('rcp-chest-min').value = en.chestCount ? en.chestCount[0] : 1;
+      $('rcp-chest-max').value = en.chestCount ? en.chestCount[1] : 3;
+      $('rcp-enemy-min').value = en.enemyBudget ? en.enemyBudget[0] : 2;
+      $('rcp-enemy-max').value = en.enemyBudget ? en.enemyBudget[1] : 6;
+      var dr = r.doors || {};
+      $('rcp-door-entry').value = dr.entry || 'auto';
+      $('rcp-door-exit').value = dr.exit || 'auto';
+      $('rcp-boss-gate').checked = !!dr.bossGate;
+      var tm = r.timer || {};
+      $('rcp-timer-budget').value = tm.budgetMs || 60000;
+      $('rcp-timer-grace').value = tm.sentinelGraceMs || 12000;
+      $('rcp-hero').value = tm.heroArchetype || 'seeker';
+      $('rcp-seed').value = r.seed != null ? r.seed : '';
+      $('rcp-id').disabled = true; // can't change id on edit
+    } else {
+      // Defaults for new recipe
+      $('rcp-id').value = '';
+      $('rcp-id').disabled = false;
+      $('rcp-title').value = '';
+      $('rcp-biome').value = 'cellar';
+      $('rcp-faction').value = 'neutral';
+      $('rcp-strategy').value = 'mixed';
+      $('rcp-weight').value = '1';
+      $('rcp-w').value = '30';
+      $('rcp-h').value = '30';
+      $('rcp-room-min').value = '3';
+      $('rcp-room-max').value = '7';
+      $('rcp-corr-style').value = 'random';
+      $('rcp-corr-width').value = '1';
+      $('rcp-corr-extra').value = '0.2';
+      $('rcp-torch').value = '0.3';
+      $('rcp-breakable').value = '0.15';
+      $('rcp-trap').value = '0.05';
+      $('rcp-chest-min').value = '1';
+      $('rcp-chest-max').value = '3';
+      $('rcp-enemy-min').value = '2';
+      $('rcp-enemy-max').value = '6';
+      $('rcp-door-entry').value = 'auto';
+      $('rcp-door-exit').value = 'auto';
+      $('rcp-boss-gate').checked = false;
+      $('rcp-timer-budget').value = '60000';
+      $('rcp-timer-grace').value = '12000';
+      $('rcp-hero').value = 'seeker';
+      $('rcp-seed').value = '';
+      // Pre-select parent if an authored floor is selected
+      if (state.selected && state.floors[state.selected]) sel.value = state.selected;
+    }
+    $('rcp-err').textContent = '';
+    $('dg-modal-recipe').classList.add('show');
+    setTimeout(function() { ($('rcp-id').disabled ? $('rcp-title') : $('rcp-id')).focus(); }, 30);
+  }
+
+  function closeRecipeModal() {
+    $('dg-modal-recipe').classList.remove('show');
+    _editingRecipeId = null;
+  }
+
+  function submitRecipe() {
+    var errEl = $('rcp-err'); errEl.textContent = '';
+    var id = ($('rcp-id').value || '').trim();
+    var title = ($('rcp-title').value || '').trim();
+    var parentId = $('rcp-parent').value || null;
+
+    // Validate id
+    if (!id || !/^[a-z0-9_-]+$/.test(id)) {
+      errEl.textContent = 'Recipe ID must be lowercase alphanumeric with hyphens/underscores only.';
+      return;
+    }
+    // On new, check uniqueness
+    if (!_editingRecipeId && isIdTaken(id)) {
+      errEl.textContent = 'ID "' + id + '" already exists.';
+      return;
+    }
+
+    var w = parseInt($('rcp-w').value, 10);
+    var h = parseInt($('rcp-h').value, 10);
+    if (isNaN(w) || w < 9 || w > 60) { errEl.textContent = 'Width must be 9–60.'; return; }
+    if (isNaN(h) || h < 9 || h > 60) { errEl.textContent = 'Height must be 9–60.'; return; }
+
+    var seedRaw = ($('rcp-seed').value || '').trim();
+    var seed = seedRaw === '' ? null : (isNaN(parseInt(seedRaw, 10)) ? null : parseInt(seedRaw, 10));
+
+    var recipe = {
+      id: id,
+      title: title || id,
+      biome: $('rcp-biome').value,
+      faction: $('rcp-faction').value || 'neutral',
+      size: { width: w, height: h },
+      strategy: {
+        primary: $('rcp-strategy').value,
+        weight: parseFloat($('rcp-weight').value) || 1
+      },
+      rooms: {
+        count: [parseInt($('rcp-room-min').value, 10) || 3, parseInt($('rcp-room-max').value, 10) || 7]
+      },
+      corridors: {
+        style: $('rcp-corr-style').value,
+        width: parseInt($('rcp-corr-width').value, 10) || 1,
+        extraConnections: parseFloat($('rcp-corr-extra').value) || 0
+      },
+      entities: {
+        torchDensity: parseFloat($('rcp-torch').value) || 0,
+        breakableDensity: parseFloat($('rcp-breakable').value) || 0,
+        trapDensity: parseFloat($('rcp-trap').value) || 0,
+        chestCount: [parseInt($('rcp-chest-min').value, 10) || 0, parseInt($('rcp-chest-max').value, 10) || 0],
+        enemyBudget: [parseInt($('rcp-enemy-min').value, 10) || 0, parseInt($('rcp-enemy-max').value, 10) || 0]
+      },
+      doors: {
+        entry: $('rcp-door-entry').value || 'auto',
+        exit: $('rcp-door-exit').value || 'auto',
+        bossGate: $('rcp-boss-gate').checked
+      },
+      seed: seed,
+      // Internal metadata (not part of recipe.schema.json)
+      _parent: parentId,
+      _createdAt: new Date().toISOString(),
+      _createdBy: 'world-designer'
+    };
+
+    // Add timer knobs if strategy is fetch
+    if (recipe.strategy.primary === 'fetch') {
+      recipe.timer = {
+        budgetMs: parseInt($('rcp-timer-budget').value, 10) || 60000,
+        sentinelGraceMs: parseInt($('rcp-timer-grace').value, 10) || 12000,
+        heroArchetype: $('rcp-hero').value || 'seeker'
+      };
+    }
+
+    // If editing, remove old entry if id matches
+    if (_editingRecipeId) {
+      delete state.recipes[_editingRecipeId];
+    }
+    state.recipes[id] = recipe;
+    saveRecipes();
+    closeRecipeModal();
+    rebuild(false);
+    selectFloor(id);
+    setStatus('recipe ' + (_editingRecipeId ? 'updated' : 'created') + ': ' + id, 'ok');
+  }
+
+  function discardRecipe(id) {
+    if (!state.recipes[id]) return;
+    if (!confirm('Discard recipe "' + id + '"? This cannot be undone.')) return;
+    delete state.recipes[id];
+    saveRecipes();
+    if (state.selected === id) state.selected = null;
+    rebuild(false);
+    $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+    setStatus('recipe discarded: ' + id, 'ok');
+  }
+
+  function expandRecipe(id) {
+    var rcp = state.recipes[id];
+    if (!rcp) return;
+
+    // ── Multi-floor expansion (Phase 6.4) ─────────────────────
+    // If recipe has expansion knobs, create N sibling pending floors
+    // with auto-wired parent/child relationships.
+    var exp = rcp.expansion;
+    if (exp && exp.floorCount && exp.floorCount >= 2) {
+      var floorCount = exp.floorCount;
+      var idPattern  = exp.idPattern || '{parent}.{n}';
+      var parentId   = rcp._parent || id;
+
+      // Build floor IDs from pattern
+      var floorIds = [];
+      for (var n = 1; n <= floorCount; n++) {
+        var fid = idPattern
+          .replace(/\{parent\}/g, parentId)
+          .replace(/\{n\}/g, String(n));
+        floorIds.push(fid);
+      }
+
+      // Check for ID collisions
+      var collision = null;
+      floorIds.forEach(function(fid) {
+        if (isIdTaken(fid)) collision = fid;
+      });
+      if (collision) {
+        setStatus('expand blocked: floor ID "' + collision + '" already exists', 'err');
+        return;
+      }
+
+      // Create N pending floors
+      var now = new Date().toISOString();
+      var baseDepth = parentId ? depthOf(parentId) + 1 : 2;
+
+      floorIds.forEach(function(fid, i) {
+        var pending = {
+          id: fid,
+          parent: (i === 0) ? parentId : floorIds[i - 1],
+          biome: rcp.biome,
+          w: rcp.size.width,
+          h: rcp.size.height,
+          depth: baseDepth,
+          doorCoord: null,
+          createdAt: now,
+          createdBy: 'world-designer (multi-floor expand)',
+          _fromRecipe: rcp.id,
+          _recipe: rcp,
+          _expansionIndex: i + 1,
+          _expansionTotal: floorCount,
+          _siblingPrev: (i > 0) ? floorIds[i - 1] : null,
+          _siblingNext: (i < floorCount - 1) ? floorIds[i + 1] : null
+        };
+        state.pendings[fid] = pending;
+      });
+
+      // Remove the recipe node
+      delete state.recipes[id];
+      saveRecipes();
+      savePendings();
+      rebuild(false);
+      selectFloor(floorIds[0]);
+      setStatus('recipe expanded → ' + floorCount + ' pending floors: ' + floorIds.join(', '), 'ok');
+      return;
+    }
+
+    // ── Single-floor expansion (original behavior) ────────────
+    // Check if WDBridge is available for procgen
+    var bridgeAvailable = (typeof WDBridge !== 'undefined' && WDBridge.ready);
+    if (bridgeAvailable) {
+      setStatus('expanding recipe: ' + id + '…');
+      // Send procgen action to BO-V bridge
+      WDBridge.run({ action: 'procgen', recipe: rcp })
+        .then(function(res) {
+          if (!res || !res.ok) {
+            setStatus('expand failed: ' + ((res && res.error) || 'unknown'), 'err');
+            return;
+          }
+          // On success, convert recipe → pending floor that can be opened in BO-V
+          var pending = {
+            id: id,
+            parent: rcp._parent,
+            biome: rcp.biome,
+            w: rcp.size.width,
+            h: rcp.size.height,
+            depth: rcp._parent ? depthOf(rcp._parent) + 1 : 1,
+            doorCoord: null,
+            createdAt: new Date().toISOString(),
+            createdBy: 'world-designer (expanded recipe)',
+            _fromRecipe: rcp.id
+          };
+          delete state.recipes[id];
+          state.pendings[id] = pending;
+          saveRecipes();
+          savePendings();
+          rebuild(false);
+          selectFloor(id);
+          setStatus('recipe expanded → pending: ' + id, 'ok');
+        })
+        .catch(function(e) {
+          setStatus('expand error: ' + e.message, 'err');
+        });
+    } else {
+      // No bridge — convert to pending directly (user can generate later in BO-V)
+      var pending = {
+        id: id,
+        parent: rcp._parent,
+        biome: rcp.biome,
+        w: rcp.size.width,
+        h: rcp.size.height,
+        depth: rcp._parent ? depthOf(rcp._parent) + 1 : 1,
+        doorCoord: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 'world-designer (recipe → pending, no bridge)',
+        _fromRecipe: rcp.id,
+        _recipe: rcp  // Stash full recipe so BO-V can use it later
+      };
+      delete state.recipes[id];
+      state.pendings[id] = pending;
+      saveRecipes();
+      savePendings();
+      rebuild(false);
+      selectFloor(id);
+      setStatus('recipe → pending (bridge not ready): ' + id, 'ok');
     }
   }
 
@@ -1542,9 +2039,21 @@
       } else if (action === 'zoom') {
         zoomToSubgraph(fid);
         $('btn-zoom-out').style.display = '';
+      } else if (action === 'expand-recipe') {
+        if (state.recipes[fid]) expandRecipe(fid);
       } else if (action === 'delete') {
         openDeleteModal(fid);
       }
+    });
+
+    // Phase 6.3: recipe modal handlers
+    $('btn-new-recipe').addEventListener('click', function() {
+      openRecipeModal(null);
+    });
+    $('rcp-cancel').addEventListener('click', closeRecipeModal);
+    $('rcp-create').addEventListener('click', submitRecipe);
+    $('dg-modal-recipe').addEventListener('click', function(ev) {
+      if (ev.target === $('dg-modal-recipe')) closeRecipeModal();
     });
 
     // Pass 5b.3: door contract modal handlers
@@ -1564,6 +2073,7 @@
     document.addEventListener('keydown', function(ev) {
       if (ev.key === 'Escape') {
         if ($('dg-modal-new').classList.contains('show')) closeNewFloorModal();
+        if ($('dg-modal-recipe').classList.contains('show')) closeRecipeModal();
         if ($('dg-modal-door').classList.contains('show')) closeDoorContractModal();
         if ($('dg-modal-delete').classList.contains('show')) closeDeleteModal();
         hideContextMenu();
@@ -1586,6 +2096,7 @@
     }
     wire();
     loadPendings();
+    loadRecipes();
     // Pass 5b.2: init the BO bridge iframe (non-blocking)
     if (typeof WDBridge !== 'undefined') {
       WDBridge.init();
@@ -1628,6 +2139,10 @@
     // Pass 5b.5 polish helpers
     zoomToSubgraph: zoomToSubgraph,
     zoomOut: zoomOut,
-    exportToPng: exportToPng
+    exportToPng: exportToPng,
+    // Phase 6.3 recipe helpers
+    openRecipeModal: openRecipeModal,
+    expandRecipe: expandRecipe,
+    discardRecipe: discardRecipe
   };
 })();

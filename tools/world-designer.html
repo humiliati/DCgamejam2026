@@ -63,6 +63,21 @@
         background:#2e2a1d !important;
         border-color:#c96 !important;
       }
+      /* Phase 6.3 — recipe nodes (procgen blueprint, not yet expanded) */
+      .dg-node.dg-node-recipe {
+        background:#1a2a2a !important;
+        border:2px solid #6cb !important;
+        border-style: solid !important;
+        opacity: 1;
+        box-shadow: 0 0 0 1px #6cb inset, 0 2px 8px rgba(100,200,180,0.2);
+      }
+      .dg-node.dg-node-recipe .dg-node-badge {
+        background:#6cb; color:#0a1a1a; border-color:#6cb;
+      }
+      .dg-node.dg-node-recipe .dg-node-id { color:#aef; }
+      .dg-node.dg-node-recipe .dg-node-biome { color:#8cb; }
+      svg.dg-edge-recipe path { stroke: #6cb; stroke-dasharray: 6,3; stroke-width: 2px; }
+
       /* Pass 5c — pending (uncommitted) authored floors awaiting BO-V. */
       .dg-node.dg-node-pending {
         background:#3a2d1a !important;
@@ -103,6 +118,7 @@
       svg.dg-edge-procgen path { stroke-dasharray: 4,3; opacity: 0.8; }
       svg.dg-edge-planned path { stroke: #c96; stroke-dasharray: 2,5; opacity: 0.85; }
       svg.dg-edge-pending path { stroke: #fc8; stroke-width: 3px; }
+      svg.dg-edge-sibling path { stroke: #e8a; stroke-dasharray: 8,4; stroke-width: 2px; }
 
       /* Pass 5b.2: validation overlay badges */
       .dg-node .dg-val-badge {
@@ -169,6 +185,7 @@
       <span class="sub">editor · Pass 5b.5</span>
       <div class="spacer"></div>
       <button id="btn-new-floor" title="Create a new pending floor (hand off to Blockout-Visualizer)" style="background:#3a2d1a; border-color:#764; color:#fc8;">＋ New Floor</button>
+      <button id="btn-new-recipe" title="Create a procgen recipe node (Phase 6.3)" style="background:#1a2a2a; border-color:#3a6a5a; color:#6cb;">＋ Recipe</button>
       <button id="btn-reload" title="Reload floor-data.json from disk">Reload Data</button>
       <button id="btn-validate" title="Run BO validate on all floors via the bridge iframe" style="background:#1a2a2a; border-color:#466; color:#8cc;">Validate All</button>
       <button id="btn-layout-reset" title="Reset node positions to auto-layout">Reset Layout</button>
@@ -191,6 +208,7 @@
           <div class="legend-row"><div class="swatch" style="background:#2b1e34;border-color:#96b;border-style:dashed;"></div><span>Proc-gen slot</span></div>
           <div class="legend-row"><div class="swatch" style="background:#2e2a1d;border-color:#c96;border-style:dashed;"></div><span>Planned (not authored)</span></div>
           <div class="legend-row"><div class="swatch" style="background:#3a2d1a;border-color:#fc8;"></div><span>Pending (awaiting BO-V)</span></div>
+          <div class="legend-row"><div class="swatch" style="background:#1a2a2a;border-color:#6cb;"></div><span>Recipe (procgen)</span></div>
           <div style="font-size:10px; color:#678; margin-top:4px;">Kinds: <span style="color:#8cf;">TEMPLATE</span> · <span style="color:#8cf;">COMPOSED</span> · <span style="color:#8cf;">RANDOM</span></div>
         </div>
         <div class="sect">
@@ -266,6 +284,7 @@
     <div id="dg-ctx-menu" class="dg-ctx-menu" style="display:none;">
       <div data-ctx="open-bov" class="dg-ctx-item">Open in Blockout Editor</div>
       <div data-ctx="add-edge" class="dg-ctx-item">Add Door Connection…</div>
+      <div data-ctx="expand-recipe" class="dg-ctx-item" style="color:#6cb;">Expand Recipe (generate)</div>
       <div data-ctx="zoom" class="dg-ctx-item">Zoom into Subtree</div>
       <div data-ctx="delete" class="dg-ctx-item dg-ctx-danger">Delete Floor…</div>
     </div>
@@ -319,6 +338,170 @@
         <div class="actions">
           <button id="del-cancel" type="button">Cancel</button>
           <button id="del-confirm" type="button" style="background:#4a1a1a; border-color:#633; color:#fcc;">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 6.3: New Recipe modal -->
+    <div id="dg-modal-recipe" class="dg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="dg-modal-recipe-title">
+      <div class="dg-modal" style="width:480px; max-height:90vh; overflow-y:auto;">
+        <h2 id="dg-modal-recipe-title" style="color:#6cb;">NEW RECIPE</h2>
+
+        <div class="row">
+          <label for="rcp-id">Recipe ID</label>
+          <input id="rcp-id" type="text" placeholder="e.g. sprint-cellar" autocomplete="off" />
+        </div>
+        <div class="hint">Unique kebab-case identifier for this recipe.</div>
+
+        <div class="row">
+          <label for="rcp-title">Title</label>
+          <input id="rcp-title" type="text" placeholder="Human-readable name" autocomplete="off" />
+        </div>
+
+        <div class="row">
+          <label for="rcp-parent">Parent floor</label>
+          <select id="rcp-parent"></select>
+        </div>
+        <div class="hint">Authored floor that owns the door into this generated dungeon.</div>
+
+        <div class="row">
+          <label for="rcp-biome">Biome</label>
+          <select id="rcp-biome">
+            <option value="cellar">cellar</option><option value="catacomb">catacomb</option>
+            <option value="depths">depths</option><option value="bazaar">bazaar</option>
+            <option value="guild">guild</option><option value="inn">inn</option>
+            <option value="apothecary">apothecary</option><option value="armory">armory</option>
+            <option value="promenade">promenade</option><option value="gardens">gardens</option>
+            <option value="frontier">frontier</option><option value="exterior">exterior</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="rcp-faction">Faction</label>
+          <select id="rcp-faction">
+            <option value="neutral">neutral</option>
+            <option value="mss">mss</option><option value="pinkerton">pinkerton</option>
+            <option value="jesuit">jesuit</option><option value="bprd">bprd</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="rcp-strategy">Strategy</label>
+          <select id="rcp-strategy">
+            <option value="cobweb">cobweb</option><option value="combat">combat</option>
+            <option value="pressure-wash">pressure-wash</option><option value="fetch">fetch</option>
+            <option value="mixed">mixed</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="rcp-weight">Strat weight</label>
+          <input id="rcp-weight" type="number" min="0" max="1" step="0.1" value="1.0" />
+        </div>
+
+        <div class="row">
+          <label for="rcp-w">Grid W</label>
+          <input id="rcp-w" type="number" min="9" max="60" value="30" />
+        </div>
+        <div class="row">
+          <label for="rcp-h">Grid H</label>
+          <input id="rcp-h" type="number" min="9" max="60" value="30" />
+        </div>
+
+        <h3 style="margin:12px 0 4px; font-size:11px; color:#6cb; letter-spacing:1px;">ROOMS</h3>
+        <div class="row">
+          <label for="rcp-room-min">Count min/max</label>
+          <input id="rcp-room-min" type="number" min="1" max="20" value="3" style="flex:0.5;" />
+          <input id="rcp-room-max" type="number" min="1" max="20" value="7" style="flex:0.5;" />
+        </div>
+
+        <h3 style="margin:12px 0 4px; font-size:11px; color:#6cb; letter-spacing:1px;">CORRIDORS</h3>
+        <div class="row">
+          <label for="rcp-corr-style">Style</label>
+          <select id="rcp-corr-style">
+            <option value="random">random</option><option value="straight">straight</option>
+            <option value="winding">winding</option><option value="l-bend">l-bend</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="rcp-corr-width">Width</label>
+          <input id="rcp-corr-width" type="number" min="1" max="3" value="1" />
+        </div>
+        <div class="row">
+          <label for="rcp-corr-extra">Extra loops</label>
+          <input id="rcp-corr-extra" type="number" min="0" max="1" step="0.05" value="0.2" />
+        </div>
+
+        <h3 style="margin:12px 0 4px; font-size:11px; color:#6cb; letter-spacing:1px;">ENTITIES</h3>
+        <div class="row">
+          <label for="rcp-torch">Torch density</label>
+          <input id="rcp-torch" type="number" min="0" max="1" step="0.05" value="0.3" />
+        </div>
+        <div class="row">
+          <label for="rcp-breakable">Breakable dens.</label>
+          <input id="rcp-breakable" type="number" min="0" max="1" step="0.05" value="0.15" />
+        </div>
+        <div class="row">
+          <label for="rcp-trap">Trap density</label>
+          <input id="rcp-trap" type="number" min="0" max="1" step="0.05" value="0.05" />
+        </div>
+        <div class="row">
+          <label for="rcp-chest-min">Chests min/max</label>
+          <input id="rcp-chest-min" type="number" min="0" max="10" value="1" style="flex:0.5;" />
+          <input id="rcp-chest-max" type="number" min="0" max="10" value="3" style="flex:0.5;" />
+        </div>
+        <div class="row">
+          <label for="rcp-enemy-min">Enemies min/max</label>
+          <input id="rcp-enemy-min" type="number" min="0" max="20" value="2" style="flex:0.5;" />
+          <input id="rcp-enemy-max" type="number" min="0" max="20" value="6" style="flex:0.5;" />
+        </div>
+
+        <h3 style="margin:12px 0 4px; font-size:11px; color:#6cb; letter-spacing:1px;">DOORS</h3>
+        <div class="row">
+          <label for="rcp-door-entry">Entry wall</label>
+          <select id="rcp-door-entry">
+            <option value="auto">auto</option><option value="north">north</option>
+            <option value="south">south</option><option value="east">east</option><option value="west">west</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="rcp-door-exit">Exit wall</label>
+          <select id="rcp-door-exit">
+            <option value="auto">auto</option><option value="none">none</option>
+            <option value="north">north</option><option value="south">south</option>
+            <option value="east">east</option><option value="west">west</option>
+          </select>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="rcp-boss-gate" style="margin-right:6px;" />Boss gate exit</label>
+        </div>
+
+        <h3 id="rcp-timer-heading" style="margin:12px 0 4px; font-size:11px; color:#6cb; letter-spacing:1px;">TIMER <span style="font-size:9px; color:#789;">(fetch strategy only)</span></h3>
+        <div class="row">
+          <label for="rcp-timer-budget">Budget (ms)</label>
+          <input id="rcp-timer-budget" type="number" min="15000" max="300000" step="5000" value="60000" />
+        </div>
+        <div class="row">
+          <label for="rcp-timer-grace">Sentinel grace</label>
+          <input id="rcp-timer-grace" type="number" min="0" max="30000" step="1000" value="12000" />
+        </div>
+        <div class="row">
+          <label for="rcp-hero">Hero archetype</label>
+          <select id="rcp-hero">
+            <option value="seeker">seeker</option><option value="scholar">scholar</option>
+            <option value="shadow">shadow</option><option value="crusader">crusader</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="rcp-seed">RNG seed</label>
+          <input id="rcp-seed" type="text" placeholder="(blank = random)" autocomplete="off" />
+        </div>
+
+        <div class="err" id="rcp-err"></div>
+        <div class="actions">
+          <button id="rcp-cancel" type="button">Cancel</button>
+          <button id="rcp-create" class="primary" type="button" style="background:#1a2a2a; border-color:#3a6a5a; color:#6cb;">Create Recipe</button>
         </div>
       </div>
     </div>

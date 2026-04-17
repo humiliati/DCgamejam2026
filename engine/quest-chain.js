@@ -32,9 +32,36 @@ var QuestChain = (function () {
     'waypoint':      [],
     'completed':     [],
     'marker-change': [],
-    'prefs-change':  []
+    'prefs-change':  [],
+    // DOC-113 Phase C — sprint timer events
+    'timer-start':   [],
+    'timer-tick':    [],
+    'timer-zone':    [],
+    'timer-expired': [],
+    'timer-cancel':  []
   };
   var _tickCount   = 0;    // monotonic counter for start/update ordering
+
+  // ── DOC-113 Phase C — Sprint timer state ─────────────────────────
+  // When a kind:"fetch" step becomes the current step for any active
+  // quest, a countdown timer starts. Pauses during MenuBox, dialogue,
+  // floor transitions, combat, and cinematic camera locks. Ticked via
+  // tickTimer(dt) called from Game._tick or Game._render.
+  //
+  // Only one timer can be active at a time (the player can only be in
+  // one sprint dungeon at a time).
+  var _timer = null;   // null when inactive, or:
+  // {
+  //   questId:        string,
+  //   totalMs:        number,
+  //   remainMs:       number,
+  //   zone:           'green' | 'yellow' | 'red' | 'expired',
+  //   paused:         boolean,
+  //   heroArchetype:  string,
+  //   floorId:        string,
+  //   lastTickSec:    number  // second that last 'timer-tick' was emitted
+  // }
+  var _TIMER_ZONE_THRESHOLDS = { green: 0.60, yellow: 0.30 };
 
   // Sticky marker cache: last good { floorId, x, y } per floor.
   // Ported from QuestWaypoint._lastQuestTarget so the marker doesn't
@@ -103,6 +130,154 @@ var QuestChain = (function () {
         }
       }
     }
+  }
+
+  // ── DOC-113 Phase C — Timer management ────────────────────────────
+
+  function _computeZone(pct) {
+    if (pct <= 0) return 'expired';
+    if (pct > _TIMER_ZONE_THRESHOLDS.green) return 'green';
+    if (pct > _TIMER_ZONE_THRESHOLDS.yellow) return 'yellow';
+    return 'red';
+  }
+
+  // Start a countdown for a kind:"fetch" step. Called when a quest
+  // advances to a fetch step or when the player enters the floor where
+  // a fetch step is already the current step.
+  function _startTimer(questId, step) {
+    if (!step || !step.advanceWhen) return;
+    var aw = step.advanceWhen;
+    if (aw.kind !== 'fetch' || !aw.timerMs) return;
+    // Don't restart if already running for this quest
+    if (_timer && _timer.questId === questId) return;
+    // Cancel any existing timer (only one at a time)
+    if (_timer) _cancelTimer();
+    var fid = aw.floorId || ((typeof FloorManager !== 'undefined' && FloorManager.getFloor)
+      ? FloorManager.getFloor() : null);
+    _timer = {
+      questId:       questId,
+      totalMs:       +aw.timerMs,
+      remainMs:      +aw.timerMs,
+      zone:          'green',
+      paused:        false,
+      heroArchetype: aw.heroArchetype || 'seeker',
+      floorId:       fid,
+      sentinelGraceMs: +(aw.sentinelGraceMs || 12000),
+      lastTickSec:   Math.ceil(aw.timerMs / 1000)
+    };
+    _emit('timer-start', {
+      questId: questId,
+      totalMs: _timer.totalMs,
+      floorId: _timer.floorId,
+      heroArchetype: _timer.heroArchetype
+    });
+  }
+
+  function _cancelTimer() {
+    if (!_timer) return;
+    var questId = _timer.questId;
+    _timer = null;
+    _emit('timer-cancel', { questId: questId });
+  }
+
+  // Tick the timer by `dt` milliseconds. Called from tickTimer() which
+  // Game._tick or Game._render invokes each frame/tick.
+  function _tickTimerInternal(dt) {
+    if (!_timer || _timer.zone === 'expired') return;
+
+    // ── Pause check ──────────────────────────────────────────────
+    // Timer freezes under the same conditions as MovementController:
+    // MenuBox open, DialogBox open, floor transition, combat active,
+    // cinematic camera lock, ScreenManager paused.
+    var shouldPause = false;
+    if (typeof ScreenManager !== 'undefined' && ScreenManager.isPaused && ScreenManager.isPaused()) shouldPause = true;
+    if (typeof MenuBox !== 'undefined' && MenuBox.isOpen && MenuBox.isOpen()) shouldPause = true;
+    if (typeof DialogBox !== 'undefined' && DialogBox.isOpen && DialogBox.isOpen()) shouldPause = true;
+    if (typeof FloorTransition !== 'undefined' && FloorTransition.isTransitioning && FloorTransition.isTransitioning()) shouldPause = true;
+    if (typeof CombatEngine !== 'undefined' && CombatEngine.isActive && CombatEngine.isActive()) shouldPause = true;
+    if (typeof CinematicCamera !== 'undefined' && CinematicCamera.isInputLocked && CinematicCamera.isInputLocked()) shouldPause = true;
+
+    _timer.paused = shouldPause;
+    if (shouldPause) return;
+
+    // ── Countdown ────────────────────────────────────────────────
+    _timer.remainMs = Math.max(0, _timer.remainMs - dt);
+    var pct = _timer.totalMs > 0 ? _timer.remainMs / _timer.totalMs : 0;
+    var prevZone = _timer.zone;
+    _timer.zone = _computeZone(pct);
+
+    // Emit 'timer-tick' at most once per second (floor of remaining seconds)
+    var sec = Math.ceil(_timer.remainMs / 1000);
+    if (sec !== _timer.lastTickSec) {
+      _timer.lastTickSec = sec;
+      _emit('timer-tick', {
+        questId:  _timer.questId,
+        remainMs: _timer.remainMs,
+        pct:      pct,
+        zone:     _timer.zone
+      });
+    }
+
+    // Emit 'timer-zone' on zone transitions
+    if (_timer.zone !== prevZone) {
+      _emit('timer-zone', {
+        questId:  _timer.questId,
+        zone:     _timer.zone,
+        prevZone: prevZone
+      });
+    }
+
+    // ── Expired ──────────────────────────────────────────────────
+    if (_timer.remainMs <= 0) {
+      _timer.zone = 'expired';
+      _emit('timer-expired', {
+        questId:       _timer.questId,
+        floorId:       _timer.floorId,
+        heroArchetype: _timer.heroArchetype,
+        sentinelGraceMs: _timer.sentinelGraceMs
+      });
+    }
+  }
+
+  // Public tick entry point — called by Game each frame or tick.
+  function tickTimer(dt) {
+    _tickTimerInternal(+dt || 0);
+  }
+
+  // Public read-only snapshot for UI consumers.
+  function getActiveTimer() {
+    if (!_timer) return null;
+    var pct = _timer.totalMs > 0 ? _timer.remainMs / _timer.totalMs : 0;
+    return {
+      questId:       _timer.questId,
+      remainMs:      _timer.remainMs,
+      totalMs:       _timer.totalMs,
+      pct:           pct,
+      zone:          _timer.zone,
+      paused:        !!_timer.paused,
+      heroArchetype: _timer.heroArchetype,
+      floorId:       _timer.floorId
+    };
+  }
+
+  // 9th event entry point (DOC-113 Phase C). Explicit trigger for
+  // timer expiry — normally fires automatically via _tickTimerInternal
+  // when remainMs hits zero. This public API exists for testing and
+  // for edge cases where an external system needs to force-expire
+  // the timer (e.g. scripted events).
+  function onTimerExpired(questId, floorId) {
+    if (_timer && _timer.questId === questId) {
+      _timer.remainMs = 0;
+      _timer.zone = 'expired';
+      _emit('timer-expired', {
+        questId:       _timer.questId,
+        floorId:       floorId || _timer.floorId,
+        heroArchetype: _timer.heroArchetype,
+        sentinelGraceMs: _timer.sentinelGraceMs
+      });
+      return true;
+    }
+    return false;
   }
 
   // ── UI prefs: getters / setters / persistence (Phase 4) ──────────
@@ -321,6 +496,18 @@ var QuestChain = (function () {
 
     rec.stepIndex += 1;
     _emit('waypoint', questId, waypoint);
+
+    // DOC-113 Phase C: if the newly-current step is kind:'fetch', start
+    // the sprint timer. _maybeComplete may transition to COMPLETED which
+    // would make the step index past the end, so check bounds first.
+    var defAfter = QuestRegistry.getQuest(questId);
+    if (defAfter && Array.isArray(defAfter.steps) && rec.stepIndex < defAfter.steps.length) {
+      var nextStep = defAfter.steps[rec.stepIndex];
+      if (nextStep && nextStep.advanceWhen && nextStep.advanceWhen.kind === 'fetch') {
+        _startTimer(questId, nextStep);
+      }
+    }
+
     _maybeComplete(questId);
     return true;
   }
@@ -338,6 +525,8 @@ var QuestChain = (function () {
   function complete(questId) {
     var rec = _active[questId];
     if (!rec) return false;
+    // DOC-113: cancel sprint timer if this quest owns it
+    if (_timer && _timer.questId === questId) _cancelTimer();
     var prev = rec.state;
     rec.state = QuestTypes.STATE.COMPLETED;
     _emit('state-change', questId, prev, QuestTypes.STATE.COMPLETED);
@@ -348,6 +537,8 @@ var QuestChain = (function () {
   function fail(questId, reason) {
     var rec = _active[questId];
     if (!rec) return false;
+    // DOC-113: cancel sprint timer if this quest owns it
+    if (_timer && _timer.questId === questId) _cancelTimer();
     var prev = rec.state;
     rec.state = QuestTypes.STATE.FAILED;
     rec.failReason = reason || null;
@@ -357,6 +548,8 @@ var QuestChain = (function () {
   function expire(questId) {
     var rec = _active[questId];
     if (!rec) return false;
+    // DOC-113: cancel sprint timer if this quest owns it
+    if (_timer && _timer.questId === questId) _cancelTimer();
     var prev = rec.state;
     rec.state = QuestTypes.STATE.EXPIRED;
     _emit('state-change', questId, prev, QuestTypes.STATE.EXPIRED);
@@ -456,6 +649,17 @@ var QuestChain = (function () {
         if (dir !== 'any' && dir !== event.direction) return false;
         return true;
 
+      case 'fetch':
+        // DOC-113 sprint dungeons. Advances when the player picks up the
+        // target item (itemId required). Optional floorId restricts the
+        // match to a specific floor. Timer/hero data (timerMs,
+        // sentinelGraceMs, heroArchetype) live on the step for runtime
+        // consumption by HeroSystem but don't gate advancement — the step
+        // completes on item acquisition. Fires via onItemAcquired().
+        if (!predicate.itemId || predicate.itemId !== event.itemId) return false;
+        if (predicate.floorId && predicate.floorId !== event.floorId) return false;
+        return true;
+
       default:
         return false;
     }
@@ -488,7 +692,14 @@ var QuestChain = (function () {
 
   function onItemAcquired(itemId) {
     if (typeof itemId !== 'string' || !itemId) return false;
-    return _dispatch({ kind: 'item', itemId: itemId });
+    var advanced = _dispatch({ kind: 'item', itemId: itemId });
+    // DOC-113: also fan out a 'fetch' event so kind:"fetch" steps can
+    // match on item pickup. The fetch predicate optionally gates on
+    // floorId so we pass the current floor.
+    var fid = (typeof FloorManager !== 'undefined' && FloorManager.getFloor)
+      ? FloorManager.getFloor() : null;
+    if (_dispatch({ kind: 'fetch', itemId: itemId, floorId: fid })) advanced = true;
+    return advanced;
   }
 
   function onFlagChanged(flag, value) {
@@ -503,6 +714,10 @@ var QuestChain = (function () {
 
   function onFloorArrive(floorId, x, y) {
     if (typeof floorId !== 'string') return false;
+    // DOC-113: cancel sprint timer if the player left the timer's floor
+    if (_timer && _timer.floorId && _timer.floorId !== floorId) {
+      _cancelTimer();
+    }
     return _dispatch({ kind: 'floor', floorId: floorId, x: x | 0, y: y | 0 });
   }
 
@@ -876,6 +1091,9 @@ var QuestChain = (function () {
     getUIPrefs:              getUIPrefs,
     setUIPrefs:              setUIPrefs,
     loadUIPrefs:             loadUIPrefs,
+    getActiveTimer:          getActiveTimer,
+    tickTimer:               tickTimer,
+    onTimerExpired:          onTimerExpired,
     get initialized() { return _initialized; }
   });
 })();

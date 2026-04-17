@@ -392,6 +392,27 @@ canvas { display: block; }
 #tile-picker .tp-tile:hover .tp-label { display: block; }
 #tile-picker .tp-cat { font-size: 9px; color: #666; margin-right: 4px; writing-mode: vertical-rl; text-orientation: mixed; }
 
+/* Search bar */
+#tile-picker .tp-search-row {
+  display: inline-flex; align-items: center; margin-right: 10px; vertical-align: middle;
+}
+#tile-picker .tp-search {
+  width: 110px; padding: 2px 6px; font: 11px Consolas, monospace;
+  background: #222; color: #ccc; border: 1px solid #555; border-radius: 3px;
+  outline: none;
+}
+#tile-picker .tp-search:focus { border-color: #8cf; }
+#tile-picker .tp-search-clear {
+  background: none; border: none; color: #888; cursor: pointer; font-size: 14px;
+  margin-left: 2px; padding: 0 4px; line-height: 1;
+}
+#tile-picker .tp-search-clear:hover { color: #fff; }
+#tile-picker .tp-no-results {
+  display: inline-block; color: #666; font-size: 10px; font-style: italic; padding: 4px 8px;
+}
+/* Recently-used row */
+#tile-picker .tp-recent-row { }
+
 /* ── Lasso selection ─────────────────────────────────────── */
 #lasso-rect {
   position: absolute;
