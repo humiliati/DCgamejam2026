@@ -334,6 +334,7 @@ These were evaluated and kept off the follow-up:
 
 ## 8. Cross-references
 
+- **Track delegation graph (who works on what)**: `TRACK_GRAPH_TERMINUS.md` (DOC-108)
 - Arc map: `docs/DOC_GRAPH_BLOCKOUT_ARC.md` (DOC-104)
 - Full doc index: `docs/TABLE_OF_CONTENTS_CROSS_ROADMAP.md`
 - Upstream plan: `docs/BLOCKOUT_REFRESH_PLAN.docx`

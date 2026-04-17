@@ -72,6 +72,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-104 | [DOC_GRAPH_BLOCKOUT_ARC.md](#doc-104-doc_graph_blockout_arcmd) — Mermaid document graph for the blockout refresh arc: prereqs → spec → engine files → downstream consumers; reading order for delegated engineers | docs/ |
 | DOC-105 | [POST_JAM_FOLLOWUP_ROADMAP.md](#doc-105-post_jam_followup_roadmapmd) — **Active execution plan.** Consolidates deferred items from DOC-62/82/86/17/19/48/88/89/91/92 + legacy carryovers + **20+ stale roadmaps triaged 2026-04-17** into 6 ordered waves aligned with Blockout → NPC → Living Shops arc. See Appendix A for full triage ledger. | docs/ |
 | DOC-106 | [RAYCASTER_PAUSE_RESUME_ADR.md](#doc-106-raycaster_pause_resume_adrmd) — ADR for Raycaster.pause()/resume()/isPaused()/getPausedFrame() API; blocks `viewportMode: 'takeover'` minigames (MINIGAME_ROADMAP §4.6); ~150 LOC across 4 files | docs/ |
+| DOC-108 | [TRACK_GRAPH_TERMINUS.md](#doc-108-track_graph_terminusmd) — **Delegation track graph through project terminus.** Six tracks (World, Renderer, NPC/Narrative, Economy, Platform, Tooling) with Mermaid dependency graph, roadmap sets per node, cross-track interfaces, critical path analysis, milestone timeline through Winter 2026 LG ship. GDD five-pillar anchor. Complements DOC-105 (wave sequencing) and DOC-104 (arc reading graph). | docs/ |
 
 ### Card, Inventory And Combat
 
