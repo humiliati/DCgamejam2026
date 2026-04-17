@@ -75,15 +75,15 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 
 ### Card, Inventory And Combat
 
-| # | Document | Folder |
-|---|----------|--------|
-| DOC-46 | [INVENTORY_CARD_MENU_REWORK.md](#doc-46-inventory_card_menu_reworkmd) | docs/ |
+| # | Document | Folder | Exec Slot |
+|---|----------|--------|-----------|
+| DOC-46 | [INVENTORY_CARD_MENU_REWORK.md](#doc-46-inventory_card_menu_reworkmd) | docs/ | — |
 | DOC-45 | [INVENTORY_SYSTEM_AUDIT_AND_ROADMAP.md](#doc-45-inventory_system_audit_and_roadmapmd) | docs/ | ✅ Resolved Apr 1 — archive candidate |
-| DOC-26 | [UNIFIED_INVENTORY_METADATA_CONTRACT.md](#doc-26-unified_inventory_metadata_contractmd) | docs/ |
-| DOC-24 | [B5_INVENTORY_INTERACTION_DESIGN.md](#doc-24-b5_inventory_interaction_designmd) | docs/ |
-| DOC-25 | [B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md](#doc-25-b6_slot_wheel_and_transaction_layoutmd) | docs/ |
-| DOC-36 | [FACE2_INVENTORY_POLISH.md](#doc-36-face2_inventory_polishmd) | docs/ |
-| DOC-20 | [COMBAT_DRAG_SYSTEM.md](#doc-20-combat_drag_systemmd) | docs/ |
+| DOC-26 | [UNIFIED_INVENTORY_METADATA_CONTRACT.md](#doc-26-unified_inventory_metadata_contractmd) | docs/ | — |
+| DOC-24 | [B5_INVENTORY_INTERACTION_DESIGN.md](#doc-24-b5_inventory_interaction_designmd) | docs/ | — |
+| DOC-25 | [B6_SLOT_WHEEL_AND_TRANSACTION_LAYOUT.md](#doc-25-b6_slot_wheel_and_transaction_layoutmd) | docs/ | — |
+| DOC-36 | [FACE2_INVENTORY_POLISH.md](#doc-36-face2_inventory_polishmd) | docs/ | — |
+| DOC-20 | [COMBAT_DRAG_SYSTEM.md](#doc-20-combat_drag_systemmd) | docs/ | — |
 | DOC-16 | [SUIT_SYSTEM_ROADMAP.md](#doc-16-suit_system_roadmapmd) | docs/ | 8/12 passes — remaining → DOC-105 Wave 4 |
 | DOC-57 | [CRATEUI_INTERACTION_OVERHAUL.md](#doc-57-crateui_interaction_overhaulmd) | docs/ | → DOC-105 Wave 4 |
 
