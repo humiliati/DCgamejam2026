@@ -148,6 +148,10 @@ Priority tags: **[CRIT]** blocks the arc, **[HIGH]** high leverage this cycle, *
    Source: DOC-59 DEPTH3_CLEANING_LOOP_BALANCE  
    Readiness weight overrides for depth-3 floors, "adventurer detritus" breakable category, indestructible supply crates at depth-3, bag size increase, spatial tempo tuning. Depends on D3 reliability (item #2 above) being stable. First application: Floor 2.2.1. Without this, the first dungeon run feels like the town cleaning loop with harder enemies instead of its own distinct rhythm.
 
+8. **[CRIT] NPC/Enemy Authoring Tooling Suite** *(new — DOC-110, 2026-04-16)*  
+   Source: DOC-110 NPC_TOOLING_ROADMAP  
+   Seven-tool authoring suite (P1 NPC Designer, P2 Bark Workbench, P3 Verb-Node Stamper layer on blockout-visualizer, P4 Archetype Studio, P5 Enemy Hydrator, P6 NPC Sprite Studio, P7 Population Planner) that turns every item above from hand-JSON-editing into UI-driven CRUD + coherence CI. Phases 0–3 (schema + CLI + NPC Designer + Bark Workbench + Verb-Node Stamper = ~4.5 days) are the minimum viable suite; unlock all of Wave 3 #1–7. Phases 4–5 (~4.5 days) are the quality tier required for Wave 4 §16.3 retrofuturistic roster expansion. Phases 6–7 (~3 days) are the polish tier required before public playtest. **Sequence: Phase 0 lands before Wave 3 #1 so population/archetype authoring has a canonical schema.**
+
 ### Gate
 
 - Wave 2 exit met.

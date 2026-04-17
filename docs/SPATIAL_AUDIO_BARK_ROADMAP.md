@@ -419,3 +419,4 @@ Game._tickAmbient()    (any off-screen spatial event)
 | KaomojiCapsule speech | `engine/kaomoji-capsule.js` | Rolling ellipsis | Phase 2c on-screen suppression defers to capsule in FOV |
 | Floor transition audio | `engine/floor-transition.js:69-82` | Door contract SFX | Phase 6c crossfade replaces hard stopMusic() for same-biome |
 | DayCycle night-lock | `engine/day-cycle.js:228-253` | registerNightLock / getMuffledBarkPool | Phase 6d spatializes these |
+| **Bark authoring tooling** | **DOC-110 NPC_TOOLING_ROADMAP.md** | §4.2 P2 Bark Workbench | Every bark referenced here is authored/validated through the workbench — coverage, orphan pools, fire-roll distribution, 60-char limit. Manifest feeds Population Planner coherence checks. |

@@ -41,6 +41,35 @@ Observed symptoms that trick agents:
 
 `sudo sysctl vm.drop_caches`, remount, and `rm` on the mount are all blocked by the sandbox profile. There is no in-sandbox way to globally drop the bindfs cache.
 
+## File truncation — recovery, not rewrite
+
+Separate from the stale-read issue above, files in this repo occasionally end up **actually truncated on disk** — the tail of the file is missing content that was committed moments earlier. Pattern: agent edits → commit → later, the working-tree copy is N lines shorter than `HEAD:<file>`. `engine/game.js` was the most recent victim (4536 lines on disk vs. 4568 in HEAD, losing the Minimap-render block and boot closure).
+
+**Best current theory on the mechanism.** This project runs multiple Claude agent worktrees under `.claude/worktrees/` (`busy-gould`, `competent-margulis`, `elegant-mendel`), each committing to its own `claude/*` branch but sharing the `.git/` directory through bindfs. A newer Windows git writes index extensions (e.g. the "k\xfby3" extension we saw) that the sandbox's git 2.34.1 can't parse, producing "index file corrupt" errors. Partial writes to the index and/or to files during that contention appear to be the underlying mechanism. The `.git/hooks/pre-commit` installed by code-review-graph is **not** the cause (it only runs read-only analysis), and the active hook (`tools/.githooks/pre-commit` via `core.hooksPath`) is the read-only file-size budget check in `tools/check-budgets.js` — also not the cause.
+
+**If you suspect a file is truncated**, the recovery procedure is always:
+
+1. **Never regenerate from scratch.** The content still exists in git.
+2. Compare line counts: `git show HEAD:<path> | wc -l` vs. `wc -l <path>`. If HEAD is longer, the disk copy is truncated.
+3. Restore: `git show HEAD:<path> > <path>`. Do **not** use `git checkout HEAD -- <path>` if the index is corrupt — it will fail.
+4. Verify the hash: `git hash-object <path>` should match `git rev-parse HEAD:<path>`.
+
+**If the git index is corrupt** (error: `index uses XXXX extension, which we do not understand` / `index file corrupt`), `rm .git/index` is blocked by the sandbox profile. Workaround: `mv .git/index .git/index.corrupt && git read-tree HEAD`. Same trick for stale `.git/index.lock` files left by aborted operations — `mv` aside instead of `rm`.
+
+**Line-ending config is now pinned** (`core.autocrlf=false`, `core.safecrlf=warn`, `core.eol=lf` in `.git/config`). Don't change these without thinking hard — EOL conversion mid-write on Windows is a known way to produce short files with `* text=auto` in `.gitattributes`.
+
+**Post-commit agent verification step.** After any commit that touches more than a few files, run:
+
+```sh
+for f in $(git diff --name-only HEAD~1 HEAD); do
+  disk=$(wc -l < "$f" 2>/dev/null || echo 0)
+  head=$(git show "HEAD:$f" 2>/dev/null | wc -l)
+  [ "$disk" != "$head" ] && echo "MISMATCH $f disk=$disk head=$head"
+done
+```
+
+Any `MISMATCH` line means that file got truncated post-commit — restore via step 3 above.
+
 ## Hard rules
 
 - **Zero build tools.** No npm, no webpack, no esbuild, no TypeScript. The project is vanilla HTML5/JavaScript loaded via `<script>` tags. The browser is the only runtime.

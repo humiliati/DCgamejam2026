@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "floorId": "1.6",
+  "_notes": [
+    "DOC-107 Phase 6 — distributed anchor sidecar for Gleaner's Home (1.6).",
+    "Migrates `home_work_keys_chest` out of data/quests.json.anchors (central)",
+    "into this per-floor sidecar. Demonstrates the distributed-anchor pattern:",
+    "the anchor definition travels with the floor data that defines it, so",
+    "moving the chest tile in the blockout map (x=19, y=3) only requires",
+    "editing this file — no cross-file sync against a central registry.",
+    "",
+    "At runtime: tools/extract-floors.js harvests this `anchors` block into",
+    "floor-data.json._sidecarAnchors. FloorManager.getDistributedAnchors()",
+    "returns the aggregated map. QuestRegistry.init unions it with",
+    "data/quests.json.anchors (central wins on name collision; validation",
+    "reports any unresolved anchor references in quest steps as fail-fast",
+    "errors in init().errors[])."
+  ],
+  "anchors": {
+    "home_work_keys_chest": {
+      "type": "literal",
+      "floorId": "1.6",
+      "x": 19,
+      "y": 3
+    }
+  }
+}

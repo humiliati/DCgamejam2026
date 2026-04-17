@@ -43,6 +43,67 @@ var DebriefFeed = (function () {
   var _incineratorGlow   = 0;     // 0..1 glow intensity for animation
   var INCINERATOR_ZONE   = 'debrief-incinerator';
 
+  // ── DOC-107 Phase 3 — faction reputation strip ─────────────────
+  // Each entry is one expandable faction row appended after the
+  // buffs block in _renderUnified. The strip starts collapsed (no
+  // entries shown) — the first faction reveals via expandFaction()
+  // at the end of the dispatcher cinematic. Collapsing a faction
+  // hides its row but preserves favor/tier so re-expanding restores
+  // the bar in its current state.
+  var _factions = {};   // factionId → { favor, tier, expanded, justRevealed, justBumped, justTierCrossed }
+  // Faction colors — matched to Biome Plan §19.1 suit alignment.
+  // The internal ids are Street Chronicles codenames retained for
+  // narrative ambiguity; the displayed colors read from their
+  // in-world counterpart biomes.
+  //   bprd       = The Necromancer     ♥  crimson (employer, outside triangle)
+  //   mss        = Tide Council        ♠  coral-teal (Coral Cellars)
+  //   pinkerton  = Foundry Collective  ♦  brass/forge (Ironhold Depths)
+  //   jesuit     = The Admiralty       ♣  lamp amethyst (Lamplit Catacombs)
+  var FACTION_COLORS = {
+    bprd:      '#B8395A',
+    mss:       '#5F9EA0',
+    pinkerton: '#B87333',
+    jesuit:    '#6B5BA8'
+  };
+  // Display labels per faction, used as fallback when i18n.t is
+  // unavailable. i18n keys are 'faction.<id>.name'. Canonical
+  // in-world names per Biome Plan §19.1.
+  var FACTION_LABELS = {
+    bprd:      'The Necromancer',
+    mss:       'Tide Council',
+    pinkerton: 'Foundry Collective',
+    jesuit:    'The Admiralty'
+  };
+  // Suit glyphs per faction — appended to the row header so the
+  // suit alignment (which drives the RPS combat triangle) is
+  // readable at a glance. i18n keys are 'faction.<id>.suit'.
+  // ♥ is outside the ♣/♦/♠ triangle — used for the employer.
+  var FACTION_SUITS = {
+    bprd:      '\u2665', // ♥
+    mss:       '\u2660', // ♠
+    pinkerton: '\u2666', // ♦
+    jesuit:    '\u2663'  // ♣
+  };
+  // Suit color accents (spade/club = black; heart/diamond = red).
+  // Renders the glyph in the classic card-suit color alongside the
+  // faction name tinted to its biome color.
+  var SUIT_COLORS = {
+    '\u2660': '#1A1A1A', // spade  — black
+    '\u2663': '#1A1A1A', // club   — black
+    '\u2665': '#C8314A', // heart  — red
+    '\u2666': '#C8314A'  // diamond — red
+  };
+  // Tier display labels — fallback when i18n.t lookup misses.
+  // Keys are 'rep.tier.<id>'.
+  var TIER_LABELS = {
+    hated:      'Hated',
+    unfriendly: 'Unfriendly',
+    neutral:    'Neutral',
+    friendly:   'Friendly',
+    allied:     'Allied',
+    exalted:    'Exalted'
+  };
+
   // MOK avatar state
   var _mokEmoji     = '\uD83D\uDDE1\uFE0F';  // 🗡️ default
   var _mokCallsign  = 'ROOK';
@@ -381,6 +442,24 @@ var DebriefFeed = (function () {
       }
     }
 
+    // ── Faction reputation strip (DOC-107 Phase 3) ──────────────
+    // Render only expanded factions. Collapsed rows are not in the DOM,
+    // so they cost zero render budget. Below readiness/buffs, above
+    // the feed tail divider — interior + dungeon visibility is gated
+    // upstream by Game (per scope clarification: HUD is the debrief
+    // feed; faction strip lives inside it, not under the HUD bar).
+    var factionIds = [];
+    for (var fid in _factions) {
+      if (_factions.hasOwnProperty(fid) && _factions[fid].expanded) factionIds.push(fid);
+    }
+    if (factionIds.length > 0) {
+      html += '<div class="df-faction-strip">';
+      for (var fi2 = 0; fi2 < factionIds.length; fi2++) {
+        html += _factionRow(factionIds[fi2], _factions[factionIds[fi2]]);
+      }
+      html += '</div>';
+    }
+
     // Compact feed tail — last 2 events (avatar + 2-line event feed)
     if (_feedLog.length > 0) {
       var tailCount = Math.min(2, _feedLog.length);
@@ -452,6 +531,139 @@ var DebriefFeed = (function () {
       '<span class="df-label">' + label + '</span>' +
       '<span' + pipsId + ' style="color:' + color + ';letter-spacing:2px;font-size:1.05em">' + pips + '</span>' +
       '</div>';
+  }
+
+  // ── DOC-107 Phase 3 — faction-row helpers ──────────────────────
+
+  // i18n lookup with fallback to FACTION_LABELS / TIER_LABELS.
+  function _i18n(key, fallback) {
+    if (typeof i18n !== 'undefined' && typeof i18n.t === 'function') {
+      var v = i18n.t(key);
+      if (v && v !== key) return v;
+    }
+    return fallback;
+  }
+
+  // Resolve the favor → progress-within-tier ratio. Returns 0..1.
+  // For 'exalted' (open-ended top tier) we cap at 1 once the player
+  // has any favor above the exalted threshold — there's no "next tier".
+  function _tierProgress(favor, tierId) {
+    if (typeof QuestTypes === 'undefined' || !QuestTypes.REP_TIERS) return 0;
+    var tiers = QuestTypes.REP_TIERS;
+    var idx = -1;
+    for (var i = 0; i < tiers.length; i++) {
+      if (tiers[i].id === tierId) { idx = i; break; }
+    }
+    if (idx < 0) return 0;
+    var lo = tiers[idx].min;
+    if (idx === tiers.length - 1) {
+      // Exalted: no upper bound. Show full bar.
+      return 1;
+    }
+    var hi = tiers[idx + 1].min;
+    if (lo === -Infinity) {
+      // Hated: no lower bound. Show empty bar (player is at the bottom).
+      return 0;
+    }
+    var span = hi - lo;
+    if (span <= 0) return 0;
+    var p = (favor - lo) / span;
+    return Math.max(0, Math.min(1, p));
+  }
+
+  function _factionRow(factionId, fdata) {
+    var color = FACTION_COLORS[factionId] || '#888888';
+    var name  = _i18n('faction.' + factionId + '.name', FACTION_LABELS[factionId] || factionId.toUpperCase());
+    var suit  = _i18n('faction.' + factionId + '.suit', FACTION_SUITS[factionId] || '');
+    var suitColor = SUIT_COLORS[suit] || '#888888';
+    var tierId = fdata.tier || 'neutral';
+    var tierLabel = _i18n('rep.tier.' + tierId, TIER_LABELS[tierId] || tierId);
+    var pct = Math.round(_tierProgress(fdata.favor || 0, tierId) * 100);
+
+    // Animation classes: stack reveal + bump + tiercross as appropriate.
+    // Each is consumed (cleared) on the next render so a re-render
+    // mid-pulse doesn't restart the animation indefinitely.
+    var classes = 'df-faction-row';
+    if (fdata.justRevealed)    classes += ' df-faction-reveal';
+    if (fdata.justBumped)      classes += ' df-faction-bump';
+    if (fdata.justTierCrossed) classes += ' df-faction-tiercross';
+    fdata.justRevealed    = false;
+    fdata.justBumped      = false;
+    fdata.justTierCrossed = false;
+
+    var rowId  = ' id="df-fac-row-'  + factionId + '"';
+    var nameId = ' id="df-fac-name-' + factionId + '"';
+    var suitId = ' id="df-fac-suit-' + factionId + '"';
+    var tierEl = ' id="df-fac-tier-' + factionId + '"';
+    var fillId = ' id="df-fac-fill-' + factionId + '"';
+
+    // Suit glyph renders inline before the name. Card-suit color
+    // (red for ♥/♦, black for ♠/♣) so the alignment reads at a glance.
+    var suitHtml = '';
+    if (suit) {
+      suitHtml = '<span class="df-faction-suit"' + suitId +
+        ' style="color:' + suitColor + '">' + _escape(suit) + '</span>';
+    }
+
+    return '<div class="' + classes + '"' + rowId + '>' +
+      '<div class="df-faction-head">' +
+        suitHtml +
+        '<span class="df-faction-name"' + nameId + ' style="color:' + color + '">' + _escape(name) + '</span>' +
+        '<span class="df-faction-tier"' + tierEl + '>' + _escape(tierLabel) + '</span>' +
+      '</div>' +
+      '<div class="df-faction-track">' +
+        '<div class="df-faction-fill"' + fillId + ' style="width:' + pct + '%;background:' + color + '"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Public — expand a faction row in the strip. Triggers reveal
+  // animation on next render. opts.animate defaults to true.
+  function expandFaction(factionId, opts) {
+    if (typeof factionId !== 'string' || !factionId) return;
+    if (!_factions[factionId]) {
+      _factions[factionId] = { favor: 0, tier: 'neutral', expanded: false, justRevealed: false, justBumped: false, justTierCrossed: false };
+    }
+    var rec = _factions[factionId];
+    var animate = !opts || opts.animate !== false;
+    if (!rec.expanded && animate) rec.justRevealed = true;
+    rec.expanded = true;
+    if (_visible) render();
+  }
+
+  // Public — hide a faction row without losing its favor/tier state.
+  function collapseFaction(factionId) {
+    if (!_factions[factionId]) return;
+    _factions[factionId].expanded = false;
+    if (_visible) render();
+  }
+
+  // Public — push new favor + tier into the strip. Drives the bump
+  // animation on increases; tier-cross adds an extra goldflash.
+  // Auto-expands the row if the favor/tier delta is non-trivial AND
+  // the caller passed opts.expandOnUpdate (default false — explicit
+  // expand via expandFaction is the canonical reveal path).
+  function updateFaction(factionId, favor, tier, opts) {
+    if (typeof factionId !== 'string' || !factionId) return;
+    if (!_factions[factionId]) {
+      _factions[factionId] = { favor: 0, tier: 'neutral', expanded: false, justRevealed: false, justBumped: false, justTierCrossed: false };
+    }
+    var rec = _factions[factionId];
+    var prevFavor = rec.favor;
+    var prevTier  = rec.tier;
+    rec.favor = +favor || 0;
+    rec.tier  = tier || rec.tier || 'neutral';
+    if (rec.favor > prevFavor) rec.justBumped = true;
+    if (rec.tier !== prevTier) rec.justTierCrossed = true;
+    if (opts && opts.expandOnUpdate) rec.expanded = true;
+    if (_visible) render();
+  }
+
+  // Public — read-only snapshot for tests / save serialization.
+  function getFactionState(factionId) {
+    if (!_factions[factionId]) return null;
+    var r = _factions[factionId];
+    return { favor: r.favor, tier: r.tier, expanded: !!r.expanded };
   }
 
   // ── Feed mode ───────────────────────────────────────────────────
@@ -548,6 +760,12 @@ var DebriefFeed = (function () {
     // MOK
     setAvatar:     setAvatar,
     setExpression: setExpression,
+
+    // DOC-107 Phase 3 — Faction reputation strip
+    expandFaction:   expandFaction,
+    collapseFaction: collapseFaction,
+    updateFaction:   updateFaction,
+    getFactionState: getFactionState,
 
     // Incinerator
     updateIncineratorBounds: _updateIncineratorBounds

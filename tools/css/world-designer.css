@@ -1,0 +1,363 @@
+/* ═══════════════════════════════════════════════════════════════
+   tools/css/world-designer.css — UNUSED stub
+   The actual CSS is inline in tools/world-designer.html.
+   This file was created during 5b.0 scaffolding before discovering
+   that world-designer.html already had its own styles. Safe to delete.
+   ═══════════════════════════════════════════════════════════════ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background-color: #0a0a0a;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ── Header ── */
+.designer-header {
+    background-color: #1a1a2e;
+    border-bottom: 2px solid #ff9933;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.designer-header h1 {
+    font-size: 18px;
+    color: #ff9933;
+    white-space: nowrap;
+}
+
+.header-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Buttons ── */
+.btn {
+    padding: 5px 12px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.btn-primary {
+    background-color: #1a2a1a;
+    color: #8f8;
+    border-color: #4a4;
+}
+.btn-primary:hover { border-color: #8f8; background-color: #2a3a2a; }
+
+.btn-secondary {
+    background-color: #1a1a2e;
+    color: #aaa;
+    border-color: #444;
+}
+.btn-secondary:hover { border-color: #ff9933; color: #ff9933; }
+
+.btn-danger {
+    background-color: #2a1a1a;
+    color: #f88;
+    border-color: #a44;
+    width: 100%;
+    margin-top: 12px;
+}
+.btn-danger:hover { border-color: #f88; background-color: #3a2a2a; }
+
+/* ── Main 3-panel layout ── */
+.designer-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ── Palette sidebar (left) ── */
+.palette-sidebar {
+    width: 220px;
+    background-color: #111;
+    border-right: 2px solid #ff9933;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.palette-section {
+    border-bottom: 1px solid #333;
+    padding-bottom: 12px;
+}
+.palette-section:last-child { border-bottom: none; }
+
+.palette-section h3 {
+    font-size: 11px;
+    color: #ff9933;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.palette-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ── Draggable palette items ── */
+.draggable-item {
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: grab;
+    text-align: center;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+    user-select: none;
+}
+.draggable-item:hover { border-color: #fff4; }
+.draggable-item:active { cursor: grabbing; }
+
+/* Node type colors — DG depth vocabulary */
+.exterior-color  { background-color: #3a7d5a; color: #e0ffe0; }
+.interior-color  { background-color: #5a6d8a; color: #e0e8ff; }
+.dungeon-color   { background-color: #7a4a5a; color: #ffe0e8; }
+
+/* ── Canvas area (center) ── */
+.canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.canvas-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: #111;
+    border-bottom: 1px solid #333;
+}
+
+#world-canvas {
+    flex: 1;
+    position: relative;
+    overflow: auto;
+    background-color: #0d0d0d;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+}
+
+/* ── World nodes ── */
+.world-node {
+    position: absolute;
+    border: 2px solid #555;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    cursor: move;
+    z-index: 10;
+    min-width: 80px;
+    text-align: center;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+}
+.world-node:hover { border-color: #ff9933; }
+.world-node.selected {
+    border-color: #ff9933;
+    box-shadow: 0 0 8px rgba(255, 153, 51, 0.5);
+}
+
+.world-node strong {
+    display: block;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.world-node .node-id {
+    font-size: 9px;
+    opacity: 0.6;
+    font-weight: normal;
+}
+
+.world-node .node-meta {
+    font-size: 9px;
+    opacity: 0.5;
+}
+
+/* Depth-based node colors */
+.world-node.depth-1 { background-color: #1a3a2a; border-color: #3a7d5a; color: #c0f0d0; }
+.world-node.depth-2 { background-color: #1a2a3a; border-color: #5a6d8a; color: #c0d8f0; }
+.world-node.depth-3 { background-color: #2a1a2a; border-color: #7a4a5a; color: #f0c0d0; }
+
+.world-node.depth-1.selected { border-color: #6fdf9f; box-shadow: 0 0 8px rgba(111,223,159,0.4); }
+.world-node.depth-2.selected { border-color: #8aaddf; box-shadow: 0 0 8px rgba(138,173,223,0.4); }
+.world-node.depth-3.selected { border-color: #df8aad; box-shadow: 0 0 8px rgba(223,138,173,0.4); }
+
+/* Door endpoints on nodes */
+.door {
+    position: absolute;
+    bottom: -5px;
+    width: 10px;
+    height: 10px;
+    background-color: #fff;
+    border: 1px solid #888;
+    border-radius: 50%;
+    z-index: 20;
+    cursor: crosshair;
+}
+
+/* ── Selection marquee ── */
+#selection-marquee {
+    position: absolute;
+    border: 1px dashed #ff9933;
+    background: rgba(255, 153, 51, 0.08);
+    pointer-events: none;
+    display: none;
+    z-index: 100;
+}
+
+/* ── Property inspector (right) ── */
+.property-inspector {
+    width: 260px;
+    background-color: #111;
+    border-left: 2px solid #ff9933;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 5px 8px;
+    background-color: #1a1a1a;
+    color: #888;
+    border: 1px solid #333;
+    border-radius: 4px 4px 0 0;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    cursor: pointer;
+}
+.tab-btn.active {
+    background-color: #222;
+    color: #ff9933;
+    border-color: #ff9933;
+    border-bottom-color: #222;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.tab-content h3 {
+    font-size: 12px;
+    color: #ff9933;
+    margin-bottom: 8px;
+}
+
+.inspector-empty {
+    color: #555;
+    font-size: 11px;
+    text-align: center;
+    padding: 20px 0;
+}
+
+#inspector-content div {
+    margin-bottom: 6px;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+#inspector-content input[type="text"],
+#inspector-content select {
+    width: 100%;
+    padding: 4px 6px;
+    margin-top: 2px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
+#inspector-content input[type="text"]:focus,
+#inspector-content select:focus {
+    border-color: #ff9933;
+    outline: none;
+}
+
+#node-notes {
+    width: 100%;
+    height: 200px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px;
+    resize: vertical;
+}
+#node-notes:focus { border-color: #ff9933; outline: none; }
+
+/* ── Connection overlays (jsPlumb) ── */
+.jtk-connector { z-index: 4; }
+.jtk-endpoint { z-index: 5; }
+.jtk-overlay { z-index: 6; }
+
+/* ── Status bar ── */
+.status-bar {
+    background-color: #111;
+    border-top: 1px solid #333;
+    padding: 4px 12px;
+    font-size: 10px;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* ── Validation badge overlays ── */
+.validation-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 14px;
+    z-index: 30;
+}
+.validation-badge.error { background-color: #c44; color: #fff; }
+.validation-badge.warn  { background-color: #c90; color: #000; }

@@ -1,5 +1,5 @@
 // ============================================================
-// world-designer.js — Pass 5b.1 DG-native read-only viewer
+// world-designer.js — Pass 5b.3 DG-native world graph editor
 // ============================================================
 // Fetches ./floor-data.json, synthesizes a graph (one node per
 // floor, one edge per doorTargets entry), renders via jsPlumb
@@ -423,6 +423,29 @@
     return out;
   }
 
+  // Pass 5b.5: biome-tinted background color — mixes the biome's wallDark
+  // palette color at low opacity with the depth base color.
+  function biomeTintStyle(biomeKey) {
+    if (!state.biomeMap || !biomeKey) return '';
+    var b = state.biomeMap[biomeKey];
+    if (!b || !b.palette || !b.palette.wallDark) return '';
+    // Use wallDark at ~40% as background overlay
+    return 'background: linear-gradient(135deg, ' + b.palette.wallDark + 'aa, ' + b.palette.wallDark + '44);' +
+           'border-color: ' + b.palette.wallLight + '88;';
+  }
+
+  // Pass 5b.5: metadata summary line for node body
+  function metaSummary(floor) {
+    var parts = [];
+    var entities = (floor.entities || []).length;
+    var rooms = (floor.rooms || []).length;
+    var doors = Object.keys(floor.doorTargets || {}).length;
+    if (entities > 0) parts.push(entities + ' ent');
+    if (rooms > 0) parts.push(rooms + ' rm');
+    if (doors > 0) parts.push(doors + ' dr');
+    return parts.length ? parts.join(' · ') : '';
+  }
+
   function makeNode(id, floor, pos) {
     var d = depthOf(id);
     var el = document.createElement('div');
@@ -430,14 +453,25 @@
     el.id = 'dg-node-' + id.replace(/\./g, '_');
     el.style.left = pos.x + 'px';
     el.style.top  = pos.y + 'px';
+    // Pass 5b.5: biome-tinted background
+    var tint = biomeTintStyle(floor.biome);
+    if (tint) el.style.cssText += tint;
+    var meta = metaSummary(floor);
     el.innerHTML =
       '<div class="dg-node-id">' + id + '</div>' +
       '<div class="dg-node-biome">' + (floor.biome || 'unknown') + '</div>' +
       '<div class="dg-node-size">' + (floor.gridW || '?') + '×' + (floor.gridH || '?') +
-        ' · d' + d + '</div>';
+        ' · d' + d + '</div>' +
+      (meta ? '<div class="dg-node-meta">' + meta + '</div>' : '');
     el.addEventListener('click', function(ev) {
       ev.stopPropagation();
       selectFloor(id);
+    });
+    // Pass 5b.3: right-click context menu
+    el.addEventListener('contextmenu', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+      showContextMenu(ev, id);
     });
     $('dg-canvas').appendChild(el);
     return el;
@@ -465,6 +499,11 @@
       ev.stopPropagation();
       selectFloor(id);
     });
+    el.addEventListener('contextmenu', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+      showContextMenu(ev, id);
+    });
     $('dg-canvas').appendChild(el);
     return el;
   }
@@ -484,6 +523,11 @@
     el.addEventListener('click', function(ev) {
       ev.stopPropagation();
       selectFloor(id);
+    });
+    el.addEventListener('contextmenu', function(ev) {
+      ev.stopPropagation();
+      selectFloor(id);
+      showContextMenu(ev, id);
     });
     $('dg-canvas').appendChild(el);
     return el;
@@ -601,6 +645,20 @@
     $('sum-warn').textContent   = state.warnings;
   }
 
+  // Pass 5b.2: render validation issues for a floor in the inspector
+  function _buildValidationSection(floorId) {
+    var group = _validationIssues[floorId];
+    if (!group || !group.issues || !group.issues.length) return '';
+    var html = '<h3 style="margin-top:14px; color:#f88;">Validation (' + group.issues.length + ')</h3>';
+    group.issues.forEach(function(iss) {
+      var color = iss.severity === 'err' ? '#f88' : iss.severity === 'warn' ? '#cc0' : '#8ad';
+      html += '<div style="font-size:10px; padding:2px 0; color:' + color + ';">';
+      html += '<b>[' + iss.severity + ']</b> ' + iss.kind + ': ' + iss.msg;
+      html += '</div>';
+    });
+    return html;
+  }
+
   function selectFloor(id) {
     if (state.selected && state.nodes[state.selected]) {
       state.nodes[state.selected].el.classList.remove('selected');
@@ -707,7 +765,8 @@
       '<div class="kv"><span class="k">Entities</span><span class="v">' + ((f.entities || []).length) + '</span></div>' +
       '<h3 style="margin-top:14px;">Doors (' + Object.keys(dt).length + ')</h3>' +
       dtRows +
-      (kids.length ? '<h3 style="margin-top:14px;">Proc-gen slots (' + kids.length + ')</h3>' + kidRows : '');
+      (kids.length ? '<h3 style="margin-top:14px;">Proc-gen slots (' + kids.length + ')</h3>' + kidRows : '') +
+      _buildValidationSection(id);
     Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {
       a.addEventListener('click', function() {
         var to = a.getAttribute('data-jump');
@@ -852,12 +911,74 @@
     };
     // M3: attach the full §3.1 payload for BO-V consumption
     spec.payload = buildPayload(spec);
-    state.pendings[id] = spec;
-    savePendings();
-    closeNewFloorModal();
-    rebuild(false);
-    selectFloor(id);
-    setStatus('pending floor created: ' + id, 'ok');
+
+    // Pass 5b.3: if bridge is ready, create the floor in BO-V immediately
+    var bridgeAvailable = (typeof WDBridge !== 'undefined' && WDBridge.ready);
+    if (bridgeAvailable) {
+      var wallId  = spec.payload.biome.defaults.wallTile;
+      var floorId = spec.payload.biome.defaults.floorTile;
+      WDBridge.run({
+        action: 'createFloor',
+        id: id,
+        biome: biome,
+        w: w, h: h,
+        wallTile: wallId  != null ? wallId  : 1,
+        floorTile: floorId != null ? floorId : 0,
+        spawn: { x: w >> 1, y: h >> 1, dir: 0 },
+        doorTargets: doorCoord && parentId ? (function() { var dt = {}; dt[doorCoord] = parentId; return dt; })() : {},
+        force: false,
+        select: false
+      }).then(function(res) {
+        if (res && res.ok !== false) {
+          // Floor created in BO-V — add to local state as authored
+          state.floors[id] = {
+            floorId: id, biome: biome, gridW: w, gridH: h,
+            spawn: { x: w >> 1, y: h >> 1, dir: 0 },
+            doorTargets: doorCoord && parentId ? (function() { var dt = {}; dt[doorCoord] = parentId; return dt; })() : {},
+            rooms: [], entities: []
+          };
+          // Also set reciprocal doorTarget on parent if door coord is set
+          if (doorCoord && parentId && state.floors[parentId]) {
+            if (!state.floors[parentId].doorTargets) state.floors[parentId].doorTargets = {};
+            state.floors[parentId].doorTargets[doorCoord] = id;
+            // Fire bridge call for the parent doorTarget too
+            var cx = parseInt(doorCoord.split(',')[0], 10);
+            var cy = parseInt(doorCoord.split(',')[1], 10);
+            WDBridge.run({ action: 'setDoorTarget', floor: parentId, at: { x: cx, y: cy }, target: id })
+              .catch(function(e) { console.warn('[world-designer] parent doorTarget bridge failed:', e); });
+          }
+          closeNewFloorModal();
+          rebuild(false);
+          selectFloor(id);
+          setStatus('floor created via bridge: ' + id, 'ok');
+        } else {
+          // Bridge returned error — fall back to pending
+          console.warn('[world-designer] bridge createFloor failed, using pending:', res);
+          state.pendings[id] = spec;
+          savePendings();
+          closeNewFloorModal();
+          rebuild(false);
+          selectFloor(id);
+          setStatus('pending floor created (bridge error): ' + id, 'ok');
+        }
+      }).catch(function(e) {
+        console.warn('[world-designer] bridge createFloor error, using pending:', e);
+        state.pendings[id] = spec;
+        savePendings();
+        closeNewFloorModal();
+        rebuild(false);
+        selectFloor(id);
+        setStatus('pending floor created (bridge unavailable): ' + id, 'ok');
+      });
+    } else {
+      // No bridge — create as pending (original behavior)
+      state.pendings[id] = spec;
+      savePendings();
+      closeNewFloorModal();
+      rebuild(false);
+      selectFloor(id);
+      setStatus('pending floor created: ' + id, 'ok');
+    }
   }
 
   function openPendingInBOV(id) {
@@ -885,19 +1006,505 @@
     setStatus('pending discarded: ' + id, 'ok');
   }
 
+  // ── Pass 5b.2: Validation overlay ─────────────────────────
+  var _validationIssues = {};  // floorId → [{severity, kind, msg, cells}, ...]
+
+  function clearValidationOverlay() {
+    _validationIssues = {};
+    Object.keys(state.nodes).forEach(function(id) {
+      var el = state.nodes[id].el;
+      el.classList.remove('dg-val-err', 'dg-val-warn');
+      var badge = el.querySelector('.dg-val-badge');
+      if (badge) badge.parentNode.removeChild(badge);
+    });
+    $('sum-warn').textContent = state.warnings;
+  }
+
+  function applyValidationOverlay(issues) {
+    clearValidationOverlay();
+    if (!issues || !issues.length) {
+      setStatus('validation: 0 issues', 'ok');
+      return;
+    }
+    // Group by floorId
+    var byFloor = {};
+    issues.forEach(function(iss) {
+      var fid = iss.floorId;
+      if (!byFloor[fid]) byFloor[fid] = { err: 0, warn: 0, info: 0, issues: [] };
+      byFloor[fid][iss.severity === 'err' ? 'err' : iss.severity === 'warn' ? 'warn' : 'info']++;
+      byFloor[fid].issues.push(iss);
+    });
+    _validationIssues = byFloor;
+
+    var totalErr = 0, totalWarn = 0;
+    Object.keys(byFloor).forEach(function(fid) {
+      var counts = byFloor[fid];
+      totalErr += counts.err;
+      totalWarn += counts.warn;
+      var node = state.nodes[fid];
+      if (!node) return;
+      var el = node.el;
+      // Outline class
+      if (counts.err > 0)       el.classList.add('dg-val-err');
+      else if (counts.warn > 0) el.classList.add('dg-val-warn');
+      // Badge
+      var sev = counts.err > 0 ? 'err' : counts.warn > 0 ? 'warn' : 'info';
+      var total = counts.err + counts.warn + counts.info;
+      var badge = document.createElement('div');
+      badge.className = 'dg-val-badge ' + sev;
+      badge.textContent = total;
+      badge.title = counts.err + ' errors, ' + counts.warn + ' warnings, ' + counts.info + ' info';
+      el.appendChild(badge);
+    });
+    $('sum-warn').textContent = state.warnings + ' reciprocity + ' + totalErr + ' err / ' + totalWarn + ' warn (BO)';
+    setStatus('validation: ' + issues.length + ' issues (' + totalErr + ' err, ' + totalWarn + ' warn)', totalErr > 0 ? 'err' : 'ok');
+  }
+
+  function runBridgeValidation() {
+    if (typeof WDBridge === 'undefined' || !WDBridge.ready) {
+      setStatus('bridge not ready — validation requires BO-V iframe', 'err');
+      return;
+    }
+    setStatus('validating via BO bridge…');
+    WDBridge.validate('all').then(function(issues) {
+      applyValidationOverlay(issues);
+    }).catch(function(e) {
+      setStatus('bridge validation failed: ' + e.message, 'err');
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Pass 5b.5: Subgraph zoom — focus on a floor + its subtree
+  // ──────────────────────────────────────────────────────────
+  var _zoomRoot = null; // null = full view, else = floor id prefix
+
+  function zoomToSubgraph(rootId) {
+    _zoomRoot = rootId;
+    var prefix = rootId + '.';
+    var wrap = $('dg-canvas-wrap');
+    // Scroll to center the root node
+    var rootNode = state.nodes[rootId];
+    if (rootNode) {
+      wrap.scrollLeft = Math.max(0, rootNode.x - wrap.clientWidth / 2 + 75);
+      wrap.scrollTop  = Math.max(0, rootNode.y - wrap.clientHeight / 2 + 27);
+    }
+    // Dim nodes outside the subtree
+    Object.keys(state.nodes).forEach(function(id) {
+      var el = state.nodes[id].el;
+      var inScope = (id === rootId || id.indexOf(prefix) === 0);
+      el.style.opacity = inScope ? '1' : '0.25';
+      el.style.pointerEvents = inScope ? 'auto' : 'none';
+    });
+    // Dim edges outside scope
+    state.edges.forEach(function(e) {
+      var inScope = (e.from === rootId || e.from.indexOf(prefix) === 0) ||
+                    (e.to === rootId || e.to.indexOf(prefix) === 0);
+      if (e.conn && e.conn.canvas) {
+        e.conn.canvas.style.opacity = inScope ? '1' : '0.12';
+      }
+    });
+    setStatus('zoomed: ' + rootId + ' subtree (' +
+      Object.keys(state.nodes).filter(function(id) {
+        return id === rootId || id.indexOf(prefix) === 0;
+      }).length + ' nodes)', 'ok');
+  }
+
+  function zoomOut() {
+    _zoomRoot = null;
+    Object.keys(state.nodes).forEach(function(id) {
+      var el = state.nodes[id].el;
+      el.style.opacity = '';
+      el.style.pointerEvents = '';
+    });
+    state.edges.forEach(function(e) {
+      if (e.conn && e.conn.canvas) e.conn.canvas.style.opacity = '';
+    });
+    setStatus('zoom reset — full view', 'ok');
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Pass 5b.5: Export graph to PNG
+  // ──────────────────────────────────────────────────────────
+  function exportToPng() {
+    setStatus('rendering PNG…');
+    // Use html2canvas-style approach: render the canvas div to a data URL
+    // via a simple SVG foreignObject technique
+    var canvas = $('dg-canvas');
+    var rect = canvas.getBoundingClientRect();
+    // Find bounding box of all nodes
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    Object.keys(state.nodes).forEach(function(id) {
+      var n = state.nodes[id];
+      var el = n.el;
+      var x = parseInt(el.style.left, 10) || 0;
+      var y = parseInt(el.style.top, 10) || 0;
+      var w = el.offsetWidth || 150;
+      var h = el.offsetHeight || 60;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x + w > maxX) maxX = x + w;
+      if (y + h > maxY) maxY = y + h;
+    });
+    // Pad
+    var pad = 40;
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX += pad;
+    maxY += pad;
+    var cw = maxX - minX;
+    var ch = maxY - minY;
+
+    // Create an offscreen canvas and draw node boxes + labels
+    var c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    var ctx = c.getContext('2d');
+    // Background
+    ctx.fillStyle = '#20232a';
+    ctx.fillRect(0, 0, cw, ch);
+    // Grid dots
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    for (var gx = 0; gx < cw; gx += 24) {
+      for (var gy = 0; gy < ch; gy += 24) {
+        ctx.fillRect(gx, gy, 1, 1);
+      }
+    }
+
+    // Draw edges as lines
+    state.edges.forEach(function(e) {
+      var fromN = state.nodes[e.from];
+      var toN = state.nodes[e.to];
+      if (!fromN || !toN) return;
+      var fx = (parseInt(fromN.el.style.left, 10) || 0) + 75 - minX;
+      var fy = (parseInt(fromN.el.style.top, 10) || 0) + 27 - minY;
+      var tx = (parseInt(toN.el.style.left, 10) || 0) + 75 - minX;
+      var ty = (parseInt(toN.el.style.top, 10) || 0) + 27 - minY;
+      ctx.strokeStyle = e.reciprocal === false ? '#f66' : (e.type === 'dungeon' ? '#b69' : e.type === 'interior' ? '#79a' : '#9b6');
+      ctx.lineWidth = 2;
+      if (!e.reciprocal) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      // Simple bezier
+      var midX = (fx + tx) / 2 + (fy < ty ? 30 : -30);
+      ctx.quadraticCurveTo(midX, (fy + ty) / 2, tx, ty);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Draw nodes as rounded rects
+    Object.keys(state.nodes).forEach(function(id) {
+      var n = state.nodes[id];
+      var el = n.el;
+      var x = (parseInt(el.style.left, 10) || 0) - minX;
+      var y = (parseInt(el.style.top, 10) || 0) - minY;
+      var w = el.offsetWidth || 150;
+      var h = el.offsetHeight || 60;
+      // Background
+      var bg = n.ghost ? '#1a1d22' : (n.depth >= 3 ? '#3a2a44' : n.depth === 2 ? '#2a3644' : '#2b3a2a');
+      var border = n.ghost ? '#567' : (n.depth >= 3 ? '#96b' : n.depth === 2 ? '#79a' : '#6a8');
+      ctx.fillStyle = bg;
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 6);
+      ctx.fill();
+      ctx.stroke();
+      // ID text
+      ctx.fillStyle = '#cfe';
+      ctx.font = 'bold 12px Consolas, monospace';
+      ctx.fillText(id, x + 8, y + 16);
+      // Biome text
+      var floor = state.floors[id] || state.pendings[id];
+      var biome = floor ? (floor.biome || '') : (state.ghosts[id] ? (state.ghosts[id].biomeHint || '') : '');
+      ctx.fillStyle = '#9ab';
+      ctx.font = '9px Consolas, monospace';
+      ctx.fillText(biome.toUpperCase(), x + 8, y + 28);
+      // Size
+      var sizeText = floor ? ((floor.gridW || '?') + '×' + (floor.gridH || '?') + ' · d' + n.depth) : ('d' + n.depth);
+      ctx.fillStyle = '#678';
+      ctx.fillText(sizeText, x + 8, y + 40);
+    });
+
+    // Download
+    try {
+      var url = c.toDataURL('image/png');
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'world-graph-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.png';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() { a.remove(); }, 100);
+      setStatus('PNG exported (' + cw + '×' + ch + ')', 'ok');
+    } catch (e) {
+      setStatus('PNG export failed: ' + e.message, 'err');
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Pass 5b.3: Context menu
+  // ──────────────────────────────────────────────────────────
+  var _ctxFloorId = null;
+
+  function showContextMenu(ev, floorId) {
+    _ctxFloorId = floorId;
+    var menu = $('dg-ctx-menu');
+    menu.style.display = 'block';
+    menu.style.left = ev.clientX + 'px';
+    menu.style.top  = ev.clientY + 'px';
+    // Adjust if off-screen
+    var rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (ev.clientX - rect.width) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (ev.clientY - rect.height) + 'px';
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+
+  function hideContextMenu() {
+    $('dg-ctx-menu').style.display = 'none';
+    _ctxFloorId = null;
+  }
+
+  function openInBlockoutEditor(floorId) {
+    if (!floorId) return;
+    var url = 'blockout-visualizer.html?floor=' + encodeURIComponent(floorId);
+    window.open(url, '_blank');
+    setStatus('opened ' + floorId + ' in BO-V', 'ok');
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Pass 5b.3: Door contract modal
+  // ──────────────────────────────────────────────────────────
+  function openDoorContractModal(fromFloorId) {
+    $('dc-from').value = fromFloorId || '';
+    $('dc-from-coord').value = '';
+    $('dc-to-coord').value = '';
+    $('dc-err').textContent = '';
+    $('dc-reciprocal').checked = true;
+    // Populate "To floor" dropdown — all authored floors except fromFloorId
+    var sel = $('dc-to');
+    sel.innerHTML = '';
+    Object.keys(state.floors).sort().forEach(function(fid) {
+      if (fid === fromFloorId) return;
+      var o = document.createElement('option');
+      o.value = fid;
+      o.textContent = fid + ' — ' + (state.floors[fid].biome || '?');
+      sel.appendChild(o);
+    });
+    // Also include pending floors as possible targets
+    Object.keys(state.pendings).sort().forEach(function(fid) {
+      if (fid === fromFloorId) return;
+      var o = document.createElement('option');
+      o.value = fid;
+      o.textContent = fid + ' (pending)';
+      sel.appendChild(o);
+    });
+    $('dg-modal-door').classList.add('show');
+    setTimeout(function() { $('dc-from-coord').focus(); }, 30);
+  }
+
+  function closeDoorContractModal() {
+    $('dg-modal-door').classList.remove('show');
+  }
+
+  function submitDoorContract() {
+    var errEl = $('dc-err'); errEl.textContent = '';
+    var fromId = $('dc-from').value;
+    var toId = $('dc-to').value;
+    var fromCoordRaw = $('dc-from-coord').value.trim();
+    var toCoordRaw = $('dc-to-coord').value.trim();
+    var reciprocal = $('dc-reciprocal').checked;
+
+    if (!fromId) { errEl.textContent = 'No source floor.'; return; }
+    if (!toId) { errEl.textContent = 'Select a target floor.'; return; }
+    if (fromId === toId) { errEl.textContent = 'Cannot link a floor to itself.'; return; }
+
+    // Validate from-coord
+    var fromFloor = state.floors[fromId];
+    if (!fromFloor) { errEl.textContent = 'Source floor "' + fromId + '" not authored.'; return; }
+    var fv = isValidDoorCoord(fromCoordRaw, fromFloor.gridW, fromFloor.gridH);
+    if (!fv.ok) { errEl.textContent = 'From coord: ' + fv.msg; return; }
+    if (!fv.coord) { errEl.textContent = 'From coord is required.'; return; }
+
+    // Validate to-coord if reciprocal
+    var toFloor = state.floors[toId];
+    var tv = { ok: true, coord: null };
+    if (reciprocal && toCoordRaw) {
+      if (!toFloor) { errEl.textContent = 'Target "' + toId + '" not authored — cannot set reciprocal coord.'; return; }
+      tv = isValidDoorCoord(toCoordRaw, toFloor.gridW, toFloor.gridH);
+      if (!tv.ok) { errEl.textContent = 'To coord: ' + tv.msg; return; }
+    }
+    if (reciprocal && !tv.coord && toFloor) {
+      errEl.textContent = 'Reciprocal checked but no "to" coord provided.';
+      return;
+    }
+
+    // Route through bridge if available, else update local state
+    var bridgeAvailable = (typeof WDBridge !== 'undefined' && WDBridge.ready);
+
+    function applyForward() {
+      if (bridgeAvailable) {
+        return WDBridge.run({
+          action: 'setDoorTarget',
+          floor: fromId,
+          at: { x: parseInt(fv.coord.split(',')[0], 10), y: parseInt(fv.coord.split(',')[1], 10) },
+          target: toId
+        });
+      }
+      // Local fallback
+      if (!fromFloor.doorTargets) fromFloor.doorTargets = {};
+      fromFloor.doorTargets[fv.coord] = toId;
+      return Promise.resolve({ doorTargets: fromFloor.doorTargets });
+    }
+
+    function applyReverse() {
+      if (!reciprocal || !tv.coord || !toFloor) return Promise.resolve(null);
+      if (bridgeAvailable) {
+        return WDBridge.run({
+          action: 'setDoorTarget',
+          floor: toId,
+          at: { x: parseInt(tv.coord.split(',')[0], 10), y: parseInt(tv.coord.split(',')[1], 10) },
+          target: fromId
+        });
+      }
+      if (!toFloor.doorTargets) toFloor.doorTargets = {};
+      toFloor.doorTargets[tv.coord] = fromId;
+      return Promise.resolve({ doorTargets: toFloor.doorTargets });
+    }
+
+    applyForward().then(function() {
+      return applyReverse();
+    }).then(function() {
+      closeDoorContractModal();
+      rebuild(false);
+      selectFloor(fromId);
+      setStatus('door link: ' + fromId + ' → ' + toId + (reciprocal ? ' (reciprocal)' : ''), 'ok');
+    }).catch(function(e) {
+      errEl.textContent = 'Bridge error: ' + e.message;
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Pass 5b.3: Delete floor modal
+  // ──────────────────────────────────────────────────────────
+  var _deleteTarget = null;
+
+  function openDeleteModal(floorId) {
+    _deleteTarget = floorId;
+    $('del-err').textContent = '';
+    $('del-cascade').value = 'orphan';
+    // Build info text
+    var isAuthored = !!state.floors[floorId];
+    var isPending = !!state.pendings[floorId];
+    var isGhost = !!state.ghosts[floorId];
+    var childCount = 0;
+    if (isAuthored) {
+      var prefix = floorId + '.';
+      Object.keys(state.floors).forEach(function(fid) {
+        if (fid.indexOf(prefix) === 0) childCount++;
+      });
+    }
+    var info = 'Floor: <b style="color:#fc8;">' + floorId + '</b>';
+    if (isAuthored) info += ' <span style="color:#9c6;">(authored)</span>';
+    else if (isPending) info += ' <span style="color:#fc8;">(pending)</span>';
+    else if (isGhost) info += ' <span style="color:#789;">(ghost)</span>';
+    if (childCount > 0) info += '<br>This floor has <b>' + childCount + '</b> descendant(s) in the tree.';
+    $('del-info').innerHTML = info;
+    $('dg-modal-delete').classList.add('show');
+  }
+
+  function closeDeleteModal() {
+    $('dg-modal-delete').classList.remove('show');
+    _deleteTarget = null;
+  }
+
+  function confirmDelete() {
+    var errEl = $('del-err'); errEl.textContent = '';
+    if (!_deleteTarget) return;
+    var floorId = _deleteTarget;
+    var cascade = $('del-cascade').value;
+
+    // Pending floors just get removed from local pool
+    if (state.pendings[floorId]) {
+      delete state.pendings[floorId];
+      savePendings();
+      closeDeleteModal();
+      if (state.selected === floorId) state.selected = null;
+      rebuild(false);
+      $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+      setStatus('pending floor deleted: ' + floorId, 'ok');
+      return;
+    }
+
+    // Ghost floors — can't delete them, they're synthesized
+    if (state.ghosts[floorId] && !state.floors[floorId]) {
+      errEl.textContent = 'Ghost nodes are synthesized — delete the parent reference instead.';
+      return;
+    }
+
+    // Authored floor — route through bridge if available
+    var bridgeAvailable = (typeof WDBridge !== 'undefined' && WDBridge.ready);
+    if (bridgeAvailable) {
+      WDBridge.run({ action: 'deleteFloor', id: floorId, cascade: cascade })
+        .then(function(res) {
+          if (!res || !res.ok) {
+            errEl.textContent = 'BO error: ' + ((res && res.error) || 'unknown');
+            return;
+          }
+          var r = res.result || res;
+          // Also remove from local state.floors to keep graph in sync
+          var dels = r.deleted || [floorId];
+          dels.forEach(function(d) {
+            delete state.floors[d];
+          });
+          closeDeleteModal();
+          if (state.selected === floorId) state.selected = null;
+          rebuild(false);
+          $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+          setStatus('deleted: ' + dels.join(', ') + (r.orphaned && r.orphaned.length ? ' (orphaned: ' + r.orphaned.join(', ') + ')' : ''), 'ok');
+        })
+        .catch(function(e) {
+          errEl.textContent = 'Bridge error: ' + e.message;
+        });
+    } else {
+      // Local-only fallback — just remove from state
+      delete state.floors[floorId];
+      closeDeleteModal();
+      if (state.selected === floorId) state.selected = null;
+      rebuild(false);
+      $('dg-inspector-body').innerHTML = '<div class="empty">Click a floor node</div>';
+      setStatus('deleted locally (bridge not ready): ' + floorId, 'ok');
+    }
+  }
+
   function wire() {
     $('btn-reload').addEventListener('click', function() {
       setStatus('reloading…');
       Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
-        .then(function() { populateBiomeSelect(); rebuild(false); setStatus('reloaded', 'ok'); })
+        .then(function() {
+          populateBiomeSelect();
+          rebuild(false);
+          setStatus('reloaded', 'ok');
+          // Also reload the bridge iframe so BO-V picks up new data
+          if (typeof WDBridge !== 'undefined') WDBridge.reload();
+        })
         .catch(function(e) { setStatus('reload failed: ' + e.message, 'err'); });
     });
+    // Pass 5b.2: Validate All button
+    var btnValidate = $('btn-validate');
+    if (btnValidate) {
+      btnValidate.addEventListener('click', runBridgeValidation);
+    }
     $('btn-layout-reset').addEventListener('click', function() {
       state.layout = {};
       rebuild(true);
       setStatus('layout reset', 'ok');
     });
     $('btn-layout-save').addEventListener('click', downloadLayout);
+    // Pass 5b.5: zoom out + PNG export
+    $('btn-zoom-out').addEventListener('click', function() {
+      zoomOut();
+      $('btn-zoom-out').style.display = 'none';
+    });
+    $('btn-export-png').addEventListener('click', exportToPng);
     $('btn-new-floor').addEventListener('click', function() {
       // Preselect currently-selected authored floor as parent, if any.
       var pre = (state.selected && state.floors[state.selected]) ? state.selected : '';
@@ -915,9 +1522,51 @@
     $('dg-modal-new').addEventListener('click', function(ev) {
       if (ev.target === $('dg-modal-new')) closeNewFloorModal();
     });
+    // Pass 5b.3: context menu handlers
+    document.addEventListener('click', function() { hideContextMenu(); });
+    document.addEventListener('contextmenu', function(ev) {
+      // Close menu on right-click outside node (node handler will stopPropagation)
+      hideContextMenu();
+    });
+    var ctxMenu = $('dg-ctx-menu');
+    ctxMenu.addEventListener('click', function(ev) {
+      var item = ev.target.closest('[data-ctx]');
+      if (!item || !_ctxFloorId) return;
+      var action = item.getAttribute('data-ctx');
+      var fid = _ctxFloorId;
+      hideContextMenu();
+      if (action === 'open-bov') {
+        openInBlockoutEditor(fid);
+      } else if (action === 'add-edge') {
+        openDoorContractModal(fid);
+      } else if (action === 'zoom') {
+        zoomToSubgraph(fid);
+        $('btn-zoom-out').style.display = '';
+      } else if (action === 'delete') {
+        openDeleteModal(fid);
+      }
+    });
+
+    // Pass 5b.3: door contract modal handlers
+    $('dc-cancel').addEventListener('click', closeDoorContractModal);
+    $('dc-create').addEventListener('click', submitDoorContract);
+    $('dg-modal-door').addEventListener('click', function(ev) {
+      if (ev.target === $('dg-modal-door')) closeDoorContractModal();
+    });
+
+    // Pass 5b.3: delete modal handlers
+    $('del-cancel').addEventListener('click', closeDeleteModal);
+    $('del-confirm').addEventListener('click', confirmDelete);
+    $('dg-modal-delete').addEventListener('click', function(ev) {
+      if (ev.target === $('dg-modal-delete')) closeDeleteModal();
+    });
+
     document.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Escape' && $('dg-modal-new').classList.contains('show')) {
-        closeNewFloorModal();
+      if (ev.key === 'Escape') {
+        if ($('dg-modal-new').classList.contains('show')) closeNewFloorModal();
+        if ($('dg-modal-door').classList.contains('show')) closeDoorContractModal();
+        if ($('dg-modal-delete').classList.contains('show')) closeDeleteModal();
+        hideContextMenu();
       }
     });
     $('dg-canvas-wrap').addEventListener('click', function() {
@@ -937,6 +1586,19 @@
     }
     wire();
     loadPendings();
+    // Pass 5b.2: init the BO bridge iframe (non-blocking)
+    if (typeof WDBridge !== 'undefined') {
+      WDBridge.init();
+      WDBridge.onReady(function() {
+        console.log('[world-designer] BO bridge ready');
+        // Enable the validate button visually
+        var btn = $('btn-validate');
+        if (btn) btn.style.opacity = '1';
+      });
+      // Dim the validate button until bridge is ready
+      var btn = $('btn-validate');
+      if (btn) btn.style.opacity = '0.4';
+    }
     Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
       .then(function() {
         populateBiomeSelect();
@@ -952,5 +1614,20 @@
     boot();
   }
 
-  window.DG_WORLD = { state: state, rebuild: rebuild, snapshotPositions: snapshotPositions };
+  window.DG_WORLD = {
+    state: state,
+    rebuild: rebuild,
+    snapshotPositions: snapshotPositions,
+    // Pass 5b.2 bridge helpers
+    runBridgeValidation: runBridgeValidation,
+    validationIssues: function() { return _validationIssues; },
+    // Pass 5b.3 edit helpers
+    openInBlockoutEditor: openInBlockoutEditor,
+    openDoorContractModal: openDoorContractModal,
+    openDeleteModal: openDeleteModal,
+    // Pass 5b.5 polish helpers
+    zoomToSubgraph: zoomToSubgraph,
+    zoomOut: zoomOut,
+    exportToPng: exportToPng
+  };
 })();

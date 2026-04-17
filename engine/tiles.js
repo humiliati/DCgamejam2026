@@ -350,7 +350,43 @@ var TILES = (function () {
     // where the tile is adjacent to "hull exterior." Gap reveals the
     // distant ocean; parallax-based (stable horizon) rather than true
     // skybox-cube sampling — correct for 1-tile porthole scale.
-    PORTHOLE_OCEAN:   96
+    PORTHOLE_OCEAN:   96,
+
+    // ── Mechanism-before-fire trap family (DOC-112 §3.6, BOXFORGE_AGENT_ROADMAP Phase 5.0) ──
+    // The existing TRAP (8), FIRE (15), SPIKES (16), POISON (17) tiles are
+    // instant-hazard tiles that fire on step with no approach moment — the
+    // player has already committed before the trap resolves, so no peek is
+    // possible. Gleaner's cleanup-after-heroes narrative needs the OPPOSITE:
+    // visible mechanisms the player can see, peek, and re-arm ("re-arm for
+    // the next delve" — that's the UX tone, not "disarm"). Each tile is a
+    // distinct visual silhouette so the peek descriptor knows which shape
+    // to stamp. See DOC-112 §5 for the stamp queue that consumes these.
+    TRAP_PRESSURE_PLATE: 97,  // Floor-level plate — walkable, sight-permeable,
+                              //   classified as hazard. Peek via stamp-flat-sprite.
+                              //   Action: pry / re-arm plate.
+    TRAP_DART_LAUNCHER:  98,  // Wall-mounted dart mechanism — non-walkable,
+                              //   opaque, classified as hazard. Peek via
+                              //   stamp-vertical-fixture (wall-mount variant).
+                              //   Action: de-cock / remove dart; aim line visible.
+    TRAP_TRIPWIRE:       99,  // Thin floor strip — walkable, sight-permeable,
+                              //   classified as hazard. Peek via stamp-flat-sprite
+                              //   (thin-strip variant). Micro peek: cut / reset.
+    TRAP_SPIKE_PIT:      100, // Open pit with spikes — non-walkable (falls kill),
+                              //   sight-permeable, classified as hazard. Peek via
+                              //   stamp-box-lidded (open-pit interior variant).
+                              //   Action: board-over / retract spikes.
+    TRAP_TELEPORT_DISC:  101, // Floor-embedded rune disc — walkable, sight-
+                              //   permeable, classified as hazard. Peek via
+                              //   stamp-pyramid-shrine (flat-disc variant).
+                              //   Context-gated: destination preview + deactivate.
+    COBWEB:              102  // Vertical translucent strands — walkable (pushed
+                              //   through with effort), sight-permeable (player
+                              //   sees distorted shapes behind), NOT a hazard —
+                              //   creature-family obstacle. Peek via
+                              //   stamp-vertical-fixture (translucent-strand
+                              //   variant). Action: sweep + inspect (may drop
+                              //   harvest). Interacts with the hose/flame pass
+                              //   from DOC-31b COBWEB_TRAP_STRATEGY.
   };
 
   /**
@@ -397,13 +433,29 @@ var TILES = (function () {
            tile === T.DOOR_FACADE ||
            tile === T.TRAPDOOR_DN || tile === T.TRAPDOOR_UP ||
            tile === T.STOOP || tile === T.DECK ||
-           tile === T.TUNNEL_RIB;
+           tile === T.TUNNEL_RIB ||
+           // DOC-112 / BOXFORGE Phase 5.0: mechanism-before-fire trap family.
+           // Pressure plate / tripwire / teleport disc sit flush with the
+           // floor (walkable). Cobweb is pushed through with effort.
+           // TRAP_DART_LAUNCHER (wall-mounted) and TRAP_SPIKE_PIT (open pit)
+           // are NOT walkable by design.
+           tile === T.TRAP_PRESSURE_PLATE ||
+           tile === T.TRAP_TRIPWIRE ||
+           tile === T.TRAP_TELEPORT_DISC ||
+           tile === T.COBWEB;
   };
 
   /** Check if a tile is an environmental hazard */
   T.isHazard = function (tile) {
     return tile === T.TRAP || tile === T.FIRE ||
-           tile === T.SPIKES || tile === T.POISON;
+           tile === T.SPIKES || tile === T.POISON ||
+           // DOC-112 / BOXFORGE Phase 5.0: the five new TRAP_* tiles
+           // classify as hazards. COBWEB is creature-family, not hazard.
+           tile === T.TRAP_PRESSURE_PLATE ||
+           tile === T.TRAP_DART_LAUNCHER ||
+           tile === T.TRAP_TRIPWIRE ||
+           tile === T.TRAP_SPIKE_PIT ||
+           tile === T.TRAP_TELEPORT_DISC;
   };
 
   /** Check if a tile blocks light / line of sight */
@@ -426,7 +478,12 @@ var TILES = (function () {
            tile === T.WALL_DIAG_0 || tile === T.WALL_DIAG_1 ||
            tile === T.WALL_DIAG_2 || tile === T.WALL_DIAG_3 ||
            tile === T.TUNNEL_RIB || tile === T.TUNNEL_WALL ||
-           tile === T.PORTHOLE_OCEAN;
+           tile === T.PORTHOLE_OCEAN ||
+           // DOC-112 / BOXFORGE Phase 5.0: only TRAP_DART_LAUNCHER is
+           // opaque (wall-mounted mechanism, blocks line-of-sight across
+           // the tile). The floor-level TRAP_* tiles and COBWEB are
+           // sight-permeable.
+           tile === T.TRAP_DART_LAUNCHER;
   };
 
   /** Check if tile is a torch (lit or unlit) */

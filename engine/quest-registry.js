@@ -33,11 +33,13 @@ var QuestRegistry = (function () {
   var _initialized      = false;
   var _quests           = Object.freeze({});   // { questId: frozen quest def }
   var _namedAnchors     = Object.freeze({});   // { anchorId: frozen spec }
+  var _anchorSources    = Object.freeze({});   // { anchorId: 'central' | <sidecar filename> } — Phase 6
   var _floorQuestIndex  = Object.freeze({});   // { floorId: [questId, ...] }
   var _version          = 0;
   var _templates        = Object.freeze({});   // _templates key from quests.json
   var _source           = null;                // 'quests.json' | 'inline' | null
   var _lastError        = null;
+  var _initErrors       = [];                  // Phase 6 fail-fast log (unresolved anchor refs, etc.)
 
   // Runtime resolvers (wired by Game at Layer 4 boot; see setResolvers).
   // Left null in Phase 0 tests so resolveAnchor returns null cleanly.
@@ -68,18 +70,53 @@ var QuestRegistry = (function () {
     return cur;
   }
 
+  // Normalize one anchor spec object. Returns {normalized, ok, reason}.
+  // A bare {floorId, x, y} without a type becomes an implicit 'literal'.
+  function _normalizeAnchorSpec(spec) {
+    if (!spec || typeof spec !== 'object') {
+      return { ok: false, reason: 'not-an-object' };
+    }
+    if (typeof spec.type !== 'string') {
+      if (typeof spec.floorId === 'string' &&
+          typeof spec.x === 'number' && typeof spec.y === 'number') {
+        return {
+          ok: true,
+          normalized: { type: 'literal', floorId: spec.floorId, x: spec.x, y: spec.y }
+        };
+      }
+      return { ok: false, reason: 'missing-type' };
+    }
+    var copy = {};
+    Object.keys(spec).forEach(function (k) { copy[k] = spec[k]; });
+    return { ok: true, normalized: copy };
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
-  // Accepts the parsed quests.json payload plus (optionally) a map of
-  // floor-anchored quests harvested from floor-data.json. Phase 1 now
-  // also ingests named anchors from payload.anchors.
-  function init(payload, floorAnchors) {
+  // Accepts:
+  //   payload              — parsed data/quests.json (with .anchors map)
+  //   floorAnchors         — { floorId: [questDef, ...] } harvested from
+  //                          *.quest.json sidecars (Phase 0b/6).
+  //   distributedAnchors   — { anchorId: spec } flat union of anchor
+  //                          blocks from *.quest.json sidecars (Phase 6).
+  //
+  // Phase 6 collision policy: central wins. A distributed anchor whose
+  // id collides with a central one is rejected with a loud warn + an
+  // entry pushed into _initErrors. The central def stays authoritative.
+  //
+  // Phase 6 fail-fast: after anchors are merged, every quest step's
+  // target.anchor = '<id>' reference is validated. Unknown names are
+  // appended to _initErrors[] and surface via getLastError()/summary().
+  // Returns true on success, false if _initErrors is non-empty.
+  function init(payload, floorAnchors, distributedAnchors) {
     _lastError = null;
+    _initErrors = [];
     _initialized = true;
 
     if (!payload || typeof payload !== 'object') {
       _version          = 0;
       _quests           = Object.freeze({});
       _namedAnchors     = Object.freeze({});
+      _anchorSources    = Object.freeze({});
       _floorQuestIndex  = Object.freeze({});
       _templates        = Object.freeze({});
       _source           = null;
@@ -103,44 +140,117 @@ var QuestRegistry = (function () {
     }
     _quests = _freezeDeep(qOut);
 
-    // Named anchors: { anchorId: spec }. Phase 1.
-    // Tolerates missing/malformed — missing reduces to {} not a throw.
+    // ── Anchor union (central first, distributed second) ───────────
+    // Phase 1 shipped central-only. Phase 6 adds the distributed pass:
+    // sidecar anchors fill in missing ids; collisions with central are
+    // rejected (central wins) and logged.
+    var naOut     = {};
+    var srcOut    = {};
+
+    // Central: payload.anchors from data/quests.json
     var namedIn = (payload.anchors && typeof payload.anchors === 'object' &&
                    !Array.isArray(payload.anchors)) ? payload.anchors : {};
-    var naOut = {};
     Object.keys(namedIn).forEach(function (id) {
-      var spec = namedIn[id];
-      // An anchor spec must be an object with a `type` string. A bare
-      // {floorId, x, y} without a type is treated as an implicit literal.
-      if (!spec || typeof spec !== 'object') return;
-      if (typeof spec.type !== 'string') {
-        if (typeof spec.floorId === 'string' &&
-            typeof spec.x === 'number' && typeof spec.y === 'number') {
-          naOut[id] = { type: 'literal', floorId: spec.floorId, x: spec.x, y: spec.y };
-        }
-        return;
-      }
-      // Shallow copy so freezeDeep doesn't mutate the payload the caller kept.
-      var copy = {};
-      Object.keys(spec).forEach(function (k) { copy[k] = spec[k]; });
-      naOut[id] = copy;
+      var r = _normalizeAnchorSpec(namedIn[id]);
+      if (!r.ok) return;
+      naOut[id]  = r.normalized;
+      srcOut[id] = 'central';
     });
-    _namedAnchors = _freezeDeep(naOut);
 
-    // Floor → [questId] index. Comes from the sidecar merge via
-    // FloorManager.getQuestAnchors() at Game boot. In Phase 0/1 this is
-    // a simple {floorId: [id,...]} map.
+    // Distributed: Phase 6 sidecar union
+    if (distributedAnchors && typeof distributedAnchors === 'object' &&
+        !Array.isArray(distributedAnchors)) {
+      Object.keys(distributedAnchors).forEach(function (id) {
+        if (Object.prototype.hasOwnProperty.call(naOut, id)) {
+          _initErrors.push({
+            kind:   'anchor-collision',
+            anchor: id,
+            sources: ['central', 'distributed'],
+            msg:    'Distributed anchor "' + id + '" collides with central registry — central wins.'
+          });
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[QuestRegistry] anchor collision: "' + id +
+                         '" defined in both data/quests.json AND a *.quest.json sidecar. Central wins.');
+          }
+          return;
+        }
+        var r = _normalizeAnchorSpec(distributedAnchors[id]);
+        if (!r.ok) {
+          _initErrors.push({
+            kind:   'anchor-malformed',
+            anchor: id,
+            source: 'distributed',
+            reason: r.reason,
+            msg:    'Distributed anchor "' + id + '" rejected: ' + r.reason
+          });
+          return;
+        }
+        naOut[id]  = r.normalized;
+        srcOut[id] = 'distributed';
+      });
+    }
+    _namedAnchors  = _freezeDeep(naOut);
+    _anchorSources = _freezeDeep(srcOut);
+
+    // Floor → [questId] index. Phase 0b accepts either a plain string
+    // list OR a map whose values are arrays of quest definition objects
+    // (Phase 6 sidecar shape from FloorManager.getQuestAnchors()). In
+    // the richer shape we index by quest id.
     var aOut = {};
     if (floorAnchors && typeof floorAnchors === 'object') {
       Object.keys(floorAnchors).forEach(function (fid) {
         var list = floorAnchors[fid];
         if (!Array.isArray(list)) return;
-        aOut[fid] = list.slice();
+        aOut[fid] = list.map(function (q) {
+          if (typeof q === 'string') return q;
+          if (q && typeof q === 'object' && typeof q.id === 'string') return q.id;
+          return null;
+        }).filter(function (id) { return !!id; });
       });
     }
     _floorQuestIndex = _freezeDeep(aOut);
 
+    // ── Phase 6 fail-fast: validate anchor references in quest steps ─
+    _validateQuestAnchors();
+
+    if (_initErrors.length > 0) {
+      _lastError = _initErrors[0].msg;
+      return false;
+    }
     return true;
+  }
+
+  // Walks every quest step's target.anchor / advanceWhen.anchor and
+  // confirms the named id exists in _namedAnchors. Unknown names push
+  // an 'unresolved-anchor' entry into _initErrors[]. Inline spec objects
+  // (no string id) are ignored — they resolve at call-time via resolveAnchor.
+  function _validateQuestAnchors() {
+    Object.keys(_quests).forEach(function (qid) {
+      var q = _quests[qid];
+      if (!q || !Array.isArray(q.steps)) return;
+      q.steps.forEach(function (step, sIdx) {
+        if (!step || typeof step !== 'object') return;
+        var probes = [];
+        if (step.target) probes.push({ obj: step.target, path: 'target' });
+        if (step.advanceWhen) probes.push({ obj: step.advanceWhen, path: 'advanceWhen' });
+        probes.forEach(function (p) {
+          var a = p.obj.anchor;
+          if (typeof a === 'string' && a.length > 0) {
+            if (!Object.prototype.hasOwnProperty.call(_namedAnchors, a)) {
+              _initErrors.push({
+                kind:   'unresolved-anchor',
+                quest:  qid,
+                stepId: step.id || ('step[' + sIdx + ']'),
+                path:   p.path + '.anchor',
+                anchor: a,
+                msg:    'Quest "' + qid + '" step "' + (step.id || sIdx) +
+                        '" references unknown anchor "' + a + '" at ' + p.path + '.anchor'
+              });
+            }
+          }
+        });
+      });
+    });
   }
 
   // ── Runtime resolver wiring (Layer 4 Game.init calls this) ───────
@@ -271,43 +381,58 @@ var QuestRegistry = (function () {
     });
     return out;
   }
-  function anchorsFor(floorId) { return (_floorQuestIndex[floorId] || []).slice(); }
-  function getAnchor(id)       { return _namedAnchors[id] || null; }
-  function listAnchors()       { return Object.keys(_namedAnchors); }
+  function anchorsFor(floorId)   { return (_floorQuestIndex[floorId] || []).slice(); }
+  function getAnchor(id)         { return _namedAnchors[id] || null; }
+  function getAnchorSource(id)   { return _anchorSources[id] || null; }
+  function listAnchors()         { return Object.keys(_namedAnchors); }
+  function listCentralAnchors()  {
+    return Object.keys(_anchorSources).filter(function (id) { return _anchorSources[id] === 'central'; });
+  }
+  function listDistributedAnchors() {
+    return Object.keys(_anchorSources).filter(function (id) { return _anchorSources[id] === 'distributed'; });
+  }
   function getVersion()        { return _version; }
   function getTemplates()      { return _templates; }
   function getSource()         { return _source; }
   function getLastError()      { return _lastError; }
+  function getInitErrors()     { return _initErrors.slice(); }
 
   // ── Phase 0 introspection ────────────────────────────────────────
   function summary() {
     return {
-      initialized:     _initialized,
-      version:         _version,
-      source:          _source,
-      questCount:      Object.keys(_quests).length,
-      anchorCount:     Object.keys(_namedAnchors).length,
-      floorIndexCount: Object.keys(_floorQuestIndex).length,
-      resolversWired:  !!(_resolvers.getFloorData || _resolvers.getEntity ||
-                          _resolvers.getNpcById    || _resolvers.getDumpTruck)
+      initialized:         _initialized,
+      version:             _version,
+      source:              _source,
+      questCount:          Object.keys(_quests).length,
+      anchorCount:         Object.keys(_namedAnchors).length,
+      centralAnchorCount:  listCentralAnchors().length,
+      distributedAnchorCount: listDistributedAnchors().length,
+      floorIndexCount:     Object.keys(_floorQuestIndex).length,
+      initErrorCount:      _initErrors.length,
+      resolversWired:      !!(_resolvers.getFloorData || _resolvers.getEntity ||
+                              _resolvers.getNpcById    || _resolvers.getDumpTruck)
     };
   }
 
   return Object.freeze({
-    init:          init,
-    setResolvers:  setResolvers,
-    resolveAnchor: resolveAnchor,
-    getQuest:      getQuest,
-    listQuests:    listQuests,
-    listByKind:    listByKind,
-    anchorsFor:    anchorsFor,
-    getAnchor:     getAnchor,
-    listAnchors:   listAnchors,
-    getVersion:    getVersion,
-    getTemplates:  getTemplates,
-    getSource:     getSource,
-    getLastError:  getLastError,
-    summary:       summary,
+    init:                    init,
+    setResolvers:            setResolvers,
+    resolveAnchor:           resolveAnchor,
+    getQuest:                getQuest,
+    listQuests:              listQuests,
+    listByKind:              listByKind,
+    anchorsFor:              anchorsFor,
+    getAnchor:               getAnchor,
+    getAnchorSource:         getAnchorSource,
+    listAnchors:             listAnchors,
+    listCentralAnchors:      listCentralAnchors,
+    listDistributedAnchors:  listDistributedAnchors,
+    getVersion:              getVersion,
+    getTemplates:            getTemplates,
+    getSource:               getSource,
+    getLastError:            getLastError,
+    getInitErrors:           getInitErrors,
+    summary:                 summary,
     get initialized() { return _initialized; }
   });
 })();

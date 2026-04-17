@@ -735,6 +735,18 @@ Floor 4 should have the highest density of living infrastructure, reflecting gen
 
 ## 9. Dependencies & Phase Order
 
+### 9.0 Authoring tooling dependency
+
+The populations, archetypes, verb-nodes, enemy tiers, and bark pools referenced throughout this blockout are all authored through the seven-tool suite described in **`docs/NPC_TOOLING_ROADMAP.md` (DOC-110)**. Critical cross-links:
+
+- §3 / §4 / §5 / §6 floor populations → produced by P1 NPC Designer + P7 Population Planner budget tracker
+- §5.2c / §6.2c / §12.6 verb-node registration → P3 Verb-Node Stamper layer on blockout-visualizer (6 template stamps including `town_square`, `soup_kitchen_congregation`, `dungeon_rest_ring`)
+- §12.3 creature verb-set definitions → P4 Archetype Studio + P5 Enemy Hydrator reanim-behavior tab
+- §10.2 suppression-radius / §11 anti-mush invariants → P7 Population Planner coherence checks (`unsatisfiable-archetype`, `empty-bark-pool`, `broken-supply-chain`)
+- §17 economy / supply-chain → P7 supply-chain trace overlay
+
+Phase 0 of DOC-110 (schema + CLI + `data/npcs.json` extraction) should land before Step 3 below so that verb-node registration has a canonical NPC source to validate against.
+
 ### 9.1 Critical Path
 
 ```

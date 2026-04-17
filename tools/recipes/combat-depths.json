@@ -1,0 +1,31 @@
+{
+  "$schema": "./recipe.schema.json",
+  "id": "combat-depths",
+  "title": "Combat Depths Arena",
+  "description": "Open chambers with sightlines, patrol-friendly corridors, and ambush corners. Enemy-heavy, designed for card combat encounters with flanking opportunities.",
+  "biome": "depths",
+  "faction": "bprd",
+  "size": { "width": 25, "height": 25 },
+  "strategy": { "primary": "combat", "weight": 1.0 },
+  "rooms": {
+    "count": [3, 5],
+    "minSize": [5, 5],
+    "maxSize": [9, 9]
+  },
+  "corridors": {
+    "style": "l-bend",
+    "width": 2,
+    "extraConnections": 0.3
+  },
+  "entities": {
+    "torchDensity": 0.35,
+    "breakableDensity": 0.1,
+    "trapDensity": 0.08,
+    "chestCount": [2, 3],
+    "corpseCount": [1, 2],
+    "cobwebSlots": 0,
+    "enemyBudget": [4, 8]
+  },
+  "doors": { "entry": "north", "exit": "south", "bossGate": true },
+  "seed": null
+}

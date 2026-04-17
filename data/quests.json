@@ -2,7 +2,7 @@
   "version": 1,
   "_source": "quests.json",
   "_docRef": "docs/QUEST_SYSTEM_ROADMAP.md",
-  "_notes": "Canonical quest registry. Read by engine/quest-registry.js via synchronous XHR at boot. Per-floor sidequests can also live in tools/floor-payloads/<floorId>.quest.json and are merged in by tools/extract-floors.js before serving.",
+  "_notes": "Canonical quest registry. Read by engine/quest-registry.js via synchronous XHR at boot.",
 
   "_templates": {
     "sidequest": {
@@ -11,75 +11,143 @@
       "title": "quest.sidequest.<slug>.title",
       "hook":  "quest.sidequest.<slug>.hook",
       "summary": "quest.sidequest.<slug>.summary",
-      "giver": {
-        "npcId": null,
-        "floorId": null
-      },
-      "prereq": {
-        "flags": {},
-        "minReadiness": null,
-        "minReputation": {}
-      },
+      "giver": { "npcId": null, "floorId": null },
+      "prereq": { "flags": {}, "minReadiness": null, "minReputation": {} },
       "steps": [
-        {
-          "id": "step.1",
-          "kind": "floor",
+        { "id": "step.1", "kind": "floor",
           "label": "quest.sidequest.<slug>.step.1.label",
-          "target": {
-            "floorId": null,
-            "x": null,
-            "y": null
-          },
-          "advanceWhen": {
-            "kind": "floor",
-            "floorId": null,
-            "x": null,
-            "y": null,
-            "radius": 1
-          }
-        }
+          "target": { "floorId": null, "x": null, "y": null },
+          "advanceWhen": { "kind": "floor", "floorId": null, "x": null, "y": null, "radius": 1 } }
       ],
-      "rewards": {
-        "gold": 0,
-        "items": [],
-        "favor": {},
-        "flags": {}
-      },
+      "rewards": { "gold": 0, "items": [], "favor": {}, "flags": {} },
       "markerColor": null,
-      "notes": "Copy this block, replace <slug> with a snake_case id, fill giver + target floor + step predicates. Title/hook/summary strings go in data/strings/en.js under the matching key. `markerColor` overrides the default minimap quest marker color (HUD settings toggle still gates visibility)."
+      "notes": "Copy this block, replace <slug>, fill giver + target floor + step predicates."
     },
-
     "main": {
-      "id": "main.<act>.<slug>",
-      "kind": "main",
-      "title": "quest.main.<slug>.title",
-      "summary": "quest.main.<slug>.summary",
-      "act": 1,
-      "steps": [],
-      "rewards": {},
-      "notes": "Main-quest spine — one per Act beat. Gated by flags + readiness tier."
+      "id": "main.<act>.<slug>", "kind": "main",
+      "title": "quest.main.<slug>.title", "summary": "quest.main.<slug>.summary",
+      "act": 1, "steps": [], "rewards": {},
+      "notes": "Main-quest spine — one per Act beat."
     },
-
     "faction": {
-      "id": "faction.<faction>.<tier>",
-      "kind": "faction",
+      "id": "faction.<faction>.<tier>", "kind": "faction",
       "title": "quest.faction.<faction>.<tier>.title",
-      "factionId": null,
-      "requiresTier": "neutral",
-      "grantsTier": "friendly",
-      "steps": [],
-      "rewards": {
-        "favor": {}
-      },
-      "notes": "Per-faction reputation-advancement chain. `factionId` must be one of QuestTypes.FACTIONS (mss, pinkerton, jesuit, bprd)."
+      "factionId": null, "requiresTier": "neutral", "grantsTier": "friendly",
+      "steps": [], "rewards": { "favor": {} },
+      "notes": "Per-faction reputation-advancement chain."
     }
   },
 
   "anchors": {
     "promenade_home_door":  { "type": "literal", "floorId": "1",   "x": 22, "y": 27 },
-    "home_work_keys_chest": { "type": "literal", "floorId": "1.6", "x": 19, "y": 3 },
     "dispatcher_entity":    { "type": "entity",  "module": "DispatcherChoreography", "method": "getEntity", "floorId": "1" }
   },
-  "_anchorNotes": "Named anchors. Resolved by QuestRegistry.resolveAnchor(id). Spec shapes: { type:'literal',floorId,x,y } | { type:'floor-data',floorId,path } | { type:'entity',module,method,floorId? } | { type:'npc',floorId,npcId } | { type:'dump-truck',floorId? } | { type:'door-to',floorId,targetFloorId }. Floor-data/dump-truck with no floorId are resolver templates that must be supplied per-call by quests.json step targets (which embed the floorId).",
-  "quests": []
+  "_anchorNotes": "Named anchors. Resolved by QuestRegistry.resolveAnchor(id). DOC-107 Phase 6: floor-scoped anchors live in tools/floor-payloads/<floorId>.quest.json sidecars (distributed anchors) and are unioned into _namedAnchors at init. `home_work_keys_chest` migrated to 1.6.quest.json; `pentagram_chamber` authored in 1.3.1.quest.json.",
+  "quests": [
+    {
+      "id": "side.1.3.1.pentagram_wash",
+      "kind": "side",
+      "title": "quest.sidequest.pentagram_wash.title",
+      "hook":  "quest.sidequest.pentagram_wash.hook",
+      "summary": "quest.sidequest.pentagram_wash.summary",
+      "giver": { "npcId": null, "floorId": "1.3.1" },
+      "prereq": { "flags": {}, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "minigame",
+          "label": "quest.sidequest.pentagram_wash.step.1.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": { "kind": "minigame", "kindId": "pressure_wash", "reason": "subtarget",
+                           "subTargetId": "tile_clean", "floorId": "1.3.1", "count": 3 } }
+      ],
+      "rewards": { "gold": 25, "items": [], "favor": {}, "flags": { "side_pentagram_wash_done": true } },
+      "markerColor": null,
+      "_notes": "DOC-107 Phase 5 demo sidequest. Player pressure-washes three floor tiles."
+    },
+    {
+      "id": "side.1.2.innkeeper_bottles",
+      "kind": "side",
+      "title": "quest.sidequest.innkeeper_bottles.title",
+      "hook":  "quest.sidequest.innkeeper_bottles.hook",
+      "summary": "quest.sidequest.innkeeper_bottles.summary",
+      "giver": { "npcId": "inn_keeper", "floorId": "1.2" },
+      "prereq": { "flags": {}, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "npc",
+          "label": "quest.sidequest.innkeeper_bottles.step.1.label",
+          "target": { "anchor": { "type": "npc", "floorId": "1.2", "npcId": "inn_keeper" } },
+          "advanceWhen": { "kind": "npc", "npcId": "inn_keeper" } },
+        { "id": "step.2", "kind": "floor",
+          "label": "quest.sidequest.innkeeper_bottles.step.2.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": { "kind": "floor", "floorId": "1.3.1" } },
+        { "id": "step.3", "kind": "combat",
+          "label": "quest.sidequest.innkeeper_bottles.step.3.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": { "kind": "combat", "archetype": "ENM-003", "count": 3 } },
+        { "id": "step.4", "kind": "npc",
+          "label": "quest.sidequest.innkeeper_bottles.step.4.label",
+          "target": { "anchor": { "type": "npc", "floorId": "1.2", "npcId": "inn_keeper" } },
+          "advanceWhen": { "kind": "npc", "npcId": "inn_keeper", "branch": "rat_report" } }
+      ],
+      "rewards": { "gold": 40, "items": [], "favor": { "bprd": 50 }, "flags": { "side_innkeeper_bottles_done": true } },
+      "markerColor": null,
+      "_notes": "Four-step arc: npc -> floor -> combat(count:3,ENM-003) -> npc(branch:rat_report). PENDING: onCombatKill + onNpcTalk fan-outs."
+    },
+    {
+      "id": "side.1.3.cellar_owner_mop",
+      "kind": "side",
+      "title": "quest.sidequest.cellar_owner_mop.title",
+      "hook":  "quest.sidequest.cellar_owner_mop.hook",
+      "summary": "quest.sidequest.cellar_owner_mop.summary",
+      "giver": { "npcId": "cellar_resident", "floorId": "1.3" },
+      "prereq": { "flags": {}, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "npc",
+          "label": "quest.sidequest.cellar_owner_mop.step.1.label",
+          "target": { "anchor": { "type": "npc", "floorId": "1.3", "npcId": "cellar_resident" } },
+          "advanceWhen": { "kind": "npc", "npcId": "cellar_resident" } },
+        { "id": "step.2", "kind": "item",
+          "label": "quest.sidequest.cellar_owner_mop.step.2.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": { "kind": "item", "itemId": "ITM-089" } },
+        { "id": "step.3", "kind": "readiness",
+          "label": "quest.sidequest.cellar_owner_mop.step.3.label",
+          "target": { "floorId": "1.3.1" },
+          "advanceWhen": { "kind": "readiness", "floorId": "1.3.1", "threshold": 0.5 } }
+      ],
+      "rewards": { "gold": 30, "items": [], "favor": { "bprd": 25 }, "flags": { "side_cellar_owner_mop_done": true } },
+      "markerColor": null,
+      "_notes": "npc -> item(ITM-089 Mop Head) -> readiness(>=0.5). PENDING: generic onItemAcquired fan-out."
+    },
+    {
+      "id": "side.2.2.watchman_roll_call",
+      "kind": "side",
+      "title": "quest.sidequest.watchman_roll_call.title",
+      "hook":  "quest.sidequest.watchman_roll_call.hook",
+      "summary": "quest.sidequest.watchman_roll_call.summary",
+      "giver": { "npcId": "watchpost_watchman", "floorId": "2.2" },
+      "prereq": { "flags": { "gateUnlocked": true }, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.1", "kind": "npc",
+          "label": "quest.sidequest.watchman_roll_call.step.1.label",
+          "target": { "anchor": { "type": "npc", "floorId": "2.2", "npcId": "watchpost_watchman" } },
+          "advanceWhen": { "kind": "npc", "npcId": "watchpost_watchman" } },
+        { "id": "step.2", "kind": "floor",
+          "label": "quest.sidequest.watchman_roll_call.step.2.label",
+          "target": { "floorId": "2.2.1" },
+          "advanceWhen": { "kind": "floor", "floorId": "2.2.1" } },
+        { "id": "step.3", "kind": "floor",
+          "label": "quest.sidequest.watchman_roll_call.step.3.label",
+          "target": { "floorId": "2.2.2" },
+          "advanceWhen": { "kind": "floor", "floorId": "2.2.2" } },
+        { "id": "step.4", "kind": "flag",
+          "label": "quest.sidequest.watchman_roll_call.step.4.label",
+          "target": { "anchor": { "type": "npc", "floorId": "2.2", "npcId": "watchpost_watchman" } },
+          "advanceWhen": { "kind": "flag", "flag": "heroWakeArrival", "value": true } }
+      ],
+      "rewards": { "gold": 50, "items": [], "favor": { "bprd": 75, "jesuit": 25 }, "flags": { "side_watchman_roll_call_done": true } },
+      "markerColor": null,
+      "_notes": "npc -> floor -> floor -> flag(heroWakeArrival). Gated gateUnlocked=true."
+    }
+  ]
 }

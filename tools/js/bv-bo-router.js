@@ -1156,6 +1156,29 @@
   };
   Object.defineProperty(window.BO, 'currentFloorId', { get: function() { return currentFloorId; } });
   Object.defineProperty(window.BO, 'floors',         { get: function() { return Object.keys(FLOORS); } });
+
+  // ── Pass 5b.2: postMessage bridge ──────────────────────────
+  // Allows a parent window (e.g. world-designer.html) to call BO.run()
+  // via postMessage when the blockout-visualizer is loaded in an iframe.
+  //
+  // Inbound:  { _bo: true, id: <correlationId>, cmd: {action, ...args} }
+  // Outbound: { _bo: true, id: <correlationId>, result: <BO.run result> }
+  //
+  // The `_bo` flag prevents collisions with other postMessage traffic.
+  // The `id` field lets the caller correlate async responses.
+  window.addEventListener('message', function(ev) {
+    if (!ev.data || ev.data._bo !== true || !ev.data.cmd) return;
+    var msg = ev.data;
+    var result;
+    try {
+      result = window.BO.run(msg.cmd);
+    } catch (e) {
+      result = { ok: false, error: e.message, action: (msg.cmd && msg.cmd.action) || '?' };
+    }
+    if (ev.source) {
+      ev.source.postMessage({ _bo: true, id: msg.id, result: result }, '*');
+    }
+  });
 })();
 
 // Smoke test: paints a 3×3 WALL rect, validates, and undoes. Run in

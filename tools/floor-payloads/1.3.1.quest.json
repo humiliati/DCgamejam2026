@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "floorId": "1.3.1",
+  "_notes": [
+    "DOC-107 Phase 6 — distributed anchor sidecar for the Soft Cellar (1.3.1).",
+    "",
+    "Authors `pentagram_chamber` as a NEW anchor born in sidecar form — it",
+    "was never defined in data/quests.json.anchors. This demonstrates the",
+    "sidecar-first authoring pattern: floor-scoped anchors can be created",
+    "entirely without touching the central registry. The map editor track",
+    "(`bo place-waypoint --floor 1.3.1 --at 14,8 --id pentagram_chamber`)",
+    "writes directly here, and extract-floors.js harvests it on the next",
+    "rebuild.",
+    "",
+    "Coordinates (14, 8) are the §4.2 spec example; the actual pentagram",
+    "chamber geometry lives in the blockout grid and can be retargeted by",
+    "editing this file alone. The pentagram-wash demo sidequest",
+    "(side.1.3.1.pentagram_wash) uses a minigame predicate keyed on the",
+    "SpraySystem 'tile_clean' subTarget rather than this anchor — so",
+    "pentagram_chamber is currently a future-use entry demonstrating that",
+    "sidecar anchors are referenceable from any quest step (central or",
+    "sidecar-born) via target.anchor = 'pentagram_chamber'."
+  ],
+  "anchors": {
+    "pentagram_chamber": {
+      "type": "literal",
+      "floorId": "1.3.1",
+      "x": 14,
+      "y": 8
+    }
+  }
+}

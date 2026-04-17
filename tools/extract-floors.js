@@ -198,6 +198,14 @@ var payloadDir = path.join(__dirname, 'floor-payloads');
 var payloadCount = 0;
 var questPayloadCount = 0;
 var questCount = 0;
+// Phase 6: top-level aggregate of distributed anchors lifted from
+// *.quest.json sidecars. Flat {anchorId: spec} map. At runtime
+// FloorManager.getDistributedAnchors() returns this blob and
+// QuestRegistry.init unions it with data/quests.json.anchors.
+var _sidecarAnchors = {};
+var _sidecarAnchorSources = {};   // {anchorId: <sidecar filename>} for collision reporting
+var sidecarAnchorCount = 0;
+var sidecarAnchorCollisions = 0;
 try {
   if (fs.existsSync(payloadDir)) {
     fs.readdirSync(payloadDir).forEach(function(file) {
@@ -217,6 +225,27 @@ try {
             questCount += qlist.length;
           } else {
             console.log('  quest sidecar ' + file + ': floor "' + qfid + '" not found in blockouts — skipped');
+          }
+          // Phase 6: harvest optional anchors block — distributed
+          // anchor defs live next to the floor they describe. Union
+          // into the flat top-level map with loud collision detection.
+          if (qp.anchors && typeof qp.anchors === 'object' && !Array.isArray(qp.anchors)) {
+            Object.keys(qp.anchors).forEach(function (aid) {
+              var spec = qp.anchors[aid];
+              if (!spec || typeof spec !== 'object') {
+                console.warn('  WARN: sidecar ' + file + ' anchor "' + aid + '" is not an object — skipped');
+                return;
+              }
+              if (Object.prototype.hasOwnProperty.call(_sidecarAnchors, aid)) {
+                sidecarAnchorCollisions++;
+                console.warn('  ERROR: sidecar anchor "' + aid + '" defined in BOTH "' +
+                             _sidecarAnchorSources[aid] + '" AND "' + file + '" — first-seen wins');
+                return;
+              }
+              _sidecarAnchors[aid] = spec;
+              _sidecarAnchorSources[aid] = file;
+              sidecarAnchorCount++;
+            });
           }
         } catch (qe) {
           console.warn('  WARN: could not parse quest sidecar ' + file + ': ' + qe.message);
@@ -239,6 +268,8 @@ try {
     });
     if (payloadCount > 0) console.log('  Merged ' + payloadCount + ' payload sidecar(s) into floor data');
     if (questPayloadCount > 0) console.log('  Merged ' + questPayloadCount + ' quest sidecar(s) (' + questCount + ' quests) into floor data');
+    if (sidecarAnchorCount > 0) console.log('  Harvested ' + sidecarAnchorCount + ' distributed anchor(s) from quest sidecars' +
+                                            (sidecarAnchorCollisions ? ' (' + sidecarAnchorCollisions + ' collision(s) — see WARN above)' : ''));
   }
 } catch (e) {
   console.warn('  WARN: payload scan failed: ' + e.message);
@@ -255,6 +286,10 @@ var _floorPayload = JSON.stringify({
   payloadCount: payloadCount,
   questPayloadCount: questPayloadCount,
   questCount: questCount,
+  sidecarAnchorCount: sidecarAnchorCount,
+  sidecarAnchorCollisions: sidecarAnchorCollisions,
+  _sidecarAnchors: _sidecarAnchors,
+  _sidecarAnchorSources: _sidecarAnchorSources,
   floors: floors
 }, null, 2);
 fs.writeFileSync(outPath, _floorPayload);
@@ -268,6 +303,59 @@ fs.writeFileSync(_jsPath,
   '// Chromium CORS fetch block). Keep in sync with floor-data.json.\n' +
   'window.FLOOR_DATA = ' + _floorPayload + ';\n');
 console.log('Done: floor-data.js sidecar -> tools/floor-data.js');
+
+// ─────────────────────────────────────────────────────────────────────
+//  QUEST SIDECARS (DOC-107 Phase 6) — slim runtime blob
+//
+//  The main floor-data.js sidecar above is consumed by world-designer.html
+//  under file://, but the GAME runtime (index.html) does NOT load it
+//  (it carries hundreds of KB of grid data the engine doesn't need —
+//  each floor has its own engine/floor-blockout-*.js IIFE instead).
+//
+//  Phase 6 needs a runtime path for distributed anchors to reach
+//  FloorManager.getDistributedAnchors() at boot. So we emit a SECOND
+//  slim sidecar — data/quest-sidecars.js — that contains only the
+//  quest-relevant slice:
+//
+//    window.QUEST_SIDECARS = {
+//      generated:        <iso>,
+//      anchors:          { anchorId: spec, ... },   // distributed anchor union
+//      anchorSources:    { anchorId: 'N.N.quest.json', ... },
+//      floorQuests:      { floorId:  [quest, ...], ... },
+//      anchorCount:      N,
+//      collisionCount:   N
+//    };
+//
+//  Loaded from index.html as a Layer 5 (data) script, BEFORE
+//  engine/quest-registry.js runs init(). FloorManager exposes
+//  getDistributedAnchors()/getQuestAnchors() which read this blob.
+// ─────────────────────────────────────────────────────────────────────
+var floorQuestsOut = {};
+Object.keys(floors).forEach(function (fid) {
+  if (Array.isArray(floors[fid].quests) && floors[fid].quests.length > 0) {
+    floorQuestsOut[fid] = floors[fid].quests;
+  }
+});
+var _questSidecarPayload = JSON.stringify({
+  generated:      new Date().toISOString(),
+  anchors:        _sidecarAnchors,
+  anchorSources:  _sidecarAnchorSources,
+  floorQuests:    floorQuestsOut,
+  anchorCount:    sidecarAnchorCount,
+  collisionCount: sidecarAnchorCollisions
+}, null, 2);
+var _questSidecarPath = path.join(ROOT, 'data', 'quest-sidecars.js');
+fs.writeFileSync(_questSidecarPath,
+  '// AUTO-GENERATED by tools/extract-floors.js — do not edit by hand.\n' +
+  '// DOC-107 Phase 6: distributed anchors + per-floor quest defs harvested\n' +
+  '// from tools/floor-payloads/*.quest.json. Loaded by index.html at Layer 5\n' +
+  '// (data) and read at boot by FloorManager.getDistributedAnchors() and\n' +
+  '// FloorManager.getQuestAnchors(). QuestRegistry.init unions these with\n' +
+  '// data/quests.json.anchors; central wins on collision (Phase 6 policy).\n' +
+  'window.QUEST_SIDECARS = ' + _questSidecarPayload + ';\n');
+console.log('Done: quest-sidecars.js -> data/quest-sidecars.js ('
+            + sidecarAnchorCount + ' anchor(s), '
+            + Object.keys(floorQuestsOut).length + ' floor(s) with quests)');
 
 // ─────────────────────────────────────────────────────────────────────
 //  TILE SCHEMA EXTRACTION (Phase 3)
@@ -361,7 +449,14 @@ if (!T_) {
     WINDOW_ALCOVE:{color:'#8899aa',glyph:'a',cat:'freeform'},
     WINDOW_COMMERCIAL:{color:'#88ccdd',glyph:'c',cat:'freeform'},
     WINDOW_ARROWSLIT:{color:'#445566',glyph:'v',cat:'freeform'},
-    WINDOW_MURDERHOLE:{color:'#334455',glyph:'m',cat:'freeform'}
+    WINDOW_MURDERHOLE:{color:'#334455',glyph:'m',cat:'freeform'},
+    // DOC-112 / BOXFORGE Phase 5.0 — mechanism-before-fire trap family.
+    TRAP_PRESSURE_PLATE:{color:'#aa6644',glyph:'p',cat:'hazard'},
+    TRAP_DART_LAUNCHER: {color:'#887755',glyph:'d',cat:'hazard'},
+    TRAP_TRIPWIRE:      {color:'#996633',glyph:'-',cat:'hazard'},
+    TRAP_SPIKE_PIT:     {color:'#554433',glyph:'v',cat:'hazard'},
+    TRAP_TELEPORT_DISC: {color:'#6644aa',glyph:'o',cat:'hazard'},
+    COBWEB:             {color:'#bbbbcc',glyph:'w',cat:'creature'}
   };
   var tileSchema = {};
   var missing = [];
@@ -463,4 +558,120 @@ try {
   console.log('  OK: ' + enemies.length + ' enemies -> tools/enemy-manifest.json');
 } catch (e) {
   console.warn('  WARN: enemy manifest failed - ' + e.message);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  NPC MANIFEST  (DOC-110 Phase 0 Chapter 3 — SHIPPED 2026-04-16)
+//
+//  Cross-tool API surface (NPC_TOOLING_ROADMAP §5.4 + §7).
+//  Shape:
+//    { generated, source, npcCount, floorCount,
+//      npcs:        [ { id, name, type, floorId, x, y, faction,
+//                       role, archetype, talkable, barkPool, ... } ],
+//      byFloor:     { floorId  -> [npcId, ...] },
+//      byFaction:   { faction  -> [npcId, ...] },
+//      byArchetype: { roleOrArchetype -> [npcId, ...] },
+//      byType:      { npcType  -> [npcId, ...] },
+//      byBarkPool:  { poolKey  -> [npcId, ...] },
+//      orphans:     { noBarkPool: [], noDialogue: [] }    // light QA hints
+//    }
+//
+//  Consumers: P1 NPC Designer (Used-By badges), P2 Bark Workbench
+//  (orphan + cross-ref panel), P7 Population Planner / coherence CI.
+// ─────────────────────────────────────────────────────────────────────
+console.log('\nExtracting NPC manifest from data/npcs.json...');
+try {
+  var rawNpcs = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/npcs.json'), 'utf8'));
+  var byFloor = (rawNpcs && rawNpcs.npcsByFloor) || {};
+  var npcs = [];
+  var idxByFloor = {};
+  var idxByFaction = {};
+  var idxByArchetype = {};
+  var idxByType = {};
+  var idxByBarkPool = {};
+  var orphanNoBark = [];
+  var orphanNoDialogue = [];
+
+  Object.keys(byFloor).sort().forEach(function(fid) {
+    var list = byFloor[fid] || [];
+    list.forEach(function(n) {
+      if (!n || !n.id) return;
+      var faction   = n.factionId || 'unaligned';
+      var archetype = n.verbArchetype || n.role || 'ambient';
+      var ntype     = n.type || 'ambient';
+      var entry = {
+        id:           n.id,
+        name:         n.name || n.id,
+        emoji:        n.emoji || '',
+        type:         ntype,
+        floorId:      n.floorId || fid,
+        x:            n.x,
+        y:            n.y,
+        facing:       n.facing || 'south',
+        faction:      faction,
+        role:         n.role || null,
+        archetype:    n.verbArchetype || null,
+        talkable:     !!n.talkable,
+        barkPool:     n.barkPool || null,
+        dialogueTreeId: n.dialogueTreeId || null,
+        dialoguePool: n.dialoguePool || null,
+        gateCheck:    !!n.gateCheck,
+        blocksMovement: !!n.blocksMovement
+      };
+      npcs.push(entry);
+
+      (idxByFloor[entry.floorId]   = idxByFloor[entry.floorId]   || []).push(entry.id);
+      (idxByFaction[faction]       = idxByFaction[faction]       || []).push(entry.id);
+      (idxByArchetype[archetype]   = idxByArchetype[archetype]   || []).push(entry.id);
+      (idxByType[ntype]            = idxByType[ntype]            || []).push(entry.id);
+      if (entry.barkPool) {
+        (idxByBarkPool[entry.barkPool] = idxByBarkPool[entry.barkPool] || []).push(entry.id);
+      } else {
+        orphanNoBark.push(entry.id);
+      }
+      if (entry.talkable && !entry.dialogueTreeId && !entry.dialoguePool) {
+        orphanNoDialogue.push(entry.id);
+      }
+    });
+  });
+
+  // Stable ordering for reviewable diffs.
+  npcs.sort(function(a,b){ return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  Object.keys(idxByFloor).forEach(function(k){ idxByFloor[k].sort(); });
+  Object.keys(idxByFaction).forEach(function(k){ idxByFaction[k].sort(); });
+  Object.keys(idxByArchetype).forEach(function(k){ idxByArchetype[k].sort(); });
+  Object.keys(idxByType).forEach(function(k){ idxByType[k].sort(); });
+  Object.keys(idxByBarkPool).forEach(function(k){ idxByBarkPool[k].sort(); });
+  orphanNoBark.sort();
+  orphanNoDialogue.sort();
+
+  fs.writeFileSync(path.join(__dirname, 'npc-manifest.json'), JSON.stringify({
+    generated: new Date().toISOString(),
+    source: 'data/npcs.json',
+    schema: 'tools/actor-schema.json#/definitions/npcActor (v1.1.0)',
+    npcCount: npcs.length,
+    floorCount: Object.keys(idxByFloor).length,
+    factionCount: Object.keys(idxByFaction).length,
+    archetypeCount: Object.keys(idxByArchetype).length,
+    npcs: npcs,
+    byFloor: idxByFloor,
+    byFaction: idxByFaction,
+    byArchetype: idxByArchetype,
+    byType: idxByType,
+    byBarkPool: idxByBarkPool,
+    orphans: {
+      noBarkPool:  orphanNoBark,
+      noDialogue:  orphanNoDialogue
+    }
+  }, null, 2));
+  console.log('  OK: ' + npcs.length + ' NPCs across '
+    + Object.keys(idxByFloor).length + ' floor(s) -> tools/npc-manifest.json');
+  if (orphanNoBark.length) {
+    console.log('       (' + orphanNoBark.length + ' NPC(s) without barkPool — see manifest.orphans.noBarkPool)');
+  }
+  if (orphanNoDialogue.length) {
+    console.log('       (' + orphanNoDialogue.length + ' talkable NPC(s) without dialogue — see manifest.orphans.noDialogue)');
+  }
+} catch (e) {
+  console.warn('  WARN: NPC manifest failed - ' + e.message);
 }

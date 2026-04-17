@@ -246,6 +246,7 @@ Faction NPCs on their home floor should have distinct interaction behaviors:
 | §4 Encounters | engine/npc-system.js (tick loop), docs/NPC_SYSTEM_ROADMAP.md (Phase B-C) |
 | §5 Faction HQs | docs/Tutorial_world_roadmap.md (floor registry), CLAUDE.md (floor hierarchy) |
 | §2-§5 Faction Presence | docs/ACT2_NARRATIVE_OUTLINE.md (§4 faction lock, §4.3 hostility consequences, §5.4 housing reassignment) |
+| **Authoring tooling** | **docs/NPC_TOOLING_ROADMAP.md (DOC-110)** — seven-tool suite: P1 NPC Designer (factionId + gateCheck + uniforms), P2 Bark Workbench (faction.* pool authoring + orphan detection), P6 Sprite Studio (faction palette presets: Tide cyan / Foundry amber / Admiralty violet / Gleaner green / Scholar ivory), P7 Population Planner (faction balance per floor + coherence checks for over-representation on neutral floors) |
 
 ---
 

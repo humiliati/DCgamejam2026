@@ -24,6 +24,10 @@ var DispatcherChoreography = (function() {
   var _onPickupWorkKeysCb = null;
   var _updateQuestTargetCb = null;
   var _changeStateCb = null;
+  // DOC-107 Phase 3 — fired when the dispatcher cinematic releases
+  // controls (`_closeCinematic`). Receives `firstTime:bool` so callers
+  // can distinguish the first-encounter rep bump from re-talks.
+  var _onCompleteCb = null;
 
   // ============================================================================
   // INIT
@@ -34,6 +38,7 @@ var DispatcherChoreography = (function() {
     if (typeof opts.onPickupWorkKeys === 'function') _onPickupWorkKeysCb = opts.onPickupWorkKeys;
     if (typeof opts.updateQuestTarget === 'function') _updateQuestTargetCb = opts.updateQuestTarget;
     if (typeof opts.changeState === 'function') _changeStateCb = opts.changeState;
+    if (typeof opts.onComplete === 'function') _onCompleteCb = opts.onComplete;
   }
 
   // ============================================================================
@@ -215,6 +220,15 @@ var DispatcherChoreography = (function() {
       }
       _dispatcherPhase = 'done';
       if (_updateQuestTargetCb) _updateQuestTargetCb();
+      // DOC-107 Phase 3 — notify the reputation/debrief layer that the
+      // dispatch encounter wrapped. `firstTime` is captured in the outer
+      // closure (see line ~181 above) and tells the consumer whether to
+      // emit the first-encounter BPRD favor bump + auto-expand the
+      // debrief faction row, or treat this as a re-talk no-op.
+      if (_onCompleteCb) {
+        try { _onCompleteCb(firstTime); }
+        catch (e) { console.error('[DispatcherChoreography] onComplete callback error:', e); }
+      }
     };
 
     var dispatcherNpc = {

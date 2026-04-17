@@ -91,6 +91,15 @@ var SpraySystem = (function () {
   var _sfxPlaying = false;   // spray loop SFX state
   var _nozzleType = 'base';  // currently equipped nozzle
 
+  // DOC-107 Phase 5 — fan-out hook called when a tile's cleanliness crosses
+  // 1.0 (fully cleaned). Wired at Game.init to PickupActions.onMinigameExit
+  // so quest predicates of kind:'minigame' / kindId:'pressure_wash' can
+  // advance on each washed tile. Signature:
+  //   onSubTargetComplete(subTargetId, floorId, tileX, tileY)
+  // Left as a settable module-level slot (rather than exported property)
+  // because Object.freeze'd exports cannot be mutated post-init.
+  var _onSubTargetComplete = null;
+
   // Screen-space aim tracking for beam-hit droplet FX (Rung 1).
   // Independent from _prevAim (which is subcell-space, used for stroke
   // interpolation) — this tracks pixel position for velocity-driven
@@ -632,6 +641,19 @@ var SpraySystem = (function () {
               ? i18n.t('toast.tile_clean', 'Tile cleaned!') : 'Tile cleaned!'), 'loot');
           }
           _stat('tilesFullyCleaned');
+
+          // DOC-107 Phase 5 — fan out a 'tile_clean' subtarget event so
+          // quest predicates tracking "wash N tiles" can advance. Wired
+          // lazily at Game.init → PickupActions.onMinigameExit.
+          if (typeof _onSubTargetComplete === 'function') {
+            try {
+              _onSubTargetComplete('tile_clean', fId, aimTileX, aimTileY);
+            } catch (e) {
+              if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[SpraySystem] onSubTargetComplete threw:', e);
+              }
+            }
+          }
         }
       }
     }
@@ -769,6 +791,18 @@ var SpraySystem = (function () {
     MC = (typeof MovementController !== 'undefined') ? MovementController : null;
   }
 
+  /**
+   * DOC-107 Phase 5 — wire the fan-out callback for tile-clean subtarget
+   * events. Called once at Game.init with PickupActions.onMinigameExit
+   * curried for the 'pressure_wash' kindId. Pass `null` to detach.
+   */
+  function setOnSubTargetComplete(fn) {
+    if (fn === null) { _onSubTargetComplete = null; return true; }
+    if (typeof fn !== 'function') return false;
+    _onSubTargetComplete = fn;
+    return true;
+  }
+
   return Object.freeze({
     init:                  init,
     update:                update,
@@ -776,6 +810,7 @@ var SpraySystem = (function () {
     getNozzleType:         getNozzleType,
     setNozzleType:         setNozzleType,
     getResolvedNozzleStats: getResolvedNozzleStats,
+    setOnSubTargetComplete: setOnSubTargetComplete,
     NOZZLE_STATS:          NOZZLE_STATS,
     BASE_STRENGTH:         BASE_STRENGTH
   });

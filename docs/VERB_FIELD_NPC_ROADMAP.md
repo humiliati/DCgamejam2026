@@ -616,6 +616,7 @@ Floor minimap could show faction "pressure" — heatmap of which faction's NPCs 
 | §18 Cage Pipeline | → `engine/shop.js`, day-advance system | T3 dispatch → cage → processed → shop inventory restock. 1-day cycle. |
 | §18 Tracker | → NEW `engine/reanimation-tracker.js` (Layer 2) | Persistent creature state: tier, floor, cage status, day reanimated. |
 | Sundog Theorem | → `sundog/` repo, `Brainstorm/agent_leisure_architecture.md` | Theoretical basis for field-gradient movement |
+| **Authoring tooling** | → **NPC_TOOLING_ROADMAP.md (DOC-110)** | Seven-tool suite (NPC Designer, Bark Workbench, Verb-Node Stamper, Archetype Studio, Enemy Hydrator, Sprite Studio, Population Planner) that edits every schema in §4–§5 + §17–§18 through UIs instead of hand-JSON |
 
 ---
 

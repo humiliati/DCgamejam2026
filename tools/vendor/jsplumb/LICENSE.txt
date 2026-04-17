@@ -1,0 +1,6 @@
+jsPlumb Community Edition 2.15.6
+Copyright (c) 2010-2021 jsPlumb
+MIT License — https://opensource.org/licenses/MIT
+
+Vendored from https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/js/jsplumb.min.js
+for offline dev-tool use only. Not included in the webOS ship bundle.

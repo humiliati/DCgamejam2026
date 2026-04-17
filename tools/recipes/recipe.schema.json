@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Procgen Recipe",
+  "description": "Tunable knobs for procedural dungeon generation (Pass 6). A recipe describes *what kind* of floor to generate — the generator interprets these knobs to produce a concrete tile grid, spawn, doors, and entity list.",
+
+  "type": "object",
+  "required": ["id", "title", "biome", "size", "strategy"],
+  "additionalProperties": false,
+
+  "properties": {
+    "id":    { "type": "string", "pattern": "^[a-z0-9_-]+$", "description": "Unique recipe identifier." },
+    "title": { "type": "string", "description": "Human-readable name." },
+    "description": { "type": "string" },
+
+    "biome": {
+      "type": "string",
+      "enum": ["cellar", "catacomb", "depths", "bazaar", "guild", "inn", "apothecary", "armory", "promenade", "gardens", "frontier", "exterior"],
+      "description": "Biome key from biome-map.json. Determines tile palette, accent tiles, breakable set, and depth/contract."
+    },
+
+    "faction": {
+      "type": "string",
+      "enum": ["mss", "pinkerton", "jesuit", "bprd", "neutral"],
+      "default": "neutral",
+      "description": "Faction affinity. Affects thematic entity choices (notice boards, faction banners, NPC spawn hints). 'neutral' = no faction lean."
+    },
+
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width":  { "type": "integer", "minimum": 9,  "maximum": 60, "description": "Grid width in tiles." },
+        "height": { "type": "integer", "minimum": 9,  "maximum": 60, "description": "Grid height in tiles." }
+      },
+      "additionalProperties": false
+    },
+
+    "strategy": {
+      "type": "object",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "string",
+          "enum": ["cobweb", "combat", "pressure-wash", "fetch", "mixed"],
+          "description": "Primary map strategy archetype. cobweb = long corridors with chokepoints for spider deployment. combat = open rooms with sightlines and ambush corners. pressure-wash = winding connected paths that reward/punish route planning (kink-prone). fetch = tree-structured maze for timed sprint runs (DOC-113). mixed = balanced blend."
+        },
+        "weight": {
+          "type": "number", "minimum": 0, "maximum": 1, "default": 1.0,
+          "description": "How strongly the primary strategy dominates (1.0 = pure, 0.5 = half-mixed with fallback patterns)."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "rooms": {
+      "type": "object",
+      "properties": {
+        "count":   { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [3, 7], "description": "[min, max] room count." },
+        "minSize": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [3, 3], "description": "[minW, minH] room interior dimensions." },
+        "maxSize": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [9, 9], "description": "[maxW, maxH] room interior dimensions." }
+      },
+      "additionalProperties": false
+    },
+
+    "corridors": {
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["straight", "winding", "l-bend", "random"],
+          "default": "random",
+          "description": "Corridor shape preference. straight = direct connections. winding = longer S-curves (good for pressure-wash). l-bend = right-angle turns. random = mix."
+        },
+        "width": { "type": "integer", "minimum": 1, "maximum": 3, "default": 1, "description": "Corridor width. 1 = standard chokepoint, 3 = wide gallery." },
+        "extraConnections": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2, "description": "Fraction of extra loop-back corridors added after spanning tree (0 = no loops, 1 = all possible)." }
+      },
+      "additionalProperties": false
+    },
+
+    "entities": {
+      "type": "object",
+      "properties": {
+        "torchDensity":    { "type": "number", "minimum": 0, "maximum": 1, "default": 0.3, "description": "Fraction of eligible wall tiles that get torches." },
+        "breakableDensity": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.15, "description": "Fraction of room floor tiles that get breakables." },
+        "trapDensity":     { "type": "number", "minimum": 0, "maximum": 1, "default": 0.05, "description": "Fraction of corridor tiles that get traps." },
+        "chestCount":      { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [1, 3], "description": "[min, max] chests." },
+        "corpseCount":     { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [0, 2], "description": "[min, max] corpses (hero's mess)." },
+        "cobwebSlots":     { "type": "integer", "minimum": 0, "default": 0, "description": "Number of pre-placed cobweb tiles. 0 = let CobwebSystem compute at runtime." },
+        "enemyBudget":     { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [2, 6], "description": "[min, max] enemy spawn count. Actual spawns are floor-data entities, not tiles." },
+        "decoyCount":      { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2, "default": [1, 3], "description": "[min, max] decoy containers (empty chests, looted corpses) placed in dead-end branches. Fetch strategy only (DOC-113 §6.2)." },
+        "secondaryExit":   { "type": "boolean", "default": true, "description": "If true, place a hidden secondary DOOR_EXIT in a non-critical-path leaf room. Fetch strategy only (DOC-113 §5.2)." }
+      },
+      "additionalProperties": false
+    },
+
+    "doors": {
+      "type": "object",
+      "properties": {
+        "entry":   { "type": "string", "enum": ["north", "south", "east", "west", "auto"], "default": "auto", "description": "Which wall gets the entry door (STAIRS_UP or DOOR_EXIT)." },
+        "exit":    { "type": "string", "enum": ["north", "south", "east", "west", "auto", "none"], "default": "auto", "description": "Which wall gets the deeper door (STAIRS_DN or DOOR). 'none' = dead-end floor." },
+        "bossGate": { "type": "boolean", "default": false, "description": "If true, exit door is BOSS_DOOR instead." }
+      },
+      "additionalProperties": false
+    },
+
+    "timer": {
+      "type": "object",
+      "description": "Hero approach timer settings. Required for fetch strategy, ignored by other strategies (DOC-113 §2).",
+      "properties": {
+        "budgetMs":        { "type": "integer", "minimum": 15000, "maximum": 300000, "default": 60000, "description": "Countdown budget in milliseconds." },
+        "sentinelGraceMs": { "type": "integer", "minimum": 0, "maximum": 30000, "default": 12000, "description": "Milliseconds the hero stands at the exit door before switching to pursuit." },
+        "heroArchetype":   { "type": "string", "enum": ["seeker", "scholar", "shadow", "crusader"], "default": "seeker", "description": "Which hero archetype spawns on timer expiry. Determines suit, combat stats, and carnage behavior." }
+      },
+      "additionalProperties": false
+    },
+
+    "seed": {
+      "type": ["integer", "null"],
+      "default": null,
+      "description": "RNG seed for deterministic output. null = random."
+    }
+  }
+}

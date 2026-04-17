@@ -40,19 +40,30 @@ var QuestTypes = (function () {
   });
 
   // ── Waypoint kinds ──────────────────────────────────────────────
-  // 'floor'    — advance by reaching a tile on a specific floor
-  // 'item'     — advance by acquiring an item/card id
-  // 'npc'      — advance by exhausting a dialogue branch
-  // 'flag'     — advance when a player-flag predicate becomes true
-  // 'readiness'— advance when a readiness tier is crossed
-  // 'combat'   — advance by defeating an enemy archetype or boss
+  // 'floor'           — advance by reaching a tile on a specific floor
+  // 'item'            — advance by acquiring an item/card id
+  // 'npc'             — advance by exhausting a dialogue branch
+  // 'flag'            — advance when a player-flag predicate becomes true
+  // 'readiness'       — advance when a readiness tier is crossed
+  // 'combat'          — advance by defeating an enemy archetype or boss
+  // 'minigame'        — advance on minigame exit event (DOC-107 Phase 5).
+  //                     Predicate fields: kindId (required), reason?,
+  //                     subTargetId?, floorId?, count? (N-of-M via
+  //                     stepProgress).
+  // 'reputation-tier' — advance when a faction reputation tier is crossed
+  //                     (DOC-107 Phase 3). Predicate fields: factionId
+  //                     (required), tier (required — exact match on the
+  //                     *destination* tier id), direction? ('up'|'down'|'any'
+  //                     default 'up'). Fires once per tier-cross event.
   var WAYPOINT_KIND = Object.freeze({
-    FLOOR:     'floor',
-    ITEM:      'item',
-    NPC:       'npc',
-    FLAG:      'flag',
-    READINESS: 'readiness',
-    COMBAT:    'combat'
+    FLOOR:           'floor',
+    ITEM:            'item',
+    NPC:             'npc',
+    FLAG:            'flag',
+    READINESS:       'readiness',
+    COMBAT:          'combat',
+    MINIGAME:        'minigame',
+    REPUTATION_TIER: 'reputation-tier'
   });
 
   // ── Reputation tiers ────────────────────────────────────────────

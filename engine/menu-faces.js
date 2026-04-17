@@ -57,6 +57,7 @@ var MenuFaces = (function () {
   // (bonfire rest state is tracked by HazardSystem.getLastRestResult — null = pre-rest)
   var _hoverDetail = null; // { item, x, y } — item/card under pointer for tooltip
   var _bookScrollOffset = 0; // Journal books list scroll offset
+  var _questCompletedScrollOffset = 0; // Journal completed-quests scroll offset (Phase 2)
   var _selectedSlot = -1;  // tap-selected slot for highlight mode
   var _selectedPayload = null; // payload from selected slot (for drop matching)
   var _selectedZoneId = null;  // zone id of selected slot
@@ -405,27 +406,23 @@ var MenuFaces = (function () {
     ctx.textAlign = 'left';
   }
 
-  // ── Quest objective resolver ──────────────────────────────────────
-  // Returns a short string describing the current Day 0 objective
-  // based on game state flags and current floor.
+  // ── Quest objective resolver (Phase 2 shim) ───────────────────────
+  // Returns a short, already-translated string describing the player's
+  // current top-priority objective. DOC-107 Phase 2 gutted the legacy
+  // hardcoded floor/gate if-ladder — the logic now lives in
+  // QuestChain.getJournalEntries() + the quest.nav_hint.* i18n keys.
+  //
+  // Keeping this as a thin shim (not inlining at the single HUD call
+  // site) preserves the named entry point for any future caller that
+  // wants "just the first active objective string."
   function _getQuestObjective() {
-    var floorId = (typeof FloorManager !== 'undefined') ? FloorManager.getFloor() : '';
-    // Check if Game exposes gate state
-    var gateUnlocked = (typeof Game !== 'undefined' && Game.isGateUnlocked)
-      ? Game.isGateUnlocked() : false;
-
-    if (!gateUnlocked) {
-      // Phase 1: player needs to get work keys from home
-      if (floorId === '1.6') return 'Find work keys in the chest';
-      if (floorId === '0') return 'Enter The Promenade';
-      return 'Head home for your keys \u2014 east side of town';
-    }
-
-    // Phase 2: gate unlocked, head to dungeon
-    if (floorId === '1') return 'Enter the Coral Bazaar \u2014 find the cellar';
-    if (floorId === '1.1') return 'Descend to the Soft Cellar';
-    if (floorId && floorId.split('.').length >= 3) return 'Clear the dungeon floor';
-    return 'Report to the dungeon entrance';
+    if (typeof QuestChain === 'undefined' || !QuestChain.getJournalEntries) return '';
+    var entries = QuestChain.getJournalEntries({ active: true, completed: false }) || [];
+    if (entries.length === 0) return '';
+    var top = entries[0];
+    var key = top.stepLabel || top.title;
+    if (!key) return '';
+    return (typeof i18n !== 'undefined' && i18n.t) ? i18n.t(key, key) : key;
   }
 
   function _renderBonfireRest(ctx, x, y, w, h) {
@@ -1516,22 +1513,150 @@ var MenuFaces = (function () {
     ctx.fillStyle = COL.dim;
     ctx.font = F_SECTION + 'px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('OBJECTIVES', x + PAD, ty + Math.round(6 * S));
+    ctx.fillText(i18n.t('quest.panel.active', 'OBJECTIVES').toUpperCase(),
+                 x + PAD, ty + Math.round(6 * S));
+
+    // Pull active entries from QuestChain (DOC-107 Phase 2). Falls back
+    // to a synthetic nav-hint entry when no real quest is active.
+    var qActiveEntries = [];
+    var qCompletedEntries = [];
+    if (typeof QuestChain !== 'undefined' && QuestChain.getJournalEntries) {
+      qActiveEntries    = QuestChain.getJournalEntries({ active: true,  completed: false }) || [];
+      qCompletedEntries = QuestChain.getJournalEntries({ active: false, completed: true  }) || [];
+    }
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.fillText(qActiveEntries.length + ' active', x + w - PAD, ty + Math.round(6 * S));
     ty += Math.round(14 * S);
 
-    var questText = _getQuestObjective();
-    if (questText) {
-      ctx.fillStyle = 'rgba(120,220,160,0.8)';
-      ctx.font = F_SMALL + 'px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('\u25C6 ' + questText, x + PAD + 2, ty + 2);
-      ty += Math.round(16 * S);
-    } else {
+    if (qActiveEntries.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.font = F_SMALL + 'px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('No active objectives', x + w / 2, ty + 2);
+      ctx.fillText(i18n.t('quest.panel.empty', 'No active quests.'),
+                   x + w / 2, ty + 2);
       ty += Math.round(16 * S);
+    } else {
+      ctx.font = F_SMALL + 'px monospace';
+      ctx.textAlign = 'left';
+      for (var qei = 0; qei < qActiveEntries.length; qei++) {
+        var qe = qActiveEntries[qei];
+        var qLabel = qe.stepLabel
+          ? i18n.t(qe.stepLabel, qe.stepLabel)
+          : (qe.title ? i18n.t(qe.title, qe.title) : '');
+        if (!qLabel) continue;
+        // Nav-hint entries render the same compact green diamond row
+        // as real active objectives — UI parity with jam-build nav hint.
+        ctx.fillStyle = (qe.kind === 'nav')
+          ? 'rgba(120,220,160,0.8)'
+          : (qe.markerColor || 'rgba(120,220,160,0.9)');
+        ctx.fillText('\u25C6 ' + qLabel, x + PAD + 2, ty + 2);
+        ty += Math.round(16 * S);
+      }
+    }
+
+    // ── Section 2b: Completed quests (BOOKS-style scrollable rows) ──
+    // Only rendered when at least one quest has actually completed —
+    // saves vertical space on the jam-build journal when the main-quest
+    // spine is still being authored.
+    if (qCompletedEntries.length > 0) {
+      ty += Math.round(4 * S);
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_SECTION + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(i18n.t('quest.panel.completed', 'COMPLETED').toUpperCase(),
+                   x + PAD, ty + Math.round(6 * S));
+      ctx.textAlign = 'right';
+      ctx.fillText(qCompletedEntries.length + '', x + w - PAD, ty + Math.round(6 * S));
+      ty += Math.round(14 * S);
+
+      var Q_ROW_H = Math.round(28 * S);
+      var Q_ROW_GAP = Math.round(3 * S);
+      var Q_MAX_VISIBLE = 4;
+      var Q_ICON_W = Math.round(22 * S);
+
+      // Clamp scroll offset
+      _questCompletedScrollOffset = Math.max(0,
+        Math.min(_questCompletedScrollOffset, qCompletedEntries.length - Q_MAX_VISIBLE));
+      var qStart = Math.max(0, _questCompletedScrollOffset);
+      var qEnd   = Math.min(qCompletedEntries.length, qStart + Q_MAX_VISIBLE);
+
+      // Scroll-up chevron
+      if (qStart > 0) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25B2 ' + qStart + ' more', x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2, h: Math.round(14 * S),
+          slot: 930, action: 'quest_scroll_up' });
+        ty += Math.round(14 * S);
+      }
+
+      for (var qri = qStart; qri < qEnd; qri++) {
+        var qEntry = qCompletedEntries[qri];
+        var rowYq = ty;
+        var qHov = (_hoverSlot === (910 + qri));
+
+        // Row background
+        ctx.fillStyle = qHov ? 'rgba(180,160,100,0.15)' : 'rgba(60,50,35,0.35)';
+        _roundRectFill(ctx, x + PAD, rowYq, w - PAD * 2, Q_ROW_H, Math.round(3 * S));
+        ctx.strokeStyle = qHov ? COL.accent : 'rgba(180,160,120,0.2)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, x + PAD, rowYq, w - PAD * 2, Q_ROW_H, Math.round(3 * S));
+
+        // Icon — checkmark for completed
+        var qIconFont = Math.max(10, Math.round(16 * S));
+        ctx.font = qIconFont + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#8fd8a8';
+        ctx.fillText('\u2713', x + PAD + Q_ICON_W / 2 + 4, rowYq + Q_ROW_H / 2 + Math.round(3 * S));
+
+        // Title (truncated)
+        var qTitleX = x + PAD + Q_ICON_W + Math.round(6 * S);
+        var qMaxW   = w - PAD * 2 - Q_ICON_W - Math.round(12 * S);
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = qHov ? '#fff' : COL.text;
+        var qTitleStr = qEntry.title ? i18n.t(qEntry.title, qEntry.title) : qEntry.id;
+        while (qTitleStr.length > 3 && ctx.measureText(qTitleStr).width > qMaxW) {
+          qTitleStr = qTitleStr.substring(0, qTitleStr.length - 4) + '...';
+        }
+        ctx.fillText(qTitleStr, qTitleX, rowYq + Q_ROW_H / 2 + Math.round(2 * S));
+
+        // Kind tag (right-aligned, dimmed)
+        if (qEntry.kind) {
+          ctx.font = Math.max(8, Math.round(10 * S)) + 'px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillStyle = 'rgba(180,170,150,0.45)';
+          ctx.fillText(qEntry.kind.toUpperCase(), x + w - PAD - 4, rowYq + Q_ROW_H / 2 + Math.round(2 * S));
+        }
+
+        // Hit zone (slot 910+ reserved for completed-quest rows)
+        _hitZones.push({ x: x + PAD, y: rowYq, w: w - PAD * 2, h: Q_ROW_H,
+          slot: 910 + qri, action: 'read_quest_completed', questId: qEntry.id });
+
+        if (qHov) {
+          var bcText = qEntry.breadcrumb ? i18n.t(qEntry.breadcrumb, qEntry.breadcrumb) : '';
+          _hoverDetail = { item: { name: i18n.t(qEntry.title, qEntry.title),
+            emoji: '\u2713', description: bcText }, x: x + w - PAD, y: rowYq };
+        }
+
+        ty += Q_ROW_H + Q_ROW_GAP;
+      }
+
+      // Scroll-down chevron
+      if (qEnd < qCompletedEntries.length) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25BC ' + (qCompletedEntries.length - qEnd) + ' more',
+                     x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2, h: Math.round(14 * S),
+          slot: 931, action: 'quest_scroll_down' });
+        ty += Math.round(14 * S);
+      }
     }
 
     // ── Section 3: Books read (selectable scrollable rows) ──
@@ -3266,11 +3391,54 @@ var MenuFaces = (function () {
     { value: 0.25, label: '25% (lowest)' }
   ];
 
+  // Quest settings subsection (DOC-107 Phase 4).
+  // Each row is either a boolean toggle ('toggle') or a fixed-option
+  // cycle ('cycle'). `prefKey` is the QuestChain.setUIPrefs patch field;
+  // `options` lists the valid values for cycle rows. i18n keys below
+  // live in data/strings/en.js under `settings.quest.*`.
+  var _QUEST_SETTINGS_DEFS = [
+    { type: 'toggle', prefKey: 'markers',
+      labelKey: 'settings.quest.markers',
+      hintKey:  'settings.quest.markers_hint',
+      bind: 'Click' },
+    { type: 'cycle',  prefKey: 'hintVerbosity',
+      labelKey: 'settings.quest.hint_verbosity',
+      hintKey:  'settings.quest.hint_verbosity_hint',
+      options:  ['off', 'subtle', 'explicit'],
+      optionLabelKeys: {
+        'off':      'settings.quest.verbosity.off',
+        'subtle':   'settings.quest.verbosity.subtle',
+        'explicit': 'settings.quest.verbosity.explicit'
+      },
+      bind: 'Click' },
+    { type: 'cycle',  prefKey: 'waypointFlair',
+      labelKey: 'settings.quest.waypoint_flair',
+      hintKey:  'settings.quest.waypoint_flair_hint',
+      options:  ['simple', 'pulsing', 'trail'],
+      optionLabelKeys: {
+        'simple':  'settings.quest.flair.simple',
+        'pulsing': 'settings.quest.flair.pulsing',
+        'trail':   'settings.quest.flair.trail'
+      },
+      bind: 'Click' },
+    { type: 'cycle',  prefKey: 'sidequestOptIn',
+      labelKey: 'settings.quest.sidequest_optin',
+      hintKey:  'settings.quest.sidequest_hint',
+      options:  ['all', 'main-only', 'ask'],
+      optionLabelKeys: {
+        'all':       'settings.quest.optin.all',
+        'main-only': 'settings.quest.optin.main-only',
+        'ask':       'settings.quest.optin.ask'
+      },
+      bind: 'Click' }
+  ];
+  var _QUEST_ROW_COUNT = _QUEST_SETTINGS_DEFS.length;
+
   // Total navigable rows:
-  //   3 sliders + 10 toggles + 1 render-scale cycle + 1 language = 15
+  //   3 sliders + 10 toggles + 1 render-scale cycle + 1 language + 4 quest = 19
   var _TOGGLE_COUNT = 10;
   var _CYCLE_COUNT  = 1; // render scale
-  var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + _CYCLE_COUNT + 1;
+  var _SETTINGS_ROW_COUNT = _SLIDER_DEFS.length + _TOGGLE_COUNT + _CYCLE_COUNT + 1 + _QUEST_ROW_COUNT;
 
   // Find nearest step in _RENDER_SCALE_STEPS for the current Raycaster
   // scale. Tolerates tiny floating-point drift from localStorage round-trip.
@@ -3331,6 +3499,7 @@ var MenuFaces = (function () {
   function handleSettingsInteract() {
     var row = _settingsState.row;
     var cycleStart = _SLIDER_DEFS.length + _TOGGLE_COUNT;
+    var questStart = cycleStart + 2; // after render-scale + language
     if (row < _SLIDER_DEFS.length) {
       // Slider row — toggle lock
       _settingsLocked = !_settingsLocked;
@@ -3348,10 +3517,37 @@ var MenuFaces = (function () {
     } else if (row === cycleStart) {
       // Render-scale cycle row — step to next scale
       _cycleRenderScale();
-    } else {
+    } else if (row === cycleStart + 1) {
       // Language row
       handleLanguageCycle();
+    } else if (row >= questStart && row < questStart + _QUEST_ROW_COUNT) {
+      // Quest subsection row — toggle or cycle through QuestChain prefs
+      handleQuestSettingInteract(row - questStart);
     }
+  }
+
+  /**
+   * Apply an interact action (Enter / click) to a quest-settings row.
+   * `qIdx` is the 0-based index into `_QUEST_SETTINGS_DEFS`.
+   * All mutations go through QuestChain.setUIPrefs() which handles
+   * validation, persistence, and the 'prefs-change' event fan-out.
+   */
+  function handleQuestSettingInteract(qIdx) {
+    if (typeof QuestChain === 'undefined' || !QuestChain.setUIPrefs) return;
+    var def = _QUEST_SETTINGS_DEFS[qIdx];
+    if (!def) return;
+    var prefs = QuestChain.getUIPrefs ? QuestChain.getUIPrefs() : null;
+    if (!prefs) return;
+    var patch = {};
+    if (def.type === 'toggle') {
+      patch[def.prefKey] = !prefs[def.prefKey];
+    } else if (def.type === 'cycle') {
+      var opts = def.options || [];
+      var cur  = String(prefs[def.prefKey]);
+      var idx  = opts.indexOf(cur);
+      patch[def.prefKey] = opts[(idx + 1 + opts.length) % opts.length];
+    }
+    QuestChain.setUIPrefs(patch);
   }
 
   /** @returns {boolean} True if a slider is focus-locked. */
@@ -3767,8 +3963,102 @@ var MenuFaces = (function () {
       slot: 830, action: 'cycle_language'
     });
 
+    // ── Quest subsection (DOC-107 Phase 4) ────────────────────────
+    // 1 toggle + 3 cycle rows. Prefs pulled live from QuestChain so
+    // the UI reflects any programmatic setUIPrefs() caller. All writes
+    // go through handleSettingsInteract → QuestChain.setUIPrefs.
+    var questSectionY = langY + langRowH + Math.round(12 * S);
+    ctx.strokeStyle = COL.divider;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, questSectionY - Math.round(6 * S));
+    ctx.lineTo(x + w - 10, questSectionY - Math.round(6 * S));
+    ctx.stroke();
+
+    // Section title
+    ctx.fillStyle = COL.dim;
+    ctx.font = F_SECTION + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      (i18n.t('settings.quest.section_title', 'Quest') + '').toUpperCase(),
+      listX + Math.round(14 * S), questSectionY + Math.round(6 * S)
+    );
+
+    var questRowStart = _SLIDER_DEFS.length + _TOGGLE_COUNT + 2;      // first quest row = 15
+    var questRowH      = Math.max(18, Math.round(22 * S));
+    var questBaseY     = questSectionY + Math.round(14 * S);
+    var questPrefs     = (typeof QuestChain !== 'undefined' && QuestChain.getUIPrefs)
+                       ? QuestChain.getUIPrefs()
+                       : { markers: true, hintVerbosity: 'subtle',
+                           waypointFlair: 'pulsing', sidequestOptIn: 'all' };
+    var _hoveredQuestHintKey = null;
+
+    for (var qi = 0; qi < _QUEST_SETTINGS_DEFS.length; qi++) {
+      var qdef      = _QUEST_SETTINGS_DEFS[qi];
+      var qRowY     = questBaseY + qi * questRowH;
+      var qSlot     = 850 + qi;
+      var qSelected = (_settingsState.row === questRowStart + qi);
+      var qHover    = (_hoverSlot === qSlot);
+
+      if (qSelected || qHover) {
+        ctx.fillStyle = qSelected ? 'rgba(240,208,112,0.10)' : 'rgba(240,208,112,0.06)';
+        ctx.fillRect(x + 6, qRowY - 2, w - 12, questRowH - 2);
+        _hoveredQuestHintKey = qdef.hintKey;
+      }
+
+      // Label (left column)
+      ctx.fillStyle = (qSelected || qHover) ? COL.accent : COL.dim;
+      ctx.font = (qSelected ? 'bold ' : '') + F_BODY + 'px monospace';
+      ctx.textAlign = 'left';
+      var qLabel = i18n.t(qdef.labelKey, qdef.labelKey);
+      ctx.fillText((qSelected ? '\u25B6 ' : '  ') + qLabel,
+                   listX + Math.round(14 * S), qRowY + Math.round(10 * S));
+
+      // Value (right column)
+      ctx.textAlign = 'right';
+      if (qdef.type === 'toggle') {
+        var qVal = !!questPrefs[qdef.prefKey];
+        ctx.fillStyle = qVal ? 'rgba(80,220,120,0.9)' : 'rgba(180,80,80,0.7)';
+        ctx.fillText(qVal ? 'ON' : 'OFF',
+                     listX + trackW + Math.round(6 * S),
+                     qRowY + Math.round(10 * S));
+      } else if (qdef.type === 'cycle') {
+        var qCur      = String(questPrefs[qdef.prefKey]);
+        var qOptKey   = qdef.optionLabelKeys ? qdef.optionLabelKeys[qCur] : null;
+        var qOptLabel = qOptKey ? i18n.t(qOptKey, qCur) : qCur;
+        ctx.fillStyle = (qSelected || qHover) ? COL.accent : COL.text;
+        ctx.fillText(qOptLabel,
+                     listX + trackW + Math.round(6 * S),
+                     qRowY + Math.round(10 * S));
+      }
+
+      // Hit zone (compensate for Face 3 scroll translate)
+      _hitZones.push({
+        x: x + 6, y: qRowY - 2 - _f3ScrollY, w: w - 12, h: questRowH - 2,
+        slot: qSlot, action: 'quest_setting', questSettingIdx: qi
+      });
+    }
+
+    // Hover hint line for selected/hovered quest row
+    var qDescY = questBaseY + _QUEST_SETTINGS_DEFS.length * questRowH + Math.round(2 * S);
+    // Fallback to selected row's hint when nothing hovered
+    if (!_hoveredQuestHintKey) {
+      var selQIdx = _settingsState.row - questRowStart;
+      if (selQIdx >= 0 && selQIdx < _QUEST_SETTINGS_DEFS.length) {
+        _hoveredQuestHintKey = _QUEST_SETTINGS_DEFS[selQIdx].hintKey;
+      }
+    }
+    if (_hoveredQuestHintKey) {
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = 'italic ' + F_SMALL + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(
+        i18n.t(_hoveredQuestHintKey, _hoveredQuestHintKey),
+        listX + Math.round(14 * S), qDescY + Math.round(8 * S)
+      );
+    }
+
     // ── Controls reference ────────────────────────────────────────
-    var ctrlY = langY + Math.round(18 * S);
+    var ctrlY = qDescY + Math.round(18 * S);
     ctx.strokeStyle = COL.divider;
     ctx.beginPath();
     ctx.moveTo(x + 10, ctrlY - Math.round(4 * S));
@@ -4567,6 +4857,12 @@ var MenuFaces = (function () {
     _bookScrollOffset = Math.max(0, _bookScrollOffset + delta);
   }
 
+  // DOC-107 Phase 2 — completed-quests pane scroll (Journal Section 2b).
+  // Clamp is deferred to _renderJournal() per the _bookScrollOffset pattern.
+  function scrollQuestCompleted(delta) {
+    _questCompletedScrollOffset = Math.max(0, _questCompletedScrollOffset + delta);
+  }
+
   function scrollFocused(delta) {
     if (_invFocus === 'bag') scrollBag(delta);
     else scrollDeck(delta);
@@ -4681,6 +4977,7 @@ var MenuFaces = (function () {
     handleSettingsScroll:    handleSettingsScroll,
     handleSettingsToggle:    handleSettingsToggle,
     handleSettingsInteract:  handleSettingsInteract,
+    handleQuestSettingInteract: handleQuestSettingInteract,
     isSettingsLocked:        isSettingsLocked,
     handleLanguageCycle:     handleLanguageCycle,
     handleRenderScaleCycle:  _cycleRenderScale,
@@ -4715,6 +5012,9 @@ var MenuFaces = (function () {
     isDeckExpanded:       function () { return _deckExpanded; },
 
     // Journal book scroll
-    scrollBooks:          scrollBooks
+    scrollBooks:          scrollBooks,
+
+    // Journal completed-quests scroll (DOC-107 Phase 2)
+    scrollQuestCompleted: scrollQuestCompleted
   };
 })();

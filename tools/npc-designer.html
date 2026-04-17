@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Gleaner — NPC Designer</title>
+
+  <!-- ============================================================
+       NPC Designer — DOC-110 Phase 1 (P1) MVP
+       ============================================================
+       Visual CRUD tool for every NPC in the game.
+       Loads data/npcs.js (sidecar of data/npcs.json), renders a
+       searchable sidebar + tabbed editor, and exports a modified
+       data/npcs.json via the browser download blob.
+
+       Conventions:
+         - Vanilla JS, no build step, no CDN (matches project rules).
+         - Palette matches tools/world-designer.html.
+         - Same file:// loading story: <script src="../data/npcs.js">
+           exposes window.NPCS_DATA; tools/floor-data.js exposes
+           window.FLOOR_DATA for the Placement mini-map.
+
+       MVP scope (2026-04-16 ship):
+         - Identity tab ........ full CRUD
+         - Placement tab ....... full CRUD + mini-map click-to-pin
+         - Behavior tab ........ full CRUD (bark + patrol + step)
+         - Dialogue tab ........ read-only preview (P4 will author)
+         - Commerce tab ........ gateCheck JSON only (P5 = full)
+         - Reanim-Tier tab ..... verbSet/verbFaction readonly (P4/P6)
+         - Save ................ Download data/npcs.json blob
+         - Dirty tracking ...... in-memory + beforeunload guard
+       ============================================================ -->
+
+  <style>
+    /* ─── Palette (world-designer parity) ─── */
+    :root {
+      --bg: #1a1d22;
+      --bg-header: #0f1115;
+      --bg-side: #15181d;
+      --bg-panel: #20232a;
+      --bg-input: #0f1115;
+      --accent: #8ad;
+      --accent-dim: #789;
+      --text: #e6e6e6;
+      --text-dim: #9ab;
+      --text-em: #cfe;
+      --muted: #678;
+      --border: #333;
+      --border-mid: #456;
+      --divider: #2a2e33;
+      --good: #9c6;
+      --warn: #fc8;
+      --err: #f88;
+      --btn-bg: #2a3a4a;
+      --btn-bg-hover: #345;
+      --btn-primary-bg: #3a2d1a;
+      --btn-primary-fg: #fc8;
+      --btn-primary-border: #764;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "Courier New", monospace;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    /* ─── Header bar ─── */
+    .nd-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+    }
+    .nd-header h1 {
+      margin: 0; font-size: 15px; letter-spacing: 1px; color: var(--accent);
+    }
+    .nd-header .sub { color: var(--accent-dim); font-size: 12px; }
+    .nd-header .spacer { flex: 1; }
+    .nd-header button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 4px 10px; cursor: pointer;
+      font-family: inherit; font-size: 12px; border-radius: 3px;
+    }
+    .nd-header button:hover { background: var(--btn-bg-hover); }
+    .nd-header button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .nd-header button.primary {
+      background: var(--btn-primary-bg);
+      border-color: var(--btn-primary-border);
+      color: var(--btn-primary-fg);
+    }
+    .nd-header .status { font-size: 11px; color: var(--good); min-width: 120px; text-align: right; }
+    .nd-header .status.dirty { color: var(--warn); }
+    .nd-header .status.err   { color: var(--err); }
+
+    /* ─── Three-pane container ─── */
+    .nd-container {
+      display: flex;
+      height: calc(100vh - 44px);
+    }
+
+    /* ─── Sidebar (NPC list) ─── */
+    .nd-sidebar {
+      width: 280px;
+      background: var(--bg-side);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .nd-search {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--divider);
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .nd-search input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      padding: 4px 6px;
+      font-family: inherit; font-size: 12px;
+      border-radius: 3px;
+    }
+    .nd-search input:focus { outline: 1px solid var(--accent); }
+    .nd-filter-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .nd-chip {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: #22262c;
+      color: var(--text-dim);
+      border: 1px solid #2d3339;
+      cursor: pointer;
+      user-select: none;
+      letter-spacing: 0.3px;
+    }
+    .nd-chip.active {
+      background: #2a3a4a;
+      color: var(--text-em);
+      border-color: var(--accent-dim);
+    }
+
+    .nd-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .nd-list-floor {
+      padding: 4px 10px 2px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent-dim);
+      background: #111418;
+      border-top: 1px solid var(--divider);
+      border-bottom: 1px solid var(--divider);
+      display: flex; justify-content: space-between;
+    }
+    .nd-list-floor .count { color: var(--muted); }
+
+    .nd-list-item {
+      padding: 5px 10px 5px 14px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .nd-list-item:hover { background: #1f242b; }
+    .nd-list-item.selected {
+      background: #2a3240;
+      border-left-color: var(--accent);
+    }
+    .nd-list-item.dirty::after {
+      content: '●'; color: var(--warn); font-size: 10px;
+    }
+    .nd-list-item .emoji { flex: 0 0 18px; text-align: center; font-size: 14px; }
+    .nd-list-item .name {
+      flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--text-em);
+    }
+    .nd-list-item .role {
+      font-size: 10px; color: var(--muted);
+      flex: 0 0 auto; letter-spacing: 0.3px;
+    }
+
+    /* ─── Center editor pane ─── */
+    .nd-editor {
+      flex: 1;
+      display: flex; flex-direction: column;
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+
+    /* Editor header (selected NPC summary) */
+    .nd-editor-header {
+      padding: 8px 16px;
+      background: #191c21;
+      border-bottom: 1px solid var(--divider);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .nd-editor-header .emoji-big { font-size: 22px; }
+    .nd-editor-header .title-block { flex: 1; }
+    .nd-editor-header .title-block .npc-name { color: var(--text-em); font-size: 14px; font-weight: bold; }
+    .nd-editor-header .title-block .npc-id { font-size: 10px; color: var(--muted); letter-spacing: 0.3px; }
+    .nd-editor-header .actions { display: flex; gap: 6px; }
+    .nd-editor-header button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 3px 8px; cursor: pointer;
+      font-family: inherit; font-size: 11px; border-radius: 3px;
+    }
+    .nd-editor-header button:hover { background: var(--btn-bg-hover); }
+    .nd-editor-header button.danger { border-color: #744; color: #faa; }
+    .nd-editor-header button.danger:hover { background: #3a1a1a; }
+
+    /* Tabs */
+    .nd-tabs {
+      display: flex;
+      background: #141619;
+      border-bottom: 1px solid var(--divider);
+      padding: 0 8px;
+    }
+    .nd-tab {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    .nd-tab:hover { color: var(--text-em); background: #1a1d22; }
+    .nd-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: var(--bg-panel);
+    }
+    .nd-tab.stub::after {
+      content: '†';
+      margin-left: 4px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    /* Tab body */
+    .nd-tab-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    .nd-tab-body.hidden { display: none; }
+
+    /* Form groups */
+    .nd-fieldset {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      background: #1d2128;
+      border: 1px solid var(--divider);
+      border-radius: 4px;
+    }
+    .nd-fieldset-title {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px dashed var(--divider);
+    }
+    .nd-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+    }
+    .nd-row label {
+      flex: 0 0 130px;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.3px;
+    }
+    .nd-row label.required::after { content: ' *'; color: var(--warn); }
+    .nd-row input[type="text"],
+    .nd-row input[type="number"],
+    .nd-row select,
+    .nd-row textarea {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      padding: 4px 6px;
+      font-family: inherit; font-size: 12px;
+      border-radius: 3px;
+    }
+    .nd-row input:focus, .nd-row select:focus, .nd-row textarea:focus {
+      outline: 1px solid var(--accent);
+    }
+    .nd-row input[readonly] { color: var(--muted); background: #0b0d10; cursor: not-allowed; }
+    .nd-row textarea { min-height: 60px; font-size: 11px; resize: vertical; }
+    .nd-row .hint {
+      font-size: 10px; color: var(--muted);
+      flex: 0 0 100%; margin-left: 140px; margin-top: 2px;
+    }
+    .nd-row .checkbox-group {
+      flex: 1;
+      display: flex; gap: 14px; flex-wrap: wrap;
+    }
+    .nd-row .checkbox-group label {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .nd-row .checkbox-group input[type=checkbox] { cursor: pointer; }
+
+    .nd-radio-group {
+      flex: 1;
+      display: flex; gap: 10px;
+    }
+    .nd-radio-group label {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--text-dim); cursor: pointer;
+      padding: 2px 8px;
+      border: 1px solid var(--border-mid);
+      border-radius: 3px;
+      background: #1a1d22;
+    }
+    .nd-radio-group label.selected {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: #1a2530;
+    }
+
+    /* Empty state */
+    .nd-empty {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 40px;
+    }
+    .nd-empty .big { font-size: 32px; margin-bottom: 10px; opacity: 0.5; }
+
+    /* Stub notice */
+    .nd-stub-notice {
+      padding: 10px 14px;
+      background: #2a2a1a;
+      border: 1px dashed #764;
+      border-radius: 4px;
+      color: var(--warn);
+      font-size: 11px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .nd-stub-notice strong { color: #fd8; letter-spacing: 0.5px; }
+
+    /* Mini-map */
+    .nd-minimap-wrap {
+      display: flex; gap: 14px;
+      align-items: flex-start;
+    }
+    .nd-minimap-canvas {
+      background: #0a0c0e;
+      border: 1px solid var(--border-mid);
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+    .nd-minimap-info {
+      flex: 1;
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+    .nd-minimap-info .legend-row {
+      display: flex; align-items: center; gap: 6px; padding: 1px 0;
+    }
+    .nd-minimap-info .dot {
+      width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+      border: 1px solid #000;
+    }
+
+    /* Patrol list */
+    .nd-patrol-list {
+      margin: 0; padding: 0; list-style: none;
+      border: 1px solid var(--divider);
+      border-radius: 3px;
+      background: #141619;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .nd-patrol-list li {
+      padding: 4px 8px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px;
+      border-bottom: 1px dotted var(--divider);
+    }
+    .nd-patrol-list li:last-child { border-bottom: none; }
+    .nd-patrol-list li .idx { color: var(--muted); width: 20px; }
+    .nd-patrol-list li .coord { color: var(--text-em); flex: 1; }
+    .nd-patrol-list li .face { color: var(--text-dim); font-size: 10px; }
+    .nd-patrol-list li button {
+      background: none; color: var(--err);
+      border: none; cursor: pointer; font-size: 12px; padding: 0 4px;
+    }
+    .nd-patrol-controls {
+      display: flex; gap: 6px; margin-top: 6px;
+    }
+    .nd-patrol-controls input, .nd-patrol-controls select {
+      padding: 3px 5px !important;
+      font-size: 11px !important;
+    }
+    .nd-patrol-controls button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 3px 10px; cursor: pointer;
+      font-family: inherit; font-size: 11px; border-radius: 3px;
+    }
+
+    /* ─── Visual Stack editor (SPRITE_STACK_ROADMAP §3) ─── */
+    .nd-stack-mode {
+      display: flex; gap: 8px; align-items: center;
+      margin-bottom: 10px;
+      padding: 6px 8px;
+      background: #141619;
+      border-radius: 3px;
+    }
+    .nd-stack-mode label {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--text-dim);
+      cursor: pointer;
+      padding: 3px 8px;
+      border: 1px solid var(--border-mid);
+      border-radius: 3px;
+      background: #1a1d22;
+    }
+    .nd-stack-mode label.selected {
+      color: var(--accent); border-color: var(--accent); background: #1a2530;
+    }
+
+    .nd-stack-grid {
+      display: grid;
+      grid-template-columns: 100px 90px 1fr;
+      gap: 4px 10px;
+      align-items: center;
+    }
+    .nd-stack-grid.disabled { opacity: 0.45; pointer-events: none; }
+    .nd-stack-grid .slot-label {
+      font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.3px;
+      padding: 3px 0;
+    }
+    .nd-stack-grid .slot-label .sub {
+      font-size: 9px; color: var(--muted); display: block;
+    }
+    .nd-stack-grid .slot-emoji {
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      font-family: inherit; font-size: 16px;
+      padding: 2px 6px; border-radius: 3px;
+      text-align: center;
+    }
+    .nd-stack-grid .slot-modifiers {
+      display: flex; gap: 4px; align-items: center;
+      font-size: 10px; color: var(--muted);
+    }
+    .nd-stack-grid .slot-modifiers input[type=number] {
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      padding: 2px 4px; border-radius: 3px;
+      font-family: inherit; font-size: 10px;
+      width: 60px;
+    }
+    .nd-stack-grid .slot-modifiers label {
+      color: var(--muted); font-size: 10px;
+      display: inline-flex; align-items: center; gap: 3px;
+    }
+
+    .nd-stack-tint {
+      display: flex; gap: 8px; align-items: center;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--divider);
+    }
+    .nd-stack-tint label { font-size: 11px; color: var(--text-dim); flex: 0 0 100px; }
+    .nd-stack-tint input[type=range] { flex: 1; }
+    .nd-stack-tint .tint-swatch {
+      width: 22px; height: 22px;
+      border-radius: 4px;
+      border: 1px solid var(--border-mid);
+      background: #888;
+    }
+    .nd-stack-tint .tint-value {
+      font-size: 11px; color: var(--text-em);
+      width: 46px; text-align: right;
+    }
+
+    /* ─── Sprite Commissions grid (6 slots × 4 intents) ─── */
+    .nd-sprite-grid {
+      display: grid;
+      grid-template-columns: 110px repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .nd-sprite-grid .sp-hdr {
+      font-size: 10px; letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--accent-dim);
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--divider);
+      text-align: center;
+    }
+    .nd-sprite-grid .sp-slot {
+      font-size: 11px; color: var(--text-dim);
+      padding: 8px 6px;
+      border-right: 1px dotted var(--divider);
+      align-self: center;
+    }
+    .nd-sprite-grid .sp-cell {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px;
+      padding: 6px 4px;
+      background: #141619;
+      border: 1px solid var(--divider);
+      border-radius: 3px;
+      cursor: pointer;
+      min-height: 44px;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .nd-sprite-grid .sp-cell:hover {
+      background: #1a1f26; border-color: var(--accent-dim);
+    }
+    .nd-sprite-grid .sp-cell.has-frames {
+      background: #1a2530; border-color: var(--accent);
+    }
+    .nd-sprite-grid .sp-cell.active {
+      background: #2a3a4a; border-color: var(--warn);
+      box-shadow: 0 0 0 1px var(--warn);
+    }
+    .nd-sprite-grid .sp-cell .count {
+      font-size: 14px; color: var(--text-em); font-weight: bold;
+    }
+    .nd-sprite-grid .sp-cell.has-frames .count { color: var(--accent); }
+    .nd-sprite-grid .sp-cell.active .count { color: var(--warn); }
+    .nd-sprite-grid .sp-cell .label {
+      font-size: 9px; color: var(--muted); letter-spacing: 0.3px;
+    }
+
+    /* Sprite frame editor (reveals below grid when a cell is clicked) */
+    .nd-frame-editor {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #131619;
+      border: 1px solid var(--warn);
+      border-radius: 3px;
+    }
+    .nd-frame-editor.hidden { display: none; }
+    .nd-frame-editor .header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed var(--divider);
+    }
+    .nd-frame-editor .header .title {
+      color: var(--warn); font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .nd-frame-editor .header .dismiss {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 14px; padding: 0 4px;
+    }
+    .nd-frame-editor .header .dismiss:hover { color: var(--err); }
+
+    .nd-frame-list {
+      list-style: none; margin: 0; padding: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--divider);
+      border-radius: 3px;
+      background: #0e1013;
+    }
+    .nd-frame-list li {
+      display: grid;
+      grid-template-columns: 24px 48px 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 4px 8px;
+      border-bottom: 1px dotted var(--divider);
+    }
+    .nd-frame-list li:last-child { border-bottom: none; }
+    .nd-frame-list li .idx { color: var(--muted); font-size: 10px; }
+    .nd-frame-list li .preview {
+      width: 40px; height: 40px;
+      background: #1a1d22;
+      border: 1px solid var(--divider);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: var(--muted);
+      image-rendering: pixelated;
+      overflow: hidden;
+    }
+    .nd-frame-list li .preview img {
+      max-width: 100%; max-height: 100%;
+      image-rendering: pixelated;
+    }
+    .nd-frame-list li .asset-id {
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      padding: 3px 6px;
+      font-family: inherit; font-size: 11px;
+      border-radius: 3px;
+    }
+    .nd-frame-list li .browse-btn {
+      background: var(--btn-bg); color: var(--text-dim);
+      border: 1px solid var(--border-mid);
+      padding: 3px 8px;
+      font-size: 10px; border-radius: 3px;
+      cursor: pointer;
+    }
+    .nd-frame-list li .browse-btn:hover { color: var(--text-em); background: var(--btn-bg-hover); }
+    .nd-frame-list li .remove-btn {
+      background: none; border: none; color: var(--err);
+      cursor: pointer; font-size: 12px; padding: 0 4px;
+    }
+
+    .nd-frame-empty {
+      padding: 14px;
+      text-align: center;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 11px;
+    }
+
+    .nd-frame-add {
+      display: flex; gap: 6px; margin-top: 8px;
+    }
+    .nd-frame-add input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      color: var(--text-em);
+      padding: 4px 6px; font-family: inherit; font-size: 11px;
+      border-radius: 3px;
+    }
+    .nd-frame-add button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 4px 10px;
+      font-family: inherit; font-size: 11px; border-radius: 3px;
+      cursor: pointer;
+    }
+    .nd-frame-add button:hover { background: var(--btn-bg-hover); }
+
+    .nd-frame-hint {
+      font-size: 10px; color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .nd-frame-hint code {
+      background: #0b0d10;
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: var(--accent);
+    }
+
+    .nd-commission-footer {
+      display: flex; gap: 8px; margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--divider);
+    }
+    .nd-commission-footer button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 4px 12px;
+      font-family: inherit; font-size: 11px; border-radius: 3px;
+      cursor: pointer;
+    }
+    .nd-commission-footer button.primary {
+      background: var(--btn-primary-bg);
+      border-color: var(--btn-primary-border);
+      color: var(--btn-primary-fg);
+    }
+    .nd-commission-footer button:hover { filter: brightness(1.2); }
+
+    /* JSON preview (readonly) */
+    .nd-json-preview {
+      background: #0b0d10;
+      border: 1px solid var(--divider);
+      padding: 10px;
+      border-radius: 3px;
+      color: var(--text-dim);
+      font-size: 10.5px;
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 320px;
+      line-height: 1.4;
+    }
+
+    /* Toast */
+    .nd-toast {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      background: var(--bg-header);
+      border: 1px solid var(--border-mid);
+      border-radius: 4px;
+      padding: 10px 16px;
+      color: var(--text-em);
+      font-size: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      z-index: 100;
+      transition: opacity 0.25s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .nd-toast.show { opacity: 1; }
+    .nd-toast.good { border-color: var(--good); color: var(--good); }
+    .nd-toast.warn { border-color: var(--warn); color: var(--warn); }
+    .nd-toast.err  { border-color: var(--err);  color: var(--err);  }
+
+    /* Scrollbar (WebKit) */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #0b0d10; }
+    ::-webkit-scrollbar-thumb { background: #2a2e33; border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3e43; }
+  </style>
+</head>
+<body>
+
+  <!-- Header ─────────────────────────────────────────────── -->
+  <div class="nd-header">
+    <h1>DUNGEON GLEANER — NPC DESIGNER</h1>
+    <span class="sub">DOC-110 P1 · MVP</span>
+    <div class="spacer"></div>
+    <button id="btn-new-npc">＋ New NPC</button>
+    <button id="btn-revert" title="Discard all unsaved edits">Revert</button>
+    <button id="btn-download" class="primary" title="Download data/npcs.json (save over the original)">Download npcs.json</button>
+    <span id="status-indicator" class="status">loading…</span>
+  </div>
+
+  <!-- Main container ─────────────────────────────────────── -->
+  <div class="nd-container">
+
+    <!-- Sidebar: search + filter + NPC list ─────────────── -->
+    <aside class="nd-sidebar">
+      <div class="nd-search">
+        <input id="search-input" type="text" placeholder="Search by id / name / emoji…">
+        <div class="nd-filter-chips" id="floor-chips"></div>
+      </div>
+      <div class="nd-list" id="npc-list"></div>
+    </aside>
+
+    <!-- Editor pane ─────────────────────────────────────── -->
+    <main class="nd-editor" id="editor-root">
+      <div class="nd-empty" id="empty-state">
+        <div class="big">🧙</div>
+        <div>Select an NPC from the sidebar to edit.</div>
+        <div style="font-size:11px; margin-top:10px; color:var(--muted);">
+          45 NPCs across 9 floors. Search, filter, or pick one to begin.
+        </div>
+      </div>
+
+      <!-- Editor body (hidden until selection) -->
+      <div id="editor-body" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+
+        <div class="nd-editor-header">
+          <div class="emoji-big" id="hdr-emoji">•</div>
+          <div class="title-block">
+            <div class="npc-name" id="hdr-name">—</div>
+            <div class="npc-id" id="hdr-id">—</div>
+          </div>
+          <div class="actions">
+            <button id="btn-duplicate">Duplicate</button>
+            <button id="btn-delete" class="danger">Delete</button>
+          </div>
+        </div>
+
+        <!-- Tab strip -->
+        <div class="nd-tabs">
+          <div class="nd-tab active" data-tab="identity">Identity</div>
+          <div class="nd-tab" data-tab="placement">Placement</div>
+          <div class="nd-tab" data-tab="behavior">Behavior</div>
+          <div class="nd-tab stub" data-tab="dialogue">Dialogue</div>
+          <div class="nd-tab stub" data-tab="commerce">Commerce</div>
+          <div class="nd-tab stub" data-tab="reanim">Reanim-Tier</div>
+        </div>
+
+        <!-- Tab bodies — one per tab, toggled via .hidden -->
+
+        <!-- IDENTITY ------------------------------------------ -->
+        <div class="nd-tab-body" id="tab-identity">
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Identity</h3>
+            <div class="nd-row">
+              <label class="required">ID</label>
+              <input id="f-id" type="text" readonly>
+            </div>
+            <div class="nd-row"><span class="hint">IDs are immutable — use Duplicate to fork.</span></div>
+            <div class="nd-row">
+              <label class="required">Name</label>
+              <input id="f-name" type="text" placeholder="Display name">
+            </div>
+            <div class="nd-row">
+              <label>Emoji</label>
+              <input id="f-emoji" type="text" maxlength="4" style="flex:0 0 80px;" placeholder="🧑">
+              <span class="hint" style="margin-left:10px; flex:1;">Single glyph — visible in minimap &amp; dialogue.</span>
+            </div>
+            <div class="nd-row">
+              <label class="required">Type</label>
+              <select id="f-type">
+                <option value="interactive">interactive</option>
+                <option value="cosmetic">cosmetic</option>
+                <option value="patrol">patrol</option>
+                <option value="vendor">vendor</option>
+                <option value="employer">employer</option>
+                <option value="tutorial">tutorial</option>
+              </select>
+            </div>
+            <div class="nd-row">
+              <label>Role</label>
+              <input id="f-role" type="text" placeholder="e.g. dispatcher, drifter, innkeep — or empty">
+            </div>
+            <div class="nd-row">
+              <label>Faction</label>
+              <select id="f-faction">
+                <option value="">— unaligned —</option>
+                <option value="mss">mss (dispatcher agency)</option>
+                <option value="pinkerton">pinkerton (crooked detectives)</option>
+                <option value="jesuit">jesuit (religious order)</option>
+                <option value="bprd">bprd (paranormal bureau)</option>
+              </select>
+            </div>
+            <div class="nd-row">
+              <label>Flags</label>
+              <div class="checkbox-group">
+                <label><input id="f-talkable" type="checkbox"> talkable</label>
+                <label><input id="f-blocksMovement" type="checkbox"> blocksMovement</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visual Stack (triple-emoji stack per SPRITE_STACK_ROADMAP §3) -->
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Emoji Stack <span style="color:var(--muted); font-weight:normal; letter-spacing:0;">— Billboard Composition</span></h3>
+            <div class="nd-stack-mode" id="stack-mode">
+              <span style="font-size:11px; color:var(--text-dim); margin-right:6px;">Source:</span>
+              <label data-val="composer"><input type="radio" name="stack-mode" value="composer"> Composer (default)</label>
+              <label data-val="pinned"><input type="radio" name="stack-mode" value="pinned"> Pin stack</label>
+              <span class="hint" style="flex:1; margin-left:10px; font-size:10px; color:var(--muted);">
+                Composer = deterministic seed-based stack via NpcComposer. Pin = hand-authored override (required before sprite commissioning).
+              </span>
+            </div>
+
+            <div class="nd-stack-grid" id="stack-grid">
+              <!-- Primary slots -->
+              <div class="slot-label">Head <span class="sub">slot 0</span></div>
+              <input class="slot-emoji" id="stack-head" type="text" maxlength="4" placeholder="🧑">
+              <div class="slot-modifiers">—</div>
+
+              <div class="slot-label">Torso <span class="sub">slot 1</span></div>
+              <input class="slot-emoji" id="stack-torso" type="text" maxlength="4" placeholder="🧥">
+              <div class="slot-modifiers">—</div>
+
+              <div class="slot-label">Legs <span class="sub">slot 2</span></div>
+              <input class="slot-emoji" id="stack-legs" type="text" maxlength="4" placeholder="👖">
+              <div class="slot-modifiers">—</div>
+
+              <!-- Sub-layers -->
+              <div class="slot-label">Hat <span class="sub">sub-layer</span></div>
+              <input class="slot-emoji" id="stack-hat" type="text" maxlength="4" placeholder="(none)">
+              <div class="slot-modifiers">
+                <label>scale <input id="stack-hatScale" type="number" step="0.05" min="0.1" max="1.5"></label>
+                <label><input id="stack-hatBehind" type="checkbox"> behind</label>
+              </div>
+
+              <div class="slot-label">Front Weapon <span class="sub">sub-layer</span></div>
+              <input class="slot-emoji" id="stack-frontWeapon" type="text" maxlength="4" placeholder="(none)">
+              <div class="slot-modifiers">
+                <label>scale <input id="stack-frontWeaponScale" type="number" step="0.05" min="0.1" max="1.5"></label>
+                <label>offsetX <input id="stack-frontWeaponOffsetX" type="number" step="0.05" min="-1" max="1"></label>
+              </div>
+
+              <div class="slot-label">Back Weapon <span class="sub">sub-layer</span></div>
+              <input class="slot-emoji" id="stack-backWeapon" type="text" maxlength="4" placeholder="(none)">
+              <div class="slot-modifiers">
+                <label>scale <input id="stack-backWeaponScale" type="number" step="0.05" min="0.1" max="1.5"></label>
+                <label>offsetX <input id="stack-backWeaponOffsetX" type="number" step="0.05" min="-1" max="1"></label>
+              </div>
+
+              <!-- Corpse override -->
+              <div class="slot-label">Corpse <span class="sub">death override</span></div>
+              <input class="slot-emoji" id="stack-corpse" type="text" maxlength="4" placeholder="💀">
+              <div class="slot-modifiers">—</div>
+            </div>
+
+            <div class="nd-stack-tint" id="stack-tint-row">
+              <label>Tint Hue</label>
+              <input id="stack-tintHue" type="range" min="0" max="360" step="5">
+              <div class="tint-swatch" id="stack-tint-swatch"></div>
+              <div class="tint-value" id="stack-tint-value">—</div>
+              <label style="flex:0 0 auto;"><input id="stack-tintHue-null" type="checkbox"> no tint</label>
+            </div>
+          </div>
+
+          <!-- Sprite Commissions (per SPRITE_COMMISSIONING_MAP + SPRITE_STUB_ROADMAP) -->
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Sprite Commissions <span style="color:var(--muted); font-weight:normal; letter-spacing:0;">— Per-Slot Animation Series</span></h3>
+            <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px; line-height:1.5;">
+              Each cell holds a frame series for one slot × intent. Fallback chain:
+              <span style="color:var(--accent);">StaticSprite(assetId) → emoji stack → NpcComposer default</span>.
+              File picker is preview-only; artist PNGs land in <code style="background:#0b0d10; padding:1px 4px; border-radius:2px; color:var(--accent);">assets/sprites/npcs/</code> via the commissioning workflow.
+            </div>
+
+            <div class="nd-sprite-grid" id="sprite-grid">
+              <!-- header row populated by JS -->
+            </div>
+
+            <!-- In-place frame editor (toggles open when a cell is clicked) -->
+            <div class="nd-frame-editor hidden" id="frame-editor">
+              <div class="header">
+                <span class="title" id="frame-editor-title">—</span>
+                <button class="dismiss" id="frame-editor-close">✕</button>
+              </div>
+              <ul class="nd-frame-list" id="frame-list"></ul>
+              <div class="nd-frame-add">
+                <input id="frame-new-id" type="text" placeholder="Asset ID (e.g. NPC-dispatcher_head_walk_00)">
+                <button id="frame-add-btn">＋ Add Frame</button>
+              </div>
+              <div class="nd-frame-hint">
+                Asset IDs map into <code>assets/sprites/manifest.js</code>. Naming convention:
+                <code>NPC-&lt;id&gt;_&lt;slot&gt;_&lt;intent&gt;_&lt;frame&gt;</code>. Empty series falls back to the emoji stack.
+              </div>
+            </div>
+
+            <div class="nd-commission-footer">
+              <button id="btn-manifest-preview">Manifest Preview</button>
+              <button id="btn-manifest-export" class="primary">Download Manifest Fragment</button>
+              <span style="font-size:10px; color:var(--muted); margin-left:auto; align-self:center;">
+                Generates a <code style="background:#0b0d10; padding:1px 4px; border-radius:2px; color:var(--accent);">manifest.js</code> snippet for every commissioned asset on this NPC.
+              </span>
+            </div>
+          </div>
+
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Raw Preview</h3>
+            <div class="nd-json-preview" id="identity-preview">—</div>
+          </div>
+        </div>
+
+        <!-- PLACEMENT ----------------------------------------- -->
+        <div class="nd-tab-body hidden" id="tab-placement">
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Location</h3>
+            <div class="nd-row">
+              <label class="required">Floor</label>
+              <select id="f-floorId"></select>
+            </div>
+            <div class="nd-row"><span class="hint">Changing floor moves the NPC to the target floor's roster.</span></div>
+            <div class="nd-row">
+              <label class="required">X</label>
+              <input id="f-x" type="number" min="0" step="1" style="flex:0 0 100px;">
+              <label style="flex:0 0 30px; margin-left:14px;">Y</label>
+              <input id="f-y" type="number" min="0" step="1" style="flex:0 0 100px;">
+              <span class="hint" style="flex:1; margin-left:16px;">Grid tile — click the map to pin.</span>
+            </div>
+            <div class="nd-row">
+              <label class="required">Facing</label>
+              <div class="nd-radio-group" id="facing-radio">
+                <label data-val="east"><input type="radio" name="facing" value="east"> ▶ east</label>
+                <label data-val="south"><input type="radio" name="facing" value="south"> ▼ south</label>
+                <label data-val="west"><input type="radio" name="facing" value="west"> ◀ west</label>
+                <label data-val="north"><input type="radio" name="facing" value="north"> ▲ north</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Minimap (click to pin)</h3>
+            <div class="nd-minimap-wrap">
+              <canvas id="placement-minimap" class="nd-minimap-canvas" width="400" height="300"></canvas>
+              <div class="nd-minimap-info">
+                <div class="legend-row"><span class="dot" style="background:#8ad;"></span>Selected NPC</div>
+                <div class="legend-row"><span class="dot" style="background:#7a7;"></span>Other NPCs on floor</div>
+                <div class="legend-row"><span class="dot" style="background:#c96;"></span>Spawn point</div>
+                <div class="legend-row"><span class="dot" style="background:#666; border-radius:0;"></span>Wall</div>
+                <div style="margin-top:10px; font-size:10px;">
+                  Floor: <span id="minimap-floor-id" style="color:var(--text-em);">—</span><br>
+                  Grid: <span id="minimap-dims" style="color:var(--text-em);">—</span><br>
+                  Biome: <span id="minimap-biome" style="color:var(--text-em);">—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BEHAVIOR ------------------------------------------ -->
+        <div class="nd-tab-body hidden" id="tab-behavior">
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Movement</h3>
+            <div class="nd-row">
+              <label>Step Interval (ms)</label>
+              <input id="f-stepInterval" type="number" min="0" step="50" style="flex:0 0 140px;">
+              <span class="hint" style="flex:1; margin-left:10px;">0 = stationary. Typical: 800–1500 for patrol.</span>
+            </div>
+            <div class="nd-row">
+              <label>Verb Archetype</label>
+              <input id="f-verbArchetype" type="text" placeholder="e.g. patrol, idle, converse (DOC-83)">
+            </div>
+          </div>
+
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Patrol Points</h3>
+            <ul class="nd-patrol-list" id="patrol-list"></ul>
+            <div class="nd-patrol-controls">
+              <input id="f-patrol-x" type="number" min="0" placeholder="X" style="flex:0 0 70px; background:var(--bg-input); border:1px solid var(--border-mid); color:var(--text-em); border-radius:3px; font-family:inherit;">
+              <input id="f-patrol-y" type="number" min="0" placeholder="Y" style="flex:0 0 70px; background:var(--bg-input); border:1px solid var(--border-mid); color:var(--text-em); border-radius:3px; font-family:inherit;">
+              <select id="f-patrol-facing" style="flex:0 0 100px; background:var(--bg-input); border:1px solid var(--border-mid); color:var(--text-em); border-radius:3px; font-family:inherit;">
+                <option value="east">▶ east</option>
+                <option value="south">▼ south</option>
+                <option value="west">◀ west</option>
+                <option value="north">▲ north</option>
+              </select>
+              <button id="btn-patrol-add">＋ Add</button>
+              <button id="btn-patrol-clear">Clear All</button>
+            </div>
+          </div>
+
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Bark</h3>
+            <div class="nd-row">
+              <label>Bark Pool</label>
+              <input id="f-barkPool" type="text" placeholder="e.g. ambient.approach, vendor.idle">
+            </div>
+            <div class="nd-row">
+              <label>Bark Radius</label>
+              <input id="f-barkRadius" type="number" min="0" step="1" style="flex:0 0 100px;">
+              <span class="hint" style="flex:1; margin-left:10px;">Tiles — NPC only barks when player is within this distance.</span>
+            </div>
+            <div class="nd-row">
+              <label>Bark Interval (ms)</label>
+              <input id="f-barkInterval" type="number" min="0" step="1000" style="flex:0 0 140px;">
+              <span class="hint" style="flex:1; margin-left:10px;">Minimum gap between random barks.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DIALOGUE (stub) ----------------------------------- -->
+        <div class="nd-tab-body hidden" id="tab-dialogue">
+          <div class="nd-stub-notice">
+            <strong>DEFERRED TO P4 — Dialogue Workbench.</strong><br>
+            Full tree editor (nodes, choices, gates, callbacks) ships as a dedicated tool.
+            This tab shows the current bindings read-only.
+          </div>
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Current Bindings</h3>
+            <div class="nd-row">
+              <label>Dialogue Pool</label>
+              <input id="f-dialoguePool" type="text" placeholder="(e.g. shop.coral, meet.bprd) — optional">
+            </div>
+            <div class="nd-row"><span class="hint">Free-text for MVP. P4 will supply a validated picker.</span></div>
+            <div class="nd-row">
+              <label>Tree ID</label>
+              <input id="f-dialogueTreeId" type="text" readonly>
+            </div>
+            <div class="nd-row"><span class="hint">'__inline__' = defined in npc-dialogue-trees.js — edit there for now.</span></div>
+          </div>
+        </div>
+
+        <!-- COMMERCE (stub) ----------------------------------- -->
+        <div class="nd-tab-body hidden" id="tab-commerce">
+          <div class="nd-stub-notice">
+            <strong>PARTIAL — Gatecheck only.</strong><br>
+            Full vendor inventory &amp; pricing editor ships in P5 (Vendor Workbench).
+            This tab exposes the gate-check payload as raw JSON.
+          </div>
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Gate Check (JSON)</h3>
+            <div class="nd-row">
+              <textarea id="f-gateCheck" rows="10" spellcheck="false"
+                placeholder='{"flag":"met_dispatcher","missingMessage":"…"} — or leave blank.'></textarea>
+            </div>
+            <div class="nd-row">
+              <span class="hint">Validated on save. Must be valid JSON or empty. See DOC-107 quest anchors + npc-system gateCheck schema.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- REANIM-TIER (stub) -------------------------------- -->
+        <div class="nd-tab-body hidden" id="tab-reanim">
+          <div class="nd-stub-notice">
+            <strong>PARTIAL — Verb set &amp; faction only.</strong><br>
+            Full reanim tier editor (T1 wander / T2 dialogue / T3 dispatch) + attenuation curves
+            ship in P4/P6 alongside verb-field tooling.
+          </div>
+          <div class="nd-fieldset">
+            <h3 class="nd-fieldset-title">Verb Binding (DOC-83)</h3>
+            <div class="nd-row">
+              <label>Verb Set</label>
+              <input id="f-verbSet" type="text" placeholder="e.g. npc.ambient, npc.vendor">
+            </div>
+            <div class="nd-row">
+              <label>Verb Faction</label>
+              <input id="f-verbFaction" type="text" placeholder="e.g. mss_agent, unaligned">
+            </div>
+            <div class="nd-row"><span class="hint">Free-text for MVP. Future: picker populated from DOC-83 verb-set registry.</span></div>
+          </div>
+        </div>
+
+      </div> <!-- /editor-body -->
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="nd-toast">—</div>
+
+  <!-- Data sidecars (browser-safe under file://) -->
+  <script src="../data/npcs.js"></script>
+  <script src="floor-data.js"></script>
+
+  <!-- Optional: NpcComposer for live composer-preview fallback values -->
+  <script src="../engine/npc-composer.js"></script>
+
+  <!-- Application code -->
+  <script src="npc-designer.js"></script>
+</body>
+</html>

@@ -22,10 +22,31 @@ payload, and vice versa.
 
 ## `.quest.json` schema (v1)
 
+A sidecar may carry any combination of the following top-level blocks.
+Every block is optional, but at least one must be present.
+
+- **`anchors`** *(Phase 6)* — named anchors whose definition lives next
+  to the floor data they describe. Shape matches
+  `data/quests.json.anchors` exactly (`{ anchorId: spec }` where `spec`
+  has a `type` discriminator — `'literal'`, `'floor-data'`, `'entity'`,
+  `'npc'`, `'dump-truck'`, `'door-to'`). QuestRegistry unions these
+  with the central anchors block at init; collisions abort the init
+  with a loud error naming both sources.
+- **`quests`** *(Phase 0b)* — per-floor quest definitions that are
+  merged into `floorData[fid].quests`.
+
 ```jsonc
 {
   "version": 1,
   "floorId": "1.3.1",             // REQUIRED; must match filename stem before ".quest"
+  "anchors": {                     // Phase 6 — named anchors anchored to this floor
+    "pentagram_chamber": {
+      "type": "literal",
+      "floorId": "1.3.1",
+      "x": 14,
+      "y": 8
+    }
+  },
   "quests": [
     {
       "id": "side.1_3_1.scrub_boiler",    // must match /^[a-z0-9_.-]+$/

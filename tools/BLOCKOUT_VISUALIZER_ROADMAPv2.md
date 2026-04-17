@@ -25,24 +25,16 @@ the vocabulary).
 Reference frame: what a level designer coming from Tiled, Ogmo, Unity Tilemaps, Unreal, or a AAA in-house
 editor would expect to find when they sit down at this tool.
 
-**Planned next:** Pass 0 (modularization — split the ~4,000-line visualizer into `tools/js/bv-*.js`
-IIFEs + manifest + `tools/` code-review-graph + CI file-size budgets) is a prerequisite for
-Pass 5b's world-graph editor. Pass 5a (vanilla floor primitives) **shipped April 2026**; Pass 5c
-(scaffold-on-save + parent-wiring multi-file commit) **shipped April 2026** and closes the
-world-designer → BO-V pending-floor handoff. Pass 5b explicitly depends on Pass 0 to avoid
-compounding the monolith problem. Pass 5d (agent-feedback closeouts — see the new section
-below) is the next designated slice; it cleans up CLI dry-run / IIFE round-trip / biome-specific
-stamps based on the field report in `tools/BO-V agent feedback.md`. See the Tier 6 section for
-details.
+**Planned next:** Pass 0 (modularization) **shipped April 2026** — visualizer split into 26 `tools/js/bv-*.js` modules (483-line HTML shell), CLI split into 17 `tools/cli/*.js` modules, module manifest at `tools/js/MODULES.md`, CSS extracted to `tools/css/blockout-visualizer.css`. Sub-items 0.5 (tools/ code-review-graph) and 0.6 (file-size CI budgets) are scaffolded but not enforced. Pass 5a **shipped**; Pass 5c **shipped**; Pass 5d (agent-feedback closeouts) **shipped April 2026** via Track C (C1-C6 all closed — `--dry-run`, IIFE round-trip, `bo help`, biome stamps, IIFE-aware `render-ascii`, expanded validate rules). The World Designer → BO-V §3.1 payload handoff **shipped** (Track B M3). **Next designated slice:** Pass 5b (world graph editor) or Tier 3/4 polish.
 
 ---
 
-## Progress snapshot (April 15, 2026)
+## Progress snapshot (April 16, 2026)
 
 Status legend: ✅ done · 🟡 partial · ⬜ not started
 
 **Phase 3 — Schema extraction** ✅
-- `tools/tile-schema.json` — 84 tiles with predicates (was hardcoded 77 → now live-tracked)
+- `tools/tile-schema.json` — 97 tiles with predicates (was hardcoded 77 → now live-tracked)
 - `tools/card-manifest.json` — 120 cards, bucketed by suit
 - `tools/enemy-manifest.json` — 27 enemies
 - `tools/string-index.json` — 243 strings, 27 namespaces
@@ -252,7 +244,7 @@ separate adjacent tiles, not stacked in the same cell.)*
 For DG this could encode patterns like: "if ARCH_DOORWAY is placed, auto-populate adjacent tiles with
 the required road, pillar stubs, and back-face tile."
 
-### Validation ✅ (first pass)
+### Validation ✅ (two passes — base + C6 expanded rules)
 
 - ✅ **Walkability check** — BFS from spawn, flags unreachable walkable tiles (grouped into one
   issue, rendered with red/amber/blue border overlay and pulsing fill on the first cell)
@@ -263,6 +255,10 @@ the required road, pillar stubs, and back-face tile."
 - ✅ **Missing required tiles** — depth-1 exterior floor with no ARCH_DOORWAY or door tile flagged
 - ✅ **Validation modal** — two tabs (current floor / all floors), severity pills, click-to-jump,
   persistent highlight overlay, Esc / Close clears. Dev helper: `window.__validateSmokeTest('all')`.
+- ✅ **C6 expanded rules** (April 2026): `door-no-target` (warn — every door/stair tile should have
+  explicit doorTargets), `room-has-walls` (warn — room interiors should not contain WALL tiles),
+  `offset-no-height` (info, browser only — tiles with tileHeightOffsets should have tileWallHeights).
+  All three fire in the existing modal + CLI `report-validation`.
 - ⬜ **Heatmaps**: distance from spawn, distance from nearest door, lighting coverage, line-of-sight
   from key tiles — deferred to a polish pass
 
@@ -533,7 +529,7 @@ stall-6x4, pergola-run, cathedral-window, bonfire-nook). These should be generat
 `tools/mine-stamps.js` script that crawls floor-data.json for recurring motifs rather than
 hand-authored.
 
-### Pass 0 — Modularization for agent crawlability ⬜
+### Pass 0 — Modularization for agent crawlability ✅ (0.1–0.4 shipped 2026-04-14; 0.5 scaffolded; 0.6 deferred)
 
 **Prerequisite for Pass 5b.** The blockout visualizer has grown to ~4,000 lines in a single
 HTML file; `peek-workbench.html` is 7,643 and `boxforge.html` is 6,850. Practical agent context
@@ -752,7 +748,7 @@ paints the DOOR tile on the parent grid — all from one Ctrl+S / `{action:'save
 → Ctrl+S → paste script tag*. No manual IIFE authoring, no hand-merging of parent
 doorTargets, no forgotten DOOR tile on the parent grid.
 
-### Pass 5d — Agent feedback closeouts ⬜
+### Pass 5d — Agent feedback closeouts ✅ (shipped 2026-04-15, Track C)
 
 Scoped from `tools/BO-V agent feedback.md` (Floor 3.1.1 field report, April 2026). The
 agent authored 3.1.1 raw rather than via the CLI because the toolchain still has five
@@ -838,6 +834,12 @@ agent feedback addressed before Pass 0's refactor churn; otherwise swap.
   round-trips via `bo emit` byte-identical (modulo comment whitespace).
 - `bo help stamp-tunnel-corridor` prints args + a worked `--len 12 --width 3` example.
 
+**Shipped status (Track C, 2026-04-13 – 2026-04-15):** All five blockers closed plus the
+stretch `bo validate` expansion (C6). Implementation landed across `tools/cli/commands-*.js`
+(17 modules) and `tools/js/bv-*.js` (26 modules). See `tools/short-roadmap.md` Track C for
+per-slice details. The stretch item (`bo validate` expanded checklist) shipped as C6 with
+door-no-target, room-has-walls, and offset-no-height (browser-only) rules.
+
 ### Pass 5b — World graph editor (portal port) ⬜
 
 Port the EyesOnly jsPlumb-based world designer into `tools/` and point it at Dungeon Gleaner's
@@ -859,95 +861,172 @@ and offline-capable. See "Design constraints for Tier 6" below.
 The scaffold is currently a verbatim copy — still references Eyes node types, the cdnjs jsPlumb
 URL, and Eyes' flat floor model. The phases below replace each of those.
 
-**Phase 5b.0 — Vendor + scaffold cleanup** (½ day)
+**Phase 5b.0 — Vendor + scaffold cleanup** ✅ (shipped 2026-04-16)
 
-- Vendor jsPlumb Community Edition 2.15.6 into `tools/vendor/jsplumb/` (MIT license, ~180 KB). Swap
-  the `<script src="https://cdnjs.cloudflare.com/...">` in `world-designer.html` for the local
-  copy so the editor works offline.
-- Add `tools/.gitignore` entry for `node_modules/` and `tools/vendor/` build artifacts (keep the
-  vendor source committed for LG reproducibility).
-- Add `scripts/build-webos.sh` (and `.ps1`) that explicitly lists ship paths (`engine/`, `data/`,
-  `assets/`, `index.html`, `CLAUDE.md` stripped) — never globs `tools/`. Write a test that fails
-  CI if `dist/` contains anything under `tools/`, `node_modules/`, or `vendor/`.
-- Rename the Eyes-flavored file set so the DG vocabulary reads cleanly:
-  `world-designer.html` stays; `js/world-designer.js` gets a `'use strict'` top wrapper around a
-  fresh DG-specific rewrite rather than trying to diff Eyes' IIFE.
+- Vendored jsPlumb Community Edition 2.15.6 into `tools/vendor/jsplumb/` (MIT, ~216 KB JS +
+  ~16 KB CSS). HTML already referenced the local path; the CDN URL was already removed.
+- `tools/floor-data.js` sidecar (auto-generated by `extract-floors.js`) exposes
+  `window.FLOOR_DATA` so the world designer works under `file://` without CORS.
+- `tools/js/world-designer.js` (956 lines) was already a DG-native rewrite — not an Eyes
+  diff. Supports depth-typed nodes (d1/d2/d3), ghost nodes (proc-gen + planned), pending
+  nodes (Pass 5c new-floor modal), edge reciprocity checks, biome-map + tile-schema loaders,
+  layout persistence, and the `sessionStorage['pendingFloorSpec']` handoff to BO-V.
+- Build-webos whitelist and `.gitignore` deferred (tracked alongside Pass 0.6 CI checks).
 
-**Phase 5b.1 — Read-only viewer** (1½ days)
+**Phase 5b.1 — Read-only viewer** ✅ (shipped 2026-04-16, merged into scaffold)
 
-- Replace Eyes' `fetch('world-engine/worlds/test-world.json')` with `fetch('./floor-data.json')`.
-- Synthesize a graph from the real floor data: **one node per floor** (type = depth-based:
-  `exterior` | `interior` | `nested-dungeon`), **one edge per entry in every floor's `doorTargets`
-  map**. Edge `contractType` auto-derived from source/target depths (advance_retreat vs
-  building_entry vs sibling-exit).
-- Initial layout: depth on the Y axis (exterior top, nested-dungeon bottom), lexicographic
-  by floor ID on the X axis. User can drag; layout persists to `tools/world-layout.json`
-  (gitignored).
-- No writes yet. Palette sidebar and connection tools disabled/hidden. Goal: look at the 19
-  floors we already have and make sure the door-target reciprocity visually matches what the
-  validator reports.
-- Success criterion: every floor in `floor-data.json` appears; every directed edge has a reverse
-  or is flagged red (matches Pass 2's validator output).
+The read-only viewer shipped as part of `js/world-designer.js` (956 lines). All planned items
+landed:
+- Reads `floor-data.json` via the `floor-data.js` sidecar (`window.FLOOR_DATA`); falls back
+  to `fetch()` when served over HTTP.
+- One node per floor (21 floors), depth-colored (d1 green, d2 blue, d3 purple).
+- One directed edge per `doorTargets` entry. Non-reciprocal edges render red dashed + warning
+  count in the sidebar summary.
+- Auto-layout by branch (X) and depth (Y); draggable nodes with grid snap.
+- Layout downloads to `tools/world-layout.json` via Save Layout button; reloads on next boot.
+- Ghost nodes (proc-gen slots + planned dangling refs) synthesized from `procGenChildren[]`
+  and unresolved `doorTargets`.
+- Pending nodes (Pass 5c new-floor modal) with `sessionStorage['pendingFloorPool']` persistence.
+- Inspector shows floor metadata, door targets with clickable jump links, spawn, rooms, entities.
+- Success criterion met: 21 floors + edges visible, non-reciprocal edges flagged red.
 
-**Phase 5b.2 — Bridge to BO.run** (1 day)
+**Phase 5b.2 — Bridge to BO.run** ✅ (shipped 2026-04-16)
 
-- Embed the blockout visualizer's `BO` router in the world designer (either as an iframe to
-  `blockout-visualizer.html` or by loading its `<script>` blocks directly — iframe is cleaner for
-  isolation, direct load is faster). Pick iframe; the designer posts `{action, ...}` messages and
-  the visualizer replies with `{ok, result}`.
-- All reads (load, refresh, re-diff) route through `BO.run({action:'loadFloorData'})`. The designer
-  never touches `floor-data.json` directly.
-- Add a "Refresh from disk" button + a "Highlight validation errors" toggle that colors edges red
-  for anything in `BO.run({action:'reportValidation'})`.
+Architecture: iframe postMessage bridge. Three files changed/created:
 
-**Phase 5b.3 — Edit mode** (2–3 days)
+- **`bv-bo-router.js`** — added `window.addEventListener('message', ...)` listener at the end
+  of the IIFE. Protocol: inbound `{_bo:true, id, cmd}` → dispatches `BO.run(cmd)` → outbound
+  `{_bo:true, id, result}`. The `_bo` flag prevents collisions with other postMessage traffic;
+  `id` enables promise correlation.
+- **`js/wd-bo-bridge.js`** (new, 135 lines) — promise-based wrapper. `WDBridge.init()` creates
+  a hidden iframe pointing at `blockout-visualizer.html`. `WDBridge.run({action, ...})` returns
+  a `Promise<result>`. Convenience methods: `.validate(scope)`, `.listFloors()`, `.getFloor(id)`.
+  10-second timeout per call; `.reload()` destroys + recreates the iframe.
+- **`world-designer.html`** — added `<script src="js/wd-bo-bridge.js">` before world-designer.js,
+  added "Validate All" header button, added CSS for validation badges (`.dg-val-badge`,
+  `.dg-val-err`, `.dg-val-warn`).
+- **`js/world-designer.js`** — `boot()` calls `WDBridge.init()` + dims the Validate button
+  until bridge is ready. "Validate All" button calls `WDBridge.validate('all')` and overlays
+  per-node badges (error count + severity outline). Reload also reloads the bridge iframe.
+  Inspector shows validation issues when a node with issues is selected. `DG_WORLD` debug
+  global exposes `runBridgeValidation()` and `validationIssues()`.
+  
+Note: the roadmap spec said "All reads route through BO.run" — we preserved the direct
+`floor-data.js` sidecar path for floor data (faster, works under `file://`) and added the
+bridge for validation only. Phase 5b.3 edit-mode mutations will route through the bridge.
 
-- Enable the palette: dragging an `exterior` / `interior` / `nested-dungeon` node onto the canvas
-  opens a "New floor" dialog (id, depth inferred from position, biome dropdown, template).
-  OK calls `BO.run({action:'createFloor', ...})` (Pass 5a primitive).
-- Drawing an edge between two nodes opens a "Door contract" dialog: which wall on each floor, which
-  cell, contract type (auto-populated from node types). OK calls
-  `BO.run({action:'setDoorTarget', ...})` twice (both sides, for reciprocity).
-- Deleting a node prompts for confirmation + cascade options (delete children? just orphan?). Fans
-  out to `BO.run({action:'deleteFloor', ...})` — this is a new Pass 1 primitive we'll need to add.
-- Right-click a node → "Open in blockout editor" opens `blockout-visualizer.html?floor=<id>` in a
-  new tab for per-tile editing. The graph reflects the change on next refresh.
+**Phase 5b.3 — Edit mode** ✅ (shipped 2026-04-16)
 
-**Phase 5b.4 — Diff-apply + agent API** (2 days)
+- New Floor modal now routes through `WDBridge.run({action:'createFloor'})` when the bridge is
+  ready. Falls back to pending-pool creation (original behavior) if bridge is unavailable or errors.
+  Reciprocal doorTarget on the parent is also set via bridge when a door coord is specified.
+- **Door contract modal**: right-click → "Add Door Connection…" opens a dialog with from/to floor
+  selects, coordinate fields for both sides, and a reciprocal checkbox. OK calls
+  `WDBridge.run({action:'setDoorTarget'})` for both directions (when reciprocal is checked).
+  Validates coords against floor grid dimensions.
+- **Delete floor modal**: right-click → "Delete Floor…" opens confirmation with cascade mode select
+  (orphan children vs. delete subtree). Routes through
+  `WDBridge.run({action:'deleteFloor'})` — a new primitive added to `bv-bo-floor.js`. Cleans up
+  dangling doorTargets in surviving floors. Pending floors are deleted from the local pool directly.
+  Ghost nodes cannot be deleted (must remove the parent reference instead).
+- **`deleteFloor` BO action** (new, `bv-bo-floor.js`): supports `cascade:'orphan'` (default) and
+  `cascade:'delete'` (recursive subtree). Returns `{deleted:[], orphaned:[]}`. Scrubs doorTargets
+  from surviving floors that pointed at deleted floors.
+- **Right-click context menu** on any node (authored, ghost, or pending): three actions —
+  "Open in Blockout Editor" (opens `blockout-visualizer.html?floor=<id>` in new tab),
+  "Add Door Connection…", and "Delete Floor…".
+- All three node factories (`makeNode`, `makeGhostNode`, `makePendingNode`) now attach
+  `contextmenu` event handlers.
+- `DG_WORLD` debug global extended with `openInBlockoutEditor()`, `openDoorContractModal()`,
+  `openDeleteModal()`.
 
-- **`BO.run({action:'exportWorldGraph'})`** — returns the current graph as JSON (nodes, edges,
-  layout). Agents call this to see the world.
-- **`BO.run({action:'applyWorldDiff', nodes:[...], edges:[...], deletes:[...]})`** — takes a graph
-  diff and fans out to `createFloor` / `deleteFloor` / `setDoorTarget` / `setBiome` in order.
-  Single transaction: validate all inputs first, then apply or rollback.
-- CLI mirror: `node tools/blockout-cli.js export-world-graph` / `apply-world-diff --input diff.json`.
-  Enables "here's a 3-floor dungeon arm — apply it" agent workflows without a browser open.
-- `Undo` in the world designer undoes the last batch (uses existing per-floor undo stacks + a new
-  world-level undo log that references the batched changeset).
+**Phase 5b.4 — Diff-apply + agent API** ✅ (shipped 2026-04-16)
 
-**Phase 5b.5 — Polish** (1–2 days)
+- **`BO.run({action:'exportWorldGraph'})`** — returns `{nodes, edges, summary}`. Each node carries
+  id, biome, gridW/H, depth, type, parent, spawn, entity/room/door counts. Each edge carries
+  from, to, fromCoord, reciprocal flag, type. Summary has floor/edge counts, non-reciprocal count,
+  depth breakdown.
+- **`BO.run({action:'applyWorldDiff', nodes, edges, deletes, biomes, validate})`** — transaction
+  semantics: Phase 1 validates all inputs (missing fields, duplicate floor IDs, etc.) and returns
+  early with `{applied:false, errors:[]}` if any fail. Phase 2 snapshots via `_snapshotAll()`.
+  Phase 3 applies in order: deletes → nodes (createFloor) → biomes (setBiome) → edges
+  (setDoorTarget, with reciprocal support). On any error, rolls back via `_restoreAll()` and
+  returns `{applied:false, error, partial}`. Optional `validate:true` runs post-apply validation.
+- **`bv-bo-world.js`** (new, ~250 lines) — browser-side IIFE registering both actions via
+  `window.BO._register()`. Loads after `bv-bo-floor.js` in `blockout-visualizer.html`.
+- **CLI mirror**: `commands-world.js` (new, ~250 lines) adds `export-world-graph` (read-only,
+  stdout JSON) and `apply-world-diff --input diff.json` (validates, applies, saves, supports
+  `--dry-run`). Wired into `blockout-cli.js` command registry.
+- World-level undo: browser-side `applyWorldDiff` uses `_snapshotAll()` / `_restoreAll()` for
+  atomic rollback on error. The existing per-floor undo stacks are preserved for fine-grained
+  undo of individual tile edits made by the fanned-out primitives.
 
-- Biome-tinted node backgrounds (uses `tools/biome-map.json` from Pass 5a).
-- Validation overlay: red outline on nodes with validation errors, red edges for broken
-  reciprocity, tooltip lists the issues.
-- Subgraph zoom: click a building node to zoom into its interior tree (children + grandchildren).
-- Node metadata surface: show first-line of NPC roster, loot tables, enemy count in the node body.
-- Export to PNG for design reviews (`canvas.toDataURL` on the jsPlumb container).
+**Phase 5b.5 — Polish** ✅ (shipped 2026-04-16)
+
+- **Biome-tinted node backgrounds**: `biomeTintStyle()` reads `biome-map.json` palette `wallDark`
+  at 40% opacity as a `linear-gradient` overlay on the depth base color, plus `wallLight` as the
+  border tint. Every authored node gets a unique color fingerprint from its biome.
+- **Validation overlay**: already shipped in 5b.2 (red/yellow outline, badge counts, inspector
+  detail). 5b.5 inherits it.
+- **Subgraph zoom**: right-click → "Zoom into Subtree" dims all nodes/edges outside the selected
+  floor's subtree (opacity 0.25, pointer-events disabled). "Zoom Out" header button resets to
+  full view. State tracked via `_zoomRoot`.
+- **Node metadata surface**: `metaSummary()` renders entity/room/door counts as a compact fourth
+  line in the node body (e.g. "3 ent · 2 rm · 4 dr"). `.dg-node-meta` CSS class in green-tint.
+- **Export to PNG**: `exportToPng()` renders the graph to an offscreen `<canvas>` — grid background,
+  bezier edge lines (color-coded by type, dashed for non-reciprocal), rounded-rect nodes with
+  ID/biome/size labels. Downloads as `world-graph-<timestamp>.png`. Bounding box auto-calculated
+  from node positions with 40px padding.
 
 **Deferred to later passes:**
 - Drag-to-reorganize entire subgraphs (move floor 2.2 + 2.2.1 + 2.2.2 as a unit).
-- Collaborative multi-cursor editing.
-- Procgen recipe nodes (see Pass 6).
+- Procgen recipe nodes — now promoted to Pass 6 (next up).
 
-### Pass 6 — Procedural + live preview ⬜ (post-webOS, aspirational)
+### Pass 6 — Procedural generation + live preview 🟡 (in progress)
 
-The world graph makes procgen tractable — an agent says "grow a 3-level random cellar here" and
-the designer node expands into a subgraph with auto-generated floor data.
+With Pass 5b complete, the world graph + `applyWorldDiff` provide the structural foundation
+procgen needs: create floors, wire edges, and validate the result — all transactionally. Pass 6
+builds the generation layer on top.
 
-- **Procgen recipe nodes** — a special node type in the world designer whose "content" is a
-  recipe (grid size, room count range, corridor style, enemy density, biome). On "Expand," the
-  node splits into N concrete floor nodes via an external procgen pass (likely `tools/procgen.js`,
-  Node-only, allowed to use dev deps).
+**Phase 6.1 — Recipe schema + BSP generator + CLI/browser wiring** ✅ (shipped 2026-04-16)
+
+- **Recipe JSON schema** (`tools/recipes/recipe.schema.json`): tunable knobs for biome, faction
+  (mss/pinkerton/jesuit/bprd/neutral), grid size, strategy type, room count/size ranges, corridor
+  style (straight/winding/l-bend/random), corridor width, extra loop-back fraction, entity
+  densities (torches, breakables, traps, chests, corpses, enemy budget), door placement
+  (entry/exit wall, boss gate), and RNG seed for deterministic output.
+- **Three strategy archetypes** shape generated topology post-BSP:
+  - `cobweb` — long 1-wide corridors with branch stubs for spider web deployment chokepoints.
+  - `combat` — expanded rooms with alcove ambush nooks, wide corridors, sightline-friendly.
+  - `pressure-wash` — winding self-crossing loops that reward/punish route planning (hose kinks).
+  - `mixed` — balanced blend of all three at 1/3 weight each.
+- **`tools/procgen.js`** (~600 lines, Node): BSP room carving, Prim's MST corridor linking, strategy
+  decorators, entity placement (torches on room perimeters, breakables from biome set, traps in
+  corridors, chests against walls, corpses, enemy spawn list). Deterministic via xorshift32 RNG.
+  Also usable as a library: `require('./procgen').generate(recipe, {seed})`.
+- **Three starter recipes**: `cobweb-cellar.json`, `pressure-wash-catacomb.json`, `combat-depths.json`.
+- **CLI**: `bo procgen --recipe <path> [--floor <id>] [--seed N] [--ascii]` for preview or inject.
+  `bo list-recipes` enumerates `tools/recipes/`. Wired into `blockout-cli.js` dispatcher.
+- **Browser**: `bv-bo-procgen.js` registers `procgen`, `listRecipes`, `procgenPreview` BO actions.
+  `procgen` with `floorId` creates the floor and paints the full grid via existing BO primitives.
+
+**Phase 6.2 — Strategy formulas + recipe tuning** ⬜ (next)
+
+- Refine cobweb strategy: corridor length distribution, T-junction density, dead-end depth budgets.
+- Refine pressure-wash strategy: loop circumference targets, guaranteed Hamiltonian-ish sweep path.
+- Refine combat strategy: room aspect ratio constraints, pillar placement, patrol route analysis.
+- Balance entity densities per biome × strategy combination.
+- Playtest-driven iteration: generate → play → adjust knobs → regenerate.
+
+**Phase 6.3 — World designer recipe node UI** ⬜
+
+- Recipe node type in world designer (distinct from ghost/pending/authored).
+- Recipe editor panel: form UI for all knobs, preview thumbnail via `procgenPreview` action.
+- "Expand" button: generates concrete floor, converts recipe node → authored node.
+- Multi-floor recipe expansion: "grow a 3-level cellar" expands into N sibling floors.
+
+**Phase 6.4 — Live preview + analytics (stretch)** ⬜
+
 - **Live preview pane** — embedded mini raycaster view next to the node inspector. Select a floor,
   see it rendered from its spawn point, walk around with arrow keys. Uses the actual game's
   raycaster loaded as a module — requires a small refactor to let `Raycaster` init without
@@ -957,10 +1036,6 @@ the designer node expands into a subgraph with auto-generated floor data.
   actually visit" analytics.
 - **Difficulty curve preview** — plot enemy power / loot value per floor along the player's
   likely path through the graph; flag spikes and plateaus.
-
-Pass 6 is explicitly post-Winter 2026 launch. Listing it here so the world graph's schema choices
-in Pass 5b leave room for these extensions (e.g., don't bake "concrete floor" into the node type
-— leave it polymorphic for procgen nodes later).
 
 ### Design constraints for Tier 6
 
@@ -989,16 +1064,15 @@ in Pass 5b leave room for these extensions (e.g., don't bake "concrete floor" in
 
 ## Tier 5 — Aspirational / post-jam
 
-Things that would be lovely but aren't shipping before Winter 2026 webOS launch.
+Things that would be lovely but aren't shipping before Winter 2026 webOS launch. Note: procedural
+generation has graduated from this list into Pass 6 (active).
 
-- **Procedural floor recipe editor** — for the floors we *don't* blockout by hand. Visual node graph
-  for "generate N rooms, connect with corridors, place 3 torches per room."
 - **Procedural + handcrafted hybrid** — hand-place the entry + boss rooms, let the editor fill the
-  middle with procgen, preview the result
+  middle with procgen, preview the result (partially addressed by Pass 6 recipe nodes)
 - **Multi-floor view** — render the full world graph as a 3D stack of floors
 - **Collaborative editing** — multiple designers on the same floor (probably overkill; DG is small team)
 - **Playtesting instrumentation** — in the editor, replay player paths from analytics, see heatmaps
-  of actual player movement
+  of actual player movement (Pass 6 stretch item)
 - **Accessibility check** — validate against WCAG-adjacent rules: contrast between walkable and
   non-walkable, color-blind-safe tile palette, glyph readability
 - **i18n preview** — swap `data/strings/en.js` for other locales to check UI overflow
@@ -1061,13 +1135,12 @@ Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
     in-memory and round-trips via `exportStamps` / `importStamps`. Heterogeneous-bulk undo
     makes every stamp a single Ctrl+Z step. Default stamp mining (building-corner-NE etc.)
     deferred to a later `tools/mine-stamps.js` pass.
-15. ⬜ **Pass 0 — Modularization for agent crawlability.** Prerequisite for Pass 5b. Split
-    `blockout-visualizer.html` inline `<script>` into `tools/js/bv-*.js` IIFEs (~16 modules,
-    each ≤ 800 lines), extract CSS, split `blockout-cli.js` into `tools/cli/commands-*.js`,
-    add `tools/js/MODULES.md` manifest, build a separate `tools/` code-review-graph, enforce
-    file-size budgets in CI. Defers `peek-workbench.html` and `boxforge.html` as tracked tech
-    debt. Unlocks every later pass landing as 1–2 new files instead of monolith edits.
-    Scope: ~3 days.
+15. ✅ **Pass 0 — Modularization for agent crawlability (shipped 2026-04-14).** 0.1: 26
+    `tools/js/bv-*.js` IIFEs extracted, HTML shell ≤ 483 lines. 0.2: CSS extracted to
+    `tools/css/blockout-visualizer.css`. 0.3: CLI split into 17 `tools/cli/*.js` modules.
+    0.4: `tools/js/MODULES.md` manifest written. 0.5: `tools/` code-review-graph scaffolded
+    (DB exists, full indexing deferred). 0.6: file-size budgets CI check not started (tracked
+    tech debt).
 16. ✅ **Pass 5a — Floor semantics primitives (shipped).** `createFloor({id, biome, template})`,
     `setBiome`, `placeEntity`. Ships in `tools/js/bv-bo-floor.js` + `tools/cli/commands-floor.js`
     with `tools/biome-map.json` + `tools/templates/` seeded. `gitSnapshot` / `gitDiff` deferred.
@@ -1076,18 +1149,20 @@ Assuming the current jam timeline (post-jam cleanup through Winter 2026 launch):
     pending-floor handoff via `sessionStorage['pendingFloorPool']`. Ctrl+S now writes the new
     engine file, merges parent `doorTargets`, paints the DOOR tile on the parent grid, and
     copies the `<script>` tag to the clipboard for `index.html` paste.
-18. ⬜ **Pass 5d — Agent feedback closeouts.** `--dry-run` on every mutator, `bo ingest` /
-    `bo emit` IIFE round-trip, `bo help <command>`, three biome-specific stamps
-    (`stamp-tunnel-corridor`, `stamp-porthole-wall`, `stamp-alcove-flank`), IIFE-aware
-    `render-ascii`. Scoped from `tools/BO-V agent feedback.md`. Scope: 3–4 days.
-19. ⬜ **Pass 5b — World graph editor (portal port).** Port the EyesOnly jsPlumb world designer
-    into `tools/` and point it at `floor-data.json`. Six phases (0 vendor → 1 viewer → 2 BO bridge
-    → 3 edit → 4 diff-apply + agent API → 5 polish). Adds the `applyWorldDiff` action so agents
-    can describe whole dungeon arms in one call. **First pass that takes dev-time deps**
-    (vendored jsPlumb). Lands as `bv-bo-world.js` + `tools/js/wd-*.js` post-Pass-0. Scope: ~1.5 weeks.
-20. ⬜ **Pass 6 — Procedural + live preview (post-launch).** Procgen recipe nodes,
-    embedded raycaster preview, playtest replay heatmaps, difficulty-curve plotting. Depends on
-    Pass 5b's graph schema staying polymorphic. Scope: open-ended, post-Winter-2026.
+18. ✅ **Pass 5d — Agent feedback closeouts (shipped 2026-04-15, Track C).** All five blockers
+    closed: `--dry-run` (C1), `bo ingest`/`bo emit` (C2), `bo help` (C3), biome stamps (C4),
+    IIFE-aware `render-ascii` (C5). Stretch `bo validate` expanded checklist shipped as C6
+    (door-no-target, room-has-walls, offset-no-height). See `tools/short-roadmap.md`.
+19. **Pass 5b — World graph editor (portal port).** ✅ All phases (5b.0–5b.5) shipped 2026-04-16.
+    Vendored jsPlumb 2.15.6; `js/world-designer.js` (~1500 lines) renders 21 floors + edges +
+    ghost/pending nodes with full edit mode, agent API, biome tinting, subgraph zoom, PNG export.
+    `bv-bo-world.js` adds `exportWorldGraph` + `applyWorldDiff` with transaction/rollback.
+    `cli/commands-world.js` mirrors both as CLI commands. **Pass 5b complete.**
+20. 🟡 **Pass 6 — Procedural generation.** Phase 6.1 shipped 2026-04-16: recipe schema, BSP
+    generator (`tools/procgen.js`), three strategy archetypes (cobweb/combat/pressure-wash),
+    three starter recipes, CLI `bo procgen`/`bo list-recipes`, browser `procgen` BO action.
+    Next: Phase 6.2 (strategy formula tuning), 6.3 (recipe node UI in world designer),
+    6.4 (live preview + analytics, stretch).
 
 **Recommended next step:** ✅ **Done (2026-04-14).** The save patcher (`tools/js/bv-save-patcher.js`)
 now rewrites `spawn:` and `doorTargets:` inside the `registerFloorBuilder` block in addition to the
@@ -1099,20 +1174,26 @@ handles both the inline `doorTargets: { ... }` object on the builder return and 
 via `outputs/patcher_sim.js` with four cases: inline doorTargets, scaffold var, missing blocks (no-op),
 and full chain + VM parse.
 
-**Next recommended step:** Pass 5d (agent feedback closeouts). Three-to-four-day slice that
-addresses the five concrete blockers from `tools/BO-V agent feedback.md` — `--dry-run`, IIFE
-round-trip (`bo ingest` / `bo emit`), `bo help <command>`, biome-specific stamps
-(`stamp-tunnel-corridor` / `stamp-porthole-wall` / `stamp-alcove-flank`), and IIFE-aware
-`render-ascii`. After 5d, the CLI is competitive with raw authoring for the submarine-base
-class of floors and ships a single source of truth across the JSON ↔ IIFE boundary.
+**Next recommended step:** Phase 6.2 — strategy formula tuning. The procgen infrastructure is
+live (Phase 6.1 shipped). The generator produces playable layouts for all three strategy types,
+but the strategy decorators use placeholder heuristics. Next step is playtesting generated floors,
+refining the cobweb corridor-length distribution and dead-end budgets, tuning the pressure-wash
+loop circumference targets, and balancing entity densities per biome × strategy. This is an
+iterative loop: generate → play → adjust knobs → regenerate. Phase 6.3 (recipe node UI in the
+world designer) can proceed in parallel since it's purely tooling chrome on top of the existing
+`procgen` BO action.
 
-Lower-priority follow-ups: Tier 4 window-scene engine consumption (raycaster reads `sceneGrid`,
-JSON re-import loader), rooms/biome metadata editors, or Tier 2 heatmaps (distance from spawn,
-lighting coverage).
+**Also open (lower priority):**
+- Pass 0.6 — file-size budget CI check (tracked tech debt, low urgency).
+- Pass 5a stretch — `gitSnapshot` / `gitDiff` (deferred, not blocking).
+- Tier 4 — window-scene engine consumption (raycaster reads `sceneGrid`).
+- Tier 2 — heatmaps (distance from spawn, lighting coverage).
+- Tier 3 polish — rooms array editor, biome picker, save-patcher for full metadata.
+- Tier 4 — tile height offset editor (1–2 days when needed).
+- Quest system — DOC-107 Phases 2–4 (see `docs/QUEST_SYSTEM_ROADMAP.md`).
 
-Items that are probably **never worth it** for DG's scope: collaborative editing, procedural recipe
-editor, history tree with branching, customizable shortcuts. A small team building one game doesn't
-need those.
+Items that are probably **never worth it** for DG's scope: collaborative editing, history tree
+with branching, customizable shortcuts. A small team building one game doesn't need those.
 
 ---
 

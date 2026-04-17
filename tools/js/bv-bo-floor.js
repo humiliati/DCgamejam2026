@@ -159,5 +159,79 @@
     };
   });
 
-  console.log('[bv-bo-floor] registered: createFloor, setBiome, placeEntity');
+  // ── deleteFloor ────────────────────────────────────────────
+  // Args:
+  //   id          (required) floor ID to delete
+  //   cascade     (optional) 'orphan' (default) — just delete this floor,
+  //               leave children intact;  'delete' — recursively delete
+  //               all children as well
+  // Returns { deleted: [ids], orphaned: [ids] }
+  window.BO._register('deleteFloor', function(a) {
+    if (!a.id) throw new Error('deleteFloor needs id');
+    if (typeof FLOORS === 'undefined') throw new Error('FLOORS not loaded');
+    if (!FLOORS[a.id]) throw new Error('floor not found: ' + a.id);
+
+    var cascade = a.cascade || 'orphan';
+    var deleted = [];
+    var orphaned = [];
+
+    function childrenOf(pid) {
+      var prefix = pid + '.';
+      var kids = [];
+      Object.keys(FLOORS).forEach(function(fid) {
+        if (fid.indexOf(prefix) === 0 && fid.length > prefix.length) {
+          // Direct children only (one level deeper)
+          var rest = fid.slice(prefix.length);
+          if (rest.indexOf('.') < 0) kids.push(fid);
+        }
+      });
+      return kids;
+    }
+
+    function collectTree(rootId) {
+      var ids = [rootId];
+      var kids = childrenOf(rootId);
+      for (var i = 0; i < kids.length; i++) {
+        ids = ids.concat(collectTree(kids[i]));
+      }
+      return ids;
+    }
+
+    if (cascade === 'delete') {
+      // Recursive delete of the entire subtree
+      var tree = collectTree(a.id);
+      tree.forEach(function(fid) {
+        delete FLOORS[fid];
+        if (typeof FLOOR_NAMES !== 'undefined') delete FLOOR_NAMES[fid];
+        deleted.push(fid);
+      });
+    } else {
+      // Orphan mode: delete only this floor
+      delete FLOORS[a.id];
+      if (typeof FLOOR_NAMES !== 'undefined') delete FLOOR_NAMES[a.id];
+      deleted.push(a.id);
+      // Children become orphans (still exist but their parent is gone)
+      orphaned = childrenOf(a.id);
+    }
+
+    // Clean up doorTargets pointing to deleted floors from other floors
+    var deletedSet = {};
+    deleted.forEach(function(d) { deletedSet[d] = true; });
+    Object.keys(FLOORS).forEach(function(fid) {
+      var dt = FLOORS[fid].doorTargets;
+      if (!dt) return;
+      Object.keys(dt).forEach(function(coord) {
+        if (deletedSet[dt[coord]]) {
+          delete dt[coord];
+        }
+      });
+    });
+
+    if (typeof populateFloorSelect === 'function') populateFloorSelect();
+    if (typeof draw === 'function') draw();
+
+    return { deleted: deleted, orphaned: orphaned };
+  });
+
+  console.log('[bv-bo-floor] registered: createFloor, setBiome, placeEntity, deleteFloor');
 })();

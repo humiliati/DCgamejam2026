@@ -2,11 +2,31 @@
 // Sidecar wrapper so world-designer.html works under file:// (bypasses
 // Chromium CORS fetch block). Keep in sync with floor-data.json.
 window.FLOOR_DATA = {
-  "generated": "2026-04-16T21:55:47.994Z",
+  "generated": "2026-04-17T07:47:35.864Z",
   "floorCount": 21,
   "payloadCount": 0,
-  "questPayloadCount": 0,
+  "questPayloadCount": 1,
   "questCount": 0,
+  "sidecarAnchorCount": 2,
+  "sidecarAnchorCollisions": 0,
+  "_sidecarAnchors": {
+    "pentagram_chamber": {
+      "type": "literal",
+      "floorId": "1.3.1",
+      "x": 14,
+      "y": 8
+    },
+    "home_work_keys_chest": {
+      "type": "literal",
+      "floorId": "1.6",
+      "x": 19,
+      "y": 3
+    }
+  },
+  "_sidecarAnchorSources": {
+    "pentagram_chamber": "1.3.1.quest.json",
+    "home_work_keys_chest": "1.6.quest.json"
+  },
   "floors": {
     "0": {
       "floorId": "0",

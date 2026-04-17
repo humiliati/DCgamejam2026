@@ -1,7 +1,7 @@
 ﻿# Dungeon Gleaner - Cross-Roadmap Execution Order
 
 **Created**: 2026-03-28 | **Updated**: 2026-04-17
-**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed, DOC-107 Phases 0 + 0b + 1 shipped, **stale roadmap triage complete** (20+ orphaned docs absorbed into DOC-105 waves)
+**Status**: Post-jam - PW-1 through PW-5 complete, core design/implementation docs indexed, DOC-107 Phases 0 + 0b + 1 + 2 + 3 + 4 + 5 + 5b + 6 shipped, **stale roadmap triage complete** (20+ orphaned docs absorbed into DOC-105 waves)
 **Goal**: Polish, post-jam vision execution, LG webOS deployment readiness
 
 ---
@@ -44,7 +44,8 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-74 | [ACT2_NARRATIVE_OUTLINE.md](#doc-74-act2_narrative_outlinemd) | docs/ |
 | DOC-75 | [HERO_FOYER_ENCOUNTER.md](#doc-75-hero_foyer_encountermd) | docs/ |
 | DOC-76 | [gameover.md](#doc-76-gameovermd) | docs/ |
-| DOC-107 | [QUEST_SYSTEM_ROADMAP.md](#doc-107-quest_system_roadmapmd) — Post-jam canonical quest system: QuestChain + QuestRegistry + ReputationBar (WoW-style faction/NPC standing) + Journal re-wire + settings toggles. Supersedes DOC-66 §6 post-jam spec. **Phases 0 + 0b + 1 shipped 2026-04-16** — QuestTypes/QuestRegistry/QuestChain live; QuestWaypoint reduced to cursor-fx shim; 3 named anchors in `quests.json`; Minimap pull-based marker wired. Phases 2–7 pending. | docs/ |
+| DOC-113 | [SPRINT_DUNGEON_DESIGN.md](#doc-113-sprint_dungeon_designmd) — Sprint dungeon / hero approach timer design. Fourth dungeon archetype (`fetch` strategy): timed maze navigation, hero sentinel→pursuit on timer expiry, act-based hero scaling (impractical Acts 1–2, viable Act 3), secondary exits, cobweb escape barriers. Procgen `fetch` topology (tree-structured BSP, zero extra connections, dead-end decoys). Recipe schema additions (`timer`, `decoyCount`, `secondaryExit`). Quest integration via `kind:"fetch"` step + `onTimerExpired` 9th event entry point. Depends on DOC-107, DOC-75, DOC-74, DOC-13, DOC-31b. **Design only — no engine implementation yet.** | docs/ |
+| DOC-107 | [QUEST_SYSTEM_ROADMAP.md](#doc-107-quest_system_roadmapmd) — Post-jam canonical quest system: QuestChain + QuestRegistry + ReputationBar (WoW-style faction/NPC standing) + Journal re-wire + settings toggles. Supersedes DOC-66 §6 post-jam spec. **Phases 0 + 0b + 1 + 2 + 3 + 4 + 5 + 5b + 6 shipped 2026-04-17** — QuestTypes/QuestRegistry/QuestChain live; QuestWaypoint reduced to cursor-fx shim; 3 named anchors in `quests.json`; Minimap pull-based marker wired; agent-facing CLI (`add-quest`/`place-waypoint`/`validate-quest`) + sidecar merge shipped; Journal UI rewired with `QuestChain.getJournalEntries()` + nav-hint i18n + completed-quests BOOKS pane; Face-3 Settings Quest subsection with 4 toggles (markers / hint verbosity / waypoint flair / sidequest opt-in) persisted to `localStorage['gleaner_settings_v1']` via `QuestChain.setUIPrefs()` + 90s Subtle idle gate in `getCurrentMarker()` + `_filterIdsByOptIn()` sidequest suppression, 10/10 Node harness assertions pass; Phase 5 Minigame sidequest adapter shipped — `QuestChain.onMinigameExit(kindId, reason, payload)` 7th event entry point + `kind:'minigame'` predicate (kindId/reason/subTargetId/floorId filters) + count-gated advance with partial waypoint events + `PickupActions.onMinigameExit` fan-out layer + SpraySystem tile-clean callback + `side.1.3.1.pentagram_wash` demo sidequest (count:3), 37/37 Node contract-harness assertions pass; Phase 3 Reputation bars shipped — `QuestTypes.WAYPOINT_KIND.REPUTATION_TIER` enum + `QuestChain.onReputationTierCross(factionId, fromTier, toTier)` 8th event entry point + `kind:'reputation-tier'` predicate (factionId + toTier exact match + optional direction gate `'up'`/`'down'`/`'any'`, default up) + `DebriefFeed` faction-row API (expand/collapse/updateFaction) with reveal/bump/tier-cross keyframe juice + `DispatcherChoreography.init({onComplete})` first-time hook bumping BPRD by +100 favor and auto-expanding the debrief row + full Game.init fan-out wiring + four faction × six tier i18n keys in `data/strings/en.js`, 47/47 Node contract-harness assertions pass; Phase 5b sidequest content batch shipped (data-only) — expanded `data/quests.json` from 1 demo to 4 sidequests (`side.1.2.innkeeper_bottles` npc→floor→combat ENM-003 ×3→npc branch, `side.1.3.cellar_owner_mop` npc→item ITM-089→readiness, `side.2.2.watchman_roll_call` npc→floor→floor→flag heroWakeArrival with prereq gateUnlocked=true) stretching the remaining non-minigame predicate surface (npc / floor / item / combat / readiness / flag / prereq), 21 new i18n keys under `quest.sidequest.*`, grounded in real NPC / enemy / item ids so predicates match live events the moment the pending `onNpcTalk` / `onCombatKill` / generic `onItemAcquired` fan-outs land; 88/88 Node harness assertions pass across 5 groups (structural, per-quest, i18n coverage, event-stream simulation, cross-quest isolation); Phase 6 distributed floor-sidecar anchors shipped — `tools/floor-payloads/*.quest.json` sidecar schema (`{version, floorId, quests[], anchors{}}`) + `tools/extract-floors.js` emits slim runtime `data/quest-sidecars.js` (`window.QUEST_SIDECARS = {anchors, anchorSources, floorQuests, anchorCount, collisionCount, generated}`) loaded at Layer 0 before QuestRegistry + FloorManager `getDistributedAnchors()`/`getDistributedAnchorSources()`/`getQuestAnchors()` read-through hooks + `QuestRegistry.init(payload, floorAnchors, distributedAnchors)` third-param union with source tagging (`'central'`/`'distributed'`), collision-logging (`anchor-collision` with central-wins policy), malformed-spec rejection (`anchor-malformed`), and fail-fast `_validateQuestAnchors()` walking every quest step's `target.anchor` + `advanceWhen.anchor` surfacing `unresolved-anchor` errors + `init()` returning false when `_initErrors[]` non-empty, new exports `getAnchorSource`/`listCentralAnchors`/`listDistributedAnchors`/`getInitErrors` + `summary()` exposes `centralAnchorCount`/`distributedAnchorCount`/`initErrorCount`, two Act 1 test anchors migrated (`pentagram_chamber` on floor 1.3.1, `home_work_keys_chest` on floor 1.6), 62/62 Node fresh-inode harness assertions pass across 4 groups (sidecar emission, JSON shape + cross-sidecar collision, registry union + source tagging + resolveAnchor, fail-fast error surfacing). Phase 7 (Act-2 content load-in) pending. | docs/ |
 
 ### Engine And Renderer Roadmaps
 
@@ -106,6 +107,7 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-98 | [BOXFORGE_AUDIT.md](#doc-98-boxforge_auditmd) | docs/ | Audit of tools/peek-workbench.html (7,074 lines) — color selectors, sidebar wiring, export pipeline |
 | DOC-99 | [BOXFORGE_NEXT_STEPS.md](#doc-99-boxforge_next_stepsmd) | docs/ | Enhancement plan — peek system support (orbs, phases, sub-attachments, templates) |
 | DOC-100 | [BOXFORGE_TOOLS_ROADMAP.md](#doc-100-boxforge_tools_roadmapmd) | docs/ | Active — items 1–5 complete, 6–8 in planning; tools/peek-workbench.html ↔ tools/boxforge.html |
+| DOC-112 | [BOXFORGE_PEEK_COVERAGE_MATRIX.md](BOXFORGE_PEEK_COVERAGE_MATRIX.md) | docs/ | Canonical tile × peek × stamp inventory. 97 tiles mapped to 12 stamp slots (7 primitive + 5 wired archetypes); 30 unwired tiles queued across 8 stamps. Drives `BOXFORGE_AGENT_ROADMAP` Phase 5 (stamp authoring order) + Phase 5.0 schema widen (6 new tiles for the trap family: TRAP_PRESSURE_PLATE 97, TRAP_DART_LAUNCHER 98, TRAP_TRIPWIRE 99, TRAP_SPIKE_PIT 100, TRAP_TELEPORT_DISC 101, COBWEB 102). |
 
 ### Gleaner Systems (Cleaning, Restocking, Traps)
 
@@ -139,6 +141,8 @@ Brainstorming and publishing-only docs are intentionally excluded from this inde
 | DOC-83 | [VERB_FIELD_NPC_ROADMAP.md](#doc-83-verb_field_npc_roadmapmd) â€” v1.3: +tile catalog, +cross-floor, +reanimated verbs, +living infra, +reanim tiers | docs/ |
 | DOC-84 | [LIVING_INFRASTRUCTURE_BLOCKOUT.md](#doc-84-living_infrastructure_blockoutmd) â€” v1.3: tiles 40-59, trap/cobweb/creature verbs, anti-mush invariants, corpse recovery loop, faction relations (trust/heat/debt), NPC memory morphing, economy buildings (Clinic, Morgue, Union Hall, Chop Room) | docs/ |
 | DOC-85 | [D3_AI_LIVING_INFRA_PROCGEN_AUDIT_ROADMAP.md](#doc-85-d3_ai_living_infra_procgen_audit_roadmapmd) â€” depth-3 reliability contract (dispositions, reanimation reprioritization, puzzle-layer proc-gen invariants, acceptance tests) | docs/ |
+| DOC-110 | [NPC_TOOLING_ROADMAP.md](#doc-110-npc_tooling_roadmapmd) — seven-tool authoring suite: P1 NPC Designer, P2 Bark Workbench, P3 Verb-Node Stamper (blockout-visualizer layer), P4 Archetype Studio, P5 Enemy Hydrator, P6 NPC Sprite Studio, P7 Population Planner. Phase 0 = actor schema + npc-cli + `data/npcs.json` extraction | docs/ | → Wave 3 (NPC Refresh tooling source) |
+| DOC-111 | [NPC_TOOLING_DEPENDENCY_AUDIT.md](NPC_TOOLING_DEPENDENCY_AUDIT.md) — cross-roadmap dependency audit for DOC-110: ten hard schema commitments from DOC-9 / DOC-83 / DOC-79 / DOC-107 / DOC-32b / SPATIAL_AUDIO / ACT2 / LIVING_INFRASTRUCTURE / D3 audit / POST_JAM; eight schema fields missing from current P0; recommended P1‖P3 parallel sequencing; 11 mid-build risks catalogued. **Read before DOC-110 Phase 0 Chapter 4 closes.** | docs/ | → DOC-110 prerequisite |
 
 ### Sprites And Visual Assets
 
@@ -215,14 +219,54 @@ north stars. Two new plans are coming next week:
   registry JSON, ReputationBar (WoW-style faction/NPC standing evolving from readiness),
   Journal re-wire, and system-settings toggles (markers on/off, hint verbosity, sidequest
   opt-in). Parallel-track integration specs for pressure-washing, map editor, and minigame
-  owners included inline. **Phase 0 + Phase 0b + Phase 1 shipped 2026-04-16** — the engine
-  cutover is complete: QuestTypes (L0), QuestRegistry (L1) with six anchor resolvers,
-  QuestChain (L3) with predicate engine + absorbed DOC-66 §2 navigation state machine;
-  three named anchors migrated into `data/quests.json`; four game.js call-site fan-outs;
-  Minimap pull-based marker via `getCurrentMarker()`; QuestWaypoint reduced to a ~60-line
-  cursor-fx shim. Phases 2 (Journal UI), 3 (Reputation bars), 4 (Settings), 5 (Minigame
-  adapter), 6 (Floor sidecars), and 7 (Act-2 content) remain. DOC-66 §7 live-browser
-  verification walk still pending.
+  owners included inline. **Phases 0 + 0b + 1 + 2 + 3 + 4 + 5 + 5b + 6 shipped 2026-04-17** — engine cutover
+  complete + Journal rewired + Settings panel wired + Minigame adapter live + Reputation bars wired
+  into debrief feed + sidequest roster expanded from 1 demo to 4 (content-only, predicate surface
+  coverage: npc/floor/item/combat/readiness/flag/prereq): QuestTypes (L0), QuestRegistry (L1) with six anchor resolvers, QuestChain (L3)
+  with predicate engine + DOC-66 §2 navigation state machine absorbed, `getJournalEntries()` +
+  `getUIPrefs/setUIPrefs/loadUIPrefs` + `onMinigameExit(kindId, reason, payload)` +
+  `onReputationTierCross(factionId, fromTier, toTier)` on the frozen public API; three named anchors
+  migrated into `data/quests.json`; four game.js call-site fan-outs; Minimap pull-based marker
+  via `getCurrentMarker()` now gated by `markers` master switch, `hintVerbosity`
+  (off/subtle-with-90s-idle-gate/explicit), and `sidequestOptIn` filter; QuestWaypoint reduced
+  to a ~60-line cursor-fx shim; Face-3 Settings Quest subsection (1 toggle + 3 cycles,
+  slots 850–853) persists to `localStorage['gleaner_settings_v1'].quest`; Phase 5 adds a
+  `kind:'minigame'` predicate shape (kindId / reason / subTargetId / floorId filters),
+  count-gated advance emitting partial waypoint events until the Nth match, `PickupActions`
+  fan-out layer with its own `.on/.off` listener registry, SpraySystem tile-clean callback wired
+  through Game.init, and a demo `side.1.3.1.pentagram_wash` sidequest (count:3), 37/37 Node
+  contract-harness assertions pass; Phase 3 adds a `kind:'reputation-tier'` predicate (factionId +
+  toTier exact match + optional `'up'`/`'down'`/`'any'` direction gate, default up),
+  `WAYPOINT_KIND.REPUTATION_TIER` enum, a faction-row API on `DebriefFeed`
+  (`expandFaction` / `collapseFaction` / `updateFaction` / `getFactionState`) rendered below buffs
+  with per-tier bar fill and three stackable keyframe animations (reveal / bump / tier-cross gold-
+  flash), `DispatcherChoreography.init({onComplete})` first-time hook bumping BPRD favor by +100
+  and auto-expanding the debrief row at the end of the dispatch encounter, full `ReputationBar →
+  DebriefFeed + QuestChain` fan-out in Game.init (both tier-cross and favor-change wired), and
+  four-faction × six-tier i18n keys — 47/47 Node contract-harness assertions pass. A follow-on
+  display-layer rename re-maps the player-facing labels to Biome Plan §19.1 canonical names with
+  suit glyphs: `bprd → The Necromancer ♥` (employer, outside triangle), `mss → Tide Council ♠`
+  (Coral Cellars), `pinkerton → Foundry Collective ♦` (Ironhold Depths), `jesuit → The Admiralty ♣`
+  (Lamplit Catacombs); internal `QuestTypes.FACTIONS` ids unchanged (save/predicate stability);
+  `_factionRow` now renders an ivory `.df-faction-suit` chip before the name with card-suit-color
+  glyph; color palette re-tuned to biome palettes; standalone `tools/_phase3-cache/verify-rename.js`
+  harness (6 groups) verifies the rename. Phase 6 adds `tools/floor-payloads/*.quest.json`
+  distributed floor-sidecar anchors (`{version, floorId, quests[], anchors{}}`) — `tools/extract-floors.js`
+  emits a slim runtime `data/quest-sidecars.js` (`window.QUEST_SIDECARS = {anchors, anchorSources,
+  floorQuests, anchorCount, collisionCount, generated}`) loaded at Layer 0 before QuestRegistry;
+  FloorManager exposes `getQuestAnchors()` / `getDistributedAnchors()` / `getDistributedAnchorSources()`
+  read-throughs; `QuestRegistry.init(payload, floorAnchors, distributedAnchors)` unions central +
+  distributed anchors with source tagging (`'central'` / `'distributed'`), collision-logging
+  (`anchor-collision`, central-wins policy), malformed-spec rejection (`anchor-malformed`), and fail-fast
+  `_validateQuestAnchors()` walking every step's `target.anchor` + `advanceWhen.anchor` surfacing
+  `unresolved-anchor` errors; `init()` returns false when `_initErrors[]` non-empty; new exports
+  `getAnchorSource` / `listCentralAnchors` / `listDistributedAnchors` / `getInitErrors` +
+  `summary()` exposes `centralAnchorCount` / `distributedAnchorCount` / `initErrorCount`; two Act 1
+  test anchors migrated into sidecars (`pentagram_chamber` → `1.3.1.quest.json`, `home_work_keys_chest`
+  → `1.6.quest.json`); 62/62 Node fresh-inode harness assertions pass (sidecar emission /
+  JSON shape + cross-sidecar collision / registry union + source tagging + resolveAnchor /
+  fail-fast error surfacing). Phase 7 (Act-2 content load-in) remains, purely data-only.
+  DOC-66 §7 live-browser verification walk still pending.
 
 ### Primary outstanding execution priorities
 
@@ -272,23 +316,4 @@ Archive candidates: DOC-45 (INVENTORY_SYSTEM_AUDIT — resolved), DOC-32 (UNIFIE
 
 ## Archived Detail
 
-The full per-document scope inventory, completed execution-order history, and expanded cross-reference notes are archived at:
-
-- docs/Archive/CROSS_ROADMAP_EXECUTION_ARCHIVE.md
-
----
-
-## Cross-Reference Key
-
-| Tag | Meaning |
-|-----|---------|
-| -> DOC-N §X | See document N, section X for details |
-| <- DOC-N §X | This section is referenced by document N, section X |
-| ⊕ PHASE X.N | Maps to cross-roadmap phase/task |
-| Complete | Already complete |
-| Active | In progress this sprint |
-| Deferred | Blocked or post-jam |
-
----
-
-*This document is the lightweight entry point for project documentation. For historical detail and completed execution records, see docs/Archive/CROSS_ROADMAP_EXECUTION_ARCHIVE.md.*
+The full per-document scope inventory, completed exe

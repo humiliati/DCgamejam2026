@@ -21,6 +21,7 @@ Primary references:
 - `docs/PRESSURE_WASH_SYSTEM.md`
 - `docs/DEPTH3_CLEANING_LOOP_BALANCE.md`
 - `docs/Tutorial_world_roadmap.md`
+- `docs/NPC_TOOLING_ROADMAP.md` (DOC-110) — authoring suite for the NPC/enemy populations, archetypes, bark pools, and reanimation tiers this audit depends on; P5 Enemy Hydrator + P7 Population Planner are the coherence surface for "does this dungeon have the right tier mix and verb-node coverage"
 
 Code reality checked in:
 

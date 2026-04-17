@@ -144,30 +144,63 @@ Extend the `.boxforge.json` shape (was v2/v3, now **v4**) to carry everything th
 
 **Verified**: `node tools/boxforge-phase1-smoke.js` passes 8/8 checks — DEFAULTS identical across both files, 15 shared OVERRIDES agree byte-for-byte (Dragonfire + Hearth + Dragonfire correctly wb-only), resolveDescriptor idempotent, every template produces a validator-clean payload, JSON round-trip stable, validator rejects 5 intentionally-malformed payloads (null, bad format, negative delay, bad entryAnim enum, bad meta.status enum).
 
-### Phase 2 — `bf` CLI scaffolding (~1 day)
+### Phase 2 — `bf` CLI scaffolding ✅ SHIPPED 2026-04-16
 
 Mirror `tools/blockout-cli.js`. New files: `tools/boxforge-cli.js` (dispatcher) + `tools/cli/bf-*.js` (per-command modules) + `tools/cli/bf-help-meta.js` (dual-mode UMD).
 
-- [ ] `bf list-templates` → prints status + variant + dimensions for every template in the local `tools/templates/peeks/` directory (new — seed with the 15 built-ins as `.boxforge.json` files extracted from BoxForge itself).
-- [ ] `bf describe --variant <name>` → prints descriptor block + shell dims + phase map in human + `--json` forms.
-- [ ] `bf list-peeks` → scans `engine/*-peek.js`, reports variant name, line count, BoxForge provenance comment (`// from BoxForge v1.0` etc.), and whether a matching `.boxforge.json` exists.
-- [ ] `bf help` and `bf help <command>` + `bf help <command> --json` — mandatory per D2, never exits nonzero on an unknown command.
-- [ ] Shared serialize/deserialize chokepoint in `tools/cli/bf-shared.js` with `setDryRun(true)` support so Phase 3's mutators get dry-run for free.
+- [x] `bf list-templates` → prints status + variant + dimensions for every template in the local `tools/templates/peeks/` directory (seeded with the 15 built-ins as `.boxforge.json` files extracted from BoxForge itself via `tools/cli/bf-seed-from-html.js`).
+- [x] `bf describe --variant <name>` → prints descriptor block + shell dims + phase map + effects stack + inline `validateProject()` verdict, in human + `--json` forms.
+- [x] `bf list-peeks` → scans `engine/*-peek.js`, reports variant name, line count, BoxForge provenance markers (`window.BoxForge`, `BoxForge`, `boxforge.html`, `BOXFORGE_AGENT_ROADMAP` — scanned in first 4KB), and whether a matching `.boxforge.json` exists. Flags: `--json`, `--orphans`.
+- [x] `bf help` and `bf help <command>` + `bf help <command> --json` — mirrors `commands-help.js`, never exits nonzero on an unknown command.
+- [x] Shared serialize/deserialize chokepoint in `tools/cli/bf-shared.js` with `setDryRun(true)` support so Phase 3's mutators get dry-run for free. `boxforge-cli.js` dispatcher wires `NO_LOAD` + `READ_ONLY` sets and prints a `{ dryRun, command, readOnly, saveCallsSuppressed, wouldChange:false }` envelope under `--dry-run` (no-op in Phase 2 since every command is read-only).
 
-**Exit**: `bf list-templates`, `bf list-peeks`, `bf describe --variant chest` all return correct data on the current repo.
+**Exit**: ✅ `bf list-templates`, `bf list-peeks`, `bf describe --variant chest` all return correct data on the current repo.
 
-### Phase 3 — Ingest / emit round-trip (~1–1½ days)
+**Verified**:
+- 15 `.boxforge.json` sidecars seeded into `tools/templates/peeks/` from `boxforge.html` built-ins via `tools/cli/bf-seed-from-html.js` (vm-sandbox extraction mirroring `boxforge-phase1-smoke.js`). All 15 pass `validateProject()` with 0 errors / 0 warnings.
+- All four commands (`list-templates`, `describe`, `list-peeks`, `help`) return correct human + `--json` output on the current repo. Exit codes 0/1/2 verified for ok / usage-error / runtime-error paths.
+- Phase 1 smoke test re-run — 8/8 still passing, no regression.
+- Dispatcher structure mirrors `blockout-cli.js` exactly so Phase 3 ingest/emit mutators drop straight into the existing `--dry-run` plumbing.
+
+### Phase 3 — Ingest / emit round-trip
 
 This is the Slice C2 analogue. The canonical source is the `.boxforge.json` file; the `engine/<variant>-peek.js` module is a generated artifact that round-trips byte-identically.
 
-- [ ] `tools/cli/bf-peek-sandbox.js` — VM sandbox for evaluating `<variant>-peek.js` files headlessly, stubbing `PeekShell.register` + `TILES` so we can harvest the descriptor + CSS string without running the game. Modeled on `tools/cli/iife-sandbox.js` (Slice C2).
-- [ ] `bf ingest --from engine/chest-peek.js` — parses the CSS string literal, reconstructs a `.boxforge.json` project via a CSS→descriptor decoder (inverse of `generateExportCSS`), writes to `tools/templates/peeks/chest.boxforge.json`. Also parses the descriptor block.
-- [ ] `bf emit --variant chest --as peek-module --out engine/chest-peek.js` — renders the `.boxforge.json` into a complete `engine/<variant>-peek.js` using a deterministic scaffold template (mirrors `tools/cli/emit-iife.js` from Slice C2).
-- [ ] `--overwrite` / `--dry-run` / `--print` flags on both commands; emit under `--dry-run` prints only the payload metadata.
-- [ ] Round-trip regression test: for every shipped peek, `bf ingest` → `bf emit` → diff against the original `engine/*-peek.js`. Expected diff = zero modulo a provenance comment line.
-- [ ] Rebuild **CorpsePeek** and **TorchPeek** via the pipeline — author in BoxForge, emit, wire. These two are the ship-gate: if `bf emit` can't produce the working versions of these two from scratch, the pipeline is wrong.
+Phase 3 was split mid-implementation into **3a (forward-only)** and **3b (legacy support + ship-gate)** to keep progress auditable. 3a establishes the pipeline against the 15 existing sidecars; 3b closes the loop on pre-Phase-3 hand-authored peeks and regenerates the two broken ones. The split follows CLAUDE.md's "cut features, don't cut corners" principle — every shipped slice is correct, not partial.
 
-**Exit**: every shipped peek round-trips; corpse-peek.js and torch-peek.js are regenerated artifacts rather than hand-written files; `INTERACTIVE_OBJECTS_AUDIT.md` §Torch / §Corpse marks the peek regressions closed.
+#### Phase 3a — Forward-only pipeline (BF-DATA round-trip) ✅ SHIPPED 2026-04-17
+
+Ship the authoring pipeline end-to-end for sidecars we already own. Emitted peek modules carry their own sidecar JSON inside a `/* BF-DATA-START ... BF-DATA-END */` block, so `bf ingest` reads that block rather than decoding CSS. This proves the dispatcher plumbing, the sandbox harness, and the scaffold shape without blocking on the CSS decoder.
+
+- [x] `tools/cli/bf-peek-sandbox.js` — VM sandbox for evaluating `engine/*-peek.js` headlessly. Stubs `PeekShell.register` (captures descriptors into an array), `TILES` (Proxy returning numeric codes), and ~20 engine globals on both top-level and `window.*` (peek IIFEs gate on `window.PeekShell`). Modeled on `tools/cli/iife-sandbox.js`. Exports `createPeekSandbox()`, `loadPeekModule(relPath)`, `extractBfData(src)`, and the shared `BF_DATA_RE`.
+- [x] `tools/cli/bf-css-emit.js` — Pure-Node port of `boxforge.html#generateExportCSS` (~4914). `emitCSS(project, overrideName) → {css, pf}` and `emitHTML(project, overrideName) → string`. All math/string formatting copied verbatim; the one DOM reference (`esc()`) replaced with a regex HTML escape. Keeps state in the `project` parameter rather than module-level globals.
+- [x] `bf emit --variant <v> [--as peek-module] [--out <path>] [--print] [--overwrite] [--dry-run]` — renders a deterministic IIFE scaffold using `PeekShell.register()`. Scaffold layout: banner → `ensureStyle()` (injects `<style id="bf-css-<variant>">` once) → `makeContentEl()` (creates host DOM with emitted HTML) → descriptor literal via stable-key `jsLit()` → `PeekShell.register(DESC)` → `BF-DATA` block at EOF.
+- [x] `bf ingest --from <path> | --variant <v> [--print] [--overwrite] [--dry-run]` — extracts the BF-DATA block, validates via `validateProject()`, runs the peek through the vm-sandbox to capture the `PeekShell.register` descriptor (reports in `shellCheck`), and writes the sidecar via `S.savePeekFile()` (so `--dry-run` flows through the existing envelope).
+- [x] Safety rails: both commands refuse to clobber existing targets unless the new output is byte-identical to what exists or `--overwrite` is passed. `--print` and `--dry-run` always short-circuit writes.
+- [x] Dispatcher wiring (`tools/boxforge-cli.js`): ingest/emit composed into `COMMANDS` via `Object.assign()`, removed from the `READ_ONLY` set so their `--dry-run` output reports `wouldChange: true` and the count of save calls suppressed. `--help` banner updated to reference both.
+- [x] `tools/boxforge-phase3a-smoke.js` — regression harness. For every sidecar in `tools/templates/peeks/`: emit to a tmp module, extract BF-DATA, deep-equal against the source, load the module through the sandbox, assert PeekShell.register was called with matching variant + tileMatch. Exits 0 only if all 15 pass.
+
+**Exit** (met): all 15 sidecars (bookshelf, boss-door-plus-orb, chest, corpse, crate, double-doors, locked-door, orb, pyramid, single-door, splash-cube, torch-box, torch-peek, torch-plus-orb, torch) pass `boxforge-phase3a-smoke.js` with byte-stable round-trip and matching PeekShell capture.
+
+**Verified 2026-04-17**:
+- Dispatcher parses clean after heredoc-forced bindfs cache refresh: `node tools/boxforge-cli.js --help` lists all 6 commands (describe, emit, help, ingest, list-peeks, list-templates).
+- Single-variant round-trip: `bf emit --variant crate --out /tmp/bf-test/crate-peek.js --overwrite` produces a 29 111-byte module (css=14 350, html=1 269). `bf ingest --from /tmp/bf-test/crate-peek.js --print` returns the BF-DATA block; stable-stringify comparison against the source sidecar matches byte-for-byte (6 256 bytes on both sides).
+- `--dry-run` envelope: `bf ingest --from ... --dry-run` prints `saveCallsSuppressed: 1, wouldChange: true` and no file is written.
+- Full 15-variant smoke: `node tools/boxforge-phase3a-smoke.js` prints "ALL 15 VARIANTS PASSED" in ~110 ms. Verbose run reports emitted module sizes ranging 13 380 – 29 111 bytes and PeekShell capture for every sidecar with a declared `tileMatch` (orb, pyramid, splash-cube have `tileMatch: null` — flagged as `-` in the smoke output, which is expected).
+- PeekShell sandbox capture fix: engine globals now mirrored onto `sandbox.window.*` so the emitted `if (!window.PeekShell) return;` gate passes in headless mode. Previously captured zero registrations.
+
+**Bindfs-cache workaround institutional memory**: three files this session required the `cat > path << 'EOF'` heredoc workaround after Edit/Write operations failed to bust the FUSE cache (`tools/boxforge-cli.js`, `tools/cli/bf-peek-sandbox.js`, `tools/boxforge-phase3a-smoke.js`). CLAUDE.md §"Sandbox mount gotcha" already documents this; worth re-reading before any bash-driven verification step on a mid-session-edited file.
+
+#### Phase 3b — Legacy CSS decoder + ship-gate (deferred)
+
+Still pending. 3a shipped the pipeline for sidecars we already have; 3b closes the loop for the three hand-authored peek modules predating the pipeline (`engine/chest-peek.js`, `engine/corpse-peek.js`, `engine/torch-peek.js`), which carry no BF-DATA block.
+
+- [ ] CSS → descriptor decoder inside `bf-peek-sandbox.js` or a new `bf-css-decode.js`. Inverse of `emitCSS()`: parse the injected `<style>` body (or the CSS literal in the source), reconstruct shell dimensions, pane transforms, glow definitions, phase animations. Can lean on the vm-sandbox to harvest the live `PeekShell.register` descriptor for fields that CSS doesn't carry (showDelay, openDelay, juice, jsHandoffModule).
+- [ ] `bf ingest --from engine/corpse-peek.js` should fall back to the CSS decoder when no BF-DATA block is present and still write a valid v4 sidecar. Add `--legacy` explicit opt-in to make the slow path discoverable.
+- [ ] Rebuild **CorpsePeek** and **TorchPeek** via the pipeline — ingest the current hand-authored modules (CSS-decode path), author fixes in BoxForge or `.boxforge.json` directly, re-emit via `bf emit`. These two are the ship-gate: `INTERACTIVE_OBJECTS_AUDIT.md` §Torch / §Corpse lists the regressions; Phase 3b closes them.
+- [ ] Round-trip regression extended: re-ingest every engine peek (including the three legacy ones after the CSS decoder lands), re-emit, byte-diff against the currently shipped file. Expected diff: zero modulo the generation timestamp in the banner comment.
+
+**Exit**: every engine peek is either a `bf emit` artifact or round-trips cleanly through `bf ingest → bf emit`; `corpse-peek.js` and `torch-peek.js` are regenerated from sidecars rather than hand-maintained; INTERACTIVE_OBJECTS_AUDIT.md §Torch / §Corpse marks the peek regressions closed.
 
 ### Phase 4 — Agent-facing docs (~½ day)
 
@@ -179,16 +212,100 @@ Close the loop that `tools/BO-V agent feedback.md` did for blockout. The audienc
 
 **Exit**: a fresh subagent, given only `BOXFORGE_AGENT_INSTRUCTIONS.md` + the `bf help <command>` outputs, emits a valid new peek (variant name of our choice) that round-trips through ingest and registers without game-side hand-edits.
 
-### Phase 5 — Peek-primitive stamps (~1 day)
+### Phase 5 — Peek-primitive stamps (~2 days)
 
-The Slice C4 analogue. `bf` needs ready-made starting primitives for the recurring shapes in the MINIGAME_ROADMAP roster so the agent doesn't start from Splash Cube every time.
+The Slice C4 analogue. `bf` needs ready-made starting primitives for the recurring shapes in the MINIGAME_ROADMAP + tile-schema roster so the agent doesn't start from Splash Cube every time.
 
-- [ ] `stamp-chest`, `stamp-crate`, `stamp-coffin`, `stamp-bookshelf`, `stamp-door` (single/double), `stamp-locked-door`, `stamp-torch-bracket`, `stamp-terminal`, `stamp-button-panel`, `stamp-card-table`, `stamp-pane-to-box-composite` — each a parametric shell + pane layout keyed on dimensions, registered in `tools/cli/bf-stamps.js`.
-- [ ] `bf apply-stamp --name chest --bw 420 --bh 260 --bd 180 --variant golden_chest` outputs a fresh `.boxforge.json` with the shell dims substituted, ready for descriptor/glow/orb tailoring.
-- [ ] Stamp metadata carries the recommended peek type (chest → full, torch-bracket → context-gated, button-panel → action).
-- [ ] `help-meta.js` entries for each, with a worked example per stamp.
+**Foundation doc**: `docs/BOXFORGE_PEEK_COVERAGE_MATRIX.md` (DOC-112) — the canonical inventory of every tile that needs a peek, what primitive it derives from, and the stamp queue that unlocks it. Do not author a stamp without first reading the matrix's §5 priority queue and §3 gap inventory; skipping it risks inventing stamps that duplicate coverage or miss the trap/creature/economy families entirely. The matrix recognizes 12 stamp slots (7 primitive sidecars + 5 wired-archetype sidecars) that collectively cover 30 unwired tiles across furnishing, infra, creature, economy, light, and trap families.
 
-**Exit**: agent prompt "give me a 420×260×180 chest with an amber orb in the lid" → `bf apply-stamp --name chest --bw 420 --bh 260 --bd 180` → `bf edit …` → `bf emit` without touching `boxforge.html`. Time from prompt to registered peek: under 60 seconds.
+Stamp authoring order below matches DOC-112 §5. Each stamp takes the named primitive sidecar as its parametric base, exposes the dimensional + tone knobs an agent would edit, and registers a `help-meta.js` entry with at least one worked example pulled from DOC-112 §3.
+
+#### 5.0 Schema widen — trap + cobweb tiles (prerequisite)
+
+Before the trap-family stamps can land, `tools/tile-schema.json` has to grow six new tile IDs per DOC-112 §6. The current schema ships only a generic `TRAP (8)` plus instant-hazard tiles (`FIRE 15`, `SPIKES 16`, `POISON 17`) that fire on step with no approach moment. Gleaner's cleanup narrative ("re-arm for the next delve") needs the mechanism-before-fire family instead.
+
+- [ ] Add to `engine/tiles.js` (tile-schema.json is generated from this file via `tools/extract-floors.js`, so engine is authoritative). Current max ID is 96 (PORTHOLE_OCEAN); new family slots in at 97-102:
+  - `97 TRAP_PRESSURE_PLATE` (hazard) — floor-level plate, `isWalkable: true`, `isOpaque: false`
+  - `98 TRAP_DART_LAUNCHER` (hazard) — wall-mounted mechanism, `isWalkable: false`, `isOpaque: true`
+  - `99 TRAP_TRIPWIRE` (hazard) — thin-strip floor tile, `isWalkable: true`, `isOpaque: false`
+  - `100 TRAP_SPIKE_PIT` (hazard) — open pit in floor, `isWalkable: false` (until re-rigged), `isOpaque: false`
+  - `101 TRAP_TELEPORT_DISC` (hazard) — floor rune, `isWalkable: true`, `isOpaque: false`
+  - `102 COBWEB` (creature) — vertical translucent strands, `isWalkable: true`, `isOpaque: false`
+- [ ] Mirror into the `T.isWalkable` / `T.isHazard` / `T.isOpaque` classification functions in `engine/tiles.js` (additive — do not remove anything existing).
+- [ ] Update `T.isHazard` to include TRAP_PRESSURE_PLATE, TRAP_DART_LAUNCHER, TRAP_TRIPWIRE, TRAP_SPIKE_PIT, TRAP_TELEPORT_DISC. COBWEB is not a hazard — it's a creature-family obstacle.
+- [ ] Regenerate `tools/tile-schema.json` via `node tools/extract-floors.js`. Expect `tileCount: 103, maxId: 102`.
+- [ ] Append the six rows to `tools/biome-map.json` palettes where thematically appropriate (soft cellar, hero's wake, darker biomes). Biome additions can ship in a follow-up slice — the schema widen itself only needs the tiles to exist, not to be placed.
+- [ ] Smoke: `node tools/extract-floors.js` still clean; BO-V `bo validate` still passes on the existing 11 floors (the new tiles are additive, not required).
+
+**Exit**: `tile-schema.json` lists 103 tiles (was 97); `TILES.TRAP_PRESSURE_PLATE` et al resolve at runtime; no existing floor breaks.
+
+#### 5.1 `stamp-braizer` — unlocks 6 peeks
+
+Derived from the `torch-box` primitive. Box shell + top-mounted flame/glow pane. Covers every "fire-inside-a-vessel" archetype.
+
+- [ ] Register `stamp-braizer` in `tools/cli/bf-stamps.js` with tunable `{ bw, bh, bd, flameColor, embersColor, lit: true|false, biomeTag }`. Recommended peek type: `context-gated` for ambient fires, `action` for the minigame bookends.
+- [ ] Worked examples per DOC-112 §3: `HEARTH (29)`, `BONFIRE (18)`, `CITY_BONFIRE (69)`, `ANVIL (43)`, `SOUP_KITCHEN (47)`, `INCINERATOR (58)`.
+- [ ] First shipped sidecar: `hearth.boxforge.json` (context-gated, lit/cold phase). Serves as the reference implementation for the rest of the family.
+
+#### 5.2 `stamp-flat-sprite` — unlocks 9 peeks
+
+Derived from the `corpse` sidecar. Flat horizontal plate + central sprite overlay. Covers any "low-silhouette object on the floor" family.
+
+- [ ] Register `stamp-flat-sprite` with `{ plateW, plateH, spriteId, spriteTintHex, thickness, wearState }` plus optional `occupant` flag for triage-bed / bench variants.
+- [ ] Worked examples: `TABLE (28)`, `BENCH (41)`, `COT (48)`, `NEST (50)`, `STRETCHER_DOCK (55)`, `TRIAGE_BED (56)`, `MORGUE_TABLE (57)`, `TRAP_PRESSURE_PLATE (84)`, `TRAP_TRIPWIRE (86)`.
+- [ ] First shipped sidecar: `table.boxforge.json` (micro peek, cozy-quip toast). Second: `trap-pressure-plate.boxforge.json` (action peek, "Re-arm plate" label).
+
+#### 5.3 `stamp-fixture-plus-orb` — unlocks 2 peeks
+
+Derived from `torch-plus-orb`. Vertical fixture + floating orb. Covers "charged mechanism" archetype.
+
+- [ ] Register `stamp-fixture-plus-orb` with `{ bw, bh, bd, orbColor, orbPulseRate, armatureStyle }`.
+- [ ] Worked examples: `CHARGING_CRADLE (45)`, `ENERGY_CONDUIT (53)`.
+
+#### 5.4 `stamp-vertical-fixture` — unlocks 4 peeks
+
+Derived from `torch`. Bare vertical pane stack, no box shell. Covers anything that projects from a wall or mounts on a post.
+
+- [ ] Register `stamp-vertical-fixture` with `{ postH, postW, topCapStyle, glowColor, mountFace }`.
+- [ ] Worked examples: `WELL (40)`, `ROOST (49)`, `TRAP_DART_LAUNCHER (85)`, `COBWEB (89)`.
+- [ ] Wall-mount variant for `TRAP_DART_LAUNCHER` + translucent-strand variant for `COBWEB` are both first-class knobs, not afterthoughts — DOC-112 §3.6 lists the UX tone.
+
+#### 5.5 `stamp-bookshelf` — unlocks 2 peeks
+
+Derived from `bookshelf`. Upright panel variant for routing/switchboard UIs.
+
+- [ ] Register `stamp-bookshelf` with `{ shelfCount, panelMode: 'books'|'panel'|'arrangement' }`. Panel mode reuses the bookshelf shell but swaps the content layer.
+- [ ] Worked examples: `SWITCHBOARD (46)` (panel mode), `NOTICE_BOARD (42)` (arrangement mode).
+
+#### 5.6 `stamp-box-lidded` — unlocks 5 peeks
+
+Derived from `crate` (generalized — not the same as `stamp-chest`, which stays as its own sidecar template for treasure chests). Covers container-with-lid archetype.
+
+- [ ] Register `stamp-box-lidded` with `{ bw, bh, bd, lidHinge: 'top'|'front', staveTexture, interiorCavity }`.
+- [ ] Worked examples: `BARREL (44)` (no-lid + stave texture), `DEN (51)` (interior-cavity variant), `REFRIG_LOCKER (59)`, `TRAP_SPIKE_PIT (87)` (open-pit variant), `TRAP_TRAPDOOR_RIG` (reusing `TRAPDOOR_DN (75)`).
+
+#### 5.7 `stamp-pyramid-shrine` — unlocks 2 peeks
+
+Derived from `pyramid`. Conic/tetrahedral shrine shape for altars, mounds, discs.
+
+- [ ] Register `stamp-pyramid-shrine` with `{ baseW, apexH, glowColor, flatDiscMode }`. Flat-disc mode for floor-embedded variants (teleport runes).
+- [ ] Worked examples: `FUNGAL_PATCH (52)`, `TRAP_TELEPORT_DISC (88)`.
+
+#### 5.8 `stamp-splash-primitive` — scaffold + TERRITORIAL_MARK
+
+Derived from `splash-cube`. Generic cube + splash/emit phase animation for micro peeks and new-tile scaffolds.
+
+- [ ] Register `stamp-splash-primitive` with `{ bw, bh, bd, splashColor, splashShape: 'paw'|'rune'|'spatter' }`.
+- [ ] Worked example: `TERRITORIAL_MARK (54)` (paw-print / faction sigil). Also serves as the fallback stamp for any future tile that doesn't cleanly fit the other 7.
+
+#### 5.9 CLI plumbing
+
+- [ ] `bf apply-stamp --name <stamp> --bw 420 --bh 260 --bd 180 --variant <x> [--out <path>]` outputs a fresh `.boxforge.json` with the shell dims substituted, ready for descriptor/glow tailoring. Must honor `--dry-run`.
+- [ ] `bf list-stamps` + `bf list-stamps --json` surface the roster with their tunable knobs.
+- [ ] `help-meta.js` entries for each stamp, each carrying at least one worked example from DOC-112 §3.
+- [ ] Smoke harness `tools/boxforge-phase5-smoke.js` — for each stamp, apply it to a test tile, emit, ingest, assert validator-clean + round-trip stable.
+
+**Exit**: agent prompt "give me a hearth at 360×300×180 with amber embers for floor 1.2" → `bf apply-stamp --name braizer --bw 360 --bh 300 --bd 180 --variant hearth` → `bf emit --variant hearth` → `engine/hearth-peek.js` exists, registers against `TILES.HEARTH`, round-trips through the Phase 3a smoke harness. Time from prompt to registered peek: under 60 seconds. All 8 stamps pass the Phase 5 smoke. DOC-112 §4 minigame checkboxes flip from ❌ to ✅ for the 16 stamp-covered bookends.
 
 ### Phase 6 — Runtime hot-load (~½ day)
 
@@ -203,17 +320,17 @@ Don't require a game restart to try a new peek. This is what turns the CLI from 
 
 ### Phase 7 — MINIGAME_ROADMAP drive-through (~2–3 days, sequential)
 
-With Phases 0–6 in place, plow the Tier 1 roster from `docs/MINIGAME_ROADMAP.md` §2:
+With Phases 0–6 in place, plow the Tier 1 roster from `docs/MINIGAME_ROADMAP.md` §2. Stamp names match the DOC-112 §5 queue — Phase 7 consumes stamps authored in Phase 5, it does not introduce new primitives.
 
-- [ ] `WELL_PUMP` → `stamp-pump` + full-peek → register against `TILES.WELL` (40).
-- [ ] `SOUP_LADLE` → `stamp-cauldron` → register against `TILES.SOUP_KITCHEN` (47).
-- [ ] `ANVIL_HAMMER` → `stamp-anvil` → register against `TILES.ANVIL` (43).
-- [ ] `BARREL_TAP` → `stamp-barrel` → register against `TILES.BARREL` (44).
-- [ ] `FUNGAL_HARVEST` → `stamp-fungal-patch` → register against `TILES.FUNGAL_PATCH` (52).
+- [ ] `WELL_PUMP` → `stamp-vertical-fixture` + action-peek → register against `TILES.WELL` (40).
+- [ ] `SOUP_LADLE` → `stamp-braizer` + action-peek → register against `TILES.SOUP_KITCHEN` (47).
+- [ ] `ANVIL_HAMMER` → `stamp-braizer` + action-peek → register against `TILES.ANVIL` (43).
+- [ ] `BARREL_TAP` → `stamp-box-lidded` (no-lid + stave variant) + action-peek → register against `TILES.BARREL` (44).
+- [ ] `FUNGAL_HARVEST` → `stamp-pyramid-shrine` + action-peek → register against `TILES.FUNGAL_PATCH` (52).
 
-Each lands as a `face-js` peek with the bookend P1→P2→[JS]→P4 contract from `BOXFORGE_NEXT_STEPS.md`. Tier 2 (Magic Remote showcase) and Tier 3 (card-reuse) follow with their own stamp set.
+Each lands as a `face-js` peek with the bookend P1→P2→[JS]→P4 contract from `BOXFORGE_NEXT_STEPS.md`. Tier 2 (Magic Remote showcase) and Tier 3 (card-reuse) follow with their own stamp set, drawn from the same 8-stamp roster — see DOC-112 §4 for the ✅/❌ checklist across all 16+ minigames.
 
-**Exit**: all 5 Tier-1 minigames have live peeks that open via `bf register` and wire into their minigame-module JS handoff without hand-porting CSS. The gallery floor from `MINIGAME_ROADMAP.md` §6 shows all five.
+**Exit**: all 5 Tier-1 minigames have live peeks that open via `bf register` and wire into their minigame-module JS handoff without hand-porting CSS. The gallery floor from `MINIGAME_ROADMAP.md` §6 shows all five. DOC-112 §4 flips those five rows to ✅.
 
 ### Phase 8 — Stretch / parked
 
@@ -237,6 +354,7 @@ Each lands as a `face-js` peek with the bookend P1→P2→[JS]→P4 contract fro
 - `docs/PEEK_WORKBENCH_SCOPE.md` — known editor bugs (pyramid sliders lack dirty-label reset; glow locked in pyr-primary mode). Not blocking this roadmap but worth flagging when Phase 0 touches templates.
 - `docs/MINIGAME_ROADMAP.md` — the ~30-peek workload the pipeline must serve (Phase 7 driver).
 - `docs/INTERACTIVE_OBJECTS_AUDIT.md` — §Torch + §Corpse capture the current "broken" state that Phase 3 must close.
+- `docs/BOXFORGE_PEEK_COVERAGE_MATRIX.md` (DOC-112) — canonical tile × peek × stamp inventory. Phase 5 reads this before authoring any stamp; schema widen (§5.0) is driven from §6, stamp ordering (§5.1–5.8) mirrors DOC-112 §5, and minigame coverage (Phase 7) is validated against DOC-112 §4.
 - `engine/peek-shell.js` — `PeekShell.register`, lifecycle FSM, dwell detect. The runtime hot-load (Phase 6) attaches here.
 - `engine/chest-peek.js` line 52 — canonical example of the "paste CSS + call register" pattern the pipeline generates.
 

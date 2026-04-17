@@ -1412,6 +1412,55 @@
       100% { color: inherit; text-shadow: inherit; transform: translateX(0); }
     }
 
+    /* ── DOC-107 Phase 3 — faction reputation strip ───────────────── */
+    .df-faction-strip { margin-top: 4px; position: relative; z-index: 6; }
+    .df-faction-row { padding: 2px 0 4px; position: relative; z-index: 6; }
+    .df-faction-row .df-faction-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.85em; letter-spacing: 0.04em;
+      color: var(--phosphor-dim);
+    }
+    .df-faction-row .df-faction-suit {
+      display: inline-block; margin-right: 5px; font-size: 1.05em; line-height: 1;
+      text-shadow: 0 0 4px rgba(255,255,255,0.25);
+      /* Card-suit glyphs sit on a subtle ivory chip so the black
+         spade/club glyphs stay readable against the dark HUD bg. */
+      background: rgba(248,240,220,0.92);
+      padding: 0 4px; border-radius: 2px;
+      box-shadow: 0 0 3px rgba(0,0,0,0.5);
+      min-width: 13px; text-align: center;
+    }
+    .df-faction-row .df-faction-name { color: var(--phosphor); font-weight: 500; flex: 1; }
+    .df-faction-row .df-faction-tier { font-size: 0.9em; font-style: italic; opacity: 0.85; }
+    .df-faction-row .df-faction-track {
+      background: rgba(255,255,255,0.08);
+      height: 5px; border-radius: 3px; margin-top: 3px; overflow: hidden;
+    }
+    .df-faction-row .df-faction-fill {
+      height: 100%; border-radius: 3px;
+      transition: width 0.35s ease-out, background 0.2s ease-out;
+    }
+    /* Reveal — slide/grow when first expanded (dispatch encounter close) */
+    .df-faction-reveal { animation: df-faction-reveal 520ms ease-out; }
+    @keyframes df-faction-reveal {
+      0%   { opacity: 0; max-height: 0; transform: translateY(-4px); }
+      60%  { opacity: 1; max-height: 40px; transform: translateY(0); }
+      100% { opacity: 1; max-height: 40px; transform: translateY(0); }
+    }
+    /* Bump — flash/scale on favor increase; goldflash overlay on tier-cross-up */
+    .df-faction-bump { animation: df-faction-bump 480ms ease-out; }
+    @keyframes df-faction-bump {
+      0%   { transform: scale(1);    text-shadow: none; }
+      35%  { transform: scale(1.08); text-shadow: 0 0 10px currentColor, 0 0 16px rgba(255,220,120,0.6); }
+      100% { transform: scale(1);    text-shadow: none; }
+    }
+    .df-faction-tiercross { animation: df-faction-tiercross 720ms ease-out; }
+    @keyframes df-faction-tiercross {
+      0%   { filter: brightness(1) saturate(1); box-shadow: none; }
+      30%  { filter: brightness(1.45) saturate(1.4); box-shadow: 0 0 14px rgba(255,215,0,0.9), inset 0 0 8px rgba(255,215,0,0.6); }
+      100% { filter: brightness(1) saturate(1); box-shadow: none; }
+    }
+
     /* Debrief: Feed/log mode */
     .df-feed-line { font-size: 1em; line-height: 1.3; color: var(--phosphor-dim); word-break: break-all; position: relative; z-index: 6; }
     .df-feed-line.df-loot { color: var(--phosphor-bright); }
@@ -2490,6 +2539,7 @@
   <script src="engine/trap-rearm.js"></script>
   <script src="engine/torch-state.js"></script>
   <script src="engine/readiness-calc.js"></script>
+  <script src="data/quest-sidecars.js"></script>
   <script src="engine/quest-registry.js"></script>
   <script src="engine/work-order-system.js"></script>
   <script src="engine/hero-run.js"></script>
@@ -2596,6 +2646,13 @@
        this tag and the _startIntroWalk() call in game.js _initGameplay(). -->
   <!-- <script src="engine/intro-walk.js"></script> -->
   <script src="engine/npc-system.js"></script>
+  <!-- DOC-110 Phase 0 Chapter 5 (SHIPPED 2026-04-17): data/npcs.json
+       is the SOLE source of truth. The ~740-line inline
+       _registerBuiltinPopulations() block was retired; NpcSystem.init()
+       now errors if NpcSeed is unavailable or populate() fails rather
+       than silently running stale inline data. Author via
+       tools/npc-designer.html; normalise via tools/extract-npcs.js. -->
+  <script src="engine/npc-seed.js"></script>
   <script src="engine/hero-system.js"></script>
   <script src="engine/floor-transition.js"></script>
   <script src="engine/input-poll.js"></script>
@@ -2674,4 +2731,5 @@
   <script src="engine/debug-perf-monitor.js"></script>
   <script src="engine/debug-boot.js"></script>
   <script src="engine/debug-nozzle-panel.js"></script>
-  <script src="e
+</body>
+</html>

@@ -3137,6 +3137,41 @@ var FloorManager = (function () {
     // Floor 0
     getFloor0Spawn: function () { return { x: _FLOOR0_SPAWN.x, y: _FLOOR0_SPAWN.y, dir: _FLOOR0_SPAWN.dir }; },
 
+    // ── DOC-107 Phase 6: distributed quest sidecars ───────────────────
+    // Reads window.QUEST_SIDECARS (emitted by tools/extract-floors.js
+    // into data/quest-sidecars.js and loaded by index.html at Layer 5).
+    //
+    // getQuestAnchors()       → { floorId: [questDef, ...] } per-floor
+    //                           quest arrays harvested from
+    //                           tools/floor-payloads/<fid>.quest.json.
+    //                           Passed as 2nd arg to QuestRegistry.init.
+    //
+    // getDistributedAnchors() → { anchorId: anchorSpec } flat union of
+    //                           every *.quest.json `anchors` block. Passed
+    //                           as 3rd arg to QuestRegistry.init, which
+    //                           unions it with data/quests.json.anchors
+    //                           (central wins on collision).
+    //
+    // Both callbacks are typeof-guarded: if window.QUEST_SIDECARS is
+    // absent (e.g. tools/extract-floors.js hasn't run yet), they return
+    // empty objects so QuestRegistry.init still succeeds with the central
+    // registry alone.
+    getQuestAnchors: function () {
+      if (typeof window === 'undefined' || !window.QUEST_SIDECARS) return {};
+      var fq = window.QUEST_SIDECARS.floorQuests;
+      return (fq && typeof fq === 'object') ? fq : {};
+    },
+    getDistributedAnchors: function () {
+      if (typeof window === 'undefined' || !window.QUEST_SIDECARS) return {};
+      var a = window.QUEST_SIDECARS.anchors;
+      return (a && typeof a === 'object') ? a : {};
+    },
+    getDistributedAnchorSources: function () {
+      if (typeof window === 'undefined' || !window.QUEST_SIDECARS) return {};
+      var s = window.QUEST_SIDECARS.anchorSources;
+      return (s && typeof s === 'object') ? s : {};
+    },
+
     // Cache
     clearCache: clearCache,
     invalidateCache: invalidateCache,

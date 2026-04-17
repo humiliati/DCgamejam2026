@@ -157,6 +157,41 @@ i18n.register('en', {
   'faction.foundry':       'Foundry',
   'faction.admiralty':     'Admiralty',
 
+  // ── DOC-107 Phase 3 — Reputation strip (debrief feed) ──────────
+  // Names + tagline + suit strings consumed by DebriefFeed faction
+  // rows and (later phases) the menu-faces journal. Keep ids in sync
+  // with QuestTypes.FACTIONS values. The internal ids (bprd / mss /
+  // pinkerton / jesuit) are STREET CHRONICLES codenames retained for
+  // narrative ambiguity; the .name + .suit + .tagline strings are
+  // the canonical in-world identities per Biome Plan §19.1.
+  //
+  //   internal id   →  in-world name        →  suit alignment
+  //   ────────────────────────────────────────────────────────
+  //   bprd          →  The Necromancer      →  ♥  (outside triangle, employer)
+  //   mss           →  Tide Council         →  ♠  Coral Cellars
+  //   pinkerton     →  Foundry Collective   →  ♦  Ironhold Depths
+  //   jesuit        →  The Admiralty        →  ♣  Lamplit Catacombs
+  'faction.bprd.name':         'The Necromancer',
+  'faction.bprd.suit':         '\u2665',                      // ♥
+  'faction.bprd.tagline':      'Your employer — pays for dungeon resets',
+  'faction.mss.name':          'Tide Council',
+  'faction.mss.suit':          '\u2660',                      // ♠
+  'faction.mss.tagline':       'Coastal trade — Coral Cellars',
+  'faction.pinkerton.name':    'Foundry Collective',
+  'faction.pinkerton.suit':    '\u2666',                      // ♦
+  'faction.pinkerton.tagline': 'Arms & armor — Ironhold Depths',
+  'faction.jesuit.name':       'The Admiralty',
+  'faction.jesuit.suit':       '\u2663',                      // ♣
+  'faction.jesuit.tagline':    'Apothecary & research — Lamplit Catacombs',
+
+  // Reputation tier labels — match QuestTypes.REP_TIERS ids one-to-one.
+  'rep.tier.hated':          'Hated',
+  'rep.tier.unfriendly':     'Unfriendly',
+  'rep.tier.neutral':        'Neutral',
+  'rep.tier.friendly':       'Friendly',
+  'rep.tier.allied':         'Allied',
+  'rep.tier.exalted':        'Exalted',
+
   // Reputation tier names (0-3)
   'shop.rep0':             'Stranger',
   'shop.rep1':             'Associate',
@@ -336,6 +371,67 @@ i18n.register('en', {
   'quest.sidequest._template.summary': 'Details pending.',
   'quest.sidequest._template.step.1.label': 'Reach the marked location',
 
+  // DOC-107 Phase 5 demo sidequest — Soft Cellar pentagram wash.
+  // Exercises the full minigame-exit adapter chain: SpraySystem
+  // (cleanliness >= 1.0) → PickupActions.onMinigameExit → QuestChain
+  // with a count:3 predicate. Three partial-waypoint events, then
+  // completion on the third tile.
+  'quest.sidequest.pentagram_wash.title':   'A Lingering Stain',
+  'quest.sidequest.pentagram_wash.hook':    'Something the hero spilled won\u2019t come up with a dry mop.',
+  'quest.sidequest.pentagram_wash.summary': 'Pressure-wash three fouled floor tiles in the Soft Cellar. The pentagram is drawn in something older than blood \u2014 scrub until each tile reads clean.',
+  'quest.sidequest.pentagram_wash.step.1.label': 'Wash 3 pentagram tiles (Soft Cellar)',
+
+  // DOC-107 Phase 5b sidequest content batch — ship three sidequests that
+  // stretch the non-minigame predicate surface (npc / item / combat / floor /
+  // readiness / flag). Grounded in real NPC ids (npc-system.js), real enemy
+  // ids (data/enemies.json), and real item ids (data/items.json) so the
+  // predicates match live events the moment the pending fan-outs (onNpcTalk,
+  // onCombatKill, generic onItemAcquired) land. Verified in isolation by
+  // tools/_phase5b-cache/verify.js driving QuestChain directly.
+
+  // 1. Innkeeper bottles — Driftwood Inn → Soft Cellar rat-clean → report back.
+  //    Exercises: npc → floor → combat(count:3, ENM-003) → npc(branch:rat_report).
+  'quest.sidequest.innkeeper_bottles.title':   'Bottles and Bitemarks',
+  'quest.sidequest.innkeeper_bottles.hook':    'Marlo says rats got into the good vintage again.',
+  'quest.sidequest.innkeeper_bottles.summary': 'Driftwood Inn\u2019s cellar stock keeps vanishing down the Soft Cellar stairs. Talk to Marlo, head down, thin the rat pack (three should do it), then tell him the count so he can sleep.',
+  'quest.sidequest.innkeeper_bottles.step.1.label': 'Speak with Innkeeper Marlo',
+  'quest.sidequest.innkeeper_bottles.step.2.label': 'Descend to the Soft Cellar',
+  'quest.sidequest.innkeeper_bottles.step.3.label': 'Cull 3 Dungeon Rats',
+  'quest.sidequest.innkeeper_bottles.step.4.label': 'Report the kill count to Marlo',
+
+  // 2. Cellar owner mop — cellar entrance → pick up mop head → bring floor
+  //    to 50% readiness. Exercises: npc → item (ITM-089) → readiness.
+  'quest.sidequest.cellar_owner_mop.title':   'A Proper Mop-Up',
+  'quest.sidequest.cellar_owner_mop.hook':    'The cellar owner hasn\u2019t been downstairs in weeks. He\u2019s not going to start now.',
+  'quest.sidequest.cellar_owner_mop.summary': 'Find a replacement mop head in the Soft Cellar and get the floor halfway presentable. The owner will know the difference \u2014 he\u2019s the one who has to walk across it.',
+  'quest.sidequest.cellar_owner_mop.step.1.label': 'Speak with the Cellar Owner',
+  'quest.sidequest.cellar_owner_mop.step.2.label': 'Pick up a Mop Head in the Soft Cellar',
+  'quest.sidequest.cellar_owner_mop.step.3.label': 'Clean the Soft Cellar to 50% readiness',
+
+  // 3. Watchman roll call — scout the two Hero\u2019s Wake dungeon floors
+  //    then report once hero-wake arrival flag flips. Exercises: npc → floor
+  //    → floor → flag (heroWakeArrival). Prereq gateUnlocked=true.
+  'quest.sidequest.watchman_roll_call.title':   'Roll Call',
+  'quest.sidequest.watchman_roll_call.hook':    'The watchman wants eyes on what the hero left behind.',
+  'quest.sidequest.watchman_roll_call.summary': 'Walk both levels of the Hero\u2019s Wake, then wait for the hero\u2019s arrival signal. The watchman won\u2019t pay until he knows the floor count and the timeline.',
+  'quest.sidequest.watchman_roll_call.step.1.label': 'Speak with the Watchman',
+  'quest.sidequest.watchman_roll_call.step.2.label': 'Descend to Hero\u2019s Wake B1',
+  'quest.sidequest.watchman_roll_call.step.3.label': 'Descend deeper to Hero\u2019s Wake B2',
+  'quest.sidequest.watchman_roll_call.step.4.label': 'Wait for the hero\u2019s arrival signal',
+
+  // Navigation-hint fallback (Phase 2). Used when QuestChain has no active
+  // quests and `getJournalEntries()` synthesizes a hint from the legacy
+  // floor/gate state machine. Preserves jam-build parity while the real
+  // main-quest spine is still being authored.
+  'quest.nav_hint.title':             'Gleaner Dispatch',
+  'quest.nav_hint.find_keys_home':    'Find work keys in the chest',
+  'quest.nav_hint.enter_promenade':   'Enter The Promenade',
+  'quest.nav_hint.head_home_keys':    'Head home for your keys \u2014 east side of town',
+  'quest.nav_hint.enter_coral_bazaar':'Enter the Coral Bazaar \u2014 find the cellar',
+  'quest.nav_hint.descend_soft_cellar':'Descend to the Soft Cellar',
+  'quest.nav_hint.clear_dungeon':     'Clear the dungeon floor',
+  'quest.nav_hint.report_to_entrance':'Report to the dungeon entrance',
+
   // ── Reputation (Phase 0b stubs) ─────────────────────────────────
   // Concrete per-faction strings land in Phase 2 when ReputationBar
   // wires into the HUD/journal. Tier labels are canonical.
@@ -361,5 +457,31 @@ i18n.register('en', {
   'settings.bgm':       'BGM Volume',
   'settings.master':    'Master Volume',
   'settings.quest_markers':      'Quest markers',
-  'settings.quest_markers_hint': 'Show objective pips on the minimap.'
+  'settings.quest_markers_hint': 'Show objective pips on the minimap.',
+
+  // ── Quest settings subsection (DOC-107 Phase 4) ─────────────────
+  // Owned by menu-faces.js Face 3 → Quest block. Persisted to
+  // localStorage['gleaner_settings_v1'].quest via QuestChain.setUIPrefs.
+  'settings.quest.section_title':       'Quest',
+  // Row 1 — on/off toggle
+  'settings.quest.markers':             'Quest markers',
+  'settings.quest.markers_hint':        'Show the objective diamond on the minimap.',
+  // Row 2 — verbosity cycle
+  'settings.quest.hint_verbosity':      'Hint verbosity',
+  'settings.quest.hint_verbosity_hint': 'Off: no active-quest pips. Subtle: only when stuck 90s. Explicit: always.',
+  'settings.quest.verbosity.off':       'Off',
+  'settings.quest.verbosity.subtle':    'Subtle',
+  'settings.quest.verbosity.explicit':  'Explicit',
+  // Row 3 — waypoint flair cycle
+  'settings.quest.waypoint_flair':      'Waypoint flair',
+  'settings.quest.waypoint_flair_hint': 'Cosmetic style for the minimap objective marker.',
+  'settings.quest.flair.simple':        'Simple',
+  'settings.quest.flair.pulsing':       'Pulsing',
+  'settings.quest.flair.trail':         'Flash trail',
+  // Row 4 — sidequest opt-in cycle
+  'settings.quest.sidequest_optin':     'Sidequest opt-in',
+  'settings.quest.sidequest_hint':      'All: accept every sidequest. Main only: hide side branches. Ask: confirm each.',
+  'settings.quest.optin.all':           'All',
+  'settings.quest.optin.main-only':     'Main only',
+  'settings.quest.optin.ask':           'Ask per quest'
 });

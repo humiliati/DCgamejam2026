@@ -1,0 +1,31 @@
+{
+  "$schema": "./recipe.schema.json",
+  "id": "pressure-wash-catacomb",
+  "title": "Pressure Wash Catacomb",
+  "description": "Winding connected paths that reward careful route planning. The hose drags behind the player, accumulating kinks at every self-crossing — plan your sweep efficiently or run out of pressure.",
+  "biome": "catacomb",
+  "faction": "neutral",
+  "size": { "width": 30, "height": 30 },
+  "strategy": { "primary": "pressure-wash", "weight": 1.0 },
+  "rooms": {
+    "count": [5, 8],
+    "minSize": [4, 4],
+    "maxSize": [7, 7]
+  },
+  "corridors": {
+    "style": "winding",
+    "width": 1,
+    "extraConnections": 0.6
+  },
+  "entities": {
+    "torchDensity": 0.25,
+    "breakableDensity": 0.2,
+    "trapDensity": 0.02,
+    "chestCount": [1, 3],
+    "corpseCount": [2, 4],
+    "cobwebSlots": 0,
+    "enemyBudget": [2, 4]
+  },
+  "doors": { "entry": "auto", "exit": "auto" },
+  "seed": null
+}

@@ -30,6 +30,8 @@ var COMMANDS = Object.assign(
   require('./cli/commands-ingest'),   // Slice C2: bo ingest
   require('./cli/commands-emit'),     // Slice C2: bo emit
   require('./cli/commands-quest'),    // Phase 0b: bo add-quest/place-waypoint/validate-quest
+  require('./cli/commands-world'),    // Phase 5b.4: bo export-world-graph/apply-world-diff
+  require('./cli/commands-procgen'),  // Pass 6: bo procgen/list-recipes
   require('./cli/commands-help')      // Slice C3: bo help [<command>]
 );
 
@@ -48,11 +50,11 @@ COMMANDS['describe'] = function(args, raw) {
 };
 
 // Commands that don't need floor-data loaded (Pass 5a git-*, Pass 5d help).
-var NO_FLOORS = { 'git-snapshot': 1, 'git-diff': 1, 'help': 1 };
+var NO_FLOORS = { 'git-snapshot': 1, 'git-diff': 1, 'help': 1, 'list-recipes': 1 };
 
 function printHelp() {
   process.stdout.write([
-    'blockout-cli — Tier 6 Pass 1+2+3+4+5a+5d (Node, split 0.3)',
+    'blockout-cli — Tier 6 Pass 1+2+3+4+5a+5b.4+5d+6 (Node, split 0.3)',
     'Mutates tools/floor-data.json in place.',
     '',
     'Global flags:',
@@ -75,6 +77,12 @@ function printHelp() {
     '  node tools/blockout-cli.js set-biome    --floor 4.1 --biome guild',
     '  node tools/blockout-cli.js place-entity --floor 4.1 --at 3,3 --kind CHEST --key treasure1',
     '  node tools/blockout-cli.js git-snapshot --message "scaffold 4.1"',
+    '  node tools/blockout-cli.js export-world-graph',
+    '  node tools/blockout-cli.js apply-world-diff --input diff.json',
+    '  node tools/blockout-cli.js apply-world-diff --input diff.json --dry-run',
+    '  node tools/blockout-cli.js procgen --recipe recipes/cobweb-cellar.json --ascii',
+    '  node tools/blockout-cli.js procgen --recipe recipes/cobweb-cellar.json --floor 3.1 --seed 42',
+    '  node tools/blockout-cli.js list-recipes',
     '  node tools/blockout-cli.js help         paint-rect',
     ''
   ].join('\n'));
@@ -147,7 +155,9 @@ var READ_ONLY = {
   // (NOT floor-data.json) and honour --dry-run via S.isDryRun() inside
   // commands-quest.js. From the dispatcher's perspective they leave
   // floor-data.json untouched, so the dry-run envelope shows no diff.
-  'add-quest': 1, 'place-waypoint': 1, 'validate-quest': 1
+  'add-quest': 1, 'place-waypoint': 1, 'validate-quest': 1,
+  'export-world-graph': 1,
+  'list-recipes': 1
 };
 
 function main() {

@@ -164,3 +164,80 @@ The SpriteSheet module already handles frame sequences. For static
 sprites (single image, no animation), we need a simpler loader that
 maps entity IDs to sprite images. See SPRITE_STUB_ROADMAP.md for
 the implementation plan.
+
+---
+
+## Authoring surface (NPC Designer, Identity tab — as of 2026-04-17)
+
+The NPC Designer (`tools/npc-designer.html`, NPC_TOOLING_ROADMAP §4.1
+Phase 1.2) ships two fieldsets on the Identity tab that turn an NPC
+record into a commissioning brief without leaving the tool.
+
+### Emoji Stack fieldset
+
+- **Mode radio** — *Composer (default)* leaves `npc.stack = null` and the
+  runtime generates a seed-based stack via `NpcComposer.compose(seed,
+  role)`. *Pin stack* materialises `npc.stack` as a concrete object the
+  author can hand-tune.
+- **7 slots** — head, torso, legs, plus the three sub-layers (hat,
+  frontWeapon, backWeapon) with scale and behind/offsetX modifiers, plus
+  a death-override corpse glyph. Matches SPRITE_STACK_ROADMAP §3 schema
+  1-for-1 so the runtime consumes the pinned value directly.
+- **Tint hue** — 0–360° slider with a "no tint" checkbox. `null` is
+  distinct from `0` so the runtime can elide the hue-rotate filter.
+
+Pinning the stack is the prerequisite for commissioning — artists need
+an authoritative glyph set to design against, and the runtime needs a
+deterministic anchor that survives seed drift.
+
+### Sprite Commissions fieldset
+
+A 6 × 4 grid (slots × intents) with a frame-count badge in each cell.
+Click a cell to reveal an in-place frame editor below the grid. Each
+row holds:
+
+- **Asset ID** — editable text, auto-suggested as
+  `NPC-<npcId>_<slot>_<intent>_<frame>` (e.g.
+  `NPC-dispatcher_head_talk_00`). This is the key that will appear in
+  `assets/sprites/manifest.js`.
+- **Preview cell** — a file picker (Browse…) reads a local PNG via
+  `FileReader` and shows it inline. The preview is session-scoped
+  only — the browser can't write to `assets/sprites/npcs/`. Authors
+  use this to dry-run a frame sequence before commissioning.
+- **Remove** — drops the frame from the series.
+
+Below the grid: **Manifest Preview** (dumps the computed asset-ID ↔
+path mapping into the Raw Preview panel) and **Download Manifest
+Fragment** (blob download of a JSON fragment — `_meta` + `entries` —
+ready to merge into `assets/sprites/manifest.js`).
+
+### Fallback chain at render time
+
+1. `StaticSprite(assetId)` — if the PNG is loaded in the manifest, use it.
+2. Emoji stack — the pinned or composer-generated stack.
+3. `NpcComposer` default — final safety net.
+
+Empty frame series at any cell silently falls through to the next
+layer, so authoring is incremental: commission just the `head_walk`
+series first, ship, then add `torso_walk` next week.
+
+### Intents — what each series is for
+
+| Intent | Use | Typical frame count |
+|--------|-----|---------------------|
+| locomotion | walk cycle, idle bob | 2–6 |
+| interaction | opening doors, picking items, using stations | 2–4 |
+| dialogue | speaking mouth / head tilt for conversations | 2–4 |
+| combat | attack anticipation, strike, recovery | 3–6 |
+
+An NPC that never fights (a vendor) leaves the combat row empty; the
+Hero's Wake dungeon NPCs fill all four.
+
+### Known limitation
+
+`tools/extract-npcs.js` currently strips `stack` and `sprites` via its
+whitelist `cleanDef()`. That's harmless today because the engine's
+inline `_registerBuiltinPopulations()` doesn't emit them. When Phase 0
+Chapter 5 retires the inline fallback and `data/npcs.json` becomes the
+sole source of truth, cleanDef must preserve both fields — tracked on
+the Ch.5 closeout ticket in NPC_TOOLING_ROADMAP §4.1 Phase 1.2.

@@ -31,7 +31,8 @@ var QuestChain = (function () {
     'state-change':  [],
     'waypoint':      [],
     'completed':     [],
-    'marker-change': []
+    'marker-change': [],
+    'prefs-change':  []
   };
   var _tickCount   = 0;    // monotonic counter for start/update ordering
 
@@ -48,6 +49,45 @@ var QuestChain = (function () {
     findGateDoorPos:     null
   };
 
+  // ── UI preferences (DOC-107 Phase 4) ─────────────────────────────
+  // Player-authored runtime settings for the quest system. Persisted
+  // to localStorage under `gleaner_settings_v1.quest`. Mutations go
+  // exclusively through setUIPrefs() so downstream consumers
+  // (Minimap marker gate, Journal filter, etc.) can react via the
+  // 'prefs-change' event.
+  //
+  //   markers        — on/off master switch for minimap diamond
+  //   hintVerbosity  — 'off' | 'subtle' | 'explicit'
+  //                    off      → never show active-quest markers
+  //                    subtle   → show active-quest markers only when
+  //                               idle ≥ SUBTLE_IDLE_MS (nav-hint always on)
+  //                    explicit → always show active-quest markers
+  //   waypointFlair  — 'simple' | 'pulsing' | 'trail' (cosmetic, Minimap)
+  //   sidequestOptIn — 'all' | 'main-only' | 'ask'
+  //                    all        → accept sidequest injection, show markers
+  //                    main-only  → suppress side-kind markers and journal
+  //                    ask        → per-quest confirmation UI (Phase 5+)
+  var _UI_PREFS_DEFAULTS = Object.freeze({
+    markers:        true,
+    hintVerbosity:  'subtle',
+    waypointFlair:  'pulsing',
+    sidequestOptIn: 'all'
+  });
+  var _UI_PREFS_VALID = Object.freeze({
+    hintVerbosity:  ['off', 'subtle', 'explicit'],
+    waypointFlair:  ['simple', 'pulsing', 'trail'],
+    sidequestOptIn: ['all', 'main-only', 'ask']
+  });
+  var _SETTINGS_KEY    = 'gleaner_settings_v1';
+  var SUBTLE_IDLE_MS   = 90000;
+  var _uiPrefs         = {
+    markers:        _UI_PREFS_DEFAULTS.markers,
+    hintVerbosity:  _UI_PREFS_DEFAULTS.hintVerbosity,
+    waypointFlair:  _UI_PREFS_DEFAULTS.waypointFlair,
+    sidequestOptIn: _UI_PREFS_DEFAULTS.sidequestOptIn
+  };
+  var _lastProgressionTick = (typeof Date !== 'undefined') ? Date.now() : 0;
+
   // Exterior floor chain — used by findProgressionDoorForward.
   // Mirrors quest-waypoint.js:_EXTERIOR_CHAIN. Kept as a local so
   // QuestChain stays authoritative after quest-waypoint is retired.
@@ -63,6 +103,118 @@ var QuestChain = (function () {
         }
       }
     }
+  }
+
+  // ── UI prefs: getters / setters / persistence (Phase 4) ──────────
+  // getUIPrefs() returns a fresh plain copy — callers never see the
+  // internal object.
+  function getUIPrefs() {
+    return {
+      markers:        !!_uiPrefs.markers,
+      hintVerbosity:  String(_uiPrefs.hintVerbosity),
+      waypointFlair:  String(_uiPrefs.waypointFlair),
+      sidequestOptIn: String(_uiPrefs.sidequestOptIn)
+    };
+  }
+
+  function _clampPref(key, value) {
+    if (key === 'markers') return !!value;
+    var valid = _UI_PREFS_VALID[key];
+    if (!valid) return _UI_PREFS_DEFAULTS[key];
+    var s = String(value);
+    return (valid.indexOf(s) >= 0) ? s : _UI_PREFS_DEFAULTS[key];
+  }
+
+  // setUIPrefs(patch) — shallow merge, validated per-key, persisted.
+  // Emits 'prefs-change' with the fresh prefs snapshot so Minimap /
+  // HUD toast suppression can react.
+  function setUIPrefs(patch) {
+    if (!patch || typeof patch !== 'object') return getUIPrefs();
+    var changed = false;
+    if (Object.prototype.hasOwnProperty.call(patch, 'markers')) {
+      var nm = !!patch.markers;
+      if (nm !== _uiPrefs.markers) { _uiPrefs.markers = nm; changed = true; }
+    }
+    var keys = ['hintVerbosity', 'waypointFlair', 'sidequestOptIn'];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (Object.prototype.hasOwnProperty.call(patch, k)) {
+        var nv = _clampPref(k, patch[k]);
+        if (nv !== _uiPrefs[k]) { _uiPrefs[k] = nv; changed = true; }
+      }
+    }
+    if (changed) {
+      _persistUIPrefs();
+      _emit('prefs-change', getUIPrefs());
+    }
+    return getUIPrefs();
+  }
+
+  // Load prefs from localStorage — graceful no-op if storage is
+  // absent (node test harness) or the stored blob is malformed.
+  function loadUIPrefs() {
+    if (typeof localStorage === 'undefined') return getUIPrefs();
+    try {
+      var raw = localStorage.getItem(_SETTINGS_KEY);
+      if (!raw) return getUIPrefs();
+      var blob = JSON.parse(raw);
+      if (!blob || typeof blob !== 'object') return getUIPrefs();
+      var q = blob.quest;
+      if (!q || typeof q !== 'object') return getUIPrefs();
+      if (Object.prototype.hasOwnProperty.call(q, 'markers')) {
+        _uiPrefs.markers = !!q.markers;
+      }
+      var keys = ['hintVerbosity', 'waypointFlair', 'sidequestOptIn'];
+      for (var i = 0; i < keys.length; i++) {
+        if (Object.prototype.hasOwnProperty.call(q, keys[i])) {
+          _uiPrefs[keys[i]] = _clampPref(keys[i], q[keys[i]]);
+        }
+      }
+      _emit('prefs-change', getUIPrefs());
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[QuestChain] loadUIPrefs failed:', e);
+      }
+    }
+    return getUIPrefs();
+  }
+
+  function _persistUIPrefs() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      var raw = localStorage.getItem(_SETTINGS_KEY);
+      var blob = {};
+      if (raw) {
+        try { blob = JSON.parse(raw) || {}; } catch (e) { blob = {}; }
+      }
+      blob.quest = getUIPrefs();
+      localStorage.setItem(_SETTINGS_KEY, JSON.stringify(blob));
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[QuestChain] persistUIPrefs failed:', e);
+      }
+    }
+  }
+
+  // Touch the idle tick — called by _dispatch when any quest advances,
+  // and also by external progression hooks (e.g. step manual advance)
+  // so the Subtle idle gate resets on meaningful player progress.
+  function _touchProgressionTick() {
+    _lastProgressionTick = (typeof Date !== 'undefined') ? Date.now() : 0;
+  }
+
+  // Filter active quest IDs by the current sidequestOptIn setting.
+  // 'main-only' drops kind==='side'; 'all' and 'ask' pass through.
+  function _filterIdsByOptIn(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return ids;
+    if (_uiPrefs.sidequestOptIn !== 'main-only') return ids;
+    if (typeof QuestRegistry === 'undefined' || !QuestRegistry.getQuest) return ids;
+    var out = [];
+    for (var i = 0; i < ids.length; i++) {
+      var def = QuestRegistry.getQuest(ids[i]);
+      if (!def || def.kind !== 'side') out.push(ids[i]);
+    }
+    return out;
   }
 
   // ── Init ─────────────────────────────────────────────────────────
@@ -107,6 +259,8 @@ var QuestChain = (function () {
       startedTick: ++_tickCount,
       flags:       {}
     };
+    // Starting a quest is meaningful progress — reset the Subtle idle gate.
+    _touchProgressionTick();
     _emit('state-change', questId, prev, QuestTypes.STATE.ACTIVE);
     return true;
   }
@@ -116,6 +270,12 @@ var QuestChain = (function () {
   // quest runs out of steps, transition to COMPLETED. Callers that want
   // the Phase 0 "just bump the step" behavior can pass no waypoint —
   // the index increments unconditionally and no predicate is checked.
+  //
+  // Phase 5: predicates may carry `count: N` (integer ≥ 2). The step
+  // advances only after N matching events. Progress is tracked in
+  // `rec.stepProgress[stepIndex]`; intermediate matches emit a
+  // 'waypoint' event with `{ partial: true, progress: k, of: N }` so
+  // the UI can render a sub-counter without the step advancing.
   function advance(questId, waypoint) {
     var rec = _active[questId];
     if (!rec || rec.state !== QuestTypes.STATE.ACTIVE) return false;
@@ -134,6 +294,30 @@ var QuestChain = (function () {
     if (!def || !Array.isArray(def.steps) || rec.stepIndex >= def.steps.length) return false;
     var step = def.steps[rec.stepIndex];
     if (!step || !_matches(step.advanceWhen, waypoint)) return false;
+
+    // Count-gated advance (Phase 5). If the predicate has `count: N`,
+    // accumulate matches in rec.stepProgress and only advance on the
+    // Nth match.
+    var needed = (step.advanceWhen && +step.advanceWhen.count) | 0;
+    if (needed >= 2) {
+      if (!rec.stepProgress) rec.stepProgress = {};
+      var prog = (rec.stepProgress[rec.stepIndex] | 0) + 1;
+      rec.stepProgress[rec.stepIndex] = prog;
+      if (prog < needed) {
+        // Partial progress — emit a partial waypoint so UI can update
+        // the "x / N" counter but do NOT bump the step.
+        _emit('waypoint', questId, {
+          kind:     waypoint.kind,
+          partial:  true,
+          progress: prog,
+          of:       needed,
+          event:    waypoint
+        });
+        return true;
+      }
+      // Clear the progress slot — step is about to advance.
+      delete rec.stepProgress[rec.stepIndex];
+    }
 
     rec.stepIndex += 1;
     _emit('waypoint', questId, waypoint);
@@ -184,20 +368,33 @@ var QuestChain = (function () {
   // object from quests.json). Returns boolean.
   //
   // Predicate shapes map 1:1 to QuestTypes.WAYPOINT_KIND values:
-  //   { kind:'floor',     floorId, x, y, radius? }
-  //   { kind:'item',      itemId }
-  //   { kind:'npc',       npcId, branch? }
-  //   { kind:'flag',      flag, value? }       // value undefined → truthy
-  //   { kind:'readiness', floorId, threshold } // crosses threshold
-  //   { kind:'combat',    archetype }
+  //   { kind:'floor',           floorId, x, y, radius? }
+  //   { kind:'item',            itemId }
+  //   { kind:'npc',             npcId, branch? }
+  //   { kind:'flag',            flag, value? }       // value undefined → truthy
+  //   { kind:'readiness',       floorId, threshold } // crosses threshold
+  //   { kind:'combat',          archetype }
+  //   { kind:'minigame',        kindId, reason?, subTargetId?, floorId? }
+  //   { kind:'reputation-tier', factionId, tier, direction? }
   //
   // `event` is a plain object mirroring the fired event:
-  //   { kind:'floor',     floorId, x, y }       from onFloorArrive
-  //   { kind:'item',      itemId }              from onItemAcquired
-  //   { kind:'npc',       npcId, branch }       from onNpcTalk
-  //   { kind:'flag',      flag, value }         from onFlagChanged
-  //   { kind:'readiness', floorId, score }      from onReadinessChange
-  //   { kind:'combat',    archetype }           from onCombatKill
+  //   { kind:'floor',           floorId, x, y }       from onFloorArrive
+  //   { kind:'item',            itemId }              from onItemAcquired
+  //   { kind:'npc',             npcId, branch }       from onNpcTalk
+  //   { kind:'flag',            flag, value }         from onFlagChanged
+  //   { kind:'readiness',       floorId, score }      from onReadinessChange
+  //   { kind:'combat',          archetype }           from onCombatKill
+  //   { kind:'minigame',        kindId, reason, subTargetId?, floorId?, x?, y? }
+  //                                                   from onMinigameExit
+  //   { kind:'reputation-tier', factionId, fromTier, toTier, tier, direction }
+  //                                                   from onReputationTierCross
+  //
+  // Count semantics (DOC-107 Phase 5): any predicate may carry
+  // `count: N` (integer ≥ 2). When set, `_matches()` still returns true
+  // per-event; `advance()` tracks cumulative matches in
+  // `rec.stepProgress[stepIndex]` and only bumps stepIndex after the Nth
+  // match. This lets a single step declare "wash three pentagram tiles"
+  // without three separate sequential steps.
   function _matches(predicate, event) {
     if (!predicate || !event) return false;
     if (predicate.kind !== event.kind) return false;
@@ -233,6 +430,32 @@ var QuestChain = (function () {
       case 'combat':
         return predicate.archetype === event.archetype;
 
+      case 'minigame':
+        // kindId is required: 'pressure_wash', 'lights_out', 'safe_dial', etc.
+        if (predicate.kindId && predicate.kindId !== event.kindId) return false;
+        // Optional: exit reason ('complete', 'subtarget', 'abort', 'timeout')
+        if (predicate.reason && predicate.reason !== event.reason) return false;
+        // Optional: subtarget identifier (e.g. 'pentagram_tile')
+        if (predicate.subTargetId && predicate.subTargetId !== event.subTargetId) return false;
+        // Optional: restrict to a specific floor
+        if (predicate.floorId && predicate.floorId !== event.floorId) return false;
+        return true;
+
+      case 'reputation-tier':
+        // factionId is required: 'mss', 'pinkerton', 'jesuit', 'bprd'
+        if (!predicate.factionId || predicate.factionId !== event.factionId) return false;
+        // tier is required — exact match on the destination tier id
+        // ('hated'|'unfriendly'|'neutral'|'friendly'|'allied'|'exalted').
+        // We match toTier (the tier the player just entered) so a step
+        // like "reach Friendly with BPRD" fires on the first crossing.
+        if (!predicate.tier || predicate.tier !== event.toTier) return false;
+        // Optional: direction gate. Default 'up' — only fire on upward
+        // tier-crosses so a demotion (e.g. Friendly→Neutral) doesn't
+        // advance a step meant to celebrate reaching Friendly.
+        var dir = predicate.direction || 'up';
+        if (dir !== 'any' && dir !== event.direction) return false;
+        return true;
+
       default:
         return false;
     }
@@ -247,9 +470,13 @@ var QuestChain = (function () {
     for (var i = 0; i < ids.length; i++) {
       if (advance(ids[i], event)) advanced = true;
     }
-    if (advanced && typeof FloorManager !== 'undefined') {
-      var fid = FloorManager.getFloor ? FloorManager.getFloor() : null;
-      if (fid) _emit('marker-change', fid, getCurrentMarker(fid));
+    if (advanced) {
+      // Reset the Subtle idle gate — the player just made progress.
+      _touchProgressionTick();
+      if (typeof FloorManager !== 'undefined') {
+        var fid = FloorManager.getFloor ? FloorManager.getFloor() : null;
+        if (fid) _emit('marker-change', fid, getCurrentMarker(fid));
+      }
     }
     return advanced;
   }
@@ -289,6 +516,63 @@ var QuestChain = (function () {
     return _dispatch({ kind: 'combat', archetype: archetype });
   }
 
+  // Minigame exit fan-out (DOC-107 Phase 5). Called by PickupActions
+  // after any minigame dispatches an exit event. kindId is required
+  // ('pressure_wash', 'lights_out', 'safe_dial', etc.); reason is the
+  // exit cause ('complete', 'subtarget', 'abort', 'timeout'); payload
+  // is free-form but the predicate engine reads subTargetId, floorId,
+  // x, and y when present.
+  //
+  // Subtarget events (reason='subtarget') fire DURING play — a single
+  // minigame session can emit many. Complete events (reason='complete')
+  // fire once at the end. Both route through the same _dispatch path
+  // so a quest step can predicate on either.
+  function onMinigameExit(kindId, reason, payload) {
+    if (typeof kindId !== 'string' || !kindId) return false;
+    var event = {
+      kind:        'minigame',
+      kindId:      kindId,
+      reason:      (typeof reason === 'string' && reason) ? reason : 'complete'
+    };
+    if (payload && typeof payload === 'object') {
+      if (typeof payload.subTargetId === 'string') event.subTargetId = payload.subTargetId;
+      if (typeof payload.floorId     === 'string') event.floorId     = payload.floorId;
+      if (typeof payload.x === 'number') event.x = payload.x | 0;
+      if (typeof payload.y === 'number') event.y = payload.y | 0;
+    }
+    return _dispatch(event);
+  }
+
+  // Reputation tier-cross fan-out (DOC-107 Phase 3). Called by Game
+  // when ReputationBar emits a 'tier-cross' event. factionId is one of
+  // QuestTypes.FACTIONS values; fromTier/toTier are REP_TIERS ids
+  // ('hated'|'unfriendly'|'neutral'|'friendly'|'allied'|'exalted').
+  // The direction ('up'|'down') is derived from the REP_TIERS ordinal
+  // gap so predicates can gate on upward crossings only.
+  function onReputationTierCross(factionId, fromTier, toTier) {
+    if (typeof factionId !== 'string' || !factionId) return false;
+    if (typeof toTier   !== 'string' || !toTier)   return false;
+    // Derive direction by comparing REP_TIERS ordinals. A missing
+    // fromTier (first tier crossing after init) is treated as 'up'.
+    var direction = 'up';
+    if (typeof QuestTypes !== 'undefined' && Array.isArray(QuestTypes.REP_TIERS)) {
+      var fromIdx = -1, toIdx = -1;
+      for (var i = 0; i < QuestTypes.REP_TIERS.length; i++) {
+        if (QuestTypes.REP_TIERS[i].id === fromTier) fromIdx = i;
+        if (QuestTypes.REP_TIERS[i].id === toTier)   toIdx   = i;
+      }
+      if (fromIdx >= 0 && toIdx >= 0 && toIdx < fromIdx) direction = 'down';
+    }
+    return _dispatch({
+      kind:      'reputation-tier',
+      factionId: factionId,
+      fromTier:  fromTier || null,
+      toTier:    toTier,
+      tier:      toTier,
+      direction: direction
+    });
+  }
+
   // ── Marker resolution ────────────────────────────────────────────
   // Returns the {x, y} marker the Minimap should render for `floorId`,
   // or null if no marker applies. Priority:
@@ -301,8 +585,15 @@ var QuestChain = (function () {
   function getCurrentMarker(floorId) {
     if (typeof floorId !== 'string') return null;
 
-    // (1) Active quest step target
-    var ids = listActive();
+    // UI prefs gate (Phase 4):
+    //   markers=false        → master switch; never emit a marker
+    //   hintVerbosity='off'  → suppress ALL markers (player opted out)
+    if (!_uiPrefs.markers) return null;
+    if (_uiPrefs.hintVerbosity === 'off') return null;
+
+    // (1) Active quest step target — gated by Subtle idle window
+    var ids = _filterIdsByOptIn(listActive());
+    var activeMarker = null;
     for (var i = 0; i < ids.length; i++) {
       var rec = _active[ids[i]];
       var def = (typeof QuestRegistry !== 'undefined') ? QuestRegistry.getQuest(ids[i]) : null;
@@ -311,12 +602,30 @@ var QuestChain = (function () {
       if (!step || !step.target) continue;
       var resolved = _resolveStepTarget(step.target);
       if (resolved && resolved.floorId === floorId) {
-        _sticky[floorId] = { x: resolved.x, y: resolved.y };
-        return { x: resolved.x, y: resolved.y };
+        activeMarker = { x: resolved.x, y: resolved.y };
+        break;
       }
     }
 
-    // (2) Navigation hint — legacy state machine
+    if (activeMarker) {
+      // Subtle: only reveal the active-quest marker once the player
+      // has been idle for ≥ SUBTLE_IDLE_MS. Explicit: always reveal.
+      if (_uiPrefs.hintVerbosity === 'subtle') {
+        var idleMs = ((typeof Date !== 'undefined') ? Date.now() : 0) - _lastProgressionTick;
+        if (idleMs < SUBTLE_IDLE_MS) {
+          // Suppress active marker for now — don't fall through to the
+          // pre-quest nav-hint (it'd give misleading guidance). Return
+          // the sticky if one exists for continuity across floor swaps.
+          return _stickyOrNull(floorId);
+        }
+      }
+      _sticky[floorId] = activeMarker;
+      return activeMarker;
+    }
+
+    // (2) Navigation hint — legacy state machine. Always visible under
+    // Subtle (nav-hint carve-out): the pre-quest guidance flow is the
+    // player's only wayfinding before the first quest is authored.
     var hint = _legacyNavigationMarker(floorId);
     if (hint) {
       _sticky[floorId] = { x: hint.x, y: hint.y };
@@ -446,118 +755,13 @@ var QuestChain = (function () {
         }
         return _findCurrentDoorExit() || _stickyOrNull(floorId);
       }
-
-      // Dispatcher done, gate still locked — home-keys flow.
-      // Legacy hardcoded coords; Slice 3 migrates these to named anchors.
-      if (floorId === '1') {
-        var anchor1 = (typeof QuestRegistry !== 'undefined' && QuestRegistry.resolveAnchor)
-          ? QuestRegistry.resolveAnchor('promenade_home_door') : null;
-        if (anchor1 && anchor1.floorId === '1') return { x: anchor1.x, y: anchor1.y };
-        return { x: 22, y: 27 };
-      }
-      if (floorId === '1.6') {
-        var anchor16 = (typeof QuestRegistry !== 'undefined' && QuestRegistry.resolveAnchor)
-          ? QuestRegistry.resolveAnchor('home_work_keys_chest') : null;
-        if (anchor16 && anchor16.floorId === '1.6') return { x: anchor16.x, y: anchor16.y };
-        return { x: 19, y: 3 };
-      }
-      return _findCurrentDoorExit() || _stickyOrNull(floorId);
     }
 
-    // ── Dungeon work cycle (gate unlocked) ─────────────────────────
-    var nextGroup = (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getNextGroup)
-      ? DungeonSchedule.getNextGroup() : null;
-
-    // Hero-reveal club-contract fallback
-    var heroRevealed = (typeof Player !== 'undefined' && Player.hasFlag)
-      ? Player.hasFlag('heroWakeArrival') : false;
-    if (!heroRevealed && typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getSchedule) {
-      var schedList = DungeonSchedule.getSchedule();
-      var clubContract = null;
-      for (var sci = 0; sci < schedList.length; sci++) {
-        if (schedList[sci].groupId === 'club' && !schedList[sci].resolved) {
-          clubContract = schedList[sci];
-          break;
-        }
-      }
-      if (clubContract) {
-        var curDay = (typeof DungeonSchedule !== 'undefined' && DungeonSchedule.getCurrentDay)
-          ? DungeonSchedule.getCurrentDay() : 0;
-        nextGroup = {
-          groupId:    clubContract.groupId,
-          label:      clubContract.label,
-          suit:       clubContract.suit,
-          floorIds:   clubContract.floorIds,
-          target:     clubContract.target,
-          actualDay:  clubContract.actualDay,
-          daysAway:   Math.max(0, clubContract.actualDay - curDay),
-          heroType:   clubContract.heroType,
-          onSchedule: clubContract.onSchedule
-        };
-      }
-    }
-
-    if (!nextGroup || !nextGroup.floorIds || nextGroup.floorIds.length === 0) {
-      return null;
-    }
-
-    var dungeonId  = nextGroup.floorIds[0];
-    var segs       = dungeonId.split('.');
-    var lobbyId    = segs.slice(0, 2).join('.');
-    var exteriorId = segs[0];
-    var target     = (nextGroup.target || 0.6);
-
-    // Inside one of the dungeon floors for this group?
-    var inThisDungeon = false;
-    for (var gi = 0; gi < nextGroup.floorIds.length; gi++) {
-      if (floorId === nextGroup.floorIds[gi]) { inThisDungeon = true; break; }
-    }
-
-    if (inThisDungeon) {
-      var coreScore = (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore)
-        ? ReadinessCalc.getCoreScore(floorId) : 0;
-      var dData = FloorManager.getFloorData ? FloorManager.getFloorData() : null;
-      var stairsUpPos = (dData && dData.doors && dData.doors.stairsUp)
-        ? { x: dData.doors.stairsUp.x, y: dData.doors.stairsUp.y } : null;
-      var stairsDnPos = (dData && dData.doors && dData.doors.stairsDn)
-        ? { x: dData.doors.stairsDn.x, y: dData.doors.stairsDn.y } : null;
-      if (coreScore >= target) {
-        return stairsUpPos || stairsDnPos || _findTruckAnchorOnFloor(floorId) || _stickyOrNull(floorId);
-      }
-      return stairsDnPos || stairsUpPos || _findTruckAnchorOnFloor(floorId) || _stickyOrNull(floorId);
-    }
-
-    if (floorId === lobbyId) {
-      var allFloorsDone = true;
-      if (typeof ReadinessCalc !== 'undefined' && ReadinessCalc.getCoreScore) {
-        for (var fi = 0; fi < nextGroup.floorIds.length; fi++) {
-          if (ReadinessCalc.getCoreScore(nextGroup.floorIds[fi]) < target) {
-            allFloorsDone = false;
-            break;
-          }
-        }
-      }
-      var lobbyData = FloorManager.getFloorData ? FloorManager.getFloorData() : null;
-      var lobbyExit = (lobbyData && lobbyData.doors && lobbyData.doors.doorExit)
-        ? { x: lobbyData.doors.doorExit.x, y: lobbyData.doors.doorExit.y } : null;
-      var lobbyDn = (lobbyData && lobbyData.doors && lobbyData.doors.stairsDn)
-        ? { x: lobbyData.doors.stairsDn.x, y: lobbyData.doors.stairsDn.y } : null;
-      if (allFloorsDone) return lobbyExit || lobbyDn || _stickyOrNull(floorId);
-      return lobbyDn || lobbyExit || _stickyOrNull(floorId);
-    }
-
-    if (floorId === exteriorId) {
-      return _findDoorTo(exteriorId, lobbyId)
-          || _findTruckAnchorOnFloor(floorId)
-          || _stickyOrNull(floorId);
-    }
-
-    if (_floorDepth(floorId) === 1 && floorId !== exteriorId) {
-      return _findDoorTo(floorId, exteriorId)
-          || _findProgressionDoorForward(floorId, exteriorId)
-          || _findTruckAnchorOnFloor(floorId)
-          || _stickyOrNull(floorId);
-    }
+    // ── Gate unlocked (post-authorization) ─────────────────────────
+    // After the gate is open, guide the player toward the next
+    // progression door (exterior → deeper exterior → dungeon entrance).
+    var progressionTarget = _findProgressionDoorForward(floorId, floorId);
+    if (progressionTarget) return progressionTarget;
 
     return _findCurrentDoorExit() || _stickyOrNull(floorId);
   }
@@ -607,6 +811,33 @@ var QuestChain = (function () {
     return out;
   }
 
+  // ── Journal entries (DOC-107 Phase 4) ────────────────────────────
+  // Returns quest records filtered by state for the Journal face.
+  // filter: { active: bool, completed: bool }
+  function getJournalEntries(filter) {
+    filter = filter || {};
+    var out = [];
+    var ids = Object.keys(_active);
+    for (var i = 0; i < ids.length; i++) {
+      var rec = _active[ids[i]];
+      if (!rec) continue;
+      var isActive    = rec.state === QuestTypes.STATE.ACTIVE;
+      var isCompleted = rec.state === QuestTypes.STATE.COMPLETED;
+      if (filter.active    && !isActive)    { if (!filter.completed || !isCompleted) continue; }
+      if (filter.completed && !isCompleted) { if (!filter.active    || !isActive)    continue; }
+      var def = (typeof QuestRegistry !== 'undefined') ? QuestRegistry.getQuest(ids[i]) : null;
+      out.push({
+        id:        ids[i],
+        state:     rec.state,
+        stepIndex: rec.stepIndex,
+        kind:      def ? def.kind : null,
+        label:     def ? (def.label || ids[i]) : ids[i],
+        steps:     def ? (def.steps || []) : []
+      });
+    }
+    return out;
+  }
+
   function summary() {
     return {
       initialized:  _initialized,
@@ -618,27 +849,33 @@ var QuestChain = (function () {
   }
 
   return Object.freeze({
-    init:               init,
-    on:                 on,
-    off:                off,
-    setActive:          setActive,
-    advance:            advance,
-    complete:           complete,
-    fail:               fail,
-    expire:             expire,
-    onItemAcquired:     onItemAcquired,
-    onFlagChanged:      onFlagChanged,
-    onReadinessChange:  onReadinessChange,
-    onFloorArrive:      onFloorArrive,
-    onNpcTalk:          onNpcTalk,
-    onCombatKill:       onCombatKill,
-    getCurrentMarker:   getCurrentMarker,
-    update:             update,
-    getState:           getState,
-    getStepIndex:       getStepIndex,
-    listActive:         listActive,
-    snapshot:           snapshot,
-    summary:            summary,
+    init:                    init,
+    on:                      on,
+    off:                     off,
+    setActive:               setActive,
+    advance:                 advance,
+    complete:                complete,
+    fail:                    fail,
+    expire:                  expire,
+    onItemAcquired:          onItemAcquired,
+    onFlagChanged:           onFlagChanged,
+    onReadinessChange:       onReadinessChange,
+    onFloorArrive:           onFloorArrive,
+    onNpcTalk:               onNpcTalk,
+    onCombatKill:            onCombatKill,
+    onMinigameExit:          onMinigameExit,
+    onReputationTierCross:   onReputationTierCross,
+    getCurrentMarker:        getCurrentMarker,
+    update:                  update,
+    getState:                getState,
+    getStepIndex:            getStepIndex,
+    listActive:              listActive,
+    snapshot:                snapshot,
+    summary:                 summary,
+    getJournalEntries:       getJournalEntries,
+    getUIPrefs:              getUIPrefs,
+    setUIPrefs:              setUIPrefs,
+    loadUIPrefs:             loadUIPrefs,
     get initialized() { return _initialized; }
   });
 })();

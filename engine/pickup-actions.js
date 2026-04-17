@@ -1,9 +1,16 @@
 /**
- * PickupActions — breakable smash + detritus pickup extracted from game.js.
+ * PickupActions — breakable smash + detritus pickup + minigame exit fan-out.
  *
  * Layer 2 — depends on: GameActions, MovementController, FloorManager,
  *           BreakableSpawner, DetritusSprites, WorldItems, Player, HUD,
- *           AudioSystem, Toast, SessionStats, i18n (all typeof-guarded)
+ *           AudioSystem, Toast, SessionStats, i18n, QuestChain (all
+ *           typeof-guarded).
+ *
+ * DOC-107 Phase 5 adds the `onMinigameExit(kindId, reason, payload)`
+ * adapter. Minigame modules (SpraySystem, ClickyMinigame, MinigameExit,
+ * etc.) call this on every subtarget + final exit event; we fan it out
+ * to QuestChain so side/main quests can advance on minigame progress
+ * without the minigame modules importing QuestChain themselves.
  */
 
 var PickupActions = (function() {
@@ -142,8 +149,77 @@ var PickupActions = (function() {
     GameActions.refreshPanels();
   }
 
+  // ── Minigame exit fan-out (DOC-107 Phase 5) ──────────────────────
+  //
+  // Called by minigame modules (SpraySystem, ClickyMinigame, MinigameExit,
+  // TetrisStack, MatchThree, …) when:
+  //   reason='subtarget' — a sub-goal within a minigame was satisfied
+  //                         (e.g. one pentagram tile fully washed)
+  //   reason='complete'  — the minigame ended successfully
+  //   reason='abort'     — the player bailed out early
+  //   reason='timeout'   — a time-limited minigame expired
+  //
+  // kindId is the minigame identifier ('pressure_wash', 'lights_out',
+  // 'safe_dial', 'tetris_stack', 'match_three', 'clicky'). payload is
+  // minigame-specific; the recognized optional keys are:
+  //   subTargetId — string id the quest predicate can match on
+  //   floorId     — the floor the event happened on
+  //   x, y        — tile coords
+  //   anything else — passed through to listeners, ignored by QuestChain
+  //
+  // Fans out to:
+  //   1. QuestChain.onMinigameExit(kindId, reason, payload) — quest advance
+  //   2. Any _listeners registered via onMinigameExit.on(fn) — future-proof
+  //
+  // Safe to call with missing modules (typeof guards) and with any
+  // argument shape — validates kindId as a non-empty string only.
+  var _minigameListeners = [];
+
+  function onMinigameExit(kindId, reason, payload) {
+    if (typeof kindId !== 'string' || !kindId) return false;
+    var r = (typeof reason === 'string' && reason) ? reason : 'complete';
+    var p = (payload && typeof payload === 'object') ? payload : {};
+
+    // Route 1: QuestChain
+    if (typeof QuestChain !== 'undefined' && typeof QuestChain.onMinigameExit === 'function') {
+      try { QuestChain.onMinigameExit(kindId, r, p); }
+      catch (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[PickupActions] QuestChain.onMinigameExit threw:', e);
+        }
+      }
+    }
+
+    // Route 2: registered listeners
+    for (var i = 0; i < _minigameListeners.length; i++) {
+      try { _minigameListeners[i](kindId, r, p); }
+      catch (e2) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[PickupActions] minigame listener threw:', e2);
+        }
+      }
+    }
+    return true;
+  }
+
+  // Expose a tiny listener registry so non-QuestChain consumers (HUD
+  // counters, achievement tracking, minigame analytics) can subscribe
+  // without every minigame importing them directly.
+  onMinigameExit.on = function (fn) {
+    if (typeof fn !== 'function') return false;
+    if (_minigameListeners.indexOf(fn) === -1) _minigameListeners.push(fn);
+    return true;
+  };
+  onMinigameExit.off = function (fn) {
+    var i = _minigameListeners.indexOf(fn);
+    if (i === -1) return false;
+    _minigameListeners.splice(i, 1);
+    return true;
+  };
+
   return Object.freeze({
-    smashBreakable: smashBreakable,
-    collectDetritus: collectDetritus
+    smashBreakable:   smashBreakable,
+    collectDetritus:  collectDetritus,
+    onMinigameExit:   onMinigameExit
   });
 })();

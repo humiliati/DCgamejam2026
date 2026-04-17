@@ -490,3 +490,4 @@ These items must work for a playable DC Jam submission (April 5):
 | §8 Hero NPCs | → CORE_GAME_LOOP §5 (hero cycle) | 3-day hero cycle timing |
 | §9 Interior NPCs | → TUTORIAL_WORLD_ROADMAP §3.1 | Floor registry |
 | §11 Bare Min | → TABLE_OF_CONTENTS_CROSS_ROADMAP Phase A.0 | Delivery schedule |
+| **Authoring tooling** | → **NPC_TOOLING_ROADMAP.md (DOC-110)** | The NPC entity schema documented in §4.2 + dialogue trees in §5 + dispatcher choreography in §7 are all authored through the seven-tool suite (NPC Designer, Bark Workbench, Archetype Studio, Enemy Hydrator, Sprite Studio, Population Planner). Replaces hand-editing of `_registerBuiltinPopulations()`. |
