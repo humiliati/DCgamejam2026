@@ -1489,6 +1489,58 @@
       100% { filter: brightness(1) saturate(1); box-shadow: none; }
     }
 
+    /* ── DOC-109 Phase 4 — Relationships NPC row ───────────────────
+       Portrait glyph + display name + tier label + faction-tinted
+       progress bar. Rendered under the relationships category right
+       alongside faction rows — same track width, same tier labels,
+       same animation vocabulary (reveal / bump / tier-cross) so the
+       list reads as a single ledger of the Gleaner's standing with
+       every named-and-tracked party on the map. */
+    .df-npc-row { padding: 2px 0 4px; position: relative; z-index: 6; }
+    .df-npc-row .df-npc-head {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.85em; letter-spacing: 0.04em;
+      color: var(--phosphor-dim);
+    }
+    .df-npc-row .df-npc-icon {
+      display: inline-block; font-size: 1.05em; line-height: 1;
+      text-shadow: 0 0 4px rgba(255,255,255,0.25);
+      background: rgba(40,44,56,0.55);
+      padding: 0 3px; border-radius: 2px;
+      min-width: 15px; text-align: center;
+    }
+    .df-npc-row .df-npc-name { color: var(--phosphor); font-weight: 500; flex: 1; }
+    .df-npc-row .df-npc-tier { font-size: 0.9em; font-style: italic; opacity: 0.85; }
+    .df-npc-row .df-npc-track {
+      background: rgba(255,255,255,0.08);
+      height: 4px; border-radius: 2px; margin-top: 3px; overflow: hidden;
+    }
+    .df-npc-row .df-npc-fill {
+      height: 100%; border-radius: 2px;
+      transition: width 0.35s ease-out, background 0.2s ease-out;
+    }
+    /* Reveal — first-time emerge when the NPC is registered */
+    .df-npc-reveal { animation: df-npc-reveal 520ms ease-out; }
+    @keyframes df-npc-reveal {
+      0%   { opacity: 0; max-height: 0; transform: translateY(-4px); }
+      60%  { opacity: 1; max-height: 40px; transform: translateY(0); }
+      100% { opacity: 1; max-height: 40px; transform: translateY(0); }
+    }
+    /* Bump — favor delta without a tier change */
+    .df-npc-bump { animation: df-npc-bump 480ms ease-out; }
+    @keyframes df-npc-bump {
+      0%   { transform: scale(1);    text-shadow: none; }
+      35%  { transform: scale(1.05); text-shadow: 0 0 8px currentColor, 0 0 14px rgba(180,220,255,0.45); }
+      100% { transform: scale(1);    text-shadow: none; }
+    }
+    /* Tier-cross — goldenrod flash when the NPC jumps between tiers */
+    .df-npc-tiercross { animation: df-npc-tiercross 720ms ease-out; }
+    @keyframes df-npc-tiercross {
+      0%   { filter: brightness(1) saturate(1); box-shadow: none; }
+      30%  { filter: brightness(1.4) saturate(1.35); box-shadow: 0 0 12px rgba(255,215,0,0.85), inset 0 0 6px rgba(255,215,0,0.55); }
+      100% { filter: brightness(1) saturate(1); box-shadow: none; }
+    }
+
     /* ── DOC-109 Phase 3 — Readiness group row ─────────────────────
        Mirrors the faction row layout so both categories read as a
        matched pair. Suit glyph + biome-tinted label + progress bar

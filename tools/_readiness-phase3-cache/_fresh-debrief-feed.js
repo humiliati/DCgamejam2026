@@ -687,9 +687,6 @@ var DebriefFeed = (function () {
     if (row.kind === 'readiness') {
       return _readinessRow(row.subjectId, row);
     }
-    if (row.kind === 'npc') {
-      return _npcRow(row.subjectId, row);
-    }
     // Unknown kind — emit nothing rather than crashing.
     return '';
   }
@@ -748,25 +745,12 @@ var DebriefFeed = (function () {
 
   // Write a single relationships-category row. Creates the row if it's
   // new, updates favor/tier/animation flags otherwise, and moves the row
-  // to mostRecentId. Kind is 'faction' (Phase 2) or 'npc' (Phase 4).
-  //
-  // DOC-109 Phase 4 — NPC rows carry a `meta` bag persisted on the row
-  // (icon/name/factionId/floor) so the renderer doesn't have to re-query
-  // NpcSystem on every tick. First-write fills all meta fields; later
-  // writes merge non-null keys so the favor-change fast path can omit
-  // meta entirely.
-  //
-  // `data.flair` routes explicit animation flags from the Game-layer
-  // subscribers — the 'tier-cross' ReputationBar event passes
-  // flair.tierCrossed=true even when prevTier===nextTier (defensive for
-  // duplicate emits), and the 'favor-change' handler omits flair so the
-  // row only bumps when favor actually increased.
+  // to mostRecentId. Kind is 'faction' (Phase 2) or 'npc' (Phase 6).
   function _setRelationshipRow(kind, subjectId, data) {
     var cat = _categories.relationships;
     var rowId = _makeRowId(kind, subjectId);
     var existing = cat.rows[rowId];
     var now = (typeof Date !== 'undefined') ? Date.now() : 0;
-    var flair = (data && data.flair) || null;
 
     if (!existing) {
       cat.rows[rowId] = {
@@ -777,15 +761,7 @@ var DebriefFeed = (function () {
         expanded:         true,  // back-compat with getFactionState
         justRevealed:     !!(data && data.justRevealed),
         justBumped:       false,
-        justTierCrossed:  !!(flair && flair.tierCrossed),
-        // Phase 4 — optional meta bag (npc rows use all keys; faction
-        // rows can leave this null and fall through to FACTION_* tables).
-        meta: (data && data.meta) ? {
-          icon:      data.meta.icon      || null,
-          name:      data.meta.name      || null,
-          factionId: data.meta.factionId || null,
-          floor:     data.meta.floor     || null
-        } : null
+        justTierCrossed:  false
       };
       cat.order.push(rowId);
     } else {
@@ -795,17 +771,7 @@ var DebriefFeed = (function () {
       if (data && typeof data.tier === 'string')  existing.tier  = data.tier;
       if (existing.favor > prevFavor) existing.justBumped = true;
       if (existing.tier !== prevTier) existing.justTierCrossed = true;
-      if (flair && flair.tierCrossed) existing.justTierCrossed = true;
       if (data && data.justRevealed)  existing.justRevealed = true;
-      // Merge meta — only non-null keys overwrite. Lets fast-path
-      // favor-change calls pass meta:null without clobbering the icon.
-      if (data && data.meta) {
-        if (!existing.meta) existing.meta = { icon: null, name: null, factionId: null, floor: null };
-        if (data.meta.icon)      existing.meta.icon      = data.meta.icon;
-        if (data.meta.name)      existing.meta.name      = data.meta.name;
-        if (data.meta.factionId) existing.meta.factionId = data.meta.factionId;
-        if (data.meta.floor)     existing.meta.floor     = data.meta.floor;
-      }
     }
 
     cat.mostRecentId   = rowId;
@@ -1000,52 +966,6 @@ var DebriefFeed = (function () {
     '</div>';
   }
 
-  // ── DOC-109 Phase 4 — NPC row renderer ────────────────────────────
-  // Mirrors _factionRow visual language but keyed on per-NPC meta
-  // (portrait glyph + display name + faction tint) instead of the
-  // FACTION_* static tables. Meta is persisted on row.meta by
-  // _setRelationshipRow from the Game-layer favor-change subscriber.
-  //
-  // The tier progress bar reuses _tierProgress() unchanged — NPC
-  // reputation shares the same QuestTypes.REP_TIERS scale as factions.
-  // Faction-tinted portrait + bar give the NPC row an "I belong to X"
-  // visual cue without spelling out the faction name on every line.
-  function _npcRow(npcId, ndata) {
-    var meta      = ndata.meta || {};
-    var name      = meta.name || npcId;
-    var icon      = meta.icon || '\uD83D\uDC64'; // 👤 fallback
-    var factionId = meta.factionId || null;
-    var tint      = (factionId && FACTION_COLORS[factionId]) || '#9fbfd8';
-    var tierId    = ndata.tier || 'neutral';
-    var tierLabel = _i18n('rep.tier.' + tierId, TIER_LABELS[tierId] || tierId);
-    var pct       = Math.round(_tierProgress(ndata.favor || 0, tierId) * 100);
-
-    var classes = 'df-npc-row';
-    if (ndata.justRevealed)    classes += ' df-npc-reveal';
-    if (ndata.justBumped)      classes += ' df-npc-bump';
-    if (ndata.justTierCrossed) classes += ' df-npc-tiercross';
-    ndata.justRevealed    = false;
-    ndata.justBumped      = false;
-    ndata.justTierCrossed = false;
-
-    var rowIdAttr  = ' id="df-npc-row-'  + npcId + '"';
-    var iconIdAttr = ' id="df-npc-icon-' + npcId + '"';
-    var nameIdAttr = ' id="df-npc-name-' + npcId + '"';
-    var tierIdAttr = ' id="df-npc-tier-' + npcId + '"';
-    var fillIdAttr = ' id="df-npc-fill-' + npcId + '"';
-
-    return '<div class="' + classes + '"' + rowIdAttr + ' data-npc-id="' + _escape(npcId) + '">' +
-      '<div class="df-npc-head">' +
-        '<span class="df-npc-icon"' + iconIdAttr + '>' + _escape(icon) + '</span>' +
-        '<span class="df-npc-name"' + nameIdAttr + ' style="color:' + tint + '">' + _escape(name) + '</span>' +
-        '<span class="df-npc-tier"' + tierIdAttr + '>' + _escape(tierLabel) + '</span>' +
-      '</div>' +
-      '<div class="df-npc-track">' +
-        '<div class="df-npc-fill"' + fillIdAttr + ' style="width:' + pct + '%;background:' + tint + '"></div>' +
-      '</div>' +
-    '</div>';
-  }
-
   // Public — expand a faction row in the strip. Triggers reveal
   // animation on next render. opts.animate defaults to true.
   //
@@ -1119,85 +1039,6 @@ var DebriefFeed = (function () {
     var r = cat.rows[rowId];
     if (!r) return null;
     return { favor: r.favor, tier: r.tier, expanded: !!r.expanded };
-  }
-
-  // ── DOC-109 Phase 4 — Relationship unified API (faction + NPC) ──
-
-  // Public — push new favor + tier for any relationship subject
-  // (kind='faction' or kind='npc'). This is the canonical entry point
-  // for the Game-layer ReputationBar event subscribers:
-  //
-  //   ReputationBar.on('favor-change', (kind, id, prev, next) => {
-  //     DebriefFeed.updateRelationship(kind, id, next, tierForFavor(next), meta);
-  //   });
-  //   ReputationBar.on('tier-cross', (kind, id, prevTier, nextTier) => {
-  //     DebriefFeed.updateRelationship(kind, id, favor, nextTier, {...meta, tierCrossed: true});
-  //   });
-  //
-  // `meta` is optional. For 'npc' kind, first-call meta should include
-  // {icon, name, factionId, floor} so the row renders correctly; later
-  // calls can omit meta (it's preserved row-side). If meta.tierCrossed
-  // is truthy, the row's tier-cross animation flag fires even if the
-  // tier id didn't change (defensive for the tier-cross event path).
-  //
-  // Does NOT auto-expand the relationships category — the dispatcher
-  // cinematic migration (Phase 4 step 5) calls revealCategory+expandCategory
-  // once on the first BPRD encounter. Subsequent updates refresh the row
-  // in place; the category stays whatever state the player chose.
-  //
-  // Returns the row record for harness/test convenience, or null if
-  // (kind, subjectId) is invalid.
-  function updateRelationship(kind, subjectId, favor, tier, meta) {
-    if (kind !== 'faction' && kind !== 'npc') return null;
-    if (typeof subjectId !== 'string' || !subjectId) return null;
-
-    var data = {
-      favor: (typeof favor === 'number') ? favor : 0,
-      tier:  tier || 'neutral'
-    };
-    if (meta) {
-      // tierCrossed is a flair flag, not persistent meta — strip it out
-      // into data.flair so _setRelationshipRow routes it correctly and
-      // the row's meta bag stays clean.
-      var metaCopy = {
-        icon:      meta.icon      || null,
-        name:      meta.name      || null,
-        factionId: meta.factionId || null,
-        floor:     meta.floor     || null
-      };
-      // Only attach meta if at least one field is populated — faction
-      // rows pass meta purely for the tierCrossed flair, and we don't
-      // want to wipe FACTION_* fallback rendering with all-null meta.
-      if (metaCopy.icon || metaCopy.name || metaCopy.factionId || metaCopy.floor) {
-        data.meta = metaCopy;
-      }
-      if (meta.tierCrossed) data.flair = { tierCrossed: true };
-    }
-    var row = _setRelationshipRow(kind, subjectId, data);
-    if (_visible) render();
-    return row;
-  }
-
-  // Public — read-only snapshot of a relationship row. Mirrors
-  // getFactionState's shape but kind-generic, so the Phase 4 harness
-  // can probe 'npc' rows the same way Phase 2 probes 'faction' rows.
-  function getRelationshipState(kind, subjectId) {
-    var cat = _categories.relationships;
-    var rowId = _makeRowId(kind, subjectId);
-    var r = cat.rows[rowId];
-    if (!r) return null;
-    return {
-      kind:     r.kind,
-      favor:    r.favor,
-      tier:     r.tier,
-      expanded: !!r.expanded,
-      meta:     r.meta ? {
-        icon:      r.meta.icon,
-        name:      r.meta.name,
-        factionId: r.meta.factionId,
-        floor:     r.meta.floor
-      } : null
-    };
   }
 
   // ── DOC-109 Phase 3 — readiness public API ─────────────────────
@@ -1475,10 +1316,6 @@ var DebriefFeed = (function () {
     collapseFaction: collapseFaction,
     updateFaction:   updateFaction,
     getFactionState: getFactionState,
-
-    // DOC-109 Phase 4 — Unified relationship API (faction + NPC)
-    updateRelationship:   updateRelationship,
-    getRelationshipState: getRelationshipState,
 
     // DOC-109 Phase 2 — Category wrapper
     revealCategory:   revealCategory,

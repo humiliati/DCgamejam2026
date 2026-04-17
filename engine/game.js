@@ -257,7 +257,22 @@ var Game = (function () {
       DispatcherChoreography.init({
         onPickupWorkKeys: _onPickupWorkKeys,
         updateQuestTarget: _updateQuestTarget,
-        changeState: function (state) { _changeState(state === 'GAME_OVER' ? S.GAME_OVER : S.GAME_OVER); }
+        changeState: function (state) { _changeState(state === 'GAME_OVER' ? S.GAME_OVER : S.GAME_OVER); },
+        // DOC-109 Phase 4: on the *first* BPRD dispatcher debrief,
+        // reveal the relationships category in the debrief feed and
+        // seed BPRD's faction favor to the "friendly" band. Re-talks
+        // (firstTime === false) are no-ops — the sticky reveal gate
+        // in DebriefFeed._categories keeps the section open across
+        // pause/resume cycles once it has been revealed.
+        onComplete: function (firstTime) {
+          if (!firstTime) return;
+          if (typeof DebriefFeed !== 'undefined' && DebriefFeed.revealCategory) {
+            DebriefFeed.revealCategory('relationships');
+          }
+          if (typeof ReputationBar !== 'undefined' && ReputationBar.addSubjectFavor) {
+            ReputationBar.addSubjectFavor('faction', 'bprd', 100);
+          }
+        }
       });
     }
     // DOC-107 Phase 1: QuestWaypoint.init(...) is now a no-op shim —
@@ -1390,6 +1405,51 @@ var Game = (function () {
       }
     }
     if (typeof ReputationBar !== 'undefined') ReputationBar.init();
+
+    // ── DOC-109 Phase 4: ReputationBar → DebriefFeed fan-out ──
+    // Subscribe to the canonical (kind, id, prev, next) subject-kind
+    // events and forward every favor bump into the relationships
+    // category. tier-cross is the *animation* signal — it always
+    // follows a favor-change for the same (kind, id), so we route the
+    // tier-crossed flair via flair.tierCrossed and let updateRelationship
+    // coalesce the two events into a single row render.
+    //
+    // NPC meta (portrait glyph + display name + factionId for tint) is
+    // resolved lazily via NpcSystem.getNpcMeta(id) — the row renderer
+    // persists the meta bag on the first call, so subsequent
+    // favor-change events can omit meta without clobbering state.
+    if (typeof ReputationBar !== 'undefined' &&
+        typeof DebriefFeed    !== 'undefined' &&
+        typeof QuestTypes     !== 'undefined') {
+      var _resolveNpcMeta = function (id) {
+        if (typeof NpcSystem === 'undefined' || !NpcSystem.getNpcMeta) return null;
+        var m = NpcSystem.getNpcMeta(id);
+        if (!m) return null;
+        return {
+          icon:      m.emoji || '\uD83D\uDC64',
+          name:      m.name  || id,
+          factionId: m.factionId || null,
+          floor:     m.floorId || null
+        };
+      };
+      ReputationBar.on('favor-change', function (kind, id, prev, next) {
+        var tierInfo = QuestTypes.tierForFavor(next);
+        var tierId   = tierInfo ? tierInfo.id : 'neutral';
+        var meta = (kind === 'npc') ? _resolveNpcMeta(id) : null;
+        DebriefFeed.updateRelationship(kind, id, next, tierId, meta);
+      });
+      ReputationBar.on('tier-cross', function (kind, id, prevTier, nextTier) {
+        var favor = ReputationBar.getSubjectFavor(kind, id);
+        var meta = (kind === 'npc') ? _resolveNpcMeta(id) : null;
+        // updateRelationship reads meta.tierCrossed at top level and
+        // forwards it as data.flair.tierCrossed into _setRelationshipRow.
+        // We pass it on meta (not wrapped in a `flair` object) so the
+        // splitter at updateRelationship can route it correctly.
+        var payload = meta ? Object.assign({}, meta, { tierCrossed: true })
+                           : { tierCrossed: true };
+        DebriefFeed.updateRelationship(kind, id, favor, nextTier, payload);
+      });
+    }
 
     MouseLook.init(_canvas);
     if (typeof ViewportRing !== 'undefined') ViewportRing.init();

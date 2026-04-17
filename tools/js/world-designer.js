@@ -60,7 +60,8 @@
     selected: null,
     jsp: null,
     biomeMap: null,   // M3: biome-map.json data (keyed by biome name)
-    tileSchema: null  // M3: tile-schema.json data (keyed by tile id string)
+    tileSchema: null, // M3: tile-schema.json data (keyed by tile id string)
+    questMap: {}      // DOC-113: floorId → [{questId, kind, timerMs, heroArchetype}]
   };
 
   function $(id) { return document.getElementById(id); }
@@ -122,6 +123,47 @@
       .catch(function(e) {
         console.warn('[world-designer] tile-schema.json load failed:', e);
         state.tileSchema = {};
+      });
+  }
+
+  // ── DOC-113: quest data loader (sprint annotations) ─────────
+  function loadQuestData() {
+    return fetch('../data/quests.json', { cache: 'no-store' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(j) {
+        var quests = (j && j.quests) ? j.quests : (Array.isArray(j) ? j : []);
+        state.questMap = {};
+        quests.forEach(function(q) {
+          if (!q.steps || !Array.isArray(q.steps)) return;
+          var floors = {};
+          q.steps.forEach(function(s) {
+            var aw = s.advanceWhen || {};
+            var tgt = s.target || {};
+            var fids = [];
+            if (aw.floorId) fids.push(aw.floorId);
+            if (tgt.floorId) fids.push(tgt.floorId);
+            fids.forEach(function(fid) {
+              if (!floors[fid]) floors[fid] = true;
+              if (!state.questMap[fid]) state.questMap[fid] = [];
+              // Avoid duplicating same quest on same floor
+              var exists = state.questMap[fid].some(function(e) { return e.questId === q.id; });
+              if (!exists) {
+                state.questMap[fid].push({
+                  questId: q.id,
+                  kind: s.kind || q.kind || 'side',
+                  timerMs: aw.timerMs || null,
+                  heroArchetype: (aw.timerMs && q.id) ? 'seeker' : null,
+                  isFetch: s.kind === 'fetch'
+                });
+              }
+            });
+          });
+        });
+        console.log('[world-designer] quest-map built: ' + Object.keys(state.questMap).length + ' floors with quests');
+      })
+      .catch(function(e) {
+        console.warn('[world-designer] quests.json load failed:', e);
+        state.questMap = {};
       });
   }
 
@@ -467,13 +509,23 @@
     if (entities > 0) parts.push(entities + ' ent');
     if (rooms > 0) parts.push(rooms + ' rm');
     if (doors > 0) parts.push(doors + ' dr');
+    // DOC-113: sprint quest badge
+    var quests = state.questMap[floor.floorId] || [];
+    var sprintQ = quests.filter(function(q) { return q.isFetch; });
+    if (sprintQ.length > 0) {
+      var timerSec = sprintQ[0].timerMs ? Math.round(sprintQ[0].timerMs / 1000) + 's' : '';
+      parts.push('<span style="color:#f84;">\u23f1 sprint' + (timerSec ? ' ' + timerSec : '') + '</span>');
+    } else if (quests.length > 0) {
+      parts.push('<span style="color:#8cf;">\u2691 ' + quests.length + 'q</span>');
+    }
     return parts.length ? parts.join(' · ') : '';
   }
 
   function makeNode(id, floor, pos) {
     var d = depthOf(id);
     var el = document.createElement('div');
-    el.className = 'dg-node depth-' + Math.min(d, 3);
+    var sprintClass = (state.questMap[id] && state.questMap[id].some(function(q) { return q.isFetch; })) ? ' dg-node-sprint' : '';
+    el.className = 'dg-node depth-' + Math.min(d, 3) + sprintClass;
     el.id = 'dg-node-' + id.replace(/\./g, '_');
     el.style.left = pos.x + 'px';
     el.style.top  = pos.y + 'px';
@@ -721,6 +773,24 @@
   }
 
   // Pass 5b.2: render validation issues for a floor in the inspector
+  // ── DOC-113: Quest annotation section for committed floor inspector ──
+  function _buildQuestSection(floorId) {
+    var quests = state.questMap[floorId];
+    if (!quests || !quests.length) return '';
+    var html = '<h3 style="margin-top:14px; color:#f84;">Quests (' + quests.length + ')</h3>';
+    quests.forEach(function(q) {
+      var kindBadge = q.isFetch
+        ? '<span style="color:#f84;font-weight:bold;">\u23f1 SPRINT</span>'
+        : '<span style="color:#8cf;">\u2691 ' + q.kind + '</span>';
+      html += '<div class="door-row">' + kindBadge + ' ' + q.questId;
+      if (q.timerMs) {
+        html += ' <span style="color:#fe8;">(' + Math.round(q.timerMs / 1000) + 's timer)</span>';
+      }
+      html += '</div>';
+    });
+    return html;
+  }
+
   function _buildValidationSection(floorId) {
     var group = _validationIssues[floorId];
     if (!group || !group.issues || !group.issues.length) return '';
@@ -927,6 +997,7 @@
       '<h3 style="margin-top:14px;">Doors (' + Object.keys(dt).length + ')</h3>' +
       dtRows +
       (kids.length ? '<h3 style="margin-top:14px;">Proc-gen slots (' + kids.length + ')</h3>' + kidRows : '') +
+      _buildQuestSection(id) +
       _buildValidationSection(id);
     Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {
       a.addEventListener('click', function() {
@@ -1975,7 +2046,7 @@
   function wire() {
     $('btn-reload').addEventListener('click', function() {
       setStatus('reloading…');
-      Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
+      Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema(), loadQuestData()])
         .then(function() {
           populateBiomeSelect();
           rebuild(false);
@@ -2110,7 +2181,7 @@
       var btn = $('btn-validate');
       if (btn) btn.style.opacity = '0.4';
     }
-    Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema()])
+    Promise.all([loadData(), loadLayout(), loadBiomeMap(), loadTileSchema(), loadQuestData()])
       .then(function() {
         populateBiomeSelect();
         rebuild(false);

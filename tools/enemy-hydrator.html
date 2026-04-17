@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Gleaner — Enemy Hydrator</title>
+
+  <!-- ============================================================
+       Enemy Hydrator — DOC-110 Phase 5 (P5) MVP — Vertical Slice
+       ============================================================
+       Combat tuning surface for every row in data/enemies.json.
+
+       Vertical-slice scope (2026-04-17):
+         - Sidebar ................ full CRUD-lite (filter + select)
+         - Stats tab .............. full CRUD (sliders + selects)
+         - DPS calc + tier-band ... live, red-if-out-of-band
+         - Balance matrix ......... HP × DPS scatter (bottom panel)
+         - Export ................. download modified enemies.json
+         - Deck Composer tab ...... STUB (§4.5 — Phase 5.2)
+         - Intent Curve tab ....... STUB (§4.5 — Phase 5.3)
+         - Loot tab ............... STUB (§4.5 — Phase 5.4)
+         - Reanim Behavior tab .... STUB (§4.5 — Phase 5.5)
+
+       Conventions (match npc-designer.html):
+         - Vanilla JS, no build, no CDN.
+         - Palette mirrors world-designer / npc-designer.
+         - <script src="../data/enemies.js"> sidecar — no sync XHR.
+         - Dirty tracking + beforeunload guard.
+       ============================================================ -->
+
+  <style>
+    /* ─── Palette (npc-designer parity) ─── */
+    :root {
+      --bg: #1a1d22;
+      --bg-header: #0f1115;
+      --bg-side: #15181d;
+      --bg-panel: #20232a;
+      --bg-input: #0f1115;
+      --accent: #8ad;
+      --accent-dim: #789;
+      --text: #e6e6e6;
+      --text-dim: #9ab;
+      --text-em: #cfe;
+      --muted: #678;
+      --border: #333;
+      --border-mid: #456;
+      --divider: #2a2e33;
+      --good: #9c6;
+      --warn: #fc8;
+      --err:  #f88;
+      --btn-bg: #2a3a4a;
+      --btn-bg-hover: #345;
+      --btn-primary-bg: #3a2d1a;
+      --btn-primary-fg: #fc8;
+      --btn-primary-border: #764;
+
+      /* Suit colors (match SynergyEngine / CardFan) */
+      --suit-spade:    #bcf;
+      --suit-club:     #cfc;
+      --suit-diamond:  #fd8;
+      --suit-heart:    #f9a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "Courier New", monospace;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    .eh-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .eh-header h1 {
+      margin: 0; font-size: 15px; letter-spacing: 1px; color: var(--accent);
+    }
+    .eh-header .sub { color: var(--accent-dim); font-size: 12px; }
+    .eh-header .spacer { flex: 1; }
+    .eh-header button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 5px 12px; cursor: pointer;
+      font-family: inherit; font-size: 12px; border-radius: 3px;
+    }
+    .eh-header button:hover:not(:disabled) { background: var(--btn-bg-hover); }
+    .eh-header button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .eh-header button.primary {
+      background: var(--btn-primary-bg);
+      border-color: var(--btn-primary-border);
+      color: var(--btn-primary-fg);
+    }
+    .eh-header .status { font-size: 11px; color: var(--good); min-width: 160px; text-align: right; }
+    .eh-header .status.dirty { color: var(--warn); }
+    .eh-header .status.err   { color: var(--err); }
+
+    /* ─── Main layout ─── */
+    .eh-main {
+      display: flex;
+      flex: 1;
+      min-height: 0;   /* so flex children can scroll */
+    }
+
+    /* ─── Sidebar ─── */
+    .eh-sidebar {
+      width: 300px;
+      background: var(--bg-side);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
+    .eh-filters {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px;
+      border-bottom: 1px solid var(--divider);
+    }
+    .eh-filters input, .eh-filters select {
+      background: var(--bg-input); color: var(--text);
+      border: 1px solid var(--border-mid);
+      padding: 4px 6px; font-family: inherit; font-size: 12px; border-radius: 2px;
+    }
+    .eh-filters .row { display: flex; gap: 6px; }
+    .eh-filters .row > * { flex: 1; min-width: 0; }
+    .eh-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .eh-list .banner {
+      color: var(--muted);
+      font-size: 10px;
+      padding: 8px 6px 2px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border-top: 1px solid var(--divider);
+    }
+    .eh-list .banner:first-child { border-top: 0; }
+    .eh-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 2px;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .eh-row:hover { background: var(--bg-panel); }
+    .eh-row.active { background: var(--btn-bg); color: var(--text-em); }
+    .eh-row .id { color: var(--muted); font-size: 10px; flex-shrink: 0; width: 50px; }
+    .eh-row .emoji { width: 18px; text-align: center; flex-shrink: 0; }
+    .eh-row .name  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .eh-row .tier  { font-size: 9px; color: var(--text-dim); padding: 1px 5px; border-radius: 2px; background: rgba(255,255,255,0.05); flex-shrink: 0; }
+    .eh-row .tier.elite    { color: var(--warn); }
+    .eh-row .tier.boss     { color: var(--err); }
+    .eh-row .tier.standard { color: var(--text-dim); }
+    .eh-row .suit-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .eh-row .suit-dot.spade    { background: var(--suit-spade); }
+    .eh-row .suit-dot.club     { background: var(--suit-club); }
+    .eh-row .suit-dot.diamond  { background: var(--suit-diamond); }
+    .eh-row .suit-dot.heart    { background: var(--suit-heart); }
+    .eh-row .oob-flag { color: var(--err); font-size: 10px; flex-shrink: 0; }
+
+    /* ─── Editor area ─── */
+    .eh-editor {
+      flex: 1;
+      display: flex; flex-direction: column;
+      min-width: 0;
+    }
+    .eh-placeholder {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 14px;
+      text-align: center; padding: 40px;
+    }
+    .eh-tabs {
+      display: flex; gap: 2px;
+      padding: 8px 12px 0;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--divider);
+      flex-shrink: 0;
+    }
+    .eh-tab {
+      padding: 6px 14px;
+      cursor: pointer;
+      color: var(--text-dim);
+      background: transparent;
+      border: 1px solid transparent;
+      border-bottom: 0;
+      border-radius: 3px 3px 0 0;
+      font-size: 12px;
+      user-select: none;
+    }
+    .eh-tab:hover { color: var(--text-em); }
+    .eh-tab.active {
+      background: var(--bg-panel);
+      color: var(--text-em);
+      border-color: var(--border-mid);
+    }
+    .eh-tab.stub { color: var(--muted); font-style: italic; }
+    .eh-tab.stub::after { content: ' (wip)'; font-size: 10px; opacity: 0.6; }
+
+    .eh-tab-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      background: var(--bg-panel);
+      display: none;
+    }
+    .eh-tab-body.active { display: block; }
+    .eh-tab-body.stub   {
+      color: var(--muted); text-align: center;
+      padding: 60px 20px;
+    }
+    .eh-tab-body.stub h3 { color: var(--text-dim); margin-bottom: 8px; }
+
+    /* ─── Stats editor ─── */
+    .eh-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 24px;
+    }
+    .eh-field {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .eh-field label {
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .eh-field input[type=text],
+    .eh-field input[type=number],
+    .eh-field select,
+    .eh-field textarea {
+      background: var(--bg-input); color: var(--text);
+      border: 1px solid var(--border-mid);
+      padding: 4px 6px; font-family: inherit; font-size: 12px; border-radius: 2px;
+    }
+    .eh-field textarea { resize: vertical; min-height: 44px; }
+    .eh-field.wide { grid-column: span 2; }
+
+    .eh-slider-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .eh-slider-row input[type=range] { flex: 1; }
+    .eh-slider-row .val {
+      color: var(--text-em); font-weight: bold;
+      font-size: 13px; min-width: 28px; text-align: right;
+    }
+
+    .eh-flags {
+      display: flex; gap: 16px;
+      padding: 8px 0;
+    }
+    .eh-flags label {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* ─── DPS panel ─── */
+    .eh-dps-panel {
+      grid-column: span 2;
+      background: var(--bg-header);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .eh-dps-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .eh-dps-row .label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; min-width: 92px; }
+    .eh-dps-row .val   { color: var(--text-em); font-weight: bold; font-size: 16px; min-width: 50px; }
+    .eh-dps-row .band  {
+      padding: 3px 8px; border-radius: 3px;
+      font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .eh-dps-row .band.ok    { background: rgba(153,204,102,0.15); color: var(--good); border: 1px solid rgba(153,204,102,0.35); }
+    .eh-dps-row .band.warn  { background: rgba(255,204,136,0.15); color: var(--warn); border: 1px solid rgba(255,204,136,0.35); }
+    .eh-dps-row .band.err   { background: rgba(255,136,136,0.15); color: var(--err);  border: 1px solid rgba(255,136,136,0.35); }
+    .eh-dps-row .band.na    { background: rgba(150,150,150,0.10); color: var(--muted); border: 1px solid var(--border); }
+    .eh-dps-bar {
+      height: 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+    .eh-dps-bar .fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); }
+    .eh-dps-bar .band-marker {
+      position: absolute; top: -2px; bottom: -2px;
+      border-left: 1px dashed var(--warn);
+      pointer-events: none;
+    }
+    .eh-dps-hint { color: var(--muted); font-size: 10px; }
+
+    /* ─── Balance matrix ─── */
+    .eh-matrix {
+      flex-shrink: 0;
+      height: 220px;
+      background: var(--bg-header);
+      border-top: 1px solid var(--border);
+      display: flex;
+    }
+    .eh-matrix .ctrls {
+      width: 160px;
+      padding: 10px;
+      border-right: 1px solid var(--divider);
+      display: flex; flex-direction: column; gap: 8px;
+      font-size: 11px;
+    }
+    .eh-matrix .ctrls h4 {
+      margin: 0 0 4px 0;
+      font-size: 11px; color: var(--accent-dim); letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .eh-matrix .ctrls label {
+      color: var(--text-dim); display: flex; flex-direction: column; gap: 2px;
+    }
+    .eh-matrix .ctrls select {
+      background: var(--bg-input); color: var(--text);
+      border: 1px solid var(--border-mid);
+      padding: 3px; font-family: inherit; font-size: 11px; border-radius: 2px;
+    }
+    .eh-matrix .plot {
+      flex: 1;
+      position: relative;
+    }
+    .eh-matrix canvas {
+      display: block;
+      width: 100%; height: 100%;
+    }
+    .eh-matrix .legend {
+      position: absolute; top: 8px; right: 12px;
+      display: flex; gap: 10px;
+      font-size: 10px; color: var(--text-dim);
+    }
+    .eh-matrix .legend span::before {
+      content: '●';
+      margin-right: 3px;
+    }
+    .eh-matrix .legend .standard::before { color: var(--accent-dim); }
+    .eh-matrix .legend .elite::before    { color: var(--warn); }
+    .eh-matrix .legend .boss::before     { color: var(--err); }
+    .eh-matrix .legend .oob::before      { color: var(--err); }
+
+    /* ─── Toast ─── */
+    .eh-toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-header);
+      border: 1px solid var(--border-mid);
+      padding: 8px 16px;
+      font-size: 12px;
+      border-radius: 3px;
+      z-index: 100;
+      color: var(--text-em);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .eh-toast.show { opacity: 1; }
+    .eh-toast.err  { border-color: var(--err); color: var(--err); }
+    .eh-toast.ok   { border-color: var(--good); color: var(--good); }
+  </style>
+</head>
+<body>
+  <header class="eh-header">
+    <h1>ENEMY HYDRATOR</h1>
+    <span class="sub">DOC-110 P5 — combat tuning surface</span>
+    <span class="spacer"></span>
+    <button id="btn-export"  title="Download modified enemies.json">Export JSON</button>
+    <button id="btn-copy"    title="Copy JSON to clipboard">Copy JSON</button>
+    <button id="btn-revert"  disabled title="Discard all unsaved edits">Revert</button>
+    <span id="status" class="status">Loading…</span>
+  </header>
+
+  <main class="eh-main">
+    <!-- Sidebar -->
+    <aside class="eh-sidebar">
+      <div class="eh-filters">
+        <input type="search" id="flt-search" placeholder="Search by name or id…" />
+        <div class="row">
+          <select id="flt-tier">
+            <option value="">(any tier)</option>
+            <option value="standard">standard</option>
+            <option value="elite">elite</option>
+            <option value="boss">boss</option>
+          </select>
+          <select id="flt-suit">
+            <option value="">(any suit)</option>
+            <option value="spade">♠ spade</option>
+            <option value="club">♣ club</option>
+            <option value="diamond">♦ diamond</option>
+            <option value="heart">♥ heart</option>
+          </select>
+        </div>
+        <div class="row">
+          <select id="flt-loot">
+            <option value="">(any loot)</option>
+          </select>
+          <select id="flt-biome">
+            <option value="">(any biome)</option>
+          </select>
+        </div>
+        <label style="color: var(--text-dim); font-size: 11px; display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="flt-oob" /> Only out-of-band
+        </label>
+      </div>
+      <div id="sidebar-list" class="eh-list"></div>
+    </aside>
+
+    <!-- Editor -->
+    <section class="eh-editor">
+      <div id="placeholder" class="eh-placeholder">
+        Select an enemy from the sidebar to tune its stats.
+        <br/><br/>
+        <span style="font-size: 11px; color: var(--muted);">DOC-110 P5 — Vertical slice: Stats + DPS + tier-band + balance matrix.<br/>Deck Composer, Intent Curve, Loot, and Reanim Behavior tabs ship next.</span>
+      </div>
+
+      <div id="tabs" class="eh-tabs" style="display:none;">
+        <div class="eh-tab active" data-tab="stats">Stats</div>
+        <div class="eh-tab stub" data-tab="deck">Deck</div>
+        <div class="eh-tab stub" data-tab="intent">Intent Curve</div>
+        <div class="eh-tab stub" data-tab="loot">Loot</div>
+        <div class="eh-tab stub" data-tab="reanim">Reanim</div>
+      </div>
+
+      <!-- Stats tab -->
+      <div id="tab-stats" class="eh-tab-body active" style="display:none;">
+        <div class="eh-stats-grid">
+          <div class="eh-field">
+            <label>ID</label>
+            <input type="text" id="f-id" readonly style="opacity:0.7;" />
+          </div>
+          <div class="eh-field">
+            <label>Name</label>
+            <input type="text" id="f-name" />
+          </div>
+
+          <div class="eh-field">
+            <label>Emoji</label>
+            <input type="text" id="f-emoji" maxlength="8" />
+          </div>
+          <div class="eh-field">
+            <label>Tier</label>
+            <select id="f-tier">
+              <option value="standard">standard (2–4 DPS band)</option>
+              <option value="elite">elite (4–7 DPS band)</option>
+              <option value="boss">boss (7–12 DPS band)</option>
+            </select>
+          </div>
+
+          <div class="eh-field">
+            <label>Suit (RPS)</label>
+            <select id="f-suit">
+              <option value="spade">♠ spade (earth)</option>
+              <option value="club">♣ club (wood)</option>
+              <option value="diamond">♦ diamond (metal)</option>
+              <option value="heart">♥ heart (flesh)</option>
+            </select>
+          </div>
+          <div class="eh-field">
+            <label>Loot Profile</label>
+            <select id="f-loot">
+              <option value="">(none)</option>
+              <option value="organic">organic</option>
+              <option value="undead">undead</option>
+              <option value="construct">construct</option>
+              <option value="marine">marine</option>
+              <option value="arcane">arcane</option>
+              <option value="boss">boss</option>
+            </select>
+          </div>
+
+          <div class="eh-field wide">
+            <label>Biomes <span style="color: var(--muted); text-transform: none; font-size: 10px;">— comma-separated list (cellar, wake, promenade, …)</span></label>
+            <input type="text" id="f-biomes" placeholder="cellar, wake" />
+          </div>
+
+          <!-- Sliders -->
+          <div class="eh-field">
+            <label>HP <span style="color: var(--muted); font-size: 10px;">(1–120)</span></label>
+            <div class="eh-slider-row">
+              <input type="range" id="s-hp" min="1" max="120" />
+              <span class="val" id="v-hp">—</span>
+            </div>
+          </div>
+          <div class="eh-field">
+            <label>STR <span style="color: var(--muted); font-size: 10px;">(0–20) — base DPS</span></label>
+            <div class="eh-slider-row">
+              <input type="range" id="s-str" min="0" max="20" />
+              <span class="val" id="v-str">—</span>
+            </div>
+          </div>
+
+          <div class="eh-field">
+            <label>DEX <span style="color: var(--muted); font-size: 10px;">(0–10)</span></label>
+            <div class="eh-slider-row">
+              <input type="range" id="s-dex" min="0" max="10" />
+              <span class="val" id="v-dex">—</span>
+            </div>
+          </div>
+          <div class="eh-field">
+            <label>Stealth <span style="color: var(--muted); font-size: 10px;">(0–10)</span></label>
+            <div class="eh-slider-row">
+              <input type="range" id="s-stealth" min="0" max="10" />
+              <span class="val" id="v-stealth">—</span>
+            </div>
+          </div>
+
+          <div class="eh-field wide">
+            <label>Awareness Range <span style="color: var(--muted); font-size: 10px;">(1–12 tiles)</span></label>
+            <div class="eh-slider-row">
+              <input type="range" id="s-aware" min="1" max="12" />
+              <span class="val" id="v-aware">—</span>
+            </div>
+          </div>
+
+          <div class="eh-field wide">
+            <label>Flags</label>
+            <div class="eh-flags">
+              <label><input type="checkbox" id="f-elite" /> isElite</label>
+              <label><input type="checkbox" id="f-nonlethal" /> nonLethal</label>
+            </div>
+          </div>
+
+          <div class="eh-field wide">
+            <label>Flavor</label>
+            <textarea id="f-flavor" rows="2"></textarea>
+          </div>
+
+          <div class="eh-field wide">
+            <label>Design Note <span style="color: var(--muted); text-transform: none; font-size: 10px;">— _designNote, contributor-only</span></label>
+            <textarea id="f-designnote" rows="2"></textarea>
+          </div>
+
+          <!-- DPS panel -->
+          <div class="eh-dps-panel">
+            <div class="eh-dps-row">
+              <span class="label">DPS Estimate</span>
+              <span class="val" id="dps-val">—</span>
+              <span class="band" id="dps-band">—</span>
+            </div>
+            <div class="eh-dps-bar" id="dps-bar">
+              <div class="fill"  id="dps-fill"></div>
+            </div>
+            <div class="eh-dps-hint">
+              DPS ≈ str × 1.0 (one combat commit per second equivalent tempo).
+              Band markers show the tier-expected range (yellow dashed lines).
+              nonLethal enemies are exempt from band validation.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stub tabs -->
+      <div id="tab-deck"   class="eh-tab-body stub" style="display:none;"><h3>Deck Composer</h3><p>Drag-drop from <code>data/enemy-cards.json</code> (EATK card pool) with "Hydrate from stats" heuristic.<br/>Phase 5.2 — ships next.</p></div>
+      <div id="tab-intent" class="eh-tab-body stub" style="display:none;"><h3>Intent Curve</h3><p>State-machine editor: calm → focused → angry → enraged, per-HP%-threshold pin.<br/>Phase 5.3 — ships next.</p></div>
+      <div id="tab-loot"   class="eh-tab-body stub" style="display:none;"><h3>Loot Cross-Ref</h3><p>Cross-refs <code>data/loot-tables.json</code> for expected-value gold + item roll.<br/>Phase 5.4 — ships next.</p></div>
+      <div id="tab-reanim" class="eh-tab-body stub" style="display:none;"><h3>Reanim Behavior</h3><p>Pulls <code>tools/archetype-registry.json</code> (shipped P1.1.2) for defaults by type regex.<br/>Phase 5.5 — ships next.</p></div>
+
+      <!-- Balance matrix -->
+      <div class="eh-matrix">
+        <div class="ctrls">
+          <h4>Balance Matrix</h4>
+          <label>
+            X-axis
+            <select id="mx-x">
+              <option value="hp">HP</option>
+              <option value="str">STR</option>
+              <option value="dex">DEX</option>
+              <option value="stealth">Stealth</option>
+              <option value="awarenessRange">Awareness</option>
+              <option value="dps">DPS</option>
+            </select>
+          </label>
+          <label>
+            Y-axis
+            <select id="mx-y">
+              <option value="dps">DPS</option>
+              <option value="hp">HP</option>
+              <option value="str">STR</option>
+              <option value="dex">DEX</option>
+              <option value="stealth">Stealth</option>
+              <option value="awarenessRange">Awareness</option>
+            </select>
+          </label>
+          <label style="margin-top: auto;">
+            <input type="checkbox" id="mx-oob-only" /> OOB only
+          </label>
+          <div id="mx-count" style="color: var(--muted); font-size: 10px;"></div>
+        </div>
+        <div class="plot">
+          <canvas id="mx-canvas"></canvas>
+          <div class="legend">
+            <span class="standard">standard</span>
+            <span class="elite">elite</span>
+            <span class="boss">boss</span>
+            <span class="oob">OOB</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="eh-toast"></div>
+
+  <!-- ── Data sidecars ───────────────────────────────────────── -->
+  <script src="../data/enemies.js"></script>
+
+  <!-- ── App ─────────────────────────────────────────────────── -->
+  <script>
+  (function () {
+    'use strict';
+
+    // ── State ─────────────────────────────────────────────────
+    var _rows = [];          // live mutable array (mirrors enemies.json row order, banners included)
+    var _selectedId = null;
+    var _dirty = false;
+    var _originalJSON = '';
+
+    // ── Constants ─────────────────────────────────────────────
+    // DPS formula: combat in this game is turn-based, but each enemy
+    // commits a card stack roughly once per combat "tempo unit" (~1s
+    // of real time). Raw str is the headline damage number; cards
+    // and stack-size bonuses refine it. Phase 5.2 will fold deck
+    // stats into the estimate — for now, str IS the DPS axis.
+    var FIRE_RATE_PER_SEC = 1.0;
+
+    // Tier-expected DPS bands (roadmap §4.5):
+    //   standard 2–4 | elite 4–7 | boss 7–12
+    // Bands are inclusive; endpoint overlaps (4 is valid for both
+    // standard and elite) mean a stat near the boundary is just
+    // "close enough". The validator uses a **flat ±1 point** slack
+    // margin outside the band to separate "off by a touch" (yellow)
+    // from "way out" (red). Flat slack — not proportional — because
+    // the narrow standard band (width 2) was false-failing every
+    // str=5 as "way out" when the design intent of "just a point
+    // over" matches what the red flag should spare.
+    var TIER_BANDS = {
+      standard: { lo: 2, hi: 4 },
+      elite:    { lo: 4, hi: 7 },
+      boss:     { lo: 7, hi: 12 }
+    };
+    var BAND_SLACK = 1;  // flat ±1 DPS; "off by one" = warn, 2+ = err
+
+    var MATRIX_SCALE_MAX = {
+      hp:             120,
+      str:            20,
+      dex:            10,
+      stealth:        10,
+      awarenessRange: 12,
+      dps:            12
+    };
+
+    // ── DOM refs (grabbed lazily via $ helper) ────────────────
+    function $(id) { return document.getElementById(id); }
+
+    // ── Boot ──────────────────────────────────────────────────
+    function boot() {
+      var data = window.ENEMIES_DATA;
+      if (!data || !Array.isArray(data.rows)) {
+        setStatus('data/enemies.js sidecar failed to load', 'err');
+        return;
+      }
+      _rows = data.rows.map(function (r) {
+        // shallow clone — row mutations won't leak back to the sidecar
+        return Object.assign({}, r);
+      });
+      _originalJSON = serialize(_rows);
+      populateFilters();
+      renderSidebar();
+      wireEditor();
+      wireHeader();
+      renderMatrix();
+      setStatus('Loaded — ' + countEnemies(_rows) + ' enemies, ' + _rows.length + ' rows');
+    }
+
+    function countEnemies(rows) {
+      var n = 0;
+      for (var i = 0; i < rows.length; i++) if (rows[i] && typeof rows[i].id === 'string') n++;
+      return n;
+    }
+
+    // ── Filters ───────────────────────────────────────────────
+    function populateFilters() {
+      var lootSet = Object.create(null), biomeSet = Object.create(null);
+      _rows.forEach(function (r) {
+        if (!r || !r.id) return;
+        if (r.lootProfile) lootSet[r.lootProfile] = 1;
+        if (Array.isArray(r.biomes)) r.biomes.forEach(function (b) { biomeSet[b] = 1; });
+      });
+      fillSelect($('flt-loot'),  Object.keys(lootSet).sort());
+      fillSelect($('flt-biome'), Object.keys(biomeSet).sort());
+    }
+    function fillSelect(sel, values) {
+      values.forEach(function (v) {
+        var opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        sel.appendChild(opt);
+      });
+    }
+
+    // ── Sidebar render ────────────────────────────────────────
+    function renderSidebar() {
+      var list = $('sidebar-list');
+      list.innerHTML = '';
+
+      var searchEl = $('flt-search');
+      var q = (searchEl.value || '').toLowerCase().trim();
+      var tierFilt = $('flt-tier').value;
+      var suitFilt = $('flt-suit').value;
+      var lootFilt = $('flt-loot').value;
+      var biomeFilt= $('flt-biome').value;
+      var oobOnly  = $('flt-oob').checked;
+
+      var visibleCount = 0;
+      _rows.forEach(function (r) {
+        if (!r) return;
+        // Banner rows
+        if (r._comment && !r.id) {
+          // Only render banners when no filter is active — otherwise they're noise
+          if (!q && !tierFilt && !suitFilt && !lootFilt && !biomeFilt && !oobOnly) {
+            var ban = document.createElement('div');
+            ban.className = 'banner';
+            ban.textContent = r._comment.replace(/^=+\s*|\s*=+$/g, '');
+            list.appendChild(ban);
+          }
+          return;
+        }
+        if (!r.id) return;
+
+        if (q) {
+          var hay = (r.id + ' ' + (r.name || '')).toLowerCase();
+          if (hay.indexOf(q) === -1) return;
+        }
+        if (tierFilt && r.tier !== tierFilt) return;
+        if (suitFilt && r.suit !== suitFilt) return;
+        if (lootFilt && r.lootProfile !== lootFilt) return;
+        if (biomeFilt && (!Array.isArray(r.biomes) || r.biomes.indexOf(biomeFilt) === -1)) return;
+
+        var evalRes = evalTierBand(r);
+        if (oobOnly && evalRes.status === 'ok') return;
+
+        visibleCount++;
+        var row = document.createElement('div');
+        row.className = 'eh-row' + (r.id === _selectedId ? ' active' : '');
+        row.dataset.id = r.id;
+        row.innerHTML =
+          '<span class="id">' + escapeHtml(r.id) + '</span>' +
+          '<span class="emoji">' + escapeHtml(r.emoji || '') + '</span>' +
+          '<span class="suit-dot ' + escapeHtml(r.suit || '') + '"></span>' +
+          '<span class="name">' + escapeHtml(r.name || '(unnamed)') + '</span>' +
+          (evalRes.status === 'err' ? '<span class="oob-flag" title="Out of tier band (' + evalRes.reason + ')">⚠</span>' : '') +
+          '<span class="tier ' + escapeHtml(r.tier || '') + '">' + escapeHtml(r.tier || '?') + '</span>';
+        row.addEventListener('click', function () { selectEnemy(r.id); });
+        list.appendChild(row);
+      });
+
+      if (visibleCount === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'color: var(--muted); padding: 20px; text-align: center; font-size: 11px;';
+        empty.textContent = 'No enemies match the current filters.';
+        list.appendChild(empty);
+      }
+    }
+
+    // ── Select + populate editor ──────────────────────────────
+    function selectEnemy(id) {
+      _selectedId = id;
+      var row = findRow(id);
+      if (!row) return;
+      renderSidebar();
+      $('placeholder').style.display = 'none';
+      $('tabs').style.display = 'flex';
+      $('tab-stats').style.display = 'block';
+      $('tab-stats').classList.add('active');
+      populateEditor(row);
+    }
+
+    function findRow(id) {
+      for (var i = 0; i < _rows.length; i++) if (_rows[i] && _rows[i].id === id) return _rows[i];
+      return null;
+    }
+
+    function populateEditor(r) {
+      $('f-id').value        = r.id || '';
+      $('f-name').value      = r.name || '';
+      $('f-emoji').value     = r.emoji || '';
+      $('f-tier').value      = r.tier || 'standard';
+      $('f-suit').value      = r.suit || 'spade';
+      $('f-loot').value      = r.lootProfile || '';
+      $('f-biomes').value    = (r.biomes || []).join(', ');
+      $('s-hp').value        = r.hp || 0;
+      $('s-str').value       = r.str || 0;
+      $('s-dex').value       = r.dex || 0;
+      $('s-stealth').value   = r.stealth || 0;
+      $('s-aware').value     = r.awarenessRange || 1;
+      $('f-elite').checked   = !!r.isElite;
+      $('f-nonlethal').checked = !!r.nonLethal;
+      $('f-flavor').value    = r.flavor || '';
+      $('f-designnote').value= r._designNote || '';
+      updateSliderLabels();
+      updateDPS(r);
+    }
+
+    // ── Editor wiring ─────────────────────────────────────────
+    function wireEditor() {
+      // Sliders — update on input for live DPS feedback
+      ['s-hp', 's-str', 's-dex', 's-stealth', 's-aware'].forEach(function (id) {
+        $(id).addEventListener('input', function () {
+          var r = findRow(_selectedId); if (!r) return;
+          var key = id === 's-hp' ? 'hp'
+                  : id === 's-str' ? 'str'
+                  : id === 's-dex' ? 'dex'
+                  : id === 's-stealth' ? 'stealth'
+                  : 'awarenessRange';
+          r[key] = parseInt($(id).value, 10) || 0;
+          updateSliderLabels();
+          updateDPS(r);
+          if (key === 'hp' || key === 'str') {
+            renderSidebar(); // tier-band flag could flip
+            renderMatrix();
+          }
+          markDirty();
+        });
+      });
+
+      // Text fields + selects
+      bind('f-name',      'name');
+      bind('f-emoji',     'emoji');
+      bind('f-flavor',    'flavor');
+      bind('f-designnote','_designNote');
+      bindSelect('f-tier',  'tier',        true);   // retrigger band
+      bindSelect('f-suit',  'suit',        false);
+      bindSelect('f-loot',  'lootProfile', false);
+
+      $('f-biomes').addEventListener('input', function () {
+        var r = findRow(_selectedId); if (!r) return;
+        var raw = $('f-biomes').value || '';
+        r.biomes = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        markDirty();
+      });
+
+      $('f-elite').addEventListener('change', function () {
+        var r = findRow(_selectedId); if (!r) return;
+        r.isElite = $('f-elite').checked;
+        markDirty();
+      });
+      $('f-nonlethal').addEventListener('change', function () {
+        var r = findRow(_selectedId); if (!r) return;
+        r.nonLethal = $('f-nonlethal').checked;
+        updateDPS(r);
+        renderSidebar();
+        markDirty();
+      });
+
+      // Filters
+      ['flt-search', 'flt-tier', 'flt-suit', 'flt-loot', 'flt-biome', 'flt-oob'].forEach(function (id) {
+        $(id).addEventListener('input', renderSidebar);
+        $(id).addEventListener('change', renderSidebar);
+      });
+
+      // Tabs (only stats is functional — others just toast)
+      document.querySelectorAll('.eh-tab').forEach(function (t) {
+        t.addEventListener('click', function () {
+          if (t.classList.contains('stub')) {
+            toast('Tab "' + t.dataset.tab + '" ships in a later Phase 5 slice.', 'err');
+            return;
+          }
+          document.querySelectorAll('.eh-tab').forEach(function (x) { x.classList.remove('active'); });
+          document.querySelectorAll('.eh-tab-body').forEach(function (x) { x.classList.remove('active'); x.style.display = 'none'; });
+          t.classList.add('active');
+          var body = $('tab-' + t.dataset.tab);
+          if (body) { body.classList.add('active'); body.style.display = 'block'; }
+        });
+      });
+
+      // Matrix axis selectors
+      ['mx-x', 'mx-y', 'mx-oob-only'].forEach(function (id) {
+        $(id).addEventListener('change', renderMatrix);
+      });
+    }
+    function bind(elId, key) {
+      $(elId).addEventListener('input', function () {
+        var r = findRow(_selectedId); if (!r) return;
+        r[key] = $(elId).value;
+        markDirty();
+      });
+    }
+    function bindSelect(elId, key, retriggerBand) {
+      $(elId).addEventListener('change', function () {
+        var r = findRow(_selectedId); if (!r) return;
+        r[key] = $(elId).value || undefined;
+        if (retriggerBand) {
+          updateDPS(r);
+          renderSidebar();
+          renderMatrix();
+        }
+        markDirty();
+      });
+    }
+
+    function updateSliderLabels() {
+      $('v-hp').textContent      = $('s-hp').value;
+      $('v-str').textContent     = $('s-str').value;
+      $('v-dex').textContent     = $('s-dex').value;
+      $('v-stealth').textContent = $('s-stealth').value;
+      $('v-aware').textContent   = $('s-aware').value;
+    }
+
+    // ── DPS + tier-band ───────────────────────────────────────
+    function computeDPS(r) {
+      // Base DPS = str × fire-rate. Elites naturally land at the top
+      // of their parent tier's band because enemy-ai.js applies a
+      // `tierBonus` at spawn (str += 1 for elite, +2 for boss). The
+      // validator measures the *authored* base str, not the
+      // spawn-time boosted value — keeps the matrix honest.
+      return (r.str || 0) * FIRE_RATE_PER_SEC;
+    }
+    function evalTierBand(r) {
+      if (r.nonLethal) return { status: 'na', reason: 'non-lethal (no damage)', band: null, dps: computeDPS(r) };
+      var band = TIER_BANDS[r.tier];
+      if (!band) return { status: 'na', reason: 'unknown tier "' + r.tier + '"', band: null, dps: computeDPS(r) };
+      var dps = computeDPS(r);
+      var slack = BAND_SLACK;
+      if (dps >= band.lo && dps <= band.hi) {
+        return { status: 'ok', reason: 'in band', band: band, dps: dps };
+      }
+      if (dps >= band.lo - slack && dps <= band.hi + slack) {
+        return { status: 'warn', reason: 'just outside band', band: band, dps: dps };
+      }
+      var dir = dps < band.lo ? 'below' : 'above';
+      return { status: 'err', reason: dir + ' band (' + band.lo + '–' + band.hi + ')', band: band, dps: dps };
+    }
+    function updateDPS(r) {
+      var evalRes = evalTierBand(r);
+      $('dps-val').textContent = evalRes.dps.toFixed(1);
+      var band = $('dps-band');
+      band.className = 'band ' + evalRes.status;
+      if (evalRes.status === 'ok') band.textContent = 'IN BAND';
+      else if (evalRes.status === 'warn') band.textContent = 'NEAR BAND (' + evalRes.band.lo + '–' + evalRes.band.hi + ')';
+      else if (evalRes.status === 'err')  band.textContent = 'OUT OF BAND: ' + evalRes.reason.toUpperCase();
+      else                                 band.textContent = evalRes.reason.toUpperCase();
+
+      // Bar: scale 0..12 (boss ceiling); mark band edges
+      var ceiling = 12;
+      var pct = Math.max(0, Math.min(100, (evalRes.dps / ceiling) * 100));
+      $('dps-fill').style.width = pct + '%';
+      $('dps-fill').style.background =
+        evalRes.status === 'ok'   ? 'var(--good)' :
+        evalRes.status === 'warn' ? 'var(--warn)' :
+        evalRes.status === 'err'  ? 'var(--err)'  : 'var(--muted)';
+
+      // Re-draw band markers
+      var bar = $('dps-bar');
+      bar.querySelectorAll('.band-marker').forEach(function (n) { n.remove(); });
+      if (evalRes.band) {
+        ['lo', 'hi'].forEach(function (k) {
+          var m = document.createElement('div');
+          m.className = 'band-marker';
+          m.style.left = ((evalRes.band[k] / ceiling) * 100) + '%';
+          bar.appendChild(m);
+        });
+      }
+    }
+
+    // ── Balance matrix ────────────────────────────────────────
+    function renderMatrix() {
+      var canvas = $('mx-canvas');
+      // Resize to container
+      var rect = canvas.parentNode.getBoundingClientRect();
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width  = Math.floor(rect.width  * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      var ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      var xKey = $('mx-x').value;
+      var yKey = $('mx-y').value;
+      var oobOnly = $('mx-oob-only').checked;
+      var xMax = MATRIX_SCALE_MAX[xKey] || 10;
+      var yMax = MATRIX_SCALE_MAX[yKey] || 10;
+
+      var padL = 36, padR = 12, padT = 12, padB = 22;
+      var plotW = rect.width  - padL - padR;
+      var plotH = rect.height - padT - padB;
+
+      // Axes
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padL, padT);
+      ctx.lineTo(padL, padT + plotH);
+      ctx.lineTo(padL + plotW, padT + plotH);
+      ctx.stroke();
+
+      // Gridlines + labels
+      ctx.fillStyle = '#678';
+      ctx.font = '10px Consolas, monospace';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      for (var i = 0; i <= 4; i++) {
+        var yv = (yMax / 4) * i;
+        var yp = padT + plotH - (yv / yMax) * plotH;
+        ctx.strokeStyle = '#222';
+        ctx.beginPath(); ctx.moveTo(padL, yp); ctx.lineTo(padL + plotW, yp); ctx.stroke();
+        ctx.fillText(formatScale(yv), padL - 4, yp);
+      }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for (var j = 0; j <= 4; j++) {
+        var xv = (xMax / 4) * j;
+        var xp = padL + (xv / xMax) * plotW;
+        ctx.fillText(formatScale(xv), xp, padT + plotH + 3);
+      }
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#8ad'; ctx.font = 'bold 10px Consolas, monospace';
+      ctx.fillText(yKey + ' →', padL - 4, padT - 1);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillText(xKey + ' →', padL + plotW, padT + plotH + 3);
+
+      // Highlight band region for the Y axis = dps case — shade the
+      // union of tier bands so the scatter shows "where things should
+      // land" at a glance.
+      if (yKey === 'dps') {
+        ctx.fillStyle = 'rgba(153,204,102,0.05)';
+        var loY = padT + plotH - (2  / yMax) * plotH;
+        var hiY = padT + plotH - (12 / yMax) * plotH;
+        ctx.fillRect(padL, hiY, plotW, loY - hiY);
+      }
+
+      // Points
+      var plotted = 0;
+      _rows.forEach(function (r) {
+        if (!r || !r.id) return;
+        var evalRes = evalTierBand(r);
+        if (oobOnly && evalRes.status !== 'err') return;
+
+        var xv = extractVal(r, xKey, evalRes.dps);
+        var yv = extractVal(r, yKey, evalRes.dps);
+        var xp = padL + Math.max(0, Math.min(plotW, (xv / xMax) * plotW));
+        var yp = padT + plotH - Math.max(0, Math.min(plotH, (yv / yMax) * plotH));
+
+        var color = r.tier === 'boss'     ? '#f88'
+                  : r.tier === 'elite'    ? '#fc8'
+                  : r.tier === 'standard' ? '#789'
+                  : '#678';
+        // Override: OOB err → red ring
+        var ring = evalRes.status === 'err' ? '#f44' : null;
+        var isSelected = r.id === _selectedId;
+
+        ctx.beginPath();
+        ctx.arc(xp, yp, isSelected ? 6 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        if (ring || isSelected) {
+          ctx.strokeStyle = isSelected ? '#cfe' : ring;
+          ctx.lineWidth = isSelected ? 2 : 1.5;
+          ctx.stroke();
+        }
+        plotted++;
+      });
+
+      $('mx-count').textContent = plotted + ' / ' + countEnemies(_rows) + ' plotted';
+
+      // Click-to-select — (attach once)
+      if (!canvas._clickBound) {
+        canvas._clickBound = true;
+        canvas.addEventListener('click', function (e) {
+          var rect2 = canvas.getBoundingClientRect();
+          var cx = e.clientX - rect2.left;
+          var cy = e.clientY - rect2.top;
+          var xKey2 = $('mx-x').value, yKey2 = $('mx-y').value;
+          var xMax2 = MATRIX_SCALE_MAX[xKey2] || 10, yMax2 = MATRIX_SCALE_MAX[yKey2] || 10;
+          var best = null, bestD = 64; // 8px squared
+          _rows.forEach(function (r) {
+            if (!r || !r.id) return;
+            var evalRes = evalTierBand(r);
+            var xv = extractVal(r, xKey2, evalRes.dps);
+            var yv = extractVal(r, yKey2, evalRes.dps);
+            var xp = padL + (xv / xMax2) * plotW;
+            var yp = padT + plotH - (yv / yMax2) * plotH;
+            var d = (xp - cx) * (xp - cx) + (yp - cy) * (yp - cy);
+            if (d < bestD) { bestD = d; best = r; }
+          });
+          if (best) selectEnemy(best.id);
+        });
+      }
+    }
+    function extractVal(r, key, dpsCache) {
+      if (key === 'dps') return dpsCache != null ? dpsCache : computeDPS(r);
+      return (r[key] != null) ? r[key] : 0;
+    }
+    function formatScale(v) {
+      if (v >= 10) return Math.round(v).toString();
+      return v.toFixed(1).replace(/\.0$/, '');
+    }
+
+    // ── Header wiring (export / copy / revert) ────────────────
+    function wireHeader() {
+      $('btn-export').addEventListener('click', function () {
+        var txt = serialize(_rows);
+        var blob = new Blob([txt], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'enemies.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        toast('Exported enemies.json — drop it into data/.', 'ok');
+      });
+
+      $('btn-copy').addEventListener('click', function () {
+        var txt = serialize(_rows);
+        navigator.clipboard.writeText(txt).then(
+          function () { toast('Copied ' + txt.length + ' bytes to clipboard.', 'ok'); },
+          function (err) { toast('Clipboard failed: ' + err, 'err'); }
+        );
+      });
+
+      $('btn-revert').addEventListener('click', function () {
+        if (!_dirty) return;
+        if (!confirm('Discard all unsaved edits?')) return;
+        _rows = JSON.parse(_originalJSON);
+        _dirty = false;
+        setStatus('Reverted to disk');
+        $('btn-revert').disabled = true;
+        if (_selectedId) {
+          var r = findRow(_selectedId);
+          if (r) populateEditor(r);
+        }
+        renderSidebar();
+        renderMatrix();
+      });
+
+      window.addEventListener('beforeunload', function (e) {
+        if (_dirty) {
+          e.preventDefault();
+          e.returnValue = 'Unsaved changes — exit anyway?';
+          return e.returnValue;
+        }
+      });
+
+      window.addEventListener('resize', renderMatrix);
+    }
+
+    function markDirty() {
+      if (!_dirty) {
+        _dirty = true;
+        setStatus('Unsaved changes', 'dirty');
+        $('btn-revert').disabled = false;
+      } else {
+        setStatus('Unsaved changes', 'dirty');
+      }
+    }
+
+    function setStatus(msg, cls) {
+      var el = $('status');
+      el.textContent = msg;
+      el.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    function toast(msg, cls) {
+      var t = $('toast');
+      t.textContent = msg;
+      t.className = 'eh-toast show' + (cls ? ' ' + cls : '');
+      clearTimeout(t._hide);
+      t._hide = setTimeout(function () { t.className = 'eh-toast'; }, 2800);
+    }
+
+    // ── Serialisation ─────────────────────────────────────────
+    // Produces a diff-friendly output matching the existing
+    // data/enemies.json layout: 2-space indent, array-of-objects,
+    // preserves _comment banner rows, preserves field order within
+    // each enemy by delegating to JSON.stringify (rows are already
+    // in authoring order in the sidecar).
+    function serialize(rows) {
+      // Strip out any runtime-only fields before write. Currently
+      // none — but this is the hook point for when we add them.
+      var clean = rows.map(function (r) {
+        if (!r) return r;
+        var out = {};
+        Object.keys(r).forEach(function (k) {
+          if (r[k] === undefined) return;    // dropped fields
+          if (k === 'biomes' && Array.isArray(r[k]) && r[k].length === 0) return;
+          out[k] = r[k];
+        });
+        return out;
+      });
+      return JSON.stringify(clean, null, 2);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    // ── Go ────────────────────────────────────────────────────
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot);
+    } else {
+      boot();
+    }
+
+    // Expose minimal debug surface
+    window.EH = {
+      rows: function () { return _rows; },
+      find: findRow,
+      eval: evalTierBand,
+      dps:  computeDPS
+    };
+  })();
+  </script>
+</body>
+</html>

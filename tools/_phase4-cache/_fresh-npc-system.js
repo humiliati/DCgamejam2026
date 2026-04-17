@@ -1305,45 +1305,4 @@ var NpcSystem = (function () {
    * Returns `null` if no NPC with that id is registered on any floor.
    *
    * @param {string} npcId
-   * @returns {{id:string, name:string, emoji:string, factionId:string|null, floorId:string}|null}
-   */
-  function getNpcMeta(npcId) {
-    if (typeof npcId !== 'string' || !npcId) return null;
-    var floors = Object.keys(_defs);
-    for (var i = 0; i < floors.length; i++) {
-      var floorId = floors[i];
-      var defs = _defs[floorId];
-      for (var j = 0; j < defs.length; j++) {
-        if (defs[j].id === npcId) {
-          return {
-            id:        defs[j].id,
-            name:      defs[j].name  || 'Passerby',
-            emoji:     defs[j].emoji || '\uD83D\uDC64',
-            factionId: defs[j].factionId || null,
-            floorId:   floorId
-          };
-        }
-      }
-    }
-    return null;
-  }
-
-  // ── Public API ────────────────────────────────────────────────────
-
-  return Object.freeze({
-    TYPES:        TYPES,
-    init:         init,
-    register:     register,
-    registerTree: registerTree,
-    spawn:        spawn,
-    tick:         tick,
-    interact:     interact,
-    engageTalk:   _engageTalk,
-    clearActive:  clearActive,
-    findById:     findById,
-    findAtTile:   findAtTile,
-    isTalkable:   isTalkable,
-    getGateCheck: getGateCheck,
-    getNpcMeta:   getNpcMeta
-  });
-})();
+ 

@@ -2,7 +2,7 @@
 
 **DOC-109**
 **Created**: 2026-04-17
-**Status**: Phase 0 + Phase 1 + Phase 2 SHIPPED 2026-04-17 — ReputationBar subject-kind namespace (51/51 harness green) + ReadinessCalc event bus (`on`/`off`/`markDirty`/`getGroupScore`/`invalidate`, microtask-debounced, 32/32 harness green) + DebriefFeed `_categories` wrapper scaffold (readiness + relationships categories with collapsed/expanded toggle, faction rows migrated under `'faction:<id>'` row IDs, legacy `expandFaction`/`collapseFaction`/`updateFaction`/`getFactionState` delegating through `_categories.relationships`, 37/37 harness green). Phases 3–7 still scoped.
+**Status**: Phase 0 + Phase 1 + Phase 2 + Phase 3 SHIPPED 2026-04-17 — ReputationBar subject-kind namespace (51/51 harness green) + ReadinessCalc event bus (`on`/`off`/`markDirty`/`getGroupScore`/`invalidate`, microtask-debounced, 32/32 harness green) + DebriefFeed `_categories` wrapper scaffold (readiness + relationships categories with collapsed/expanded toggle, faction rows migrated under `'faction:<id>'` row IDs, legacy `expandFaction`/`collapseFaction`/`updateFaction`/`getFactionState` delegating through `_categories.relationships`, 37/37 harness green) + DebriefFeed readiness wires (`updateReadiness`/`getReadinessState` public API, `GROUP_DATA` display-side metadata with biome tints matching FACTION_COLORS, ♠/♣/♦ suit glyphs + ★ overheal accent past 100%, `_readinessRow` renderer wired into `_renderRowByKind` + `_renderUnified` above relationships, Game.init subscribes `ReadinessCalc.on('group-score-change')` → `DebriefFeed.updateReadiness` + seeds via `ReadinessCalc.invalidate()`, 24/24 harness green; 228/228 total across all DOC-109 + DOC-113 harnesses). Phases 4–7 still scoped.
 
 **Adjacent surface (DOC-113 Phase C, shipped 2026-04-17)**: DebriefFeed also hosts the sprint-timer countdown row (`showTimer`/`updateTimer`/`hideTimer`/`getTimerState`). The timer row renders ABOVE the category wrappers in `_renderUnified` — it's a peer widget, not a category member, so it doesn't interact with the readiness/relationships collapse logic. When extending `_renderUnified` in later phases, keep the insertion order `timer row → categories → feed tail` to preserve urgent-priority visibility for countdowns. Harness: `tools/_sprint-timer-cache/verify-timer.js` (84/84 green); contract: `docs/SPRINT_TIMER_UI_HANDOFF.md`.
 **Depends on**: DOC-22 HUD_ROADMAP (debrief-feed layout contract), DOC-52 READINESS_BAR_ROADMAP (readiness tier-cross event bus pattern), DOC-107 QUEST_SYSTEM_ROADMAP (Phase 3 reputation bars + Phase 4 dispatcher choreography), DOC-13 STREET_CHRONICLES_NARRATIVE_OUTLINE (canonical faction roster), DOC-9 NPC_SYSTEM_ROADMAP (NPC roster + favor targets)
@@ -371,31 +371,54 @@ Driver lives at `tools/_debrief-categories-cache/verify-phase2-final.js`. Uses `
 
 **Non-goals held (for Phase 3/4)**: no readiness rows populated, no auto-retract on mostRecent change, no NPC rows. Just the wrapper, migration of existing faction behavior, the click toggle, and the scaffolded `updateReadiness`/`updateRelationship` entrypoints.
 
-### Phase 3 — Readiness category wires
+### Phase 3 — Readiness category wires (SHIPPED 2026-04-17)
 
 Turn on the Readiness category: 3 dungeon group rows, fed by the Phase 1 event bus.
 
-**Files touched**: `engine/game.js` (init wiring), `engine/debrief-feed.js` (public `updateReadiness`), possibly `engine/dungeon-schedule.js` (need `getGroupById(id)` convenience if not already present).
+**Files touched**: `engine/debrief-feed.js` (added `GROUP_DATA` table, `_setReadinessRow`, `_readinessRow` renderer, `updateReadiness` / `getReadinessState` public API, readiness row dispatch in `_renderRowByKind`, readiness block emitted above relationships in `_renderUnified`), `engine/game.js` (Game.init wires `ReadinessCalc.on('group-score-change', ...)` → `DebriefFeed.updateReadiness(...)` and calls `ReadinessCalc.invalidate()` to seed the initial bars), `index.html` (CSS: `.df-readiness-row` / `.df-readiness-head` / `.df-readiness-name` / `.df-readiness-pct` / `.df-readiness-track` / `.df-readiness-fill` / `.df-readiness-star` + `@keyframes df-readiness-reveal` + `@keyframes df-readiness-bump` + `.df-readiness-overhealed` glow).
 
-**What lands**:
-- `DebriefFeed.updateReadiness(groupId, coreScore, meta)` implemented.
-- Game.init subscribes `ReadinessCalc.on('group-score-change', ...)` → fans out to `DebriefFeed.updateReadiness(...)`.
-- `ReadinessCalc.invalidate()` called at end of Game.init to seed the initial bars for whichever groups are known at boot (most likely 0.0 for all 3 until the player starts cleaning).
-- Readiness category auto-reveals on first `updateReadiness` call (`revealed = true` is sticky).
-- Row tint: biome color per group (Coral → teal, Ironhold → brass, Lamplit → amethyst).
-- Bar visual: filled to `coreScore × 100%`, with a ★ accent overlay past 100% (matches `ReadinessCalc.getPercent()` format).
+**Decision**: `DungeonSchedule.JAM_CONTRACTS` already exposes all three groups with the expected `groupId` / `label` / `suit` / `floorIds` shape, so no convenience wrapper was needed on that module. `GROUP_DATA` inside `debrief-feed.js` is the display-side translation table (label + suit glyph + biome tint), keyed by the same `groupId` strings that `ReadinessCalc` emits. The ♠/♣/♦ tints are deliberately identical to `FACTION_COLORS.mss` / `jesuit` / `pinkerton` so the Readiness rows and Relationships rows feel like the same widget family.
 
-**Verification**: `verify-phase3.js`:
-1. Three groups → three rows in readiness category
-2. `updateReadiness` tracks mostRecent correctly
-3. Aggregate math — 0.5 + 0.3 + 0.7 floor scores → group score matches ReadinessCalc.getGroupScore
-4. Reveal gate fires on first update
+**What landed**:
+- `DebriefFeed.updateReadiness(groupId, coreScore, meta)` implemented. `meta` is optional; the row falls back to `GROUP_DATA[groupId]` when `meta.label / .suit / .tint` are not provided, so the common path is a two-arg call.
+- `DebriefFeed.getReadinessState(groupId)` added for test / debug probing (mirrors `getFactionState` shape).
+- Game.init subscribes `ReadinessCalc.on('group-score-change', function (groupId, prev, next) { ... })` → fans out to `DebriefFeed.updateReadiness(groupId, next)`. Guarded by `typeof ReadinessCalc !== 'undefined'` / `typeof DebriefFeed !== 'undefined'` / `typeof ReadinessCalc.on === 'function'` so a lighter boot sequence (e.g. a standalone title-screen build) doesn't crash.
+- `ReadinessCalc.invalidate()` called in the same `init` block so all three groups emit their initial `group-score-change` — rows self-reveal even on a cold start.
+- Readiness category auto-reveals on first `updateReadiness` call (`_categories.readiness.revealed = true`, sticky; verified by collapsing the category and confirming `revealed` stays true).
+- Row tint per group: coral-teal ♠ / lamp amethyst ♣ / brass ♦, matching the three faction biomes.
+- Bar fill: `scoreNum × 100%` clamped to `[0, 100]%` visually. When the raw score exceeds 1.0, a ★ glyph overlays the end of the bar and the `pct` label reads `"142% ★"` (mirrors `ReadinessCalc.getPercent()` convention).
+- Render order: readiness category sits **above** relationships in `_renderUnified` — "how clean is the place" before "how do people feel about you".
 
-Target: ~12 assertions. Plus a live-browser check: smash a crate, watch the Coral readiness bar tick up.
+**Verification**: `tools/_readiness-phase3-cache/verify-phase3.js` — **24/24 assertions green** (2026-04-17). Five groups:
 
-### Phase 4 — Relationships category: factions migrated + NPC rows added
+- **G1 (5/5)**: public API surface — `updateReadiness` + `getReadinessState` exported; readiness category starts unrevealed + empty; unknown groupId returns null; invalid `groupId` (`''` / `null`) returns null; no DOM emitted before any update.
+- **G2 (5/5)**: first-update reveal — `updateReadiness` returns a row record with the expected shape; category flips `revealed = true`; row appended with `mostRecentId = 'readiness:spade'`; `GROUP_DATA` fallback resolves `spade → { label: 'Coral Cellars', suit: ♠, tint: '#5F9EA0' }`; `collapseCategory` does NOT un-reveal (sticky gate).
+- **G3 (4/4)**: three-group sequencing — three sequential updates (`spade 0.5` → `club 0.3` → `diamond 0.7`) append in insertion order; `mostRecentId` moves to `'readiness:diamond'`; `club` + `diamond` fallback metadata resolves correctly; aggregate math 0.5+0.3+0.7 round-trips as 1.5.
+- **G4 (6/6)**: fill math + overheal accent — `score 0.5` → `width:50%` in DOM + `50%` label; no ★ or `df-readiness-overhealed` when `score ≤ 1.0`; bump updates preserve `prevScore` (0.5) alongside new `score` (0.9); `score 1.42` emits `df-readiness-overhealed` + `df-readiness-star` + `★` glyph; label reads `"142% ★"`; fill clamps at `width:100%` visually (no `width:142%` leak).
+- **G5 (4/4)**: render DOM + order — expanded readiness emits three `df-readiness-row` entries (spade/club/diamond); `df-category-readiness` appears BEFORE `df-category-relationships` in the output stream; collapsed state renders exactly one row (the `mostRecentId` — diamond).
+
+Cross-regression (2026-04-17): all prior harnesses re-green on the Phase-3 `_fresh-debrief-feed.js` mirror — Phase 0: **51/51**, Phase 1: **32/32**, Phase 2: **37/37**, DOC-113 Phase C (sprint timer): **84/84**. Total 228/228 across five harness suites.
+
+Live-browser check deferred to the next playtest (smash a crate on floor 1.3.1, watch the Coral Cellars readiness bar tick up).
+
+### Phase 4 — Relationships category: factions migrated + NPC rows added — **SHIPPED 2026-04-17**
 
 Add NPC rows, wire `favor-change` (not just `tier-cross`), finalize the subject-kind fan-out.
+
+**Status**: Shipped 2026-04-17. 22/22 Phase 4 harness assertions green; Phase 0 (51/51), Phase 1 (32/32), Phase 2 (37/37), Phase 3 (24/24) regressions re-green on the Phase-4 `_fresh-debrief-feed.js` mirror.
+
+**Landed code**:
+- `engine/debrief-feed.js`: `updateRelationship(kind, subjectId, favor, tier, meta)` + `getRelationshipState(kind, subjectId)` added. `_setRelationshipRow` extended with meta bag persistence (icon/name/factionId/floor) and `flair.tierCrossed` routing. `_renderRowByKind` dispatches `kind==='npc'` to the new `_npcRow(npcId, ndata)` renderer.
+- `engine/npc-system.js`: `getNpcMeta(npcId)` cross-floor lookup returning `{id, name, emoji, factionId, floorId}` — used by Game.init's `favor-change`/`tier-cross` subscribers to resolve the portrait glyph + display name + faction tint for NPC rows.
+- `engine/game.js`: ReputationBar fan-out wired post-`ReputationBar.init()`. `favor-change` forwards the `(kind, id, next, tier, meta)` tuple to `updateRelationship`; `tier-cross` does the same but adds `meta.tierCrossed=true` so the row renders the goldenrod flash keyframes. NPC meta is resolved lazily via `NpcSystem.getNpcMeta` and cached on the row.
+- `engine/game.js`: `DispatcherChoreography.init` now passes `onComplete(firstTime)`. On `firstTime`, Game reveals the relationships category and calls `ReputationBar.addSubjectFavor('faction', 'bprd', 100)` which cascades through `favor-change` → `tier-cross` → `updateRelationship` to produce the first BPRD row with a tier-cross flair.
+- `index.html`: `.df-npc-row / .df-npc-head / .df-npc-icon / .df-npc-name / .df-npc-tier / .df-npc-track / .df-npc-fill` CSS + `@keyframes df-npc-reveal / df-npc-bump / df-npc-tiercross` animations added next to the faction-row block.
+
+**Harness**: `tools/_phase4-cache/verify-phase4-v2.js` (22 assertions across 6 groups — API surface, faction migration, NPC meta persistence, flag routing, reveal-gate stickiness, render DOM dispatch). The v1 at `verify-phase4.js` is the original copy; v2 is a fresh-inode clone to dodge the bindfs Edit-tool cache while Node-executing.
+
+---
+
+**Original spec** (retained for reference):
 
 **Files touched**: `engine/game.js` (add `favor-change` subscription + kind-aware meta lookup), `engine/debrief-feed.js` (`updateRelationship` implemented fully), possibly `engine/npc-system.js` (read NPC roster for favor metadata — icon, name, floor).
 

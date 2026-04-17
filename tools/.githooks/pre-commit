@@ -173,6 +173,30 @@ if git diff --cached --name-only | grep -qE '^tools/verb-node-overrides/.+\.json
   echo "[pre-commit] data/verb-node-overrides.js regenerated + staged." >&2
 fi
 
+# ── 1f. Enemies sidecar auto-regen ─────────────────────────
+# DOC-110 P5 (Enemy Hydrator). Same pattern as §1c/§1d/§1e —
+# when data/enemies.json is staged, regenerate the data/enemies.js
+# sidecar (consumed by tools/enemy-hydrator.html under file://) and
+# stage it alongside. No separate validator yet — the sidecar
+# generator itself parses + shape-checks. When P5 adds an enemy
+# schema validator (planned §5.2 unification), slot it in here
+# ahead of the sidecar regen.
+#
+# Shape: data/enemies.js is AUTO-GENERATED — hand edits are always
+# wrong (see the header banner in the generated file).
+if git diff --cached --name-only | grep -qxF 'data/enemies.json'; then
+  echo "[pre-commit] data/enemies.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-enemies-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Enemies sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-enemies-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/enemies.js"
+  echo "[pre-commit] data/enemies.js regenerated + staged." >&2
+fi
+
 # ── 2. File-size budget check ───────────────────────────────
 node "$repo_root/tools/check-budgets.js" || {
   echo "" >&2

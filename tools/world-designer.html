@@ -78,6 +78,16 @@
       .dg-node.dg-node-recipe .dg-node-biome { color:#8cb; }
       svg.dg-edge-recipe path { stroke: #6cb; stroke-dasharray: 6,3; stroke-width: 2px; }
 
+      /* DOC-113 — sprint dungeon node highlight */
+      .dg-node.dg-node-sprint {
+        box-shadow: 0 0 0 2px #f84 inset, 0 2px 8px rgba(255,136,68,0.25);
+      }
+      .dg-node.dg-node-sprint::after {
+        content: '\23f1';  /* timer emoji */
+        position: absolute; bottom: 2px; right: 4px;
+        font-size: 11px; line-height: 1;
+      }
+
       /* Pass 5c — pending (uncommitted) authored floors awaiting BO-V. */
       .dg-node.dg-node-pending {
         background:#3a2d1a !important;

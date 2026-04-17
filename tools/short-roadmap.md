@@ -359,6 +359,17 @@ inherits a CLI that's already agent-friendly.
 
 ---
 
+### Track D — BV UX polish + DOC-113 tooling (Pass 5e) ✅ (shipped 2026-04-17)
+
+Sprint dungeon authoring support and general UX improvements for the blockout visualizer and world designer.
+
+- [x] **Tile picker search + MRU**: `bv-tile-picker.js` rewritten — live search bar with Escape-to-clear, recently-used tile row (last 8 unique tiles persisted to localStorage), biome/category rows filtered by query. MRU tracking wired into `flushStroke()` and `commitBulk()`.
+- [x] **Stamp library categories**: `bv-stamp-library.js` rewritten — 6 categories (Sprint, Room, Corridor, Wall, Lighting, My Stamps), category filter pill row, 3-column thumbnail grid layout with color-coded borders, right-click rename/delete for user stamps. Built-in stamps loaded from `stamps.json` at init; user stamps in localStorage.
+- [x] **Sprint dungeon template stamps**: `stamps.json` expanded from 3 → 11 stamps. 6 sprint dungeon templates: entry vestibule (7×7, DOOR_EXIT + SPAWN + torches), T-junction (7×7, 3-way fork), dead-end chest room (5×5, CHEST red herring), trap corridor (9×3, pressure plates + tripwires), fetch target chamber (9×9, COLLECTIBLE + 4 torches + corner pillars), breakable shortcut (5×3, BREAKABLE walls). Plus torch ring (5×5) and basic room (8×8).
+- [x] **World designer quest annotations**: `world-designer.js` loads `data/quests.json` at boot, builds floor→quest lookup. Sprint dungeon floor nodes get orange inset glow + timer emoji badge via `dg-node-sprint` CSS class. `metaSummary` shows "⏱ sprint 75s" on sprint floors, "⚑ Nq" on quest floors. Inspector gains "Quests" section listing linked quests with kind badges and timer budgets.
+
+---
+
 ### Cross-references
 
 - `docs/SEED_AND_SAVELOAD_DESIGN.md` — full design spec, open questions, §4.6 death model.

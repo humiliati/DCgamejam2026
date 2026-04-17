@@ -192,7 +192,7 @@
     "biomes": [
       "foundry"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "construct",
     "hp": 32,
     "str": 6,
@@ -212,7 +212,7 @@
     "biomes": [
       "foundry"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "organic",
     "hp": 24,
     "str": 6,
@@ -335,7 +335,7 @@
     "biomes": [
       "sealab"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "marine",
     "hp": 30,
     "str": 6,
@@ -355,7 +355,7 @@
     "biomes": [
       "sealab"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "marine",
     "hp": 26,
     "str": 6,
@@ -375,7 +375,7 @@
     "biomes": [
       "sealab"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "construct",
     "hp": 28,
     "str": 6,
@@ -395,7 +395,7 @@
     "biomes": [
       "sealab"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "marine",
     "hp": 34,
     "str": 7,
@@ -415,7 +415,7 @@
     "biomes": [
       "sealab"
     ],
-    "tier": "standard",
+    "tier": "elite",
     "lootProfile": "undead",
     "hp": 30,
     "str": 6,

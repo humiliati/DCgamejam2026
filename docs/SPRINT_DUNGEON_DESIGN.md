@@ -2,7 +2,7 @@
 
 **DOC-113**
 **Created**: 2026-04-17
-**Status**: Phases A + B + C **SHIPPED 2026-04-17** (recipe schema + fetch strategy + starter recipe + quest data + i18n + timer runtime in QuestChain + Game.js wiring + DebriefFeed timer row UI). Phases D–E pending. See `SPRINT_TIMER_UI_HANDOFF.md` Closure Summary + `tools/_sprint-timer-cache/verify-timer.js` (84/84 green).
+**Status**: Phases A + B + C **SHIPPED 2026-04-17** (recipe schema + fetch strategy + starter recipe + quest data + i18n + timer runtime in QuestChain + Game.js wiring + DebriefFeed timer row UI). **Tooling shipped 2026-04-17**: BV stamp library with 6 sprint dungeon templates (entry vestibule, T-junction, dead-end chest, trap corridor, fetch chamber, breakable shortcut), tile picker search + MRU, world designer sprint quest annotations + timer badges. Phases D–E (hero pursuit + polish) pending. See `SPRINT_TIMER_UI_HANDOFF.md` Closure Summary + `tools/_sprint-timer-cache/verify-timer.js` (84/84 green).
 **Depends on**: DOC-107 (Quest System), DOC-75 (HERO_FOYER_ENCOUNTER), DOC-74 (ACT2_NARRATIVE_OUTLINE), DOC-13 (STREET_CHRONICLES_NARRATIVE_OUTLINE), DOC-31b (COBWEB_TRAP_STRATEGY_ROADMAP)
 **Informs**: DOC-107 Phase 7 (Act 2 content), BLOCKOUT_VISUALIZER_ROADMAPv2 Pass 6 (procgen recipe schema), `engine/hero-system.js`, `engine/quest-chain.js`
 **Audience**: Design track + quest-system track + procgen track
