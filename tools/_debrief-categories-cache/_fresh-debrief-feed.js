@@ -22,6 +22,21 @@ var DebriefFeed = (function () {
   var MODE_NAMES    = ['STATUS'];
   var MAX_FEED_LINES = 40;
 
+  // ── DOC-109 Phase 5 — Auto-retract tuning ───────────────────────
+  // Expanded categories auto-collapse after an incoming update, so
+  // the "most recent" summary line reappears once the flash finishes.
+  // Policy: see docs/DEBRIEF_FEED_CATEGORIES_ROADMAP.md Phase 5.
+  //   - MIN_EXPAND_WINDOW_MS: no auto-retract during this grace window
+  //                           after expandCategory/toggleCategory open
+  //                           (protects "I just opened it, let me read").
+  //   - RETRACT_DELAY_MS:    wait this long after the triggering update
+  //                           before collapsing. Lets the bump/tier-cross
+  //                           keyframe play out before the row disappears.
+  // Explicit collapseCategory() or toggleCategory()-to-collapse always
+  // wins, cancelling any pending retract timer.
+  var CATEGORY_MIN_EXPAND_WINDOW_MS = 600;
+  var CATEGORY_RETRACT_DELAY_MS     = 600;
+
   // EyesOnly pip-bar characters
   var BAR_FULL    = '\u2588';   // █
   var BAR_PARTIAL = '\u2592';   // ▒
@@ -102,6 +117,36 @@ var DebriefFeed = (function () {
     exalted:    'Exalted'
   };
 
+  // ── DOC-109 Phase 3 — Readiness group display data ─────────────
+  // Dungeon-group metadata for the three ♠ ♣ ♦ hero-day contracts
+  // tracked by DungeonSchedule. Each group corresponds to a faction's
+  // biome palette (coral-teal ♠ / lamp-amethyst ♣ / brass-forge ♦)
+  // that matches FACTION_COLORS above, so the row tint feels like it
+  // belongs in the same widget family as the relationships rows.
+  //
+  // The groupId strings match DungeonSchedule's JAM_CONTRACTS entries
+  // ('club'/'spade'/'diamond'), so the ReadinessCalc 'group-score-change'
+  // event's `groupId` maps straight into this table without translation.
+  var GROUP_DATA = {
+    spade: {
+      label: 'Coral Cellars',
+      suit:  '\u2660', // ♠
+      tint:  '#5F9EA0' // coral-teal (matches mss)
+    },
+    club: {
+      label: 'Hero\u2019s Wake',
+      suit:  '\u2663', // ♣
+      tint:  '#6B5BA8' // lamp amethyst (matches jesuit)
+    },
+    diamond: {
+      label: 'Ironhold Depths',
+      suit:  '\u2666', // ♦
+      tint:  '#B87333' // brass (matches pinkerton)
+    }
+  };
+  // Deterministic render order (matches the ♠ ♣ ♦ print order).
+  var GROUP_ORDER = ['spade', 'club', 'diamond'];
+
   // ── DOC-109 Phase 2 — category wrapper ─────────────────────────
   // Two expandable categories ('readiness' and 'relationships') that
   // collapse their rows into a single "most recently updated" summary
@@ -125,7 +170,8 @@ var DebriefFeed = (function () {
       expanded:     false,
       revealed:     false,
       mostRecentId: null,
-      _lastUpdateAt: 0          // reserved for Phase 5 auto-retract
+      _lastUpdateAt: 0,         // wall-clock ms at last row write
+      expandedAtTs: 0           // Phase 5 — stamped on expand; drives min-window suppression
     },
     relationships: {
       id:           'relationships',
@@ -135,9 +181,15 @@ var DebriefFeed = (function () {
       expanded:     false,
       revealed:     false,
       mostRecentId: null,
-      _lastUpdateAt: 0
+      _lastUpdateAt: 0,
+      expandedAtTs: 0
     }
   };
+
+  // Phase 5 — per-category pending retract timer handle. Keyed by catId;
+  // value is whatever the sandbox's setTimeout returns (or null). Flushed
+  // on explicit collapse/toggle-to-collapse, overwritten on debounce.
+  var _retractTimers = {};
 
   // Parse a rowId of the form 'kind:subjectId' into its parts. Legacy
   // callers pass a bare faction id (no ':'), which we map to 'faction:<id>'
@@ -149,6 +201,30 @@ var DebriefFeed = (function () {
     return { kind: rowId.slice(0, colonAt), subjectId: rowId.slice(colonAt + 1) };
   }
   function _makeRowId(kind, subjectId) { return kind + ':' + subjectId; }
+
+  // ── DOC-113 Phase C — Sprint timer state ─────────────────────────
+  // Populated via showTimer()/updateTimer() which subscribe to
+  // QuestChain's 'timer-*' event bus (wiring lives in Game.init).
+  // Rendered above the category strip when non-null.
+  //
+  // Shape when active:
+  //   { questId, totalMs, remainMs, pct, zone, paused, heroArchetype, heroName }
+  //
+  // zone is one of 'green' | 'yellow' | 'red' | 'expired'. heroName is
+  // the display label looked up from i18n on showTimer() so we don't
+  // have to re-resolve it every tick.
+  var _timerState = null;
+
+  // Archetype → hero display label for the expired message. Keys match
+  // the QuestChain.timer.heroArchetype values emitted in 'timer-start'.
+  // Wrapped in i18n.t() at render time so translators can override via
+  // 'quest.sprint.hero_name.<archetype>' keys when those land.
+  var _HERO_NAMES = {
+    seeker:   'The Seeker',
+    sentinel: 'The Sentinel',
+    pursuer:  'The Pursuer',
+    hunter:   'The Hunter'
+  };
 
   // MOK avatar state
   var _mokEmoji     = '\uD83D\uDDE1\uFE0F';  // 🗡️ default
@@ -266,7 +342,7 @@ var DebriefFeed = (function () {
   // ── Incinerator Zone ────────────────────────────────────────────
 
   function _registerIncinerator() {
-    if (typeof DragDrop === 'undefined' || !_el) return;
+    if (typeof DragDrop === 'undefined' || !DragDrop || !_el) return;
 
     DragDrop.registerZone(INCINERATOR_ZONE, {
       x: 0, y: 0, w: 0, h: 0,  // Updated dynamically
@@ -298,7 +374,7 @@ var DebriefFeed = (function () {
    * Update incinerator zone bounds (call when panel layout changes).
    */
   function _updateIncineratorBounds() {
-    if (typeof DragDrop === 'undefined' || !_el) return;
+    if (typeof DragDrop === 'undefined' || !DragDrop || !_el) return;
     var rect = _el.getBoundingClientRect();
     // Convert DOM rect to canvas coordinates (panels overlay the canvas)
     var canvas = document.getElementById('view-canvas');
@@ -338,18 +414,18 @@ var DebriefFeed = (function () {
     logEvent('\uD83D\uDD25 Disposed: ' + emoji + ' ' + name, 'damage');
 
     // Grant refund if any
-    if (refund > 0 && typeof CardAuthority !== 'undefined') {
+    if (refund > 0 && typeof CardAuthority !== 'undefined' && CardAuthority) {
       CardAuthority.addGold(refund);
       logEvent('  +' + refund + 'g refund', 'loot');
     }
 
     // Play SFX
-    if (typeof AudioSystem !== 'undefined') {
+    if (typeof AudioSystem !== 'undefined' && AudioSystem) {
       AudioSystem.play('ui_close');  // placeholder burn sound
     }
 
     // Toast notification
-    if (typeof Toast !== 'undefined') {
+    if (typeof Toast !== 'undefined' && Toast) {
       var msg = '\uD83D\uDD25 ' + name + ' destroyed';
       if (refund > 0) msg += ' (+' + refund + 'g)';
       Toast.show(msg);
@@ -477,7 +553,7 @@ var DebriefFeed = (function () {
     }
 
     // Buffs
-    if (typeof StatusEffect !== 'undefined' && StatusEffect.getAll) {
+    if (typeof StatusEffect !== 'undefined' && StatusEffect && StatusEffect.getAll) {
       var effs = StatusEffect.getAll();
       if (effs && effs.length > 0) {
         html += '<div class="df-stat-row" style="color:var(--phosphor-dim)">';
@@ -488,11 +564,21 @@ var DebriefFeed = (function () {
       }
     }
 
-    // ── Category wrapper strip (DOC-109 Phase 2) ────────────────
-    // Migrated from the raw faction-strip loop. _categories.relationships
-    // owns the expanded/collapsed state for all faction rows (and, in
-    // Phase 6, NPC rows). Phase 3 will also render _categories.readiness
-    // below this block. Click the category head → toggleCategory(id).
+    // ── Sprint timer (DOC-113 Phase C) ──────────────────────────
+    // Urgent-priority countdown row for fetch-kind quest steps. Sits
+    // ABOVE the category wrappers so the player never has to expand a
+    // category to see how long they have left. _timerState is null when
+    // no sprint dungeon is active; see showTimer()/updateTimer()/hideTimer().
+    if (_timerState) html += _renderTimerRow(_timerState);
+
+    // ── Category wrapper strip (DOC-109 Phase 2 + 3) ────────────
+    // Both categories share a single render path. Readiness lands
+    // first so the dungeon scorecard reads above the standing bars —
+    // "how clean is the place right now" before "how do people feel
+    // about you". Readiness gate self-reveals on first updateReadiness;
+    // Relationships gate opens via the dispatcher cinematic (Phase 4).
+    // Click the category head → toggleCategory(id).
+    html += _renderCategoryRow(_categories.readiness);
     html += _renderCategoryRow(_categories.relationships);
 
     // Compact feed tail — last 2 events (avatar + 2-line event feed)
@@ -620,6 +706,12 @@ var DebriefFeed = (function () {
     if (row.kind === 'faction') {
       return _factionRow(row.subjectId, row);
     }
+    if (row.kind === 'readiness') {
+      return _readinessRow(row.subjectId, row);
+    }
+    if (row.kind === 'npc') {
+      return _npcRow(row.subjectId, row);
+    }
     // Unknown kind — emit nothing rather than crashing.
     return '';
   }
@@ -636,11 +728,21 @@ var DebriefFeed = (function () {
   // Mark a category as expanded (shows full body). Also reveals it if
   // it wasn't already — expanding an unrevealed category is a valid
   // entry point (e.g. the dispatcher-cinematic reveal path).
+  //
+  // Phase 5: stamps expandedAtTs on the first-flip-to-expanded so the
+  // auto-retract logic can suppress retract during the grace window.
+  // Idempotent expand (already expanded) does not re-stamp — that
+  // would reset the grace window on every programmatic expand.
   function expandCategory(catId) {
     var cat = _categories[catId];
     if (!cat) return false;
+    var wasExpanded = cat.expanded;
     cat.revealed = true;
     cat.expanded = true;
+    if (!wasExpanded) {
+      cat.expandedAtTs = _now();
+      _cancelRetract(catId);
+    }
     if (_visible) render();
     return true;
   }
@@ -649,20 +751,100 @@ var DebriefFeed = (function () {
     var cat = _categories[catId];
     if (!cat) return false;
     cat.expanded = false;
+    _cancelRetract(catId);          // Phase 5 — explicit action wins
     if (_visible) render();
     return true;
   }
 
   // Click-handler target from _renderCategoryRow. Flips expanded.
+  //
+  // Phase 5: flip-to-expanded stamps expandedAtTs (grace window); the
+  // reverse flip cancels any pending retract timer so a user click
+  // doesn't get overridden 600 ms later by a stale scheduled collapse.
   function toggleCategory(catId) {
     var cat = _categories[catId];
     if (!cat) return false;
     cat.expanded = !cat.expanded;
+    if (cat.expanded) {
+      cat.expandedAtTs = _now();
+      _cancelRetract(catId);
+    } else {
+      _cancelRetract(catId);
+    }
     if (_visible) render();
     return cat.expanded;
   }
 
+  // ── DOC-109 Phase 5 — Auto-retract machinery ────────────────────
+
+  // Monotonic clock helper — sandboxed harnesses swap the sandbox's
+  // Date object wholesale to drive the min-expand window forward, so
+  // the module reads Date.now() on every call rather than caching.
+  function _now() {
+    return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
+  }
+
+  // Clear any pending retract for catId. Safe to call when nothing is
+  // scheduled — used both by explicit collapse/toggle-to-collapse and
+  // by _scheduleRetract itself to debounce back-to-back updates.
+  function _cancelRetract(catId) {
+    var t = _retractTimers[catId];
+    if (t === undefined || t === null) return;
+    if (typeof clearTimeout === 'function') {
+      try { clearTimeout(t); } catch (e) { /* noop */ }
+    }
+    delete _retractTimers[catId];
+  }
+
+  // Arm (or re-arm) the retract timer for catId. Each new call clears
+  // the previous handle, implementing debounce — if updates keep
+  // arriving within RETRACT_DELAY_MS, the clock resets. When the
+  // timer finally fires, it re-checks the category's expanded state
+  // (a racing manual collapse may have already closed it).
+  function _scheduleRetract(catId) {
+    _cancelRetract(catId);
+    if (typeof setTimeout !== 'function') return;
+    _retractTimers[catId] = setTimeout(function () {
+      delete _retractTimers[catId];
+      var cat = _categories[catId];
+      if (!cat || !cat.expanded) return;
+      cat.expanded = false;
+      if (_visible) render();
+    }, CATEGORY_RETRACT_DELAY_MS);
+  }
+
+  // Entry point called from updateReadiness / updateRelationship
+  // after the row write lands. Only arms the timer when the category
+  // is actually expanded AND we're past the min-expand grace window.
+  // Everything else is a silent no-op — the collapsed-row mostRecent
+  // summary already updated via render(); no retract needed.
+  function _maybeScheduleRetract(catId) {
+    var cat = _categories[catId];
+    if (!cat || !cat.expanded) return;
+    var since = _now() - (cat.expandedAtTs || 0);
+    if (since < CATEGORY_MIN_EXPAND_WINDOW_MS) return;
+    _scheduleRetract(catId);
+  }
+
+  // Harness-only inspection of the pending retract handle map. Returns
+  // a count, not the handles themselves, so tests stay decoupled from
+  // whatever object shape setTimeout returns (Node vs browser).
+  function _getPendingRetractCount(catId) {
+    if (catId) {
+      return (_retractTimers[catId] !== undefined && _retractTimers[catId] !== null) ? 1 : 0;
+    }
+    var n = 0;
+    for (var k in _retractTimers) {
+      if (_retractTimers.hasOwnProperty(k) &&
+          _retractTimers[k] !== undefined && _retractTimers[k] !== null) n++;
+    }
+    return n;
+  }
+
   // Get read-only category state (tests + save serialization).
+  //
+  // Phase 5: `expandedAtTs` surfaces the grace-window anchor so
+  // harnesses can probe it without reaching into `_categories`.
   function getCategoryState(catId) {
     var cat = _categories[catId];
     if (!cat) return null;
@@ -672,18 +854,32 @@ var DebriefFeed = (function () {
       expanded:     !!cat.expanded,
       revealed:     !!cat.revealed,
       mostRecentId: cat.mostRecentId,
-      order:        cat.order.slice()
+      order:        cat.order.slice(),
+      expandedAtTs: cat.expandedAtTs || 0
     };
   }
 
   // Write a single relationships-category row. Creates the row if it's
   // new, updates favor/tier/animation flags otherwise, and moves the row
-  // to mostRecentId. Kind is 'faction' (Phase 2) or 'npc' (Phase 6).
+  // to mostRecentId. Kind is 'faction' (Phase 2) or 'npc' (Phase 4).
+  //
+  // DOC-109 Phase 4 — NPC rows carry a `meta` bag persisted on the row
+  // (icon/name/factionId/floor) so the renderer doesn't have to re-query
+  // NpcSystem on every tick. First-write fills all meta fields; later
+  // writes merge non-null keys so the favor-change fast path can omit
+  // meta entirely.
+  //
+  // `data.flair` routes explicit animation flags from the Game-layer
+  // subscribers — the 'tier-cross' ReputationBar event passes
+  // flair.tierCrossed=true even when prevTier===nextTier (defensive for
+  // duplicate emits), and the 'favor-change' handler omits flair so the
+  // row only bumps when favor actually increased.
   function _setRelationshipRow(kind, subjectId, data) {
     var cat = _categories.relationships;
     var rowId = _makeRowId(kind, subjectId);
     var existing = cat.rows[rowId];
     var now = (typeof Date !== 'undefined') ? Date.now() : 0;
+    var flair = (data && data.flair) || null;
 
     if (!existing) {
       cat.rows[rowId] = {
@@ -694,7 +890,15 @@ var DebriefFeed = (function () {
         expanded:         true,  // back-compat with getFactionState
         justRevealed:     !!(data && data.justRevealed),
         justBumped:       false,
-        justTierCrossed:  false
+        justTierCrossed:  !!(flair && flair.tierCrossed),
+        // Phase 4 — optional meta bag (npc rows use all keys; faction
+        // rows can leave this null and fall through to FACTION_* tables).
+        meta: (data && data.meta) ? {
+          icon:      data.meta.icon      || null,
+          name:      data.meta.name      || null,
+          factionId: data.meta.factionId || null,
+          floor:     data.meta.floor     || null
+        } : null
       };
       cat.order.push(rowId);
     } else {
@@ -704,7 +908,17 @@ var DebriefFeed = (function () {
       if (data && typeof data.tier === 'string')  existing.tier  = data.tier;
       if (existing.favor > prevFavor) existing.justBumped = true;
       if (existing.tier !== prevTier) existing.justTierCrossed = true;
+      if (flair && flair.tierCrossed) existing.justTierCrossed = true;
       if (data && data.justRevealed)  existing.justRevealed = true;
+      // Merge meta — only non-null keys overwrite. Lets fast-path
+      // favor-change calls pass meta:null without clobbering the icon.
+      if (data && data.meta) {
+        if (!existing.meta) existing.meta = { icon: null, name: null, factionId: null, floor: null };
+        if (data.meta.icon)      existing.meta.icon      = data.meta.icon;
+        if (data.meta.name)      existing.meta.name      = data.meta.name;
+        if (data.meta.factionId) existing.meta.factionId = data.meta.factionId;
+        if (data.meta.floor)     existing.meta.floor     = data.meta.floor;
+      }
     }
 
     cat.mostRecentId   = rowId;
@@ -712,11 +926,57 @@ var DebriefFeed = (function () {
     return cat.rows[rowId];
   }
 
+  // ── DOC-109 Phase 3 — Readiness row write/update ───────────────
+
+  // Write a single readiness row (one per dungeon group). Creates the
+  // row on first call, updates score + animation flags on subsequent
+  // calls, bumps mostRecentId so the collapsed-state summary line
+  // always shows whichever group just moved. `meta` is optional and
+  // folds into the row — future callers can stash display overrides
+  // (label/suit/tint) for ad-hoc groups that aren't in GROUP_DATA.
+  function _setReadinessRow(groupId, coreScore, meta) {
+    var cat = _categories.readiness;
+    var rowId = _makeRowId('readiness', groupId);
+    var existing = cat.rows[rowId];
+    var now = (typeof Date !== 'undefined') ? Date.now() : 0;
+    var score = +coreScore;
+    if (!isFinite(score)) score = 0;
+
+    if (!existing) {
+      cat.rows[rowId] = {
+        kind:             'readiness',
+        subjectId:        groupId,
+        score:            score,
+        prevScore:        score,
+        label:            (meta && meta.label) || null,
+        suit:             (meta && meta.suit)  || null,
+        tint:             (meta && meta.tint)  || null,
+        justRevealed:     true,
+        justBumped:       false
+      };
+      cat.order.push(rowId);
+    } else {
+      var prevScore = existing.score;
+      existing.prevScore = prevScore;
+      existing.score     = score;
+      if (meta) {
+        if (meta.label) existing.label = meta.label;
+        if (meta.suit)  existing.suit  = meta.suit;
+        if (meta.tint)  existing.tint  = meta.tint;
+      }
+      if (score > prevScore) existing.justBumped = true;
+    }
+
+    cat.mostRecentId  = rowId;
+    cat._lastUpdateAt = now;
+    return cat.rows[rowId];
+  }
+
   // ── DOC-107 Phase 3 — faction-row helpers ──────────────────────
 
   // i18n lookup with fallback to FACTION_LABELS / TIER_LABELS.
   function _i18n(key, fallback) {
-    if (typeof i18n !== 'undefined' && typeof i18n.t === 'function') {
+    if (typeof i18n !== 'undefined' && i18n && typeof i18n.t === 'function') {
       var v = i18n.t(key);
       if (v && v !== key) return v;
     }
@@ -796,6 +1056,109 @@ var DebriefFeed = (function () {
     '</div>';
   }
 
+  // ── DOC-109 Phase 3 — readiness row renderer ───────────────────
+  // Mirrors _factionRow visual language: suit glyph (♠/♣/♦) in the
+  // classic card-suit color + biome-tinted label + progress bar.
+  // The bar fill clamps at 100% visually, but when the underlying
+  // score exceeds 1.0 a ★ accent overlays the end of the bar to
+  // match ReadinessCalc.getPercent()'s "142% ★" convention.
+  function _readinessRow(groupId, rdata) {
+    var meta = GROUP_DATA[groupId] || {};
+    var label = rdata.label || meta.label ||
+                _i18n('readiness.group.' + groupId + '.label', groupId.toUpperCase());
+    var suit  = rdata.suit  || meta.suit  || '';
+    var suitColor = SUIT_COLORS[suit] || '#888888';
+    var tint  = rdata.tint  || meta.tint  || '#888888';
+
+    var scoreNum = +rdata.score;
+    if (!isFinite(scoreNum)) scoreNum = 0;
+    var rawPct     = Math.round(scoreNum * 100);
+    var fillPct    = Math.max(0, Math.min(100, rawPct));
+    var overHealed = scoreNum > 1;
+    var pctLabel   = overHealed ? (rawPct + '% \u2605') : (rawPct + '%');
+
+    var classes = 'df-readiness-row';
+    if (rdata.justRevealed) classes += ' df-readiness-reveal';
+    if (rdata.justBumped)   classes += ' df-readiness-bump';
+    if (overHealed)         classes += ' df-readiness-overhealed';
+    rdata.justRevealed = false;
+    rdata.justBumped   = false;
+
+    var rowIdAttr   = ' id="df-rd-row-'   + groupId + '"';
+    var nameIdAttr  = ' id="df-rd-name-'  + groupId + '"';
+    var suitIdAttr  = ' id="df-rd-suit-'  + groupId + '"';
+    var pctIdAttr   = ' id="df-rd-pct-'   + groupId + '"';
+    var fillIdAttr  = ' id="df-rd-fill-'  + groupId + '"';
+    var starIdAttr  = ' id="df-rd-star-'  + groupId + '"';
+
+    var suitHtml = '';
+    if (suit) {
+      suitHtml = '<span class="df-readiness-suit"' + suitIdAttr +
+        ' style="color:' + suitColor + '">' + _escape(suit) + '</span>';
+    }
+    var starHtml = overHealed
+      ? '<span class="df-readiness-star"' + starIdAttr + ' aria-hidden="true">\u2605</span>'
+      : '';
+
+    return '<div class="' + classes + '"' + rowIdAttr + '>' +
+      '<div class="df-readiness-head">' +
+        suitHtml +
+        '<span class="df-readiness-name"' + nameIdAttr + ' style="color:' + tint + '">' + _escape(label) + '</span>' +
+        '<span class="df-readiness-pct"'  + pctIdAttr  + '>' + _escape(pctLabel) + '</span>' +
+      '</div>' +
+      '<div class="df-readiness-track">' +
+        '<div class="df-readiness-fill"' + fillIdAttr + ' style="width:' + fillPct + '%;background:' + tint + '"></div>' +
+        starHtml +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── DOC-109 Phase 4 — NPC row renderer ────────────────────────────
+  // Mirrors _factionRow visual language but keyed on per-NPC meta
+  // (portrait glyph + display name + faction tint) instead of the
+  // FACTION_* static tables. Meta is persisted on row.meta by
+  // _setRelationshipRow from the Game-layer favor-change subscriber.
+  //
+  // The tier progress bar reuses _tierProgress() unchanged — NPC
+  // reputation shares the same QuestTypes.REP_TIERS scale as factions.
+  // Faction-tinted portrait + bar give the NPC row an "I belong to X"
+  // visual cue without spelling out the faction name on every line.
+  function _npcRow(npcId, ndata) {
+    var meta      = ndata.meta || {};
+    var name      = meta.name || npcId;
+    var icon      = meta.icon || '\uD83D\uDC64'; // 👤 fallback
+    var factionId = meta.factionId || null;
+    var tint      = (factionId && FACTION_COLORS[factionId]) || '#9fbfd8';
+    var tierId    = ndata.tier || 'neutral';
+    var tierLabel = _i18n('rep.tier.' + tierId, TIER_LABELS[tierId] || tierId);
+    var pct       = Math.round(_tierProgress(ndata.favor || 0, tierId) * 100);
+
+    var classes = 'df-npc-row';
+    if (ndata.justRevealed)    classes += ' df-npc-reveal';
+    if (ndata.justBumped)      classes += ' df-npc-bump';
+    if (ndata.justTierCrossed) classes += ' df-npc-tiercross';
+    ndata.justRevealed    = false;
+    ndata.justBumped      = false;
+    ndata.justTierCrossed = false;
+
+    var rowIdAttr  = ' id="df-npc-row-'  + npcId + '"';
+    var iconIdAttr = ' id="df-npc-icon-' + npcId + '"';
+    var nameIdAttr = ' id="df-npc-name-' + npcId + '"';
+    var tierIdAttr = ' id="df-npc-tier-' + npcId + '"';
+    var fillIdAttr = ' id="df-npc-fill-' + npcId + '"';
+
+    return '<div class="' + classes + '"' + rowIdAttr + ' data-npc-id="' + _escape(npcId) + '">' +
+      '<div class="df-npc-head">' +
+        '<span class="df-npc-icon"' + iconIdAttr + '>' + _escape(icon) + '</span>' +
+        '<span class="df-npc-name"' + nameIdAttr + ' style="color:' + tint + '">' + _escape(name) + '</span>' +
+        '<span class="df-npc-tier"' + tierIdAttr + '>' + _escape(tierLabel) + '</span>' +
+      '</div>' +
+      '<div class="df-npc-track">' +
+        '<div class="df-npc-fill"' + fillIdAttr + ' style="width:' + pct + '%;background:' + tint + '"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
   // Public — expand a faction row in the strip. Triggers reveal
   // animation on next render. opts.animate defaults to true.
   //
@@ -869,6 +1232,126 @@ var DebriefFeed = (function () {
     var r = cat.rows[rowId];
     if (!r) return null;
     return { favor: r.favor, tier: r.tier, expanded: !!r.expanded };
+  }
+
+  // ── DOC-109 Phase 4 — Relationship unified API (faction + NPC) ──
+
+  // Public — push new favor + tier for any relationship subject
+  // (kind='faction' or kind='npc'). This is the canonical entry point
+  // for the Game-layer ReputationBar event subscribers:
+  //
+  //   ReputationBar.on('favor-change', (kind, id, prev, next) => {
+  //     DebriefFeed.updateRelationship(kind, id, next, tierForFavor(next), meta);
+  //   });
+  //   ReputationBar.on('tier-cross', (kind, id, prevTier, nextTier) => {
+  //     DebriefFeed.updateRelationship(kind, id, favor, nextTier, {...meta, tierCrossed: true});
+  //   });
+  //
+  // `meta` is optional. For 'npc' kind, first-call meta should include
+  // {icon, name, factionId, floor} so the row renders correctly; later
+  // calls can omit meta (it's preserved row-side). If meta.tierCrossed
+  // is truthy, the row's tier-cross animation flag fires even if the
+  // tier id didn't change (defensive for the tier-cross event path).
+  //
+  // Does NOT auto-expand the relationships category — the dispatcher
+  // cinematic migration (Phase 4 step 5) calls revealCategory+expandCategory
+  // once on the first BPRD encounter. Subsequent updates refresh the row
+  // in place; the category stays whatever state the player chose.
+  //
+  // Returns the row record for harness/test convenience, or null if
+  // (kind, subjectId) is invalid.
+  function updateRelationship(kind, subjectId, favor, tier, meta) {
+    if (kind !== 'faction' && kind !== 'npc') return null;
+    if (typeof subjectId !== 'string' || !subjectId) return null;
+
+    var data = {
+      favor: (typeof favor === 'number') ? favor : 0,
+      tier:  tier || 'neutral'
+    };
+    if (meta) {
+      // tierCrossed is a flair flag, not persistent meta — strip it out
+      // into data.flair so _setRelationshipRow routes it correctly and
+      // the row's meta bag stays clean.
+      var metaCopy = {
+        icon:      meta.icon      || null,
+        name:      meta.name      || null,
+        factionId: meta.factionId || null,
+        floor:     meta.floor     || null
+      };
+      // Only attach meta if at least one field is populated — faction
+      // rows pass meta purely for the tierCrossed flair, and we don't
+      // want to wipe FACTION_* fallback rendering with all-null meta.
+      if (metaCopy.icon || metaCopy.name || metaCopy.factionId || metaCopy.floor) {
+        data.meta = metaCopy;
+      }
+      if (meta.tierCrossed) data.flair = { tierCrossed: true };
+    }
+    var row = _setRelationshipRow(kind, subjectId, data);
+    _maybeScheduleRetract('relationships');  // Phase 5 — arm auto-retract if expanded past grace window
+    if (_visible) render();
+    return row;
+  }
+
+  // Public — read-only snapshot of a relationship row. Mirrors
+  // getFactionState's shape but kind-generic, so the Phase 4 harness
+  // can probe 'npc' rows the same way Phase 2 probes 'faction' rows.
+  function getRelationshipState(kind, subjectId) {
+    var cat = _categories.relationships;
+    var rowId = _makeRowId(kind, subjectId);
+    var r = cat.rows[rowId];
+    if (!r) return null;
+    return {
+      kind:     r.kind,
+      favor:    r.favor,
+      tier:     r.tier,
+      expanded: !!r.expanded,
+      meta:     r.meta ? {
+        icon:      r.meta.icon,
+        name:      r.meta.name,
+        factionId: r.meta.factionId,
+        floor:     r.meta.floor
+      } : null
+    };
+  }
+
+  // ── DOC-109 Phase 3 — readiness public API ─────────────────────
+
+  // Public — push an updated core readiness score for a dungeon group
+  // row. Called from Game.init's subscription to
+  // ReadinessCalc's 'group-score-change' event. First call auto-reveals
+  // the readiness category (sticky reveal gate). `meta` is optional;
+  // rows fall back to the GROUP_DATA table for label/suit/tint when
+  // not supplied, so the standard ♠/♣/♦ groups render correctly with
+  // just (groupId, coreScore).
+  //
+  // Returns the row record for test/debug convenience, or null if the
+  // groupId is not a non-empty string.
+  function updateReadiness(groupId, coreScore, meta) {
+    if (typeof groupId !== 'string' || !groupId) return null;
+    var row = _setReadinessRow(groupId, coreScore, meta);
+    // Sticky reveal gate — first update anywhere in the category
+    // flips the readiness wrapper visible. Subsequent updates are no-op.
+    _categories.readiness.revealed = true;
+    _maybeScheduleRetract('readiness');  // Phase 5 — arm auto-retract if expanded past grace window
+    if (_visible) render();
+    return row;
+  }
+
+  // Public — read-only snapshot of a readiness row. Mirrors
+  // getFactionState's shape so harnesses can probe state without
+  // reaching into the category internals.
+  function getReadinessState(groupId) {
+    var cat = _categories.readiness;
+    var rowId = _makeRowId('readiness', groupId);
+    var r = cat.rows[rowId];
+    if (!r) return null;
+    return {
+      score:     r.score,
+      prevScore: r.prevScore,
+      label:     r.label || (GROUP_DATA[groupId] && GROUP_DATA[groupId].label) || null,
+      suit:      r.suit  || (GROUP_DATA[groupId] && GROUP_DATA[groupId].suit)  || null,
+      tint:      r.tint  || (GROUP_DATA[groupId] && GROUP_DATA[groupId].tint)  || null
+    };
   }
 
   // ── Feed mode ───────────────────────────────────────────────────
@@ -945,6 +1428,142 @@ var DebriefFeed = (function () {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // ── DOC-113 Phase C — Sprint timer row ──────────────────────────
+
+  // i18n helper — falls back to the fallback string when i18n is
+  // unavailable (Layer 0 unit tests, early boot). Mirrors the pattern
+  // used by _factionRow/_renderCategoryRow.
+  function _timerI18n(key, fallback, params) {
+    if (typeof i18n !== 'undefined' && i18n && i18n.t) {
+      try { return i18n.t(key, params); } catch (e) { /* fall through */ }
+    }
+    if (params && fallback) {
+      var out = fallback;
+      for (var k in params) {
+        if (Object.prototype.hasOwnProperty.call(params, k)) {
+          out = out.replace('{' + k + '}', params[k]);
+        }
+      }
+      return out;
+    }
+    return fallback;
+  }
+
+  // Format milliseconds as mm:ss with a zero-padded seconds component.
+  // Ceiling seconds so the display reads "1:00" until the tick that
+  // crosses into the next second — matches the behaviour players expect
+  // from rally-rally-style timers. Negative/NaN inputs render as '0:00'.
+  function _formatMMSS(ms) {
+    ms = +ms;
+    if (!isFinite(ms) || ms <= 0) return '0:00';
+    var totalSec = Math.ceil(ms / 1000);
+    var mins = Math.floor(totalSec / 60);
+    var secs = totalSec - mins * 60;
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }
+
+  function _renderTimerRow(t) {
+    if (!t) return '';
+    var zone = t.zone || 'green';
+    var pctClamped = Math.max(0, Math.min(1, +t.pct || 0));
+    var fillPct = (zone === 'expired') ? 0 : (pctClamped * 100);
+    var rowClasses = 'df-timer-row df-timer-zone-' + zone;
+    if (zone === 'expired') rowClasses += ' df-timer-expired';
+    if (t.paused) rowClasses += ' df-timer-paused';
+
+    var html = '';
+    html += '<div class="' + rowClasses + '" role="timer" aria-live="off">';
+    html += '<div class="df-timer-head">';
+    html += '<span class="df-timer-icon" aria-hidden="true">\u23F1</span>';
+
+    if (zone === 'expired') {
+      var heroName = t.heroName || _HERO_NAMES[t.heroArchetype] || 'The Hero';
+      html += '<span class="df-timer-label">' + _escape(_timerI18n('quest.sprint.timer_expired', 'TIME\u2019S UP')) + '</span>';
+      html += '<span class="df-timer-time" aria-hidden="true">0:00</span>';
+      html += '</div>'; // close head
+      html += '<div class="df-timer-track"><div class="df-timer-fill" style="width:0%"></div></div>';
+      html += '<div class="df-timer-hero-msg">' +
+              _escape(heroName + ' ' + _timerI18n('quest.sprint.hero_sentinel', 'blocks the exit')) +
+              '</div>';
+    } else {
+      html += '<span class="df-timer-label">' + _escape(_timerI18n('quest.sprint.timer_label', 'TIME')) + '</span>';
+      html += '<span class="df-timer-time">' + _formatMMSS(t.remainMs) + '</span>';
+      html += '</div>'; // close head
+      html += '<div class="df-timer-track">' +
+                '<div class="df-timer-fill" style="width:' + fillPct.toFixed(2) + '%"></div>' +
+              '</div>';
+    }
+    html += '</div>'; // close row
+    return html;
+  }
+
+  // Public: reveal the timer row. Called by Game.init's subscription to
+  // QuestChain's 'timer-start' event. Resets any prior timer state.
+  function showTimer(questId, totalMs, heroArchetype) {
+    if (typeof questId !== 'string' || !questId) return false;
+    var total = +totalMs;
+    if (!isFinite(total) || total <= 0) return false;
+    var arche = (typeof heroArchetype === 'string' && heroArchetype) ? heroArchetype : 'seeker';
+    _timerState = {
+      questId:       questId,
+      totalMs:       total,
+      remainMs:      total,
+      pct:           1,
+      zone:          'green',
+      paused:        false,
+      heroArchetype: arche,
+      heroName:      _HERO_NAMES[arche] || 'The Hero'
+    };
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Public: update fill + zone from a 'timer-tick' / 'timer-expired'
+  // event. Ignores updates when no timer is active (prevents spurious
+  // stray ticks from repainting a hidden row). opts.paused is optional;
+  // when omitted the existing paused state is preserved so the Game.init
+  // subscriber doesn't need to re-read paused on every tick.
+  function updateTimer(remainMs, pct, zone, opts) {
+    if (!_timerState) return false;
+    var rem = Math.max(0, +remainMs || 0);
+    var pctNum = Math.max(0, Math.min(1, +pct));
+    if (!isFinite(pctNum)) pctNum = (_timerState.totalMs > 0) ? (rem / _timerState.totalMs) : 0;
+    var z = (zone === 'green' || zone === 'yellow' || zone === 'red' || zone === 'expired')
+      ? zone
+      : _timerState.zone;
+    _timerState.remainMs = rem;
+    _timerState.pct      = pctNum;
+    _timerState.zone     = z;
+    if (opts && typeof opts.paused === 'boolean') _timerState.paused = opts.paused;
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Public: tear down the timer row — called on 'timer-cancel' when
+  // the player leaves the floor or completes the objective.
+  function hideTimer() {
+    if (!_timerState) return false;
+    _timerState = null;
+    if (_visible) _renderUnified();
+    return true;
+  }
+
+  // Test/debug helper — exposed so the Node harness can read state
+  // without poking at the private variable directly.
+  function getTimerState() {
+    if (!_timerState) return null;
+    return {
+      questId:       _timerState.questId,
+      totalMs:       _timerState.totalMs,
+      remainMs:      _timerState.remainMs,
+      pct:           _timerState.pct,
+      zone:          _timerState.zone,
+      paused:        _timerState.paused,
+      heroArchetype: _timerState.heroArchetype,
+      heroName:      _timerState.heroName
+    };
+  }
+
   // ── Public API ──────────────────────────────────────────────────
 
   return {
@@ -972,6 +1591,10 @@ var DebriefFeed = (function () {
     updateFaction:   updateFaction,
     getFactionState: getFactionState,
 
+    // DOC-109 Phase 4 — Unified relationship API (faction + NPC)
+    updateRelationship:   updateRelationship,
+    getRelationshipState: getRelationshipState,
+
     // DOC-109 Phase 2 — Category wrapper
     revealCategory:   revealCategory,
     expandCategory:   expandCategory,
@@ -979,7 +1602,23 @@ var DebriefFeed = (function () {
     toggleCategory:   toggleCategory,
     getCategoryState: getCategoryState,
 
+    // DOC-109 Phase 5 — Auto-retract introspection (harness-only; no
+    // production caller should depend on this. Returns count of pending
+    // setTimeout handles either across all categories or scoped by catId.)
+    _getPendingRetractCount: _getPendingRetractCount,
+
+    // DOC-109 Phase 3 — Readiness rows
+    updateReadiness:   updateReadiness,
+    getReadinessState: getReadinessState,
+
+    // DOC-113 Phase C — Sprint timer row
+    showTimer:     showTimer,
+    updateTimer:   updateTimer,
+    hideTimer:     hideTimer,
+    getTimerState: getTimerState,
+
     // Incinerator
     updateIncineratorBounds: _updateIncineratorBounds
   };
 })();
+// eof

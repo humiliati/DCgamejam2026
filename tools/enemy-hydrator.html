@@ -18,7 +18,7 @@
          - Export ................. download modified enemies.json + enemy-decks.json
          - Deck Composer tab ...... EATK pool, deck slot, hydrate-from-stats (Phase 5.2 shipped)
          - Intent Curve tab ....... side-by-side rows + overlay toggle + rounds clamp (Phase 5.3 shipped)
-         - Loot tab ............... STUB (§4.5 — Phase 5.4)
+         - Loot tab ............... EV breakdown + volatility + per-biome rarity (Phase 5.4 shipped)
          - Reanim Behavior tab .... STUB (§4.5 — Phase 5.5)
 
        Conventions (match npc-designer.html):
@@ -381,6 +381,110 @@
     }
     .ehc-note strong { color: var(--text-dim); }
 
+    /* ─── Loot tab (Phase 5.4) ─── */
+    .ehl-ctrls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 8px; font-size: 11px;
+    }
+    .ehl-ctrls .spacer { flex: 1; }
+    .ehl-ctrls .ehl-head { color: var(--text-dim); font-weight: 600; }
+    .ehl-meta {
+      font-size: 10px; color: var(--muted); line-height: 1.45;
+    }
+    .ehl-meta .ehl-flag {
+      color: #f0d07a; font-weight: 600; padding: 1px 5px;
+      border: 1px solid #f0d07a55; border-radius: 3px;
+    }
+    .ehl-meta .ehl-flag-err { color: #e06a6a; border-color: #e06a6a55; }
+    .ehl-dim { color: var(--muted); font-style: italic; }
+    .ehl-host { display: flex; flex-direction: column; gap: 8px; }
+    .ehl-section { display: flex; flex-direction: column; gap: 6px; }
+    .ehl-section h5 {
+      color: var(--text-dim); font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.08em; margin: 4px 0 0 0; font-weight: 600;
+    }
+
+    .ehl-summary {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 8px; margin-top: 2px;
+    }
+    .ehl-kpi {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-low);
+      border-radius: 4px; padding: 8px 10px;
+    }
+    .ehl-kpi-v { color: var(--text-dim); font-size: 14px; font-weight: 600; }
+    .ehl-kpi-k { color: var(--muted); font-size: 10px; margin-top: 2px; }
+
+    .ehl-slots {
+      width: 100%; border-collapse: collapse; font-size: 11px;
+    }
+    .ehl-slots th, .ehl-slots td {
+      text-align: left; padding: 4px 6px;
+      border-bottom: 1px solid var(--border-low);
+    }
+    .ehl-slots th {
+      color: var(--muted); font-weight: 600; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .ehl-slots tr.ehl-off td { color: var(--muted); }
+    .ehl-slots .ehl-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px; vertical-align: baseline;
+    }
+
+    .ehl-vol {
+      display: inline-block; padding: 0 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ehl-vol-low    { background: #2d4a2d; color: #9fd27a; }
+    .ehl-vol-medium { background: #4a4223; color: #f4c768; }
+    .ehl-vol-high   { background: #4a2d2d; color: #e09090; }
+
+    .ehl-cd-row {
+      border: 1px solid var(--border-low); border-radius: 4px;
+      padding: 8px 10px; margin-top: 4px;
+      background: rgba(255,255,255,0.02);
+    }
+    .ehl-cd-row.ehl-cd-agg {
+      border-color: var(--border-mid);
+      background: rgba(255,255,255,0.06);
+    }
+    .ehl-cd-head {
+      color: var(--text-dim); font-size: 11px;
+      font-weight: 600; margin-bottom: 4px;
+    }
+    .ehl-cd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ehl-cd-col h6 {
+      color: var(--muted); font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0 0 2px 0; font-weight: 600;
+    }
+
+    .ehl-wbar-row {
+      display: grid; grid-template-columns: 70px 1fr 40px;
+      gap: 6px; align-items: center; font-size: 10px;
+      margin: 2px 0;
+    }
+    .ehl-wbar-lbl { color: var(--muted); text-transform: capitalize; }
+    .ehl-wbar {
+      display: block; height: 8px; background: rgba(255,255,255,0.05);
+      border-radius: 2px; overflow: hidden;
+    }
+    .ehl-wbar-fill {
+      display: block; height: 100%; background: var(--accent, #67c7e8);
+      border-radius: 2px;
+    }
+    .ehl-wbar-pct { color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+
+    .ehl-warn {
+      padding: 6px 10px; border-radius: 3px; font-size: 10px;
+      line-height: 1.45; border-left: 2px solid;
+    }
+    .ehl-warn-info { background: rgba(103,199,232,0.08); border-color: #67c7e8; color: #b8dce8; }
+    .ehl-warn-warn { background: rgba(244,199,104,0.08); border-color: #f4c768; color: #e8ccaa; }
+    .ehl-warn-err  { background: rgba(224,106,106,0.1);  border-color: #e06a6a; color: #f0bcbc; }
+
     /* ─── Stats editor ─── */
     .eh-stats-grid {
       display: grid;
@@ -594,7 +698,7 @@
         <div class="eh-tab active" data-tab="stats">Stats</div>
         <div class="eh-tab" data-tab="deck">Deck</div>
         <div class="eh-tab" data-tab="intent">Intent Curve</div>
-        <div class="eh-tab stub" data-tab="loot">Loot</div>
+        <div class="eh-tab" data-tab="loot">Loot</div>
         <div class="eh-tab stub" data-tab="reanim">Reanim</div>
       </div>
 
@@ -772,7 +876,14 @@
           <div id="curve-body"></div>
         </div>
       </div>
-      <div id="tab-loot"   class="eh-tab-body stub" style="display:none;"><h3>Loot Cross-Ref</h3><p>Cross-refs <code>data/loot-tables.json</code> for expected-value gold + item roll.<br/>Phase 5.4 — ships next.</p></div>
+      <div id="tab-loot" class="eh-tab-body" style="display:none;">
+        <div class="ehl-ctrls">
+          <span class="ehl-head">Loot breakdown for <code id="loot-head">—</code></span>
+          <span class="spacer"></span>
+          <span class="ehl-meta" id="loot-meta"></span>
+        </div>
+        <div id="loot-host" class="ehl-host"><div id="loot-body"></div></div>
+      </div>
       <div id="tab-reanim" class="eh-tab-body stub" style="display:none;"><h3>Reanim Behavior</h3><p>Pulls <code>tools/archetype-registry.json</code> (shipped P1.1.2) for defaults by type regex.<br/>Phase 5.5 — ships next.</p></div>
 
       <!-- Balance matrix -->
@@ -825,6 +936,7 @@
   <script src="../data/enemies.js"></script>
   <script src="../data/enemy-cards.js"></script>
   <script src="../data/enemy-decks.js"></script>
+  <script src="../data/loot-tables.js"></script>
 
   <!-- ── App ─────────────────────────────────────────────────── -->
   <script>
@@ -1483,5 +1595,6 @@
   <!-- ── Phase 5.2 — Deck Composer module ─────────────────────── -->
   <script src="./js/enemy-hydrator-deck.js"></script>
   <script src="./js/enemy-hydrator-curve.js"></script>
+  <script src="./js/enemy-hydrator-loot.js"></script>
 </body>
 </html>

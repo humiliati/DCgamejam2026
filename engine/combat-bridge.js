@@ -785,6 +785,25 @@ var CombatBridge = (function () {
       var corpseY = enemy.y;
       SessionStats.inc('enemiesDefeated');
 
+      // ── DOC-107 quest fan-out ────────────────────────────────────
+      // Fire onCombatKill with the enemy's source archetype id (from
+      // enemies.json, e.g. 'ENM-003'). Quest steps predicating on
+      // `{kind:'combat', archetype:'ENM-003'}` advance here — with
+      // `count: N` support in QuestChain for N-kill steps like
+      // innkeeper_bottles step.3 (three rats). Guarded: enemies
+      // spawned from blockout data without an archetypeId won't
+      // match anything, which is correct.
+      if (typeof QuestChain !== 'undefined' &&
+          typeof QuestChain.onCombatKill === 'function' &&
+          enemy && typeof enemy.archetypeId === 'string' && enemy.archetypeId) {
+        try { QuestChain.onCombatKill(enemy.archetypeId); }
+        catch (qcErr) {
+          if (typeof console !== 'undefined') {
+            console.warn('[CombatBridge] QuestChain.onCombatKill threw:', qcErr);
+          }
+        }
+      }
+
       // Track defeat count for reward gating
       enemy.defeatCount = (enemy.defeatCount || 0) + 1;
       var firstDefeat = (enemy.defeatCount === 1);
@@ -1407,39 +1426,4 @@ var CombatBridge = (function () {
     var enemies = FloorManager.getEnemies();
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
-      if (!EnemyAI.canEngage(e)) continue;
-      var dist = Math.abs(e.x - px) + Math.abs(e.y - py);
-      if (dist <= 1 && e.awareness > 100) {
-        startCombat(e);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // ── Public API ────────────────────────────────────────────────────
-
-  /**
-   * True while the facing-turn animation is playing before combat
-   * actually starts. Input should be blocked during this window.
-   */
-  function isPending() {
-    return !!_pendingEnemy;
-  }
-
-  return {
-    init: init,
-    update: update,
-    startCombat: startCombat,
-    isPending: isPending,
-    playCard: playCard,
-    fireStack: fireStack,
-    flee: flee,
-    openChest: openChest,
-    checkEnemyProximity: checkEnemyProximity,
-    checkEnemyAggro: checkEnemyAggro,
-    interactFriendlyEnemy: interactFriendlyEnemy,
-    findDeadEnemyAt: findDeadEnemyAt,
-    resurrectAsFriendly: _resurrectAsFriendly
-  };
-})();
+      if (!E

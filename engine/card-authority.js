@@ -516,6 +516,10 @@ var CardAuthority = (function () {
     if (_state.bag.length >= getMaxBag()) return false;
     _state.bag.push(item);
     _emit('bag:changed', { bag: getBag() });
+    // DOC-107: discrete add-only event so consumers (Game → QuestChain)
+    // can fan out item-acquired without diffing the whole bag against
+    // a prior snapshot. Only fires on successful push.
+    _emit('bag:item-added', { item: item });
     return true;
   }
 
@@ -922,15 +926,4 @@ var CardAuthority = (function () {
     moveHandToBackup:  moveHandToBackup,
     moveBackupToHand:  moveBackupToHand,
 
-    // ── Lifecycle ──
-    init:            init,
-    reset:           reset,
-    failstateWipe:   failstateWipe,
-    serialize:       serialize,
-    deserialize:     deserialize,
-
-    // ── Events ──
-    on:  on,
-    off: off
-  };
-})();
+    // 

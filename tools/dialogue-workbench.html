@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Gleaner — Dialogue Tree Workbench</title>
+
+  <!-- ============================================================
+       Dialogue Tree Workbench — DOC-110 Dialogue Phase 1
+       ============================================================
+       Visual graph editor for NPC dialogue trees.
+       Loads data/dialogue-trees.js (browser sidecar) to populate
+       an interactive node graph with inline editing.
+
+       Three-pane layout:
+         Left   — tree list sidebar (searchable, with node counts)
+         Center — SVG node graph (auto-layout, draggable nodes)
+         Right  — properties panel (node text, choices, effects)
+
+       Conventions:
+         - Vanilla JS, no build step, no CDN (project rules).
+         - Palette matches tools/bark-workbench.html.
+         - Loads data/dialogue-trees.js via <script> for the
+           DIALOGUE_TREES_DATA global.
+       ============================================================ -->
+
+  <style>
+    /* ─── Palette (world-designer parity) ─── */
+    :root {
+      --bg: #1a1d22;
+      --bg-header: #0f1115;
+      --bg-side: #15181d;
+      --bg-panel: #20232a;
+      --bg-input: #0f1115;
+      --accent: #8ad;
+      --accent-dim: #789;
+      --text: #e6e6e6;
+      --text-dim: #9ab;
+      --text-em: #cfe;
+      --muted: #678;
+      --border: #333;
+      --border-mid: #456;
+      --divider: #2a2e33;
+      --good: #9c6;
+      --warn: #fc8;
+      --err: #f88;
+      --btn-bg: #2a3a4a;
+      --btn-bg-hover: #345;
+      --btn-primary-bg: #3a2d1a;
+      --btn-primary-fg: #fc8;
+      --btn-primary-border: #764;
+      --node-bg: #252830;
+      --node-border: #444;
+      --node-selected: #8ad;
+      --node-root: #6c8;
+      --node-terminal: #fa8;
+      --node-orphan: #f66;
+      --edge-color: #567;
+      --edge-exit: #f88;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "Courier New", monospace;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ─── Top header ─── */
+    #header {
+      height: 42px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      z-index: 100;
+    }
+    #header h1 {
+      font-size: 14px;
+      color: var(--accent);
+      margin: 0;
+      white-space: nowrap;
+    }
+    #header .subtitle {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    #header .spacer { flex: 1; }
+    .hdr-btn {
+      background: var(--btn-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 12px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .hdr-btn:hover { background: var(--btn-bg-hover); }
+    .hdr-btn.primary {
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: var(--btn-primary-border);
+    }
+    .dirty-badge {
+      display: none;
+      background: var(--warn);
+      color: #000;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    .dirty-badge.visible { display: inline-block; }
+
+    /* ─── Main layout ─── */
+    #main {
+      display: flex;
+      height: calc(100vh - 42px);
+    }
+
+    /* ─── Left sidebar: tree list ─── */
+    #sidebar {
+      width: 240px;
+      min-width: 180px;
+      background: var(--bg-side);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #sidebar-header {
+      padding: 8px;
+      border-bottom: 1px solid var(--divider);
+    }
+    #tree-search {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    #tree-search::placeholder { color: var(--muted); }
+    #tree-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .tree-item {
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 3px solid transparent;
+    }
+    .tree-item:hover { background: rgba(136,170,221,0.08); }
+    .tree-item.selected {
+      background: rgba(136,170,221,0.15);
+      border-left-color: var(--accent);
+      color: var(--accent);
+    }
+    .tree-item .tree-id { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-item .tree-badge {
+      font-size: 10px;
+      color: var(--muted);
+      margin-left: 6px;
+      white-space: nowrap;
+    }
+    #sidebar-footer {
+      padding: 8px;
+      border-top: 1px solid var(--divider);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ─── Center: graph canvas ─── */
+    #graph-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    #graph-svg {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #graph-svg.panning { cursor: grabbing; }
+
+    /* SVG node styles */
+    .graph-node { cursor: pointer; }
+    .graph-node rect {
+      fill: var(--node-bg);
+      stroke: var(--node-border);
+      stroke-width: 1.5;
+      rx: 6;
+    }
+    .graph-node.selected rect {
+      stroke: var(--node-selected);
+      stroke-width: 2.5;
+    }
+    .graph-node.root rect {
+      stroke: var(--node-root);
+      stroke-width: 2;
+    }
+    .graph-node.orphan rect {
+      stroke: var(--node-orphan);
+      stroke-width: 2;
+      stroke-dasharray: 5,3;
+    }
+    .graph-node .node-id {
+      fill: var(--accent);
+      font-size: 11px;
+      font-family: Consolas, monospace;
+      font-weight: bold;
+    }
+    .graph-node .node-text {
+      fill: var(--text-dim);
+      font-size: 10px;
+      font-family: Consolas, monospace;
+    }
+    .graph-node .node-badge {
+      fill: var(--muted);
+      font-size: 9px;
+      font-family: Consolas, monospace;
+    }
+    .graph-node .choice-dot {
+      fill: var(--accent-dim);
+      stroke: none;
+    }
+    .graph-node .choice-exit-dot {
+      fill: var(--edge-exit);
+      stroke: none;
+    }
+
+    /* SVG edges */
+    .graph-edge {
+      fill: none;
+      stroke: var(--edge-color);
+      stroke-width: 1.2;
+    }
+    .graph-edge.exit-edge {
+      stroke: var(--edge-exit);
+      stroke-dasharray: 4,3;
+      stroke-width: 1;
+    }
+    .graph-edge-arrow {
+      fill: var(--edge-color);
+    }
+
+    /* Graph toolbar */
+    #graph-toolbar {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      display: flex;
+      gap: 4px;
+      z-index: 10;
+    }
+    .graph-tool-btn {
+      background: var(--bg-panel);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .graph-tool-btn:hover { background: var(--btn-bg-hover); color: var(--text); }
+
+    /* Graph info overlay */
+    #graph-info {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      z-index: 10;
+    }
+
+    /* ─── Right panel: properties ─── */
+    #props-panel {
+      width: 320px;
+      min-width: 260px;
+      background: var(--bg-side);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #props-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--divider);
+      font-size: 13px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    #props-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+    }
+    #props-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    /* Property form elements */
+    .prop-section {
+      margin-bottom: 16px;
+    }
+    .prop-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .prop-input, .prop-textarea {
+      width: 100%;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .prop-textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    .prop-input:focus, .prop-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Choice list in properties */
+    .choice-item {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 6px;
+    }
+    .choice-item .choice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .choice-item .choice-idx {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .choice-item .choice-next-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .choice-next-badge.has-target {
+      background: rgba(136,170,221,0.2);
+      color: var(--accent);
+    }
+    .choice-next-badge.exit {
+      background: rgba(255,136,136,0.2);
+      color: var(--err);
+    }
+    .choice-del-btn {
+      background: none;
+      border: none;
+      color: var(--err);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      font-family: inherit;
+    }
+    .choice-del-btn:hover { color: #f44; }
+
+    .effect-tag, .showif-tag {
+      display: inline-block;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      margin-top: 2px;
+      margin-right: 3px;
+    }
+    .effect-tag { background: rgba(153,204,102,0.2); color: var(--good); }
+    .showif-tag { background: rgba(252,200,136,0.2); color: var(--warn); }
+
+    .add-btn {
+      background: var(--btn-bg);
+      color: var(--accent-dim);
+      border: 1px dashed var(--border-mid);
+      border-radius: 4px;
+      padding: 6px;
+      width: 100%;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      text-align: center;
+    }
+    .add-btn:hover { background: var(--btn-bg-hover); color: var(--accent); }
+
+    /* Coherence footer */
+    #coherence-strip {
+      border-top: 1px solid var(--divider);
+      padding: 8px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #coherence-strip .coh-title {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .coh-item {
+      font-size: 11px;
+      padding: 2px 0;
+      cursor: pointer;
+      color: var(--text-dim);
+    }
+    .coh-item:hover { color: var(--accent); }
+    .coh-item.error { color: var(--err); }
+    .coh-item.warning { color: var(--warn); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<div id="header">
+  <h1>Dialogue Tree Workbench</h1>
+  <span class="subtitle" id="hdr-stats"></span>
+  <span class="dirty-badge" id="dirty-badge">UNSAVED</span>
+  <span class="spacer"></span>
+  <button class="hdr-btn" id="btn-new-tree" title="Create new tree">+ Tree</button>
+  <button class="hdr-btn" id="btn-validate" title="Run validator">Validate</button>
+  <button class="hdr-btn primary" id="btn-export" title="Export JSON">Export JSON</button>
+</div>
+
+<!-- ─── Main layout ─── -->
+<div id="main">
+
+  <!-- Left sidebar: tree list -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <input type="text" id="tree-search" placeholder="Search trees...">
+    </div>
+    <div id="tree-list"></div>
+    <div id="sidebar-footer" id="sidebar-stats"></div>
+  </div>
+
+  <!-- Center: graph -->
+  <div id="graph-area">
+    <div id="graph-toolbar">
+      <button class="graph-tool-btn" id="btn-zoom-in" title="Zoom in">+</button>
+      <button class="graph-tool-btn" id="btn-zoom-out" title="Zoom out">-</button>
+      <button class="graph-tool-btn" id="btn-zoom-fit" title="Fit to view">Fit</button>
+      <button class="graph-tool-btn" id="btn-add-node" title="Add new node">+ Node</button>
+    </div>
+    <svg id="graph-svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6" class="graph-edge-arrow"/>
+        </marker>
+        <marker id="arrow-exit" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6" fill="var(--edge-exit)"/>
+        </marker>
+      </defs>
+      <g id="graph-root"></g>
+    </svg>
+    <div id="graph-info"></div>
+  </div>
+
+  <!-- Right panel: properties -->
+  <div id="props-panel">
+    <div id="props-header">Properties</div>
+    <div id="props-body">
+      <div id="props-empty">Select a node in the graph<br>to edit its properties</div>
+      <div id="props-content" style="display:none;"></div>
+    </div>
+    <div id="coherence-strip">
+      <div class="coh-title">Coherence</div>
+      <div id="coherence-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Data: dialogue trees sidecar ─── -->
+<script src="../data/dialogue-trees.js"></script>
+
+<!-- ─── NPC manifest for cross-reference ─── -->
+<script>
+  var NPC_MANIFEST = null;
+  (function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'npc-manifest.json', false); // sync for simplicity
+    try { xhr.send(); if (xhr.status === 200) NPC_MANIFEST = JSON.parse(xhr.responseText); }
+    catch(e) { console.warn('[DialogueWorkbench] Could not load npc-manifest.json'); }
+  })();
+</script>
+
+<!-- ─── Main application ─── -->
+<script>
+(function() {
+  'use strict';
+
+  // ════════════════════════════════════════════════════════════════
+  //  State
+  // ════════════════════════════════════════════════════════════════
+
+  var _data      = null;   // Deep clone of DIALOGUE_TREES_DATA
+  var _treeId    = null;   // Currently selected tree ID
+  var _selectedNode = null; // Currently selected node ID within tree
+  var _dirty     = false;
+  var _nodePositions = {};  // treeId → { nodeId → { x, y } }
+
+  // Graph transform state
+  var _pan  = { x: 0, y: 0 };
+  var _zoom = 1;
+  var _panning = false;
+  var _panStart = null;
+
+  // Node dragging
+  var _dragging  = null;  // { nodeId, startX, startY, offsetX, offsetY }
+
+  // Layout constants
+  var NODE_W   = 180;
+  var NODE_H   = 60;
+  var NODE_PAD = 30;
+  var LEVEL_H  = 120;
+
+  // ════════════════════════════════════════════════════════════════
+  //  Init
+  // ════════════════════════════════════════════════════════════════
+
+  function init() {
+    if (typeof DIALOGUE_TREES_DATA === 'undefined') {
+      alert('DIALOGUE_TREES_DATA not found. Ensure data/dialogue-trees.js is generated.');
+      return;
+    }
+
+    // Deep clone so edits don't mutate the original
+    _data = JSON.parse(JSON.stringify(DIALOGUE_TREES_DATA));
+
+    // Update header stats
+    var ids = Object.keys(_data.trees);
+    var totalNodes = 0, totalChoices = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var t = _data.trees[ids[i]];
+      var nids = Object.keys(t.nodes);
+      totalNodes += nids.length;
+      for (var j = 0; j < nids.length; j++) {
+        totalChoices += (t.nodes[nids[j]].choices || []).length;
+      }
+    }
+    document.getElementById('hdr-stats').textContent =
+      ids.length + ' trees · ' + totalNodes + ' nodes · ' + totalChoices + ' choices';
+    document.getElementById('sidebar-footer').textContent =
+      ids.length + ' trees loaded';
+
+    // Build sidebar
+    _buildTreeList();
+
+    // Wire events
+    document.getElementById('tree-search').addEventListener('input', _buildTreeList);
+    document.getElementById('btn-zoom-in').addEventListener('click', function() { _setZoom(_zoom * 1.25); });
+    document.getElementById('btn-zoom-out').addEventListener('click', function() { _setZoom(_zoom / 1.25); });
+    document.getElementById('btn-zoom-fit').addEventListener('click', _fitToView);
+    document.getElementById('btn-add-node').addEventListener('click', _addNode);
+    document.getElementById('btn-new-tree').addEventListener('click', _newTree);
+    document.getElementById('btn-validate').addEventListener('click', _runValidation);
+    document.getElementById('btn-export').addEventListener('click', _exportJSON);
+
+    // Graph pan/zoom
+    var svg = document.getElementById('graph-svg');
+    svg.addEventListener('mousedown', _onGraphMouseDown);
+    svg.addEventListener('mousemove', _onGraphMouseMove);
+    svg.addEventListener('mouseup', _onGraphMouseUp);
+    svg.addEventListener('mouseleave', _onGraphMouseUp);
+    svg.addEventListener('wheel', _onGraphWheel, { passive: false });
+
+    // Dirty guard
+    window.addEventListener('beforeunload', function(e) {
+      if (_dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // Auto-select first tree
+    if (ids.length > 0) _selectTree(ids[0]);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Sidebar — tree list
+  // ════════════════════════════════════════════════════════════════
+
+  function _buildTreeList() {
+    var container = document.getElementById('tree-list');
+    var filter = document.getElementById('tree-search').value.toLowerCase();
+    container.innerHTML = '';
+
+    var ids = Object.keys(_data.trees);
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      if (filter && id.toLowerCase().indexOf(filter) === -1) continue;
+
+      var tree = _data.trees[id];
+      var nodeCount = Object.keys(tree.nodes).length;
+      var choiceCount = 0;
+      for (var nid in tree.nodes) {
+        choiceCount += (tree.nodes[nid].choices || []).length;
+      }
+
+      var div = document.createElement('div');
+      div.className = 'tree-item' + (id === _treeId ? ' selected' : '');
+      div.dataset.id = id;
+      div.innerHTML =
+        '<span class="tree-id">' + _esc(id) + '</span>' +
+        '<span class="tree-badge">' + nodeCount + 'n/' + choiceCount + 'c</span>';
+      div.addEventListener('click', (function(tid) {
+        return function() { _selectTree(tid); };
+      })(id));
+      container.appendChild(div);
+    }
+  }
+
+  function _selectTree(id) {
+    _treeId = id;
+    _selectedNode = null;
+    _buildTreeList();
+    _layoutTree(id);
+    _renderGraph();
+    _renderProps();
+    _runCoherence();
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Layout — Sugiyama-lite (simple layered layout)
+  // ════════════════════════════════════════════════════════════════
+
+  function _layoutTree(treeId) {
+    if (_nodePositions[treeId]) return; // Use existing positions if already laid out
+
+    var tree = _data.trees[treeId];
+    if (!tree) return;
+
+    var positions = {};
+    var nodeIds = Object.keys(tree.nodes);
+    if (nodeIds.length === 0) { _nodePositions[treeId] = positions; return; }
+
+    // Determine root entries
+    var rootEntries = [];
+    if (typeof tree.root === 'string') {
+      rootEntries.push(tree.root);
+    } else if (tree.root && tree.root.ifTrue) {
+      rootEntries.push(tree.root.ifTrue);
+      rootEntries.push(tree.root.ifFalse);
+    }
+
+    // BFS from roots to assign layers
+    var layers = {};   // nodeId → layer index
+    var queue = [];
+    for (var r = 0; r < rootEntries.length; r++) {
+      if (tree.nodes[rootEntries[r]]) {
+        layers[rootEntries[r]] = 0;
+        queue.push(rootEntries[r]);
+      }
+    }
+
+    var visited = {};
+    while (queue.length > 0) {
+      var nid = queue.shift();
+      if (visited[nid]) continue;
+      visited[nid] = true;
+
+      var node = tree.nodes[nid];
+      if (!node || !node.choices) continue;
+
+      for (var c = 0; c < node.choices.length; c++) {
+        var next = node.choices[c].next;
+        if (next && tree.nodes[next] && !visited[next]) {
+          if (layers[next] === undefined || layers[next] < layers[nid] + 1) {
+            layers[next] = layers[nid] + 1;
+          }
+          queue.push(next);
+        }
+      }
+    }
+
+    // Assign orphans to max layer + 1
+    var maxLayer = 0;
+    for (var k in layers) { if (layers[k] > maxLayer) maxLayer = layers[k]; }
+    for (var o = 0; o < nodeIds.length; o++) {
+      if (layers[nodeIds[o]] === undefined) {
+        layers[nodeIds[o]] = maxLayer + 1;
+      }
+    }
+
+    // Group by layer
+    var layerGroups = {};
+    for (var nid2 in layers) {
+      var lyr = layers[nid2];
+      if (!layerGroups[lyr]) layerGroups[lyr] = [];
+      layerGroups[lyr].push(nid2);
+    }
+
+    // Position nodes in each layer
+    var maxLayerIdx = 0;
+    for (var l in layerGroups) {
+      if (+l > maxLayerIdx) maxLayerIdx = +l;
+    }
+
+    for (var layer = 0; layer <= maxLayerIdx; layer++) {
+      var group = layerGroups[layer] || [];
+      var totalWidth = group.length * (NODE_W + NODE_PAD) - NODE_PAD;
+      var startX = -totalWidth / 2;
+
+      for (var g = 0; g < group.length; g++) {
+        positions[group[g]] = {
+          x: startX + g * (NODE_W + NODE_PAD),
+          y: layer * (NODE_H + LEVEL_H)
+        };
+      }
+    }
+
+    _nodePositions[treeId] = positions;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Graph rendering (SVG)
+  // ════════════════════════════════════════════════════════════════
+
+  function _renderGraph() {
+    var root = document.getElementById('graph-root');
+    root.innerHTML = '';
+
+    if (!_treeId || !_data.trees[_treeId]) return;
+
+    var tree = _data.trees[_treeId];
+    var positions = _nodePositions[_treeId] || {};
+
+    // Compute reachability for orphan highlighting
+    var reachable = _getReachable(tree);
+
+    // Determine root entries
+    var rootEntries = {};
+    if (typeof tree.root === 'string') {
+      rootEntries[tree.root] = true;
+    } else if (tree.root && tree.root.ifTrue) {
+      rootEntries[tree.root.ifTrue] = true;
+      rootEntries[tree.root.ifFalse] = true;
+    }
+
+    // Draw edges first (behind nodes)
+    var edgesGroup = _svgEl('g', { id: 'edges-layer' });
+    root.appendChild(edgesGroup);
+
+    for (var nid in tree.nodes) {
+      var node = tree.nodes[nid];
+      var pos  = positions[nid];
+      if (!pos || !node.choices) continue;
+
+      for (var c = 0; c < node.choices.length; c++) {
+        var next = node.choices[c].next;
+        if (!next || !positions[next]) continue;
+
+        var tpos = positions[next];
+        var fromX = pos.x + NODE_W / 2;
+        var fromY = pos.y + NODE_H;
+        var toX   = tpos.x + NODE_W / 2;
+        var toY   = tpos.y;
+
+        // Curved edge
+        var midY = (fromY + toY) / 2;
+        var d = 'M' + fromX + ',' + fromY +
+                ' C' + fromX + ',' + midY + ' ' + toX + ',' + midY + ' ' + toX + ',' + toY;
+
+        var edgePath = _svgEl('path', {
+          d: d,
+          class: 'graph-edge',
+          'marker-end': 'url(#arrow)'
+        });
+        edgesGroup.appendChild(edgePath);
+      }
+    }
+
+    // Draw nodes
+    var nodesGroup = _svgEl('g', { id: 'nodes-layer' });
+    root.appendChild(nodesGroup);
+
+    for (var nid2 in tree.nodes) {
+      var node2    = tree.nodes[nid2];
+      var pos2     = positions[nid2];
+      if (!pos2) continue;
+
+      var isRoot    = !!rootEntries[nid2];
+      var isOrphan  = !reachable[nid2];
+      var isSelected = nid2 === _selectedNode;
+      var choiceCount = (node2.choices || []).length;
+      var hasExit = false;
+      if (node2.choices) {
+        for (var ec = 0; ec < node2.choices.length; ec++) {
+          if (node2.choices[ec].next === null) { hasExit = true; break; }
+        }
+      }
+
+      var classes = 'graph-node';
+      if (isSelected) classes += ' selected';
+      if (isRoot) classes += ' root';
+      if (isOrphan) classes += ' orphan';
+
+      var g = _svgEl('g', {
+        class: classes,
+        transform: 'translate(' + pos2.x + ',' + pos2.y + ')',
+        'data-nid': nid2
+      });
+
+      // Background rect
+      g.appendChild(_svgEl('rect', {
+        width: NODE_W,
+        height: NODE_H,
+        x: 0, y: 0
+      }));
+
+      // Node ID label
+      var idLabel = _svgEl('text', {
+        class: 'node-id',
+        x: 8, y: 16
+      });
+      idLabel.textContent = nid2;
+      g.appendChild(idLabel);
+
+      // Truncated text preview
+      var preview = (node2.text || '').substring(0, 30);
+      if ((node2.text || '').length > 30) preview += '...';
+      var textLabel = _svgEl('text', {
+        class: 'node-text',
+        x: 8, y: 32
+      });
+      textLabel.textContent = preview;
+      g.appendChild(textLabel);
+
+      // Badge: choice count + markers
+      var badgeText = choiceCount + ' choice' + (choiceCount !== 1 ? 's' : '');
+      if (isRoot) badgeText = 'ROOT · ' + badgeText;
+      if (hasExit) badgeText += ' · EXIT';
+      var badge = _svgEl('text', {
+        class: 'node-badge',
+        x: 8, y: 48
+      });
+      badge.textContent = badgeText;
+      g.appendChild(badge);
+
+      // Choice dots (right edge)
+      if (node2.choices) {
+        for (var cd = 0; cd < node2.choices.length; cd++) {
+          var dotY = 12 + cd * 10;
+          if (dotY > NODE_H - 8) break;
+          var isExit = node2.choices[cd].next === null;
+          g.appendChild(_svgEl('circle', {
+            class: isExit ? 'choice-exit-dot' : 'choice-dot',
+            cx: NODE_W - 8,
+            cy: dotY,
+            r: 3
+          }));
+        }
+      }
+
+      // Click handler
+      g.addEventListener('mousedown', (function(nodeId) {
+        return function(e) {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          _onNodeMouseDown(e, nodeId);
+        };
+      })(nid2));
+
+      nodesGroup.appendChild(g);
+    }
+
+    // Apply transform
+    _applyTransform();
+  }
+
+  function _applyTransform() {
+    var root = document.getElementById('graph-root');
+    root.setAttribute('transform',
+      'translate(' + _pan.x + ',' + _pan.y + ') scale(' + _zoom + ')');
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Graph interaction (pan, zoom, drag)
+  // ════════════════════════════════════════════════════════════════
+
+  function _onGraphMouseDown(e) {
+    if (e.button !== 0) return;
+    // Only pan if clicking on the SVG background (not a node)
+    if (e.target === document.getElementById('graph-svg') ||
+        e.target.id === 'graph-root' ||
+        e.target.id === 'edges-layer') {
+      _panning = true;
+      _panStart = { x: e.clientX - _pan.x, y: e.clientY - _pan.y };
+      document.getElementById('graph-svg').classList.add('panning');
+
+      // Deselect node if clicking background
+      if (_selectedNode) {
+        _selectedNode = null;
+        _renderGraph();
+        _renderProps();
+      }
+    }
+  }
+
+  function _onGraphMouseMove(e) {
+    if (_dragging) {
+      var pos = _nodePositions[_treeId];
+      if (pos && pos[_dragging.nodeId]) {
+        var dx = (e.clientX - _dragging.startX) / _zoom;
+        var dy = (e.clientY - _dragging.startY) / _zoom;
+        pos[_dragging.nodeId].x = _dragging.offsetX + dx;
+        pos[_dragging.nodeId].y = _dragging.offsetY + dy;
+        _renderGraph();
+      }
+      return;
+    }
+    if (_panning && _panStart) {
+      _pan.x = e.clientX - _panStart.x;
+      _pan.y = e.clientY - _panStart.y;
+      _applyTransform();
+    }
+  }
+
+  function _onGraphMouseUp() {
+    _panning = false;
+    _panStart = null;
+    _dragging = null;
+    document.getElementById('graph-svg').classList.remove('panning');
+  }
+
+  function _onGraphWheel(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? 0.9 : 1.1;
+    _setZoom(_zoom * delta);
+  }
+
+  function _setZoom(z) {
+    _zoom = Math.max(0.15, Math.min(3, z));
+    _applyTransform();
+    _updateGraphInfo();
+  }
+
+  function _fitToView() {
+    if (!_treeId || !_nodePositions[_treeId]) return;
+    var positions = _nodePositions[_treeId];
+    var keys = Object.keys(positions);
+    if (keys.length === 0) return;
+
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < keys.length; i++) {
+      var p = positions[keys[i]];
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x + NODE_W > maxX) maxX = p.x + NODE_W;
+      if (p.y + NODE_H > maxY) maxY = p.y + NODE_H;
+    }
+
+    var area = document.getElementById('graph-area');
+    var areaW = area.clientWidth;
+    var areaH = area.clientHeight;
+    var graphW = maxX - minX + 80;
+    var graphH = maxY - minY + 80;
+
+    _zoom = Math.min(areaW / graphW, areaH / graphH, 1.5);
+    _pan.x = (areaW / 2) - ((minX + maxX) / 2) * _zoom;
+    _pan.y = (areaH / 2) - ((minY + maxY) / 2) * _zoom + 20;
+
+    _applyTransform();
+    _updateGraphInfo();
+  }
+
+  function _onNodeMouseDown(e, nodeId) {
+    // Select the node
+    _selectedNode = nodeId;
+    _renderProps();
+
+    // Start drag
+    var pos = _nodePositions[_treeId] && _nodePositions[_treeId][nodeId];
+    if (pos) {
+      _dragging = {
+        nodeId: nodeId,
+        startX: e.clientX,
+        startY: e.clientY,
+        offsetX: pos.x,
+        offsetY: pos.y
+      };
+    }
+
+    // Re-render to show selection
+    _renderGraph();
+  }
+
+  function _updateGraphInfo() {
+    var el = document.getElementById('graph-info');
+    el.textContent = 'Zoom: ' + Math.round(_zoom * 100) + '%';
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Properties panel
+  // ════════════════════════════════════════════════════════════════
+
+  function _renderProps() {
+    var empty   = document.getElementById('props-empty');
+    var content = document.getElementById('props-content');
+
+    if (!_treeId || !_selectedNode || !_data.trees[_treeId]) {
+      empty.style.display = 'block';
+      content.style.display = 'none';
+      document.getElementById('props-header').textContent = 'Properties';
+      return;
+    }
+
+    empty.style.display = 'none';
+    content.style.display = 'block';
+
+    var tree = _data.trees[_treeId];
+    var node = tree.nodes[_selectedNode];
+    if (!node) {
+      empty.style.display = 'block';
+      content.style.display = 'none';
+      return;
+    }
+
+    document.getElementById('props-header').textContent = _selectedNode;
+
+    var html = '';
+
+    // Root indicator
+    var isRoot = _isRootNode(_treeId, _selectedNode);
+    if (isRoot) {
+      html += '<div class="prop-section"><span class="effect-tag" style="font-size:11px;">ROOT NODE</span></div>';
+    }
+
+    // Text editor
+    html += '<div class="prop-section">' +
+      '<div class="prop-label">NPC Text</div>' +
+      '<textarea class="prop-textarea" id="prop-text" rows="3">' + _esc(node.text || '') + '</textarea>' +
+      '</div>';
+
+    // Choices
+    html += '<div class="prop-section">' +
+      '<div class="prop-label">Choices (' + (node.choices || []).length + ')</div>';
+
+    if (node.choices) {
+      for (var c = 0; c < node.choices.length; c++) {
+        var ch = node.choices[c];
+        var nextLabel = ch.next === null
+          ? '<span class="choice-next-badge exit">EXIT</span>'
+          : '<span class="choice-next-badge has-target" data-next="' + _esc(ch.next) + '">' + _esc(ch.next) + '</span>';
+
+        html += '<div class="choice-item" data-cidx="' + c + '">' +
+          '<div class="choice-header">' +
+            '<span class="choice-idx">#' + c + '</span>' +
+            nextLabel +
+            '<button class="choice-del-btn" data-del="' + c + '" title="Delete choice">&times;</button>' +
+          '</div>' +
+          '<input class="prop-input" data-field="label" data-cidx="' + c + '" value="' + _esc(ch.label || '') + '" placeholder="Choice label">' +
+          '<div style="margin-top:4px;">' +
+            '<input class="prop-input" data-field="next" data-cidx="' + c + '" value="' + (ch.next === null ? '' : _esc(ch.next || '')) + '" placeholder="Next node (empty=exit)" style="font-size:10px;">' +
+          '</div>';
+
+        // Effects
+        if (ch.effect) {
+          var effectKeys = Object.keys(ch.effect);
+          html += '<div style="margin-top:3px;">';
+          for (var ek = 0; ek < effectKeys.length; ek++) {
+            html += '<span class="effect-tag">' + _esc(effectKeys[ek]) + ': ' + ch.effect[effectKeys[ek]] + '</span>';
+          }
+          html += '</div>';
+        }
+
+        // ShowIf
+        if (ch.showIf) {
+          var showKeys = Object.keys(ch.showIf);
+          html += '<div style="margin-top:2px;">';
+          for (var sk = 0; sk < showKeys.length; sk++) {
+            html += '<span class="showif-tag">if ' + _esc(showKeys[sk]) + '=' + ch.showIf[showKeys[sk]] + '</span>';
+          }
+          html += '</div>';
+        }
+
+        html += '</div>';
+      }
+    }
+
+    html += '<button class="add-btn" id="btn-add-choice">+ Add Choice</button>';
+    html += '</div>';
+
+    content.innerHTML = html;
+
+    // Wire events
+    var textArea = document.getElementById('prop-text');
+    if (textArea) {
+      textArea.addEventListener('input', function() {
+        tree.nodes[_selectedNode].text = textArea.value;
+        _markDirty();
+        _renderGraph();
+      });
+    }
+
+    // Choice label/next inputs
+    var inputs = content.querySelectorAll('.prop-input[data-cidx]');
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].addEventListener('input', (function(inp) {
+        return function() {
+          var cidx = +inp.dataset.cidx;
+          var field = inp.dataset.field;
+          var choices = tree.nodes[_selectedNode].choices;
+          if (choices && choices[cidx]) {
+            if (field === 'next') {
+              choices[cidx].next = inp.value.trim() === '' ? null : inp.value.trim();
+            } else {
+              choices[cidx][field] = inp.value;
+            }
+            _markDirty();
+            _renderGraph();
+          }
+        };
+      })(inputs[i]));
+    }
+
+    // Delete choice buttons
+    var delBtns = content.querySelectorAll('.choice-del-btn');
+    for (var d = 0; d < delBtns.length; d++) {
+      delBtns[d].addEventListener('click', (function(idx) {
+        return function() {
+          var choices = tree.nodes[_selectedNode].choices;
+          if (choices) {
+            choices.splice(idx, 1);
+            _markDirty();
+            _renderGraph();
+            _renderProps();
+          }
+        };
+      })(+delBtns[d].dataset.del));
+    }
+
+    // Add choice button
+    var addBtn = document.getElementById('btn-add-choice');
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        if (!tree.nodes[_selectedNode].choices) {
+          tree.nodes[_selectedNode].choices = [];
+        }
+        tree.nodes[_selectedNode].choices.push({ label: 'New choice', next: null });
+        _markDirty();
+        _renderGraph();
+        _renderProps();
+      });
+    }
+
+    // Click-to-navigate on next badges
+    var badges = content.querySelectorAll('.choice-next-badge.has-target');
+    for (var b = 0; b < badges.length; b++) {
+      badges[b].addEventListener('click', (function(nextId) {
+        return function() {
+          if (tree.nodes[nextId]) {
+            _selectedNode = nextId;
+            _renderGraph();
+            _renderProps();
+            _scrollToNode(nextId);
+          }
+        };
+      })(badges[b].dataset.next));
+    }
+  }
+
+  function _scrollToNode(nodeId) {
+    var pos = _nodePositions[_treeId] && _nodePositions[_treeId][nodeId];
+    if (!pos) return;
+    var area = document.getElementById('graph-area');
+    _pan.x = area.clientWidth / 2 - pos.x * _zoom - NODE_W / 2 * _zoom;
+    _pan.y = area.clientHeight / 2 - pos.y * _zoom - NODE_H / 2 * _zoom;
+    _applyTransform();
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Coherence panel
+  // ════════════════════════════════════════════════════════════════
+
+  function _runCoherence() {
+    var list = document.getElementById('coherence-list');
+    list.innerHTML = '';
+
+    if (!_treeId || !_data.trees[_treeId]) return;
+
+    var tree = _data.trees[_treeId];
+    var issues = [];
+
+    var reachable = _getReachable(tree);
+    var nodeIds = Object.keys(tree.nodes);
+
+    // Orphans
+    for (var i = 0; i < nodeIds.length; i++) {
+      if (!reachable[nodeIds[i]]) {
+        issues.push({ type: 'warning', node: nodeIds[i], msg: 'Orphan — not reachable from root' });
+      }
+    }
+
+    // Dangling nexts
+    for (var nid in tree.nodes) {
+      var node = tree.nodes[nid];
+      if (!node.choices) continue;
+      for (var c = 0; c < node.choices.length; c++) {
+        var next = node.choices[c].next;
+        if (next !== null && next && !tree.nodes[next]) {
+          issues.push({ type: 'error', node: nid, msg: 'Choice "' + node.choices[c].label + '" → missing node "' + next + '"' });
+        }
+      }
+    }
+
+    // Empty text
+    for (var nid2 in tree.nodes) {
+      if (!tree.nodes[nid2].text || tree.nodes[nid2].text.trim() === '') {
+        issues.push({ type: 'warning', node: nid2, msg: 'Empty text' });
+      }
+    }
+
+    // NPC reference
+    if (NPC_MANIFEST && NPC_MANIFEST.byDialogueTree) {
+      var refs = NPC_MANIFEST.byDialogueTree[_treeId];
+      if (refs && refs.length > 0) {
+        var names = refs.map(function(r) { return r.name || r.id; }).join(', ');
+        issues.push({ type: 'info', node: null, msg: 'Used by: ' + names });
+      } else {
+        issues.push({ type: 'warning', node: null, msg: 'No NPC references this tree' });
+      }
+    }
+
+    if (issues.length === 0) {
+      list.innerHTML = '<div class="coh-item" style="color:var(--good);">All clean</div>';
+      return;
+    }
+
+    for (var j = 0; j < issues.length; j++) {
+      var iss = issues[j];
+      var div = document.createElement('div');
+      div.className = 'coh-item ' + (iss.type === 'error' ? 'error' : iss.type === 'warning' ? 'warning' : '');
+      div.textContent = (iss.node ? '[' + iss.node + '] ' : '') + iss.msg;
+      if (iss.node) {
+        div.addEventListener('click', (function(nid) {
+          return function() {
+            _selectedNode = nid;
+            _renderGraph();
+            _renderProps();
+            _scrollToNode(nid);
+          };
+        })(iss.node));
+      }
+      list.appendChild(div);
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  CRUD operations
+  // ════════════════════════════════════════════════════════════════
+
+  function _addNode() {
+    if (!_treeId || !_data.trees[_treeId]) return;
+    var tree = _data.trees[_treeId];
+    var base = 'new_node';
+    var id = base;
+    var n = 1;
+    while (tree.nodes[id]) { id = base + '_' + n++; }
+
+    tree.nodes[id] = { text: '', choices: [] };
+
+    // Position near center of view
+    if (!_nodePositions[_treeId]) _nodePositions[_treeId] = {};
+    var area = document.getElementById('graph-area');
+    _nodePositions[_treeId][id] = {
+      x: (-_pan.x + area.clientWidth / 2) / _zoom - NODE_W / 2,
+      y: (-_pan.y + area.clientHeight / 2) / _zoom - NODE_H / 2
+    };
+
+    _markDirty();
+    _selectedNode = id;
+    _renderGraph();
+    _renderProps();
+    _runCoherence();
+  }
+
+  function _newTree() {
+    var id = prompt('New tree ID (e.g. floor2_merchant):');
+    if (!id || !id.trim()) return;
+    id = id.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+    if (_data.trees[id]) { alert('Tree "' + id + '" already exists.'); return; }
+
+    _data.trees[id] = {
+      root: 'greeting',
+      nodes: {
+        greeting: { text: 'Hello there.', choices: [{ label: 'Goodbye', next: null }] }
+      }
+    };
+
+    _markDirty();
+    _buildTreeList();
+    _selectTree(id);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Validation
+  // ════════════════════════════════════════════════════════════════
+
+  function _runValidation() {
+    var errors = 0, warnings = 0;
+    var ids = Object.keys(_data.trees);
+
+    for (var t = 0; t < ids.length; t++) {
+      var tree = _data.trees[ids[t]];
+      var reachable = _getReachable(tree);
+      var nodeIds = Object.keys(tree.nodes);
+
+      for (var n = 0; n < nodeIds.length; n++) {
+        if (!reachable[nodeIds[n]]) warnings++;
+        var node = tree.nodes[nodeIds[n]];
+        if (!node.text || node.text.trim() === '') warnings++;
+        if (node.choices) {
+          for (var c = 0; c < node.choices.length; c++) {
+            var next = node.choices[c].next;
+            if (next !== null && next && !tree.nodes[next]) errors++;
+            if (!node.choices[c].label) errors++;
+          }
+        }
+      }
+    }
+
+    alert('Validation complete\n\n' +
+      ids.length + ' trees scanned\n' +
+      errors + ' error(s)\n' +
+      warnings + ' warning(s)\n\n' +
+      (errors === 0 ? 'PASS — no structural errors.' : 'FAIL — fix errors before export.'));
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Export
+  // ════════════════════════════════════════════════════════════════
+
+  function _exportJSON() {
+    var output = {
+      _meta: {
+        generated: new Date().toISOString(),
+        source: 'tools/dialogue-workbench.html',
+        schema: 'tools/dialogue-tree-schema.json',
+        treeCount: Object.keys(_data.trees).length
+      },
+      trees: _data.trees
+    };
+
+    var json = JSON.stringify(output, null, 2);
+    var blob = new Blob([json + '\n'], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'dialogue-trees.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    _dirty = false;
+    document.getElementById('dirty-badge').classList.remove('visible');
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Helpers
+  // ════════════════════════════════════════════════════════════════
+
+  function _getReachable(tree) {
+    var reachable = {};
+    var rootEntries = [];
+    if (typeof tree.root === 'string') {
+      rootEntries.push(tree.root);
+    } else if (tree.root && tree.root.ifTrue) {
+      rootEntries.push(tree.root.ifTrue);
+      rootEntries.push(tree.root.ifFalse);
+    }
+
+    // BFS
+    var queue = rootEntries.slice();
+    for (var i = 0; i < queue.length; i++) reachable[queue[i]] = true;
+
+    while (queue.length > 0) {
+      var nid = queue.shift();
+      var node = tree.nodes[nid];
+      if (!node || !node.choices) continue;
+      for (var c = 0; c < node.choices.length; c++) {
+        var next = node.choices[c].next;
+        if (next && tree.nodes[next] && !reachable[next]) {
+          reachable[next] = true;
+          queue.push(next);
+        }
+      }
+    }
+
+    return reachable;
+  }
+
+  function _isRootNode(treeId, nodeId) {
+    var tree = _data.trees[treeId];
+    if (!tree) return false;
+    if (typeof tree.root === 'string') return tree.root === nodeId;
+    if (tree.root && tree.root.ifTrue) {
+      return tree.root.ifTrue === nodeId || tree.root.ifFalse === nodeId;
+    }
+    return false;
+  }
+
+  function _markDirty() {
+    _dirty = true;
+    document.getElementById('dirty-badge').classList.add('visible');
+  }
+
+  function _esc(s) {
+    if (!s) return '';
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function _svgEl(tag, attrs) {
+    var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) {
+      for (var k in attrs) {
+        if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+      }
+    }
+    return el;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Boot
+  // ════════════════════════════════════════════════════════════════
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+</body>
+</html>

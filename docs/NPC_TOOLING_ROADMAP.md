@@ -767,7 +767,7 @@ auto-derivation now ships for real.
 | Deck Composer tab + drag-drop from EATK card pool | NEW | 4h | ✅ Phase 5.2 (shipped 2026-04-17, commit `fccf922`) |
 | "Hydrate from stats" heuristic engine (§4.5 rules) | NEW | 4h | ✅ Phase 5.2 (shipped 2026-04-17, commit `fccf922`) |
 | Intent Curve tab (slot contract + recommended-curve overlay, observational) | NEW | 3h | ✅ Phase 5.3 (shipped 2026-04-17) |
-| Loot tab cross-ref `data/loot-tables.json` | NEW | 2h | ⏳ stub — Phase 5.4 |
+| Loot tab cross-ref `data/loot-tables.json` | NEW | 2h | ✅ Phase 5.4 (shipped 2026-04-17) |
 | Reanim Behavior tab (pulls archetype-registry) | NEW | 1h | ⏳ stub — Phase 5.5 |
 | Balance matrix scatter plot | NEW | 3h | ✅ VS-5 (shipped 2026-04-17) |
 | Export all JSON + manifest | NEW | 1h | ✅ VS-4 (shipped 2026-04-17 — enemies.json only; `tools/enemy-manifest.json` regen via `extract-floors.js` already wired) |
@@ -863,11 +863,61 @@ The vertical slice ships the **Stats + DPS + tier-band validator + balance matri
 
 **Loose-coupling contract** — module listens to `document` events `enemy-hydrator:select` and `enemy-hydrator:revert`, reads `window.EnemyHydrator.currentRow()`, and surfaces toast errors via `window.EnemyHydrator.toast()`. Same pattern as 5.2; extends cleanly to 5.4 and 5.5.
 
-**Signal from the roster** — 5 of 26 existing decks (19%) match zero recommended-curve slots for their tier+profile. These were authored before the recommended curves existed and are now surfaced as candidates for deck rework or for authoring a `_curveOverride` that reshapes their playback without touching composition. This is the tab's core value proposition: combat behavior over time, as a reviewable artifact.
+**Signal from the roster — P5.3 rework candidates** — 5 of 26 existing decks (19%) match zero recommended-curve slots for their tier+profile; another 12 match only 1 of 6. Authored before the recommended curves existed, they now split cleanly into three rework kinds:
+
+| Enemy | Tier/Profile | Kind | Why |
+|---|---|---|---|
+| ENM-010 Soot Imp | standard/balanced | **rec-curve gap** | Pure DOT spam (`DOT,BASIC,DOT,BASIC,...`) — a legit "DoT specialist" sub-archetype the balanced curve doesn't capture. Resolution: add `standard/balanced-dot` rec curve OR retune deck. |
+| ENM-015 Scrap Brute | elite/tanky | **compositional rework** | Leads with BURST then alternates BRACE/BASIC; missing DOT + DRAIN entirely. Elite/tanky wants BRACE-BRACE-BASIC-DOT-BURST-DRAIN. Resolution: add DOT + DRAIN EATKs to deck. |
+| ENM-020 Tide Stalker | elite/tanky | **compositional rework** | `DOT,BASIC,CC,BASIC,CC,BASIC` — no BRACE, no BURST, no DRAIN. Structurally underweight for elite/tanky. Resolution: expand deck to 4 cards with at least BRACE + BURST. |
+| ENM-024 Brine Wraith | elite/tanky | **compositional rework** | Opens DRAIN (vampiric flavor — interesting!) then DOT loop. No BRACE or BURST. Resolution: either add the missing intents OR propose a new `elite/tanky-vampiric` rec curve. |
+| ENM-090 Hero's Shadow | elite/tanky | **`_curveOverride` candidate** | Has DOT + DRAIN + BURST + BASIC — all the right intents, just not in the recommended order. Perfect use case for reordering without touching composition. Resolution: author `_curveOverride: [...]` once 5.2 gets a write path. |
+
+**Pattern** — 4 of 5 are `elite/tanky`. Two readings, both probably true: (1) the `elite/tanky` rec curve is tuned tight and most authored decks happen to miss it; (2) when we re-tiered the seven deep-biome standards to elite during P5.2 closeout (open-question option (a)), several of those enemies now live in a recommended-curve bucket their composition wasn't authored for. The curve tool surfaces both readings immediately — the Phase 5.4+ audit pass should triage them into "retune composition" vs. "add `_curveOverride`" vs. "relax rec curve." No action required in 5.3 — the point of the tab is to make this visible.
 
 ---
 
-**What's next (Phase 5.4)**: Loot tab. Cross-refs `data/loot-tables.json` for expected-value gold + item roll per enemy; read-only view today, editor later. Same loose-coupling pattern.
+#### Phase 5.4 — Loot tab ✅ SHIPPED 2026-04-17
+
+| Task | File | Status |
+|------|------|--------|
+| Loot tab replaces stub — summary KPI card (gold range / drop chance / XP / guaranteed / total value / volatility), per-slot breakdown table (chance · range · EV · volatility · share), card-rarity rolldown (aggregate + per-biome rows with bar-visualized rarity + element bias), observational warnings block | `tools/enemy-hydrator.html` | ✅ |
+| Loot module — closed-form EV on 6 slot keys, tier multiplier application (currency_max_mult, card/salvage chance_add, guaranteed_drop + bonus_relic), volatility bucketing (range spread → low/med/high; chance variance p×(1−p) → low/med/high), contribPct rollup, volatility weighted rollup, normalizeWeights + meanWeights helpers for rarity visualization | `tools/js/enemy-hydrator-loot.js` (573 LOC, budget 600/750) | ✅ |
+| `data/loot-tables.js` sidecar + `tools/generate-loot-tables-sidecar.js` — `window.LOOT_TABLES_DATA = { _meta, version, enemy_resource_profiles, enemy_tier_multipliers, card_drops, breakable_loot }`; required-section guard blocks the commit on a broken source | NEW | ✅ |
+| `tools/.githooks/pre-commit` §1h — regen + stage `data/loot-tables.js` when `data/loot-tables.json` is staged | modify | ✅ |
+| Forward hook `estimateDropsOverRounds(row, tables, rounds=6)` — bridges 5.3 fight-length to 5.4 reward (returns `{ perFight: {goldEv, totalValue, xp}, perRound: {…}, volatility }`) | same module | ✅ |
+| `tools/smoke-enemy-hydrator-loot.js` — closed-form EV math (range + chance forms, tier mults, clamp), volatility bucketing on both forms, roster coverage (27 rows no exceptions), guaranteed-drop semantics (boss=key+relic, elite=card, standard=none), per-biome rolldown (single → no aggregate, multi → aggregate present, missing biome → warn), weight helpers, forward hook (default rounds, perRound scaling, volatility carry-through), 7 synthetic edge cases | NEW | ✅ |
+| `tools/check-budgets.js` — new rule for the loot module (600/750) | modify | ✅ |
+
+**Verification** (`node tools/smoke-enemy-hydrator-loot.js` → *PASS — 27 roster rows · 27 lethal views · 0 nonLethal-no-profile · synthetic edges all green.*)
+
+**Locked design calls** (from 5.4 kickoff review + design-partner feedback):
+
+1. **EV model = closed-form, add volatility signal.** Range slots: `ev = chance × (min+max)/2`, spread `(max-min)` bucketed `<2 low / ≤4 medium / >4 high`. Chance-only slots: `ev = chance × 1`, variance `p×(1−p)` bucketed `<0.09 low / <0.21 medium / high`. **Why volatility**: two enemies can have identical EV while feeling completely different (one steady, one jackpoty). Cheap to compute, no simulation, still deterministic.
+2. **Per-biome rolldown is the primary view + tiny aggregate.** Multi-biome enemies get an "Encounter mix (equal-weight · 1/N each)" row above the per-biome rows. `aggregateWeight = 1 / biomes.length`; no weighted encounter system yet. Single-biome enemies skip the aggregate to avoid visual clutter. Rejected "collapse to primary biome" (arbitrary) and "aggregate only" (hides per-biome variance — that's real design signal).
+3. **Warnings are observational, never blocking.** Four levels:
+   - `info` — N/A for non-lethal-no-profile (not a problem); "non-lethal drop source" for non-lethal-WITH-profile (valid design pattern: sparring / disarm / capture). Downgraded from "is this intentional?" warning per design review — surfacing a category, not a mistake.
+   - `warn` — missing biome in `card_drops`, unknown tier (falls back to neutral multipliers).
+   - `err` — unknown `lootProfile` (buildView still returns with profileMissing flag, summary card shows zeros).
+4. **Summary card ships six KPIs.** Gold range + EV, total drop chance, XP, guaranteed drops, total value (normalized scalar), volatility (weighted rollup). **Total value** = `Σ (slot.ev × VALUE_WEIGHTS[slotKey])` with `VALUE_WEIGHTS = {currency: 1.0, battery: 2.0, food: 1.5, card: 6.0, salvage: 2.5, key_frag: 8.0}` — designer-calibratable economic proxies, visible at the top of the module. Guaranteed drops add their typed weight; boss bonus relic adds card-weight.
+5. **Per-slot breakdown ships six columns** with slot-coloured dot, chance %, range, EV, volatility badge, contribution % + pool/bias tags. Contribution % lets designers immediately spot dominant reward channels or accidental skew.
+6. **Card-rarity rolldown = normalized bars**, not raw weights. Each biome row displays rarity (common/uncommon/rare/epic) and element bias (flame/frost/storm/neutral) as percent bars sorted canonically. Aggregate row sits on top with a visually distinct frame.
+7. **Forward hook is small-surface.** `estimateDropsOverRounds(enemy, rounds=6)` wraps `buildView` and normalizes gold-EV / totalValue / XP over N rounds without rewriting EV logic — designed as the join point with 5.3 rounds when later tooling wants "reward per turn" comparison. Drops realize on kill (one terminal event), so `perRound = perFight / rounds`; dead simple, leaves room for later per-round-drop semantics without API churn.
+8. **No exporter registration, no writes.** Module is purely observational. An editor surface is deferred per the roadmap's explicit "read-only today, editor later" call.
+
+**Loose-coupling contract** — identical shape to 5.2/5.3: listens to `document` events `enemy-hydrator:select` and `enemy-hydrator:revert`, reads `window.EnemyHydrator.currentRow()`, surfaces toasts via `window.EnemyHydrator.toast()`. Exposes `window.EnemyHydratorLoot` debug surface with all pure functions + `getCurrentView()`/`getCurrentId()`.
+
+**Signal from the roster — P5.4 observations**:
+
+- **27/27 lethal+nonLethal rows resolve cleanly** — 24 lethal-with-profile + 3 nonLethal-with-profile (Dungeon Rat / Bio-Hazard Slime / Wandering Vendor). All three nonLethal-with-profile fall into the "non-lethal drop source" info category (sparring / capture / disarm pattern), confirming that the design-review reframing was correct — these aren't bugs, they're a recognized category.
+- **No missing profiles and no missing tier mappings** — the roster has stayed clean against `loot-tables.json` since the P5.2 re-tiering resolution (open-question option (a)).
+- **Element bias is under-used in loot-tables.json** — all three biomes have bias tables, but because the Loot tab surfaces rarity *and* element side-by-side, an imbalance would show up visually (e.g. `sealab: flame=10` vs `storm=40`). Not a design signal against the roster yet, just a now-visible surface for future tuning.
+
+**Pass-through observation** (bridges to 5.3 rework list) — now that volatility and contribPct are visible, the five zero-match decks from P5.3 can be re-examined with a second lens: "does the enemy's drop profile match its intent profile?" A tanky enemy (BRACE/DOT intent curve) with a high-volatility drop table reads differently to players than a tanky enemy with a steady drop table. Whether to cross-correlate these two signals in P5.5 or later is a design call — the tooling now supports either answer.
+
+---
+
+**What's next (Phase 5.5)**: Reanim Behavior tab. Pulls `tools/archetype-registry.json` (shipped P1.1.2) for default behavior templates by type regex. Same loose-coupling pattern.
 
 ### Phase 6 — NPC Sprite Studio (1 day)
 
@@ -1047,4 +1097,4 @@ engine/
 **Revised**: 2026-04-16 (v1.3 — Phase 0 Chapter 4 shipped, schema v1.1.0; Phase 1+ unblocked)
 **Revised**: 2026-04-16 (v1.2 — cross-roadmap dependency audit linked + Phase 0 Chapter 4 added)
 **Created**: 2026-04-16
-**Status**: Phase 0 Ch.1–5 ✅ shipped (all inline fallbacks retired); Phase 1 MVP ✅ shipped; Phase 1.1 Schema Validation ✅ shipped; Phase 1.1.1 Post-P1.1 follow-ups ✅ shipped; Phase 1.1.2 Archetype Registry + Stamp UI ✅ shipped; **Phase 3 Ch.0 Data Foundation ✅ shipped** (inline `_registerBuiltinNodes()` retired, `data/verb-nodes.json` sole source of truth, 60 nodes across 6 hand-authored floors); **Phase 3 Ch.1 Template Registry ✅ shipped** (6 starter templates, 26 template nodes, validator + sidecar generator + pre-commit guard); **Phase 3 Ch.2 BO-V Verb-Node Stamper Layer ✅ shipped** (`tools/js/bv-verb-nodes.js` 847 LOC, template dropdown + faction-slot picker + per-floor node list + FS-API save, round-trip through Ch.0 validator PASS); **Phase 3 Ch.2 stretch — per-floor overrides ✅ shipped** (tools/verb-node-overrides/* authoring surface + validator + bundle sidecar + runtime seed + DungeonVerbNodes hook + pre-commit §1e; also added the missing `<script src="engine/dungeon-verb-nodes.js">` tag in index.html that had been silently absent). **All P1.1 deltas closed. Phase 3 fully complete including stretch.** P2 (Bark Workbench) + P4 (Archetype Studio) + P5 (Enemy Hydrator) unblocked and can begin in parallel
+**Status**: Phase 0 Ch.1–5 ✅ shipped (all inline fallbacks retired); Phase 1 MVP ✅ shipped; Phase 1.1 Schema Validation ✅ shipped; Phase 1.1.1 Post-P1.1 follow-ups ✅ shipped; Phase 1.1.2 Archetype Registry + Stamp UI ✅ shipped; **Phase 3 Ch.0 Data Foundation ✅ shipped** (inline `_registerBuiltinNodes()` retired, `data/verb-nodes.json` sole source of truth, 60 nodes across 6 hand-authored floors); **Phase 3 Ch.1 Template Registry ✅ shipped** (6 starter templates, 26 template nodes, validator + sidecar generator + pre-commit guard); **Phase 3 Ch.2 BO-V Verb-Node Stamper Layer ✅ shipped** (`tools/js/bv-verb-nodes.js` 847 LOC, template dropdown + faction-slot picker + per-floor node list + FS-API save, round-trip through Ch.0 validator PASS); **Phase 3 Ch.2 stretch — per-floor overrides ✅ shipped**; **Phase 5 Vertical Slice ✅ shipped** (Stats + DPS + tier-band validator + balance matrix; 27 enemies validated); **Phase 5.2 Deck Composer ✅ shipped 2026-04-17** (`tools/js/enemy-hydrator-deck.js` 641 LOC, §4.5 hydrate heuristic, EATK pool + slot editor + preview with Apply/Cancel, enemy-decks/enemy-cards sidecars + pre-commit §1g, smoke PASS 26 decks/24 hydrations); **Phase 5.3 Intent Curve ✅ shipped 2026-04-17** (`tools/js/enemy-hydrator-curve.js` 531 LOC, slot contract + recommended-curve library + side-by-side/overlay rows + `_curveOverride` read-only + rounds clamp [1..12], observational/no-exporter, smoke PASS 26 expansions/7 synthetic); **Phase 5.4 Loot tab ✅ shipped 2026-04-17** (`tools/js/enemy-hydrator-loot.js` 573 LOC, closed-form EV + volatility (range spread + chance variance bucketing) + per-biome card-rarity rolldown with equal-weight aggregate + 6-KPI summary with normalized total value + contribPct per slot + forward hook `estimateDropsOverRounds(enemy, rounds=6)` bridging 5.3→5.4, observational/no-exporter, smoke PASS 27 roster rows · 8 assertion groups). **Next**: Phase 5.5 Reanim Behavior.

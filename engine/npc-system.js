@@ -1018,6 +1018,25 @@ var NpcSystem = (function () {
     // Lock NPC in place and animate for all talkable types
     _engageTalk(npc);
 
+    // ── DOC-107 quest fan-out ──────────────────────────────────────
+    // Fire onNpcTalk for every interaction (any npcType). Branch is
+    // null at this entry point — it represents "conversation started".
+    // status-bar._renderDialogueNode() fires per-node branch events
+    // for tree-driven NPCs (INTERACTIVE/DISPATCHER) so steps with a
+    // branch predicate can match on tree traversal. AMBIENT/VENDOR
+    // NPCs only get this single root-level fan-out, which is enough
+    // for `{kind:'npc', npcId}` predicates.
+    if (typeof QuestChain !== 'undefined' &&
+        typeof QuestChain.onNpcTalk === 'function' &&
+        npc && typeof npc.id === 'string') {
+      try { QuestChain.onNpcTalk(npc.id, null); }
+      catch (e) {
+        if (typeof console !== 'undefined') {
+          console.warn('[NpcSystem] QuestChain.onNpcTalk threw:', e);
+        }
+      }
+    }
+
     switch (npc.npcType) {
       case TYPES.AMBIENT:
         // OK-interact on AMBIENT NPCs cycles their bark pool into the
@@ -1314,36 +1333,3 @@ var NpcSystem = (function () {
       var floorId = floors[i];
       var defs = _defs[floorId];
       for (var j = 0; j < defs.length; j++) {
-        if (defs[j].id === npcId) {
-          return {
-            id:        defs[j].id,
-            name:      defs[j].name  || 'Passerby',
-            emoji:     defs[j].emoji || '\uD83D\uDC64',
-            factionId: defs[j].factionId || null,
-            floorId:   floorId
-          };
-        }
-      }
-    }
-    return null;
-  }
-
-  // ── Public API ────────────────────────────────────────────────────
-
-  return Object.freeze({
-    TYPES:        TYPES,
-    init:         init,
-    register:     register,
-    registerTree: registerTree,
-    spawn:        spawn,
-    tick:         tick,
-    interact:     interact,
-    engageTalk:   _engageTalk,
-    clearActive:  clearActive,
-    findById:     findById,
-    findAtTile:   findAtTile,
-    isTalkable:   isTalkable,
-    getGateCheck: getGateCheck,
-    getNpcMeta:   getNpcMeta
-  });
-})();

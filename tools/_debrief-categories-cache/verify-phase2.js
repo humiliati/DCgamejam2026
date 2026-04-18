@@ -1,42 +1,7 @@
 #!/usr/bin/env node
 /**
  * DOC-109 Phase 2 — DebriefFeed category wrapper verification.
- *
- * Loads the REAL engine/debrief-feed.js under a fresh-inode copy (same
- * bindfs-cache bypass as Phase 0/1) and exercises five contract groups:
- *
- *   G1 — initial shape: both categories (readiness + relationships)
- *        exist via getCategoryState, revealed=false, expanded=false,
- *        order=[], mostRecentId=null. No render output for unrevealed
- *        categories. Legacy getFactionState returns null for unknown id.
- *
- *   G2 — legacy expandFaction routes through: expandFaction('bprd')
- *        reveals + expands the relationships category, creates a
- *        'faction:bprd' row, sets mostRecentId=faction:bprd, sets the
- *        justRevealed animation flag, leaves the readiness category
- *        untouched. getFactionState('bprd') returns expanded=true.
- *
- *   G3 — updateFaction tracks mostRecentId + animation flags: sequential
- *        updateFaction('bprd',…), updateFaction('mss',…) moves
- *        mostRecentId to 'faction:mss'; justBumped fires on favor
- *        increase; justTierCrossed fires on tier change.
- *
- *   G4 — collapsed vs expanded render DOM: collapsed category emits
- *        exactly one .df-faction-row (the mostRecentId row) inside a
- *        .df-cat-collapsed-row; expanded category emits one
- *        .df-faction-row per entry in cat.order inside
- *        .df-category-body. Chevron glyph flips ▸ → ▾.
- *
- *   G5 — toggleCategory + collapseCategory + revealCategory semantics:
- *        toggleCategory flips expanded; collapseCategory preserves
- *        revealed; revealCategory does NOT auto-expand.
- *
- * Fresh-inode cache-bust pattern (same as verify-phase0/1): every
- * source file we eval is copied to /tmp with a unique suffix before
- * read, so mid-session Edit writes to the bindfs mount are guaranteed
- * visible to Node.
- *
- * Usage: node tools/_debrief-categories-cache/verify-phase2.js
+ * Fresh-inode cache-bust pattern (same as verify-phase0/1).
  */
 'use strict';
 
@@ -49,13 +14,6 @@ var ROOT = path.resolve(__dirname, '..', '..');
 
 var _tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phase2-'));
 var _readCounter = 0;
-// bindfs page-cache bypass: engine/debrief-feed.js existed at session
-// boot, so its pages are frozen in the sandbox mount even after an
-// Edit-tool write on the Windows side. We maintain a fresh-inode mirror
-// at tools/_debrief-categories-cache/_fresh-debrief-feed.js (written
-// THIS session via the Write tool, so its pages are hot) and silently
-// redirect the engine path to it. The copy is byte-identical to the
-// real file; only the inode differs.
 var _FRESH_OVERRIDE = {
   'engine/debrief-feed.js': 'tools/_debrief-categories-cache/_fresh-debrief-feed.js'
 };
@@ -71,13 +29,6 @@ var results = [];
 function assert(group, name, cond, detail) {
   results.push({ group: group, name: name, pass: !!cond, detail: detail || '' });
 }
-
-// ── Minimal DOM shim ───────────────────────────────────────────────
-// DebriefFeed uses document.getElementById for three elements
-// (debrief-feed, df-header, df-content), plus requestAnimationFrame /
-// performance for the lagged-pool tween loop. We back each element
-// with a tiny object that captures innerHTML/textContent writes so
-// tests can assert on the rendered HTML string.
 
 function makeEl(id) {
   return {
@@ -117,7 +68,6 @@ function makeDoc() {
   };
 }
 
-// Build a fresh sandbox with the real debrief-feed.js evaluated inside.
 function makeSandbox() {
   var ctx = {
     console:    console,
@@ -127,7 +77,6 @@ function makeSandbox() {
     requestAnimationFrame: function () { return 0; },
     performance: { now: function () { return Date.now(); } },
     document:   makeDoc(),
-    // Player state: minimal fields used by _renderUnified.
     Player: {
       state: function () {
         return {
@@ -139,7 +88,6 @@ function makeSandbox() {
       getFatigue:    function () { return 0; },
       getMaxFatigue: function () { return 100; }
     },
-    // QuestTypes.REP_TIERS drives _tierProgress.
     QuestTypes: {
       REP_TIERS: [
         { id: 'hated',      min: -Infinity },
@@ -150,9 +98,9 @@ function makeSandbox() {
         { id: 'exalted',    min: 10000 }
       ]
     },
-    i18n: null,           // forces fallback labels
-    StatusEffect: null,   // no buffs rendered
-    DragDrop: null,       // incinerator registration is guarded
+    i18n: null,
+    StatusEffect: null,
+    DragDrop: null,
     Toast: null,
     AudioSystem: null,
     CardAuthority: null,
@@ -168,7 +116,6 @@ function makeSandbox() {
   return ctx;
 }
 
-// Count occurrences of a substring (for DOM assertion ergonomics).
 function countSub(hay, needle) {
   if (!hay) return 0;
   var n = 0, i = 0;
@@ -210,15 +157,12 @@ function countSub(hay, needle) {
   assert('G1', 'mostRecentId starts null',
          readiness.mostRecentId === null && relationships.mostRecentId === null);
 
-  // Unknown category id returns null
   assert('G1', 'getCategoryState(unknown) returns null',
          DF.getCategoryState('nonexistent') === null);
 
-  // Legacy getFactionState on unknown id still returns null
   assert('G1', 'getFactionState on unknown id returns null',
          DF.getFactionState('nobody') === null);
 
-  // Render produced content, but neither category should appear.
   var html = ctx.document._els['df-content'].innerHTML;
   assert('G1', 'unrevealed category emits no .df-category block',
          html.indexOf('df-category') < 0);
@@ -257,7 +201,6 @@ function countSub(hay, needle) {
   var ctx = makeSandbox();
   var DF  = ctx.DebriefFeed;
 
-  // Sequential updates — mostRecentId should track the latest.
   DF.updateFaction('bprd', 100, 'neutral');
   var afterFirst = DF.getCategoryState('relationships');
   assert('G3', 'first updateFaction appends to order',
@@ -273,13 +216,11 @@ function countSub(hay, needle) {
   assert('G3', 'second updateFaction moves mostRecentId to faction:mss',
          afterSecond.mostRecentId === 'faction:mss');
 
-  // Favor increase → justBumped
   DF.updateFaction('bprd', 300, 'neutral');
   var bprd = DF.getFactionState('bprd');
   assert('G3', 'favor increase updates favor',
          bprd.favor === 300);
 
-  // Tier change → justTierCrossed
   DF.updateFaction('bprd', 600, 'friendly');
   var bprd2 = DF.getFactionState('bprd');
   assert('G3', 'tier change sticks',
@@ -291,29 +232,29 @@ function countSub(hay, needle) {
   var ctx = makeSandbox();
   var DF  = ctx.DebriefFeed;
 
-  // Set up: 3 factions in the order so expanded-vs-collapsed diverges.
   DF.updateFaction('bprd',      100, 'neutral');
   DF.updateFaction('mss',       100, 'neutral');
   DF.updateFaction('pinkerton', 100, 'neutral');
 
-  // Reveal the category but leave it collapsed via revealCategory.
   DF.revealCategory('relationships');
 
   var htmlCollapsed = ctx.document._els['df-content'].innerHTML;
+  // Match the outer wrapper only — `class="df-category "` (trailing space).
+  // The inner head/body use `df-category-head`/`df-category-body` (hyphen),
+  // so a bare `class="df-category` matches those too.
   assert('G4', 'collapsed render emits exactly one .df-category',
-         countSub(htmlCollapsed, 'class="df-category') === 1);
+         countSub(htmlCollapsed, 'class="df-category ') === 1);
   assert('G4', 'collapsed render emits .df-cat-collapsed-row',
          htmlCollapsed.indexOf('df-cat-collapsed-row') >= 0);
   assert('G4', 'collapsed render emits exactly one .df-faction-row',
          countSub(htmlCollapsed, 'df-faction-row') === 1);
-  assert('G4', 'collapsed chevron is ▸ (right-pointing)',
+  assert('G4', 'collapsed chevron is right-pointing',
          htmlCollapsed.indexOf('\u25B8') >= 0 && htmlCollapsed.indexOf('\u25BE') < 0);
   assert('G4', 'collapsed row is the mostRecentId (pinkerton)',
          htmlCollapsed.indexOf('df-fac-row-pinkerton') >= 0 &&
          htmlCollapsed.indexOf('df-fac-row-bprd') < 0 &&
          htmlCollapsed.indexOf('df-fac-row-mss') < 0);
 
-  // Expand and re-render.
   DF.expandCategory('relationships');
   var htmlExpanded = ctx.document._els['df-content'].innerHTML;
   assert('G4', 'expanded render emits .df-category-body',
@@ -321,7 +262,7 @@ function countSub(hay, needle) {
          htmlExpanded.indexOf('df-cat-collapsed-row') < 0);
   assert('G4', 'expanded render emits 3 .df-faction-row entries',
          countSub(htmlExpanded, 'df-faction-row') === 3);
-  assert('G4', 'expanded chevron is ▾ (down-pointing)',
+  assert('G4', 'expanded chevron is down-pointing',
          htmlExpanded.indexOf('\u25BE') >= 0 && htmlExpanded.indexOf('\u25B8') < 0);
   assert('G4', 'expanded render includes all three factions',
          htmlExpanded.indexOf('df-fac-row-bprd') >= 0 &&
@@ -341,25 +282,21 @@ function countSub(hay, needle) {
   assert('G5', 'revealCategory sets revealed=true without expanding',
          s1.revealed === true && s1.expanded === false);
 
-  // toggleCategory flips → expanded=true
   var r1 = DF.toggleCategory('relationships');
   var s2 = DF.getCategoryState('relationships');
   assert('G5', 'first toggleCategory returns true (now expanded)',
          r1 === true && s2.expanded === true);
 
-  // toggleCategory again flips back → expanded=false, still revealed
   var r2 = DF.toggleCategory('relationships');
   var s3 = DF.getCategoryState('relationships');
   assert('G5', 'second toggleCategory returns false (now collapsed)',
          r2 === false && s3.expanded === false && s3.revealed === true);
 
-  // collapseCategory is a no-op when already collapsed, but preserves revealed
   DF.collapseCategory('relationships');
   var s4 = DF.getCategoryState('relationships');
   assert('G5', 'collapseCategory preserves revealed=true',
          s4.expanded === false && s4.revealed === true);
 
-  // toggle on an unknown category returns false and doesn't throw
   var rBad = DF.toggleCategory('nonexistent');
   assert('G5', 'toggleCategory on unknown id returns false',
          rBad === false);

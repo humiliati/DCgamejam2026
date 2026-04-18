@@ -46,6 +46,12 @@ var EnemyAI = (function () {
 
     return {
       id: opts.id || ('enemy_' + Math.floor(Math.random() * 99999)),
+      // DOC-107: source archetype id from enemies.json (e.g. 'ENM-003').
+      // Used by QuestChain.onCombatKill predicate matching. Distinct
+      // from `id` (instance hash) and `type` (sprite stack key).
+      // null when spawned from a hand-authored blockout entry that
+      // didn't supply one — those won't match archetype-gated quest steps.
+      archetypeId: opts.archetypeId || null,
       type: typeName,                         // Stack registry key
       x: opts.x,
       y: opts.y,
@@ -565,6 +571,10 @@ var EnemyAI = (function () {
         placed.push(createEnemy({
           x: spawn.x,
           y: spawn.y,
+          // DOC-107: blockout authors may supply `archetypeId` (or
+          // legacy `archetype` / `enemyId`) to tag the spawn with its
+          // enemies.json id so onCombatKill predicates can match.
+          archetypeId: spawn.archetypeId || spawn.archetype || spawn.enemyId || null,
           name: spawn.name || spawn.type || 'Enemy',
           emoji: spawn.emoji || _resolveEmoji(spawn.type),
           hp: spawn.hp || 5,
@@ -637,6 +647,10 @@ var EnemyAI = (function () {
       enemies.push(createEnemy({
         x: ex,
         y: ey,
+        // DOC-107: source archetype id from enemies.json (e.g. 'ENM-003').
+        // Threaded through createEnemy so combat-bridge can fan out
+        // QuestChain.onCombatKill(enemy.archetypeId) on victory.
+        archetypeId: type.id || null,
         name: type.name,
         emoji: type.emoji,
         hp: type.hp + tierBonus * 2,
@@ -702,33 +716,3 @@ var EnemyAI = (function () {
   /**
    * Tick patrol-only movement for friendly (reanimated) entities.
    * Skips awareness, chase, and sight — just runs the patrol path.
-   * Called from the game loop for entities with `friendly: true` + a path.
-   */
-  function tickFriendlyPatrol(entity, grid, gridW, gridH, deltaMs) {
-    if (!entity.friendly || !entity.path) return;
-    // Respect mosey delay: negative pathTimer means "stay put"
-    if (entity.pathTimer < 0) {
-      entity.pathTimer += deltaMs;
-      return;
-    }
-    _updatePatrol(entity, grid, gridW, gridH, deltaMs);
-  }
-
-  return {
-    createEnemy: createEnemy,
-    updateEnemy: updateEnemy,
-    spawnEnemies: spawnEnemies,
-    loadPopulation: loadPopulation,
-    getAwarenessState: getAwarenessState,
-    applyFleeImmunity: applyFleeImmunity,
-    canEngage: canEngage,
-    faceToward: faceToward,
-    tickFriendlyPatrol: tickFriendlyPatrol,
-    AWARENESS: AWARENESS,
-    PATH_TYPES: PATH_TYPES,
-    SIGHT_RANGE: SIGHT_RANGE,
-    FLEE_IMMUNITY_MS: FLEE_IMMUNITY_MS,
-    tickEnemyBarks: tickEnemyBarks,
-    assignBarkPools: assignBarkPools
-  };
-})();

@@ -826,6 +826,24 @@ var StatusBar = (function () {
     var npc = _dialogueNpc || {};
     var speaker = (npc.emoji || '') + ' ' + (npc.name || '');
 
+    // ── DOC-107 quest fan-out (branch/node level) ───────────────────
+    // Fire onNpcTalk with the node id as the branch so quest steps
+    // predicating on a specific dialogue branch (e.g.
+    // `{kind:'npc', npcId:'inn_keeper', branch:'rat_report'}`) can
+    // advance when the player navigates to that node. The root-level
+    // npc talk event is fired separately from NpcSystem.interact().
+    if (typeof QuestChain !== 'undefined' &&
+        typeof QuestChain.onNpcTalk === 'function' &&
+        npc && typeof npc.id === 'string' &&
+        typeof nodeId === 'string') {
+      try { QuestChain.onNpcTalk(npc.id, nodeId); }
+      catch (e) {
+        if (typeof console !== 'undefined') {
+          console.warn('[StatusBar] QuestChain.onNpcTalk threw:', e);
+        }
+      }
+    }
+
     // Log NPC speech to history as plain text (for scroll-back after close)
     var histText = speaker.trim() + ': \u201c' + (node.text || '') + '\u201d';
     _history.unshift({ text: histText, time: _timestamp(), category: 'dialogue' });
@@ -1174,27 +1192,4 @@ var StatusBar = (function () {
   // ── Public API ──────────────────────────────────────────────────
 
   return {
-    init:              init,
-    show:              show,
-    hide:              hide,
-    updateFloor:       updateFloor,
-    updateHeading:     updateHeading,
-    updateBag:         updateBag,
-    updateDeck:        updateDeck,
-    setCombat:         setCombat,
-    setCinematicMode:  setCinematicMode,
-    refresh:           refresh,
-    pushTooltip:       pushTooltip,
-    pushDialogue:      pushDialogue,
-    clearDialogue:     clearDialogue,
-    isDialogueActive:  isDialogueActive,
-    getChoiceCount:    getChoiceCount,
-    selectChoice:      _onDialogueChoice,
-    checkWalkAway:     checkWalkAway,
-    collapseIfIdle:    collapseIfIdle,
-    forceCollapse:     forceCollapse,
-    setOnFlee: function (fn) { _onFleeCallback = fn; },
-    setOnReel: function (fn) { _onReelCallback = fn; },
-    setHoseActive: setHoseActive
-  };
-})();
+    

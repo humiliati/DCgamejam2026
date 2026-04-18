@@ -767,7 +767,15 @@ var SpatialContract = (function () {
         45: 'charging_cradle',   // CHARGING_CRADLE — steel frame + conduit
         46: 'switchboard_panel', // SWITCHBOARD — brass toggle panel
         47: 'soup_cauldron',     // SOUP_KITCHEN — iron pot on brazier
-        48: 'cot_canvas'         // COT — drab canvas bedroll
+        48: 'cot_canvas',        // COT — drab canvas bedroll
+        // ── Medical / economy fixtures (tiles 55–59) ──
+        55: 'wall_stretcher_dock', // STRETCHER_DOCK — wheeled gurney side-view
+        56: 'wall_triage_bed',     // TRIAGE_BED — hospital bed + chart clipboard
+        57: 'wall_morgue_table',   // MORGUE_TABLE — steel slab + drainage channel
+        58: 'wall_incinerator',    // INCINERATOR — iron furnace w/ ember grate
+        59: 'wall_refrig_locker',  // REFRIG_LOCKER — 2×3 mortuary drawer grid
+        // ── Trap variants (tiles 97–101) ──
+        98: 'wall_dart_launcher' // TRAP_DART_LAUNCHER — slit + 3 iron barrel mouths
       }), opts.textures),
 
       // ── Floor texture ──
@@ -793,7 +801,12 @@ var SpatialContract = (function () {
         43: 'floor_anvil_top',  // ANVIL — iron work surface
         44: 'floor_barrel_lid', // BARREL — wooden lid
         47: 'floor_soup_top',   // SOUP_KITCHEN — broth surface
-        48: 'floor_cot_top'     // COT — canvas bedroll
+        48: 'floor_cot_top',    // COT — canvas bedroll
+        // ── Trap variants (tiles 97–101) ──
+        97:  'floor_pressure_plate', // TRAP_PRESSURE_PLATE — round rusted disc + rivets
+        99:  'floor_tripwire',       // TRAP_TRIPWIRE — diagonal bronze wire with pegs
+        100: 'floor_spike_pit',      // TRAP_SPIKE_PIT — open pit with 4 iron spikes
+        101: 'floor_teleport_disc'   // TRAP_TELEPORT_DISC — arcane rune disc with glow
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -1051,7 +1064,15 @@ var SpatialContract = (function () {
         // ── Creature verb-node walls (DOC-115 §2b) ──
         50: 'nest_debris',       // NEST — chunky woven debris mound
         51: 'den_alcove',        // DEN — stone arch over dark cavity
-        53: 'energy_conduit'     // ENERGY_CONDUIT — brass frame + cyan slit
+        53: 'energy_conduit',    // ENERGY_CONDUIT — brass frame + cyan slit
+        // ── Medical / economy fixtures (tiles 55–59) — triage wards & morgue dungeons ──
+        55: 'wall_stretcher_dock', // STRETCHER_DOCK — wheeled gurney side-view
+        56: 'wall_triage_bed',     // TRIAGE_BED — hospital bed + chart clipboard
+        57: 'wall_morgue_table',   // MORGUE_TABLE — steel slab + drainage channel
+        58: 'wall_incinerator',    // INCINERATOR — iron furnace w/ ember grate
+        59: 'wall_refrig_locker',  // REFRIG_LOCKER — 2×3 mortuary drawer grid
+        // ── Trap variants (tiles 97–101) — dungeon is primary habitat ──
+        98: 'wall_dart_launcher' // TRAP_DART_LAUNCHER — slit + 3 iron barrel mouths
       }), opts.textures),
 
       // ── Floor texture ──
@@ -1080,7 +1101,14 @@ var SpatialContract = (function () {
         76: 'floor_stone',       // TRAPDOOR_UP — stone around hatch
         82: 'floor_stone',       // WINDOW_ARROWSLIT — stone at the slit base
         83: 'floor_stone',       // WINDOW_MURDERHOLE — stone at the wall base
-        94: 'floor_stone'        // TUNNEL_RIB — walkable tile, uses tunnel floor
+        94: 'floor_stone',       // TUNNEL_RIB — walkable tile, uses tunnel floor
+        // ── Trap floor variants (tiles 97, 99, 100, 101) ──
+        97:  'floor_pressure_plate', // TRAP_PRESSURE_PLATE — round rusted disc + rivets
+        99:  'floor_tripwire',       // TRAP_TRIPWIRE — diagonal bronze wire with pegs
+        100: 'floor_spike_pit',      // TRAP_SPIKE_PIT — open pit with 4 iron spikes
+        101: 'floor_teleport_disc',  // TRAP_TELEPORT_DISC — arcane rune disc with glow
+        // ── Creature decor (tile 102) ──
+        102: 'floor_cobweb'          // COBWEB — corner-anchored silvery web on stone
       }, opts.tileFloorTextures),
 
       // ── Per-tile-type wall height overrides ──
@@ -1533,6 +1561,15 @@ var SpatialContract = (function () {
     // per-tile texture would have painted the whole face as torch-on-stone;
     // wallDecor gives us face-aware bracket placement instead.
     if (tileType === 30 || tileType === 31) {
+      return contract.textures[1] || null;
+    }
+    // WALL_DIAG_0..3 (90–93) are chamfered/angled wall segments that share
+    // the parent contract's wall material — a diagonal brick wall is still
+    // brick. Falling through to the WALL (1) texture keeps the surface
+    // continuous across the corner instead of stamping a flat-color
+    // triangle on top of an otherwise textured room. Biomes can still
+    // override by setting contract.textures[90..93] explicitly.
+    if (tileType >= 90 && tileType <= 93) {
       return contract.textures[1] || null;
     }
     return null;

@@ -1012,6 +1012,137 @@ var TextureAtlas = (function () {
       bubbleR: 90, bubbleG: 180, bubbleB: 55       // Bright bubble highlights
     });
 
+    // ── Trap variants (tiles 97–101) ─────────────────────────────────
+    // New hazard subtypes that render distinctly from the generic TRAP (8)
+    // tile. Each carries a strong silhouette cue so the player can read
+    // the threat type before triggering it.
+
+    // Pressure plate — oversize round iron disc centred in the tile with
+    // four corner rivets, shallow groove, warm rust tint. Stone surround
+    // matches the dungeon flagstone palette so the plate reads as inset.
+    _genFloorPressurePlate('floor_pressure_plate', {
+      stoneR: 58, stoneG: 54, stoneB: 50,         // Flagstone surround
+      plateR: 110, plateG: 72, plateB: 48,        // Warm rusted iron disc
+      plateHiR: 148, plateHiG: 98, plateHiB: 62,  // Disc highlight rim
+      grooveR: 25, grooveG: 20, grooveB: 18,      // Dark inset groove
+      rivetR: 155, rivetG: 135, rivetB: 95        // Brass rivet heads
+    });
+
+    // Dart launcher — opaque wall fixture. Stone block with a horizontal
+    // firing slit + 3 dart barrel mouths visible inside the slit.
+    _genWallDartLauncher('wall_dart_launcher', {
+      stoneR: 95, stoneG: 88, stoneB: 76,         // Worn sandstone
+      stoneDarkR: 60, stoneDarkG: 55, stoneDarkB: 48,
+      slitR: 12, slitG: 10, slitB: 9,             // Pitch-black slot interior
+      barrelR: 105, barrelG: 105, barrelB: 112,   // Dull iron barrel mouth
+      barrelHiR: 145, barrelHiG: 145, barrelHiB: 155 // Barrel rim highlight
+    });
+
+    // Tripwire — taut bronze wire running SW→NE across the floor at ankle
+    // height. Two peg anchors at the tile edges. Wire glints along its
+    // length; surrounding floor is standard dungeon stone.
+    _genFloorTripwire('floor_tripwire', {
+      stoneR: 55, stoneG: 52, stoneB: 48,         // Dungeon stone base
+      wireR: 155, wireG: 120, wireB: 55,          // Dull bronze wire
+      wireHiR: 220, wireHiG: 190, wireHiB: 100,   // Glint highlight
+      pegR: 85, pegG: 78, pegB: 60                // Iron peg anchors
+    });
+
+    // Spike pit — dark recessed hole with 4 iron spikes rising from the
+    // bottom. Edge vignette fades to black to sell the depth. opq=false so
+    // the raycaster paints it as a floor override, not a wall.
+    _genFloorSpikePit('floor_spike_pit', {
+      stoneR: 50, stoneG: 46, stoneB: 42,         // Stone rim (thin border)
+      pitR: 14, pitG: 12, pitB: 10,               // Pit-floor black
+      pitMidR: 28, pitMidG: 24, pitMidB: 20,      // Pit-floor mid
+      spikeR: 115, spikeG: 115, spikeB: 120,      // Iron spike body
+      spikeHiR: 175, spikeHiG: 175, spikeHiB: 180 // Spike tip specular
+    });
+
+    // Teleport disc — circular metallic plate with runic ring + center
+    // glyph, purple magical glow bleeding outward. Arcane/indigo palette.
+    _genFloorTeleportDisc('floor_teleport_disc', {
+      stoneR: 48, stoneG: 46, stoneB: 52,         // Cool stone surround
+      discR: 85, discG: 75, discB: 110,           // Dark magic-metal base
+      discHiR: 155, discHiG: 140, discHiB: 200,   // Plate highlight rim
+      glowR: 170, glowG: 90, glowB: 220,          // Purple magical glow
+      glowHiR: 220, glowHiG: 160, glowHiB: 255,   // Bright glyph highlight
+      runeR: 240, runeG: 220, runeB: 255          // Etched rune lines
+    });
+
+    // ── Medical / economy fixtures (tiles 55–59) ─────────────────────
+    // Wheeled stretcher on hospital rails — warm canvas pad + steel
+    // frame, iron wheels, leather straps. Silhouette reads as a bed on
+    // a gurney from eye level.
+    _genWallStretcherDock('wall_stretcher_dock', {
+      steelR: 125, steelG: 125, steelB: 130,      // Steel frame rail
+      steelHiR: 175, steelHiG: 175, steelHiB: 182, // Rail highlight
+      canvasR: 140, canvasG: 120, canvasB: 95,    // Warm canvas pad
+      canvasHiR: 180, canvasHiG: 158, canvasHiB: 128, // Canvas highlight
+      strapR: 78, strapG: 55, strapB: 32,         // Leather tie-down straps
+      wheelR: 35, wheelG: 32, wheelB: 30          // Dark iron wheels
+    });
+
+    // Triage bed — hospital mattress with mossy-green sheet and steel
+    // bed rails. Pillow at head, a chart clipboard hanging off the
+    // side rail. White sheet strip runs across the mattress.
+    _genWallTriageBed('wall_triage_bed', {
+      steelR: 115, steelG: 118, steelB: 122,      // Bed frame steel
+      steelHiR: 160, steelHiG: 163, steelHiB: 168, // Steel rail highlight
+      mattressR: 120, mattressG: 140, mattressB: 118, // Mossy green padding
+      mattressHiR: 155, mattressHiG: 180, mattressHiB: 152, // Padding highlight
+      sheetR: 200, sheetG: 200, sheetB: 190,      // Off-white sheet strip
+      pillowR: 210, pillowG: 210, pillowB: 198,   // Pillow fabric
+      chartR: 200, chartG: 185, chartB: 130       // Tan clipboard accent
+    });
+
+    // Morgue table — cold stainless steel slab with a central drainage
+    // channel. Subtle greenish tint, dark dried-blood runnel tracks.
+    // Low profile — eye level reads "examination table" not "bed".
+    _genWallMorgueTable('wall_morgue_table', {
+      steelR: 105, steelG: 115, steelB: 108,       // Cool green-tinted steel
+      steelHiR: 160, steelHiG: 172, steelHiB: 162, // Steel highlight
+      steelDarkR: 60, steelDarkG: 68, steelDarkB: 62, // Deep steel shadow
+      runnelR: 55, runnelG: 40, runnelB: 30,       // Dark blood-stain runnel
+      drainR: 35, drainG: 30, drainB: 28,          // Drain hole black
+      legR: 88, legG: 92, legB: 88                 // Table leg steel
+    });
+
+    // Incinerator — soot-black iron furnace with a hot orange grate at
+    // the bottom. Rivet pattern on the doors, a chimney flue on top.
+    // The grate-slits are the dominant feature (threatening/focal).
+    _genWallIncinerator('wall_incinerator', {
+      ironR: 48, ironG: 38, ironB: 32,            // Soot-black iron body
+      ironHiR: 78, ironHiG: 62, ironHiB: 48,      // Iron highlight
+      rivetR: 95, rivetG: 85, rivetB: 70,         // Brass rivet heads
+      grateR: 28, grateG: 22, grateB: 18,         // Dark grate bars
+      emberR: 220, emberG: 120, emberB: 45,       // Hot orange ember glow
+      emberHiR: 255, emberHiG: 195, emberHiB: 95, // Bright ember core
+      sootR: 22, sootG: 18, sootB: 15             // Soot streaks
+    });
+
+    // Refrigerated locker — cold steel 2x3 grid of mortuary drawer
+    // fronts. Frost-blue tint, a handle + ID card slot per drawer.
+    // Horizontal hinge lines between drawers.
+    _genWallRefrigLocker('wall_refrig_locker', {
+      steelR: 130, steelG: 148, steelB: 162,      // Cool blue-tinted steel
+      steelHiR: 175, steelHiG: 195, steelHiB: 210, // Highlight (frost cast)
+      steelDarkR: 75, steelDarkG: 90, steelDarkB: 100, // Hinge/edge shadow
+      handleR: 180, handleG: 188, handleB: 195,   // Polished handle
+      cardR: 220, cardG: 218, cardB: 205,         // ID card slot paper
+      frostR: 215, frostG: 228, frostB: 238       // Frost rime near hinges
+    });
+
+    // Cobweb — silvery web anchored at tile corners, radial spokes and
+    // concentric arcs over damp dungeon stone. Walkable, decorative
+    // floor override. Reads as "neglected corner, spider's home".
+    _genFloorCobweb('floor_cobweb', {
+      stoneR: 52, stoneG: 50, stoneB: 46,          // Dungeon stone base
+      stoneHiR: 72, stoneHiG: 68, stoneHiB: 62,    // Stone highlight
+      webR: 190, webG: 190, webB: 204,             // Pale silvery web
+      webHiR: 225, webHiG: 225, webHiB: 235        // Moon-lit glint along strands
+    });
+
     // Fungal patch — bioluminescent growth on damp dungeon stone.
     // Clusters of glowing teal-cyan caps on a dark loamy substrate with
     // occasional bright spore highlights. Walkable tile; harvestable via
@@ -6175,6 +6306,930 @@ var TextureAtlas = (function () {
         g: _clamp(p.stoneG + bt + pn * 0.9 + stain * 25),
         b: _clamp(p.stoneB + bt + pn * 0.7 - stain * 10)
       };
+    });
+  }
+
+  // ── Trap variants (tiles 97–101) ────────────────────────────────
+
+  // Pressure plate — a big round rust-iron disc inset into flagstone
+  // with four corner rivets and a dark groove around the disc edge. More
+  // menacing than the generic TRAP (8) square plate; the circular form +
+  // rust palette signals "old mechanical trigger, stepped on by many".
+  function _genFloorPressurePlate(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2, cy = S / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      var discR = 22;   // disc radius
+      var grooveW = 2.2;
+
+      // Disc interior
+      if (r <= discR) {
+        var edgeT = 1 - r / discR; // 0 at rim, 1 at centre
+        var tier = edgeT < 0.15 ? 0.78 : (edgeT > 0.55 ? 1.12 : 1.0);
+        var pn = (_hash(x + 14200, y + 14201) - 0.5) * 6;
+        // Four corner rivets inside the disc near the cardinal edges
+        var rivDist = 15;
+        var rivRadius = 2.4;
+        var onRivet = false;
+        if (Math.abs(dx) < 1.8 && Math.abs(Math.abs(dy) - rivDist) < rivRadius) onRivet = true;
+        if (Math.abs(dy) < 1.8 && Math.abs(Math.abs(dx) - rivDist) < rivRadius) onRivet = true;
+        if (onRivet) {
+          return { r: p.rivetR, g: p.rivetG, b: p.rivetB };
+        }
+        // Radial cross-hatch wear pattern
+        var ang = Math.atan2(dy, dx);
+        var hatch = Math.abs(Math.sin(ang * 8) * 3);
+        var useHi = (edgeT > 0.6) || (hatch > 2.3 && edgeT > 0.3);
+        var baseR = useHi ? p.plateHiR : p.plateR;
+        var baseG = useHi ? p.plateHiG : p.plateG;
+        var baseB = useHi ? p.plateHiB : p.plateB;
+        return {
+          r: _clamp(baseR * tier + pn),
+          g: _clamp(baseG * tier + pn * 0.9),
+          b: _clamp(baseB * tier + pn * 0.8)
+        };
+      }
+
+      // Groove ring around the disc
+      if (r <= discR + grooveW) {
+        var gn = (_hash(x + 14300, y + 14301) - 0.5) * 3;
+        return {
+          r: _clamp(p.grooveR + gn),
+          g: _clamp(p.grooveG + gn),
+          b: _clamp(p.grooveB + gn)
+        };
+      }
+
+      // Flagstone surround — same pattern as floor_trap stone
+      var blockW = 14, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      if (lx < 1 || ly < 1) {
+        return { r: _clamp(p.stoneR * 0.5), g: _clamp(p.stoneG * 0.5), b: _clamp(p.stoneB * 0.5) };
+      }
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 14400, row + 14401) - 0.5) * 10;
+      var pn2 = (_hash(x + 14500, y + 14501) - 0.5) * 3;
+      return {
+        r: _clamp(p.stoneR + bt + pn2),
+        g: _clamp(p.stoneG + bt + pn2 * 0.9),
+        b: _clamp(p.stoneB + bt + pn2 * 0.8)
+      };
+    });
+  }
+
+  // Dart launcher wall — opaque stone block with a long horizontal firing
+  // slit (pitch black interior) and three iron barrel mouths inside the
+  // slot. Strong silhouette at a glance: "this wall shoots things".
+  function _genWallDartLauncher(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Horizontal slit occupies the middle strip of the texture
+      var slitTop = 26;
+      var slitBot = 38;
+      var slitL = 6;
+      var slitR = S - 6;
+
+      if (y >= slitTop && y <= slitBot && x >= slitL && x <= slitR) {
+        // Inside slit — mostly black, with 3 barrel mouths as lighter dots
+        var barrels = [14, 32, 50]; // 3 barrels across the slit
+        var barrelY = (slitTop + slitBot) / 2;
+        for (var bi = 0; bi < barrels.length; bi++) {
+          var bdx = x - barrels[bi];
+          var bdy = y - barrelY;
+          var bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+          if (bdist <= 3.4) {
+            // Barrel mouth — ring highlight on outer, dark hole in middle
+            var useHi = bdist > 2.4 && bdist <= 3.3;
+            if (useHi) {
+              return { r: p.barrelHiR, g: p.barrelHiG, b: p.barrelHiB };
+            }
+            if (bdist <= 1.8) {
+              return { r: p.slitR, g: p.slitG, b: p.slitB };
+            }
+            return { r: p.barrelR, g: p.barrelG, b: p.barrelB };
+          }
+        }
+        // Deep shadow in the slit between barrels
+        var sn = (_hash(x + 14600, y + 14601) - 0.5) * 2;
+        return {
+          r: _clamp(p.slitR + sn),
+          g: _clamp(p.slitG + sn),
+          b: _clamp(p.slitB + sn)
+        };
+      }
+
+      // Stone block surround — big chunky courses with mortar lines
+      var blockW = 16, blockH = 8;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      if (lx < 1 || ly < 1) {
+        return { r: _clamp(p.stoneDarkR), g: _clamp(p.stoneDarkG), b: _clamp(p.stoneDarkB) };
+      }
+      var blockId = row * 7 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 14700, row + 14701) - 0.5) * 12;
+      var pn = (_hash(x + 14800, y + 14801) - 0.5) * 4;
+      // Subtle vertical soot streaks below the slit (dart residue)
+      var streak = 0;
+      if (y > slitBot && y < slitBot + 18) {
+        streak = -6 * (1 - (y - slitBot) / 18);
+      }
+      return {
+        r: _clamp(p.stoneR + bt + pn + streak),
+        g: _clamp(p.stoneG + bt + pn * 0.9 + streak),
+        b: _clamp(p.stoneB + bt + pn * 0.8 + streak)
+      };
+    });
+  }
+
+  // Tripwire floor — dungeon stone with a taut diagonal bronze wire
+  // (SW→NE) and two peg anchors. Wire has a 1px glint highlight that
+  // catches the eye. Readable even at render-distance edge.
+  function _genFloorTripwire(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      // Wire: diagonal line from (4, S-5) → (S-5, 4). Parametrise as
+      // y + x = S - 1 (approximately).
+      var wireDist = Math.abs((x + y) - (S - 1)) / Math.sqrt(2);
+
+      // Peg anchors at the two ends of the wire
+      var pegA = Math.abs(x - 4) + Math.abs(y - (S - 5));
+      var pegB = Math.abs(x - (S - 5)) + Math.abs(y - 4);
+      if (pegA < 2.5 || pegB < 2.5) {
+        return { r: p.pegR, g: p.pegG, b: p.pegB };
+      }
+
+      // Wire core (≤ 0.8 px from line) + glint pattern
+      if (wireDist < 0.9) {
+        // Glint — sinusoidal bright patches along the wire length
+        var t = (x - y + S) * 0.25;
+        var glint = Math.sin(t) > 0.6;
+        if (glint) {
+          return { r: p.wireHiR, g: p.wireHiG, b: p.wireHiB };
+        }
+        return { r: p.wireR, g: p.wireG, b: p.wireB };
+      }
+      // Wire shadow (just below/right of wire) adds contrast
+      if (wireDist < 1.8 && (x + y) > (S - 1)) {
+        var sh = 0.55;
+        return {
+          r: _clamp(p.stoneR * sh),
+          g: _clamp(p.stoneG * sh),
+          b: _clamp(p.stoneB * sh)
+        };
+      }
+
+      // Dungeon flagstone base
+      var blockW = 13, blockH = 10;
+      var row = Math.floor(y / blockH);
+      var ox = (row % 2 === 1) ? Math.floor(blockW / 2) : 0;
+      var lx = (x + ox) % blockW;
+      var ly = y % blockH;
+      if (lx < 1 || ly < 1) {
+        return { r: _clamp(p.stoneR * 0.5), g: _clamp(p.stoneG * 0.5), b: _clamp(p.stoneB * 0.5) };
+      }
+      var blockId = row * 5 + Math.floor((x + ox) / blockW);
+      var bt = (_hash(blockId + 14900, row + 14901) - 0.5) * 10;
+      var pn = (_hash(x + 15000, y + 15001) - 0.5) * 3;
+      return {
+        r: _clamp(p.stoneR + bt + pn),
+        g: _clamp(p.stoneG + bt + pn * 0.9),
+        b: _clamp(p.stoneB + bt + pn * 0.8)
+      };
+    });
+  }
+
+  // Spike pit — dark recessed hole with 4 upright iron spikes rising from
+  // the bottom. Outer stone rim is thin; most of the tile is pit-black
+  // with a radial vignette. Spikes are drawn as triangular silhouettes
+  // with a specular tip. Reads as "fall-through hole" at a glance.
+  function _genFloorSpikePit(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2, cy = S / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      var rimR = 30;      // outer rim of the pit
+
+      // Outer stone rim (beyond pit opening) — thin border
+      if (r > rimR) {
+        var rn = (_hash(x + 15100, y + 15101) - 0.5) * 4;
+        return {
+          r: _clamp(p.stoneR + rn),
+          g: _clamp(p.stoneG + rn),
+          b: _clamp(p.stoneB + rn)
+        };
+      }
+
+      // Inside pit — check spikes first. Four spikes arranged around the
+      // centre, each a narrow triangle with base at bottom, tip up.
+      var spikes = [
+        { cx: 20, baseY: 44, tipY: 22, halfW: 3 },
+        { cx: 32, baseY: 48, tipY: 20, halfW: 3.2 },
+        { cx: 44, baseY: 46, tipY: 24, halfW: 2.8 },
+        { cx: 28, baseY: 42, tipY: 28, halfW: 2.5 }
+      ];
+      for (var si = 0; si < spikes.length; si++) {
+        var sp = spikes[si];
+        if (y < sp.tipY || y > sp.baseY) continue;
+        var h = sp.baseY - sp.tipY;
+        var t = (sp.baseY - y) / h; // 0 at base, 1 at tip
+        var halfAtY = sp.halfW * (1 - t * 0.85);
+        if (Math.abs(x - sp.cx) <= halfAtY) {
+          // Specular tip
+          if (t > 0.8 && Math.abs(x - sp.cx) <= 0.8) {
+            return { r: p.spikeHiR, g: p.spikeHiG, b: p.spikeHiB };
+          }
+          // Side shadow — right side of spike darker
+          var shade = x > sp.cx ? 0.82 : 1.0;
+          return {
+            r: _clamp(p.spikeR * shade),
+            g: _clamp(p.spikeG * shade),
+            b: _clamp(p.spikeB * shade)
+          };
+        }
+      }
+
+      // Pit-floor — vignette from centre-dark to rim-light
+      var vig = Math.min(1, r / rimR);
+      var mix = vig; // 0 centre, 1 rim
+      var pR = p.pitR * (1 - mix) + p.pitMidR * mix;
+      var pG = p.pitG * (1 - mix) + p.pitMidG * mix;
+      var pB = p.pitB * (1 - mix) + p.pitMidB * mix;
+      var pn = (_hash(x + 15200, y + 15201) - 0.5) * 4;
+      return {
+        r: _clamp(pR + pn),
+        g: _clamp(pG + pn * 0.9),
+        b: _clamp(pB + pn * 0.8)
+      };
+    });
+  }
+
+  // Teleport disc — arcane circular metal plate with runic ring + central
+  // glow. Purple palette contrasts sharply with warm torch-lit stone.
+  // Features: metallic rim, etched rune ring, soft radial glow, bright
+  // centre glyph. Reads as "definitely magical, definitely dangerous".
+  function _genFloorTeleportDisc(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cx = S / 2, cy = S / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      var discR = 26;
+      var runeRingInner = 18;
+      var runeRingOuter = 22;
+      var glyphR = 6;
+
+      // Outside disc — stone surround
+      if (r > discR) {
+        var sn = (_hash(x + 15300, y + 15301) - 0.5) * 4;
+        return {
+          r: _clamp(p.stoneR + sn),
+          g: _clamp(p.stoneG + sn),
+          b: _clamp(p.stoneB + sn)
+        };
+      }
+
+      // Outer rim (highlight ring at disc edge)
+      if (r > discR - 2) {
+        return { r: p.discHiR, g: p.discHiG, b: p.discHiB };
+      }
+
+      var ang = Math.atan2(dy, dx);
+
+      // Rune ring — 8 etched glyphs around the circle at fixed angles
+      if (r >= runeRingInner && r <= runeRingOuter) {
+        var slot = Math.floor((ang + Math.PI) * 8 / (Math.PI * 2));
+        var slotMid = -Math.PI + (slot + 0.5) * (Math.PI / 4);
+        var angDelta = Math.abs(ang - slotMid);
+        // Rune is a thin radial tick + a short tangent tick per slot
+        var isTick = angDelta < 0.12 && (r > runeRingInner + 1 && r < runeRingOuter - 1);
+        if (isTick) {
+          return { r: p.runeR, g: p.runeG, b: p.runeB };
+        }
+        // Rune-ring channel fill (darker band)
+        var rn = (_hash(x + 15400, y + 15401) - 0.5) * 5;
+        return {
+          r: _clamp(p.discR * 0.8 + rn),
+          g: _clamp(p.discG * 0.8 + rn),
+          b: _clamp(p.discB * 0.85 + rn)
+        };
+      }
+
+      // Central glyph — circular glow with a cross/star etched across it
+      if (r <= glyphR) {
+        var onCross = Math.abs(dx) < 1.2 || Math.abs(dy) < 1.2 ||
+                      Math.abs(dx - dy) < 1.2 || Math.abs(dx + dy) < 1.2;
+        if (onCross) {
+          return { r: p.runeR, g: p.runeG, b: p.runeB };
+        }
+        // Bright glow centre
+        var gt = 1 - r / glyphR;
+        return {
+          r: _clamp(p.glowHiR * (0.5 + gt * 0.5)),
+          g: _clamp(p.glowHiG * (0.5 + gt * 0.5)),
+          b: _clamp(p.glowHiB * (0.5 + gt * 0.5))
+        };
+      }
+
+      // Inner disc plate — radial gradient from warm plate to glow
+      // Glow bleeds outward from centre through the rune ring area
+      var radialT = r / discR; // 0 centre, 1 rim
+      var glowMix = Math.max(0, 1 - r / (runeRingInner + 4));
+      // Base disc colour
+      var baseR2 = p.discR * (0.85 + (1 - radialT) * 0.2);
+      var baseG2 = p.discG * (0.85 + (1 - radialT) * 0.2);
+      var baseB2 = p.discB * (0.9 + (1 - radialT) * 0.15);
+      // Blend in purple glow near centre
+      baseR2 = baseR2 * (1 - glowMix) + p.glowR * glowMix;
+      baseG2 = baseG2 * (1 - glowMix) + p.glowG * glowMix;
+      baseB2 = baseB2 * (1 - glowMix) + p.glowB * glowMix;
+      // Pinwheel spokes — 6 spokes radiating from centre
+      var spokeBand = Math.abs((ang * 3 / Math.PI) % 1 - 0.5);
+      if (spokeBand > 0.47 && r > glyphR + 1 && r < runeRingInner - 1) {
+        baseR2 = baseR2 * 0.85;
+        baseG2 = baseG2 * 0.85;
+        baseB2 = baseB2 * 0.9;
+      }
+      var dn = (_hash(x + 15500, y + 15501) - 0.5) * 4;
+      return {
+        r: _clamp(baseR2 + dn),
+        g: _clamp(baseG2 + dn * 0.9),
+        b: _clamp(baseB2 + dn * 0.85)
+      };
+    });
+  }
+
+  // ── Medical / economy wall fixtures (tiles 55–59) ─────────────────
+
+  // Stretcher dock — side-profile view of a wheeled gurney docked
+  // against the wall. Three distinct horizontal zones: head wall
+  // (dark), stretcher body (frame + canvas pad), and wheel base.
+  // Two leather straps cross the pad at quarter positions. The
+  // silhouette reads as "hospital gurney" at a glance.
+  function _genWallStretcherDock(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Head wall (dim masonry above the stretcher)
+      if (y < 10) {
+        var wn = (_hash(x + 16000, y + 16001) - 0.5) * 6;
+        return {
+          r: _clamp(p.steelR * 0.35 + wn),
+          g: _clamp(p.steelG * 0.35 + wn),
+          b: _clamp(p.steelB * 0.35 + wn)
+        };
+      }
+
+      // Top rail (steel beam supporting the canvas)
+      if (y >= 10 && y <= 13 && x >= 4 && x <= S - 4) {
+        var useHi = (y === 11); // specular stripe
+        return useHi
+          ? { r: p.steelHiR, g: p.steelHiG, b: p.steelHiB }
+          : { r: p.steelR, g: p.steelG, b: p.steelB };
+      }
+
+      // Canvas mattress pad (between rails)
+      if (y > 13 && y < 36 && x >= 6 && x <= S - 6) {
+        // Vertical straps at quarter positions
+        if (Math.abs(x - 18) < 1.5 || Math.abs(x - 44) < 1.5) {
+          return { r: p.strapR, g: p.strapG, b: p.strapB };
+        }
+        // Canvas: highlight along upper half, base below
+        var padN = (_hash(x + 16100, y + 16101) - 0.5) * 10;
+        var useHi2 = (y < 22) && ((x + y) % 4 !== 0);
+        var baseR = useHi2 ? p.canvasHiR : p.canvasR;
+        var baseG = useHi2 ? p.canvasHiG : p.canvasG;
+        var baseB = useHi2 ? p.canvasHiB : p.canvasB;
+        return {
+          r: _clamp(baseR + padN),
+          g: _clamp(baseG + padN * 0.9),
+          b: _clamp(baseB + padN * 0.8)
+        };
+      }
+
+      // Bottom rail
+      if (y >= 36 && y <= 38 && x >= 4 && x <= S - 4) {
+        return { r: p.steelR, g: p.steelG, b: p.steelB };
+      }
+
+      // Leg posts (vertical steel supports)
+      if (y > 38 && y < 54) {
+        if (Math.abs(x - 10) < 2 || Math.abs(x - (S - 10)) < 2) {
+          var legN = (_hash(x + 16200, y + 16201) - 0.5) * 4;
+          return {
+            r: _clamp(p.steelR + legN),
+            g: _clamp(p.steelG + legN),
+            b: _clamp(p.steelB + legN)
+          };
+        }
+        // Dim space between legs
+        var vn = (_hash(x + 16300, y + 16301) - 0.5) * 4;
+        return {
+          r: _clamp(p.wheelR * 1.5 + vn),
+          g: _clamp(p.wheelR * 1.5 + vn),
+          b: _clamp(p.wheelR * 1.5 + vn)
+        };
+      }
+
+      // Wheels (two dark discs in the base)
+      if (y >= 54) {
+        var wheelCxA = 14, wheelCxB = S - 14, wheelCy = 58;
+        var wdxA = x - wheelCxA, wdxB = x - wheelCxB;
+        var wdy = y - wheelCy;
+        var dA = Math.sqrt(wdxA * wdxA + wdy * wdy);
+        var dB = Math.sqrt(wdxB * wdxB + wdy * wdy);
+        if (dA < 4 || dB < 4) {
+          // Wheel body + rim highlight
+          var onRim = (Math.abs(dA - 3.5) < 0.8) || (Math.abs(dB - 3.5) < 0.8);
+          return onRim
+            ? { r: p.steelHiR, g: p.steelHiG, b: p.steelHiB }
+            : { r: p.wheelR, g: p.wheelG, b: p.wheelB };
+        }
+        // Floor shadow under stretcher
+        var fn = (_hash(x + 16400, y + 16401) - 0.5) * 4;
+        return {
+          r: _clamp(p.wheelR * 0.7 + fn),
+          g: _clamp(p.wheelG * 0.7 + fn),
+          b: _clamp(p.wheelB * 0.7 + fn)
+        };
+      }
+
+      // Fall-through (shouldn't hit) — neutral wall fill
+      return { r: p.steelR * 0.5, g: p.steelG * 0.5, b: p.steelB * 0.5 };
+    });
+  }
+
+  // Triage bed — hospital bed seen from the side. Headboard rises at
+  // the right, mattress with white sheet strip extends across the
+  // tile, chart clipboard hangs off the left rail. Mossy-green
+  // mattress keys the tile to the green category color.
+  function _genWallTriageBed(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Upper wall (dark band above bed)
+      if (y < 8) {
+        var wn = (_hash(x + 16500, y + 16501) - 0.5) * 5;
+        return {
+          r: _clamp(p.steelR * 0.35 + wn),
+          g: _clamp(p.steelG * 0.35 + wn),
+          b: _clamp(p.steelB * 0.35 + wn)
+        };
+      }
+
+      // Headboard post (right side, vertical steel)
+      if (x >= S - 12 && x <= S - 4 && y >= 8 && y <= 28) {
+        var hbHi = (x === S - 10);
+        return hbHi
+          ? { r: p.steelHiR, g: p.steelHiG, b: p.steelHiB }
+          : { r: p.steelR, g: p.steelG, b: p.steelB };
+      }
+
+      // Pillow region (tucked under headboard)
+      if (x >= 40 && x <= 51 && y >= 16 && y <= 26) {
+        var pn = (_hash(x + 16600, y + 16601) - 0.5) * 8;
+        return {
+          r: _clamp(p.pillowR + pn),
+          g: _clamp(p.pillowG + pn),
+          b: _clamp(p.pillowB + pn * 0.9)
+        };
+      }
+
+      // Sheet strip across mattress (bright white band)
+      if (y >= 26 && y <= 28 && x >= 6 && x <= 52) {
+        var sn = (_hash(x + 16700, y + 16701) - 0.5) * 6;
+        return {
+          r: _clamp(p.sheetR + sn),
+          g: _clamp(p.sheetG + sn),
+          b: _clamp(p.sheetB + sn)
+        };
+      }
+
+      // Mattress body (mossy green pad)
+      if (x >= 6 && x <= 52 && y >= 22 && y <= 38) {
+        var mn = (_hash(x + 16800, y + 16801) - 0.5) * 8;
+        var useHi = (y < 30) && ((x * 3 + y) % 5 !== 0);
+        var baseR = useHi ? p.mattressHiR : p.mattressR;
+        var baseG = useHi ? p.mattressHiG : p.mattressG;
+        var baseB = useHi ? p.mattressHiB : p.mattressB;
+        return {
+          r: _clamp(baseR + mn),
+          g: _clamp(baseG + mn * 0.9),
+          b: _clamp(baseB + mn * 0.8)
+        };
+      }
+
+      // Clipboard (hanging off left rail)
+      if (x >= 1 && x <= 6 && y >= 18 && y <= 30) {
+        var cn = (_hash(x + 16900, y + 16901) - 0.5) * 4;
+        return {
+          r: _clamp(p.chartR + cn),
+          g: _clamp(p.chartG + cn),
+          b: _clamp(p.chartB + cn * 0.9)
+        };
+      }
+
+      // Front rail (thin vertical steel line at x=5)
+      if (x >= 4 && x <= 6 && y >= 10 && y <= 38) {
+        return { r: p.steelHiR, g: p.steelHiG, b: p.steelHiB };
+      }
+
+      // Leg posts
+      if (y > 38 && y < 56) {
+        if (Math.abs(x - 10) < 2 || Math.abs(x - (S - 12)) < 2) {
+          return { r: p.steelR, g: p.steelG, b: p.steelB };
+        }
+        // Under-bed shadow
+        var un = (_hash(x + 17000, y + 17001) - 0.5) * 4;
+        return {
+          r: _clamp(p.steelR * 0.35 + un),
+          g: _clamp(p.steelG * 0.35 + un),
+          b: _clamp(p.steelB * 0.35 + un)
+        };
+      }
+
+      // Floor shadow
+      if (y >= 56) {
+        var fn = (_hash(x + 17100, y + 17101) - 0.5) * 5;
+        return {
+          r: _clamp(p.steelR * 0.28 + fn),
+          g: _clamp(p.steelG * 0.28 + fn),
+          b: _clamp(p.steelB * 0.28 + fn)
+        };
+      }
+
+      // Fall-through — dim wall fill
+      var fbn = (_hash(x + 17200, y + 17201) - 0.5) * 5;
+      return {
+        r: _clamp(p.steelR * 0.3 + fbn),
+        g: _clamp(p.steelG * 0.3 + fbn),
+        b: _clamp(p.steelB * 0.3 + fbn)
+      };
+    });
+  }
+
+  // Morgue table — stainless steel examination slab with a central
+  // drainage channel running its length. Cool green-tinted palette
+  // and a low profile communicate "autopsy/mortuary" rather than
+  // "bed for the living". Dark runnel reads as dried-blood stain.
+  function _genWallMorgueTable(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Upper wall (dim green-steel)
+      if (y < 18) {
+        var wn = (_hash(x + 17300, y + 17301) - 0.5) * 6;
+        return {
+          r: _clamp(p.steelR * 0.35 + wn),
+          g: _clamp(p.steelG * 0.35 + wn),
+          b: _clamp(p.steelB * 0.35 + wn)
+        };
+      }
+
+      // Table surface (slab)
+      if (y >= 18 && y <= 30) {
+        // Edge highlights at y=18-19 (top) and y=29-30 (front lip shadow)
+        if (y <= 19) {
+          var hn = (_hash(x + 17400, y + 17401) - 0.5) * 4;
+          return {
+            r: _clamp(p.steelHiR + hn),
+            g: _clamp(p.steelHiG + hn),
+            b: _clamp(p.steelHiB + hn)
+          };
+        }
+        if (y >= 29) {
+          var dn = (_hash(x + 17500, y + 17501) - 0.5) * 4;
+          return {
+            r: _clamp(p.steelDarkR + dn),
+            g: _clamp(p.steelDarkG + dn),
+            b: _clamp(p.steelDarkB + dn)
+          };
+        }
+        // Central drainage channel (y 23-27, x 28-36)
+        if (y >= 23 && y <= 27 && x >= 28 && x <= 36) {
+          // Drain hole centred in channel
+          if (Math.abs(x - 32) < 2 && Math.abs(y - 25) < 1.5) {
+            return { r: p.drainR, g: p.drainG, b: p.drainB };
+          }
+          var rn = (_hash(x + 17600, y + 17601) - 0.5) * 4;
+          return {
+            r: _clamp(p.runnelR + rn),
+            g: _clamp(p.runnelG + rn * 0.8),
+            b: _clamp(p.runnelB + rn * 0.8)
+          };
+        }
+        // Slab body (brushed steel with grain noise)
+        var sn = (_hash(x + 17700, y + 17701) - 0.5) * 6;
+        var grain = (x + y * 2) % 3 === 0 ? 1.05 : 1.0;
+        return {
+          r: _clamp(p.steelR * grain + sn),
+          g: _clamp(p.steelG * grain + sn),
+          b: _clamp(p.steelB * grain + sn * 0.9)
+        };
+      }
+
+      // Legs (pair of narrow steel supports)
+      if (y > 30 && y < 60) {
+        if (Math.abs(x - 14) < 2 || Math.abs(x - (S - 14)) < 2) {
+          var legN = (_hash(x + 17800, y + 17801) - 0.5) * 4;
+          return {
+            r: _clamp(p.legR + legN),
+            g: _clamp(p.legG + legN),
+            b: _clamp(p.legB + legN)
+          };
+        }
+        // Under-table shadow
+        var un = (_hash(x + 17900, y + 17901) - 0.5) * 4;
+        return {
+          r: _clamp(p.steelDarkR * 0.6 + un),
+          g: _clamp(p.steelDarkG * 0.6 + un),
+          b: _clamp(p.steelDarkB * 0.6 + un)
+        };
+      }
+
+      // Floor contact band
+      var fbn = (_hash(x + 18000, y + 18001) - 0.5) * 4;
+      return {
+        r: _clamp(p.steelDarkR * 0.5 + fbn),
+        g: _clamp(p.steelDarkG * 0.5 + fbn),
+        b: _clamp(p.steelDarkB * 0.5 + fbn)
+      };
+    });
+  }
+
+  // Incinerator — tall iron furnace. Riveted doors, central hinge
+  // line, and a hot orange-glowing grate at the bottom. The ember
+  // zone is the silhouette's focal point — anyone looking at this
+  // tile should immediately read "fire burns inside".
+  function _genWallIncinerator(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+
+      // Chimney flue (top centre)
+      if (y < 12 && x >= 28 && x <= 36) {
+        var cn = (_hash(x + 18100, y + 18101) - 0.5) * 5;
+        return {
+          r: _clamp(p.sootR + cn),
+          g: _clamp(p.sootG + cn),
+          b: _clamp(p.sootB + cn)
+        };
+      }
+
+      // Top iron plate (cap)
+      if (y >= 8 && y <= 18 && x >= 4 && x <= S - 4) {
+        // Rivet row at y=13, x=10/22/42/54
+        var rivXs = [10, 22, 42, 54];
+        for (var ri = 0; ri < rivXs.length; ri++) {
+          var dx = x - rivXs[ri];
+          var dy = y - 13;
+          if (Math.sqrt(dx * dx + dy * dy) < 1.8) {
+            return { r: p.rivetR, g: p.rivetG, b: p.rivetB };
+          }
+        }
+        var tn = (_hash(x + 18200, y + 18201) - 0.5) * 6;
+        var useHiT = (y <= 10);
+        return useHiT
+          ? { r: _clamp(p.ironHiR + tn), g: _clamp(p.ironHiG + tn), b: _clamp(p.ironHiB + tn) }
+          : { r: _clamp(p.ironR + tn), g: _clamp(p.ironG + tn), b: _clamp(p.ironB + tn) };
+      }
+
+      // Door body (y 18-46)
+      if (y >= 18 && y <= 46 && x >= 6 && x <= S - 6) {
+        // Central hinge line x=31..32
+        if (x >= 31 && x <= 32) {
+          return { r: p.sootR, g: p.sootG, b: p.sootB };
+        }
+        // Four corner rivets per door (8 total)
+        var rivPts = [[12, 24], [28, 24], [36, 24], [52, 24],
+                      [12, 40], [28, 40], [36, 40], [52, 40]];
+        for (var rp = 0; rp < rivPts.length; rp++) {
+          var rdx = x - rivPts[rp][0];
+          var rdy = y - rivPts[rp][1];
+          if (Math.sqrt(rdx * rdx + rdy * rdy) < 1.8) {
+            return { r: p.rivetR, g: p.rivetG, b: p.rivetB };
+          }
+        }
+        // Soot streak near bottom of doors (vertical drips)
+        var streakSeed = _hash(x + 18300, 0);
+        if (y > 36 && streakSeed > 0.88) {
+          return { r: p.sootR, g: p.sootG, b: p.sootB };
+        }
+        // Iron plate body
+        var pn = (_hash(x + 18400, y + 18401) - 0.5) * 7;
+        var useHiD = ((x + y) % 7 === 0) && y < 32;
+        return useHiD
+          ? { r: _clamp(p.ironHiR + pn), g: _clamp(p.ironHiG + pn), b: _clamp(p.ironHiB + pn) }
+          : { r: _clamp(p.ironR + pn), g: _clamp(p.ironG + pn), b: _clamp(p.ironB + pn) };
+      }
+
+      // Grate (y 46-58) — horizontal bars with glowing ember between
+      if (y >= 46 && y <= 58 && x >= 8 && x <= S - 8) {
+        // Bar every 3 pixels (y=46, 49, 52, 55, 58)
+        if ((y - 46) % 3 === 0) {
+          return { r: p.grateR, g: p.grateG, b: p.grateB };
+        }
+        // Ember glow (flickering noise)
+        var en = (_hash(x + 18500, y + 18501) - 0.5) * 30;
+        var emberT = _hash(x + 18600, Math.floor(y / 2) + 18601);
+        var useHiE = emberT > 0.65;
+        var baseR = useHiE ? p.emberHiR : p.emberR;
+        var baseG = useHiE ? p.emberHiG : p.emberG;
+        var baseB = useHiE ? p.emberHiB : p.emberB;
+        return {
+          r: _clamp(baseR + en),
+          g: _clamp(baseG + en * 0.6),
+          b: _clamp(baseB + en * 0.3)
+        };
+      }
+
+      // Footing / floor bed
+      var fn = (_hash(x + 18700, y + 18701) - 0.5) * 5;
+      return {
+        r: _clamp(p.ironR * 0.5 + fn),
+        g: _clamp(p.ironG * 0.5 + fn),
+        b: _clamp(p.ironB * 0.5 + fn)
+      };
+    });
+  }
+
+  // Refrigerated locker — 2×3 grid of mortuary drawer fronts on a
+  // cold steel wall. Each cell has a polished handle + ID card slot.
+  // Frost rime blooms along the horizontal hinge lines between rows
+  // to sell the "this is cold" read.
+  function _genWallRefrigLocker(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      var cellW = 32;
+      var cellH = 20;
+      // Grid starts at y=2, fills 3 rows (y 2-22, 22-42, 42-62)
+      var rowY = y - 2;
+      if (rowY < 0 || rowY >= cellH * 3) {
+        // Top/bottom margin — dim frame
+        var fn = (_hash(x + 18800, y + 18801) - 0.5) * 4;
+        return {
+          r: _clamp(p.steelDarkR + fn),
+          g: _clamp(p.steelDarkG + fn),
+          b: _clamp(p.steelDarkB + fn)
+        };
+      }
+
+      var col = Math.floor(x / cellW);     // 0 or 1
+      var row = Math.floor(rowY / cellH);  // 0, 1, or 2
+      var cellX = x - col * cellW;         // 0..31 within cell
+      var cellY = rowY - row * cellH;      // 0..19 within cell
+
+      // Hinge lines between rows (top + bottom edges of each cell)
+      var onHinge = (cellY < 1) || (cellY >= cellH - 1);
+      if (onHinge) {
+        // Frost rime on hinge: dithered lighter pixels mixed with dark line
+        var fr = _hash(x + 18900, y + 18901);
+        if (fr > 0.55) {
+          return { r: p.frostR, g: p.frostG, b: p.frostB };
+        }
+        return { r: p.steelDarkR, g: p.steelDarkG, b: p.steelDarkB };
+      }
+
+      // Column divider (vertical seam between 2 columns)
+      if (Math.abs(x - cellW) < 1) {
+        return { r: p.steelDarkR, g: p.steelDarkG, b: p.steelDarkB };
+      }
+
+      // Handle — horizontal bar at cell-middle-bottom
+      var handleCx = cellW / 2;
+      var handleCy = cellH - 5;
+      if (Math.abs(cellY - handleCy) < 1 && Math.abs(cellX - handleCx) < 6) {
+        return { r: p.handleR, g: p.handleG, b: p.handleB };
+      }
+      // Handle mounting brackets (two small dots flanking the bar)
+      if (Math.abs(cellY - handleCy) < 1.5 &&
+          (Math.abs(cellX - (handleCx - 6)) < 1 || Math.abs(cellX - (handleCx + 6)) < 1)) {
+        return { r: p.steelDarkR, g: p.steelDarkG, b: p.steelDarkB };
+      }
+
+      // ID card slot — small rectangle upper-centre of cell
+      if (cellY >= 4 && cellY <= 7 && cellX >= cellW / 2 - 4 && cellX <= cellW / 2 + 4) {
+        // Card border
+        if (cellY === 4 || cellY === 7 || cellX === cellW / 2 - 4 || cellX === cellW / 2 + 4) {
+          return { r: p.steelDarkR, g: p.steelDarkG, b: p.steelDarkB };
+        }
+        return { r: p.cardR, g: p.cardG, b: p.cardB };
+      }
+
+      // Drawer front body — brushed steel with frost cast
+      var pn = (_hash(x + 19000, y + 19001) - 0.5) * 6;
+      // Subtle frost bloom concentrated near hinge edges
+      var frostDist = Math.min(cellY, cellH - cellY);
+      var frostMix = Math.max(0, 1 - frostDist / 4) * 0.3;
+      var useHi = ((x * 2 + y) % 5 === 0);
+      var baseR = useHi ? p.steelHiR : p.steelR;
+      var baseG = useHi ? p.steelHiG : p.steelG;
+      var baseB = useHi ? p.steelHiB : p.steelB;
+      // Blend frost rime tint in
+      baseR = baseR * (1 - frostMix) + p.frostR * frostMix;
+      baseG = baseG * (1 - frostMix) + p.frostG * frostMix;
+      baseB = baseB * (1 - frostMix) + p.frostB * frostMix;
+      return {
+        r: _clamp(baseR + pn),
+        g: _clamp(baseG + pn * 0.9),
+        b: _clamp(baseB + pn * 0.8)
+      };
+    });
+  }
+
+  // Cobweb — 64×64 walkable floor decor. A spider web anchored at the
+  // top-left corner radiates 6 spokes outward and has 4 concentric
+  // arcs. Silvery strands on dungeon stone. The anchor-in-corner
+  // choice lets adjacent cobweb tiles chain into a continuous web
+  // field in neglected rooms, rather than stamping a centred medallion.
+  function _genFloorCobweb(id, p) {
+    _createTexture(id, TEX_SIZE, TEX_SIZE, function (x, y) {
+      var S = TEX_SIZE;
+      // Web anchor at top-left corner (0,0). Distance and angle from anchor.
+      var ax = 0, ay = 0;
+      var dx = x - ax, dy = y - ay;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      var ang = Math.atan2(dy, dx); // 0..π/2 inside the tile
+
+      // Stone substrate (render first so we can overdraw web on top)
+      var stoneN = (_hash(x + 19100, y + 19101) - 0.5) * 8;
+      var useStoneHi = ((x * 3 + y) % 7 === 0);
+      var baseR = useStoneHi ? p.stoneHiR : p.stoneR;
+      var baseG = useStoneHi ? p.stoneHiG : p.stoneG;
+      var baseB = useStoneHi ? p.stoneHiB : p.stoneB;
+      var sR = _clamp(baseR + stoneN);
+      var sG = _clamp(baseG + stoneN * 0.9);
+      var sB = _clamp(baseB + stoneN * 0.8);
+
+      // Web only lives within r < 52 (full tile reach from corner).
+      // Beyond that, pure stone (web thins out near the opposite corner).
+      if (r > 52) {
+        return { r: sR, g: sG, b: sB };
+      }
+
+      // --- Radial spokes (6 spokes fan from 5° to 85°) ---
+      // Slot angles at π/12 * {1, 3, 5, 7, 9, 11} — evenly across 0..π/2
+      var spokeAngles = [
+        Math.PI / 12,      // 15°
+        Math.PI / 4,       // 45°
+        5 * Math.PI / 12,  // 75°
+        Math.PI / 6,       // 30°
+        Math.PI / 3,       // 60°
+        Math.PI * 0.02     // ~3° (near-horizontal strand)
+      ];
+      var onSpoke = false;
+      var spokeThin = Math.max(0.35, 0.9 - r * 0.008); // 0.9 near anchor → 0.4 at far
+      for (var si = 0; si < spokeAngles.length; si++) {
+        if (Math.abs(ang - spokeAngles[si]) < spokeThin / r) {
+          onSpoke = true;
+          break;
+        }
+      }
+
+      // --- Concentric arcs at r = 12, 22, 34, 46 ---
+      var arcs = [12, 22, 34, 46];
+      var onArc = false;
+      for (var ai = 0; ai < arcs.length; ai++) {
+        // Arc thickness: ~0.9px, slightly thicker on inner rings
+        var arcThick = 0.9 - ai * 0.05;
+        if (Math.abs(r - arcs[ai]) < arcThick && ang > 0 && ang < Math.PI / 2) {
+          // Arc sag between spokes — fake slight dip via sin wobble
+          var sag = Math.sin(ang * 6) * 0.6;
+          if (Math.abs(r - arcs[ai] - sag) < arcThick) {
+            onArc = true;
+            break;
+          }
+        }
+      }
+
+      if (onSpoke || onArc) {
+        // Strand glint: alternate pixels get the bright highlight tone
+        var glint = _hash(Math.floor(x * 1.7) + 19200, Math.floor(y * 1.7) + 19201) > 0.55;
+        var wn = (_hash(x + 19300, y + 19301) - 0.5) * 6;
+        var wR = glint ? p.webHiR : p.webR;
+        var wG = glint ? p.webHiG : p.webG;
+        var wB = glint ? p.webHiB : p.webB;
+        // Alpha fade near the outer edge of the web so strands vanish
+        // gracefully (no hard clip line at r=52).
+        var fade = r < 42 ? 1.0 : Math.max(0, 1 - (r - 42) / 10);
+        var blendR = sR * (1 - fade) + (wR + wn) * fade;
+        var blendG = sG * (1 - fade) + (wG + wn * 0.9) * fade;
+        var blendB = sB * (1 - fade) + (wB + wn * 0.8) * fade;
+        return { r: _clamp(blendR), g: _clamp(blendG), b: _clamp(blendB) };
+      }
+
+      // Plain stone (between strands)
+      return { r: sR, g: sG, b: sB };
     });
   }
 

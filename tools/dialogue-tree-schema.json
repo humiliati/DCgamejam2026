@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Dialogue Trees",
+  "description": "Canonical dialogue tree data extracted from engine/npc-dialogue-trees.js. Schema for data/dialogue-trees.json.",
+  "type": "object",
+  "required": ["_meta", "trees"],
+  "additionalProperties": false,
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "required": ["generated", "source", "schema", "treeCount"],
+      "properties": {
+        "generated": { "type": "string", "format": "date-time" },
+        "source": { "type": "string" },
+        "schema": { "type": "string" },
+        "treeCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "trees": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/tree"
+      }
+    }
+  },
+  "definitions": {
+    "tree": {
+      "type": "object",
+      "required": ["root", "nodes"],
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "#/definitions/conditionalRoot" }
+          ]
+        },
+        "nodes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/node"
+          },
+          "minProperties": 1
+        }
+      }
+    },
+    "conditionalRoot": {
+      "type": "object",
+      "required": ["condition", "ifTrue", "ifFalse"],
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "type": "object",
+          "required": ["flag"],
+          "properties": {
+            "flag": { "type": "string", "minLength": 1 }
+          }
+        },
+        "ifTrue": { "type": "string", "minLength": 1 },
+        "ifFalse": { "type": "string", "minLength": 1 }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "choices": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/choice" }
+        }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "required": ["label", "next"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "next": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ],
+          "description": "Target node ID, or null to exit the conversation"
+        },
+        "effect": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "showIf": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

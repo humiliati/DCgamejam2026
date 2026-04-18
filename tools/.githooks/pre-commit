@@ -233,6 +233,30 @@ if git diff --cached --name-only | grep -qxF 'data/enemy-cards.json'; then
   echo "[pre-commit] data/enemy-cards.js regenerated + staged." >&2
 fi
 
+# ── 1h. Loot-tables sidecar auto-regen ─────────────────────
+# DOC-110 P5.4 (Loot tab). Mirrors §1f/§1g. The Loot tab in
+# tools/enemy-hydrator.html reads data/loot-tables.js at file://
+# to compute per-enemy expected-value breakdowns (closed-form EV,
+# volatility, tier multipliers, per-biome card rarity). Generator
+# shape-checks the three required sections — missing
+# enemy_resource_profiles / enemy_tier_multipliers / card_drops
+# blocks the commit before the sidecar picks up a broken source.
+#
+# Shape: data/loot-tables.js is AUTO-GENERATED — hand edits are
+# always wrong.
+if git diff --cached --name-only | grep -qxF 'data/loot-tables.json'; then
+  echo "[pre-commit] data/loot-tables.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-loot-tables-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Loot-tables sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-loot-tables-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/loot-tables.js"
+  echo "[pre-commit] data/loot-tables.js regenerated + staged." >&2
+fi
+
 # ── 2. File-size budget check ───────────────────────────────
 node "$repo_root/tools/check-budgets.js" || {
   echo "" >&2

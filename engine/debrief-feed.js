@@ -342,7 +342,7 @@ var DebriefFeed = (function () {
   // ── Incinerator Zone ────────────────────────────────────────────
 
   function _registerIncinerator() {
-    if (typeof DragDrop === 'undefined' || !_el) return;
+    if (typeof DragDrop === 'undefined' || !DragDrop || !_el) return;
 
     DragDrop.registerZone(INCINERATOR_ZONE, {
       x: 0, y: 0, w: 0, h: 0,  // Updated dynamically
@@ -374,7 +374,7 @@ var DebriefFeed = (function () {
    * Update incinerator zone bounds (call when panel layout changes).
    */
   function _updateIncineratorBounds() {
-    if (typeof DragDrop === 'undefined' || !_el) return;
+    if (typeof DragDrop === 'undefined' || !DragDrop || !_el) return;
     var rect = _el.getBoundingClientRect();
     // Convert DOM rect to canvas coordinates (panels overlay the canvas)
     var canvas = document.getElementById('view-canvas');
@@ -414,18 +414,18 @@ var DebriefFeed = (function () {
     logEvent('\uD83D\uDD25 Disposed: ' + emoji + ' ' + name, 'damage');
 
     // Grant refund if any
-    if (refund > 0 && typeof CardAuthority !== 'undefined') {
+    if (refund > 0 && typeof CardAuthority !== 'undefined' && CardAuthority) {
       CardAuthority.addGold(refund);
       logEvent('  +' + refund + 'g refund', 'loot');
     }
 
     // Play SFX
-    if (typeof AudioSystem !== 'undefined') {
+    if (typeof AudioSystem !== 'undefined' && AudioSystem) {
       AudioSystem.play('ui_close');  // placeholder burn sound
     }
 
     // Toast notification
-    if (typeof Toast !== 'undefined') {
+    if (typeof Toast !== 'undefined' && Toast) {
       var msg = '\uD83D\uDD25 ' + name + ' destroyed';
       if (refund > 0) msg += ' (+' + refund + 'g)';
       Toast.show(msg);
@@ -553,7 +553,7 @@ var DebriefFeed = (function () {
     }
 
     // Buffs
-    if (typeof StatusEffect !== 'undefined' && StatusEffect.getAll) {
+    if (typeof StatusEffect !== 'undefined' && StatusEffect && StatusEffect.getAll) {
       var effs = StatusEffect.getAll();
       if (effs && effs.length > 0) {
         html += '<div class="df-stat-row" style="color:var(--phosphor-dim)">';
@@ -976,7 +976,7 @@ var DebriefFeed = (function () {
 
   // i18n lookup with fallback to FACTION_LABELS / TIER_LABELS.
   function _i18n(key, fallback) {
-    if (typeof i18n !== 'undefined' && typeof i18n.t === 'function') {
+    if (typeof i18n !== 'undefined' && i18n && typeof i18n.t === 'function') {
       var v = i18n.t(key);
       if (v && v !== key) return v;
     }
@@ -1434,7 +1434,7 @@ var DebriefFeed = (function () {
   // unavailable (Layer 0 unit tests, early boot). Mirrors the pattern
   // used by _factionRow/_renderCategoryRow.
   function _timerI18n(key, fallback, params) {
-    if (typeof i18n !== 'undefined' && i18n.t) {
+    if (typeof i18n !== 'undefined' && i18n && i18n.t) {
       try { return i18n.t(key, params); } catch (e) { /* fall through */ }
     }
     if (params && fallback) {

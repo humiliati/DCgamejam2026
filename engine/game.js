@@ -1593,6 +1593,30 @@ var Game = (function () {
       });
     }
 
+    // ── DOC-107: CardAuthority → QuestChain.onItemAcquired fan-out ──
+    // Subscribe to the discrete 'bag:item-added' event (not 'bag:changed',
+    // which fires on removals too) and fan out to QuestChain so steps
+    // predicating on `{kind:'item', itemId:'ITM-089'}` — or the DOC-113
+    // `{kind:'fetch', itemId, floorId}` variant — advance on pickup,
+    // loot drop, shop purchase, choice.effect.giveItem, or any other
+    // path that ultimately calls CardAuthority.addToBag().
+    if (typeof CardAuthority !== 'undefined' && typeof CardAuthority.on === 'function') {
+      CardAuthority.on('bag:item-added', function (payload) {
+        if (!payload || !payload.item) return;
+        var itemId = payload.item.id;
+        if (typeof itemId !== 'string' || !itemId) return;
+        if (typeof QuestChain !== 'undefined' &&
+            typeof QuestChain.onItemAcquired === 'function') {
+          try { QuestChain.onItemAcquired(itemId); }
+          catch (e) {
+            if (typeof console !== 'undefined') {
+              console.warn('[Game] QuestChain.onItemAcquired threw:', e);
+            }
+          }
+        }
+      });
+    }
+
     MouseLook.init(_canvas);
     if (typeof ViewportRing !== 'undefined') ViewportRing.init();
 
@@ -4678,162 +4702,4 @@ var Game = (function () {
     Raycaster.render(
       { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset + shakeOffset,
         pitch: p.lookPitch || 0, bobY: MC.getBobY() },
-      floorData.grid, floorData.gridW, floorData.gridH,
-      _sprites, lightMap
-    );
-
-    // Spatial debug overlay — world-Y ruler painted on the 3D
-    // viewport to make tile heights/offsets legible when authoring.
-    // Inert unless SpatialDebug.setEnabled(true) (test-harness toggle
-    // or window.dbg.spatialRuler). Reads the live contract from
-    // FloorManager so exterior/interior/dungeon ruler scales match
-    // whichever floor the player is on.
-    if (typeof SpatialDebug !== 'undefined' && SpatialDebug.isEnabled()) {
-      var _sdbgContract = (typeof FloorManager !== 'undefined' && FloorManager.getFloorContract)
-        ? FloorManager.getFloorContract(FloorManager.getCurrentFloorId())
-        : null;
-      if (_sdbgContract) {
-        SpatialDebug.render(ctx,
-          { px: renderPos.x, py: renderPos.y,
-            pDir: renderPos.angle + p.lookOffset + shakeOffset,
-            pitch: p.lookPitch || 0, bobY: MC.getBobY() },
-          _sdbgContract, _canvas.width, _canvas.height, _sprites);
-      }
-    }
-
-    if (combatZoom !== 1) ctx.restore();
-
-    // DOM sprite overlay (CSS flame/particle sprites anchored in world)
-    if (typeof SpriteLayer !== 'undefined' && SpriteLayer.count() > 0) {
-      SpriteLayer.tick(renderPos.x, renderPos.y, renderPos.angle + p.lookOffset + shakeOffset);
-    }
-
-    // Light orbs — additive halation over fire sources. Runs after
-    // SpriteLayer so gaze (bonfire/hearth) screen positions are current.
-    if (typeof LightOrbs !== 'undefined' && LightOrbs.render) {
-      LightOrbs.tick(frameDt);
-      LightOrbs.render(ctx, _canvas.width, _canvas.height,
-                       renderPos.x, renderPos.y,
-                       renderPos.angle + p.lookOffset + shakeOffset);
-    }
-
-    // Spray viewport FX — blue hose-carry overlay + wet spatter
-    // that catches LightOrbs reflections on indoor floors.
-    if (typeof SprayViewportFX !== 'undefined' && SprayViewportFX.render) {
-      SprayViewportFX.tick(frameDt);
-      SprayViewportFX.buildLightSnapshot(
-        _canvas.width, _canvas.height,
-        renderPos.x, renderPos.y,
-        renderPos.angle + p.lookOffset + shakeOffset
-      );
-      SprayViewportFX.render(ctx, _canvas.width, _canvas.height);
-    }
-
-    // Cobweb rendering (after raycaster, before minimap)
-    var _cobFloorId = FloorManager.getCurrentFloorId();
-    var _cobPlayer = { x: renderPos.x, y: renderPos.y, dir: renderPos.angle + p.lookOffset };
-    if (typeof CobwebRenderer !== 'undefined') {
-      var _cobBiome = (typeof FloorManager !== 'undefined' && FloorManager.getBiome)
-        ? FloorManager.getBiome() : 'cellar';
-      CobwebRenderer.render(ctx, _canvas.width, _canvas.height, _cobPlayer, _cobFloorId, _cobBiome);
-      if (CobwebRenderer.updateTearParticles) {
-        CobwebRenderer.updateTearParticles(ctx, _canvas.width, _canvas.height, _cobPlayer, frameDt);
-      }
-    }
-    if (typeof CobwebNode !== 'undefined') {
-      CobwebNode.update(frameDt, _cobFloorId);
-      CobwebNode.render(ctx, _canvas.width, _canvas.height, _cobPlayer);
-    }
-
-    // World-space popups (interaction feedback at tile positions)
-    if (typeof WorldPopup !== 'undefined') {
-      WorldPopup.update(frameDt);
-      WorldPopup.render(ctx, _canvas.width, _canvas.height, _cobPlayer);
-    }
-    } // end of `if (Raycaster.isPaused()) {} else {` world-render cluster
-
-    // Minimap render (runs every frame, including during takeover pause —
-    // minimap is UI, not world-cluster)
-    Minimap.render(
-      { x: p.x, y: p.y, dir: MC.dirToAngle(p.dir) },
-      floorData.grid, floorData.gridW, floorData.gridH,
-      enemies
-    );
-  }
-
-  // ── Public API ─────────────────────────────────────────────────────
-
-  /**
-   * Request a pause with a specific context and starting face.
-   * Called by external modules (StatusBar, NchWidget) that need to
-   * open the menu on a particular face.
-   *
-   * @param {string} context  - 'pause', 'bonfire', 'shop', 'harvest'
-   * @param {number} [face=0]   - Starting face index (0-3)
-   * @param {string} [invFocus] - 'bag' or 'deck' — sets inventory focus on Face 2
-   */
-
-  /**
-   * Silently dismiss all currently-active peek overlays before opening any
-   * menu (shop, inventory, harvest, requestPause). Unlike the ESC intercepts,
-   * which dismiss one peek per keypress so the player can back out gracefully,
-   * this helper clears everything at once when a menu is opening programmatically.
-   *
-   * Does NOT touch the ESC intercept chain — that stays one-at-a-time.
-   */
-  // Delegated to GameActions.collapseAllPeeks()
-  function _collapseAllPeeks() { GameActions.collapseAllPeeks(); }
-
-  function requestPause(context, face, invFocus) {
-    if (!ScreenManager.isPlaying()) return;
-    _collapseAllPeeks();
-    _pendingMenuContext = context || 'pause';
-    _pendingMenuFace = face || 0;
-    // Set inventory focus before opening menu
-    if (invFocus && typeof MenuFaces !== 'undefined' && MenuFaces.setInvFocus) {
-      MenuFaces.setInvFocus(invFocus);
-    }
-    ScreenManager.toPause();
-  }
-
-  return {
-    init: init,
-    requestPause: requestPause,
-    isGateUnlocked: function () { return _gateUnlocked; },
-    /** Public interact — delegates to _interact(). Used by CratePeek
-     *  action button and other DOM click targets that need to fire the
-     *  same interact path as the keyboard OK / InteractPrompt. */
-    interact: function () { _interact(); },
-
-    /** Open the corpse-restock menu for the corpse CorpsePeek is showing.
-     *  Called from CorpsePeek._onActionClick() when "Restock" is pressed.
-     *  RS-3: Routes through RestockBridge for unsealed containers. */
-    openCorpseMenu: function () {
-      // Try RS-3 path via CorpsePeek target coords
-      if (typeof RestockBridge !== 'undefined' && typeof CorpsePeek !== 'undefined' && CorpsePeek.getTarget) {
-        var t = CorpsePeek.getTarget();
-        if (t && t.x >= 0 && RestockBridge.detectMode(t.x, t.y, t.floorId) === 'corpse') {
-          if (!RestockBridge.isActive()) {
-            if (typeof CinematicCamera !== 'undefined' && !CinematicCamera.isActive()) CinematicCamera.start('peek');
-            RestockBridge.open(t.x, t.y, t.floorId, 'corpse');
-          }
-          return;
-        }
-      }
-      // Legacy fallback
-      _openCorpseMenu();
-    },
-
-    /** Return current corpse-menu target (for MenuFaces to read slot data). */
-    getCorpseTarget: function () {
-      if (typeof CorpseActions !== 'undefined') return CorpseActions.getPendingPos();
-      return { x: -1, y: -1, floorId: '' };
-    }
-  };
-})();
-
-// ── Boot ──
-// (cache-bust 2026-04-16: DOC-107 Phase 1 marker-refactor landed here)
-window.addEventListener('DOMContentLoaded', function () {
-  Game.init();
-});
+      flo
