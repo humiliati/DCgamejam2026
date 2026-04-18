@@ -836,6 +836,148 @@ var Game = (function () {
                 }
               }
             }
+          } else if (hit.action === 'quest_scroll_up') {
+            // Phase 2.1a — completed-quest pane scroll up
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestCompleted) {
+              MenuFaces.scrollQuestCompleted(-1);
+            }
+          } else if (hit.action === 'quest_scroll_down') {
+            // Phase 2.1a — completed-quest pane scroll down
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestCompleted) {
+              MenuFaces.scrollQuestCompleted(+1);
+            }
+          } else if (hit.action === 'read_quest_completed') {
+            // Phase 2.1a — open quest-detail DialogBox for a completed
+            // quest row (mirrors the read_book pattern above). Pulls
+            // title/summary/rewards from QuestChain.getJournalEntries.
+            var qTargetId = hit.questId;
+            if (qTargetId && typeof QuestChain !== 'undefined' && QuestChain.getJournalEntries) {
+              var qCompList = QuestChain.getJournalEntries({ active: false, completed: true }) || [];
+              var qRec = null;
+              for (var qli = 0; qli < qCompList.length; qli++) {
+                if (qCompList[qli].id === qTargetId) { qRec = qCompList[qli]; break; }
+              }
+              if (qRec) {
+                if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
+                if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+                  var qT = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qRec.title, qRec.title) : qRec.title;
+                  var qS = qRec.summary
+                    ? ((typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qRec.summary, qRec.summary) : qRec.summary)
+                    : '';
+                  var qMsg = '\u2713 ' + qT + '\n\n' + qS;
+                  if (qRec.rewards) {
+                    var rw = [];
+                    if (qRec.rewards.gold) rw.push(qRec.rewards.gold + 'g');
+                    if (qRec.rewards.items && qRec.rewards.items.length) rw.push(qRec.rewards.items.length + ' items');
+                    if (qRec.rewards.favor) {
+                      var fk = Object.keys(qRec.rewards.favor);
+                      for (var qfk = 0; qfk < fk.length; qfk++) {
+                        rw.push(fk[qfk] + ' +' + qRec.rewards.favor[fk[qfk]]);
+                      }
+                    }
+                    if (rw.length) qMsg += '\n\nRewards: ' + rw.join(', ');
+                  }
+                  DialogBox.show(qMsg, { priority: 2 });
+                }
+              }
+            }
+          } else if (hit.action === 'quest_active_scroll_up') {
+            // Phase 2.1b — active-quest pane scroll up
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestActive) {
+              MenuFaces.scrollQuestActive(-1);
+            }
+          } else if (hit.action === 'quest_active_scroll_down') {
+            // Phase 2.1b — active-quest pane scroll down
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestActive) {
+              MenuFaces.scrollQuestActive(+1);
+            }
+          } else if (hit.action === 'quest_failed_scroll_up') {
+            // Phase 2.1b — failed-quest pane scroll up
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestFailed) {
+              MenuFaces.scrollQuestFailed(-1);
+            }
+          } else if (hit.action === 'quest_failed_scroll_down') {
+            // Phase 2.1b — failed-quest pane scroll down
+            if (typeof MenuFaces !== 'undefined' && MenuFaces.scrollQuestFailed) {
+              MenuFaces.scrollQuestFailed(+1);
+            }
+          } else if (hit.action === 'read_quest_active') {
+            // Phase 2.1b — open detail DialogBox for an active quest.
+            // Shows title, summary, step checklist (✓ done / ▶ current
+            // / ○ pending), and the giver breadcrumb.  Priority 2 so it
+            // layers over MenuBox (which we close) without fighting
+            // other overlays.
+            var qaTargetId = hit.questId;
+            if (qaTargetId && typeof QuestChain !== 'undefined' && QuestChain.getJournalEntries) {
+              var qaList = QuestChain.getJournalEntries({ active: true }) || [];
+              var qaRec = null;
+              for (var qaLi = 0; qaLi < qaList.length; qaLi++) {
+                if (qaList[qaLi].id === qaTargetId) { qaRec = qaList[qaLi]; break; }
+              }
+              if (qaRec) {
+                if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
+                if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+                  var qaT = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qaRec.title, qaRec.title) : qaRec.title;
+                  var qaS = qaRec.summary
+                    ? ((typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qaRec.summary, qaRec.summary) : qaRec.summary)
+                    : '';
+                  var qaMsg = '\u25C6 ' + qaT + (qaS ? '\n\n' + qaS : '');
+                  // Step checklist
+                  if (qaRec.steps && qaRec.steps.length) {
+                    var stepsHdr = (typeof i18n !== 'undefined' && i18n.t)
+                      ? i18n.t('quest.detail.steps_header', 'Steps') : 'Steps';
+                    qaMsg += '\n\n' + stepsHdr + ':';
+                    for (var qSi = 0; qSi < qaRec.steps.length; qSi++) {
+                      var stObj = qaRec.steps[qSi];
+                      var stMark = (qSi < qaRec.stepIndex) ? '\u2713'
+                        : (qSi === qaRec.stepIndex) ? '\u25B6' : '\u25CB';
+                      var stLbl = stObj.label
+                        ? ((typeof i18n !== 'undefined' && i18n.t) ? i18n.t(stObj.label, stObj.label) : stObj.label)
+                        : (stObj.id || ('step ' + (qSi + 1)));
+                      qaMsg += '\n  ' + stMark + ' ' + stLbl;
+                    }
+                  }
+                  // Giver breadcrumb
+                  if (qaRec.breadcrumb) {
+                    var giverHdr = (typeof i18n !== 'undefined' && i18n.t)
+                      ? i18n.t('quest.detail.giver_prefix', 'Giver') : 'Giver';
+                    var giverLoc = (typeof i18n !== 'undefined' && i18n.t)
+                      ? i18n.t(qaRec.breadcrumb, qaRec.breadcrumb) : qaRec.breadcrumb;
+                    qaMsg += '\n\n' + giverHdr + ': ' + giverLoc;
+                  }
+                  DialogBox.show(qaMsg, { priority: 2 });
+                }
+              }
+            }
+          } else if (hit.action === 'read_quest_failed') {
+            // Phase 2.1b — open detail DialogBox for a failed quest.
+            // Shows title, summary, and the fail reason (i18n-keyed).
+            var qfTargetId = hit.questId;
+            if (qfTargetId && typeof QuestChain !== 'undefined' && QuestChain.getJournalEntries) {
+              var qfList = QuestChain.getJournalEntries({ failed: true }) || [];
+              var qfRec = null;
+              for (var qfLi = 0; qfLi < qfList.length; qfLi++) {
+                if (qfList[qfLi].id === qfTargetId) { qfRec = qfList[qfLi]; break; }
+              }
+              if (qfRec) {
+                if (typeof MenuBox !== 'undefined' && MenuBox.close) MenuBox.close();
+                if (typeof DialogBox !== 'undefined' && DialogBox.show) {
+                  var qfT = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qfRec.title, qfRec.title) : qfRec.title;
+                  var qfS = qfRec.summary
+                    ? ((typeof i18n !== 'undefined' && i18n.t) ? i18n.t(qfRec.summary, qfRec.summary) : qfRec.summary)
+                    : '';
+                  var qfMsg = '\u2717 ' + qfT + (qfS ? '\n\n' + qfS : '');
+                  if (qfRec.failReason) {
+                    var reasonHdr = (typeof i18n !== 'undefined' && i18n.t)
+                      ? i18n.t('quest.detail.fail_reason', 'Reason') : 'Reason';
+                    var reasonStr = (typeof i18n !== 'undefined' && i18n.t)
+                      ? i18n.t(qfRec.failReason, qfRec.failReason) : qfRec.failReason;
+                    qfMsg += '\n\n' + reasonHdr + ': ' + reasonStr;
+                  }
+                  DialogBox.show(qfMsg, { priority: 2 });
+                }
+              }
+            }
           } else if (hit.action === 'expand_bag') {
             if (typeof MenuFaces !== 'undefined') MenuFaces.toggleBagExpand();
           } else if (hit.action === 'expand_deck') {

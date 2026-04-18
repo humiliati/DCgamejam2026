@@ -58,6 +58,8 @@ var MenuFaces = (function () {
   var _hoverDetail = null; // { item, x, y } — item/card under pointer for tooltip
   var _bookScrollOffset = 0; // Journal books list scroll offset
   var _questCompletedScrollOffset = 0; // Journal completed-quests scroll offset (Phase 2)
+  var _questActiveScrollOffset    = 0; // Journal active-quests scroll offset (Phase 2.1b)
+  var _questFailedScrollOffset    = 0; // Journal failed-quests scroll offset (Phase 2.1b)
   var _selectedSlot = -1;  // tap-selected slot for highlight mode
   var _selectedPayload = null; // payload from selected slot (for drop matching)
   var _selectedZoneId = null;  // zone id of selected slot
@@ -1516,13 +1518,15 @@ var MenuFaces = (function () {
     ctx.fillText(i18n.t('quest.panel.active', 'OBJECTIVES').toUpperCase(),
                  x + PAD, ty + Math.round(6 * S));
 
-    // Pull active entries from QuestChain (DOC-107 Phase 2). Falls back
-    // to a synthetic nav-hint entry when no real quest is active.
-    var qActiveEntries = [];
+    // Pull entries from QuestChain (DOC-107 Phase 2 / Phase 2.1b).
+    // Phase 2.1b: also pull failed entries for Section 2c.
+    var qActiveEntries    = [];
     var qCompletedEntries = [];
+    var qFailedEntries    = [];
     if (typeof QuestChain !== 'undefined' && QuestChain.getJournalEntries) {
-      qActiveEntries    = QuestChain.getJournalEntries({ active: true,  completed: false }) || [];
-      qCompletedEntries = QuestChain.getJournalEntries({ active: false, completed: true  }) || [];
+      qActiveEntries    = QuestChain.getJournalEntries({ active:    true }) || [];
+      qCompletedEntries = QuestChain.getJournalEntries({ completed: true }) || [];
+      qFailedEntries    = QuestChain.getJournalEntries({ failed:    true }) || [];
     }
 
     ctx.textAlign = 'right';
@@ -1532,28 +1536,168 @@ var MenuFaces = (function () {
     ty += Math.round(14 * S);
 
     if (qActiveEntries.length === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = F_SMALL + 'px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(i18n.t('quest.panel.empty', 'No active quests.'),
-                   x + w / 2, ty + 2);
-      ty += Math.round(16 * S);
-    } else {
-      ctx.font = F_SMALL + 'px monospace';
-      ctx.textAlign = 'left';
-      for (var qei = 0; qei < qActiveEntries.length; qei++) {
-        var qe = qActiveEntries[qei];
-        var qLabel = qe.stepLabel
-          ? i18n.t(qe.stepLabel, qe.stepLabel)
-          : (qe.title ? i18n.t(qe.title, qe.title) : '');
-        if (!qLabel) continue;
-        // Nav-hint entries render the same compact green diamond row
-        // as real active objectives — UI parity with jam-build nav hint.
-        ctx.fillStyle = (qe.kind === 'nav')
-          ? 'rgba(120,220,160,0.8)'
-          : (qe.markerColor || 'rgba(120,220,160,0.9)');
-        ctx.fillText('\u25C6 ' + qLabel, x + PAD + 2, ty + 2);
+      // Phase 2.1b: capstone teaser empty-state.  When the player has
+      // no active quests but the act-1 capstone is registered (it
+      // unlocks Act 2 by flag), render a 2-row teaser hinting that
+      // the spine continues once the hero falls.  Falls back to the
+      // legacy "No active quests." line when the capstone is absent
+      // (e.g. quest data not loaded, or pre-DOC-107 fixtures).
+      var capDef = (typeof QuestRegistry !== 'undefined' && QuestRegistry.getQuest)
+        ? QuestRegistry.getQuest('main.act1.capstone') : null;
+      if (capDef) {
+        var teaserH = Math.round(38 * S);
+        ctx.fillStyle = 'rgba(140,90,150,0.18)';
+        _roundRectFill(ctx, x + PAD, ty, w - PAD * 2, teaserH, Math.round(3 * S));
+        ctx.strokeStyle = 'rgba(180,130,200,0.35)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, x + PAD, ty, w - PAD * 2, teaserH, Math.round(3 * S));
+
+        ctx.fillStyle = 'rgba(220,180,240,0.9)';
+        ctx.font = (F_SMALL + 1) + 'px serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('\u2756 ' + i18n.t('quest.capstone.teaser_title', 'The Hero Falls'),
+                     x + PAD + Math.round(8 * S), ty + Math.round(15 * S));
+
+        ctx.fillStyle = 'rgba(200,180,210,0.65)';
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.fillText(i18n.t('quest.capstone.teaser_hint', 'Awaiting the hero\u2019s fall below'),
+                     x + PAD + Math.round(8 * S), ty + Math.round(30 * S));
+
+        ty += teaserH + Math.round(4 * S);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(i18n.t('quest.panel.empty', 'No active quests.'),
+                     x + w / 2, ty + 2);
         ty += Math.round(16 * S);
+      }
+    } else {
+      // Phase 2.1b — BOOKS-style active rows.  Mirrors Section 2b
+      // (completed-quests pane): 28px rounded-rect rows, faction-tinted
+      // diamond icon, stacked title+stepLabel, progress dots + kind tag
+      // right-aligned, hit zones at slot 940+, scroll chevrons at
+      // slots 932/933 when count > Q_ACTIVE_MAX_VISIBLE.
+      var QA_ROW_H       = Math.round(28 * S);
+      var QA_ROW_GAP     = Math.round(3 * S);
+      var QA_MAX_VISIBLE = 4;
+      var QA_ICON_W      = Math.round(22 * S);
+
+      _questActiveScrollOffset = Math.max(0,
+        Math.min(_questActiveScrollOffset,
+                 Math.max(0, qActiveEntries.length - QA_MAX_VISIBLE)));
+      var qaStart = _questActiveScrollOffset;
+      var qaEnd   = Math.min(qActiveEntries.length, qaStart + QA_MAX_VISIBLE);
+
+      // Scroll-up chevron (slot 932)
+      if (qaStart > 0) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25B2 ' + qaStart + ' more', x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2,
+          h: Math.round(14 * S), slot: 932, action: 'quest_active_scroll_up' });
+        ty += Math.round(14 * S);
+      }
+
+      for (var qai = qaStart; qai < qaEnd; qai++) {
+        var qa = qActiveEntries[qai];
+        var qaRowY = ty;
+        var qaHov  = (_hoverSlot === (940 + qai));
+        var qaTint = qa.markerColor || 'rgba(120,220,160,0.9)';
+
+        // Row chrome
+        ctx.fillStyle = qaHov ? 'rgba(120,180,140,0.18)' : 'rgba(40,55,45,0.4)';
+        _roundRectFill(ctx, x + PAD, qaRowY, w - PAD * 2, QA_ROW_H, Math.round(3 * S));
+        ctx.strokeStyle = qaHov ? COL.accent : 'rgba(120,180,140,0.3)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, x + PAD, qaRowY, w - PAD * 2, QA_ROW_H, Math.round(3 * S));
+
+        // Faction-tinted diamond icon
+        var qaIconFont = Math.max(10, Math.round(16 * S));
+        ctx.font = qaIconFont + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = qaTint;
+        ctx.fillText('\u25C6',
+          x + PAD + QA_ICON_W / 2 + 4,
+          qaRowY + QA_ROW_H / 2 + Math.round(3 * S));
+
+        // Title + stepLabel stacked
+        var qaTitleX = x + PAD + QA_ICON_W + Math.round(6 * S);
+        var qaMaxW   = w - PAD * 2 - QA_ICON_W - Math.round(70 * S);
+        var qaTitle  = qa.title ? i18n.t(qa.title, qa.title) : qa.id;
+        while (qaTitle.length > 3 && ctx.measureText(qaTitle).width > qaMaxW) {
+          qaTitle = qaTitle.substring(0, qaTitle.length - 4) + '...';
+        }
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = qaHov ? '#fff' : COL.text;
+        ctx.fillText(qaTitle, qaTitleX, qaRowY + Math.round(11 * S));
+
+        // Step label below title (dimmed)
+        var qaStep = qa.stepLabel ? i18n.t(qa.stepLabel, qa.stepLabel) : '';
+        if (qaStep) {
+          while (qaStep.length > 3 && ctx.measureText(qaStep).width > qaMaxW) {
+            qaStep = qaStep.substring(0, qaStep.length - 4) + '...';
+          }
+          ctx.font = Math.max(9, Math.round(10 * S)) + 'px monospace';
+          ctx.fillStyle = 'rgba(180,200,180,0.65)';
+          ctx.fillText(qaStep, qaTitleX, qaRowY + Math.round(22 * S));
+        }
+
+        // Right-side: progress dots over kind tag
+        var qaTotal = (qa.progress && qa.progress.total) || qa.totalSteps || 0;
+        var qaCur   = (qa.progress && typeof qa.progress.current === 'number')
+          ? qa.progress.current : (qa.stepIndex || 0);
+        if (qaTotal > 0) {
+          var dotR     = Math.max(2, Math.round(2.5 * S));
+          var dotGap   = Math.max(2, Math.round(3 * S));
+          var dotsW    = qaTotal * (dotR * 2) + (qaTotal - 1) * dotGap;
+          var dotsX0   = x + w - PAD - dotsW - 4;
+          var dotsY    = qaRowY + Math.round(10 * S);
+          for (var qd = 0; qd < qaTotal; qd++) {
+            var filled = (qd < qaCur);
+            ctx.fillStyle = filled
+              ? (qa.markerColor || 'rgba(140,220,160,0.95)')
+              : 'rgba(255,255,255,0.18)';
+            ctx.beginPath();
+            ctx.arc(dotsX0 + dotR + qd * (dotR * 2 + dotGap), dotsY, dotR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        if (qa.kind) {
+          var qaKindKey = 'quest.kind.' + qa.kind;
+          var qaKindStr = i18n.t(qaKindKey, qa.kind.toUpperCase());
+          ctx.font = Math.max(8, Math.round(10 * S)) + 'px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillStyle = 'rgba(180,200,180,0.55)';
+          ctx.fillText(qaKindStr, x + w - PAD - 4, qaRowY + Math.round(22 * S));
+        }
+
+        // Hit zone (slot 940+ reserved for active-quest rows)
+        _hitZones.push({ x: x + PAD, y: qaRowY, w: w - PAD * 2, h: QA_ROW_H,
+          slot: 940 + qai, action: 'read_quest_active', questId: qa.id });
+
+        if (qaHov) {
+          var qaBcText = qa.breadcrumb ? i18n.t(qa.breadcrumb, qa.breadcrumb) : '';
+          _hoverDetail = { item: { name: i18n.t(qa.title, qa.title),
+            emoji: '\u25C6', description: qaBcText },
+            x: x + w - PAD, y: qaRowY };
+        }
+
+        ty += QA_ROW_H + QA_ROW_GAP;
+      }
+
+      // Scroll-down chevron (slot 933)
+      if (qaEnd < qActiveEntries.length) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25BC ' + (qActiveEntries.length - qaEnd) + ' more',
+                     x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2,
+          h: Math.round(14 * S), slot: 933, action: 'quest_active_scroll_down' });
+        ty += Math.round(14 * S);
       }
     }
 
@@ -1655,6 +1799,121 @@ var MenuFaces = (function () {
                      x + w / 2, ty + Math.round(4 * S));
         _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2, h: Math.round(14 * S),
           slot: 931, action: 'quest_scroll_down' });
+        ty += Math.round(14 * S);
+      }
+    }
+
+    // ── Section 2c: Failed quests (Phase 2.1b — red accent rows) ──
+    // Rendered only when at least one quest has failed.  Mirrors the
+    // completed-pane chrome with a red accent so the player can see
+    // at-a-glance which contracts slipped.  Slot 950+ reserved for
+    // failed-quest rows; scroll chevrons at 934/935.
+    if (qFailedEntries.length > 0) {
+      ty += Math.round(4 * S);
+      ctx.fillStyle = COL.dim;
+      ctx.font = F_SECTION + 'px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(i18n.t('quest.panel.failed', 'FAILED').toUpperCase(),
+                   x + PAD, ty + Math.round(6 * S));
+      ctx.textAlign = 'right';
+      ctx.fillText(qFailedEntries.length + '', x + w - PAD, ty + Math.round(6 * S));
+      ty += Math.round(14 * S);
+
+      var QF_ROW_H       = Math.round(28 * S);
+      var QF_ROW_GAP     = Math.round(3 * S);
+      var QF_MAX_VISIBLE = 4;
+      var QF_ICON_W      = Math.round(22 * S);
+
+      _questFailedScrollOffset = Math.max(0,
+        Math.min(_questFailedScrollOffset,
+                 Math.max(0, qFailedEntries.length - QF_MAX_VISIBLE)));
+      var qfStart = _questFailedScrollOffset;
+      var qfEnd   = Math.min(qFailedEntries.length, qfStart + QF_MAX_VISIBLE);
+
+      if (qfStart > 0) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25B2 ' + qfStart + ' more', x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2,
+          h: Math.round(14 * S), slot: 934, action: 'quest_failed_scroll_up' });
+        ty += Math.round(14 * S);
+      }
+
+      for (var qfi = qfStart; qfi < qfEnd; qfi++) {
+        var qf = qFailedEntries[qfi];
+        var qfRowY = ty;
+        var qfHov  = (_hoverSlot === (950 + qfi));
+
+        // Red-tinted row chrome
+        ctx.fillStyle = qfHov ? 'rgba(180,80,80,0.22)' : 'rgba(70,35,35,0.4)';
+        _roundRectFill(ctx, x + PAD, qfRowY, w - PAD * 2, QF_ROW_H, Math.round(3 * S));
+        ctx.strokeStyle = qfHov ? 'rgba(220,120,110,0.9)' : 'rgba(180,80,80,0.35)';
+        ctx.lineWidth = 1;
+        _roundRectStroke(ctx, x + PAD, qfRowY, w - PAD * 2, QF_ROW_H, Math.round(3 * S));
+
+        // Icon — ✗ red cross
+        var qfIconFont = Math.max(10, Math.round(16 * S));
+        ctx.font = qfIconFont + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#d88a8a';
+        ctx.fillText('\u2717',
+          x + PAD + QF_ICON_W / 2 + 4,
+          qfRowY + QF_ROW_H / 2 + Math.round(3 * S));
+
+        // Title (truncated)
+        var qfTitleX = x + PAD + QF_ICON_W + Math.round(6 * S);
+        var qfMaxW   = w - PAD * 2 - QF_ICON_W - Math.round(50 * S);
+        ctx.font = F_SMALL + 'px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = qfHov ? '#fff' : COL.text;
+        var qfTitleStr = qf.title ? i18n.t(qf.title, qf.title) : qf.id;
+        while (qfTitleStr.length > 3 && ctx.measureText(qfTitleStr).width > qfMaxW) {
+          qfTitleStr = qfTitleStr.substring(0, qfTitleStr.length - 4) + '...';
+        }
+        ctx.fillText(qfTitleStr, qfTitleX, qfRowY + Math.round(11 * S));
+
+        // Fail reason below (truncated, dim red)
+        if (qf.failReason) {
+          var qfReason = i18n.t(qf.failReason, qf.failReason);
+          ctx.font = Math.max(9, Math.round(10 * S)) + 'px monospace';
+          ctx.fillStyle = 'rgba(220,170,170,0.65)';
+          while (qfReason.length > 3 && ctx.measureText(qfReason).width > qfMaxW) {
+            qfReason = qfReason.substring(0, qfReason.length - 4) + '...';
+          }
+          ctx.fillText(qfReason, qfTitleX, qfRowY + Math.round(22 * S));
+        }
+
+        if (qf.kind) {
+          var qfKindKey = 'quest.kind.' + qf.kind;
+          var qfKindStr = i18n.t(qfKindKey, qf.kind.toUpperCase());
+          ctx.font = Math.max(8, Math.round(10 * S)) + 'px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillStyle = 'rgba(200,150,150,0.5)';
+          ctx.fillText(qfKindStr, x + w - PAD - 4, qfRowY + Math.round(22 * S));
+        }
+
+        _hitZones.push({ x: x + PAD, y: qfRowY, w: w - PAD * 2, h: QF_ROW_H,
+          slot: 950 + qfi, action: 'read_quest_failed', questId: qf.id });
+
+        if (qfHov) {
+          var qfBcText = qf.breadcrumb ? i18n.t(qf.breadcrumb, qf.breadcrumb) : '';
+          _hoverDetail = { item: { name: i18n.t(qf.title, qf.title),
+            emoji: '\u2717', description: qfBcText },
+            x: x + w - PAD, y: qfRowY };
+        }
+
+        ty += QF_ROW_H + QF_ROW_GAP;
+      }
+
+      if (qfEnd < qFailedEntries.length) {
+        ctx.fillStyle = COL.dim;
+        ctx.font = F_SECTION + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25BC ' + (qFailedEntries.length - qfEnd) + ' more',
+                     x + w / 2, ty + Math.round(4 * S));
+        _hitZones.push({ x: x + PAD, y: ty - Math.round(4 * S), w: w - PAD * 2,
+          h: Math.round(14 * S), slot: 935, action: 'quest_failed_scroll_down' });
         ty += Math.round(14 * S);
       }
     }
@@ -4685,336 +4944,4 @@ var MenuFaces = (function () {
   }
 
   /**
-   * Unregister all inventory drag-drop zones.
-   */
-  function unregisterDragZones() {
-    // Unmount DOM overlay companion
-    if (typeof InventoryOverlay !== 'undefined') {
-      InventoryOverlay.unmount();
-    }
-    if (typeof DragDrop === 'undefined') return;
-    for (var i = 0; i < _registeredZoneIds.length; i++) {
-      DragDrop.removeZone(_registeredZoneIds[i]);
-    }
-    _registeredZoneIds = [];
-    _dragZonesRegistered = false;
-    _selectedSlot = -1;
-    _selectedPayload = null;
-    _selectedZoneId = null;
-  }
-
-  /**
-   * Update drag zone bounds from the last _renderInventory layout.
-   * Called at the end of _renderInventory to sync zone positions with
-   * the canvas slot positions. Stores layout data in module-level vars
-   * so registerDragZones can re-register with correct bounds next frame.
-   */
-  var _lastInvLayout = null;
-
-  function _storeInvLayout(layout) {
-    _lastInvLayout = layout;
-    _syncDragZoneBounds();
-    // Sync DOM overlay positions + combat lock check
-    if (typeof InventoryOverlay !== 'undefined' && InventoryOverlay.isMounted()) {
-      InventoryOverlay.sync(layout);
-      InventoryOverlay.updateCombatLock();
-    }
-  }
-
-  function _syncDragZoneBounds() {
-    if (!_lastInvLayout || typeof DragDrop === 'undefined' || !_dragZonesRegistered) return;
-    var L = _lastInvLayout;
-    // Equip slots
-    for (var ei = 0; ei < 3; ei++) {
-      DragDrop.updateZone('inv-eq-' + ei, {
-        x: L.eqSlots[ei].x, y: L.eqSlots[ei].y,
-        w: L.eqSlots[ei].w, h: L.eqSlots[ei].h
-      });
-    }
-    // Bag wheel slots
-    for (var bi = 0; bi < 5; bi++) {
-      DragDrop.updateZone('inv-bag-' + bi, {
-        x: L.bagSlots[bi].x, y: L.bagSlots[bi].y,
-        w: L.bagSlots[bi].w, h: L.bagSlots[bi].h
-      });
-    }
-    // Hand slots
-    for (var hi = 0; hi < 5; hi++) {
-      DragDrop.updateZone('inv-hand-' + hi, {
-        x: L.handSlots[hi].x, y: L.handSlots[hi].y,
-        w: L.handSlots[hi].w, h: L.handSlots[hi].h
-      });
-    }
-    // Deck wheel slots
-    for (var di = 0; di < 5; di++) {
-      DragDrop.updateZone('inv-deck-' + di, {
-        x: L.deckSlots[di].x, y: L.deckSlots[di].y,
-        w: L.deckSlots[di].w, h: L.deckSlots[di].h
-      });
-    }
-    // Incinerator
-    if (L.incin) {
-      DragDrop.updateZone(ZONE_INCIN, {
-        x: L.incin.x, y: L.incin.y,
-        w: L.incin.w, h: L.incin.h
-      });
-    }
-  }
-
-  /**
-   * Draw pulsing highlight borders on all valid drop targets
-   * when a slot is tap-selected.
-   */
-  function _drawSelectionHighlights(ctx) {
-    if (!_selectedPayload || !_lastInvLayout || typeof DragDrop === 'undefined') return;
-    var L = _lastInvLayout;
-    var t = Date.now();
-    var pulse = 0.5 + 0.5 * Math.sin(t * 0.006);  // 0..1 pulsing
-    var alpha = 0.3 + 0.5 * pulse;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0, 255, 180, ' + alpha + ')';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([6, 3]);
-
-    // Check each zone type
-    var allZones = [
-      { prefix: 'inv-eq-', slots: L.eqSlots, count: 3 },
-      { prefix: 'inv-bag-', slots: L.bagSlots, count: 5 },
-      { prefix: 'inv-hand-', slots: L.handSlots, count: 5 },
-      { prefix: 'inv-deck-', slots: L.deckSlots, count: 5 }
-    ];
-    for (var g = 0; g < allZones.length; g++) {
-      var group = allZones[g];
-      for (var s = 0; s < group.count; s++) {
-        var zid = group.prefix + s;
-        if (zid === _selectedZoneId) continue;  // Don't highlight the source
-        var zone = DragDrop.getZone(zid);
-        if (zone && zone.accepts && zone.accepts(_selectedPayload)) {
-          var sl = group.slots[s];
-          ctx.strokeRect(sl.x - 2, sl.y - 2, sl.w + 4, sl.h + 4);
-        }
-      }
-    }
-    // Incinerator highlight
-    if (L.incin && ZONE_INCIN !== _selectedZoneId) {
-      var incZone = DragDrop.getZone(ZONE_INCIN);
-      if (incZone && incZone.accepts && incZone.accepts(_selectedPayload)) {
-        ctx.strokeStyle = 'rgba(255, 80, 40, ' + alpha + ')';
-        ctx.strokeRect(L.incin.x - 2, L.incin.y - 2, L.incin.w + 4, L.incin.h + 4);
-      }
-    }
-    // Draw a solid highlight ring on the selected source
-    ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(255, 255, 100, 0.9)';
-    ctx.lineWidth = 2;
-    // Find the selected slot bounds
-    var selBounds = null;
-    if (_selectedZoneId) {
-      for (var g2 = 0; g2 < allZones.length; g2++) {
-        for (var s2 = 0; s2 < allZones[g2].count; s2++) {
-          if (allZones[g2].prefix + s2 === _selectedZoneId) {
-            selBounds = allZones[g2].slots[s2];
-            break;
-          }
-        }
-        if (selBounds) break;
-      }
-    }
-    if (selBounds) {
-      ctx.strokeRect(selBounds.x - 1, selBounds.y - 1, selBounds.w + 2, selBounds.h + 2);
-    }
-    ctx.restore();
-  }
-
-  // ── Registration helper ─────────────────────────────────────────
-
-  /**
-   * Register all 4 face renderers on a MenuBox instance.
-   * Called from Game._initGameplay().
-   */
-  function registerAll() {
-    MenuBox.setFaceRenderer(0, renderFace0, 'Map');
-    MenuBox.setFaceRenderer(1, renderFace1, 'Items');
-    MenuBox.setFaceRenderer(2, renderFace2, 'Gear');
-    MenuBox.setFaceRenderer(3, renderFace3, 'System');
-  }
-
-  // ── Public API ──────────────────────────────────────────────────
-
-  // ── Inventory Wheel Scroll/Focus API ─────────────────────────────
-
-  function scrollBag(delta) {
-    // Scroll is now clamped by _renderInventory each frame based on
-    // dynamic visible count, so just apply delta and let render clamp.
-    _bagOffset = Math.max(0, _bagOffset + delta);
-  }
-
-  function scrollDeck(delta) {
-    _deckOffset = Math.max(0, _deckOffset + delta);
-  }
-
-  function scrollBooks(delta) {
-    _bookScrollOffset = Math.max(0, _bookScrollOffset + delta);
-  }
-
-  // DOC-107 Phase 2 — completed-quests pane scroll (Journal Section 2b).
-  // Clamp is deferred to _renderJournal() per the _bookScrollOffset pattern.
-  function scrollQuestCompleted(delta) {
-    _questCompletedScrollOffset = Math.max(0, _questCompletedScrollOffset + delta);
-  }
-
-  function scrollFocused(delta) {
-    if (_invFocus === 'bag') scrollBag(delta);
-    else scrollDeck(delta);
-  }
-
-  function toggleInvFocus() {
-    _invFocus = (_invFocus === 'bag') ? 'deck' : 'bag';
-  }
-
-  function setInvFocus(focus) {
-    if (focus === 'bag' || focus === 'deck') _invFocus = focus;
-  }
-
-  function toggleBagExpand() {
-    _bagExpanded = !_bagExpanded;
-    _bagOffset = 0; // Reset scroll on toggle
-  }
-
-  function toggleDeckExpand() {
-    _deckExpanded = !_deckExpanded;
-    _deckOffset = 0;
-  }
-
-  /**
-   * Handle a card dropped from the CardFan external drag system.
-   * Converts screen coordinates to canvas coordinates and hit-tests
-   * against the inventory layout zones.
-   *
-   * @param {Object} info - { cardIdx, card, screenX, screenY }
-   * @returns {boolean} True if the drop was handled.
-   */
-  function handleExternalDrop(info) {
-    if (!_lastInvLayout || !info || !info.card) return false;
-
-    // Convert screen (client) coordinates to canvas coordinates
-    var canvas = MenuBox.getCanvas ? MenuBox.getCanvas() : null;
-    if (!canvas) return false;
-    var rect = canvas.getBoundingClientRect();
-    var cx = (info.screenX - rect.left) * (canvas.width / rect.width);
-    var cy = (info.screenY - rect.top)  * (canvas.height / rect.height);
-
-    var L = _lastInvLayout;
-    var card = info.card;
-
-    // Hit test: bag slots (card-in-bag / Joker Vault)
-    if (L.bagSlots) {
-      for (var bi = 0; bi < L.bagSlots.length; bi++) {
-        var bs = L.bagSlots[bi];
-        if (cx >= bs.x && cx <= bs.x + bs.w && cy >= bs.y && cy <= bs.y + bs.h) {
-          // Card → bag (Joker Vault): store card as item in bag
-          if (typeof CardAuthority !== 'undefined') {
-            var bagCard = { id: card.id, name: card.name, emoji: card.emoji || '🃏',
-                           type: 'card', suit: card.suit, _bagStored: true, _cardRef: card };
-            if (!CardAuthority.addToBag(bagCard)) {
-              if (typeof Toast !== 'undefined') Toast.show('Bag full - make room first', 'warning');
-              return false;
-            }
-            // Remove from hand
-            CardAuthority.removeFromHand(info.cardIdx);
-            if (typeof Toast !== 'undefined') Toast.show('🃏 Card stashed in bag', 'info');
-            if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
-            return true;
-          }
-          return false;
-        }
-      }
-    }
-
-    // Hit test: deck wheel slots (return card to collection)
-    if (L.deckSlots) {
-      for (var di = 0; di < L.deckSlots.length; di++) {
-        var ds = L.deckSlots[di];
-        if (cx >= ds.x && cx <= ds.x + ds.w && cy >= ds.y && cy <= ds.y + ds.h) {
-          var moved = CardAuthority.moveHandToBackup(info.cardIdx);
-          if (moved) {
-            if (typeof Toast !== 'undefined') Toast.show('🃏 Card returned to deck', 'info');
-            if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
-            return true;
-          } else {
-            if (typeof Toast !== 'undefined') Toast.show('Deck full (' + CardAuthority.MAX_BACKUP + ')', 'warning');
-            return false;
-          }
-        }
-      }
-    }
-
-    // Hit test: incinerator
-    if (L.incin) {
-      var inc = L.incin;
-      if (cx >= inc.x && cx <= inc.x + inc.w && cy >= inc.y && cy <= inc.y + inc.h) {
-        CardAuthority.removeFromHand(info.cardIdx);
-        if (typeof Toast !== 'undefined') Toast.show('🐉 Card destroyed', 'warning');
-        if (typeof StatusBar !== 'undefined') { StatusBar.refresh(); }
-        return true;
-      }
-    }
-
-    // Hit test: equip slots — cards can't equip, reject
-    // (items-only slots, card drops are invalid here)
-
-    return false;
-  }
-
-  return {
-    renderFace0:          renderFace0,
-    renderFace1:          renderFace1,
-    renderFace2:          renderFace2,
-    renderFace3:          renderFace3,
-    registerAll:          registerAll,
-    handleSettingsNav:       handleSettingsNav,
-    handleSettingsAdjust:    handleSettingsAdjust,
-    handleSettingsScroll:    handleSettingsScroll,
-    handleSettingsToggle:    handleSettingsToggle,
-    handleSettingsInteract:  handleSettingsInteract,
-    handleQuestSettingInteract: handleQuestSettingInteract,
-    isSettingsLocked:        isSettingsLocked,
-    handleLanguageCycle:     handleLanguageCycle,
-    handleRenderScaleCycle:  _cycleRenderScale,
-    handleSettingsSelectRow: handleSettingsSelectRow,
-    handleSettingsSetValue:  handleSettingsSetValue,
-    resetSettings:           resetSettings,
-    clearHitZones:        clearHitZones,
-    updateHover:          updateHover,
-    handlePointerClick:   handlePointerClick,
-
-    // DragDrop integration
-    registerDragZones:    registerDragZones,
-    unregisterDragZones:  unregisterDragZones,
-
-    // External drop (CardFan → inventory zones)
-    handleExternalDrop:   handleExternalDrop,
-
-    // Inventory wheel scroll/focus
-    scrollBag:            scrollBag,
-    scrollDeck:           scrollDeck,
-    scrollFocused:        scrollFocused,
-    toggleInvFocus:       toggleInvFocus,
-    setInvFocus:          setInvFocus,
-    toggleBagExpand:      toggleBagExpand,
-    toggleDeckExpand:     toggleDeckExpand,
-
-    // State getters
-    getInvFocus:          function () { return _invFocus; },
-    getBagOffset:         function () { return _bagOffset; },
-    getDeckOffset:        function () { return _deckOffset; },
-    isBagExpanded:        function () { return _bagExpanded; },
-    isDeckExpanded:       function () { return _deckExpanded; },
-
-    // Journal book scroll
-    scrollBooks:          scrollBooks,
-
-    // Journal completed-quests scroll (DOC-107 Phase 2)
-    scrollQuestCompleted: scrollQuestCompleted
-  };
-})();
+   * Unregister all inventory drag-

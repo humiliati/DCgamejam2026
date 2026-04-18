@@ -52,6 +52,7 @@ var Raycaster = (function () {
   // only from within renderSprites.
   var _renderSprites            = RaycasterSprites.renderSprites;
   var _renderWallDecor          = RaycasterSprites.renderWallDecor;
+  var _renderFloorDecor         = RaycasterSprites.renderFloorDecor;
   var _updateAndRenderParticles = RaycasterSprites.updateAndRenderParticles;
 
   // Main canvas — owned by the page, stays at native CSS resolution so
@@ -2573,6 +2574,17 @@ var Raycaster = (function () {
       _renderSprites(ctx, px, py, pDir, halfFov, w, h, halfH, sprites, _spriteRenderDist, fogDist, fogColor, terminusDist, null);
     }
     if (_dpm) _dpm.end('Raycaster.spritesDistant');
+
+    // ── Floor decor (DOC-117) ─────────────────────────────────────
+    // Paints AdjacentDecorSpawner's _floorDecor grid onto the floor
+    // plane. Runs before the weather veil so distant cells receive
+    // the standard fog treatment alongside walls + distant sprites;
+    // near cells punch through via the alpha floor in the renderer.
+    // No-ops when _floorDecor is null (pre-spawn, or entries live on
+    // unsupported floors).
+    if (_dpm) _dpm.begin('Raycaster.floorDecor');
+    _renderFloorDecor(ctx, px, py, pDir, halfFov, w, h, halfH, renderDist, fogDist, fogColor);
+    if (_dpm) _dpm.end('Raycaster.floorDecor');
 
     // ── Weather layer insertion point ─────────────────────────────
     // When WeatherSystem is loaded (Phase 1+), it renders the veil,

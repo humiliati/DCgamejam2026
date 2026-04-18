@@ -17,7 +17,7 @@
          - Balance matrix ......... HP × DPS scatter (bottom panel)
          - Export ................. download modified enemies.json + enemy-decks.json
          - Deck Composer tab ...... EATK pool, deck slot, hydrate-from-stats (Phase 5.2 shipped)
-         - Intent Curve tab ....... STUB (§4.5 — Phase 5.3)
+         - Intent Curve tab ....... side-by-side rows + overlay toggle + rounds clamp (Phase 5.3 shipped)
          - Loot tab ............... STUB (§4.5 — Phase 5.4)
          - Reanim Behavior tab .... STUB (§4.5 — Phase 5.5)
 
@@ -289,6 +289,98 @@
       padding: 40px 10px; font-size: 11px;
     }
 
+    /* ─── Intent Curve (P5.3) ─── */
+    .ehc-ctrls {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 8px; font-size: 11px;
+    }
+    .ehc-ctrls .spacer { flex: 1; }
+    .ehc-ctrls .ehc-head { color: var(--text-dim); font-weight: 600; }
+    .ehc-ctrls label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+    .ehc-ctrls input[type="number"] { font: inherit; padding: 3px 6px; }
+    .ehc-meta {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 0.04em; margin-bottom: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .ehc-meta .ehc-flag {
+      color: #b08040;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .ehc-dim { color: var(--muted); font-style: italic; }
+    .ehc-host { display: flex; flex-direction: column; gap: 6px; }
+    .ehc-section { display: flex; flex-direction: column; gap: 4px; }
+    .ehc-section h5 {
+      font-size: 10px; margin: 2px 0 2px;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.06em; font-weight: 600;
+    }
+    .ehc-section h5 .ehc-dim { text-transform: none; letter-spacing: 0; font-weight: normal; }
+    .ehc-bars {
+      display: flex; gap: 4px;
+      align-items: stretch; min-height: 48px;
+    }
+    .ehc-bar {
+      flex: 1 1 0; min-width: 40px; min-height: 48px;
+      border-radius: 3px;
+      padding: 4px 6px; position: relative;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+      color: #f0f0f0; font-size: 10px;
+      line-height: 1.2; overflow: hidden;
+    }
+    .ehc-bar-round {
+      position: absolute; top: 3px; left: 5px;
+      font-size: 9px; opacity: 0.65;
+      font-variant-numeric: tabular-nums;
+    }
+    .ehc-bar-intent { font-weight: 600; letter-spacing: 0.04em; }
+    .ehc-bar-card { font-size: 9px; opacity: 0.72; font-family: monospace; }
+    .ehc-bar-rec    { opacity: 0.78; }
+    .ehc-bar-actual { opacity: 1; }
+    .ehc-bar-mismatch {
+      box-shadow: inset 0 0 0 2px rgba(224,120,80, 0.85),
+                  0 0 0 1px rgba(224,120,80, 0.4);
+    }
+    .ehc-bars-overlay .ehc-bar-stacked {
+      padding: 0; background: none; flex-direction: column;
+      box-shadow: none;
+    }
+    .ehc-bars-overlay .ehc-bar-top,
+    .ehc-bars-overlay .ehc-bar-bottom {
+      flex: 1 1 50%;
+      padding: 4px 6px;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      color: #f0f0f0; font-size: 10px; line-height: 1.2;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+    }
+    .ehc-bars-overlay .ehc-bar-top    { border-radius: 3px 3px 0 0; }
+    .ehc-bars-overlay .ehc-bar-bottom { border-radius: 0 0 3px 3px; opacity: 0.72; }
+    .ehc-bars-overlay .ehc-bar-stacked.ehc-bar-mismatch {
+      outline: 2px solid rgba(224,120,80, 0.85); outline-offset: -1px;
+    }
+    .ehc-row-empty {
+      padding: 14px; color: var(--muted); font-style: italic; font-size: 11px;
+      text-align: center;
+    }
+    .ehc-legend {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      font-size: 10px; color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .ehc-legend-chip { display: inline-flex; align-items: center; gap: 4px; }
+    .ehc-legend-swatch {
+      display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+    }
+    .ehc-note {
+      padding: 8px 10px; border-left: 2px solid var(--border-mid);
+      background: rgba(255,255,255,0.03);
+      font-size: 10px; color: var(--muted); line-height: 1.45;
+      margin-top: 4px;
+    }
+    .ehc-note strong { color: var(--text-dim); }
+
     /* ─── Stats editor ─── */
     .eh-stats-grid {
       display: grid;
@@ -501,7 +593,7 @@
       <div id="tabs" class="eh-tabs" style="display:none;">
         <div class="eh-tab active" data-tab="stats">Stats</div>
         <div class="eh-tab" data-tab="deck">Deck</div>
-        <div class="eh-tab stub" data-tab="intent">Intent Curve</div>
+        <div class="eh-tab" data-tab="intent">Intent Curve</div>
         <div class="eh-tab stub" data-tab="loot">Loot</div>
         <div class="eh-tab stub" data-tab="reanim">Reanim</div>
       </div>
@@ -667,7 +759,19 @@
           </section>
         </div>
       </div>
-      <div id="tab-intent" class="eh-tab-body stub" style="display:none;"><h3>Intent Curve</h3><p>State-machine editor: calm → focused → angry → enraged, per-HP%-threshold pin.<br/>Phase 5.3 — ships next.</p></div>
+      <!-- Intent Curve tab — DOC-110 P5.3 -->
+      <div id="tab-intent" class="eh-tab-body" style="display:none;">
+        <div class="ehc-ctrls">
+          <span class="ehc-head">Intent curve for <code id="curve-head">—</code></span>
+          <span class="spacer"></span>
+          <label>Rounds <input type="number" id="curve-rounds" min="1" max="12" step="1" value="6" style="width:50px;"/></label>
+          <label><input type="checkbox" id="curve-overlay"/> Overlay mode</label>
+        </div>
+        <div id="curve-meta" class="ehc-meta"><span class="ehc-dim">Select an enemy to see its intent curve.</span></div>
+        <div id="curve-host" class="ehc-host">
+          <div id="curve-body"></div>
+        </div>
+      </div>
       <div id="tab-loot"   class="eh-tab-body stub" style="display:none;"><h3>Loot Cross-Ref</h3><p>Cross-refs <code>data/loot-tables.json</code> for expected-value gold + item roll.<br/>Phase 5.4 — ships next.</p></div>
       <div id="tab-reanim" class="eh-tab-body stub" style="display:none;"><h3>Reanim Behavior</h3><p>Pulls <code>tools/archetype-registry.json</code> (shipped P1.1.2) for defaults by type regex.<br/>Phase 5.5 — ships next.</p></div>
 
@@ -1378,5 +1482,6 @@
 
   <!-- ── Phase 5.2 — Deck Composer module ─────────────────────── -->
   <script src="./js/enemy-hydrator-deck.js"></script>
+  <script src="./js/enemy-hydrator-curve.js"></script>
 </body>
 </html>

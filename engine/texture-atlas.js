@@ -763,6 +763,141 @@ var TextureAtlas = (function () {
       plateR: 60, plateG: 55, plateB: 50          // Mounting plate
     });
 
+    // ── Tier 1 adjacent decor (DOC-117a) ───────────────────────────
+    //
+    // 19 sprites authored over the six pixel-test primitives. Source
+    // tile IDs wire up in engine/adjacent-decor-map.js once this batch
+    // (scatter) + the remaining 4 batches land. See DOC-117_TIER1_SPRITE
+    // _TAXONOMY.md for the design contract.
+
+    // Scatter batch — feathers, bones, scales, filings, fur, blood.
+
+    // Feather — single dropped plume (ROOST adjacent).
+    _genDecorFeatherSingle('decor_feather_single', {
+      featherR: 150, featherG: 140, featherB: 120,  // Warm bone-tone vane
+      spineR: 90, spineG: 80, spineB: 65              // Dark keratin spine
+    });
+
+    // Feather tuft — small cluster of down.
+    _genDecorFeatherTuft('decor_feather_tuft', {
+      featherR: 160, featherG: 150, featherB: 135,
+      spineR: 85, spineG: 75, spineB: 60
+    });
+
+    // Dragon scale — iridescent chitinous chip.
+    _genDecorDragonScale('decor_dragon_scale', {
+      scaleR: 60, scaleG: 85, scaleB: 100,          // Cool slate green-blue
+      edgeR: 120, edgeG: 160, edgeB: 170            // Iridescent rim
+    });
+
+    // Bone shard — scattered broken fragments (NEST/DEN).
+    _genDecorBoneShardFloor('decor_bone_shard_floor', {
+      boneR: 200, boneG: 190, boneB: 165,           // Ivory
+      shadowR: 90, shadowG: 80, shadowB: 65         // Dark marrow shadow
+    });
+
+    // Gnawed bone — 1-2 whole bones with tooth marks.
+    _genDecorGnawedBone('decor_gnawed_bone', {
+      boneR: 190, boneG: 180, boneB: 155,
+      shadowR: 75, shadowG: 65, shadowB: 50
+    });
+
+    // Fur tuft — russet fur scraps (DEN).
+    _genDecorFurTuft('decor_fur_tuft', {
+      furR: 95, furG: 65, furB: 40,                 // Russet brown
+      darkR: 55, darkG: 35, darkB: 22               // Shadow root
+    });
+
+    // Copper filings — metallic dust (ENERGY_CONDUIT adjacent).
+    _genDecorCopperFilings('decor_copper_filings_floor', {
+      copperR: 180, copperG: 115, copperB: 65       // Warm copper
+    });
+
+    // Blood dot — dried droplet (TERRITORIAL_MARK adjacent).
+    _genDecorBloodDot('decor_blood_dot_floor', {
+      bloodR: 110, bloodG: 25, bloodB: 20,          // Fresh arterial
+      driedR: 75, driedG: 25, driedB: 22            // Oxidized edge
+    });
+
+    // Slash batch — scratches, gouges, bundles.
+
+    // Scratch kneehigh — 3 diagonals waist-high (DEN, ROOST).
+    _genDecorScratchKneehigh('decor_scratch_kneehigh', {
+      scratchR: 120, scratchG: 115, scratchB: 108,  // Exposed stone rim
+      deepR: 45, deepG: 40, deepB: 35               // Deep gouge shadow
+    });
+
+    // Claw gouge masonry — 4 deeper parallel tears.
+    _genDecorClawGougeMasonry('decor_claw_gouge_masonry', {
+      exposedR: 135, exposedG: 128, exposedB: 118,  // Fresh exposed stone
+      deepR: 30, deepG: 25, deepB: 20               // Very deep shadow
+    });
+
+    // Scratch parallel wall — territorial marker, clean horizontals.
+    _genDecorScratchParallel('decor_scratch_parallel_wall', {
+      scratchR: 115, scratchG: 110, scratchB: 100,
+      deepR: 40, deepG: 35, deepB: 30
+    });
+
+    // Stick bundle floor — 4 crossed sticks (NEST nesting material).
+    _genDecorStickBundleFloor('decor_stick_bundle_floor', {
+      stickR: 110, stickG: 75, stickB: 45,          // Weathered wood
+      shadowR: 55, shadowG: 35, shadowB: 20         // Dark underside
+    });
+
+    // Blob batch — fungus, spores, oil stain.
+
+    // Fungus climb wall — dark fungal body with upward shoots (FUNGAL_PATCH).
+    _genDecorFungusClimb('decor_fungus_climb_wall', {
+      baseR: 55, baseG: 85, baseB: 45,              // Dark fungal green
+      hiR: 85, hiG: 125, hiB: 65,                   // Fungal cap highlights
+      rootR: 40, rootG: 60, rootB: 30               // Dark root/shoot color
+    });
+
+    // Spore puff floor — faint greenish spore cloud.
+    _genDecorSporePuff('decor_spore_puff_floor', {
+      sporeR: 110, sporeG: 145, sporeB: 85,         // Pale spore green
+      wispR: 135, wispG: 165, wispB: 100             // Outer wisp
+    });
+
+    // Oil stain floor — dark oil with faint iridescent sheen.
+    _genDecorOilStain('decor_oil_stain_floor', {
+      darkR: 25, darkG: 22, darkB: 18,              // Black oil core
+      sheenR: 80, sheenG: 95, sheenB: 110           // Cool iridescent sheen
+    });
+
+    // Streak batch — guano drip, brass pipe.
+
+    // Guano streak wall — organic drip from ROOST perch.
+    _genDecorGuanoStreak('decor_guano_streak_wall', {
+      guanoR: 215, guanoG: 215, guanoB: 195,        // Bone-white
+      edgeR: 150, edgeG: 145, edgeB: 120            // Yellowed edge
+    });
+
+    // Brass pipe run wall — riveted fabricated pipe (ENERGY_CONDUIT).
+    _genDecorBrassPipeRun('decor_brass_pipe_run_wall', {
+      brassR: 155, brassG: 110, brassB: 50,         // Warm brass
+      hiR: 195, hiG: 155, hiB: 85,                  // Bright highlight strip
+      shadowR: 55, shadowG: 38, shadowB: 20,        // Deep shadow edge
+      rivetR: 85, rivetG: 65, rivetB: 35            // Darker rivet flange
+    });
+
+    // Singletons — mycelium thread, warning plate.
+
+    // Mycelium thread wall — fractal tendrils climbing upward (FUNGAL).
+    _genDecorMyceliumThread('decor_mycelium_thread_wall', {
+      trunkR: 120, trunkG: 105, trunkB: 85,         // Warm parchment trunk
+      tipR: 180, tipG: 170, tipB: 150                // Pale fresh-growth tips
+    });
+
+    // Warning sign plate — hazard placard (ENERGY_CONDUIT adjacent).
+    _genDecorWarningPlate('decor_warning_sign_plate', {
+      plateR: 215, plateG: 175, plateB: 45,         // Hazard yellow
+      borderR: 30, borderG: 25, borderB: 20,        // Dark edge trim
+      bevelR: 245, bevelG: 210, bevelB: 85,         // Bright inner rim
+      symbolR: 25, symbolG: 20, symbolB: 15         // Black lightning-bolt
+    });
+
     // ── A6 textures (torch tiles) ──────────────────────────────────
 
     // Lit torch wall — stone wall with iron bracket and flame
@@ -1143,6 +1278,341 @@ var TextureAtlas = (function () {
   }
 
   function _clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+
+  // ── DOC-117a pixel-test primitives ──────────────────────────────
+  //
+  // Shared helpers for adjacent-decor sprite generators. Each primitive
+  // is a pure pixel test: given (x, y) and a config, it returns a
+  // coverage record {hit, alpha, depth, layer} without touching palette.
+  // The outer sprite pixelFn interprets the record through its palette.
+  //
+  // See docs/DOC-117_TIER1_SPRITE_TAXONOMY.md for the design contract.
+  // These primitives must stay palette-agnostic — they never return
+  // rgba, only structural coverage.
+
+  var _PX_MISS = { hit: false };
+
+  // ── A. Scatter — hash-placed item field ──
+  //
+  // Places cfg.count small shapes at hash-selected positions inside
+  // cfg.bounds. One call per pixel iterates all items; O(count) worst
+  // case, with count capped at ~12 in practice.
+  function _pxScatter(x, y, cfg) {
+    var count = cfg.count | 0;
+    var bounds = cfg.bounds;
+    var bw = bounds.x1 - bounds.x0;
+    var bh = bounds.y1 - bounds.y0;
+    var baseR = cfg.itemR;
+    var jitter = cfg.itemJitter || 0;
+    var rotate = !!cfg.rotate;
+    var itemKind = cfg.item || 'dot';
+    var seed = cfg.seed | 0;
+
+    for (var i = 0; i < count; i++) {
+      // Per-item deterministic position + radius + rotation.
+      var rx = _hash(seed + i * 7, 17000 + i);
+      var ry = _hash(seed + i * 11, 17001 + i);
+      var rr = _hash(seed + i * 13, 17002 + i);
+      var rot = rotate ? _hash(seed + i * 17, 17003 + i) * Math.PI * 2 : 0;
+      var cx = bounds.x0 + rx * bw;
+      var cy = bounds.y0 + ry * bh;
+      var radius = baseR * (1 + (rr - 0.5) * 2 * jitter);
+      if (radius < 1) radius = 1;
+
+      var lx = x - cx;
+      var ly = y - cy;
+      // Rotate into item-local frame.
+      if (rot !== 0) {
+        var cs = Math.cos(-rot), sn = Math.sin(-rot);
+        var rlx = lx * cs - ly * sn;
+        ly = lx * sn + ly * cs;
+        lx = rlx;
+      }
+      // Cheap bounding-box reject before shape test.
+      if (lx * lx + ly * ly > (radius + 1) * (radius + 1)) continue;
+
+      var hit = _pxScatterShape(lx, ly, radius, itemKind);
+      if (hit.hit) return hit;
+    }
+    return _PX_MISS;
+  }
+
+  // Item-shape dispatch — each returns {hit, alpha, depth, layer}.
+  // layer='core' inside the body, 'edge' along the anti-aliased rim.
+  function _pxScatterShape(lx, ly, r, kind) {
+    if (kind === 'dot') {
+      // Filled circle with soft rim.
+      var d = Math.sqrt(lx * lx + ly * ly);
+      if (d > r) return _PX_MISS;
+      var depth = d / r;
+      if (d > r - 1) {
+        return { hit: true, alpha: Math.max(0, r - d), depth: depth, layer: 'edge' };
+      }
+      return { hit: true, alpha: 1, depth: depth, layer: 'core' };
+    }
+    if (kind === 'diamond') {
+      // L1 norm — square rotated 45°.
+      var m = Math.abs(lx) + Math.abs(ly);
+      if (m > r) return _PX_MISS;
+      var d2 = m / r;
+      if (m > r - 1) return { hit: true, alpha: Math.max(0, r - m), depth: d2, layer: 'edge' };
+      return { hit: true, alpha: 1, depth: d2, layer: 'core' };
+    }
+    if (kind === 'ellipse') {
+      // 2:1 aspect ratio ellipse — wider than tall.
+      var a = r, b = r * 0.55;
+      var ex = (lx * lx) / (a * a) + (ly * ly) / (b * b);
+      if (ex > 1) return _PX_MISS;
+      if (ex > 0.75) return { hit: true, alpha: (1 - ex) * 4, depth: ex, layer: 'edge' };
+      return { hit: true, alpha: 1, depth: ex, layer: 'core' };
+    }
+    if (kind === 'teardrop') {
+      // Ellipse narrower at one end (feather vane). ly<0 = tip, ly>0 = root.
+      var bodyH = r * 1.4;  // taller than wide
+      var bodyW = r * 0.55 * (1 - Math.max(0, -ly) / bodyH * 0.7);
+      if (ly < -bodyH || ly > bodyH * 0.4) return _PX_MISS;
+      var absX = Math.abs(lx);
+      if (absX > bodyW) return _PX_MISS;
+      var depthT = absX / Math.max(0.5, bodyW);
+      // Spine — 0.8px wide dark line down the middle (layer='core').
+      if (absX < 0.9) return { hit: true, alpha: 1, depth: 0, layer: 'core' };
+      if (absX > bodyW - 1) {
+        return { hit: true, alpha: Math.max(0, bodyW - absX), depth: depthT, layer: 'edge' };
+      }
+      return { hit: true, alpha: 1, depth: depthT, layer: 'edge' };
+    }
+    if (kind === 'stick') {
+      // Thin horizontal bar (pre-rotation). Length 2r, thickness ~1.2px.
+      if (Math.abs(lx) > r) return _PX_MISS;
+      if (Math.abs(ly) > 1.3) return _PX_MISS;
+      if (Math.abs(ly) > 0.6) {
+        return { hit: true, alpha: Math.max(0, 1.3 - Math.abs(ly)) / 0.7, depth: Math.abs(lx) / r, layer: 'edge' };
+      }
+      return { hit: true, alpha: 1, depth: Math.abs(lx) / r, layer: 'core' };
+    }
+    // Fallback: dot shape.
+    var dd = Math.sqrt(lx * lx + ly * ly);
+    if (dd > r) return _PX_MISS;
+    return { hit: true, alpha: 1, depth: dd / r, layer: 'core' };
+  }
+
+  // ── B. Slash — parametric diagonal strokes ──
+  //
+  // For each stroke in cfg.strokes, computes perpendicular distance from
+  // (x,y) to the line segment (x0,y0)→(x1,y1). Returns the closest hit
+  // across all strokes; layer='core' inside coreW, 'edge' inside edgeW.
+  function _pxSlash(x, y, cfg) {
+    var strokes = cfg.strokes;
+    var jitterOn = !cfg.straight;
+    var best = _PX_MISS;
+    var bestAlpha = 0;
+    for (var i = 0; i < strokes.length; i++) {
+      var s = strokes[i];
+      var x0 = s.x0, y0 = s.y0, x1 = s.x1, y1 = s.y1;
+      // Per-stroke row jitter (wobble ±1 per ~3px).
+      var px = x, py = y;
+      if (jitterOn) {
+        var rowKey = Math.floor(y / 3);
+        px = x + (_hash(rowKey + 18000 + i, 0) - 0.5) * 1.2;
+      }
+      var dx = x1 - x0, dy = y1 - y0;
+      var len2 = dx * dx + dy * dy;
+      if (len2 < 0.0001) continue;
+      var t = ((px - x0) * dx + (py - y0) * dy) / len2;
+      if (t < 0 || t > 1) continue;  // off the ends
+      var cxP = x0 + t * dx, cyP = y0 + t * dy;
+      var perpD = Math.sqrt((px - cxP) * (px - cxP) + (py - cyP) * (py - cyP));
+      var coreW = s.coreW, edgeW = s.edgeW;
+      if (perpD < coreW) {
+        return { hit: true, alpha: 1, depth: perpD / edgeW, layer: 'core' };
+      }
+      if (perpD < edgeW) {
+        var a = (edgeW - perpD) / (edgeW - coreW);
+        if (a > bestAlpha) {
+          bestAlpha = a;
+          best = { hit: true, alpha: a, depth: perpD / edgeW, layer: 'edge' };
+        }
+      }
+    }
+    return best;
+  }
+
+  // ── C. Streak — vertical column with y-progression ──
+  //
+  // Column centered on cfg.cx, spanning cfg.yStart..cfg.yEnd. Width
+  // varies by cfg.widthFn(progress). Optional per-row x-jitter for
+  // organic look.
+  function _pxStreak(x, y, cfg) {
+    if (y < cfg.yStart || y > cfg.yEnd) return _PX_MISS;
+    var progress = (y - cfg.yStart) / Math.max(1, cfg.yEnd - cfg.yStart);
+    var width = cfg.widthFn ? cfg.widthFn(progress) : 4;
+    var jitter = 0;
+    if (cfg.jitterAmp) {
+      var rowKey = Math.floor(y / 3);
+      jitter = (_hash(rowKey + (cfg.jitterSeed | 0), 18100) - 0.5) * cfg.jitterAmp * 2;
+    }
+    var dist = Math.abs(x - cfg.cx - jitter);
+    if (dist > width) return _PX_MISS;
+    if (cfg.hardEdge) {
+      // Fabricated pipe — sharp edges, layer='core' inside, 'edge' on
+      // the 1-px outer shell.
+      if (dist > width - 1) {
+        return { hit: true, alpha: 1, depth: dist / width, layer: 'edge' };
+      }
+      return { hit: true, alpha: 1, depth: dist / width, layer: 'core' };
+    }
+    // Soft edge — coverage falls off linearly near the rim.
+    var depth = dist / width;
+    if (depth > 0.65) {
+      var a = (1 - depth) / 0.35;
+      return { hit: true, alpha: a, depth: depth, layer: 'edge' };
+    }
+    return { hit: true, alpha: 1, depth: depth, layer: 'core' };
+  }
+
+  // ── D. Blob — noise-edged ellipse with optional tendrils ──
+  //
+  // Ellipse at (cx,cy) with semi-axes (rX,rY). Edge jittered by noise.
+  // Tendrils add radial lobes at angle harmonics.
+  function _pxBlob(x, y, cfg) {
+    var dx = x - cfg.cx, dy = y - cfg.cy;
+    var rX = cfg.rX, rY = cfg.rY;
+    // Normalize into unit-circle space so noise applies radially.
+    var nx = dx / rX, ny = dy / rY;
+    var r = Math.sqrt(nx * nx + ny * ny);
+    // Per-pixel edge jitter (noise modulated by polar angle).
+    var edge = 1.0;
+    if (cfg.noiseAmp) {
+      var angleKey = Math.floor(Math.atan2(dy, dx) * 8);
+      var noise = (_hash(angleKey + (cfg.noiseSeed | 0), 18200) - 0.5);
+      edge = 1.0 + (noise * cfg.noiseAmp) / Math.min(rX, rY);
+    }
+    if (r <= edge) {
+      return { hit: true, alpha: 1, depth: r / edge, layer: 'core' };
+    }
+    // Tendril test — radial lobes beyond the main body.
+    if (cfg.tendrils && cfg.tendrils > 0) {
+      var ang = Math.atan2(dy, dx);
+      var tendrilSel = Math.abs(Math.sin(ang * cfg.tendrils));
+      var thresh = cfg.tendrilThresh !== undefined ? cfg.tendrilThresh : 0.85;
+      if (tendrilSel > thresh && r < edge * 1.4) {
+        var tAlpha = (r - edge) / (edge * 0.4);
+        tAlpha = Math.max(0, Math.min(1, 1 - tAlpha));
+        return { hit: true, alpha: tAlpha, depth: 1, layer: 'detail' };
+      }
+    }
+    return _PX_MISS;
+  }
+
+  // ── E. Thread — recursive branching fractal ──
+  //
+  // Builds a branch tree once per cfg (cached on cfg._tree), then tests
+  // distance from (x,y) to any segment. Each call returns hit on the
+  // thinnest-miss-distance segment encountered.
+  function _pxThread(x, y, cfg) {
+    var tree = cfg._tree;
+    if (!tree) {
+      tree = _buildThreadTree(cfg);
+      cfg._tree = tree;
+    }
+    var best = _PX_MISS;
+    var bestDist = 999;
+    for (var i = 0; i < tree.length; i++) {
+      var seg = tree[i];
+      var dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
+      var len2 = dx * dx + dy * dy;
+      if (len2 < 0.0001) continue;
+      var t = ((x - seg.x0) * dx + (y - seg.y0) * dy) / len2;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+      var cxP = seg.x0 + t * dx, cyP = seg.y0 + t * dy;
+      var d = Math.sqrt((x - cxP) * (x - cxP) + (y - cyP) * (y - cyP));
+      var w = seg.w;
+      if (d < w && d < bestDist) {
+        bestDist = d;
+        var alpha = (w - d) / w;
+        best = { hit: true, alpha: alpha, depth: seg.depth, layer: 'core' };
+      }
+    }
+    return best;
+  }
+
+  function _buildThreadTree(cfg) {
+    var segments = [];
+    var seed = cfg.seed | 0;
+    var segmentLen = cfg.segmentLen || 5;
+    var maxDepth = cfg.depth || 3;
+    var branchProb = cfg.branchProb !== undefined ? cfg.branchProb : 0.4;
+    var angleSpread = cfg.angleSpread || 0.5;
+    var widthAt = cfg.widthAt || function (d) { return Math.max(1, 2 - d * 0.4); };
+
+    // Queue of pending segments to grow: [x, y, angle, depth].
+    var queue = [[cfg.rootX, cfg.rootY, cfg.rootAngle, 0]];
+    var counter = 0;
+    while (queue.length > 0 && counter < 200) {
+      var node = queue.shift();
+      counter++;
+      var x = node[0], y = node[1], ang = node[2], d = node[3];
+      if (d > maxDepth) continue;
+      var nx = x + Math.cos(ang) * segmentLen;
+      var ny = y + Math.sin(ang) * segmentLen;
+      segments.push({ x0: x, y0: y, x1: nx, y1: ny, depth: d, w: widthAt(d) });
+      // Always continue the main line to next depth.
+      if (d + 1 <= maxDepth) {
+        var nextAng = ang + (_hash(seed + counter, 18300) - 0.5) * angleSpread * 0.4;
+        queue.push([nx, ny, nextAng, d + 1]);
+        // Branch?
+        if (_hash(seed + counter, 18301) < branchProb) {
+          var branchSide = _hash(seed + counter, 18302) < 0.5 ? -1 : 1;
+          var branchAng = ang + branchSide * angleSpread * (0.5 + _hash(seed + counter, 18303) * 0.5);
+          queue.push([nx, ny, branchAng, d + 1]);
+        }
+      }
+    }
+    return segments;
+  }
+
+  // ── F. Plate — rectangular bounded region with bevel ──
+  //
+  // Returns coverage with extra fields (localX, localY, innerW, innerH)
+  // so the outer sprite can draw symbols inside the plate.
+  function _pxPlate(x, y, cfg) {
+    var b = cfg.bounds;
+    if (x < b.x0 || x >= b.x1 || y < b.y0 || y >= b.y1) return _PX_MISS;
+    var borderW = cfg.borderW || 1;
+    var bevelW = cfg.bevelW || 0;
+    var innerX0 = b.x0 + borderW;
+    var innerY0 = b.y0 + borderW;
+    var innerX1 = b.x1 - borderW;
+    var innerY1 = b.y1 - borderW;
+
+    // Border test.
+    if (x < innerX0 || x >= innerX1 || y < innerY0 || y >= innerY1) {
+      return {
+        hit: true, alpha: 1, depth: 0, layer: 'border',
+        localX: x - b.x0, localY: y - b.y0,
+        innerW: innerX1 - innerX0, innerH: innerY1 - innerY0
+      };
+    }
+    // Bevel test — 1-2px bright rim inside the border.
+    if (bevelW > 0) {
+      var bx0 = innerX0 + bevelW, by0 = innerY0 + bevelW;
+      var bx1 = innerX1 - bevelW, by1 = innerY1 - bevelW;
+      if (x < bx0 || x >= bx1 || y < by0 || y >= by1) {
+        return {
+          hit: true, alpha: 1, depth: 0, layer: 'bevel',
+          localX: x - innerX0, localY: y - innerY0,
+          innerW: innerX1 - innerX0, innerH: innerY1 - innerY0
+        };
+      }
+    }
+    // Interior fill.
+    return {
+      hit: true, alpha: 1, depth: 0, layer: 'inner',
+      localX: x - innerX0, localY: y - innerY0,
+      innerW: innerX1 - innerX0, innerH: innerY1 - innerY0
+    };
+  }
 
   // ── Brick ──
 
@@ -7576,6 +8046,588 @@ var TextureAtlas = (function () {
         r: _clamp(p.baseR + n),
         g: _clamp(p.baseG + n),
         b: _clamp(p.baseB + n)
+      };
+    });
+  }
+
+  // ── Tier 1 adjacent decor (DOC-117a) ─────────────────────────────
+  //
+  // 19 sprites composed over the six pixel-test primitives (_pxScatter,
+  // _pxSlash, _pxStreak, _pxBlob, _pxThread, _pxPlate). See
+  // docs/DOC-117_TIER1_SPRITE_TAXONOMY.md for the design contract.
+  // Seed range 17000–17999 is reserved for Tier 1 sprite hashing;
+  // primitive internals use 18000+ to avoid collision.
+
+  // ── Scatter batch (8 sprites) ──
+
+  // Feather — single teardrop shape with darker spine.
+  function _genDecorFeatherSingle(id, p) {
+    var cfg = {
+      count: 1, seed: 17200,
+      bounds: { x0: 10, y0: 10, x1: 22, y1: 22 },
+      item: 'teardrop', itemR: 5, itemJitter: 0.3, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17300, y + 17301) - 0.5) * 6;
+      if (h.layer === 'core') {
+        // Spine — darker stroke.
+        return {
+          r: _clamp(p.spineR + pn),
+          g: _clamp(p.spineG + pn),
+          b: _clamp(p.spineB + pn),
+          a: _clamp(220 * h.alpha)
+        };
+      }
+      // Vane — body color with depth shading.
+      var body = 1 - h.depth * 0.3;
+      return {
+        r: _clamp(p.featherR * body + pn),
+        g: _clamp(p.featherG * body + pn),
+        b: _clamp(p.featherB * body + pn),
+        a: _clamp(210 * h.alpha)
+      };
+    });
+  }
+
+  // Feather tuft — 3-4 scattered feathers clustered together.
+  function _genDecorFeatherTuft(id, p) {
+    var cfg = {
+      count: 4, seed: 17210,
+      bounds: { x0: 6, y0: 6, x1: 26, y1: 26 },
+      item: 'teardrop', itemR: 4, itemJitter: 0.35, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17310, y + 17311) - 0.5) * 6;
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.spineR + pn), g: _clamp(p.spineG + pn),
+          b: _clamp(p.spineB + pn), a: _clamp(210 * h.alpha)
+        };
+      }
+      var body = 1 - h.depth * 0.3;
+      return {
+        r: _clamp(p.featherR * body + pn),
+        g: _clamp(p.featherG * body + pn),
+        b: _clamp(p.featherB * body + pn),
+        a: _clamp(200 * h.alpha)
+      };
+    });
+  }
+
+  // Dragon scale — iridescent ellipse/diamond. Small keratinous chips.
+  function _genDecorDragonScale(id, p) {
+    var cfg = {
+      count: 3, seed: 17220,
+      bounds: { x0: 8, y0: 8, x1: 24, y1: 24 },
+      item: 'diamond', itemR: 4, itemJitter: 0.2, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17320, y + 17321) - 0.5) * 8;
+      // Iridescent shift: brighter rim, darker center.
+      if (h.layer === 'edge') {
+        return {
+          r: _clamp(p.edgeR + pn), g: _clamp(p.edgeG + pn),
+          b: _clamp(p.edgeB + pn), a: _clamp(230 * h.alpha)
+        };
+      }
+      var dim = 0.7 + (1 - h.depth) * 0.3;
+      return {
+        r: _clamp(p.scaleR * dim + pn),
+        g: _clamp(p.scaleG * dim + pn),
+        b: _clamp(p.scaleB * dim + pn),
+        a: 240
+      };
+    });
+  }
+
+  // Bone shard floor — 5-7 small sticks scattered (broken bone fragments).
+  function _genDecorBoneShardFloor(id, p) {
+    var cfg = {
+      count: 6, seed: 17230,
+      bounds: { x0: 6, y0: 6, x1: 26, y1: 26 },
+      item: 'stick', itemR: 3, itemJitter: 0.4, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17330, y + 17331) - 0.5) * 6;
+      if (h.layer === 'edge') {
+        return {
+          r: _clamp(p.shadowR + pn), g: _clamp(p.shadowG + pn),
+          b: _clamp(p.shadowB + pn), a: _clamp(200 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.boneR + pn),
+        g: _clamp(p.boneG + pn),
+        b: _clamp(p.boneB + pn * 0.9),
+        a: 230
+      };
+    });
+  }
+
+  // Gnawed bone — larger, 1-2 intact bones (longer sticks).
+  function _genDecorGnawedBone(id, p) {
+    var cfg = {
+      count: 2, seed: 17240,
+      bounds: { x0: 6, y0: 10, x1: 26, y1: 22 },
+      item: 'stick', itemR: 7, itemJitter: 0.2, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17340, y + 17341) - 0.5) * 6;
+      // Gnaw marks — hash-based tooth indentations along the bone length.
+      var gnaw = _hash(Math.floor(x * 1.5) + 17350, Math.floor(y * 1.5) + 17351);
+      if (gnaw > 0.92 && h.layer === 'core') {
+        return {
+          r: _clamp(p.shadowR + pn), g: _clamp(p.shadowG + pn),
+          b: _clamp(p.shadowB + pn), a: 210
+        };
+      }
+      if (h.layer === 'edge') {
+        return {
+          r: _clamp(p.shadowR + pn), g: _clamp(p.shadowG + pn),
+          b: _clamp(p.shadowB + pn), a: _clamp(200 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.boneR + pn), g: _clamp(p.boneG + pn),
+        b: _clamp(p.boneB + pn * 0.9), a: 235
+      };
+    });
+  }
+
+  // Fur tuft — 3-5 small teardrops in russet/brown hues.
+  function _genDecorFurTuft(id, p) {
+    var cfg = {
+      count: 5, seed: 17250,
+      bounds: { x0: 8, y0: 8, x1: 24, y1: 24 },
+      item: 'teardrop', itemR: 3, itemJitter: 0.3, rotate: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17360, y + 17361) - 0.5) * 8;
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.darkR + pn), g: _clamp(p.darkG + pn),
+          b: _clamp(p.darkB + pn), a: _clamp(210 * h.alpha)
+        };
+      }
+      var body = 1 - h.depth * 0.25;
+      return {
+        r: _clamp(p.furR * body + pn),
+        g: _clamp(p.furG * body + pn),
+        b: _clamp(p.furB * body + pn),
+        a: _clamp(200 * h.alpha)
+      };
+    });
+  }
+
+  // Copper filings — 8-12 tiny dots (metallic dust around conduit).
+  function _genDecorCopperFilings(id, p) {
+    var cfg = {
+      count: 10, seed: 17260,
+      bounds: { x0: 4, y0: 4, x1: 28, y1: 28 },
+      item: 'dot', itemR: 1.5, itemJitter: 0.5, rotate: false
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17370, y + 17371) - 0.5) * 12;
+      return {
+        r: _clamp(p.copperR + pn),
+        g: _clamp(p.copperG + pn * 0.7),
+        b: _clamp(p.copperB + pn * 0.4),
+        a: _clamp(230 * h.alpha)
+      };
+    });
+  }
+
+  // Blood dot — 3-5 dots with varying sizes, dried edges.
+  function _genDecorBloodDot(id, p) {
+    var cfg = {
+      count: 4, seed: 17270,
+      bounds: { x0: 8, y0: 8, x1: 24, y1: 24 },
+      item: 'dot', itemR: 2.5, itemJitter: 0.6, rotate: false
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxScatter(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17380, y + 17381) - 0.5) * 8;
+      // Dried edge — rim darker than core (oxidized blood).
+      if (h.layer === 'edge') {
+        return {
+          r: _clamp(p.driedR + pn),
+          g: _clamp(p.driedG + pn * 0.7),
+          b: _clamp(p.driedB + pn * 0.7),
+          a: _clamp(220 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.bloodR + pn),
+        g: _clamp(p.bloodG + pn * 0.5),
+        b: _clamp(p.bloodB + pn * 0.4),
+        a: 235
+      };
+    });
+  }
+
+  // ── Slash batch (4 sprites) ──
+
+  // Scratch kneehigh — 3 diagonal claw marks at waist height, jittered.
+  function _genDecorScratchKneehigh(id, p) {
+    var cfg = {
+      strokes: [
+        { x0:  6, y0: 18, x1: 16, y1: 22, coreW: 0.9, edgeW: 2.2 },
+        { x0: 10, y0: 16, x1: 22, y1: 20, coreW: 0.9, edgeW: 2.2 },
+        { x0: 14, y0: 20, x1: 26, y1: 24, coreW: 0.7, edgeW: 1.8 }
+      ],
+      straight: false
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxSlash(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.deepR), g: _clamp(p.deepG), b: _clamp(p.deepB),
+          a: _clamp(220 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.scratchR), g: _clamp(p.scratchG), b: _clamp(p.scratchB),
+        a: _clamp(180 * h.alpha)
+      };
+    });
+  }
+
+  // Claw gouge masonry — 4 deeper parallel gouges, wider than knee-scratches.
+  function _genDecorClawGougeMasonry(id, p) {
+    var cfg = {
+      strokes: [
+        { x0:  4, y0:  8, x1: 16, y1: 14, coreW: 1.3, edgeW: 3.0 },
+        { x0:  6, y0: 12, x1: 20, y1: 18, coreW: 1.3, edgeW: 3.0 },
+        { x0:  8, y0: 16, x1: 24, y1: 22, coreW: 1.1, edgeW: 2.7 },
+        { x0: 12, y0: 20, x1: 28, y1: 26, coreW: 1.0, edgeW: 2.5 }
+      ],
+      straight: false
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxSlash(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17400, y + 17401) - 0.5) * 5;
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.deepR + pn), g: _clamp(p.deepG + pn), b: _clamp(p.deepB + pn),
+          a: _clamp(230 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.exposedR + pn), g: _clamp(p.exposedG + pn), b: _clamp(p.exposedB + pn),
+        a: _clamp(190 * h.alpha)
+      };
+    });
+  }
+
+  // Scratch parallel wall — 3 clean horizontal marks (territorial tagging).
+  function _genDecorScratchParallel(id, p) {
+    var cfg = {
+      strokes: [
+        { x0:  4, y0: 12, x1: 28, y1: 12, coreW: 0.8, edgeW: 2.0 },
+        { x0:  4, y0: 16, x1: 28, y1: 16, coreW: 0.8, edgeW: 2.0 },
+        { x0:  4, y0: 20, x1: 28, y1: 20, coreW: 0.8, edgeW: 2.0 }
+      ],
+      straight: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxSlash(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.deepR), g: _clamp(p.deepG), b: _clamp(p.deepB),
+          a: _clamp(220 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.scratchR), g: _clamp(p.scratchG), b: _clamp(p.scratchB),
+        a: _clamp(180 * h.alpha)
+      };
+    });
+  }
+
+  // Stick bundle floor — 4 straight sticks crossing at various angles (NEST).
+  function _genDecorStickBundleFloor(id, p) {
+    var cfg = {
+      strokes: [
+        { x0:  6, y0: 10, x1: 26, y1: 14, coreW: 1.1, edgeW: 2.3 },
+        { x0:  8, y0: 20, x1: 24, y1: 12, coreW: 1.1, edgeW: 2.3 },
+        { x0: 10, y0:  8, x1: 20, y1: 24, coreW: 0.9, edgeW: 2.0 },
+        { x0:  4, y0: 18, x1: 28, y1: 22, coreW: 1.0, edgeW: 2.2 }
+      ],
+      straight: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxSlash(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17410, y + 17411) - 0.5) * 10;
+      if (h.layer === 'core') {
+        return {
+          r: _clamp(p.stickR + pn),
+          g: _clamp(p.stickG + pn * 0.85),
+          b: _clamp(p.stickB + pn * 0.7),
+          a: _clamp(230 * h.alpha)
+        };
+      }
+      return {
+        r: _clamp(p.shadowR + pn),
+        g: _clamp(p.shadowG + pn * 0.9),
+        b: _clamp(p.shadowB + pn * 0.8),
+        a: _clamp(190 * h.alpha)
+      };
+    });
+  }
+
+  // ── Blob batch (3 sprites) ──
+
+  // Fungus climb wall — main body + upward tendril shoots (two primitives).
+  function _genDecorFungusClimb(id, p) {
+    var blob = {
+      cx: 16, cy: 20, rX: 9, rY: 7,
+      noiseAmp: 4, noiseSeed: 17400,
+      tendrils: 3, tendrilThresh: 0.78
+    };
+    var thread = {
+      rootX: 16, rootY: 14, rootAngle: -Math.PI / 2,
+      segmentLen: 3, depth: 4, branchProb: 0.35,
+      angleSpread: 0.7, seed: 17401,
+      widthAt: function (d) { return d === 0 ? 1.8 : 1.2; }
+    };
+
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var t = _pxThread(x, y, thread);
+      if (t.hit) {
+        return {
+          r: _clamp(p.rootR), g: _clamp(p.rootG), b: _clamp(p.rootB),
+          a: _clamp(200 * t.alpha)
+        };
+      }
+      var b = _pxBlob(x, y, blob);
+      if (!b.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      if (b.layer === 'detail') {
+        return {
+          r: _clamp(p.rootR), g: _clamp(p.rootG), b: _clamp(p.rootB),
+          a: _clamp(180 * b.alpha)
+        };
+      }
+      var isHi = _hash(x * 3 + 17500, y * 3 + 17501) > 0.7;
+      var pn = (_hash(x + 17600, y + 17601) - 0.5) * 8;
+      return {
+        r: _clamp((isHi ? p.hiR : p.baseR) + pn * 0.5),
+        g: _clamp((isHi ? p.hiG : p.baseG) + pn),
+        b: _clamp((isHi ? p.hiB : p.baseB) + pn * 0.3),
+        a: _clamp(220 * (1 - b.depth * 0.4))
+      };
+    });
+  }
+
+  // Spore puff — soft-edged blob with outer tendril cloud (FUNGAL_PATCH).
+  function _genDecorSporePuff(id, p) {
+    var cfg = {
+      cx: 16, cy: 16, rX: 8, rY: 6,
+      noiseAmp: 5, noiseSeed: 17410,
+      tendrils: 5, tendrilThresh: 0.70
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxBlob(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17420, y + 17421) - 0.5) * 6;
+      if (h.layer === 'detail') {
+        return {
+          r: _clamp(p.wispR + pn), g: _clamp(p.wispG + pn),
+          b: _clamp(p.wispB + pn), a: _clamp(150 * h.alpha)
+        };
+      }
+      var core = 1 - h.depth * 0.35;
+      return {
+        r: _clamp(p.sporeR * core + pn),
+        g: _clamp(p.sporeG * core + pn),
+        b: _clamp(p.sporeB * core + pn * 0.8),
+        a: _clamp(210 * (1 - h.depth * 0.2))
+      };
+    });
+  }
+
+  // Oil stain floor — smooth dark blob, no tendrils (ENERGY_CONDUIT).
+  function _genDecorOilStain(id, p) {
+    var cfg = {
+      cx: 16, cy: 16, rX: 10, rY: 8,
+      noiseAmp: 3, noiseSeed: 17430,
+      tendrils: 0
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxBlob(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17440, y + 17441) - 0.5) * 6;
+      // Oil sheen — rainbow iridescence at mid-depth.
+      var mid = Math.abs(h.depth - 0.5) < 0.15;
+      if (mid && _hash(x + 17450, y + 17451) > 0.7) {
+        return {
+          r: _clamp(p.sheenR + pn), g: _clamp(p.sheenG + pn),
+          b: _clamp(p.sheenB + pn), a: 210
+        };
+      }
+      var coreBias = 1 - h.depth;
+      return {
+        r: _clamp(p.darkR * (0.7 + coreBias * 0.3) + pn),
+        g: _clamp(p.darkG * (0.7 + coreBias * 0.3) + pn),
+        b: _clamp(p.darkB * (0.7 + coreBias * 0.3) + pn * 0.5),
+        a: _clamp(220 * (1 - h.depth * 0.15))
+      };
+    });
+  }
+
+  // ── Streak batch (2 sprites) ──
+
+  // Guano streak wall — jittered organic drip, widening at top.
+  function _genDecorGuanoStreak(id, p) {
+    var cfg = {
+      cx: 16, yStart: 4, yEnd: 28,
+      widthFn: function (pr) { return 5 - pr * 3; },  // 5px at top → 2px at bottom
+      jitterAmp: 2.5, jitterSeed: 17460,
+      hardEdge: false
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxStreak(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17470, y + 17471) - 0.5) * 8;
+      if (h.layer === 'edge') {
+        return {
+          r: _clamp(p.edgeR + pn), g: _clamp(p.edgeG + pn),
+          b: _clamp(p.edgeB + pn), a: _clamp(200 * h.alpha)
+        };
+      }
+      // Core — white guano with faint green cast.
+      return {
+        r: _clamp(p.guanoR + pn),
+        g: _clamp(p.guanoG + pn),
+        b: _clamp(p.guanoB + pn * 0.8),
+        a: 235
+      };
+    });
+  }
+
+  // ── Singleton batch (2 sprites) ──
+
+  // Mycelium thread wall — branching fractal tendrils (FUNGAL_PATCH extension).
+  function _genDecorMyceliumThread(id, p) {
+    var cfg = {
+      rootX: 16, rootY: 28, rootAngle: -Math.PI / 2,
+      segmentLen: 3, depth: 5, branchProb: 0.55,
+      angleSpread: 0.9, seed: 17500,
+      widthAt: function (d) { return Math.max(0.8, 1.8 - d * 0.25); }
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxThread(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17510, y + 17511) - 0.5) * 6;
+      // Thinner tips brighter (fresh growth), thicker trunk darker.
+      var trunkish = h.depth === 0;
+      return {
+        r: _clamp((trunkish ? p.trunkR : p.tipR) + pn),
+        g: _clamp((trunkish ? p.trunkG : p.tipG) + pn),
+        b: _clamp((trunkish ? p.trunkB : p.tipB) + pn * 0.8),
+        a: _clamp(220 * h.alpha)
+      };
+    });
+  }
+
+  // Warning sign plate — yellow metal plate with lightning-bolt symbol.
+  function _genDecorWarningPlate(id, p) {
+    var cfg = {
+      bounds: { x0: 6, y0: 6, x1: 26, y1: 26 },
+      borderW: 2, bevelW: 1
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxPlate(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      if (h.layer === 'border') {
+        return { r: _clamp(p.borderR), g: _clamp(p.borderG), b: _clamp(p.borderB), a: 250 };
+      }
+      if (h.layer === 'bevel') {
+        return { r: _clamp(p.bevelR), g: _clamp(p.bevelG), b: _clamp(p.bevelB), a: 250 };
+      }
+      // Interior — yellow plate with lightning-bolt symbol.
+      // Bolt shape: zigzag through the inner region. Use localX/localY
+      // relative to the 14×14 inner box.
+      var lx = h.localX, ly = h.localY;
+      var iw = h.innerW, ih = h.innerH;
+      var cx = iw / 2;
+      // Lightning path: top (lx=cx+1) → middle-jog (lx=cx-2) → bottom (lx=cx+2).
+      // Segment 1: y 0..iw/2, slope left.
+      var boltX;
+      if (ly < ih * 0.5) {
+        var t1 = ly / (ih * 0.5);
+        boltX = cx + 2.5 - t1 * 4.5;
+      } else {
+        var t2 = (ly - ih * 0.5) / (ih * 0.5);
+        boltX = cx - 2 + t2 * 5;
+      }
+      var boltDist = Math.abs(lx - boltX);
+      if (boltDist < 1.6 && ly > 1 && ly < ih - 1) {
+        return { r: _clamp(p.symbolR), g: _clamp(p.symbolG), b: _clamp(p.symbolB), a: 250 };
+      }
+      var pn = (_hash(x + 17520, y + 17521) - 0.5) * 6;
+      return {
+        r: _clamp(p.plateR + pn),
+        g: _clamp(p.plateG + pn),
+        b: _clamp(p.plateB + pn * 0.5),
+        a: 250
+      };
+    });
+  }
+
+  // Brass pipe run wall — straight fabricated pipe, rivets at endpoints.
+  function _genDecorBrassPipeRun(id, p) {
+    var cfg = {
+      cx: 16, yStart: 0, yEnd: 31,
+      widthFn: function () { return 3; },           // uniform pipe width
+      jitterAmp: 0, jitterSeed: 17480,
+      hardEdge: true
+    };
+    _createTexture(id, DECOR_SIZE, DECOR_SIZE, function (x, y) {
+      var h = _pxStreak(x, y, cfg);
+      if (!h.hit) return { r: 0, g: 0, b: 0, a: 0 };
+      var pn = (_hash(x + 17490, y + 17491) - 0.5) * 5;
+      // Rivet flanges at y=4 and y=27 — thicker bands.
+      var riveted = (y > 2 && y < 6) || (y > 25 && y < 29);
+      if (riveted && h.layer === 'edge') {
+        return {
+          r: _clamp(p.rivetR + pn), g: _clamp(p.rivetG + pn),
+          b: _clamp(p.rivetB + pn * 0.6), a: 245
+        };
+      }
+      if (h.layer === 'edge') {
+        // Dark shadow edge — outer 1px of pipe.
+        return {
+          r: _clamp(p.shadowR + pn), g: _clamp(p.shadowG + pn),
+          b: _clamp(p.shadowB + pn * 0.7), a: 240
+        };
+      }
+      // Pipe body — brass with vertical bright highlight strip.
+      var dx = x - cfg.cx;
+      var isHi = dx > -2 && dx < 0;
+      return {
+        r: _clamp((isHi ? p.hiR : p.brassR) + pn),
+        g: _clamp((isHi ? p.hiG : p.brassG) + pn * 0.9),
+        b: _clamp((isHi ? p.hiB : p.brassB) + pn * 0.5),
+        a: 245
       };
     });
   }

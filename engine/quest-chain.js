@@ -1113,30 +1113,83 @@ var QuestChain = (function () {
     return out;
   }
 
-  // ── Journal entries (DOC-107 Phase 4) ────────────────────────────
+  // ── Journal entries (DOC-107 Phase 4 / Phase 2.1a) ───────────────
   // Returns quest records filtered by state for the Journal face.
-  // filter: { active: bool, completed: bool }
+  // filter: { active: bool, completed: bool, failed: bool, expired: bool }
+  //
+  // Phase 2.1a expanded the projection to match what _renderJournal in
+  // menu-faces.js actually reads: title, stepLabel, markerColor,
+  // breadcrumb, progress, summary, giver, rewards. Sorted stable:
+  // main > side > contract, then startedTick ascending.
+  //
+  // Back-compat: when no state flag is passed, returns all records in
+  // _active (matches pre-2.1a semantics). label + steps are kept on
+  // the payload for legacy callers.
+  var _KIND_ORDER = { main: 0, side: 1, contract: 2 };
   function getJournalEntries(filter) {
     filter = filter || {};
+    var wantActive    = !!filter.active;
+    var wantCompleted = !!filter.completed;
+    var wantFailed    = !!filter.failed;
+    var wantExpired   = !!filter.expired;
+    var hasAnyFilter  = wantActive || wantCompleted || wantFailed || wantExpired;
     var out = [];
     var ids = Object.keys(_active);
     for (var i = 0; i < ids.length; i++) {
       var rec = _active[ids[i]];
       if (!rec) continue;
-      var isActive    = rec.state === QuestTypes.STATE.ACTIVE;
-      var isCompleted = rec.state === QuestTypes.STATE.COMPLETED;
-      if (filter.active    && !isActive)    { if (!filter.completed || !isCompleted) continue; }
-      if (filter.completed && !isCompleted) { if (!filter.active    || !isActive)    continue; }
+      var st = rec.state;
+      if (hasAnyFilter) {
+        var keep = (wantActive    && st === QuestTypes.STATE.ACTIVE)    ||
+                   (wantCompleted && st === QuestTypes.STATE.COMPLETED) ||
+                   (wantFailed    && st === QuestTypes.STATE.FAILED)    ||
+                   (wantExpired   && st === QuestTypes.STATE.EXPIRED);
+        if (!keep) continue;
+      }
       var def = (typeof QuestRegistry !== 'undefined') ? QuestRegistry.getQuest(ids[i]) : null;
+      var steps = def ? (def.steps || []) : [];
+      var totalSteps = steps.length;
+      var stepObj = (rec.stepIndex >= 0 && rec.stepIndex < totalSteps) ? steps[rec.stepIndex] : null;
+      // Progress index clamps to totalSteps for completed quests so
+      // the journal can render "3/3" not "2/3" on the completed pane.
+      var progressCurrent = (st === QuestTypes.STATE.COMPLETED) ? totalSteps : rec.stepIndex;
+      // Breadcrumb — resolved to a floor-name i18n key so the journal
+      // renderer can localize. Minimap.getFloorStack lives at Layer 2
+      // and QuestChain is Layer 3; we stay at the i18n-key layer.
+      var breadcrumb = '';
+      if (def && def.giver && def.giver.floorId) {
+        breadcrumb = 'floor.' + def.giver.floorId + '.name';
+      }
       out.push({
-        id:        ids[i],
-        state:     rec.state,
-        stepIndex: rec.stepIndex,
-        kind:      def ? def.kind : null,
-        label:     def ? (def.label || ids[i]) : ids[i],
-        steps:     def ? (def.steps || []) : []
+        id:          ids[i],
+        state:       st,
+        stepIndex:   rec.stepIndex,
+        totalSteps:  totalSteps,
+        progress:    { current: progressCurrent, total: totalSteps },
+        kind:        def ? def.kind : null,
+        act:         def ? (def.act || null) : null,
+        title:       def ? (def.title || ids[i]) : ids[i],
+        summary:     def ? (def.summary || '') : '',
+        stepLabel:   stepObj ? (stepObj.label || '') : '',
+        stepId:      stepObj ? (stepObj.id || '') : '',
+        stepKind:    stepObj ? (stepObj.kind || '') : '',
+        markerColor: def ? (def.markerColor || null) : null,
+        giver:       def ? (def.giver || null) : null,
+        breadcrumb:  breadcrumb,
+        rewards:     def ? (def.rewards || null) : null,
+        failReason:  rec.failReason || null,
+        startedTick: rec.startedTick || 0,
+        label:       def ? (def.label || def.title || ids[i]) : ids[i],
+        steps:       steps
       });
     }
+    // Stable sort: main > side > contract, then startedTick ascending.
+    out.sort(function (a, b) {
+      var ao = (_KIND_ORDER[a.kind] !== undefined) ? _KIND_ORDER[a.kind] : 99;
+      var bo = (_KIND_ORDER[b.kind] !== undefined) ? _KIND_ORDER[b.kind] : 99;
+      if (ao !== bo) return ao - bo;
+      return (a.startedTick || 0) - (b.startedTick || 0);
+    });
     return out;
   }
 

@@ -1,6 +1,6 @@
 # NPC & Enemy Tooling Roadmap
 
-> **Status**: Phase 0 Ch.1–5 ✅ shipped (schema v1.1.0 + runtime cutover + manifest pipeline + **inline fallback retired** + **in-browser smoke test green**); Phase 1 MVP ✅ shipped (`tools/npc-designer.html` — CRUD every NPC via UI, plus stack + sprite commission authoring); **Phase 1.1 schema validation on save ✅ shipped** (`tools/schema-validator.js` + `tools/actor-schema.js` sidecar + Designer `_download()` gate); **Phase 1.1.1 post-P1.1 follow-ups ✅ shipped** (pre-commit sidecar auto-regen + CSV/JSON import in the Designer); **Phase 1.1.2 archetype registry + stamp UI ✅ shipped** (9 archetypes, validator, sidecar, pre-commit guard, "📚 Stamp" overlay panel); **Phase 3 Ch.0 data foundation ✅ shipped 2026-04-17** (`data/verb-nodes.json` sole source of truth for hand-authored spatial nodes, inline `_registerBuiltinNodes()` retired, schema + validator + sidecar generator + seed loader + pre-commit §1c — 60 nodes across 6 floors); **Phase 3 Ch.1 template registry ✅ shipped 2026-04-17** (6 starter templates — town_square, soup_kitchen_congregation, faction_post, market_row, guard_checkpoint, dungeon_rest_ring — with factionSlot parametrics, generator + structural/synthesized-stamp validator + pre-commit §1d, 26 template nodes all schema-clean); **Phase 3 Ch.2 BO-V verb-node stamper ✅ shipped 2026-04-17** (`tools/js/bv-verb-nodes.js` 847 LOC — 7 stamp buttons, factionSlot dropdown, ghost preview, pinned-cell overlay, overrides opt-in); **Phase 3 Ch.2 stretch — per-floor overrides ✅ shipped 2026-04-17** (`tools/verb-node-overrides/*.json` with filename↔floorId three-way match, add/remove/replace op semantics, `engine/verb-node-overrides-seed.js` Layer 1 IIFE applying ops inside `DungeonVerbNodes.populate` before `VerbNodes.register`, bundle sidecar + pre-commit §1e + 4-scenario smoke; **also fixed a latent bug**: `engine/dungeon-verb-nodes.js` was referenced via `typeof` guard but never actually loaded at runtime — now has a proper `<script src>` in `index.html`); **Phase 5 vertical slice — Enemy Hydrator Stats tab ✅ shipped 2026-04-17** (`tools/enemy-hydrator.html` — tabbed shell + sidebar filters + live Stats editor with HP/STR/DEX/Stealth/Awareness sliders, DPS panel with tier-band validator flashing red on OOB entries, bottom-panel scatter-plot balance matrix with configurable axes and click-to-select, round-trip JSON export + dirty-tracking; sidecar via `tools/generate-enemies-sidecar.js` + pre-commit §1f; `tools/smoke-enemy-hydrator.js` 27 live + 16 synthetic cases pass; validator surfaces 7 OOB + 6 near-band enemies across the live roster — real design signal for Phase 5.2); `data/npcs.json` + `data/verb-nodes.json` + `data/enemies.json` are now the sole sources of truth at runtime. **All P1.1 deltas closed.** P2 (Bark Workbench) + P4 (Archetype Studio) + P5.2 (Deck Composer + hydrate-heuristic) unblocked.
+> **Status**: Phase 0 Ch.1–5 ✅ shipped (schema v1.1.0 + runtime cutover + manifest pipeline + **inline fallback retired** + **in-browser smoke test green**); Phase 1 MVP ✅ shipped (`tools/npc-designer.html` — CRUD every NPC via UI, plus stack + sprite commission authoring); **Phase 1.1 schema validation on save ✅ shipped** (`tools/schema-validator.js` + `tools/actor-schema.js` sidecar + Designer `_download()` gate); **Phase 1.1.1 post-P1.1 follow-ups ✅ shipped** (pre-commit sidecar auto-regen + CSV/JSON import in the Designer); **Phase 1.1.2 archetype registry + stamp UI ✅ shipped** (9 archetypes, validator, sidecar, pre-commit guard, "📚 Stamp" overlay panel); **Phase 3 Ch.0 data foundation ✅ shipped 2026-04-17** (`data/verb-nodes.json` sole source of truth for hand-authored spatial nodes, inline `_registerBuiltinNodes()` retired, schema + validator + sidecar generator + seed loader + pre-commit §1c — 60 nodes across 6 floors); **Phase 3 Ch.1 template registry ✅ shipped 2026-04-17** (6 starter templates — town_square, soup_kitchen_congregation, faction_post, market_row, guard_checkpoint, dungeon_rest_ring — with factionSlot parametrics, generator + structural/synthesized-stamp validator + pre-commit §1d, 26 template nodes all schema-clean); **Phase 3 Ch.2 BO-V verb-node stamper ✅ shipped 2026-04-17** (`tools/js/bv-verb-nodes.js` 847 LOC — 7 stamp buttons, factionSlot dropdown, ghost preview, pinned-cell overlay, overrides opt-in); **Phase 3 Ch.2 stretch — per-floor overrides ✅ shipped 2026-04-17** (`tools/verb-node-overrides/*.json` with filename↔floorId three-way match, add/remove/replace op semantics, `engine/verb-node-overrides-seed.js` Layer 1 IIFE applying ops inside `DungeonVerbNodes.populate` before `VerbNodes.register`, bundle sidecar + pre-commit §1e + 4-scenario smoke; **also fixed a latent bug**: `engine/dungeon-verb-nodes.js` was referenced via `typeof` guard but never actually loaded at runtime — now has a proper `<script src>` in `index.html`); **Phase 5 vertical slice — Enemy Hydrator Stats tab ✅ shipped 2026-04-17** (`tools/enemy-hydrator.html` — tabbed shell + sidebar filters + live Stats editor with HP/STR/DEX/Stealth/Awareness sliders, DPS panel with tier-band validator flashing red on OOB entries, bottom-panel scatter-plot balance matrix with configurable axes and click-to-select, round-trip JSON export + dirty-tracking; sidecar via `tools/generate-enemies-sidecar.js` + pre-commit §1f; `tools/smoke-enemy-hydrator.js` 27 live + 16 synthetic cases pass; validator surfaces 7 OOB + 6 near-band enemies across the live roster — real design signal for Phase 5.2); `data/npcs.json` + `data/verb-nodes.json` + `data/enemies.json` are now the sole sources of truth at runtime. **All P1.1 deltas closed.** **Phase 2 Bark Workbench ✅ shipped 2026-04-17** (`tools/bark-workbench.html` — 121 pools / 510 barks, three-pane editor with namespace tree, editable bark table, Used-By NPC badges from manifest, coherence panel with smart NPC-assignable filter, fire-roll histogram simulator, JSON export with dirty tracking). P4 (Archetype Studio) + P5.2 (Deck Composer + hydrate-heuristic) unblocked.
 
 > **Created**: 2026-04-16
 > **Owner**: Tooling / Authoring Pipeline
@@ -531,14 +531,18 @@ Each archetype carries: `id`, `displayName`, `category`, `description`, `default
 - Archetypes themselves aren't hand-editable in the Designer — `archetype-registry.json` is the source of truth and edited manually. A future "Archetype Studio" could slot in as a sibling tool if real authoring demand surfaces; for DOC-110 the jam-scope answer is "9 archetypes is enough, open the JSON if you need a tenth."
 - `dialoguePool` strings in archetypes reference entries that must exist in `data/barks/en.js` (or wherever the bark pool is defined). Validation of pool existence is P2 Bark Workbench scope — today a typo in `dialoguePool` passes schema but fires empty at runtime.
 
-### Phase 2 — Bark Workbench (1 day)
+### Phase 2 — Bark Workbench (1 day) ✅ **SHIPPED 2026-04-17**
 
-| Task | File | Est. |
-|------|------|------|
-| `tools/bark-workbench.html` | NEW | 4h |
-| Coherence panel (orphan pools, oneShot singletons, cross-ref from P1 manifest) | NEW | 2h |
-| Fire-roll simulator | NEW | 1h |
-| Export pass (preserves `data/barks/en.js` structure) | NEW | 1h |
+| Task | File | Status |
+|------|------|--------|
+| `tools/bark-workbench.html` — three-pane layout (pool tree sidebar, bark table editor, coherence panel) | NEW | ✅ |
+| Coherence panel — orphan pools, unreferenced pools (smart NPC-assignable filter), oneShot singletons, >60 char warnings, zero-weight entries | NEW | ✅ |
+| Fire-roll simulator — weighted random histogram with configurable roll count | NEW | ✅ |
+| Export pass — JSON blob download (`barks-export.json`) with dirty tracking + beforeunload guard | NEW | ✅ |
+| BarkLibrary shim — intercepts `register()` calls from `data/barks/en.js` without loading full engine | NEW | ✅ |
+| NPC manifest cross-reference — async load of `npc-manifest.json`, Used-By badges on pool headers, `byBarkPool` index for coherence | NEW | ✅ |
+
+**Verification**: 121 pools, 510 barks captured from `data/barks/en.js`. Coherence panel correctly flags 9 genuinely unreferenced NPC-assignable pools (e.g. `npc.promenade.vendor`, `interior.guild`), 0 false positives from system-driven pools. Fire-roll histogram produces expected weight distributions. Export round-trips cleanly.
 
 **Deliverable**: Every bark in the game visible, editable, and validated for reachability.
 
@@ -760,9 +764,9 @@ auto-derivation now ships for real.
 |------|------|------|--------|
 | `tools/enemy-hydrator.html` shell | NEW | 3h | ✅ VS-1 (shipped 2026-04-17) |
 | Stats tab + DPS computation + tier-band validator | NEW | 4h | ✅ VS-2 + VS-3 (shipped 2026-04-17) |
-| Deck Composer tab + drag-drop from EATK card pool | NEW | 4h | ⏳ stub — Phase 5.2 |
-| "Hydrate from stats" heuristic engine (§4.5 rules) | NEW | 4h | ⏳ Phase 5.2 |
-| Intent Curve tab + state-machine editor | NEW | 3h | ⏳ stub — Phase 5.3 |
+| Deck Composer tab + drag-drop from EATK card pool | NEW | 4h | ✅ Phase 5.2 (shipped 2026-04-17, commit `fccf922`) |
+| "Hydrate from stats" heuristic engine (§4.5 rules) | NEW | 4h | ✅ Phase 5.2 (shipped 2026-04-17, commit `fccf922`) |
+| Intent Curve tab (slot contract + recommended-curve overlay, observational) | NEW | 3h | ✅ Phase 5.3 (shipped 2026-04-17) |
 | Loot tab cross-ref `data/loot-tables.json` | NEW | 2h | ⏳ stub — Phase 5.4 |
 | Reanim Behavior tab (pulls archetype-registry) | NEW | 1h | ⏳ stub — Phase 5.5 |
 | Balance matrix scatter plot | NEW | 3h | ✅ VS-5 (shipped 2026-04-17) |
@@ -800,9 +804,70 @@ The vertical slice ships the **Stats + DPS + tier-band validator + balance matri
 
 **Runtime failure mode**: if `data/enemies.js` fails to load (missing file, wrong path, odd CORS), the tool shows "data/enemies.js sidecar failed to load" in the status bar and the sidebar stays empty. The engine's own enemy-ai.js still loads via sync XHR of `data/enemies.json`, so gameplay is unaffected — only the authoring tool is gated.
 
-**Open question for Phase 5.2 kickoff**: are the tier bands correct, or should they scale per-biome? Seven deep-biome "standards" land OOB against the §4.5 bands. Three paths: (a) re-tier those enemies to elite; (b) widen the standard band (e.g. 2–6); (c) add a per-biome modifier (e.g. `standard + marine = 4–6 expected`). The hydrator will surface whichever choice lands — the band constants are one edit in `tools/enemy-hydrator.html` + `tools/smoke-enemy-hydrator.js`.
+**Open question for Phase 5.2 kickoff** ✅ RESOLVED (2026-04-17, bundled into commit `91c99b3`): are the tier bands correct, or should they scale per-biome? Seven deep-biome "standards" landed OOB against the §4.5 bands. Three paths were on the table: (a) re-tier those enemies to elite; (b) widen the standard band (e.g. 2–6); (c) add a per-biome modifier. **Chose (a)** — re-tiered the seven OOB entries (Iron Golem, Slag Hound, Tide Stalker, Shock Eel, Lab Drone, Deep Crawler, Brine Wraith) to `tier: elite`. Rationale: widening the standard band would hide real design signal in future authoring; per-biome modifiers would proliferate edge-case logic through the hydrator, validator, and smoke. Re-tiering is one `data/enemies.json` edit per row and leaves the band constants doing their job. Smoke now reports zero OOB standards.
 
-**What's next (Phase 5.2)**: Deck Composer tab. Drag-drop from `data/enemy-cards.json` (EATK-### pool) into the enemy's `decks[]` slot; weight indicator shows each card's draw probability; "Hydrate from stats" button applies §4.5 heuristics (`hp/str ratio` → aggression tilt, `dex` → skill-card weight, `stealth` → opener-card slots, `suit` → suit-matched ratio ≥60%, `tier` → card-count + quality ceiling). Data shape lands in `data/enemy-decks.json` (already present — will extend, not replace).
+#### Phase 5.2 — Deck Composer ✅ SHIPPED 2026-04-17 (commit `fccf922`)
+
+| Task | File | Status |
+|------|------|--------|
+| Deck Composer tab replaces stub — three-pane layout: EATK pool (left), enemy's deck slot (middle), Apply/Cancel preview (right); pattern/greed controls above | `tools/enemy-hydrator.html` | ✅ |
+| Composer module — pool render, slot editor, preview diff (add/remove), exporter registration | `tools/js/enemy-hydrator-deck.js` (641 LOC, budget 700/850) | ✅ |
+| `proposeFromStats()` heuristic engine — deterministic §4.5 rule stack (see *Heuristic rule set* below) with alphabetical id tie-breaking | same module | ✅ |
+| `data/enemy-decks.js` sidecar + `tools/generate-enemy-decks-sidecar.js` — `window.ENEMY_DECKS_DATA = { _meta, _schema, decks }` | NEW | ✅ |
+| `data/enemy-cards.js` sidecar + `tools/generate-enemy-cards-sidecar.js` — `window.ENEMY_CARDS_DATA = { _meta, _schema, cards }` (composer needs both at file:// since `fetch` fails on `file://`) | NEW | ✅ |
+| `tools/.githooks/pre-commit` §1g — regenerate + stage `data/enemy-decks.js` and `data/enemy-cards.js` whenever their `.json` counterparts are staged | modify | ✅ |
+| `tools/smoke-enemy-hydrator-deck.js` — reference integrity, determinism, tier/quality/suit/dex/stealth constraints across 24 roster hydrations + 6 synthetic cases | NEW | ✅ |
+
+**Verification** (`node tools/smoke-enemy-hydrator-deck.js` → *PASS — 26 decks · 14 cards · 24 roster hydrations · 6 synthetic cases.*)
+
+**Heuristic rule set** (§4.5 translation, applied in order inside `proposeFromStats()`):
+
+1. **Profile detection** from `hp/str` ratio — `tanky` (ratio ≥ 3), `glass` (ratio ≤ 1.5), `balanced` otherwise.
+2. **Deck-size gate** from tier — `standard 3 / elite 3–4 / boss 4`.
+3. **Quality ceiling** by tier — `standard` bans the four "boss-tier" EATKs (EATK-004, -011, -012, -013); elite + boss unrestricted.
+4. **Intent-weighted scoring** — each card scored by `INTENT_WEIGHTS[profile]` (tanky favors BRACE/DOT; glass favors BURST/BASIC; balanced evenly split) × 2, plus suit-match × 3, plus dex ≥ 5 → CC bonus, plus stealth ≥ 5 → DOT/BASIC opener bonus.
+5. **Forced slots** — `tier: boss` forces one BRACE and one BURST in the deck (regardless of score); `stealth ≥ 5` reserves slot 0 for a DOT or BASIC opener.
+6. **Greedy fill with variety guard** — highest-score first, but downweight repeats of the same intent beyond the greed budget (`standard 2 / elite 2 / boss 3` distinct intents).
+7. **Post-hoc suit enforcement** — target ≥ 60% suit-matched cards; if the chosen set falls short and the pool has unused same-suit candidates, swap the lowest-scored mismatched card for a same-suit one (best-effort, accepts lower if the pool can't satisfy).
+8. **Opener reorder** — if stealth rule fired and the reserved card didn't land at slot 0, rotate it there.
+9. **Tie-break** — alphabetical EATK id, so the same (stats, pool) input always produces the same deck. This is why the smoke can assert determinism across two runs of the same enemy.
+
+**Loose-coupling pattern** (new in 5.2, available for 5.3–5.5): the Composer is a side module, not a main-app dependency. Hook points:
+
+- `document` CustomEvents `enemy-hydrator:select` (fires on enemy change with `{detail: {id, row}}`) and `enemy-hydrator:revert` (fires when the Revert button resets the roster).
+- `window.EnemyHydrator` registry exposes `registerExporter(name, fn)` so a tab's "Export" participates in the main export button without the tab being wired into the shell. The Composer registers `enemy-decks.json` this way; Phases 5.3–5.5 should follow suit (curve proposals, loot overrides, reanim behavior all ship as their own JSON via the same hook).
+
+**Design note** — the composer deliberately **does not auto-save**. A hydrate proposal stages into the Preview pane; the user has to click Apply to commit it to the slot and Export to write the file. This preserves "dirty → explicit save" symmetry with the Stats tab and keeps reverting cheap. The 6-case synthetic smoke covers the Apply path; the roster smoke covers the full 24 enemies currently in `enemies.json` that have deck entries.
+
+---
+
+#### Phase 5.3 — Intent Curve ✅ SHIPPED 2026-04-17
+
+| Task | File | Status |
+|------|------|--------|
+| Intent Curve tab replaces stub — controls row (rounds clamp 1–12, overlay toggle), meta line, curve body with per-row bars | `tools/enemy-hydrator.html` | ✅ |
+| Curve module — slot contract, deck expansion, recommended-curve library, side-by-side + overlay renderers, purely observational (no mutation, no exporter) | `tools/js/enemy-hydrator-curve.js` (531 LOC, budget 600/750) | ✅ |
+| `tools/smoke-enemy-hydrator-curve.js` — slot-contract math, roster expansion determinism, recommended-curve coverage (9 tier×profile combos), `_curveOverride` semantics, 7 synthetic cases | NEW | ✅ |
+| `tools/check-budgets.js` — new rule for the module | modify | ✅ |
+
+**Verification** (`node tools/smoke-enemy-hydrator-curve.js` → *PASS — 26 roster decks expanded · 7 synthetic cases · avg match 1.19/6 · 0 perfect-match · 5 zero-match.*)
+
+**Locked design calls** (from 5.3 kickoff review):
+
+1. **Slot contract** — `slot 0 = opener (round 1 guaranteed)`, `slots 1..N-1 = looped sequence (rounds 2+)`. Pure function: `roundToSlot(round, N)` — `N==0→-1`, `N==1→0`, `round==0→0`, else `1 + ((round-1) % (N-1))`. No shuffle, no weighting — deterministic playback so the curve is debuggable, not statistical.
+2. **maxRounds clamp** — default 6, configurable [1..12]. Bosses can go 8–10, trash mobs die in 3. "6" is a default view, not a logic assumption.
+3. **Recommended curves** — static `tier × profile` library (9 entries: {standard,elite,boss} × {balanced,tanky,glass}). Each entry is `{sequence, tolerance: {earlyDefense, lateBurst}}`. Sequence is *example of intent*, not the only valid ordering; tolerance metadata travels with the data for future validators ("does this deck violate early defense expectation?") but is not enforced today. Falls back to `standard/balanced` on unknown keys. Rejected the "derive from hydrator proposal" path — self-referential, loses design intent as independent signal.
+4. **Side-by-side rows default, overlay toggle** — actual row above recommended row by default. Diagnosis first, density second. Overlay mode is a single checkbox that collapses to stacked top/bottom bars for density-seekers.
+5. **Curve model stores `{round, cardId, intent, slot}`** — not just intent. Enables future repetition / diversity / predictability checks without a schema change.
+6. **`_curveOverride`** is **read-only in 5.3**. When present, `buildView()` uses it as the playback order ground truth; the deck's own `cards` array is not mutated. Writes (if we ever add them) flow through 5.2's `enemy-decks.json` exporter — this module registers no exporter.
+
+**Loose-coupling contract** — module listens to `document` events `enemy-hydrator:select` and `enemy-hydrator:revert`, reads `window.EnemyHydrator.currentRow()`, and surfaces toast errors via `window.EnemyHydrator.toast()`. Same pattern as 5.2; extends cleanly to 5.4 and 5.5.
+
+**Signal from the roster** — 5 of 26 existing decks (19%) match zero recommended-curve slots for their tier+profile. These were authored before the recommended curves existed and are now surfaced as candidates for deck rework or for authoring a `_curveOverride` that reshapes their playback without touching composition. This is the tab's core value proposition: combat behavior over time, as a reviewable artifact.
+
+---
+
+**What's next (Phase 5.4)**: Loot tab. Cross-refs `data/loot-tables.json` for expected-value gold + item roll per enemy; read-only view today, editor later. Same loose-coupling pattern.
 
 ### Phase 6 — NPC Sprite Studio (1 day)
 
@@ -835,7 +900,7 @@ The vertical slice ships the **Stats + DPS + tier-band validator + balance matri
 |-------|-------|------|
 | 0 | Schema + CLI + npcs.json extraction | 1 day |
 | 1 | NPC Designer | 2 days |
-| 2 | Bark Workbench | 1 day |
+| 2 | Bark Workbench | 1 day | ✅ shipped 2026-04-17 |
 | 3 | Verb-Node Stamper layer | 0.5 day |
 | 4 | Archetype Studio | 1.5 days |
 | 5 | Enemy Hydrator | 3 days |

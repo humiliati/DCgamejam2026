@@ -270,6 +270,167 @@ var RaycasterSprites = (function () {
     }
   }
 
+  // ── Floor decor rendering (DOC-117) ───────────────────────────────
+  //
+  // Consumer for _floorDecor[y][x] — the floor-plane companion of
+  // wall-decor. Walks the grid inside the render distance, billboards
+  // each decor item at its cell center (with per-item sub-tile jitter
+  // derived from anchorU + a deterministic hash of cell + slot index),
+  // and draws it texture-aligned to the floor plane.
+  //
+  // Screen-space anchor is the floor plane at the item's world
+  // distance, using the standard raycaster formula
+  //   screenRow = halfH + (eyeHeight * h) / dist
+  // where eyeHeight = contract.wallHeight * 0.5 (player eye at half
+  // wall height). Falls back to 0.5 when no contract is bound.
+  //
+  // Item shape matches `_buildDecorItem` in AdjacentDecorSpawner:
+  //   { spriteId, placement, anchorU, anchorV, scale, minDepth, biomeTint }
+  // anchorU is treated as a sub-tile X offset (0..1 within the cell).
+  // anchorV is ignored for floor placements — Y is derived from a
+  // seeded hash so stacked items in the same cell spread out along
+  // the tile's depth axis instead of piling on the same pixel.
+  //
+  // Render order: called from the Raycaster core between the distant
+  // sprite pass and the weather veil so floor decor inherits the
+  // standard fog treatment (distant cells blend into the horizon),
+  // but near cells still punch through via the alpha floor of 0.1.
+  //
+  // Z-buffer: reads only; any column where a wall is closer than the
+  // decor's distance culls the sprite (same pattern as renderSprites).
+  function renderFloorDecor(ctx, px, py, pDir, halfFov, w, h, halfH,
+                            renderDist, fogDist, fogColor) {
+    var floorDecor = _s ? _s.floorDecor() : null;
+    if (!floorDecor) return;
+    var contract = _s ? _s.contract() : null;
+    var zBuffer  = _s ? _s.zBuffer()  : null;
+    if (!zBuffer) return;
+
+    var _tanHF = Math.tan(halfFov);
+
+    // Eye-height factor for floor plane projection. Matches the
+    // raycaster-floor rowDist formula solved for screenY.
+    var wallH = (contract && typeof contract.wallHeight === 'number')
+      ? contract.wallHeight : 1.0;
+    var eyeH = wallH * 0.5;
+
+    // Approximate axis-aligned render bbox. renderDist is in world
+    // units (tile widths), so cells outside this square can't be
+    // visible regardless of FOV orientation.
+    var maxR = Math.ceil(renderDist) + 1;
+    var minCellY = Math.floor(py) - maxR;
+    var maxCellY = Math.floor(py) + maxR;
+    var minCellX = Math.floor(px) - maxR;
+    var maxCellX = Math.floor(px) + maxR;
+
+    // ── Pass 1: gather visible items with world + screen coords ────
+    var items = [];
+    for (var cy = minCellY; cy <= maxCellY; cy++) {
+      var row = floorDecor[cy];
+      if (!row) continue;
+      for (var cx = minCellX; cx <= maxCellX; cx++) {
+        var cell = row[cx];
+        if (!cell || cell.length === 0) continue;
+        for (var ii = 0; ii < cell.length; ii++) {
+          var d = cell[ii];
+          if (!d || !d.spriteId) continue;
+
+          // Sub-tile position: anchorU as X offset; deterministic
+          // Y offset from (cx, cy, ii) hash so multiple items in
+          // the same cell don't all stack at dead center.
+          var ux = (typeof d.anchorU === 'number') ? d.anchorU : 0.5;
+          if (ux < 0.1) ux = 0.1; else if (ux > 0.9) ux = 0.9;
+          var hv = ((cx * 73856093) ^ (cy * 19349663) ^ (ii * 83492791));
+          hv = (hv & 0x7fffffff) / 0x7fffffff;
+          var uy = 0.35 + hv * 0.30; // 0.35..0.65
+
+          var wx = cx + ux;
+          var wy = cy + uy;
+          var dx = wx - px;
+          var dy = wy - py;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 0.2 || dist > renderDist) continue;
+
+          var angle = Math.atan2(dy, dx) - pDir;
+          while (angle >  Math.PI) angle -= 2 * Math.PI;
+          while (angle < -Math.PI) angle += 2 * Math.PI;
+          if (Math.abs(angle) > halfFov + 0.3) continue;
+
+          items.push({ d: d, dist: dist, angle: angle });
+        }
+      }
+    }
+
+    if (items.length === 0) return;
+
+    // ── Pass 2: sort far→near so nearer decor draws over distant ───
+    items.sort(function (a, b) { return b.dist - a.dist; });
+
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var d    = it.d;
+      var dist = it.dist;
+      var ang  = it.angle;
+
+      // Perspective column (matches renderSprites math).
+      var screenX = Math.floor((1 + Math.tan(ang) / _tanHF) * w / 2);
+
+      // Billboard size. scale is a fraction of the wall-face height
+      // at distance 1 (same convention as renderSprites baseScale),
+      // kept small for floor detritus.
+      var scale = (d.scale || 0.35) / dist;
+      var spriteH = Math.floor(h * scale);
+      var spriteW = spriteH;
+      if (spriteH < 2) continue;
+
+      var drawX = screenX - spriteW / 2;
+
+      // Floor-plane anchor: sprite bottom sits ON the floor at `dist`.
+      var floorRowY = halfH + Math.floor((eyeH * h) / dist);
+      var spriteBot = floorRowY;
+      var spriteTop = floorRowY - spriteH;
+
+      // Z-buffer occlusion — skip if every column the sprite covers
+      // has a closer wall. Same early-out pattern as renderSprites.
+      var startCol = Math.max(0, Math.floor(drawX));
+      var endCol   = Math.min(w - 1, Math.floor(drawX + spriteW));
+      if (startCol > endCol) continue;
+      var visible = false;
+      for (var col = startCol; col <= endCol; col++) {
+        if (zBuffer[col] > dist) { visible = true; break; }
+      }
+      if (!visible) continue;
+
+      var tex = (typeof TextureAtlas !== 'undefined' && TextureAtlas.get)
+        ? TextureAtlas.get(d.spriteId) : null;
+      if (!tex || !tex.canvas) continue;
+
+      // Fog fade — identical treatment to wall sprites so floor decor
+      // blends into the horizon band the same way terrain does.
+      var fogFactor = (contract && typeof SpatialContract !== 'undefined' && SpatialContract.getFogFactor)
+        ? SpatialContract.getFogFactor(contract, dist, renderDist, fogDist)
+        : Math.min(1, dist / (fogDist || renderDist));
+      var alpha = Math.max(0.0, 1 - fogFactor);
+      if (alpha < 0.02) continue;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Per-column draw so walls that only partially occlude still
+      // cull the right columns. For floor decor the per-column cost
+      // is cheap (spriteW is small at typical scales) and it keeps
+      // the partially-occluded edges clean.
+      for (var cc = startCol; cc <= endCol; cc++) {
+        if (zBuffer[cc] <= dist) continue;
+        var srcX = Math.floor((cc - drawX) / spriteW * tex.width);
+        if (srcX < 0) srcX = 0;
+        if (srcX >= tex.width) srcX = tex.width - 1;
+        ctx.drawImage(tex.canvas, srcX, 0, 1, tex.height,
+                      cc, spriteTop, 1, spriteH);
+      }
+      ctx.restore();
+    }
+  }
+
   // ── Particle pool ────────────────────────────────────────────────
 
   function _emitParticle(emoji, sx, sy, spriteH, dist, baseAlpha) {
@@ -1189,6 +1350,7 @@ var RaycasterSprites = (function () {
     bind: bind,
     renderSprites: renderSprites,
     renderWallDecor: renderWallDecor,
+    renderFloorDecor: renderFloorDecor,
     updateAndRenderParticles: updateAndRenderParticles
   });
 })();

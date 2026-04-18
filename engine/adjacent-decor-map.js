@@ -43,23 +43,59 @@ var AdjacentDecorMap = (function () {
   // IIFE runs because index.html loads tiles.js in Layer 0.
   var T = (typeof TILES !== 'undefined') ? TILES : {};
 
-  // ── Tier 1 — Creature ecology (scaffolding; empty until §8a step 2)
+  // ── Tier 1 — Creature ecology (DOC-117 §1a-§1f, shipped 2026-04-17)
   //
-  // Each creature tile gets a registered entry list. Empty arrays
-  // preserve the registration surface (the spawner will iterate and
-  // simply find nothing to place) so that lookups by tile ID never
-  // return undefined. This lets the spawn pass + Raycaster decor map
-  // plumbing be exercised before any sprite generator lands.
-  //
-  // When sprite generators are wired, replace each [] with the
-  // catalogue rows from DOC-117 §1a-§1f.
+  // 19 sprite entries authored per DOC-117_TIER1_SPRITE_TAXONOMY.md.
+  // Rates tuned conservatively to respect the ~12-instance dungeon-floor
+  // perf budget (DOC-117 §7). Directions = 'cardinal' for this first
+  // live pass — advanced modes (facing-tile/inline) fall back to
+  // cardinal in the spawner with a warn-once, so the pipeline stays
+  // deterministic until those resolvers land.
   var MAP = {};
-  MAP[T.ROOST            || 49] = []; // §1a ROOST
-  MAP[T.NEST             || 50] = []; // §1b NEST
-  MAP[T.DEN              || 51] = []; // §1c DEN
-  MAP[T.FUNGAL_PATCH     || 52] = []; // §1d FUNGAL_PATCH
-  MAP[T.ENERGY_CONDUIT   || 53] = []; // §1e ENERGY_CONDUIT
-  MAP[T.TERRITORIAL_MARK || 54] = []; // §1f TERRITORIAL_MARK
+
+  // §1a ROOST — feathers, scales, guano drip above the perch.
+  MAP[T.ROOST || 49] = [
+    { sprite: 'decor_feather_single',     placement: 'floor',    rate: 0.50, directions: 'cardinal' },
+    { sprite: 'decor_feather_tuft',       placement: 'floor',    rate: 0.25, directions: 'cardinal' },
+    { sprite: 'decor_dragon_scale',       placement: 'floor',    rate: 0.15, directions: 'cardinal' },
+    { sprite: 'decor_guano_streak_wall',  placement: 'wall-top', rate: 0.40, directions: 'cardinal' }
+  ];
+
+  // §1b NEST — woven sticks, bone fragments on the ground around the mound.
+  MAP[T.NEST || 50] = [
+    { sprite: 'decor_bone_shard_floor',   placement: 'floor', rate: 0.40, directions: 'cardinal' },
+    { sprite: 'decor_stick_bundle_floor', placement: 'floor', rate: 0.35, directions: 'cardinal' }
+  ];
+
+  // §1c DEN — fur, gnawed bones, claw damage on adjacent walls.
+  MAP[T.DEN || 51] = [
+    { sprite: 'decor_fur_tuft',            placement: 'floor',    rate: 0.40, directions: 'cardinal' },
+    { sprite: 'decor_gnawed_bone',         placement: 'floor',    rate: 0.35, directions: 'cardinal' },
+    { sprite: 'decor_bone_shard_floor',    placement: 'floor',    rate: 0.25, directions: 'cardinal' },
+    { sprite: 'decor_scratch_kneehigh',    placement: 'wall-knee',rate: 0.40, directions: 'cardinal' },
+    { sprite: 'decor_claw_gouge_masonry',  placement: 'wall-mid', rate: 0.18, directions: 'cardinal' }
+  ];
+
+  // §1d FUNGAL_PATCH — fungus on walls + spore clouds + mycelium threads.
+  MAP[T.FUNGAL_PATCH || 52] = [
+    { sprite: 'decor_fungus_climb_wall',      placement: 'wall-mid', rate: 0.45, directions: 'cardinal' },
+    { sprite: 'decor_spore_puff_floor',       placement: 'floor',    rate: 0.35, directions: 'cardinal' },
+    { sprite: 'decor_mycelium_thread_wall',   placement: 'wall-mid', rate: 0.20, directions: 'cardinal' }
+  ];
+
+  // §1e ENERGY_CONDUIT — brass pipe run, oil/filings, warning plate.
+  MAP[T.ENERGY_CONDUIT || 53] = [
+    { sprite: 'decor_brass_pipe_run_wall',      placement: 'wall-mid', rate: 0.55, directions: 'cardinal' },
+    { sprite: 'decor_copper_filings_floor',     placement: 'floor',    rate: 0.35, directions: 'cardinal' },
+    { sprite: 'decor_oil_stain_floor',          placement: 'floor',    rate: 0.22, directions: 'cardinal' },
+    { sprite: 'decor_warning_sign_plate',       placement: 'wall-top', rate: 0.15, directions: 'cardinal' }
+  ];
+
+  // §1f TERRITORIAL_MARK — parallel scratches + blood dots.
+  MAP[T.TERRITORIAL_MARK || 54] = [
+    { sprite: 'decor_scratch_parallel_wall',  placement: 'wall-mid', rate: 0.35, directions: 'cardinal' },
+    { sprite: 'decor_blood_dot_floor',        placement: 'floor',    rate: 0.30, directions: 'cardinal' }
+  ];
 
   // Tier 2 (botanical) + Tier 3 (infrastructure) are declared here
   // when the respective rollouts land (DOC-117 §8b / §8c). Until

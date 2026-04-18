@@ -497,7 +497,11 @@ biggest instance-count contributors by design.
    load spawn pass wired to an empty sprite list so the pipe is
    exercised before any art lands. Blocking for DOC-118 ledger hooks.
 2. **Feather + bone + scratch sprites** — highest-impact visual
-   return per sprite authored, simple procedural generators.
+   return per sprite authored, simple procedural generators. **See
+   [`DOC-117_TIER1_SPRITE_TAXONOMY.md`](DOC-117_TIER1_SPRITE_TAXONOMY.md)**
+   for the six-primitive helper design that all 19 Tier 1 sprites
+   compose over. Implementation must start with the primitives before
+   any sprite generator is written.
 3. **Fungal spread + blood decor** — next visual-impact tier. Fungal
    wall-climb needs a gradient-blend against existing fog that's
    worth getting right.

@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Gleaner — Bark Workbench</title>
+
+  <!-- ============================================================
+       Bark Workbench — DOC-110 Phase 2 (P2)
+       ============================================================
+       Pool composition editor for every bark in the game.
+       Intercepts BarkLibrary.register() calls from data/barks/en.js
+       to build an editable in-memory model.
+
+       Three-pane layout:
+         Left   — namespace-grouped pool tree (collapsible)
+         Center — selected pool bark table (editable)
+         Right  — coherence panel (warnings, orphans, stats)
+         Bottom — fire-roll simulator (weight histogram)
+
+       Conventions:
+         - Vanilla JS, no build step, no CDN (matches project rules).
+         - Palette matches tools/world-designer.html + npc-designer.html.
+         - Loads data/barks/en.js via <script> after a shim BarkLibrary
+           that captures registrations without needing the engine.
+       ============================================================ -->
+
+  <style>
+    /* ─── Palette (world-designer parity) ─── */
+    :root {
+      --bg: #1a1d22;
+      --bg-header: #0f1115;
+      --bg-side: #15181d;
+      --bg-panel: #20232a;
+      --bg-input: #0f1115;
+      --accent: #8ad;
+      --accent-dim: #789;
+      --text: #e6e6e6;
+      --text-dim: #9ab;
+      --text-em: #cfe;
+      --muted: #678;
+      --border: #333;
+      --border-mid: #456;
+      --divider: #2a2e33;
+      --good: #9c6;
+      --warn: #fc8;
+      --err: #f88;
+      --btn-bg: #2a3a4a;
+      --btn-bg-hover: #345;
+      --btn-primary-bg: #3a2d1a;
+      --btn-primary-fg: #fc8;
+      --btn-primary-border: #764;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "Courier New", monospace;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ─── Header ─── */
+    .bw-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      height: 42px;
+    }
+    .bw-header h1 { margin: 0; font-size: 15px; letter-spacing: 1px; color: var(--accent); }
+    .bw-header .sub { color: var(--accent-dim); font-size: 12px; }
+    .bw-header .spacer { flex: 1; }
+    .bw-header button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 4px 10px; cursor: pointer;
+      font-family: inherit; font-size: 12px; border-radius: 3px;
+    }
+    .bw-header button:hover { background: var(--btn-bg-hover); }
+    .bw-header button.primary {
+      background: var(--btn-primary-bg); border-color: var(--btn-primary-border);
+      color: var(--btn-primary-fg);
+    }
+    .bw-header .status { font-size: 11px; color: var(--good); min-width: 120px; text-align: right; }
+    .bw-header .status.dirty { color: var(--warn); }
+
+    /* ─── Layout ─── */
+    .bw-body {
+      display: flex;
+      height: calc(100vh - 42px);
+    }
+
+    /* ─── Left sidebar (pool tree) ─── */
+    .bw-sidebar {
+      width: 260px; min-width: 200px;
+      background: var(--bg-side);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .bw-sidebar-header {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--divider);
+    }
+    .bw-sidebar-header input {
+      width: 100%; padding: 4px 8px;
+      background: var(--bg-input); color: var(--text);
+      border: 1px solid var(--border); border-radius: 3px;
+      font-family: inherit; font-size: 12px;
+    }
+    .bw-sidebar-header input::placeholder { color: var(--muted); }
+    .bw-pool-tree {
+      flex: 1; overflow-y: auto; padding: 4px 0;
+    }
+    .bw-ns-group { margin-bottom: 2px; }
+    .bw-ns-label {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 10px; cursor: pointer;
+      color: var(--accent-dim); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; user-select: none;
+    }
+    .bw-ns-label:hover { color: var(--accent); }
+    .bw-ns-label .arrow { font-size: 9px; transition: transform 0.15s; }
+    .bw-ns-label .arrow.collapsed { transform: rotate(-90deg); }
+    .bw-ns-label .count { color: var(--muted); font-size: 10px; margin-left: auto; }
+    .bw-ns-children { padding-left: 6px; }
+    .bw-ns-children.hidden { display: none; }
+    .bw-pool-item {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 10px 3px 16px; cursor: pointer;
+      font-size: 12px; color: var(--text-dim);
+      border-left: 2px solid transparent;
+    }
+    .bw-pool-item:hover { background: rgba(136,170,221,0.06); color: var(--text); }
+    .bw-pool-item.active {
+      background: rgba(136,170,221,0.1); color: var(--text-em);
+      border-left-color: var(--accent);
+    }
+    .bw-pool-item .bark-count { color: var(--muted); font-size: 10px; margin-left: auto; }
+    .bw-pool-item .warn-dot { color: var(--err); font-size: 8px; }
+
+    /* ─── Main editor ─── */
+    .bw-main {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .bw-pool-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--divider);
+      min-height: 44px;
+    }
+    .bw-pool-header .pool-key {
+      font-size: 14px; color: var(--accent); font-weight: bold;
+    }
+    .bw-pool-header .pool-meta {
+      font-size: 11px; color: var(--text-dim);
+    }
+    .bw-pool-header .used-by {
+      font-size: 11px; color: var(--good);
+      background: rgba(153,204,102,0.1);
+      padding: 2px 6px; border-radius: 3px;
+    }
+    .bw-pool-header .used-by.orphan {
+      color: var(--err); background: rgba(255,136,136,0.1);
+    }
+    .bw-pool-header .spacer { flex: 1; }
+    .bw-pool-header button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 3px 8px; cursor: pointer;
+      font-family: inherit; font-size: 11px; border-radius: 3px;
+    }
+    .bw-pool-header button:hover { background: var(--btn-bg-hover); }
+
+    .bw-bark-table-wrap {
+      flex: 1; overflow-y: auto; padding: 0;
+    }
+    .bw-bark-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .bw-bark-table thead th {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--bg-panel);
+      padding: 6px 8px; text-align: left;
+      font-size: 11px; color: var(--accent-dim);
+      border-bottom: 1px solid var(--border);
+      font-weight: normal; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .bw-bark-table tbody td {
+      padding: 4px 8px; border-bottom: 1px solid var(--divider);
+      vertical-align: top;
+    }
+    .bw-bark-table tbody tr:hover { background: rgba(136,170,221,0.04); }
+    .bw-bark-table .col-idx { width: 30px; color: var(--muted); text-align: center; font-size: 11px; }
+    .bw-bark-table .col-text { min-width: 300px; }
+    .bw-bark-table .col-speaker { width: 120px; }
+    .bw-bark-table .col-style { width: 80px; }
+    .bw-bark-table .col-weight { width: 60px; text-align: center; }
+    .bw-bark-table .col-oneshot { width: 60px; text-align: center; }
+    .bw-bark-table .col-actions { width: 50px; text-align: center; }
+
+    .bw-bark-table input[type="text"],
+    .bw-bark-table input[type="number"],
+    .bw-bark-table select {
+      background: var(--bg-input); color: var(--text);
+      border: 1px solid var(--border); border-radius: 2px;
+      padding: 2px 4px; font-family: inherit; font-size: 12px;
+      width: 100%;
+    }
+    .bw-bark-table input[type="text"]:focus,
+    .bw-bark-table input[type="number"]:focus,
+    .bw-bark-table select:focus {
+      border-color: var(--accent); outline: none;
+    }
+    .bw-bark-table input[type="checkbox"] { cursor: pointer; }
+    .bw-bark-table .char-warn { color: var(--warn); font-size: 10px; }
+    .bw-bark-table .btn-del {
+      background: none; border: none; color: var(--err);
+      cursor: pointer; font-size: 14px; padding: 0 4px;
+      opacity: 0.4;
+    }
+    .bw-bark-table .btn-del:hover { opacity: 1; }
+
+    .bw-empty-state {
+      padding: 40px; text-align: center; color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* ─── Fire-roll simulator (bottom strip) ─── */
+    .bw-simulator {
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+      padding: 8px 16px;
+      min-height: 80px;
+      display: flex; gap: 16px; align-items: flex-start;
+    }
+    .bw-sim-controls {
+      display: flex; flex-direction: column; gap: 4px; min-width: 120px;
+    }
+    .bw-sim-controls label { font-size: 11px; color: var(--text-dim); }
+    .bw-sim-controls button {
+      background: var(--btn-bg); color: var(--text-em);
+      border: 1px solid var(--border-mid);
+      padding: 4px 10px; cursor: pointer;
+      font-family: inherit; font-size: 12px; border-radius: 3px;
+    }
+    .bw-sim-controls button:hover { background: var(--btn-bg-hover); }
+    .bw-sim-histogram {
+      flex: 1; display: flex; align-items: flex-end; gap: 2px;
+      height: 60px;
+    }
+    .bw-sim-bar {
+      flex: 1; background: var(--accent); border-radius: 2px 2px 0 0;
+      min-width: 4px; position: relative; transition: height 0.2s;
+    }
+    .bw-sim-bar .bar-label {
+      position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+      font-size: 9px; color: var(--text-dim); white-space: nowrap;
+      padding-bottom: 2px;
+    }
+    .bw-sim-stats {
+      font-size: 11px; color: var(--text-dim); min-width: 150px;
+      line-height: 1.6;
+    }
+
+    /* ─── Right coherence panel ─── */
+    .bw-coherence {
+      width: 280px; min-width: 220px;
+      background: var(--bg-side);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .bw-coherence-header {
+      padding: 8px 12px;
+      font-size: 12px; color: var(--accent);
+      border-bottom: 1px solid var(--divider);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .bw-coherence-header .toggle {
+      cursor: pointer; font-size: 10px; color: var(--muted);
+      margin-left: auto;
+    }
+    .bw-coherence-body {
+      flex: 1; overflow-y: auto; padding: 8px 12px;
+    }
+    .bw-coh-section { margin-bottom: 12px; }
+    .bw-coh-section h3 {
+      margin: 0 0 4px 0; font-size: 11px; color: var(--accent-dim);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .bw-coh-item {
+      padding: 3px 0; font-size: 11px; line-height: 1.4;
+    }
+    .bw-coh-item.err { color: var(--err); }
+    .bw-coh-item.warn { color: var(--warn); }
+    .bw-coh-item.ok { color: var(--good); }
+    .bw-coh-item .pool-link {
+      cursor: pointer; text-decoration: underline;
+      color: inherit;
+    }
+    .bw-coh-item .pool-link:hover { color: var(--accent); }
+    .bw-coh-badge {
+      display: inline-block; padding: 1px 5px; border-radius: 3px;
+      font-size: 10px; margin-left: 4px;
+    }
+    .bw-coh-badge.red { background: rgba(255,136,136,0.15); color: var(--err); }
+    .bw-coh-badge.yellow { background: rgba(255,204,136,0.15); color: var(--warn); }
+    .bw-coh-badge.green { background: rgba(153,204,102,0.15); color: var(--good); }
+
+    /* ─── Scrollbar styling ─── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-mid); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="bw-header">
+    <h1>BARK WORKBENCH</h1>
+    <span class="sub">DOC-110 P2</span>
+    <span class="spacer"></span>
+    <button id="btnAddPool">+ Pool</button>
+    <button id="btnExport" class="primary">Export JSON</button>
+    <span id="statusLabel" class="status">Clean</span>
+  </div>
+
+  <!-- Body -->
+  <div class="bw-body">
+    <!-- Left: Pool tree -->
+    <div class="bw-sidebar">
+      <div class="bw-sidebar-header">
+        <input type="text" id="poolSearch" placeholder="Search pools...">
+      </div>
+      <div class="bw-pool-tree" id="poolTree"></div>
+    </div>
+
+    <!-- Center: Bark editor -->
+    <div class="bw-main">
+      <div class="bw-pool-header" id="poolHeader">
+        <span class="pool-key" id="poolKeyLabel">Select a pool</span>
+        <span class="pool-meta" id="poolMetaLabel"></span>
+        <span id="usedByBadge"></span>
+        <span class="spacer"></span>
+      </div>
+      <div class="bw-bark-table-wrap" id="tableWrap">
+        <div class="bw-empty-state" id="emptyState">
+          Select a bark pool from the sidebar to begin editing.
+        </div>
+      </div>
+      <!-- Fire-roll simulator -->
+      <div class="bw-simulator" id="simulator" style="display:none;">
+        <div class="bw-sim-controls">
+          <label>Rolls: <input type="number" id="simRolls" value="100" min="10" max="1000" step="10" style="width:60px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:12px;padding:2px 4px;border-radius:2px;"></label>
+          <button id="btnSimFire">Fire Rolls</button>
+        </div>
+        <div class="bw-sim-histogram" id="simHistogram"></div>
+        <div class="bw-sim-stats" id="simStats"></div>
+      </div>
+    </div>
+
+    <!-- Right: Coherence panel -->
+    <div class="bw-coherence" id="coherencePanel">
+      <div class="bw-coherence-header">
+        Coherence
+        <span id="cohCount"></span>
+      </div>
+      <div class="bw-coherence-body" id="coherenceBody">
+        Loading...
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       Shim: intercept BarkLibrary.register() calls
+       ============================================================ -->
+  <script>
+    // The real BarkLibrary is an IIFE in engine/bark-library.js.
+    // We provide a lightweight shim that captures registrations
+    // so the workbench can edit them without loading the full engine.
+    var BarkLibrary = (function() {
+      var _captured = [];  // Array of { key, barks, opts }
+
+      function register(key, barks, opts) {
+        if (!Array.isArray(barks)) return;
+        _captured.push({
+          key: key,
+          barks: barks.map(function(b) {
+            return {
+              text:    b.text    || '',
+              speaker: b.speaker || null,
+              style:   b.style   || 'toast',
+              weight:  (b.weight != null) ? b.weight : 1,
+              oneShot: !!b.oneShot
+            };
+          }),
+          opts: opts ? { cooldownMs: opts.cooldownMs } : {}
+        });
+      }
+
+      return {
+        register: register,
+        _captured: _captured,
+        // stubs for any other calls en.js might make
+        setDisplay: function() {},
+        pick: function() { return null; },
+        fire: function() { return null; },
+        reset: function() {},
+        hasPool: function() { return false; },
+        getKeys: function() { return []; }
+      };
+    })();
+
+    // Stubs for template substitution references in en.js
+    var Player = { state: function() { return {}; } };
+  </script>
+
+  <!-- Load bark data (calls our shim's register()) -->
+  <script src="../data/barks/en.js"></script>
+
+  <!-- ============================================================
+       Main application
+       ============================================================ -->
+  <script>
+  (function() {
+    'use strict';
+
+    // ── State ──────────────────────────────────────────────────────
+    // pools: { key → { barks: [...], cooldownMs: number } }
+    var _pools = {};
+    var _poolOrder = [];      // Insertion-order keys
+    var _selectedPool = null;
+    var _dirty = false;
+    var _manifest = null;     // NPC manifest JSON (loaded async)
+
+    // ── Init: absorb captured registrations ────────────────────────
+    function _initPools() {
+      var captured = BarkLibrary._captured;
+      for (var i = 0; i < captured.length; i++) {
+        var c = captured[i];
+        if (!_pools[c.key]) {
+          _pools[c.key] = { barks: [], cooldownMs: 45000 };
+          _poolOrder.push(c.key);
+        }
+        if (c.opts && c.opts.cooldownMs != null) {
+          _pools[c.key].cooldownMs = c.opts.cooldownMs;
+        }
+        for (var j = 0; j < c.barks.length; j++) {
+          _pools[c.key].barks.push(c.barks[j]);
+        }
+      }
+    }
+
+    // ── Load NPC manifest (async, for Used-By badges) ─────────────
+    function _loadManifest() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'npc-manifest.json', true);
+      xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 0) {
+          try {
+            _manifest = JSON.parse(xhr.responseText);
+          } catch (e) {
+            console.warn('[BarkWorkbench] Failed to parse npc-manifest.json:', e);
+          }
+          _renderCoherence();
+          // Re-render selected pool header if any
+          if (_selectedPool) _renderPoolHeader(_selectedPool);
+        }
+      };
+      xhr.onerror = function() {
+        console.warn('[BarkWorkbench] Could not load npc-manifest.json');
+      };
+      xhr.send();
+    }
+
+    // ── Dirty tracking ────────────────────────────────────────────
+    function _markDirty() {
+      _dirty = true;
+      var el = document.getElementById('statusLabel');
+      el.textContent = 'Unsaved changes';
+      el.className = 'status dirty';
+    }
+
+    function _markClean() {
+      _dirty = false;
+      var el = document.getElementById('statusLabel');
+      el.textContent = 'Clean';
+      el.className = 'status';
+    }
+
+    // ── Namespace helpers ─────────────────────────────────────────
+    function _namespace(key) {
+      var dot = key.indexOf('.');
+      return dot > 0 ? key.substring(0, dot) : key;
+    }
+
+    function _shortKey(key) {
+      var dot = key.indexOf('.');
+      return dot > 0 ? key.substring(dot + 1) : key;
+    }
+
+    // ── Pool tree rendering ───────────────────────────────────────
+    function _renderPoolTree(filter) {
+      var container = document.getElementById('poolTree');
+      container.innerHTML = '';
+
+      // Group by namespace
+      var groups = {};
+      var groupOrder = [];
+      for (var i = 0; i < _poolOrder.length; i++) {
+        var key = _poolOrder[i];
+        if (filter && key.toLowerCase().indexOf(filter) === -1) continue;
+        var ns = _namespace(key);
+        if (!groups[ns]) {
+          groups[ns] = [];
+          groupOrder.push(ns);
+        }
+        groups[ns].push(key);
+      }
+
+      for (var g = 0; g < groupOrder.length; g++) {
+        var ns = groupOrder[g];
+        var keys = groups[ns];
+
+        var groupEl = document.createElement('div');
+        groupEl.className = 'bw-ns-group';
+
+        // Namespace label
+        var label = document.createElement('div');
+        label.className = 'bw-ns-label';
+        label.innerHTML = '<span class="arrow">&#9660;</span> ' +
+          ns + ' <span class="count">' + keys.length + '</span>';
+
+        var childrenEl = document.createElement('div');
+        childrenEl.className = 'bw-ns-children';
+
+        // Toggle collapse
+        (function(lbl, ch) {
+          lbl.addEventListener('click', function() {
+            var arrow = lbl.querySelector('.arrow');
+            if (ch.classList.contains('hidden')) {
+              ch.classList.remove('hidden');
+              arrow.classList.remove('collapsed');
+            } else {
+              ch.classList.add('hidden');
+              arrow.classList.add('collapsed');
+            }
+          });
+        })(label, childrenEl);
+
+        // Pool items
+        for (var k = 0; k < keys.length; k++) {
+          var poolKey = keys[k];
+          var item = document.createElement('div');
+          item.className = 'bw-pool-item' + (poolKey === _selectedPool ? ' active' : '');
+          item.dataset.key = poolKey;
+
+          var barkCount = _pools[poolKey].barks.length;
+          var hasWarn = _hasPoolWarning(poolKey);
+          item.innerHTML = (hasWarn ? '<span class="warn-dot">&#9679;</span> ' : '') +
+            _shortKey(poolKey) +
+            ' <span class="bark-count">' + barkCount + '</span>';
+
+          (function(pk) {
+            item.addEventListener('click', function() {
+              _selectPool(pk);
+            });
+          })(poolKey);
+
+          childrenEl.appendChild(item);
+        }
+
+        groupEl.appendChild(label);
+        groupEl.appendChild(childrenEl);
+        container.appendChild(groupEl);
+      }
+    }
+
+    // Pools that are expected to be assigned as an NPC's barkPool field.
+    // Everything else is system-driven (ambient, system, muffled, home, dungeon,
+    // enemy, encounter, bark.transition, dragon, interior, mailbox, npc.dispatcher.gate/warn, etc.)
+    // Only pools matching known NPC-assignable patterns should trigger "unreferenced" warnings.
+    function _isNpcAssignablePool(key) {
+      // These namespaces are always system-driven:
+      if (/^(ambient|system|muffled|home|dungeon|enemy|encounter|bark\.|dragon|mailbox)/.test(key)) return false;
+      // Interior pools (used as floor ambient, not NPC barkPool — except when they are)
+      // Check manifest: if it's already referenced, it's assignable. Otherwise assume interior.* is system.
+      if (/^interior\./.test(key)) {
+        // interior.bazaar, interior.dispatch etc. ARE used as NPC barkPools in manifest
+        // interior.bookshelf.*, interior.bar.* are object interactions
+        if (/^interior\.(bookshelf|bar)\./.test(key)) return false;
+        return true; // interior.bazaar, interior.inn etc. can be NPC barkPools
+      }
+      // npc.dispatcher.gate.*, npc.dispatcher.warn.*, npc.*.heroday, npc.*.day1 etc.
+      // are context-driven (fired by game systems), not barkPool assignments.
+      // Only npc.<id>.ambient patterns are truly NPC-assignable.
+      if (/^npc\./.test(key)) {
+        // If it's in the manifest, it's assignable
+        if (_manifest && _manifest.byBarkPool && _manifest.byBarkPool[key]) return true;
+        // Patterns that are system-driven context barks:
+        if (/\.(gate|warn|heroday|day\d|morning|dusk|night|reject|accept|callsign)/.test(key)) return false;
+        // npc.guild.callsign is system-driven
+        if (/^npc\.guild\./.test(key)) return false;
+        return true; // Other npc.* pools are likely assignable
+      }
+      // faction.* pools are used as NPC barkPools
+      if (/^faction\./.test(key)) return true;
+      return true; // Default: assume assignable
+    }
+
+    function _hasPoolWarning(key) {
+      var pool = _pools[key];
+      if (!pool || pool.barks.length === 0) return true;
+      // Check if referenced by any NPC
+      if (_manifest && _manifest.byBarkPool) {
+        var refs = _manifest.byBarkPool[key];
+        if (!refs || refs.length === 0) {
+          if (_isNpcAssignablePool(key)) return true;
+        }
+      }
+      // oneShot singleton
+      if (pool.barks.length === 1 && pool.barks[0].oneShot) return true;
+      // Long text
+      for (var i = 0; i < pool.barks.length; i++) {
+        if (pool.barks[i].text.length > 60) return true;
+      }
+      return false;
+    }
+
+    // ── Pool selection ────────────────────────────────────────────
+    function _selectPool(key) {
+      _selectedPool = key;
+
+      // Update sidebar active state
+      var items = document.querySelectorAll('.bw-pool-item');
+      for (var i = 0; i < items.length; i++) {
+        items[i].classList.toggle('active', items[i].dataset.key === key);
+      }
+
+      _renderPoolHeader(key);
+      _renderBarkTable(key);
+      document.getElementById('simulator').style.display = 'flex';
+      document.getElementById('simHistogram').innerHTML = '';
+      document.getElementById('simStats').innerHTML = '';
+    }
+
+    // ── Pool header ───────────────────────────────────────────────
+    function _renderPoolHeader(key) {
+      var pool = _pools[key];
+      document.getElementById('poolKeyLabel').textContent = key;
+      document.getElementById('poolMetaLabel').textContent =
+        pool.barks.length + ' barks | cooldown ' + (pool.cooldownMs / 1000) + 's';
+
+      var badge = document.getElementById('usedByBadge');
+      badge.innerHTML = '';
+      badge.className = '';
+      if (_manifest && _manifest.byBarkPool) {
+        var refs = _manifest.byBarkPool[key];
+        if (refs && refs.length > 0) {
+          badge.className = 'used-by';
+          badge.textContent = 'Used by ' + refs.length + ' NPC' + (refs.length > 1 ? 's' : '') +
+            ': ' + refs.slice(0, 3).join(', ') + (refs.length > 3 ? '...' : '');
+        } else {
+          badge.className = 'used-by orphan';
+          badge.textContent = 'No NPC references';
+        }
+      }
+    }
+
+    // ── Bark table ────────────────────────────────────────────────
+    function _renderBarkTable(key) {
+      var wrap = document.getElementById('tableWrap');
+      var pool = _pools[key];
+
+      if (!pool || pool.barks.length === 0) {
+        wrap.innerHTML = '<div class="bw-empty-state">Pool is empty. <button id="btnAddFirst" style="margin-left:8px;">Add first bark</button></div>';
+        var btn = document.getElementById('btnAddFirst');
+        if (btn) btn.addEventListener('click', function() { _addBark(key); });
+        return;
+      }
+
+      var html = '<table class="bw-bark-table"><thead><tr>' +
+        '<th class="col-idx">#</th>' +
+        '<th class="col-text">Text</th>' +
+        '<th class="col-speaker">Speaker</th>' +
+        '<th class="col-style">Style</th>' +
+        '<th class="col-weight">Weight</th>' +
+        '<th class="col-oneshot">OneShot</th>' +
+        '<th class="col-actions"></th>' +
+        '</tr></thead><tbody>';
+
+      for (var i = 0; i < pool.barks.length; i++) {
+        var b = pool.barks[i];
+        var charWarn = b.text.length > 60
+          ? ' <span class="char-warn">' + b.text.length + ' chars</span>' : '';
+
+        html += '<tr data-idx="' + i + '">' +
+          '<td class="col-idx">' + (i + 1) + '</td>' +
+          '<td class="col-text"><input type="text" data-field="text" value="' + _escAttr(b.text) + '">' + charWarn + '</td>' +
+          '<td class="col-speaker"><input type="text" data-field="speaker" value="' + _escAttr(b.speaker || '') + '" placeholder="(anonymous)"></td>' +
+          '<td class="col-style"><select data-field="style">' +
+            '<option value="toast"' + (b.style === 'toast' ? ' selected' : '') + '>toast</option>' +
+            '<option value="bubble"' + (b.style === 'bubble' ? ' selected' : '') + '>bubble</option>' +
+            '<option value="dialog"' + (b.style === 'dialog' ? ' selected' : '') + '>dialog</option>' +
+          '</select></td>' +
+          '<td class="col-weight"><input type="number" data-field="weight" value="' + b.weight + '" min="0" max="10" step="0.5" style="width:50px;text-align:center;"></td>' +
+          '<td class="col-oneshot"><input type="checkbox" data-field="oneShot"' + (b.oneShot ? ' checked' : '') + '></td>' +
+          '<td class="col-actions"><button class="btn-del" data-delidx="' + i + '" title="Delete bark">&times;</button></td>' +
+          '</tr>';
+      }
+
+      html += '</tbody></table>';
+      html += '<div style="padding:8px 16px;"><button id="btnAddBark" style="background:var(--btn-bg);color:var(--text-em);border:1px solid var(--border-mid);padding:4px 10px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:3px;">+ Add Bark</button>' +
+        ' <span style="margin-left:12px;font-size:11px;color:var(--muted);">Cooldown: <input type="number" id="cooldownInput" value="' + (pool.cooldownMs / 1000) + '" min="0" max="86400" step="1" style="width:60px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:12px;padding:2px 4px;border-radius:2px;text-align:center;"> s</span></div>';
+
+      wrap.innerHTML = html;
+
+      // Wire events
+      _wireTableEvents(key);
+    }
+
+    function _wireTableEvents(key) {
+      var wrap = document.getElementById('tableWrap');
+
+      // Text/speaker/weight inputs
+      wrap.addEventListener('input', function(e) {
+        var el = e.target;
+        var tr = el.closest('tr');
+        if (!tr) {
+          // cooldown input
+          if (el.id === 'cooldownInput') {
+            _pools[key].cooldownMs = parseFloat(el.value) * 1000;
+            _markDirty();
+          }
+          return;
+        }
+        var idx = parseInt(tr.dataset.idx, 10);
+        var field = el.dataset.field;
+        if (field === 'text') {
+          _pools[key].barks[idx].text = el.value;
+          _markDirty();
+          // Update char warn
+          var warn = el.parentNode.querySelector('.char-warn');
+          if (el.value.length > 60) {
+            if (!warn) {
+              warn = document.createElement('span');
+              warn.className = 'char-warn';
+              el.parentNode.appendChild(warn);
+            }
+            warn.textContent = el.value.length + ' chars';
+          } else if (warn) {
+            warn.remove();
+          }
+        } else if (field === 'speaker') {
+          _pools[key].barks[idx].speaker = el.value || null;
+          _markDirty();
+        } else if (field === 'weight') {
+          _pools[key].barks[idx].weight = parseFloat(el.value) || 0;
+          _markDirty();
+        }
+      });
+
+      // Select (style)
+      wrap.addEventListener('change', function(e) {
+        var el = e.target;
+        var tr = el.closest('tr');
+        if (!tr) return;
+        var idx = parseInt(tr.dataset.idx, 10);
+        var field = el.dataset.field;
+        if (field === 'style') {
+          _pools[key].barks[idx].style = el.value;
+          _markDirty();
+        } else if (field === 'oneShot') {
+          _pools[key].barks[idx].oneShot = el.checked;
+          _markDirty();
+        }
+      });
+
+      // Delete buttons
+      wrap.addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-delidx]');
+        if (btn) {
+          var idx = parseInt(btn.dataset.delidx, 10);
+          _pools[key].barks.splice(idx, 1);
+          _markDirty();
+          _renderBarkTable(key);
+          _renderPoolHeader(key);
+          _renderCoherence();
+          _renderPoolTree(document.getElementById('poolSearch').value.toLowerCase());
+        }
+      });
+
+      // Add bark button
+      var addBtn = document.getElementById('btnAddBark');
+      if (addBtn) {
+        addBtn.addEventListener('click', function() { _addBark(key); });
+      }
+    }
+
+    function _addBark(key) {
+      _pools[key].barks.push({
+        text: '',
+        speaker: null,
+        style: 'toast',
+        weight: 1,
+        oneShot: false
+      });
+      _markDirty();
+      _renderBarkTable(key);
+      _renderPoolHeader(key);
+      _renderCoherence();
+      _renderPoolTree(document.getElementById('poolSearch').value.toLowerCase());
+      // Focus new row's text input
+      var inputs = document.querySelectorAll('.bw-bark-table input[data-field="text"]');
+      if (inputs.length > 0) inputs[inputs.length - 1].focus();
+    }
+
+    // ── Add / Delete pool ─────────────────────────────────────────
+    function _addPool() {
+      var key = prompt('New pool key (e.g. ambient.newfloor):');
+      if (!key || !key.trim()) return;
+      key = key.trim().toLowerCase();
+      if (_pools[key]) {
+        alert('Pool "' + key + '" already exists.');
+        return;
+      }
+      _pools[key] = { barks: [], cooldownMs: 45000 };
+      _poolOrder.push(key);
+      _markDirty();
+      _renderPoolTree(document.getElementById('poolSearch').value.toLowerCase());
+      _renderCoherence();
+      _selectPool(key);
+    }
+
+    // ── Export ─────────────────────────────────────────────────────
+    function _export() {
+      // Build a clean export structure
+      var output = {};
+      for (var i = 0; i < _poolOrder.length; i++) {
+        var key = _poolOrder[i];
+        var pool = _pools[key];
+        output[key] = {
+          cooldownMs: pool.cooldownMs,
+          barks: pool.barks.map(function(b) {
+            var entry = { text: b.text };
+            if (b.speaker) entry.speaker = b.speaker;
+            if (b.style !== 'toast') entry.style = b.style;
+            if (b.weight !== 1) entry.weight = b.weight;
+            if (b.oneShot) entry.oneShot = true;
+            return entry;
+          })
+        };
+      }
+
+      var json = JSON.stringify(output, null, 2);
+      var blob = new Blob([json], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'barks-export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      _markClean();
+    }
+
+    // ── Fire-roll simulator ───────────────────────────────────────
+    function _runSimulation() {
+      if (!_selectedPool) return;
+      var pool = _pools[_selectedPool];
+      if (!pool || pool.barks.length === 0) return;
+
+      var rolls = parseInt(document.getElementById('simRolls').value, 10) || 100;
+      var counts = new Array(pool.barks.length);
+      for (var i = 0; i < counts.length; i++) counts[i] = 0;
+
+      // Filter out oneShot entries for simulation purposes (they fire once)
+      var available = [];
+      for (var j = 0; j < pool.barks.length; j++) {
+        available.push(j);
+      }
+
+      // Weighted random picks
+      var totalWeight = 0;
+      for (var a = 0; a < available.length; a++) {
+        totalWeight += pool.barks[available[a]].weight;
+      }
+
+      if (totalWeight <= 0) {
+        document.getElementById('simStats').innerHTML = '<span style="color:var(--err);">Total weight is 0</span>';
+        return;
+      }
+
+      for (var r = 0; r < rolls; r++) {
+        var roll = Math.random() * totalWeight;
+        var cum = 0;
+        for (var b = 0; b < available.length; b++) {
+          cum += pool.barks[available[b]].weight;
+          if (roll < cum) {
+            counts[available[b]]++;
+            break;
+          }
+        }
+      }
+
+      // Render histogram
+      var maxCount = 0;
+      for (var m = 0; m < counts.length; m++) {
+        if (counts[m] > maxCount) maxCount = counts[m];
+      }
+
+      var histEl = document.getElementById('simHistogram');
+      histEl.innerHTML = '';
+      for (var h = 0; h < pool.barks.length; h++) {
+        var pct = maxCount > 0 ? (counts[h] / maxCount * 100) : 0;
+        var bar = document.createElement('div');
+        bar.className = 'bw-sim-bar';
+        bar.style.height = Math.max(pct, 2) + '%';
+        bar.style.background = pool.barks[h].oneShot ? 'var(--warn)' : 'var(--accent)';
+        bar.title = '#' + (h + 1) + ': ' + counts[h] + ' hits (' +
+          (counts[h] / rolls * 100).toFixed(1) + '%)';
+        bar.innerHTML = '<span class="bar-label">' + counts[h] + '</span>';
+        histEl.appendChild(bar);
+      }
+
+      // Stats
+      var expected = [];
+      for (var e = 0; e < pool.barks.length; e++) {
+        expected.push((pool.barks[e].weight / totalWeight * 100).toFixed(1));
+      }
+
+      var statsEl = document.getElementById('simStats');
+      statsEl.innerHTML =
+        '<strong>' + rolls + ' rolls</strong><br>' +
+        'Total weight: ' + totalWeight.toFixed(1) + '<br>' +
+        'Entries: ' + pool.barks.length + '<br>' +
+        'Expected: ' + expected.join('%, ') + '%';
+    }
+
+    // ── Coherence panel ───────────────────────────────────────────
+    function _renderCoherence() {
+      var body = document.getElementById('coherenceBody');
+      var html = '';
+      var warnCount = 0;
+      var errCount = 0;
+
+      // 1. Orphan pools (referenced by NPC but empty)
+      var referencedPools = (_manifest && _manifest.byBarkPool)
+        ? Object.keys(_manifest.byBarkPool) : [];
+      var emptyRefs = [];
+      for (var i = 0; i < referencedPools.length; i++) {
+        var rk = referencedPools[i];
+        if (!_pools[rk] || _pools[rk].barks.length === 0) {
+          emptyRefs.push(rk);
+        }
+      }
+      if (emptyRefs.length > 0) {
+        errCount += emptyRefs.length;
+        html += '<div class="bw-coh-section"><h3>Referenced but Empty <span class="bw-coh-badge red">' + emptyRefs.length + '</span></h3>';
+        for (var e = 0; e < emptyRefs.length; e++) {
+          html += '<div class="bw-coh-item err"><span class="pool-link" data-key="' + emptyRefs[e] + '">' + emptyRefs[e] + '</span> — referenced by NPCs but has no barks</div>';
+        }
+        html += '</div>';
+      }
+
+      // 2. Unreferenced pools (exist but no NPC uses them)
+      if (_manifest && _manifest.byBarkPool) {
+        var unreferenced = [];
+        for (var u = 0; u < _poolOrder.length; u++) {
+          var uk = _poolOrder[u];
+          if (!_isNpcAssignablePool(uk)) continue;
+          if (!_manifest.byBarkPool[uk] || _manifest.byBarkPool[uk].length === 0) {
+            unreferenced.push(uk);
+          }
+        }
+        if (unreferenced.length > 0) {
+          warnCount += unreferenced.length;
+          html += '<div class="bw-coh-section"><h3>Unreferenced <span class="bw-coh-badge yellow">' + unreferenced.length + '</span></h3>';
+          for (var ur = 0; ur < unreferenced.length; ur++) {
+            html += '<div class="bw-coh-item warn"><span class="pool-link" data-key="' + unreferenced[ur] + '">' + unreferenced[ur] + '</span> — no NPC barkPool matches</div>';
+          }
+          html += '</div>';
+        }
+      }
+
+      // 3. OneShot singletons
+      var oneShotSingles = [];
+      for (var os = 0; os < _poolOrder.length; os++) {
+        var osk = _poolOrder[os];
+        var osp = _pools[osk];
+        if (osp.barks.length === 1 && osp.barks[0].oneShot) {
+          oneShotSingles.push(osk);
+        }
+      }
+      if (oneShotSingles.length > 0) {
+        warnCount += oneShotSingles.length;
+        html += '<div class="bw-coh-section"><h3>OneShot Singletons <span class="bw-coh-badge yellow">' + oneShotSingles.length + '</span></h3>';
+        for (var oss = 0; oss < oneShotSingles.length; oss++) {
+          html += '<div class="bw-coh-item warn"><span class="pool-link" data-key="' + oneShotSingles[oss] + '">' + oneShotSingles[oss] + '</span> — pool has only 1 oneShot bark (player hears it once, then silence)</div>';
+        }
+        html += '</div>';
+      }
+
+      // 4. Long barks (>60 chars)
+      var longBarks = [];
+      for (var lb = 0; lb < _poolOrder.length; lb++) {
+        var lbk = _poolOrder[lb];
+        var lbp = _pools[lbk];
+        for (var lbi = 0; lbi < lbp.barks.length; lbi++) {
+          if (lbp.barks[lbi].text.length > 60) {
+            longBarks.push({ key: lbk, idx: lbi, len: lbp.barks[lbi].text.length });
+          }
+        }
+      }
+      if (longBarks.length > 0) {
+        warnCount += longBarks.length;
+        html += '<div class="bw-coh-section"><h3>Long Text (&gt;60 chars) <span class="bw-coh-badge yellow">' + longBarks.length + '</span></h3>';
+        for (var lg = 0; lg < longBarks.length; lg++) {
+          html += '<div class="bw-coh-item warn"><span class="pool-link" data-key="' + longBarks[lg].key + '">' + longBarks[lg].key + '</span> #' + (longBarks[lg].idx + 1) + ' — ' + longBarks[lg].len + ' chars (may overflow toast)</div>';
+        }
+        html += '</div>';
+      }
+
+      // 5. Zero-weight barks
+      var zeroWeight = [];
+      for (var zw = 0; zw < _poolOrder.length; zw++) {
+        var zwk = _poolOrder[zw];
+        var zwp = _pools[zwk];
+        for (var zwi = 0; zwi < zwp.barks.length; zwi++) {
+          if (zwp.barks[zwi].weight <= 0) {
+            zeroWeight.push({ key: zwk, idx: zwi });
+          }
+        }
+      }
+      if (zeroWeight.length > 0) {
+        warnCount += zeroWeight.length;
+        html += '<div class="bw-coh-section"><h3>Zero Weight <span class="bw-coh-badge yellow">' + zeroWeight.length + '</span></h3>';
+        for (var z = 0; z < zeroWeight.length; z++) {
+          html += '<div class="bw-coh-item warn"><span class="pool-link" data-key="' + zeroWeight[z].key + '">' + zeroWeight[z].key + '</span> #' + (zeroWeight[z].idx + 1) + ' — weight 0 (will never fire)</div>';
+        }
+        html += '</div>';
+      }
+
+      // Summary
+      if (errCount === 0 && warnCount === 0) {
+        html += '<div class="bw-coh-item ok">All pools pass coherence checks.</div>';
+      }
+
+      // Stats summary at top
+      var totalPools = _poolOrder.length;
+      var totalBarks = 0;
+      for (var tb = 0; tb < _poolOrder.length; tb++) {
+        totalBarks += _pools[_poolOrder[tb]].barks.length;
+      }
+
+      var summary = '<div class="bw-coh-section"><h3>Summary</h3>' +
+        '<div class="bw-coh-item">' + totalPools + ' pools, ' + totalBarks + ' barks</div>';
+      if (errCount > 0) summary += '<div class="bw-coh-item err">' + errCount + ' error(s)</div>';
+      if (warnCount > 0) summary += '<div class="bw-coh-item warn">' + warnCount + ' warning(s)</div>';
+      if (errCount === 0 && warnCount === 0) summary += '<div class="bw-coh-item ok">No issues</div>';
+      summary += '</div>';
+
+      body.innerHTML = summary + html;
+
+      // Update header count
+      document.getElementById('cohCount').innerHTML =
+        (errCount > 0 ? '<span class="bw-coh-badge red">' + errCount + '</span>' : '') +
+        (warnCount > 0 ? '<span class="bw-coh-badge yellow">' + warnCount + '</span>' : '') +
+        (errCount === 0 && warnCount === 0 ? '<span class="bw-coh-badge green">OK</span>' : '');
+
+      // Wire pool links
+      body.addEventListener('click', function(e) {
+        var link = e.target.closest('.pool-link');
+        if (link) {
+          var key = link.dataset.key;
+          if (_pools[key]) {
+            _selectPool(key);
+          }
+        }
+      });
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────
+    function _escAttr(s) {
+      return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+              .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── Search filter ─────────────────────────────────────────────
+    function _wireSearch() {
+      var input = document.getElementById('poolSearch');
+      input.addEventListener('input', function() {
+        _renderPoolTree(input.value.toLowerCase());
+      });
+    }
+
+    // ── beforeunload guard ────────────────────────────────────────
+    window.addEventListener('beforeunload', function(e) {
+      if (_dirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    // ── Boot ──────────────────────────────────────────────────────
+    function _boot() {
+      _initPools();
+      _renderPoolTree('');
+      _loadManifest();
+      _renderCoherence();
+      _wireSearch();
+
+      document.getElementById('btnAddPool').addEventListener('click', _addPool);
+      document.getElementById('btnExport').addEventListener('click', _export);
+      document.getElementById('btnSimFire').addEventListener('click', _runSimulation);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+      _boot();
+    }
+
+  })();
+  </script>
+
+</body>
+</html>

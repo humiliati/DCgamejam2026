@@ -258,11 +258,17 @@ var AdjacentDecorSpawner = (function () {
     var jitter = (SeededRNG.random() - 0.5) * 0.3;
     var anchorU = 0.5 + jitter;
 
+    // Scale — fraction of the wall face the sprite occupies. Matches
+    // existing wall-decor convention (detritus-sprites / bonfire-sprites
+    // use 0.30–0.45). Entries can override per-sprite via entry.scale.
+    var scale = (typeof entry.scale === 'number') ? entry.scale : 0.35;
+
     return {
       spriteId:  entry.sprite,
       placement: entry.placement,
       anchorU:   anchorU,
       anchorV:   anchorV,
+      scale:     scale,
       minDepth:  (typeof entry.minDepth === 'number') ? entry.minDepth : null,
       biomeTint: !!entry.biomeTint
     };
