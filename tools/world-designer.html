@@ -137,6 +137,35 @@
         cursor: pointer; pointer-events: auto;
       }
 
+      /* DOC-116: Lock badges on edges */
+      .dg-lock-warn-badge {
+        background: #3a1a1a; color: #f66; border: 1px solid #a33;
+        border-radius: 3px; padding: 1px 3px; font-size: 11px;
+        pointer-events: auto; cursor: pointer;
+      }
+      .dg-lock-ok-badge {
+        background: #1a2a1a; color: #8c8; border: 1px solid #4a6a4a;
+        border-radius: 3px; padding: 1px 3px; font-size: 11px;
+        pointer-events: auto; cursor: pointer; opacity: 0.7;
+      }
+
+      /* DOC-116: Locked door node indicators */
+      .dg-node.dg-node-locked {
+        box-shadow: 0 0 0 2px #fc8 inset, 0 2px 8px rgba(255,200,100,0.15);
+      }
+      .dg-node.dg-node-ungated {
+        box-shadow: 0 0 0 2px #f44 inset, 0 2px 8px rgba(255,68,68,0.3);
+      }
+      .dg-node.dg-node-locked::before {
+        content: '\1F512';
+        position: absolute; top: 2px; left: 4px;
+        font-size: 10px; opacity: 0.8; z-index: 20;
+      }
+      .dg-node.dg-node-ungated::before {
+        content: '\1F513';
+        color: #f66;
+      }
+
       /* Pass 5b.2: validation overlay badges */
       .dg-node .dg-val-badge {
         position:absolute; top:-8px; right:-8px;

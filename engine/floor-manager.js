@@ -46,6 +46,46 @@ var FloorManager = (function () {
   // Checked before the hard-coded if/else chain in generateCurrentFloor().
   var _registeredBuilders = {};
 
+  // ── Event system (CardAuthority on/off/_emit pattern) ──────────────
+  // Post-generate hook for Layer 3 subscribers (AdjacentDecorSpawner,
+  // future consumers). Minimal surface — wildcard '*' listeners are
+  // intentionally NOT supported here; FloorManager only emits the
+  // 'floor-loaded' event today and adding wildcards invites debug-
+  // logging code to couple to every future event shape.
+  //
+  // Event: 'floor-loaded'
+  //   Payload: { floorId, floorData, depth, fromCache }
+  //   Timing:  fired as the last step of generateCurrentFloor(), after
+  //            spawn resolution + MovementController.init, but before
+  //            generateCurrentFloor returns to its caller. Listeners
+  //            run synchronously — throwing inside a listener is
+  //            caught and warned; no listener can abort the generate
+  //            pass.
+  var _listeners = {};
+
+  function _on(type, fn) {
+    if (!type || typeof fn !== 'function') return;
+    if (!_listeners[type]) _listeners[type] = [];
+    _listeners[type].push(fn);
+  }
+
+  function _off(type, fn) {
+    var arr = _listeners[type];
+    if (!arr) return;
+    for (var i = arr.length - 1; i >= 0; i--) {
+      if (arr[i] === fn) arr.splice(i, 1);
+    }
+  }
+
+  function _emit(type, payload) {
+    var fns = _listeners[type];
+    if (!fns) return;
+    for (var i = 0; i < fns.length; i++) {
+      try { fns[i](payload); }
+      catch (e) { console.warn('[FloorManager] listener error on "' + type + '":', e); }
+    }
+  }
+
   // ── Floor ID helpers ───────────────────────────────────────────────
 
   /**
@@ -2885,6 +2925,21 @@ var FloorManager = (function () {
       onTurnFinish: null
     });
 
+    // Post-generate hook (DOC-117). Fires after contract, enemies,
+    // spawn, and MC are all ready — listeners can safely read the
+    // fully-populated floorData. Wrapped in try so a listener
+    // exception can never abort the floor transition mid-swap.
+    try {
+      _emit('floor-loaded', {
+        floorId:   _floorId,
+        floorData: _floorData,
+        depth:     _depth(_floorId),
+        fromCache: !!fromCache
+      });
+    } catch (e) {
+      console.warn('[FloorManager] _emit floor-loaded failed:', e);
+    }
+
     return { x: spawn.x, y: spawn.y, dir: spawnDir };
   }
 
@@ -3175,6 +3230,11 @@ var FloorManager = (function () {
     // Cache
     clearCache: clearCache,
     invalidateCache: invalidateCache,
+
+    // Event subscription (DOC-117 post-generate hook).
+    // Supported event: 'floor-loaded' — see _listeners docstring above.
+    on:  _on,
+    off: _off,
 
     // Torch decor sync (live wall-decor updates on extinguish/relight)
     syncTorchDecor: syncTorchDecor,

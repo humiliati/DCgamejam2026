@@ -371,6 +371,14 @@ i18n.register('en', {
   'quest.sidequest._template.summary': 'Details pending.',
   'quest.sidequest._template.step.1.label': 'Reach the marked location',
 
+  // DOC-107 follow-up — Act 1 capstone. Flag-setter quest that produces
+  // `act2_unlocked: true` when `hero_defeated` becomes true. Consumed by
+  // the Floor 3 → Floor 4 composite gate per docs/GATE_TAXONOMY.md §6.2.
+  // Single-step main quest; activation wired in DOC-107 Phase 7.
+  'quest.main.capstone.title':        'The Hero\u2019s Last Mess',
+  'quest.main.capstone.summary':      'The hero\u2019s trail ends somewhere below the boardwalk. When the dust settles, the dungeons beyond the Vivec Arch won\u2019t need a scavenger — they\u2019ll need a witness. Finish the cleanup. See what\u2019s left.',
+  'quest.main.capstone.step.1.label': 'Confirm the hero is down',
+
   // DOC-107 Phase 5 demo sidequest — Soft Cellar pentagram wash.
   // Exercises the full minigame-exit adapter chain: SpraySystem
   // (cleanliness >= 1.0) → PickupActions.onMinigameExit → QuestChain

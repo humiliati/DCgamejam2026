@@ -509,6 +509,17 @@
     if (entities > 0) parts.push(entities + ' ent');
     if (rooms > 0) parts.push(rooms + ' rm');
     if (doors > 0) parts.push(doors + ' dr');
+    // Locked door count + gate coverage
+    var lockedDoors = _findLockedDoors(floor);
+    if (lockedDoors.length > 0) {
+      var ungated = lockedDoors.filter(function(d) {
+        return !_resolveGateForTile(floor, d.x, d.y);
+      }).length;
+      var lockColor = ungated > 0 ? '#f66' : '#fc8';
+      var lockLabel = '\uD83D\uDD12 ' + lockedDoors.length;
+      if (ungated > 0) lockLabel += ' <span style="color:#f66;">(' + ungated + ' ungated!)</span>';
+      parts.push('<span style="color:' + lockColor + ';">' + lockLabel + '</span>');
+    }
     // DOC-113: sprint quest badge
     var quests = state.questMap[floor.floorId] || [];
     var sprintQ = quests.filter(function(q) { return q.isFetch; });
@@ -525,7 +536,11 @@
     var d = depthOf(id);
     var el = document.createElement('div');
     var sprintClass = (state.questMap[id] && state.questMap[id].some(function(q) { return q.isFetch; })) ? ' dg-node-sprint' : '';
-    el.className = 'dg-node depth-' + Math.min(d, 3) + sprintClass;
+    var lockedDoors = _findLockedDoors(floor);
+    var lockClass = lockedDoors.length > 0 ? ' dg-node-locked' : '';
+    var ungatedLocks = lockedDoors.filter(function(d) { return !_resolveGateForTile(floor, d.x, d.y); });
+    if (ungatedLocks.length > 0) lockClass += ' dg-node-ungated';
+    el.className = 'dg-node depth-' + Math.min(d, 3) + sprintClass + lockClass;
     el.id = 'dg-node-' + id.replace(/\./g, '_');
     el.style.left = pos.x + 'px';
     el.style.top  = pos.y + 'px';
@@ -810,6 +825,50 @@
   var _FACTION_IDS = ['mss', 'pinkerton', 'jesuit', 'bprd'];
   var _FACTION_TIERS = ['hated','unfriendly','neutral','friendly','allied','exalted'];
 
+  // ── DOC-116: Locked door scanner + gate resolution for graph ──
+
+  var _LOCKED_DOOR_TILE = 24;
+  // Door-like tile IDs (mirrors commands-gates.js isDoorLike)
+  var _DOOR_TILES = [2, 3, 4, 5, 6, 14, 24];
+
+  function _findLockedDoors(floor) {
+    var cells = [];
+    var grid = floor.grid;
+    if (!grid) return cells;
+    for (var y = 0; y < grid.length; y++) {
+      for (var x = 0; x < (grid[y] ? grid[y].length : 0); x++) {
+        if (grid[y][x] === _LOCKED_DOOR_TILE) {
+          cells.push({ x: x, y: y });
+        }
+      }
+    }
+    return cells;
+  }
+
+  // DOC-116 3-tier gate resolution (mirrors commands-gates.js resolveGate)
+  function _resolveGateForTile(floor, x, y) {
+    var key = x + ',' + y;
+    // Tier 1: Tile gate (explicit override)
+    var gates = floor.gates || {};
+    if (gates[key] && gates[key].override === true) {
+      return { tier: 'tile', gate: gates[key] };
+    }
+    // Tier 2: Edge gate (from doorTargets connection)
+    var dt = floor.doorTargets || {};
+    var targetFloorId = dt[key];
+    if (targetFloorId) {
+      var edgeGates = floor.edgeGates || {};
+      if (edgeGates[targetFloorId]) {
+        return { tier: 'edge', gate: edgeGates[targetFloorId] };
+      }
+    }
+    // Tier 3: Floor gate (whole-floor fallback)
+    if (floor.floorGate) {
+      return { tier: 'floor', gate: floor.floorGate };
+    }
+    return null;
+  }
+
   function _gateLabel(g) {
     if (!g) return 'none';
     var icon = _GATE_ICONS[g.type] || '';
@@ -820,6 +879,42 @@
     else if (g.type === 'schedule') det = g.openHour + ':00\u2013' + g.closeHour + ':00';
     else if (g.type === 'breakable') det = (g.suit || 'any') + ' \u00D7' + (g.hits || 1);
     return icon + ' ' + g.type + (det ? ' (' + det + ')' : '');
+  }
+
+  // ── Locked door section for floor inspector ────────────────
+  function _buildLockedDoorSection(floor) {
+    var locked = _findLockedDoors(floor);
+    if (locked.length === 0) return '';
+
+    var dt = floor.doorTargets || {};
+    var rows = locked.map(function(d) {
+      var key = d.x + ',' + d.y;
+      var resolved = _resolveGateForTile(floor, d.x, d.y);
+      var target = dt[key];
+      var targetHtml = target
+        ? ' &rarr; <a class="jump" data-jump="' + target + '">' + target + '</a>'
+        : ' <span style="color:#789;">(no target)</span>';
+
+      if (resolved) {
+        var tierColor = resolved.tier === 'tile' ? '#9cf' : resolved.tier === 'edge' ? '#fc8' : '#8c8';
+        return '<div class="door-row" style="margin:3px 0;">' +
+          '\uD83D\uDD12 <b>' + key + '</b>' + targetHtml +
+          '<br><span style="color:' + tierColor + '; font-size:10px; margin-left:18px;">' +
+          '[' + resolved.tier + '] ' + _gateLabel(resolved.gate) + '</span></div>';
+      } else {
+        return '<div class="door-row" style="margin:3px 0;">' +
+          '\uD83D\uDD13 <b style="color:#f66;">' + key + '</b>' + targetHtml +
+          '<br><span style="color:#f66; font-size:10px; margin-left:18px;">' +
+          '\u26A0 NO GATE — player cannot open this door</span></div>';
+      }
+    }).join('');
+
+    var ungated = locked.filter(function(d) { return !_resolveGateForTile(floor, d.x, d.y); }).length;
+    var headerColor = ungated > 0 ? '#f66' : '#fc8';
+    return '<h3 style="margin-top:14px; color:' + headerColor + ';">' +
+      '\uD83D\uDD12 Locked Doors (' + locked.length + ')' +
+      (ungated > 0 ? ' <span style="color:#f66; font-size:11px;">— ' + ungated + ' ungated!</span>' : '') +
+      '</h3>' + rows;
   }
 
   // ── Edge inspector (DOC-116 §5.1) ─────────────────────────
@@ -1034,10 +1129,12 @@
       var floor = state.floors[e.from];
       if (!floor) return;
       var eg = (floor.edgeGates || {})[e.to];
-      // Remove existing gate overlay if present
-      e.conn.removeOverlays && e.conn.getOverlays && Object.keys(e.conn.getOverlays()).forEach(function(oid) {
-        if (oid.indexOf('gate-') === 0) e.conn.removeOverlay(oid);
-      });
+      // Remove existing gate/lock overlays
+      try {
+        e.conn.removeOverlays && e.conn.getOverlays && Object.keys(e.conn.getOverlays()).forEach(function(oid) {
+          if (oid.indexOf('gate-') === 0 || oid.indexOf('lock-') === 0) e.conn.removeOverlay(oid);
+        });
+      } catch (ex) {}
       if (eg) {
         var icon = _GATE_ICONS[eg.type] || '\uD83D\uDD12';
         try {
@@ -1048,6 +1145,31 @@
             location: 0.3
           }]);
         } catch (ex) { /* jsPlumb overlay API varies by version */ }
+      }
+      // Check if target floor has ungated locked doors (warning badge at 0.7)
+      var tgtFloor = state.floors[e.to];
+      if (tgtFloor) {
+        var locked = _findLockedDoors(tgtFloor);
+        var ungated = locked.filter(function(d) { return !_resolveGateForTile(tgtFloor, d.x, d.y); });
+        if (ungated.length > 0) {
+          try {
+            e.conn.addOverlay(['Label', {
+              label: '\uD83D\uDD13' + ungated.length,
+              id: 'lock-warn-' + e.from + '-' + e.to,
+              cssClass: 'dg-lock-warn-badge',
+              location: 0.7
+            }]);
+          } catch (ex) {}
+        } else if (locked.length > 0) {
+          try {
+            e.conn.addOverlay(['Label', {
+              label: '\uD83D\uDD12' + locked.length,
+              id: 'lock-ok-' + e.from + '-' + e.to,
+              cssClass: 'dg-lock-ok-badge',
+              location: 0.7
+            }]);
+          } catch (ex) {}
+        }
       }
     });
   }
@@ -1245,6 +1367,7 @@
       '<h3 style="margin-top:14px;">Doors (' + Object.keys(dt).length + ')</h3>' +
       dtRows +
       (kids.length ? '<h3 style="margin-top:14px;">Proc-gen slots (' + kids.length + ')</h3>' + kidRows : '') +
+      _buildLockedDoorSection(f) +
       _buildQuestSection(id) +
       _buildValidationSection(id);
     Array.prototype.forEach.call(body.querySelectorAll('a.jump'), function(a) {

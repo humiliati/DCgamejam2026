@@ -149,6 +149,12 @@ var Raycaster = (function () {
   var _rooms = null;        // Room list for chamber height lookups
   var _cellHeights = null;  // Per-cell height overrides (door entrance caps)
   var _wallDecor = null;    // Per-cell wall decoration sprites (set per floor)
+  // DOC-117 Adjacent Tile Decor — floor-plane sibling to _wallDecor.
+  // Populated by AdjacentDecorSpawner after each 'floor-loaded' event
+  // in FloorManager. Entries keyed by [mapY][mapX] → Array of decor
+  // items. Null / empty rows are skipped by RaycasterSprites, so an
+  // empty map is a no-op (scaffolding state before sprites ship).
+  var _floorDecor = null;
 
   // ── N-layer compositing ──────────────────────────────────────────
   // Pre-allocated buffer for multi-hit DDA results. Avoids per-frame
@@ -434,7 +440,62 @@ var Raycaster = (function () {
     _rooms = rooms || null;
     _cellHeights = cellHeights || null;
     _wallDecor = wallDecor || null;
+    // setContract is called by FloorManager before the 'floor-loaded'
+    // event fires, so clear any stale decor from the previous floor
+    // here. AdjacentDecorSpawner will repopulate it via setFloorDecor
+    // once it receives the event. Between these two calls the map
+    // is null — RaycasterSprites treats that as "no floor decor".
+    _floorDecor = null;
     _clearAlphaRangeCache();
+  }
+
+  /**
+   * Set the per-floor adjacent-tile decor map (DOC-117).
+   * Called by AdjacentDecorSpawner after a 'floor-loaded' event.
+   * Shape: floorDecor[mapY][mapX] → Array of decor items. Passing
+   * null clears the previous floor's decor (useful for tooling).
+   */
+  function setFloorDecor(floorDecor) {
+    _floorDecor = floorDecor || null;
+  }
+
+  /**
+   * Merge additional wall-decor entries into the existing _wallDecor
+   * map (DOC-117 spawner output). Non-destructive — existing entries
+   * authored at floor-gen time (torches, door frames, mailbox plates)
+   * are preserved; spawner entries append to the per-face array.
+   *
+   * additions shape matches _wallDecor: additions[mapY][mapX][face]
+   * is an Array of decor items. Null or undefined additions → no-op.
+   *
+   * Called by AdjacentDecorSpawner after building its overlay from
+   * the empty Tier 1 catalog (which produces zero entries in the
+   * scaffolding state — this function is a no-op until sprites land).
+   */
+  function mergeWallDecor(additions) {
+    if (!additions) return;
+    if (!_wallDecor) _wallDecor = [];
+    for (var y in additions) {
+      if (!Object.prototype.hasOwnProperty.call(additions, y)) continue;
+      var srcRow = additions[y];
+      if (!srcRow) continue;
+      if (!_wallDecor[y]) _wallDecor[y] = {};
+      var dstRow = _wallDecor[y];
+      for (var x in srcRow) {
+        if (!Object.prototype.hasOwnProperty.call(srcRow, x)) continue;
+        var srcCell = srcRow[x];
+        if (!srcCell) continue;
+        if (!dstRow[x]) dstRow[x] = {};
+        var dstCell = dstRow[x];
+        for (var face in srcCell) {
+          if (!Object.prototype.hasOwnProperty.call(srcCell, face)) continue;
+          var srcItems = srcCell[face];
+          if (!srcItems || !srcItems.length) continue;
+          if (!dstCell[face]) dstCell[face] = [];
+          for (var i = 0; i < srcItems.length; i++) dstCell[face].push(srcItems[i]);
+        }
+      }
+    }
   }
 
   /**
@@ -3349,7 +3410,13 @@ var Raycaster = (function () {
       return { dist: _zBufferPedDist, topY: _zBufferPedTopY,
                mx:   _zBufferPedMX,   my:   _zBufferPedMY };
     },
-    wallDecor:  function () { return _wallDecor; }
+    wallDecor:  function () { return _wallDecor; },
+    // DOC-117 — floor-plane decor populated by AdjacentDecorSpawner.
+    // Lazy getter so setFloorDecor() swaps propagate on the next frame
+    // without rebinding. RaycasterSprites is free to ignore this
+    // getter while its consumer renderer is not yet implemented —
+    // returning null is a legal "no decor to render" state.
+    floorDecor: function () { return _floorDecor; }
   });
 
   // ── Pause / resume (ADR: docs/RAYCASTER_PAUSE_RESUME_ADR.md) ────────
@@ -3425,6 +3492,8 @@ var Raycaster = (function () {
     render: render,
     setBiomeColors: setBiomeColors,
     setContract: setContract,
+    setFloorDecor:   setFloorDecor,   // DOC-117 — AdjacentDecorSpawner writes here after floor-loaded
+    mergeWallDecor:  mergeWallDecor,  // DOC-117 — non-destructive merge of spawner wall entries
     setBloodFloorId: function (id) { _bloodFloorId = id; },
     castScreenRay: RaycasterProjection.castScreenRay,
     setRenderScale: setRenderScale,

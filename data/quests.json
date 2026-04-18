@@ -27,7 +27,7 @@
       "id": "main.<act>.<slug>", "kind": "main",
       "title": "quest.main.<slug>.title", "summary": "quest.main.<slug>.summary",
       "act": 1, "steps": [], "rewards": {},
-      "notes": "Main-quest spine — one per Act beat."
+      "notes": "Main-quest spine - one per Act beat."
     },
     "faction": {
       "id": "faction.<faction>.<tier>", "kind": "faction",
@@ -42,7 +42,7 @@
     "promenade_home_door":  { "type": "literal", "floorId": "1",   "x": 22, "y": 27 },
     "dispatcher_entity":    { "type": "entity",  "module": "DispatcherChoreography", "method": "getEntity", "floorId": "1" }
   },
-  "_anchorNotes": "Named anchors. Resolved by QuestRegistry.resolveAnchor(id). DOC-107 Phase 6: floor-scoped anchors live in tools/floor-payloads/<floorId>.quest.json sidecars (distributed anchors) and are unioned into _namedAnchors at init. `home_work_keys_chest` migrated to 1.6.quest.json; `pentagram_chamber` authored in 1.3.1.quest.json.",
+  "_anchorNotes": "Named anchors. Resolved by QuestRegistry.resolveAnchor(id). DOC-107 Phase 6: floor-scoped anchors live in tools/floor-payloads/<floorId>.quest.json sidecars (distributed anchors) and are unioned into _namedAnchors at init. home_work_keys_chest migrated to 1.6.quest.json; pentagram_chamber authored in 1.3.1.quest.json.",
   "quests": [
     {
       "id": "side.1.3.1.pentagram_wash",
@@ -213,7 +213,25 @@
       ],
       "rewards": { "gold": 80, "items": [], "favor": { "bprd": 75, "jesuit": 25 }, "flags": { "side_wake_dispatch_done": true } },
       "markerColor": "#e8a",
-      "_notes": "DOC-113 Phase B sprint sidequest #2. Harder: Hero's Wake B1, 90s timer, Crusader hero. Gated behind watchman_roll_call. BPRD document retrieval — ties into conspiracy layer."
+      "_notes": "DOC-113 Phase B sprint sidequest #2. Harder: Hero's Wake B1, 90s timer, Crusader hero. Gated behind watchman_roll_call. BPRD document retrieval - ties into conspiracy layer."
+    },
+    {
+      "id": "main.act1.capstone",
+      "kind": "main",
+      "act": 1,
+      "title": "quest.main.capstone.title",
+      "summary": "quest.main.capstone.summary",
+      "giver": { "npcId": null, "floorId": null },
+      "prereq": { "flags": {}, "minReadiness": null, "minReputation": {} },
+      "steps": [
+        { "id": "step.hero_defeat", "kind": "flag",
+          "label": "quest.main.capstone.step.1.label",
+          "target": null,
+          "advanceWhen": { "kind": "flag", "flag": "hero_defeated", "value": true } }
+      ],
+      "rewards": { "gold": 0, "items": [], "favor": {}, "flags": { "act2_unlocked": true, "act1_complete": true } },
+      "markerColor": null,
+      "_notes": "DOC-107 follow-up - canonical setter for the act2_unlocked flag referenced by the Floor 3 -> Floor 4 composite gate per docs/GATE_TAXONOMY.md S2.6 + S6.2. Single flag-kind step: advances when hero_defeated becomes true (set by combat engine on Act 1 final boss defeat). On completion, rewards.flags declares act2_unlocked:true + act1_complete:true. Predicate also satisfies QuestRegistry.flagReferenced('hero_defeated') so map-editor gate authoring can compose composite gates requiring both a key AND Act 1 completion. ACTIVATION: this quest must be set active via QuestChain.setActive('main.act1.capstone') for its reward side-effects to fire; DOC-107 Phase 7 (Act 2 content load-in) will wire the main-quest auto-accept flow. Pre-Phase-7, callers can invoke setActive from a scripted late-Act-1 trigger, or accept that the flag stays falsy (which is the intended behavior - Act 2 content is not authored yet). Either way, the quest corpus now has a single declared source-of-truth for act2_unlocked, which unblocks bo validate-gates + gate authoring referencing this flag."
     }
   ]
 }

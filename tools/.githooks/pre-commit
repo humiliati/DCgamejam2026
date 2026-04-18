@@ -197,6 +197,42 @@ if git diff --cached --name-only | grep -qxF 'data/enemies.json'; then
   echo "[pre-commit] data/enemies.js regenerated + staged." >&2
 fi
 
+# ── 1g. Enemy-decks + enemy-cards sidecars auto-regen ──────
+# DOC-110 P5.2 (Deck Composer). Mirrors §1f. The Composer tab in
+# tools/enemy-hydrator.html loads BOTH enemy-decks.js (per-enemy
+# deck map) AND enemy-cards.js (EATK-### pool) at file:// URLs, so
+# their sidecars must stay in lockstep with the source JSON.
+# Generators themselves do light shape-checking — unknown ENM-###
+# keys, missing cards arrays, malformed EATK ids block the commit.
+#
+# Shape: data/enemy-decks.js and data/enemy-cards.js are
+# AUTO-GENERATED — hand edits are always wrong.
+if git diff --cached --name-only | grep -qxF 'data/enemy-decks.json'; then
+  echo "[pre-commit] data/enemy-decks.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-enemy-decks-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Enemy-decks sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-enemy-decks-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/enemy-decks.js"
+  echo "[pre-commit] data/enemy-decks.js regenerated + staged." >&2
+fi
+
+if git diff --cached --name-only | grep -qxF 'data/enemy-cards.json'; then
+  echo "[pre-commit] data/enemy-cards.json staged — regenerating sidecar..." >&2
+  if ! node "$repo_root/tools/generate-enemy-cards-sidecar.js"; then
+    echo "" >&2
+    echo "[pre-commit] Enemy-cards sidecar regen FAILED." >&2
+    echo "  - Run manually: node tools/generate-enemy-cards-sidecar.js" >&2
+    echo "  - Override with: git commit --no-verify" >&2
+    exit 1
+  fi
+  git add "$repo_root/data/enemy-cards.js"
+  echo "[pre-commit] data/enemy-cards.js regenerated + staged." >&2
+fi
+
 # ── 2. File-size budget check ───────────────────────────────
 node "$repo_root/tools/check-budgets.js" || {
   echo "" >&2

@@ -15,8 +15,8 @@
          - Stats tab .............. full CRUD (sliders + selects)
          - DPS calc + tier-band ... live, red-if-out-of-band
          - Balance matrix ......... HP × DPS scatter (bottom panel)
-         - Export ................. download modified enemies.json
-         - Deck Composer tab ...... STUB (§4.5 — Phase 5.2)
+         - Export ................. download modified enemies.json + enemy-decks.json
+         - Deck Composer tab ...... EATK pool, deck slot, hydrate-from-stats (Phase 5.2 shipped)
          - Intent Curve tab ....... STUB (§4.5 — Phase 5.3)
          - Loot tab ............... STUB (§4.5 — Phase 5.4)
          - Reanim Behavior tab .... STUB (§4.5 — Phase 5.5)
@@ -220,6 +220,74 @@
       padding: 60px 20px;
     }
     .eh-tab-body.stub h3 { color: var(--text-dim); margin-bottom: 8px; }
+
+    /* ─── Deck Composer (Phase 5.2) ─── */
+    .eh-deck-ctrls {
+      display: flex; align-items: center; gap: 12px;
+      padding-bottom: 10px; margin-bottom: 12px;
+      border-bottom: 1px solid var(--border-dim);
+      font-size: 11px;
+    }
+    .eh-deck-ctrls .eh-deck-head { color: var(--text-dim); font-weight: 600; }
+    .eh-deck-ctrls .spacer { flex: 1; }
+    .eh-deck-ctrls label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+    .eh-deck-ctrls select, .eh-deck-ctrls input { font: inherit; padding: 3px 6px; }
+    .eh-deck-ctrls button { font: inherit; padding: 5px 10px; cursor: pointer; }
+    .eh-deck-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      min-height: 340px;
+    }
+    .eh-deck-body section { display: flex; flex-direction: column; min-height: 0; }
+    .eh-deck-body h4 { font-size: 11px; margin: 0 0 6px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .eh-deck-body h4 .muted { color: var(--muted); text-transform: none; font-weight: normal; margin-left: 6px; }
+    #deck-pool, #deck-slot, #deck-preview {
+      flex: 1; overflow-y: auto; min-height: 200px;
+      padding: 6px; border: 1px solid var(--border-dim); border-radius: 4px;
+      background: var(--bg-base);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .eh-eatk {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      gap: 6px; align-items: center;
+      padding: 5px 8px; border-radius: 3px;
+      background: var(--bg-panel); border: 1px solid var(--border-dim);
+      font-size: 11px; cursor: pointer;
+      transition: background-color 0.08s, border-color 0.08s;
+    }
+    .eh-eatk:hover { background: var(--bg-hover); border-color: var(--border-mid); }
+    .eh-eatk .emoji { font-size: 14px; text-align: center; }
+    .eh-eatk .meta { display: flex; flex-direction: column; gap: 1px; }
+    .eh-eatk .meta .name { color: var(--text); }
+    .eh-eatk .meta .sub { color: var(--muted); font-size: 9px; letter-spacing: 0.04em; }
+    .eh-eatk .meta .sub .intent { color: var(--text-dim); }
+    .eh-eatk .weight { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .eh-eatk.deck-row .weight { color: var(--text-dim); }
+    .eh-eatk.suit-spade   { border-left: 2px solid #4a5a6a; }
+    .eh-eatk.suit-club    { border-left: 2px solid #5a7050; }
+    .eh-eatk.suit-diamond { border-left: 2px solid #b06a3a; }
+    .eh-eatk.suit-heart   { border-left: 2px solid #a04854; }
+    .eh-eatk.preview-add    { border-left-width: 4px; background: rgba(74,140,74, 0.08); }
+    .eh-eatk.preview-remove { border-left-width: 4px; background: rgba(160,60,60, 0.08); opacity: 0.7; text-decoration: line-through; }
+    #deck-note {
+      margin-top: 6px; width: 100%; box-sizing: border-box;
+      font: inherit; color: var(--text); background: var(--bg-base);
+      border: 1px solid var(--border-dim); border-radius: 3px;
+      padding: 6px 8px; resize: vertical; min-height: 36px;
+    }
+    .eh-deck-preview-ctrls {
+      display: flex; gap: 8px; margin-top: 6px;
+    }
+    .eh-deck-preview-ctrls button {
+      flex: 1; font: inherit; padding: 5px 10px; cursor: pointer;
+    }
+    .eh-deck-preview-ctrls button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .eh-deck-empty {
+      color: var(--muted); font-style: italic; text-align: center;
+      padding: 40px 10px; font-size: 11px;
+    }
 
     /* ─── Stats editor ─── */
     .eh-stats-grid {
@@ -432,7 +500,7 @@
 
       <div id="tabs" class="eh-tabs" style="display:none;">
         <div class="eh-tab active" data-tab="stats">Stats</div>
-        <div class="eh-tab stub" data-tab="deck">Deck</div>
+        <div class="eh-tab" data-tab="deck">Deck</div>
         <div class="eh-tab stub" data-tab="intent">Intent Curve</div>
         <div class="eh-tab stub" data-tab="loot">Loot</div>
         <div class="eh-tab stub" data-tab="reanim">Reanim</div>
@@ -566,8 +634,39 @@
         </div>
       </div>
 
-      <!-- Stub tabs -->
-      <div id="tab-deck"   class="eh-tab-body stub" style="display:none;"><h3>Deck Composer</h3><p>Drag-drop from <code>data/enemy-cards.json</code> (EATK card pool) with "Hydrate from stats" heuristic.<br/>Phase 5.2 — ships next.</p></div>
+      <!-- Deck Composer tab (Phase 5.2) — see tools/js/enemy-hydrator-deck.js -->
+      <div id="tab-deck" class="eh-tab-body" style="display:none;">
+        <div class="eh-deck-ctrls">
+          <span class="eh-deck-head">Deck for <code id="deck-enemy-id">—</code></span>
+          <span class="spacer"></span>
+          <label>Pattern
+            <select id="deck-pattern"><option value="random">random</option><option value="sequence">sequence</option></select>
+          </label>
+          <label>Greed
+            <input type="number" id="deck-greed" min="1" max="5" step="1" style="width:50px;" title="CardStack enemy stack size. Default 2. Bosses often 3."/>
+          </label>
+          <button id="deck-hydrate" title="Propose a deck from this enemy's stats (§4.5 heuristics)">Hydrate from stats</button>
+        </div>
+        <div class="eh-deck-body">
+          <section class="eh-deck-pool">
+            <h4>EATK Pool <span class="muted" id="deck-pool-count">—</span></h4>
+            <div id="deck-pool"></div>
+          </section>
+          <section class="eh-deck-slot">
+            <h4>This Enemy's Deck <span class="muted" id="deck-slot-count">0 cards</span></h4>
+            <div id="deck-slot"></div>
+            <textarea id="deck-note" placeholder="Design intent — e.g. 'Rend loop with occasional Bone Brace'" rows="2"></textarea>
+          </section>
+          <section class="eh-deck-preview">
+            <h4>Proposal <span class="muted" id="deck-preview-meta"></span></h4>
+            <div id="deck-preview"></div>
+            <div class="eh-deck-preview-ctrls">
+              <button id="deck-preview-apply" disabled>Apply</button>
+              <button id="deck-preview-cancel" disabled>Cancel</button>
+            </div>
+          </section>
+        </div>
+      </div>
       <div id="tab-intent" class="eh-tab-body stub" style="display:none;"><h3>Intent Curve</h3><p>State-machine editor: calm → focused → angry → enraged, per-HP%-threshold pin.<br/>Phase 5.3 — ships next.</p></div>
       <div id="tab-loot"   class="eh-tab-body stub" style="display:none;"><h3>Loot Cross-Ref</h3><p>Cross-refs <code>data/loot-tables.json</code> for expected-value gold + item roll.<br/>Phase 5.4 — ships next.</p></div>
       <div id="tab-reanim" class="eh-tab-body stub" style="display:none;"><h3>Reanim Behavior</h3><p>Pulls <code>tools/archetype-registry.json</code> (shipped P1.1.2) for defaults by type regex.<br/>Phase 5.5 — ships next.</p></div>
@@ -620,6 +719,8 @@
 
   <!-- ── Data sidecars ───────────────────────────────────────── -->
   <script src="../data/enemies.js"></script>
+  <script src="../data/enemy-cards.js"></script>
+  <script src="../data/enemy-decks.js"></script>
 
   <!-- ── App ─────────────────────────────────────────────────── -->
   <script>
@@ -786,9 +887,15 @@
       renderSidebar();
       $('placeholder').style.display = 'none';
       $('tabs').style.display = 'flex';
-      $('tab-stats').style.display = 'block';
-      $('tab-stats').classList.add('active');
+      // Only force Stats tab if no tab is currently active (first select).
+      // Preserves the user's tab context when clicking a different enemy.
+      var activeTab = document.querySelector('.eh-tab.active');
+      if (!activeTab) {
+        $('tab-stats').style.display = 'block';
+        $('tab-stats').classList.add('active');
+      }
       populateEditor(row);
+      document.dispatchEvent(new CustomEvent('enemy-hydrator:select', { detail: { id: id, row: row } }));
     }
 
     function findRow(id) {
@@ -1109,18 +1216,34 @@
       return v.toFixed(1).replace(/\.0$/, '');
     }
 
+    // ── Extra exporters (registered by Composer, etc.) ────────
+    // Each entry: { name: string, fn: () => ({ filename, data } | null) }
+    // The fn may return null to opt-out on any given export (e.g. deck
+    // state is clean — no deck file to emit).
+    var _extraExports = [];
+
     // ── Header wiring (export / copy / revert) ────────────────
     function wireHeader() {
       $('btn-export').addEventListener('click', function () {
-        var txt = serialize(_rows);
-        var blob = new Blob([txt], { type: 'application/json' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'enemies.json';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
-        toast('Exported enemies.json — drop it into data/.', 'ok');
+        var exports = [{ filename: 'enemies.json', data: serialize(_rows) }];
+        _extraExports.forEach(function (e) {
+          try {
+            var out = e.fn();
+            if (out && out.filename && typeof out.data === 'string') exports.push(out);
+          } catch (err) {
+            toast('Exporter "' + e.name + '" failed: ' + err.message, 'err');
+          }
+        });
+        exports.forEach(function (ex) {
+          var blob = new Blob([ex.data], { type: 'application/json' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = ex.filename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+        });
+        toast('Exported ' + exports.length + ' file(s) — drop into data/.', 'ok');
       });
 
       $('btn-copy').addEventListener('click', function () {
@@ -1144,6 +1267,7 @@
         }
         renderSidebar();
         renderMatrix();
+        document.dispatchEvent(new CustomEvent('enemy-hydrator:revert'));
       });
 
       window.addEventListener('beforeunload', function (e) {
@@ -1223,7 +1347,36 @@
       eval: evalTierBand,
       dps:  computeDPS
     };
+
+    // ── Integration API for sibling modules (e.g. Deck Composer) ──
+    // Loose coupling via a small singleton. Composer modules:
+    //   1. Call markDirty() when their state diverges from disk so
+    //      the Revert button and beforeunload guard light up.
+    //   2. Call registerExporter(name, fn) to piggyback on the Export
+    //      JSON button — fn returns { filename, data } or null to skip.
+    //   3. Listen for 'enemy-hydrator:select' + 'enemy-hydrator:revert'
+    //      events on document (the main IIFE dispatches them).
+    window.EnemyHydrator = {
+      markDirty: function () { markDirty(); },
+      clearDirty: function () {
+        // Used by Composer after Revert has rebuilt its state from disk
+        // and the main state is also clean.
+        _dirty = false;
+        setStatus('Reverted to disk');
+        $('btn-revert').disabled = true;
+      },
+      findEnemy: findRow,
+      currentSelectedId: function () { return _selectedId; },
+      currentRow: function () { return findRow(_selectedId); },
+      registerExporter: function (name, fn) {
+        _extraExports.push({ name: String(name || 'anon'), fn: fn });
+      },
+      toast: toast
+    };
   })();
   </script>
+
+  <!-- ── Phase 5.2 — Deck Composer module ─────────────────────── -->
+  <script src="./js/enemy-hydrator-deck.js"></script>
 </body>
 </html>
