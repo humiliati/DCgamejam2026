@@ -196,6 +196,40 @@
     return out;
   }
 
+  // Theoretical max matches achievable for a deck of `deckSize` cards
+  // against `recommendedExpanded` (the already-tiled recommended curve).
+  // Closed-form: each deck slot s plays on a specific set of rounds R_s.
+  // For slot s, the best single intent match-count is the mode of the
+  // recommended intents at those rounds. Sum of modes = ceiling.
+  //
+  // This matters because size-3 decks looping over a 6-slot recommended
+  // curve are *structurally* capped — e.g. a size-3 deck against
+  // elite/tanky has ceiling 3/6 regardless of how it's authored. Showing
+  // ceiling alongside `total` keeps the "match" number interpretable.
+  function ceilingFor(recommendedExpanded, deckSize) {
+    if (deckSize <= 0 || !recommendedExpanded || recommendedExpanded.length === 0) return 0;
+    var bySlot = {};
+    for (var r = 0; r < recommendedExpanded.length; r++) {
+      var s = roundToSlot(r, deckSize);
+      if (s < 0) continue;
+      var intent = recommendedExpanded[r].intent;
+      if (!bySlot[s]) bySlot[s] = {};
+      bySlot[s][intent] = (bySlot[s][intent] || 0) + 1;
+    }
+    var ceiling = 0;
+    for (var slot in bySlot) {
+      if (!Object.prototype.hasOwnProperty.call(bySlot, slot)) continue;
+      var freqs = bySlot[slot];
+      var best = 0;
+      for (var it in freqs) {
+        if (!Object.prototype.hasOwnProperty.call(freqs, it)) continue;
+        if (freqs[it] > best) best = freqs[it];
+      }
+      ceiling += best;
+    }
+    return ceiling;
+  }
+
   // ── View model ────────────────────────────────────────────
   // Input:  row from enemies.json, deckEntry from enemy-decks.json,
   //         cardLookup (EATK→card), rounds (number).
@@ -220,7 +254,7 @@
           rounds:      rounds,
           recKey:      rec.key,
           tolerance:   rec.tolerance,
-          match:       { perRound: [], total: 0 }
+          match:       { perRound: [], total: 0, ceiling: 0 }
         }
       };
     }
@@ -243,6 +277,8 @@
       if (m) total++;
     }
 
+    var ceiling = ceilingFor(recExp, orderCards.length);
+
     return {
       actual:      actual,
       recommended: recExp,
@@ -253,7 +289,7 @@
         rounds:    rounds,
         recKey:    rec.key,
         tolerance: rec.tolerance,
-        match:     { perRound: perRound, total: total }
+        match:     { perRound: perRound, total: total, ceiling: ceiling }
       }
     };
   }
@@ -419,7 +455,15 @@
     bits.push('rounds=' + _view.meta.rounds);
     if (_view.meta.pattern) bits.push('pattern=' + escapeHtml(_view.meta.pattern));
     if (_view.meta.override) bits.push('<span class="ehc-flag">_curveOverride active</span>');
-    if (_view.actual.length) bits.push('match=' + _view.meta.match.total + '/' + _view.actual.length);
+    if (_view.actual.length) {
+      var m = _view.meta.match;
+      var matchBit = 'match=' + m.total + '/' + _view.actual.length;
+      if (typeof m.ceiling === 'number' && m.ceiling < _view.actual.length) {
+        matchBit += ' <span class="ehc-dim">(ceiling ' + m.ceiling + ', deckSize ' + _view.meta.deckSize + ' caps achievable)</span>';
+        if (m.total === m.ceiling && m.total > 0) matchBit += ' <span class="ehc-flag">at-ceiling</span>';
+      }
+      bits.push(matchBit);
+    }
     if (metaEl) metaEl.innerHTML = bits.join(' · ');
 
     if (!bodyEl) return;
@@ -524,6 +568,7 @@
     clampRounds:         clampRounds,
     expandDeck:          expandDeck,
     expandRecommended:   expandRecommended,
+    ceilingFor:          ceilingFor,
     buildView:           buildView,
     getCurrentView:      function () { return _view; },
     getCurrentId:        function () { return _currentId; }

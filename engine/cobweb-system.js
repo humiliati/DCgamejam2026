@@ -234,9 +234,14 @@ var CobwebSystem = (function () {
    * @param {string} floorId
    * @param {string} [type]       - 'wall_overlay' | 'standalone' | 'aesthetic' (default 'standalone')
    * @param {string} [dirOverride] - Force corridorDir ('H'|'V') — used by aesthetic cobwebs
+   * @param {string} [variantId]   - Force renderer variant ('classic'|'corner_br'|'funnel'|
+   *                                 'tangled'|'hammock'|'sheet'). When omitted,
+   *                                 cobweb-renderer's FNV-1a hash picks a variant.
+   *                                 Used by Phase 4.7 CobwebTrace to force 'tangled'
+   *                                 on a botched trace and by future Phase 5 tiers.
    * @returns {boolean}             true if installed successfully
    */
-  function install(x, y, floorId, type, dirOverride) {
+  function install(x, y, floorId, type, dirOverride, variantId) {
     type = type || 'standalone';
 
     if (!_cobwebs[floorId]) _cobwebs[floorId] = {};
@@ -254,13 +259,17 @@ var CobwebSystem = (function () {
       return false; // already has an intact cobweb
     }
 
-    _cobwebs[floorId][key] = {
+    var cob = {
       x: x, y: y,
       state: 'intact',
       type: type,
       corridorDir: dirOverride || getCorridorDir(x, y, floorId) || 'H',
       installedAt: Date.now()
     };
+    // Optional renderer-variant override (Phase 4.7). Only attach when set so
+    // older consumers that iterate keys don't see stray fields.
+    if (variantId) cob.variantId = variantId;
+    _cobwebs[floorId][key] = cob;
     _markDirty(floorId);
     return true;
   }

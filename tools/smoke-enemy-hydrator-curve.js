@@ -109,6 +109,27 @@ function expandRecommended(sequence, rounds) {
   return out;
 }
 
+// Mirrors ceilingFor in tools/js/enemy-hydrator-curve.js — kept verbatim
+// so the smoke validates against its own math, not the module's.
+function ceilingFor(recExp, deckSize) {
+  if (deckSize <= 0 || !recExp || !recExp.length) return 0;
+  var bySlot = {};
+  for (var r = 0; r < recExp.length; r++) {
+    var s = roundToSlot(r, deckSize);
+    if (s < 0) continue;
+    var intent = recExp[r].intent;
+    if (!bySlot[s]) bySlot[s] = {};
+    bySlot[s][intent] = (bySlot[s][intent] || 0) + 1;
+  }
+  var c = 0;
+  Object.keys(bySlot).forEach(function (s) {
+    var best = 0;
+    Object.keys(bySlot[s]).forEach(function (it) { if (bySlot[s][it] > best) best = bySlot[s][it]; });
+    c += best;
+  });
+  return c;
+}
+
 function buildView(row, deckEntry, cardLookup, rounds) {
   rounds = clampRounds(rounds);
   var rec = recommendedFor(row);
@@ -136,6 +157,7 @@ function buildView(row, deckEntry, cardLookup, rounds) {
     perRound.push(m);
     if (m) total++;
   }
+  var ceiling = ceilingFor(recExp, orderCards.length);
   return {
     actual: actual, recommended: recExp,
     meta: {
@@ -145,7 +167,7 @@ function buildView(row, deckEntry, cardLookup, rounds) {
       rounds:    rounds,
       recKey:    rec.key,
       tolerance: rec.tolerance,
-      match:     { perRound: perRound, total: total }
+      match:     { perRound: perRound, total: total, ceiling: ceiling }
     }
   };
 }
@@ -205,15 +227,22 @@ Object.keys(decksJson).forEach(function (k) { if (k !== '_schema') decks[k] = de
 })();
 
 // ── Test 2: Roster deck expansion ─────────────────────────
-var rosterStats = { total: 0, totalMatches: 0, perfectMatch: 0, zeroMatch: 0 };
+var rosterStats = { total: 0, totalMatches: 0, perfectMatch: 0, zeroMatch: 0, atCeiling: 0, ceilingSum: 0 };
 rows.forEach(function (row) {
   var d = decks[row.id];
   if (!d || !Array.isArray(d.cards) || d.cards.length === 0) return;
   var view = buildView(row, d, cardById, 6);
   rosterStats.total++;
   rosterStats.totalMatches += view.meta.match.total;
+  rosterStats.ceilingSum += view.meta.match.ceiling;
   if (view.meta.match.total === view.actual.length) rosterStats.perfectMatch++;
   if (view.meta.match.total === 0) rosterStats.zeroMatch++;
+  if (view.meta.match.ceiling > 0 && view.meta.match.total === view.meta.match.ceiling) rosterStats.atCeiling++;
+
+  // Ceiling invariants: total ≤ ceiling ≤ rounds, ceiling ≥ 1 when deckSize ≥ 1.
+  assert(view.meta.match.total <= view.meta.match.ceiling, row.id + ' total(' + view.meta.match.total + ') ≤ ceiling(' + view.meta.match.ceiling + ')');
+  assert(view.meta.match.ceiling <= view.actual.length, row.id + ' ceiling ≤ rounds');
+  assert(view.meta.match.ceiling >= 1, row.id + ' ceiling ≥ 1 for deckSize ≥ 1');
 
   // Every actual entry has a resolvable card + valid intent
   view.actual.forEach(function (e) {
@@ -371,6 +400,42 @@ var syntheticCount = 0;
   syntheticCount++;
 })();
 
+// S8: Ceiling math — closed-form verification on known shapes
+(function () {
+  // Size-3 deck against standard/balanced = BASIC,BRACE,BASIC,DOT,BASIC,BURST
+  //   slot 0 plays round 1       → rec at round 1: BASIC          → best = 1
+  //   slot 1 plays rounds 2,4,6  → rec: BRACE, DOT, BURST          → best = 1
+  //   slot 2 plays rounds 3,5    → rec: BASIC, BASIC               → best = 2
+  // Ceiling = 1 + 1 + 2 = 4/6
+  var recExp = expandRecommended(RECOMMENDED_CURVES['standard/balanced'].sequence, 6);
+  eq(ceilingFor(recExp, 3), 4, 'S8: size-3 vs standard/balanced → 4/6');
+  // Size-3 against elite/tanky = BRACE,BRACE,BASIC,DOT,BURST,DRAIN
+  //   slot 0: round 1 → BRACE                              → 1
+  //   slot 1: rounds 2,4,6 → BRACE, DOT, DRAIN             → 1
+  //   slot 2: rounds 3,5   → BASIC, BURST                  → 1
+  // Ceiling = 3/6
+  recExp = expandRecommended(RECOMMENDED_CURVES['elite/tanky'].sequence, 6);
+  eq(ceilingFor(recExp, 3), 3, 'S8: size-3 vs elite/tanky → 3/6');
+  // Size-4 against elite/balanced = BRACE,BASIC,DOT,BURST,BASIC,DRAIN
+  //   slot 0: round 1 → BRACE                              → 1
+  //   slot 1: rounds 2,5 → BASIC, BASIC                    → 2
+  //   slot 2: round 3 → DOT                                → 1
+  //   slot 3: rounds 4,6 → BURST, DRAIN                    → 1
+  // Ceiling = 5/6
+  recExp = expandRecommended(RECOMMENDED_CURVES['elite/balanced'].sequence, 6);
+  eq(ceilingFor(recExp, 4), 5, 'S8: size-4 vs elite/balanced → 5/6');
+  // Size-6 against any curve → 6/6 (every round has its own slot)
+  recExp = expandRecommended(RECOMMENDED_CURVES['boss/tanky'].sequence, 6);
+  eq(ceilingFor(recExp, 6), 6, 'S8: size-6 vs boss/tanky → 6/6');
+  // Size-1 against any curve → mode over all rounds
+  //   elite/tanky: BRACE×2, BASIC×1, DOT×1, BURST×1, DRAIN×1 → mode=BRACE, count=2
+  recExp = expandRecommended(RECOMMENDED_CURVES['elite/tanky'].sequence, 6);
+  eq(ceilingFor(recExp, 1), 2, 'S8: size-1 vs elite/tanky → 2/6');
+  // deckSize 0 → 0
+  eq(ceilingFor(recExp, 0), 0, 'S8: size-0 → 0');
+  syntheticCount++;
+})();
+
 // S7: expandRecommended equals sequence for rounds <= seq length
 (function () {
   var seq = ['BASIC','BRACE','DOT','BURST','CC','DRAIN'];
@@ -394,5 +459,7 @@ console.log('[smoke-enemy-hydrator-curve] PASS — ' +
   rosterStats.total + ' roster decks expanded · ' +
   syntheticCount + ' synthetic cases · ' +
   'avg match ' + (rosterStats.total ? (rosterStats.totalMatches / rosterStats.total).toFixed(2) : 'n/a') + '/6 · ' +
+  'avg ceiling ' + (rosterStats.total ? (rosterStats.ceilingSum / rosterStats.total).toFixed(2) : 'n/a') + '/6 · ' +
+  rosterStats.atCeiling + ' at-ceiling · ' +
   rosterStats.perfectMatch + ' perfect-match · ' + rosterStats.zeroMatch + ' zero-match.');
 process.exit(0);

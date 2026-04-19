@@ -32,6 +32,7 @@ var BUDGETS = [
   { glob: 'tools/js/enemy-hydrator-deck.js', warn: 700, fail: 850, note: 'DOC-110 P5.2 Deck Composer (EATK pool, slot editor, hydrate heuristic).' },
   { glob: 'tools/js/enemy-hydrator-curve.js', warn: 600, fail: 750, note: 'DOC-110 P5.3 Intent Curve (slot contract, recommended-curve overlay, observational).' },
   { glob: 'tools/js/enemy-hydrator-loot.js',  warn: 600, fail: 750, note: 'DOC-110 P5.4 Loot tab (closed-form EV, volatility, per-biome rolldown, observational).' },
+  { glob: 'tools/js/enemy-hydrator-reanim.js', warn: 750, fail: 900, note: 'DOC-110 P5.5 Reanim Behavior (tier editor, coherence engine, roster rollup, R/W).' },
   { glob: 'tools/js/bv-scenes.js',       warn: 400,  fail: 500,  note: 'Tier 4 window-scene editor.' },
   { glob: 'tools/js/bv-*.js',            warn: 300,  fail: 450,  note: 'Pass 0 target: < 300 LOC per bv-* module.' },
   { glob: 'tools/cli/commands-*.js',     warn: 200,  fail: 300,  note: 'CLI command module (topic-scoped).' },

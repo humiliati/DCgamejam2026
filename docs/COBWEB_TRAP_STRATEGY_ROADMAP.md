@@ -1,7 +1,8 @@
 # Cobweb & Trap Strategy Roadmap
 
-**Created**: 2026-03-30 | **Updated**: 2026-04-04 | **Status**: Phases 1–2 complete, Phase 4 partial, Phases 3/5–7 planned
+**Created**: 2026-03-30 | **Updated**: 2026-04-17 | **Status**: Phases 1–2 complete, Phase 4 expanded (4.6 shipped), Phases 3/4.7/5–7 planned
 **Phase 2 completion**: Consumable resources (Silk Spider, Trap Kit) fully wired — item defs, shop, loot drops, cost checks, prompts, starter loadout
+**Phase 4.6 completion (Apr 17)**: Barrier-web variety dispatch (6 silhouettes), draw-in install animation, and foreshortening floor raised 0.15 → 0.30 — shipped in `cobweb-renderer.js`
 **Depends on**: Phase C (cleaning loop), Phase E (hero cycle), Phase F (economy tuning)
 
 ---
@@ -152,6 +153,129 @@ Work orders (C4/C8) currently set a flat readiness target. Phase 3 adds **embell
 - Game.js wires tear particles on player self-tear (`_onPlayerMoveCommit`)
 - Audio: placeholder 'step' cue (TODO: add dedicated `cobweb_tear` audio asset)
 
+### ✅ 4.6 Installed-Web Variety & Draw-in Animation (Apr 17)
+
+Addresses three contributor complaints about the Phase-1 install mechanic:
+webs were too narrow when viewed at an angle, the F-to-interact install
+was visually indistinguishable from any other interaction, and barriers
+popped into existence with no physical beat.
+
+- **Silhouette dispatcher** — `_drawBarrierWeb()` became a switch over six
+  variants: `classic`, `corner_br`, `funnel`, `tangled`, `hammock`, `sheet`.
+  Each variant is a distinct geometric silhouette sharing the same
+  framing bbox so corridor foreshortening stays consistent.
+- **Deterministic variant picker** — `_pickVariant(cob, floorId)` uses an
+  FNV-1a hash of `floorId + "|" + x + "," + y`. Same tile always renders
+  with the same silhouette across frames and survives save/load without
+  mutating CobwebSystem state.
+- **Draw-in animation** — Derived from `cob.installedAt` (already set by
+  `CobwebSystem.install`). `DRAW_DURATION_MS = 600`. Strands extend from
+  their anchor outward (progress 0→0.65); rings fade in with an
+  overlapping window (0.40→1.0). Every variant honours two progress
+  params so the animation reads consistently across silhouettes.
+- **Foreshortening floor raised 0.15 → 0.30** — Fixes the "too narrow at
+  shallow angles" complaint. Webs now stay legible from any corridor view.
+- **Wall-overlay webs** — `_drawWebCircle()` also accepts the progress
+  params; small decorative webs draw in the same way.
+
+**Files touched**: `engine/cobweb-renderer.js` (single-file change, ~350
+lines added including six variant renderers and the dispatcher).
+
+**Deferred — tile-102 floor-cobweb sibling textures.** The `floor_cobweb`
+decal (tile 102) is a fixed procedural texture. Raycaster floor sampling
+is per-tile-UV (every tile instance samples the same atlas entry), so
+authoring sibling generators like `floor_cobweb_tangled` or
+`floor_cobweb_sheet` would produce dead code without a per-cell variant
+dispatch in `raycaster-floor.js`. Revisit when that dispatch lands (post
+Phase 4.7).
+
+### 4.7 Constellation-Trace Install Minigame (Shipped 2026-04-18)
+
+> **Shipped 2026-04-18.** Module `engine/cobweb-trace.js` (~700 lines, Layer
+> 2, loaded after `cobweb-renderer.js`) implements the full constellation-
+> trace minigame described below. All six per-variant prescriptions wired,
+> all three validation modes (`shape` / `euler` / `exact`) live, hybrid
+> pointer + keyboard cursor input with Magic Remote fallback. Failed traces
+> auto-install as `tangled` (sloppy visual); clean first-try traces award
+> +1g. `CobwebRenderer.pickVariantForPosition(x, y, floorId)` exposes the
+> FNV-1a hash so the trace overlay knows the target variant before
+> `CobwebSystem.install()` creates the cob record (which now honors an
+> optional 6th `variantId` override). Game-loop integration lives in
+> `engine/game.js` across 8 sites (pause intercept, 5 cursor-nudge
+> intercepts in strafe/turn/step handlers, pointer-click intercept, Enter
+> intercept, InputPoll.isBlocked predicate, and the update/render call in
+> the render pipeline). Recovery note: during scaffolding verification,
+> `engine/game.js` was found truncated at the main Raycaster.render call —
+> 135 lines lost during commit 334e6a8. Recovered from HEAD~1 (`2145cde`)
+> per CLAUDE.md's "recovery, not rewrite" playbook; file now 4923 lines.
+
+
+Extend the install interaction so placing a cobweb *feels* like the
+spider (via the Gleaner) is actually spinning the web. Inspired by the
+EyesOnly splash-screen `ConstellationTracer` — players connect nodes
+painted on the surface in a specific pattern before the web resolves.
+
+**Interaction loop**
+1. Face eligible corridor tile, press F → `CobwebNode.tryInteract()`.
+2. Instead of placing the web immediately, the camera zooms slightly and
+   3–6 lime node dots are painted across the corridor plane
+   (normalized 0–1 coords, scaled at render time so the overlay scales
+   with viewport).
+3. Player drags between nodes (mouse / Magic Remote pointer) to draw
+   connecting strands. Each completed connection locks with a snap ring
+   and a soft silk cue.
+4. Once the required shape is traced, the web resolves and the full
+   barrier web plays through the Phase 4.6 draw-in animation.
+5. Tracing the wrong shape plays a red-flash on the nodes and resets the
+   current edge (no progress lost — nodes remain visible).
+
+**Validation modes** (ported from EyesOnly `ConstellationTracer`)
+- `shape` — player draws a closed cycle of 3+ nodes (signature circle).
+- `euler` — every authored edge must be traversed exactly once
+  (signature *X across four nodes* — two diagonals).
+- `exact` — every node must be visited at least once, order-agnostic.
+
+**Per-variant shape prescription**. The required trace varies by cob
+variant, reinforcing the visual variety from 4.6:
+- `classic` → shape (closed cycle of 4 corner nodes).
+- `corner_br` → exact (spider reaching from corner — all 4 nodes).
+- `funnel` → euler (two diagonals across 3 nodes — an X).
+- `tangled` → shape + euler (two overlapping cycles, draw each).
+- `hammock` → exact (left-anchor → midpoints → right-anchor).
+- `sheet` → shape (horizontal zig-zag through 6 nodes).
+
+**Layered feedback**
+- Pulse dwell arc on the active node while dragging.
+- Glow halo on locked edges.
+- Flowing gradient core line on the active tether.
+- Dashed preview tether between pointer and last locked node.
+- Snap ring on node lock.
+- Red flash on reject (keeps node layout intact).
+
+**Reward loop**
+- Successful trace: +2g base (Phase 2.0 reward) **+1g bonus** for
+  tracing cleanly on the first try (no rejections). Builds skill
+  expression on top of the existing economy.
+- Failed trace (3+ rejections): web still installs, but no bonus and a
+  sloppy-web variant is forced (`tangled`) regardless of the hash-picked
+  variant. The visual tells the story of the botched install.
+
+**Files (planned)**
+- New: `engine/cobweb-trace.js` (Layer 2) — state machine idle →
+  highlighting → hasNode → tethered → resolve. Port from
+  `EyesOnly/public/js/constellation-tracer.js`.
+- `cobweb-node.js` — replace immediate install call with
+  `CobwebTrace.begin(cob, variant)` → resolves by calling
+  `CobwebSystem.install()` with the variant baked in.
+- `cobweb-system.js` — extend `install()` signature to accept an
+  explicit `variantId` override (bypasses the Phase 4.6 hash dispatch
+  for sloppy-forced installs and trace-on-specific-layouts).
+- `index.html` — script tag for `cobweb-trace.js` in Layer 2.
+
+**Out of scope for 4.7**: touch input (pointer only for Jam + webOS
+Magic Remote), per-floor trace difficulty curves (deferred to Phase 5
+tiers), trace contribution to readiness (Phase 3.1).
+
 ---
 
 ## Phase 5 — Reinforced Variants
@@ -225,7 +349,10 @@ Work orders (C4/C8) currently set a flat readiness target. Phase 3 adds **embell
 | 1 | ✅ Done | Phase C | game.js, hazard-system.js, interact-prompt.js, readiness-calc.js, index.html | trap-rearm.js |
 | 2 | ✅ Done (coins + consumable cost + loot + shop + starter) | — | game.js, cobweb-system.js, cobweb-node.js, readiness-calc.js, card-system.js, shop.js, interact-prompt.js, loot-tables.js | items.json (ITM-115, ITM-116) |
 | 3 | ⬜ Planned | Phase 2, C4 (work orders) | work-order-system.js, game.js | — |
-| 4 | 🔶 Partial (biome tint, corridor projection, tear particles done; billow + hover planned) | — (visual only) | cobweb-renderer.js, game.js | — |
+| 4.1–4.2, 4.5 | ✅ Done (biome tint, corridor projection, tear particles) | — (visual only) | cobweb-renderer.js, game.js | — |
+| 4.3–4.4 | ⬜ Planned (billow animation, hover interaction) | — (visual only) | cobweb-renderer.js | — |
+| 4.6 | ✅ Done Apr 17 (6 silhouette variants, draw-in animation, foreshortening floor) | — | cobweb-renderer.js | — |
+| 4.7 | ⬜ Planned (constellation-trace install minigame) | 4.6 (variants), EyesOnly ConstellationTracer reference | cobweb-node.js, cobweb-system.js, index.html | cobweb-trace.js |
 | 5 | ⬜ Planned | Phase 2 (resource cost) | cobweb-system.js, trap-rearm.js, loot-tables.json | — |
 | 6 | ⬜ Planned | Phase E (enemy AI) | enemy-ai.js, pathfind.js, cobweb-system.js | — |
 | 7 | ⬜ Planned | Phases 5+6 | cobweb-system.js, cobweb-renderer.js | cobweb-ecology.js |

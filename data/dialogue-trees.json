@@ -1750,6 +1750,10 @@
               "next": "rumors"
             },
             {
+              "label": "About the cellar rats\u2026",
+              "next": "rat_report"
+            },
+            {
               "label": "Just browsing",
               "next": null
             }
@@ -1930,6 +1934,49 @@
             {
               "label": "...",
               "next": null
+            }
+          ]
+        },
+        "rat_report": {
+          "text": "Marlo leans an elbow on the bar. So \u2014 the cellar. You actually went down? What's the rat count?",
+          "choices": [
+            {
+              "label": "Three confirmed. Cellar's lighter.",
+              "next": "rat_report_paid"
+            },
+            {
+              "label": "Still down there. Working on it.",
+              "next": "rat_report_pending"
+            },
+            {
+              "label": "Later.",
+              "next": "greeting"
+            }
+          ]
+        },
+        "rat_report_paid": {
+          "text": "Three. Good. That tracks with the bite marks on the vintage. Marlo slides a small stack across the bar. Don't tell the Watchman where the coin came from \u2014 he thinks the cellar's dry.",
+          "choices": [
+            {
+              "label": "Pleasure doing business.",
+              "next": null
+            },
+            {
+              "label": "Any more work?",
+              "next": "rumors"
+            }
+          ]
+        },
+        "rat_report_pending": {
+          "text": "Then we're not done. Three at a minimum \u2014 I want bottles on the shelves, not teeth on the barrels. Get back down there before I'm out of pinot.",
+          "choices": [
+            {
+              "label": "On it.",
+              "next": null
+            },
+            {
+              "label": "Back",
+              "next": "greeting"
             }
           ]
         }

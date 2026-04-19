@@ -33,6 +33,15 @@
  *     (prevents permanent silence on tiny pools).
  *   - oneShot barks are tracked in _firedOnce and never cool back in.
  *
+ * Pool-level fire throttle (anti-spam):
+ *   - `minIntervalMs` sets the minimum gap between ANY fire from the pool.
+ *   - When multiple NPCs share the same ambient pool, this prevents spam
+ *     by returning null (comfortable silence) if the pool was fired too
+ *     recently, instead of exhausting cooldowns and triggering the
+ *     "oldest fires anyway" fallback.
+ *   - Default: auto-calculated as cooldownMs / poolSize, clamped [5s, cooldownMs].
+ *   - Override per pool via opts.minIntervalMs in register().
+ *
  * Layer 1 (depends on: nothing — pure data + helpers)
  */
 var BarkLibrary = (function () {
@@ -48,7 +57,11 @@ var BarkLibrary = (function () {
 
   // Default cooldown per key in ms. Override per pool via opts.cooldownMs.
   var _DEFAULT_COOLDOWN_MS = 45000;
-  var _poolOpts = {};        // contextKey → { cooldownMs }
+  var _poolOpts = {};        // contextKey → { cooldownMs, minIntervalMs }
+
+  // Pool-level fire throttle: prevents multiple callers (NPCs sharing a pool)
+  // from spamming the same pool. Tracks when each pool last fired.
+  var _lastPoolFire = {};    // contextKey → timestamp
 
   // ── Registration ─────────────────────────────────────────────────
 
@@ -58,7 +71,13 @@ var BarkLibrary = (function () {
    * @param {string}  key   - Context identifier, e.g. 'ambient.promenade'
    * @param {Array}   barks - Array of bark entry objects (see schema above)
    * @param {Object}  [opts]
-   * @param {number}  [opts.cooldownMs] - Per-entry cooldown in ms (default 45000)
+   * @param {number}  [opts.cooldownMs]      - Per-entry cooldown in ms (default 45000)
+   * @param {number}  [opts.minIntervalMs]   - Pool-level minimum gap between ANY fire
+   *                                           from this pool. When multiple NPCs share
+   *                                           the same pool, this prevents spam by
+   *                                           returning null if the pool was fired too
+   *                                           recently. Default: auto (cooldownMs / poolSize,
+   *                                           clamped to [5000, cooldownMs]).
    */
   function register(key, barks, opts) {
     if (!Array.isArray(barks) || barks.length === 0) return;
@@ -77,8 +96,10 @@ var BarkLibrary = (function () {
         oneShot: !!barks[i].oneShot
       });
     }
-    if (opts && opts.cooldownMs != null) {
-      _poolOpts[key] = { cooldownMs: opts.cooldownMs };
+    if (opts) {
+      if (!_poolOpts[key]) _poolOpts[key] = {};
+      if (opts.cooldownMs != null)    _poolOpts[key].cooldownMs = opts.cooldownMs;
+      if (opts.minIntervalMs != null) _poolOpts[key].minIntervalMs = opts.minIntervalMs;
     }
   }
 
@@ -115,6 +136,19 @@ var BarkLibrary = (function () {
       ? _poolOpts[key].cooldownMs
       : _DEFAULT_COOLDOWN_MS;
 
+    // ── Pool-level fire throttle ──────────────────────────────────
+    // Prevents multiple NPCs sharing the same ambient pool from
+    // spamming identical barks when the player idles. If the pool
+    // was fired too recently, return null (comfortable silence).
+    var minInterval = (_poolOpts[key] && _poolOpts[key].minIntervalMs != null)
+      ? _poolOpts[key].minIntervalMs
+      : Math.max(5000, Math.min(cooldownMs, Math.floor(cooldownMs / Math.max(pool.length, 1))));
+
+    var lastFire = _lastPoolFire[key] || 0;
+    if (now - lastFire < minInterval) {
+      return null; // Pool on cooldown — silence, not spam
+    }
+
     // Partition into available (not cooling, not oneShot-done) and cooling
     var available = [];
 
@@ -145,8 +179,9 @@ var BarkLibrary = (function () {
       chosenIdx = allCooling[0].idx;
     }
 
-    // Apply cooldown and oneShot tracking
+    // Apply cooldown, oneShot tracking, and pool-level timestamp
     _cooling[key][chosenIdx] = now + cooldownMs;
+    _lastPoolFire[key] = now;
     if (pool[chosenIdx].oneShot) {
       _firedOnce[key][chosenIdx] = true;
     }
@@ -224,9 +259,11 @@ var BarkLibrary = (function () {
     if (key) {
       _cooling[key]   = {};
       _firedOnce[key] = {};
+      delete _lastPoolFire[key];
     } else {
-      _cooling   = {};
-      _firedOnce = {};
+      _cooling      = {};
+      _firedOnce    = {};
+      _lastPoolFire = {};
       // Rebuild per-key empty maps
       for (var k in _pools) {
         _cooling[k]   = {};

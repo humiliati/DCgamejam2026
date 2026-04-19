@@ -30,8 +30,14 @@ BarkLibrary.register('ambient.approach', [
   { text: '🗣️ "Early shift, huh?"',                                          weight: 3 },
   { text: '🗣️ "Watch your step - cobblestones are slippery at dawn."',       weight: 2 },
   { text: '🗣️ "The Guild notice board is already up. Heroes coming."',        weight: 2 },
+  { text: '🗣️ "Quiet morning. Almost peaceful."',                            weight: 3 },
+  { text: '🗣️ "Another day, another coin. If we\'re lucky."',                weight: 2, style: 'bubble' },
+  { text: '🗣️ "The courtyard fountain hasn\'t worked in months."',            weight: 2 },
+  { text: '🗣️ "Heard the Cellar Owner ranting again. Something about the floors."', weight: 2 },
+  { text: '🗣️ "The road from the gate was busy last night. New arrivals."',   weight: 2 },
   { text: '🗣️ "You the new Gleaner? Good luck in there."',                    weight: 1 },
-  { text: '🗣️ "Smells like smoke from the lower cellars again..."',           weight: 1, style: 'bubble' }
+  { text: '🗣️ "Smells like smoke from the lower cellars again..."',           weight: 1, style: 'bubble' },
+  { text: '🗣️ "This courtyard used to have trees. Before they expanded the Guild hall."', weight: 1 }
 ], { cooldownMs: 20000 });
 
 // ── Floor 1: The Promenade — general ambient ─────────────────────────
@@ -94,8 +100,12 @@ BarkLibrary.register('ambient.promenade.dusk', [
 BarkLibrary.register('faction.tide', [
   { text: '🗣️ "The Compact archives need re-cataloguing. Third time this year."', weight: 3 },
   { text: '🗣️ "Council meeting ran late. Something about the deep-floor readings."', weight: 3 },
+  { text: '🗣️ "Filed a preservation order on the lower gallery. Admiralty ignored it, naturally."', weight: 3 },
+  { text: '🗣️ "The specimen taxonomy is outdated. Half these classifications predate the Compact."', weight: 2 },
   { text: '🗣️ "The Foundry\u2019s new kiln runs on the same fuel the deep caves produce naturally."', weight: 2 },
   { text: '🗣️ "Have you read the annotated Compact? The footnotes are... revealing."', weight: 2 },
+  { text: '🗣️ "Another access request denied. The Admiralty treats scholarship like espionage."', weight: 2 },
+  { text: '🗣️ "The acoustic readings from the deep floors don\u2019t match any known geological pattern."', weight: 1 },
   { text: '🗣️ "Scholar Meridian says the old records don\u2019t match the official history."', weight: 1 },
   { text: '🗣️ "The dragons used to sing, you know. Before the heroes came."', weight: 0.5, oneShot: true }
 ], { cooldownMs: 28000 });
@@ -112,9 +122,15 @@ BarkLibrary.register('faction.foundry', [
 BarkLibrary.register('faction.admiralty', [
   { text: '🗣️ "Patrol report: nothing unusual on the upper floors. The lower floors... different story."', weight: 3 },
   { text: '🗣️ "The garrison commander wants a full sweep before hero day."', weight: 3 },
+  { text: '🗣️ "Rotation change in two hours. Stay sharp until then."', weight: 3 },
+  { text: '🗣️ "The checkpoint logs are getting longer. More traffic than usual."', weight: 3 },
   { text: '🗣️ "New classification came through. More specimens added to the restricted list."', weight: 2 },
   { text: '🗣️ "The Oversight Board denied the reclassification proposal. Again."', weight: 2 },
+  { text: '🗣️ "Admiralty protocol says report everything. Everything."', weight: 2, style: 'bubble' },
+  { text: '🗣️ "The Tide Council filed another access complaint. Seventh one this cycle."', weight: 2 },
+  { text: '🗣️ "Training exercise on the lower landing tomorrow. Clear the area early."', weight: 2 },
   { text: '🗣️ "Dr. Yuen\u2019s research notes went missing from the archive last week."', weight: 1 },
+  { text: '🗣️ "The sentries on the deep watch keep requesting transfers. All of them."', weight: 1 },
   { text: '🗣️ "Someone\u2019s maintaining a live holding area below the standard floor map."', weight: 0.5, oneShot: true }
 ], { cooldownMs: 28000 });
 
@@ -1071,7 +1087,58 @@ BarkLibrary.register('ambient.vivec_crowd', [
   // Weather / ambience
   { text: '🗣️ "Wind\u2019s cold off the arch. Vivec side\u2019s warmer, they say."',  weight: 1, style: 'bubble' },
   { text: '🗣️ "..."',                                                                 weight: 0.5, style: 'bubble' }
-], { cooldownMs: 28000 });
+], { cooldownMs: 28000, minIntervalMs: 8000 });
+
+// ── Floor 3: Garrison Row — general ambient ──────────────────────────
+// The frontier gate district. Military checkpoint, petitioner crowd,
+// street commerce. 5 NPCs share this pool: beggar, washerwoman, drifter,
+// hawker, urchin. Higher desperation than Floors 0–2.
+
+BarkLibrary.register('ambient.garrison', [
+  // Ground-level desperation
+  { text: '🗣️ "Gate opens at dawn, closes at dusk. Miss it and you sleep outside."',  weight: 3 },
+  { text: '🗣️ "Admiralty patrols are thicker today. Something happened below."',      weight: 3 },
+  { text: '🗣️ "Spare a coin? No? Didn\'t think so."',                                weight: 3, style: 'bubble' },
+  { text: '🗣️ "The garrison rations got halved again. Heroes eat well though."',      weight: 2 },
+  // Commerce / hustle
+  { text: '🗣️ "Dragonsteel scrap! Real dragonsteel! Only slightly cursed!"',          weight: 2, style: 'bubble' },
+  { text: '🗣️ "Fresh bread from the Vivec side! Three coin! Two if you\'re Gleaner!"', weight: 2 },
+  { text: '🗣️ "The caravan from the highway brought salt. First time in weeks."',     weight: 2 },
+  // Observation / rumour
+  { text: '🗣️ "Watched a hero walk through yesterday. Didn\'t look at any of us."',  weight: 2 },
+  { text: '🗣️ "The deep floors have gone quiet. Too quiet, the watchmen say."',       weight: 1 },
+  { text: '🗣️ "Three Admiralty soldiers came up from below last night. One was crying."', weight: 1 },
+  // Conspiracy breadcrumb
+  { text: '🗣️ "A kid told me the caves hum at night. Like something\'s breathing down there."', weight: 0.5, oneShot: true },
+  { text: '🗣️ "The old garrison records mention \'protectors.\' Not \'monsters.\' Protectors."', weight: 0.5, oneShot: true }
+], { cooldownMs: 30000 });
+
+// ── Floor 3: Pier — old fisherman ambient ────────────────────────────
+// Single NPC (floor3_fisherman). Weathered, talkative, pier-specific lore.
+// Longer cooldown since it's a solo NPC.
+
+BarkLibrary.register('ambient.pier', [
+  { text: '🗣️ "Fish aren\'t biting today. Haven\'t been biting much at all, lately."', weight: 3 },
+  { text: '🗣️ "The harbour used to be busier. Before they walled off the deep docks."', weight: 3, style: 'bubble' },
+  { text: '🗣️ "See that shimmer out past the breakwater? Been there three nights running."', weight: 2 },
+  { text: '🗣️ "Salt air\'s good for the lungs. Bad for everything else."',            weight: 2, style: 'bubble' },
+  { text: '🗣️ "My father fished these waters. His father before him. The water was warmer then."', weight: 2 },
+  { text: '🗣️ "Tide Council folk come down here sometimes. Ask about the deep water. I tell them what I see."', weight: 1 },
+  { text: '🗣️ "Heard something under the pier last night. Low. Rhythmic. Like a heartbeat."', weight: 0.5, oneShot: true }
+], { cooldownMs: 45000 });
+
+// ── Floor 3: Highway — caravan trader ambient ────────────────────────
+// Single NPC (floor3_trader_highway). Transient merchant, horse-and-cart
+// energy. Passing through with goods, gossip from other settlements.
+
+BarkLibrary.register('ambient.highway', [
+  { text: '🗣️ "Long road from the eastern pass. Your garrison\'s the first stop in weeks."', weight: 3 },
+  { text: '🗣️ "Salt, rope, lamp oil — got it all. Prices fair if you buy in bulk."',  weight: 3, style: 'bubble' },
+  { text: '🗣️ "The road patrols are stretched thin. Saw Foundry marks on abandoned camps."', weight: 2 },
+  { text: '🗣️ "Other settlements don\'t have this many heroes. Makes you wonder why."', weight: 2 },
+  { text: '🗣️ "Last town I passed through? No dungeon. No heroes. No \'Gleaners.\' Just... quiet."', weight: 1 },
+  { text: '🗣️ "The eastern settlements tell stories about this place. None of them good."', weight: 1, oneShot: true }
+], { cooldownMs: 40000 });
 
 // ═══════════════════════════════════════════════════════════════════
 // §ENCOUNTER — Verb-field NPC-to-NPC encounter barks

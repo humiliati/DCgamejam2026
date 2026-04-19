@@ -120,6 +120,13 @@ var CobwebNode = (function () {
       _promptAlpha = Math.max(0, _promptAlpha - dt / FADE_OUT_SPEED);
       return;
     }
+    // Phase 4.7 — also yield while the constellation trace is running.
+    // Trace owns input + viewport until it resolves; fade the deploy prompt
+    // so it doesn't peek through the overlay.
+    if (typeof CobwebTrace !== 'undefined' && CobwebTrace.isActive()) {
+      _promptAlpha = Math.max(0, _promptAlpha - dt / FADE_OUT_SPEED);
+      return;
+    }
 
     // Nodes are only active in nested dungeons (depth ≥ 3)
     if (_depth(floorId) < 3) {
@@ -256,6 +263,12 @@ var CobwebNode = (function () {
     if (typeof CobwebSystem === 'undefined') return false;
     if (_depth(floorId) < 3) return false;
 
+    // Phase 4.7 — swallow F-presses while a trace is mid-flight so players
+    // can't restack sessions or burn a second spider mid-trace.
+    if (typeof CobwebTrace !== 'undefined' && CobwebTrace.isActive()) {
+      return false;
+    }
+
     // Phase 2: require a Silk Spider consumable
     if (_spiderCount() <= 0) {
       if (typeof Toast !== 'undefined') {
@@ -269,8 +282,62 @@ var CobwebNode = (function () {
       return false;
     }
 
-    var ok = CobwebSystem.install(_facingX, _facingY, floorId, 'standalone');
+    // Phase 4.7 — constellation-trace install minigame.
+    //
+    // If CobwebTrace is present, defer the actual install to the trace
+    // resolve callback. The spider is consumed up-front so players can't
+    // abuse Escape for a free retry: commitment to install means commitment
+    // to the spider cost. Fail / Escape → tangled variant still installs.
+    //
+    // If CobwebTrace isn't available (e.g. unit test or early boot), fall
+    // back to the immediate-install legacy path so the game stays playable.
+    if (typeof CobwebTrace !== 'undefined' &&
+        typeof CobwebRenderer !== 'undefined' &&
+        CobwebRenderer.pickVariantForPosition) {
+      var variantId = CobwebRenderer.pickVariantForPosition(_facingX, _facingY, floorId);
+      var targetX   = _facingX;
+      var targetY   = _facingY;
+      var gp        = MC.getGridPos();
+      // Corridor direction from the player's facing axis (H = east/west).
+      var dir       = (gp.dir === 0 || gp.dir === 2) ? 'H' : 'V';
+      var started = CobwebTrace.beginSession({
+        floorId:     floorId,
+        tileX:       targetX,
+        tileY:       targetY,
+        corridorDir: dir,
+        variantId:   variantId,
+        onResolve: function (success, forcedVariantId, cleanFirstTry) {
+          // Spider is consumed regardless — player chose to place.
+          _consumeSpider();
+          var useVariant = success ? variantId : (forcedVariantId || 'tangled');
+          var ok = CobwebSystem.install(targetX, targetY, floorId,
+                                        'standalone', null, useVariant);
+          if (ok) {
+            _successFlashT = SUCCESS_FLASH_MS;
+            if (typeof AudioSystem !== 'undefined') {
+              AudioSystem.play('step', { volume: 0.4 });
+            }
+            if (success && cleanFirstTry && typeof Toast !== 'undefined') {
+              Toast.show(
+                (typeof i18n !== 'undefined')
+                  ? i18n.t('cobweb.clean_trace', 'Clean spin! +1g bonus')
+                  : 'Clean spin! +1g bonus',
+                'info'
+              );
+              // +1g bonus for first-try clean trace (Phase 4.7 reward).
+              if (typeof CardAuthority !== 'undefined' &&
+                  typeof CardAuthority.addGold === 'function') {
+                CardAuthority.addGold(1);
+              }
+            }
+          }
+        }
+      });
+      return started;
+    }
 
+    // Fallback: legacy instant install (no trace module available).
+    var ok = CobwebSystem.install(_facingX, _facingY, floorId, 'standalone');
     if (ok) {
       _consumeSpider();
       _successFlashT = SUCCESS_FLASH_MS;
@@ -278,7 +345,6 @@ var CobwebNode = (function () {
         AudioSystem.play('step', { volume: 0.4 });
       }
     }
-
     return ok;
   }
 

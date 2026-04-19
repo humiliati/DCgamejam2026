@@ -1025,6 +1025,7 @@ var NpcDialogueTrees = (function() {
               { label: 'What\'s on the menu?', next: 'menu' },
               { label: 'A room for the night', next: 'room' },
               { label: 'Heard any rumors?', next: 'rumors' },
+              { label: 'About the cellar rats\u2026', next: 'rat_report' },
               { label: 'Just browsing', next: null }
             ]
           },
@@ -1121,6 +1122,35 @@ var NpcDialogueTrees = (function() {
             text: 'Cave system maps from before the Compact. Pre-hero era. I\'m not supposed to know that, and you\'re definitely not supposed to know that. Enjoy your meal.',
             choices: [
               { label: '...', next: null }
+            ]
+          },
+          // ── DOC-107 Phase 5b: rat_report branch ──────────────────────
+          // Landing node for innkeeper_bottles step.4 predicate
+          // {kind:'npc', npcId:'inn_keeper', branch:'rat_report'}.
+          // status-bar.js fires onNpcTalk(inn_keeper, 'rat_report') on
+          // render; QuestChain advances step.4 only when currentStep
+          // matches (i.e., after 3 ENM-003 kills in 1.3.1 cleared step.3).
+          // Safe to visit prematurely — predicate won't match wrong step.
+          rat_report: {
+            text: 'Marlo leans an elbow on the bar. So \u2014 the cellar. You actually went down? What\'s the rat count?',
+            choices: [
+              { label: 'Three confirmed. Cellar\'s lighter.', next: 'rat_report_paid' },
+              { label: 'Still down there. Working on it.', next: 'rat_report_pending' },
+              { label: 'Later.', next: 'greeting' }
+            ]
+          },
+          rat_report_paid: {
+            text: 'Three. Good. That tracks with the bite marks on the vintage. Marlo slides a small stack across the bar. Don\'t tell the Watchman where the coin came from \u2014 he thinks the cellar\'s dry.',
+            choices: [
+              { label: 'Pleasure doing business.', next: null },
+              { label: 'Any more work?', next: 'rumors' }
+            ]
+          },
+          rat_report_pending: {
+            text: 'Then we\'re not done. Three at a minimum \u2014 I want bottles on the shelves, not teeth on the barrels. Get back down there before I\'m out of pinot.',
+            choices: [
+              { label: 'On it.', next: null },
+              { label: 'Back', next: 'greeting' }
             ]
           }
         }

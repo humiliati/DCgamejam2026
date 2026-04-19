@@ -313,6 +313,68 @@
     .bw-coh-badge.yellow { background: rgba(255,204,136,0.15); color: var(--warn); }
     .bw-coh-badge.green { background: rgba(153,204,102,0.15); color: var(--good); }
 
+    /* ─── Pool Dependency Map modal ─── */
+    .bw-depmap-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+    }
+    .bw-depmap-overlay.open { display: flex; }
+    .bw-depmap-modal {
+      background: var(--bg-panel); border: 1px solid var(--border-mid);
+      border-radius: 6px; width: 90vw; max-width: 1100px;
+      max-height: 85vh; display: flex; flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .bw-depmap-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+    }
+    .bw-depmap-header h2 { margin: 0; font-size: 14px; color: var(--accent); }
+    .bw-depmap-header .sub { color: var(--text-dim); font-size: 11px; }
+    .bw-depmap-header .spacer { flex: 1; }
+    .bw-depmap-header .close-btn {
+      background: none; border: none; color: var(--text-dim);
+      font-size: 20px; cursor: pointer; padding: 0 4px;
+    }
+    .bw-depmap-header .close-btn:hover { color: var(--text); }
+    .bw-depmap-body {
+      flex: 1; overflow-y: auto; padding: 12px 16px;
+    }
+    .bw-depmap-table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    .bw-depmap-table thead th {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--bg-panel); padding: 6px 8px;
+      text-align: left; font-size: 11px; color: var(--accent-dim);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase; letter-spacing: 0.5px; font-weight: normal;
+    }
+    .bw-depmap-table tbody td {
+      padding: 5px 8px; border-bottom: 1px solid var(--divider);
+      vertical-align: top;
+    }
+    .bw-depmap-table tbody tr:hover { background: rgba(136,170,221,0.04); }
+    .bw-depmap-table .pool-link { cursor: pointer; color: var(--accent); text-decoration: underline; }
+    .bw-depmap-table .pool-link:hover { color: var(--text-em); }
+    .bw-depmap-table .risk-low { color: var(--good); }
+    .bw-depmap-table .risk-med { color: var(--warn); }
+    .bw-depmap-table .risk-high { color: var(--err); }
+    .bw-depmap-table .npc-list { line-height: 1.6; }
+    .bw-depmap-table .npc-chip {
+      display: inline-block; background: rgba(136,170,221,0.1);
+      padding: 1px 6px; border-radius: 3px; margin: 1px 2px;
+      font-size: 11px; white-space: nowrap;
+    }
+    .bw-depmap-table .npc-chip .interval { color: var(--muted); font-size: 10px; margin-left: 3px; }
+    .bw-depmap-legend {
+      display: flex; gap: 16px; padding: 8px 0 4px; font-size: 11px; color: var(--text-dim);
+    }
+    .bw-depmap-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .bw-depmap-legend .dot.low { background: var(--good); }
+    .bw-depmap-legend .dot.med { background: var(--warn); }
+    .bw-depmap-legend .dot.high { background: var(--err); }
+
     /* ─── Scrollbar styling ─── */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -328,7 +390,12 @@
     <span class="sub">DOC-110 P2</span>
     <span class="spacer"></span>
     <button id="btnAddPool">+ Pool</button>
-    <button id="btnExport" class="primary">Export JSON</button>
+    <button id="btnDepMap">Dep Map</button>
+    <button id="btnImportEnJs">Import en.js</button>
+    <input type="file" id="fileImportEnJs" accept=".js" style="display:none;">
+    <button id="btnExportEnJs" class="primary">Export en.js</button>
+    <button id="btnExport">Export JSON</button>
+    <span id="undoIndicator" style="font-size:10px;color:var(--muted);min-width:80px;"></span>
     <span id="statusLabel" class="status">Clean</span>
   </div>
 
@@ -378,6 +445,19 @@
     </div>
   </div>
 
+  <!-- Pool Dependency Map modal -->
+  <div class="bw-depmap-overlay" id="depMapOverlay">
+    <div class="bw-depmap-modal">
+      <div class="bw-depmap-header">
+        <h2>POOL DEPENDENCY MAP</h2>
+        <span class="sub" id="depMapSub"></span>
+        <span class="spacer"></span>
+        <button class="close-btn" id="depMapClose">&times;</button>
+      </div>
+      <div class="bw-depmap-body" id="depMapBody">Loading...</div>
+    </div>
+  </div>
+
   <!-- ============================================================
        Shim: intercept BarkLibrary.register() calls
        ============================================================ -->
@@ -401,7 +481,7 @@
               oneShot: !!b.oneShot
             };
           }),
-          opts: opts ? { cooldownMs: opts.cooldownMs } : {}
+          opts: opts ? { cooldownMs: opts.cooldownMs, minIntervalMs: opts.minIntervalMs } : {}
         });
       }
 
@@ -439,6 +519,188 @@
     var _selectedPool = null;
     var _dirty = false;
     var _manifest = null;     // NPC manifest JSON (loaded async)
+    var _poolComments = {};   // poolKey → preceding comment block (string)
+    var _fileHeader = '';     // Top-of-file header comment
+
+    // ── Undo / Redo ───────────────────────────────────────────────
+    var _undoStack = [];       // Array of state snapshots
+    var _redoStack = [];
+    var _UNDO_MAX = 50;
+    var _undoDebounceTimer = null;
+    var _lastSnapshotJson = ''; // Dedup: skip if state hasn't actually changed
+
+    function _snapshotState() {
+      var snap = { pools: {}, poolOrder: _poolOrder.slice(), selectedPool: _selectedPool };
+      for (var k = 0; k < _poolOrder.length; k++) {
+        var key = _poolOrder[k];
+        var p = _pools[key];
+        snap.pools[key] = {
+          barks: p.barks.map(function(b) {
+            return { text: b.text, speaker: b.speaker, style: b.style, weight: b.weight, oneShot: b.oneShot };
+          }),
+          cooldownMs: p.cooldownMs,
+          minIntervalMs: p.minIntervalMs
+        };
+      }
+      return snap;
+    }
+
+    function _restoreState(snap) {
+      _pools = {};
+      _poolOrder = snap.poolOrder.slice();
+      for (var k = 0; k < _poolOrder.length; k++) {
+        var key = _poolOrder[k];
+        var sp = snap.pools[key];
+        _pools[key] = {
+          barks: sp.barks.map(function(b) {
+            return { text: b.text, speaker: b.speaker, style: b.style, weight: b.weight, oneShot: b.oneShot };
+          }),
+          cooldownMs: sp.cooldownMs,
+          minIntervalMs: sp.minIntervalMs
+        };
+      }
+      _selectedPool = snap.selectedPool;
+    }
+
+    /**
+     * Push current state onto the undo stack. Called before mutations.
+     * Deduplicates by comparing JSON of current state to last snapshot.
+     * For text input, call with debounce=true to batch rapid keystrokes.
+     */
+    function _pushUndo(debounce) {
+      if (debounce) {
+        if (_undoDebounceTimer) clearTimeout(_undoDebounceTimer);
+        _undoDebounceTimer = setTimeout(function() { _pushUndo(false); }, 600);
+        return;
+      }
+      var snap = _snapshotState();
+      var json = JSON.stringify(snap);
+      if (json === _lastSnapshotJson) return; // No actual change
+      _undoStack.push(snap);
+      if (_undoStack.length > _UNDO_MAX) _undoStack.shift();
+      _redoStack = []; // New edit clears redo
+      _lastSnapshotJson = json;
+      _updateUndoIndicator();
+    }
+
+    function _undo() {
+      if (_undoStack.length === 0) return;
+      // Push current state to redo
+      _redoStack.push(_snapshotState());
+      var snap = _undoStack.pop();
+      _restoreState(snap);
+      _lastSnapshotJson = JSON.stringify(snap);
+      _afterUndoRedo();
+    }
+
+    function _redo() {
+      if (_redoStack.length === 0) return;
+      _undoStack.push(_snapshotState());
+      var snap = _redoStack.pop();
+      _restoreState(snap);
+      _lastSnapshotJson = JSON.stringify(snap);
+      _afterUndoRedo();
+    }
+
+    function _afterUndoRedo() {
+      _dirty = _undoStack.length > 0;
+      var el = document.getElementById('statusLabel');
+      el.textContent = _dirty ? 'Unsaved changes' : 'Clean';
+      el.className = _dirty ? 'status dirty' : 'status';
+      _renderPoolTree(document.getElementById('poolSearch').value.toLowerCase());
+      if (_selectedPool && _pools[_selectedPool]) {
+        _renderPoolHeader(_selectedPool);
+        _renderBarkTable(_selectedPool);
+        document.getElementById('simulator').style.display = 'flex';
+      } else {
+        _selectedPool = null;
+        document.getElementById('tableWrap').innerHTML =
+          '<div class="bw-empty-state">Select a bark pool from the sidebar to begin editing.</div>';
+        document.getElementById('poolKeyLabel').textContent = 'Select a pool';
+        document.getElementById('poolMetaLabel').textContent = '';
+        document.getElementById('usedByBadge').innerHTML = '';
+        document.getElementById('simulator').style.display = 'none';
+      }
+      _renderCoherence();
+      _updateUndoIndicator();
+    }
+
+    function _updateUndoIndicator() {
+      var el = document.getElementById('undoIndicator');
+      if (!el) return;
+      if (_undoStack.length === 0 && _redoStack.length === 0) {
+        el.textContent = '';
+      } else {
+        var parts = [];
+        if (_undoStack.length > 0) parts.push(_undoStack.length + ' undo');
+        if (_redoStack.length > 0) parts.push(_redoStack.length + ' redo');
+        el.textContent = parts.join(' | ');
+      }
+    }
+
+    // ── Parse en.js source for region comments ────────────────────
+    // Fetches the raw source text and maps each pool key to its
+    // preceding comment block so round-trip export preserves them.
+    function _parseComments() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '../data/barks/en.js', false); // sync — needed before first render
+      try { xhr.send(); } catch (e) { return; }
+      if (xhr.status !== 200 && xhr.status !== 0) return;
+
+      var src = xhr.responseText;
+      var lines = src.split('\n');
+
+      // Capture the file header (everything before the first register call)
+      var firstRegIdx = -1;
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf('BarkLibrary.register(') !== -1) {
+          firstRegIdx = i;
+          break;
+        }
+      }
+      if (firstRegIdx > 0) {
+        // Walk back from first register to find where comments start
+        var headerEnd = firstRegIdx;
+        while (headerEnd > 0 && lines[headerEnd - 1].trim() === '') headerEnd--;
+        // Find the start of the comment block immediately preceding first register
+        var commentStart = headerEnd;
+        while (commentStart > 0 && (lines[commentStart - 1].trim().indexOf('//') === 0 || lines[commentStart - 1].trim() === '')) {
+          commentStart--;
+        }
+        _fileHeader = lines.slice(0, commentStart).join('\n');
+      }
+
+      // Match each register call to preceding comment block
+      var registerRe = /BarkLibrary\.register\(\s*'([^']+)'/;
+      for (var j = 0; j < lines.length; j++) {
+        var m = lines[j].match(registerRe);
+        if (!m) continue;
+
+        var poolKey = m[1];
+        // Walk backward from this line to collect comment lines
+        var commentLines = [];
+        var k = j - 1;
+        // Skip blank lines between comment and register
+        while (k >= 0 && lines[k].trim() === '') k--;
+        // Collect comment lines (// ... or blank separators within a comment block)
+        while (k >= 0) {
+          var lt = lines[k].trim();
+          if (lt.indexOf('//') === 0 || lt === '') {
+            commentLines.unshift(lines[k]);
+            k--;
+          } else {
+            break;
+          }
+        }
+        // Remove leading blank lines from comment block
+        while (commentLines.length > 0 && commentLines[0].trim() === '') {
+          commentLines.shift();
+        }
+        if (commentLines.length > 0) {
+          _poolComments[poolKey] = commentLines.join('\n');
+        }
+      }
+    }
 
     // ── Init: absorb captured registrations ────────────────────────
     function _initPools() {
@@ -446,11 +708,14 @@
       for (var i = 0; i < captured.length; i++) {
         var c = captured[i];
         if (!_pools[c.key]) {
-          _pools[c.key] = { barks: [], cooldownMs: 45000 };
+          _pools[c.key] = { barks: [], cooldownMs: 45000, minIntervalMs: null };
           _poolOrder.push(c.key);
         }
         if (c.opts && c.opts.cooldownMs != null) {
           _pools[c.key].cooldownMs = c.opts.cooldownMs;
+        }
+        if (c.opts && c.opts.minIntervalMs != null) {
+          _pools[c.key].minIntervalMs = c.opts.minIntervalMs;
         }
         for (var j = 0; j < c.barks.length; j++) {
           _pools[c.key].barks.push(c.barks[j]);
@@ -481,7 +746,22 @@
     }
 
     // ── Dirty tracking ────────────────────────────────────────────
+    /**
+     * Mark state as dirty. Does NOT push undo — callers must call
+     * _pushUndo() BEFORE the mutation for structural changes.
+     */
     function _markDirty() {
+      _dirty = true;
+      var el = document.getElementById('statusLabel');
+      el.textContent = 'Unsaved changes';
+      el.className = 'status dirty';
+      _updateUndoIndicator();
+    }
+
+    /** Mark dirty with debounced undo snapshot (for rapid text input).
+     *  For text edits the mutation is incremental so post-keystroke capture is fine. */
+    function _markDirtyText() {
+      _pushUndo(true);
       _dirty = true;
       var el = document.getElementById('statusLabel');
       el.textContent = 'Unsaved changes';
@@ -490,6 +770,7 @@
 
     function _markClean() {
       _dirty = false;
+      _lastSnapshotJson = JSON.stringify(_snapshotState());
       var el = document.getElementById('statusLabel');
       el.textContent = 'Clean';
       el.className = 'status';
@@ -627,6 +908,19 @@
       }
       // oneShot singleton
       if (pool.barks.length === 1 && pool.barks[0].oneShot) return true;
+      // Spam-prone (shared or ambient, few recyclable barks, short min interval)
+      var isSharedPool = false;
+      if (_manifest && _manifest.byBarkPool && _manifest.byBarkPool[key] && _manifest.byBarkPool[key].length >= 2) isSharedPool = true;
+      if (/^ambient\./.test(key)) isSharedPool = true;
+      if (isSharedPool) {
+        var cd = pool.cooldownMs || 45000;
+        var mi = pool.minIntervalMs != null
+          ? pool.minIntervalMs
+          : Math.max(5000, Math.min(cd, Math.floor(cd / Math.max(pool.barks.length, 1))));
+        var rec = 0;
+        for (var r = 0; r < pool.barks.length; r++) { if (!pool.barks[r].oneShot) rec++; }
+        if (rec <= 4 && mi < 8000) return true;
+      }
       // Long text
       for (var i = 0; i < pool.barks.length; i++) {
         if (pool.barks[i].text.length > 60) return true;
@@ -655,8 +949,12 @@
     function _renderPoolHeader(key) {
       var pool = _pools[key];
       document.getElementById('poolKeyLabel').textContent = key;
+      var effectiveMin = pool.minIntervalMs != null
+        ? pool.minIntervalMs
+        : Math.max(5000, Math.min(pool.cooldownMs, Math.floor(pool.cooldownMs / Math.max(pool.barks.length, 1))));
       document.getElementById('poolMetaLabel').textContent =
-        pool.barks.length + ' barks | cooldown ' + (pool.cooldownMs / 1000) + 's';
+        pool.barks.length + ' barks | cooldown ' + (pool.cooldownMs / 1000) + 's | min interval ' + (effectiveMin / 1000).toFixed(1) + 's' +
+        (pool.minIntervalMs == null ? ' (auto)' : '');
 
       var badge = document.getElementById('usedByBadge');
       badge.innerHTML = '';
@@ -717,8 +1015,13 @@
       }
 
       html += '</tbody></table>';
-      html += '<div style="padding:8px 16px;"><button id="btnAddBark" style="background:var(--btn-bg);color:var(--text-em);border:1px solid var(--border-mid);padding:4px 10px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:3px;">+ Add Bark</button>' +
-        ' <span style="margin-left:12px;font-size:11px;color:var(--muted);">Cooldown: <input type="number" id="cooldownInput" value="' + (pool.cooldownMs / 1000) + '" min="0" max="86400" step="1" style="width:60px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:12px;padding:2px 4px;border-radius:2px;text-align:center;"> s</span></div>';
+      var minIntVal = pool.minIntervalMs != null ? (pool.minIntervalMs / 1000) : '';
+      var autoMin = Math.max(5000, Math.min(pool.cooldownMs, Math.floor(pool.cooldownMs / Math.max(pool.barks.length, 1))));
+      html += '<div style="padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        '<button id="btnAddBark" style="background:var(--btn-bg);color:var(--text-em);border:1px solid var(--border-mid);padding:4px 10px;cursor:pointer;font-family:inherit;font-size:12px;border-radius:3px;">+ Add Bark</button>' +
+        ' <span style="font-size:11px;color:var(--muted);">Cooldown: <input type="number" id="cooldownInput" value="' + (pool.cooldownMs / 1000) + '" min="0" max="86400" step="1" style="width:60px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:12px;padding:2px 4px;border-radius:2px;text-align:center;"> s</span>' +
+        ' <span style="font-size:11px;color:var(--muted);">Min interval: <input type="number" id="minIntervalInput" value="' + minIntVal + '" min="0" max="86400" step="1" placeholder="auto (' + (autoMin / 1000).toFixed(0) + ')" style="width:90px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:12px;padding:2px 4px;border-radius:2px;text-align:center;"> s</span>' +
+        '</div>';
 
       wrap.innerHTML = html;
 
@@ -737,7 +1040,20 @@
           // cooldown input
           if (el.id === 'cooldownInput') {
             _pools[key].cooldownMs = parseFloat(el.value) * 1000;
-            _markDirty();
+            _markDirtyText();
+            _renderPoolHeader(key);
+          }
+          // min interval input
+          if (el.id === 'minIntervalInput') {
+            var val = el.value.trim();
+            if (val === '') {
+              _pools[key].minIntervalMs = null; // auto
+            } else {
+              _pools[key].minIntervalMs = parseFloat(val) * 1000;
+            }
+            _markDirtyText();
+            _renderPoolHeader(key);
+            _renderCoherence();
           }
           return;
         }
@@ -745,7 +1061,7 @@
         var field = el.dataset.field;
         if (field === 'text') {
           _pools[key].barks[idx].text = el.value;
-          _markDirty();
+          _markDirtyText();
           // Update char warn
           var warn = el.parentNode.querySelector('.char-warn');
           if (el.value.length > 60) {
@@ -760,10 +1076,10 @@
           }
         } else if (field === 'speaker') {
           _pools[key].barks[idx].speaker = el.value || null;
-          _markDirty();
+          _markDirtyText();
         } else if (field === 'weight') {
           _pools[key].barks[idx].weight = parseFloat(el.value) || 0;
-          _markDirty();
+          _markDirtyText();
         }
       });
 
@@ -775,9 +1091,11 @@
         var idx = parseInt(tr.dataset.idx, 10);
         var field = el.dataset.field;
         if (field === 'style') {
+          _pushUndo(false);
           _pools[key].barks[idx].style = el.value;
           _markDirty();
         } else if (field === 'oneShot') {
+          _pushUndo(false);
           _pools[key].barks[idx].oneShot = el.checked;
           _markDirty();
         }
@@ -788,6 +1106,7 @@
         var btn = e.target.closest('[data-delidx]');
         if (btn) {
           var idx = parseInt(btn.dataset.delidx, 10);
+          _pushUndo(false);
           _pools[key].barks.splice(idx, 1);
           _markDirty();
           _renderBarkTable(key);
@@ -805,6 +1124,7 @@
     }
 
     function _addBark(key) {
+      _pushUndo(false);
       _pools[key].barks.push({
         text: '',
         speaker: null,
@@ -831,7 +1151,8 @@
         alert('Pool "' + key + '" already exists.');
         return;
       }
-      _pools[key] = { barks: [], cooldownMs: 45000 };
+      _pushUndo(false);
+      _pools[key] = { barks: [], cooldownMs: 45000, minIntervalMs: null };
       _poolOrder.push(key);
       _markDirty();
       _renderPoolTree(document.getElementById('poolSearch').value.toLowerCase());
@@ -846,17 +1167,19 @@
       for (var i = 0; i < _poolOrder.length; i++) {
         var key = _poolOrder[i];
         var pool = _pools[key];
-        output[key] = {
-          cooldownMs: pool.cooldownMs,
-          barks: pool.barks.map(function(b) {
+        var poolExport = {
+          cooldownMs: pool.cooldownMs
+        };
+        if (pool.minIntervalMs != null) poolExport.minIntervalMs = pool.minIntervalMs;
+        poolExport.barks = pool.barks.map(function(b) {
             var entry = { text: b.text };
             if (b.speaker) entry.speaker = b.speaker;
             if (b.style !== 'toast') entry.style = b.style;
             if (b.weight !== 1) entry.weight = b.weight;
             if (b.oneShot) entry.oneShot = true;
             return entry;
-          })
-        };
+          });
+        output[key] = poolExport;
       }
 
       var json = JSON.stringify(output, null, 2);
@@ -869,6 +1192,272 @@
       URL.revokeObjectURL(url);
 
       _markClean();
+    }
+
+    // ── Export en.js (round-trip) ─────────────────────────────────
+    function _exportEnJs() {
+      var lines = [];
+
+      // File header
+      if (_fileHeader) {
+        lines.push(_fileHeader);
+      } else {
+        lines.push('/**');
+        lines.push(' * Bark pools — English locale.');
+        lines.push(' *');
+        lines.push(' * Layer 5 (data, loaded after all engine modules). Registers all NPC');
+        lines.push(' * bark text with BarkLibrary. Engine code references pool keys only —');
+        lines.push(' * no bark text ever lives inside logic files.');
+        lines.push(' */');
+      }
+      lines.push('');
+
+      // Group pools by namespace for clean section ordering
+      var namespaces = {};
+      var nsOrder = [];
+      for (var i = 0; i < _poolOrder.length; i++) {
+        var key = _poolOrder[i];
+        var ns = key.split('.')[0];
+        if (!namespaces[ns]) {
+          namespaces[ns] = [];
+          nsOrder.push(ns);
+        }
+        namespaces[ns].push(key);
+      }
+
+      // Sort pools alphabetically within each namespace
+      for (var n = 0; n < nsOrder.length; n++) {
+        namespaces[nsOrder[n]].sort();
+      }
+
+      // Emit each pool
+      var first = true;
+      for (var ni = 0; ni < nsOrder.length; ni++) {
+        var nsKeys = namespaces[nsOrder[ni]];
+        for (var ki = 0; ki < nsKeys.length; ki++) {
+          var poolKey = nsKeys[ki];
+          var pool = _pools[poolKey];
+          if (!pool) continue;
+
+          // Preceding comment block (preserved from original, or generated)
+          if (_poolComments[poolKey]) {
+            if (!first) lines.push('');
+            lines.push(_poolComments[poolKey]);
+            lines.push('');
+          } else if (ki === 0) {
+            // First pool in a new namespace — generate section header
+            if (!first) lines.push('');
+            var label = nsOrder[ni].charAt(0).toUpperCase() + nsOrder[ni].slice(1);
+            var ruler = '// ── ' + label + ' ';
+            while (ruler.length < 72) ruler += '─';
+            lines.push(ruler);
+            lines.push('');
+          } else {
+            lines.push('');
+          }
+          first = false;
+
+          // Determine if any bark has named fields (speaker/style/oneShot)
+          var hasNamedFields = false;
+          for (var bi = 0; bi < pool.barks.length; bi++) {
+            var b = pool.barks[bi];
+            if (b.speaker || (b.style && b.style !== 'toast') || b.oneShot) {
+              hasNamedFields = true;
+              break;
+            }
+          }
+
+          // Emit register call
+          lines.push("BarkLibrary.register('" + poolKey + "', [");
+
+          for (var bj = 0; bj < pool.barks.length; bj++) {
+            var bark = pool.barks[bj];
+            var trailing = bj < pool.barks.length - 1 ? ',' : '';
+
+            if (hasNamedFields && (bark.speaker || (bark.style && bark.style !== 'toast') || bark.oneShot)) {
+              // Multi-line format for named NPC barks
+              lines.push('  {');
+              lines.push("    text:    " + _jsStr(bark.text) + ",");
+              if (bark.speaker) {
+                lines.push("    speaker: " + _jsStr(bark.speaker) + ",");
+              }
+              if (bark.style && bark.style !== 'toast') {
+                lines.push("    style:   " + _jsStr(bark.style) + ",");
+              }
+              lines.push("    weight:  " + bark.weight + (bark.oneShot ? ',' : ''));
+              if (bark.oneShot) {
+                lines.push("    oneShot: true");
+              }
+              lines.push('  }' + trailing);
+            } else {
+              // Inline format
+              var parts = ['text: ' + _jsStr(bark.text)];
+              if (bark.speaker) parts.push('speaker: ' + _jsStr(bark.speaker));
+              if (bark.style && bark.style !== 'toast') parts.push('style: ' + _jsStr(bark.style));
+              if (bark.weight !== 1) parts.push('weight: ' + bark.weight);
+              if (bark.oneShot) parts.push('oneShot: true');
+              lines.push('  { ' + parts.join(', ') + ' }' + trailing);
+            }
+          }
+
+          // Close array + opts
+          var optParts = [];
+          if (pool.cooldownMs != null && pool.cooldownMs !== 45000) {
+            optParts.push('cooldownMs: ' + pool.cooldownMs);
+          }
+          if (pool.minIntervalMs != null) {
+            optParts.push('minIntervalMs: ' + pool.minIntervalMs);
+          }
+          var optsStr = optParts.length > 0 ? ', { ' + optParts.join(', ') + ' }' : '';
+          lines.push(']' + optsStr + ');');
+        }
+      }
+
+      lines.push('');
+
+      var content = lines.join('\n');
+      var blob = new Blob([content], { type: 'application/javascript' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'en.js';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      _markClean();
+    }
+
+    // ── Import en.js (file picker) ───────────────────────────────────
+    function _importEnJs(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var src = e.target.result;
+
+        // 1. Parse register calls by executing src against a capture shim
+        var captured = [];
+        var shimCode =
+          'var BarkLibrary = { register: function(k, b, o) { __captured.push({key:k,barks:b,opts:o||{}}); } };\n' +
+          'var Player = { state: function() { return {}; } };\n';
+        try {
+          var fn = new Function('__captured', shimCode + src);
+          fn(captured);
+        } catch (ex) {
+          alert('Failed to parse en.js: ' + ex.message);
+          return;
+        }
+
+        if (captured.length === 0) {
+          alert('No BarkLibrary.register() calls found in file.');
+          return;
+        }
+
+        // 2. Parse comment blocks from raw source (same logic as _parseComments)
+        var lines = src.split('\n');
+        var newComments = {};
+        var newFileHeader = '';
+
+        // Capture file header
+        var firstRegIdx = -1;
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].indexOf('BarkLibrary.register(') !== -1) {
+            firstRegIdx = i;
+            break;
+          }
+        }
+        if (firstRegIdx > 0) {
+          var headerEnd = firstRegIdx;
+          while (headerEnd > 0 && lines[headerEnd - 1].trim() === '') headerEnd--;
+          var commentStart = headerEnd;
+          while (commentStart > 0 && (lines[commentStart - 1].trim().indexOf('//') === 0 || lines[commentStart - 1].trim() === '')) {
+            commentStart--;
+          }
+          newFileHeader = lines.slice(0, commentStart).join('\n');
+        }
+
+        var registerRe = /BarkLibrary\.register\(\s*'([^']+)'/;
+        for (var j = 0; j < lines.length; j++) {
+          var m = lines[j].match(registerRe);
+          if (!m) continue;
+          var poolKey = m[1];
+          var commentLines = [];
+          var k = j - 1;
+          while (k >= 0 && lines[k].trim() === '') k--;
+          while (k >= 0) {
+            var lt = lines[k].trim();
+            if (lt.indexOf('//') === 0 || lt === '') {
+              commentLines.unshift(lines[k]);
+              k--;
+            } else {
+              break;
+            }
+          }
+          while (commentLines.length > 0 && commentLines[0].trim() === '') {
+            commentLines.shift();
+          }
+          if (commentLines.length > 0) {
+            newComments[poolKey] = commentLines.join('\n');
+          }
+        }
+
+        // 3. Snapshot current state for undo, then rebuild
+        _pushUndo(false);
+        _pools = {};
+        _poolOrder = [];
+        _selectedPool = null;
+        _poolComments = newComments;
+        _fileHeader = newFileHeader;
+
+        for (var c = 0; c < captured.length; c++) {
+          var cap = captured[c];
+          if (!_pools[cap.key]) {
+            _pools[cap.key] = { barks: [], cooldownMs: 45000, minIntervalMs: null };
+            _poolOrder.push(cap.key);
+          }
+          if (cap.opts && cap.opts.cooldownMs != null) {
+            _pools[cap.key].cooldownMs = cap.opts.cooldownMs;
+          }
+          if (cap.opts && cap.opts.minIntervalMs != null) {
+            _pools[cap.key].minIntervalMs = cap.opts.minIntervalMs;
+          }
+          for (var bi = 0; bi < cap.barks.length; bi++) {
+            var b = cap.barks[bi];
+            _pools[cap.key].barks.push({
+              text:    b.text    || '',
+              speaker: b.speaker || null,
+              style:   b.style   || 'toast',
+              weight:  (b.weight != null) ? b.weight : 1,
+              oneShot: !!b.oneShot
+            });
+          }
+        }
+
+        // 4. Re-render everything
+        _renderPoolTree('');
+        _renderCoherence();
+        document.getElementById('poolSearch').value = '';
+        document.getElementById('tableWrap').innerHTML =
+          '<div class="bw-empty-state">Imported ' + _poolOrder.length + ' pools. Select one to edit.</div>';
+        document.getElementById('poolKeyLabel').textContent = 'Select a pool';
+        document.getElementById('poolMetaLabel').textContent = '';
+        document.getElementById('usedByBadge').innerHTML = '';
+        document.getElementById('simulator').style.display = 'none';
+
+        _markClean();
+        // Flash status to confirm
+        var el = document.getElementById('statusLabel');
+        el.textContent = 'Imported ' + _poolOrder.length + ' pools';
+        el.className = 'status';
+        setTimeout(function() {
+          if (!_dirty) { el.textContent = 'Clean'; }
+        }, 3000);
+      };
+      reader.readAsText(file);
+    }
+
+    // Format a JS string literal with single quotes, escaping as needed
+    function _jsStr(s) {
+      if (s == null) return "''";
+      return "'" + s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n') + "'";
     }
 
     // ── Fire-roll simulator ───────────────────────────────────────
@@ -1048,6 +1637,41 @@
         html += '</div>';
       }
 
+      // 6. Spam-prone pools — pools where effective min interval is very short
+      // relative to pool size, meaning idle play produces rapid-fire barks.
+      // Threshold: effective minInterval < 8s AND pool shared by 2+ NPCs (or ambient).
+      var spamProne = [];
+      for (var sp = 0; sp < _poolOrder.length; sp++) {
+        var spk = _poolOrder[sp];
+        var spp = _pools[spk];
+        if (spp.barks.length === 0) continue;
+        var spCooldown = spp.cooldownMs || 45000;
+        var spMinInt = spp.minIntervalMs != null
+          ? spp.minIntervalMs
+          : Math.max(5000, Math.min(spCooldown, Math.floor(spCooldown / Math.max(spp.barks.length, 1))));
+        // Count non-oneShot barks (recyclable pool depth)
+        var recyclable = 0;
+        for (var spi = 0; spi < spp.barks.length; spi++) {
+          if (!spp.barks[spi].oneShot) recyclable++;
+        }
+        // Flag if: effective interval is very short AND the pool is shared or ambient
+        var isShared = false;
+        if (_manifest && _manifest.byBarkPool && _manifest.byBarkPool[spk] && _manifest.byBarkPool[spk].length >= 2) isShared = true;
+        if (/^ambient\./.test(spk)) isShared = true; // ambient pools are inherently multi-NPC
+        if (isShared && recyclable <= 4 && spMinInt < 8000) {
+          spamProne.push({ key: spk, minInt: spMinInt, recyclable: recyclable });
+        }
+      }
+      if (spamProne.length > 0) {
+        warnCount += spamProne.length;
+        html += '<div class="bw-coh-section"><h3>Spam-Prone <span class="bw-coh-badge yellow">' + spamProne.length + '</span></h3>';
+        for (var spm = 0; spm < spamProne.length; spm++) {
+          html += '<div class="bw-coh-item warn"><span class="pool-link" data-key="' + spamProne[spm].key + '">' + spamProne[spm].key + '</span> — ' +
+            spamProne[spm].recyclable + ' recyclable bark(s), min interval ' + (spamProne[spm].minInt / 1000).toFixed(1) + 's. May spam on idle. Consider adding more barks or raising minIntervalMs.</div>';
+        }
+        html += '</div>';
+      }
+
       // Summary
       if (errCount === 0 && warnCount === 0) {
         html += '<div class="bw-coh-item ok">All pools pass coherence checks.</div>';
@@ -1087,6 +1711,209 @@
       });
     }
 
+    // ── Pool Dependency Map ─────────────────────────────────────────
+    var _npcData = null; // Full NPC data from data/npcs.json (loaded on demand)
+
+    function _openDepMap() {
+      document.getElementById('depMapOverlay').classList.add('open');
+      if (!_npcData) {
+        _loadNpcData(function() { _renderDepMap(); });
+      } else {
+        _renderDepMap();
+      }
+    }
+
+    function _closeDepMap() {
+      document.getElementById('depMapOverlay').classList.remove('open');
+    }
+
+    function _loadNpcData(cb) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '../data/npcs.json', true);
+      xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 0) {
+          try {
+            _npcData = JSON.parse(xhr.responseText);
+          } catch (e) {
+            document.getElementById('depMapBody').innerHTML =
+              '<div style="color:var(--err);">Failed to parse data/npcs.json: ' + e.message + '</div>';
+            return;
+          }
+          if (cb) cb();
+        }
+      };
+      xhr.onerror = function() {
+        document.getElementById('depMapBody').innerHTML =
+          '<div style="color:var(--err);">Could not load data/npcs.json</div>';
+      };
+      xhr.send();
+    }
+
+    function _renderDepMap() {
+      // Build NPC index: id → { name, emoji, barkPool, barkInterval, floorId }
+      var npcIndex = {};
+      var floors = _npcData.npcsByFloor || {};
+      for (var fid in floors) {
+        var list = floors[fid];
+        for (var i = 0; i < list.length; i++) {
+          var n = list[i];
+          if (n.barkPool) {
+            npcIndex[n.id] = {
+              name: n.name || n.id,
+              emoji: n.emoji || '',
+              barkPool: n.barkPool,
+              barkInterval: n.barkInterval || 20000,
+              floorId: n.floorId || fid
+            };
+          }
+        }
+      }
+
+      // Build pool → NPC[] map
+      var poolNpcs = {};
+      for (var nid in npcIndex) {
+        var npc = npcIndex[nid];
+        if (!poolNpcs[npc.barkPool]) poolNpcs[npc.barkPool] = [];
+        poolNpcs[npc.barkPool].push(npc);
+      }
+
+      // Also include pools with no NPCs (from workbench state)
+      for (var pi = 0; pi < _poolOrder.length; pi++) {
+        if (!poolNpcs[_poolOrder[pi]]) poolNpcs[_poolOrder[pi]] = [];
+      }
+
+      // Sort pools: multi-NPC first (descending), then single, then orphan
+      var poolKeys = Object.keys(poolNpcs).sort(function(a, b) {
+        var diff = poolNpcs[b].length - poolNpcs[a].length;
+        return diff !== 0 ? diff : a.localeCompare(b);
+      });
+
+      // Compute stats and risk for each pool
+      var rows = [];
+      var riskCounts = { high: 0, med: 0, low: 0 };
+      for (var pk = 0; pk < poolKeys.length; pk++) {
+        var key = poolKeys[pk];
+        var npcs = poolNpcs[key];
+        var pool = _pools[key];
+        var barkCount = pool ? pool.barks.length : 0;
+        var cooldown = pool ? pool.cooldownMs : 45000;
+        var minInt = (pool && pool.minIntervalMs != null)
+          ? pool.minIntervalMs
+          : Math.max(5000, Math.min(cooldown, Math.floor(cooldown / Math.max(barkCount, 1))));
+
+        // Fastest NPC bark interval in this pool
+        var fastestInterval = Infinity;
+        for (var ni = 0; ni < npcs.length; ni++) {
+          if (npcs[ni].barkInterval < fastestInterval) fastestInterval = npcs[ni].barkInterval;
+        }
+
+        // Effective combined fire rate: all NPCs try at their intervals,
+        // but throttle limits actual fires to 1 per minInt.
+        // Combined attempt rate = sum(1/interval) → attempts per ms
+        var combinedAttemptRate = 0;
+        for (var nj = 0; nj < npcs.length; nj++) {
+          combinedAttemptRate += 1 / npcs[nj].barkInterval;
+        }
+        var avgAttemptGap = combinedAttemptRate > 0 ? (1 / combinedAttemptRate) : Infinity;
+
+        // Effective fire gap = max(minInt, avgAttemptGap)
+        var effectiveGap = Math.max(minInt, avgAttemptGap);
+
+        // Fires per minute
+        var firesPerMin = effectiveGap < Infinity ? (60000 / effectiveGap) : 0;
+
+        // Risk assessment
+        var risk = 'low';
+        if (npcs.length >= 2 && barkCount <= 3 && effectiveGap < 8000) risk = 'high';
+        else if (npcs.length >= 3 && effectiveGap < 10000) risk = 'med';
+        else if (npcs.length >= 2 && barkCount <= 5 && effectiveGap < 10000) risk = 'med';
+        riskCounts[risk]++;
+
+        rows.push({
+          key: key, npcs: npcs, barkCount: barkCount,
+          cooldown: cooldown, minInt: minInt,
+          effectiveGap: effectiveGap, firesPerMin: firesPerMin,
+          risk: risk, hasPool: !!pool
+        });
+      }
+
+      // Header summary
+      document.getElementById('depMapSub').textContent =
+        poolKeys.length + ' pools | ' + Object.keys(npcIndex).length + ' NPCs with bark pools';
+
+      // Render table
+      var html = '<div class="bw-depmap-legend">' +
+        '<span><span class="dot low"></span>Low risk</span>' +
+        '<span><span class="dot med"></span>Medium — may need tuning</span>' +
+        '<span><span class="dot high"></span>High — likely spams on idle</span>' +
+        '</div>';
+
+      html += '<table class="bw-depmap-table"><thead><tr>' +
+        '<th>Pool</th>' +
+        '<th>NPCs</th>' +
+        '<th>Barks</th>' +
+        '<th>Cooldown</th>' +
+        '<th>Min Interval</th>' +
+        '<th>Eff. Gap</th>' +
+        '<th>Fires/min</th>' +
+        '<th>Risk</th>' +
+        '</tr></thead><tbody>';
+
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        var riskClass = 'risk-' + r.risk;
+
+        // NPC chips
+        var npcHtml = '';
+        if (r.npcs.length === 0) {
+          npcHtml = '<span style="color:var(--muted);">(no NPCs)</span>';
+        } else {
+          for (var nc = 0; nc < r.npcs.length; nc++) {
+            var npc = r.npcs[nc];
+            npcHtml += '<span class="npc-chip">' + npc.emoji + ' ' + npc.name +
+              '<span class="interval">' + (npc.barkInterval / 1000) + 's</span></span>';
+          }
+        }
+
+        html += '<tr>' +
+          '<td>' + (r.hasPool
+            ? '<span class="pool-link" data-depkey="' + r.key + '">' + r.key + '</span>'
+            : '<span style="color:var(--err);">' + r.key + ' (missing)</span>') + '</td>' +
+          '<td class="npc-list">' + npcHtml + '</td>' +
+          '<td style="text-align:center;">' + r.barkCount + '</td>' +
+          '<td style="text-align:center;">' + (r.cooldown / 1000) + 's</td>' +
+          '<td style="text-align:center;">' + (r.minInt / 1000).toFixed(1) + 's</td>' +
+          '<td style="text-align:center;">' + (r.effectiveGap < Infinity ? (r.effectiveGap / 1000).toFixed(1) + 's' : '—') + '</td>' +
+          '<td style="text-align:center;">' + r.firesPerMin.toFixed(1) + '</td>' +
+          '<td class="' + riskClass + '" style="text-align:center;font-weight:bold;">' +
+            r.risk.toUpperCase() + '</td>' +
+          '</tr>';
+      }
+      html += '</tbody></table>';
+
+      // Summary bar
+      html += '<div style="padding:8px 0;font-size:11px;color:var(--text-dim);">' +
+        '<span class="dot high" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--err);margin-right:3px;vertical-align:middle;"></span>' + riskCounts.high + ' high' +
+        ' &nbsp; <span class="dot med" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:3px;vertical-align:middle;"></span>' + riskCounts.med + ' medium' +
+        ' &nbsp; <span class="dot low" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:3px;vertical-align:middle;"></span>' + riskCounts.low + ' low' +
+        '</div>';
+
+      var body = document.getElementById('depMapBody');
+      body.innerHTML = html;
+
+      // Wire pool links — click navigates to pool in editor and closes modal
+      body.addEventListener('click', function(e) {
+        var link = e.target.closest('[data-depkey]');
+        if (link) {
+          var key = link.dataset.depkey;
+          if (_pools[key]) {
+            _selectPool(key);
+            _closeDepMap();
+          }
+        }
+      });
+    }
+
     // ── Helpers ────────────────────────────────────────────────────
     function _escAttr(s) {
       return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -1111,6 +1938,7 @@
 
     // ── Boot ──────────────────────────────────────────────────────
     function _boot() {
+      _parseComments();   // Capture region comments before anything else
       _initPools();
       _renderPoolTree('');
       _loadManifest();
@@ -1118,8 +1946,40 @@
       _wireSearch();
 
       document.getElementById('btnAddPool').addEventListener('click', _addPool);
+      document.getElementById('btnDepMap').addEventListener('click', _openDepMap);
+      document.getElementById('depMapClose').addEventListener('click', _closeDepMap);
+      document.getElementById('depMapOverlay').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('depMapOverlay')) _closeDepMap();
+      });
+      document.getElementById('btnImportEnJs').addEventListener('click', function() {
+        if (_dirty && !confirm('You have unsaved changes. Import will replace all pools. Continue?')) return;
+        document.getElementById('fileImportEnJs').click();
+      });
+      document.getElementById('fileImportEnJs').addEventListener('change', function(e) {
+        if (e.target.files && e.target.files[0]) {
+          _importEnJs(e.target.files[0]);
+          e.target.value = ''; // Reset so same file can be re-imported
+        }
+      });
+      document.getElementById('btnExportEnJs').addEventListener('click', _exportEnJs);
       document.getElementById('btnExport').addEventListener('click', _export);
       document.getElementById('btnSimFire').addEventListener('click', _runSimulation);
+
+      // Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Y / Ctrl+Shift+Z = redo
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+          if (e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            _undo();
+          } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey)) {
+            e.preventDefault();
+            _redo();
+          }
+        }
+      });
+
+      // Capture initial state as undo baseline
+      _lastSnapshotJson = JSON.stringify(_snapshotState());
     }
 
     if (document.readyState === 'loading') {
