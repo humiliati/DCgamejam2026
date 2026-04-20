@@ -8,3 +8,7 @@ dcexjam2025/
 # Added by code-review-graph
 .code-review-graph/
 docs/DOOR_ARCHITECTURE_ROADMAP.md
+
+# Scratch / probe files from coherence-check tooling
+/tmp-*
+**/_sync_probe_*

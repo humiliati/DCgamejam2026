@@ -2,6 +2,14 @@
 
 This file tells Claude (and future contributors) how to work in this codebase.
 
+## Environment
+
+All paths below use `<repo-root>` as a placeholder for the game's checkout. On the maintainer's machine `<repo-root>` currently resolves to `C:\Users\hughe\Dev\Dungeon Gleaner Main\`. Treat any absolute path you see in older docs (e.g. `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\…`) as a stale reference to a prior checkout location — the content is what matters, not the literal path.
+
+Sibling repos historically lived next to the game under the same parent directory. In the current checkout, `raycast.js-master/` is **nested inside `<repo-root>/`**, and `EyesOnly/` is not present in the working tree. If you need EyesOnly as a reference source, ask the user where it currently lives — don't fabricate based on old CLAUDE.md wording.
+
+For the full CLI inventory (local serve, extractors, authoring CLIs, validators, harnesses, deploy scripts), see `<repo-root>/docs/CLI_TOOLS.md`.
+
 ## Project identity
 
 **Dungeon Gleaner** — first-person dungeon crawler. You are **Operative Gleaner**, a licensed dungeon scavenger dispatched to a retrofuturistic fantasy boardwalk town. Your job: clean up after the heroes and adventurers who storm through the dungeons beneath the town — scrub the walls, exstinguish torches, restock the crates, re-arm the traps, reset the floors. Four DC Jam 2026 themes: Dragons, Retrofuturism, Rock-Paper-Scissors (playing-card suit combat triangle: ♣/♦/♠/♥), Cleaning Up the Hero's Mess.
@@ -80,9 +88,18 @@ Any `MISMATCH` line means that file got truncated post-commit — restore via st
 /////If the timeline is tight, cut features — don't cut corners on the features you do build.////////////
 
 
-**Never fabricate when EyesOnly & Raycast.js-master has a reference implementation.** EyesOnly or raycast.js-master is ALWAYS available at `EyesOnly/` or `\workspace\LG Apps\Games\DCgamejam2026\raycast.js-master` within this repo (absolute path on the contributor's machine: `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\EyesOnly`). When a problem has already been solved in EyesOnly or raycast.js-master, READ that code and extract/adapt it. Do not invent a new algorithm, do not claim EyesOnly is "not mounted" or "not available," do not search GitHub or the web for something we already have locally. The path is `EyesOnly/public/js/` for 2D game modules and `EyesOnly/public/data/gone-rogue/` for JSON configs. for raycast or 3D rendering, the path is `C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\raycast.js-master\src` 
+**Never fabricate when EyesOnly or raycast.js-master has a reference implementation.** Reference source paths (relative to `<repo-root>`):
 
-If you cannot find a file, use `find` or `ls` on the EyesOnly directory — it is always there. If EyesOnly nor raycast.js-master has no suitable refrence material regroup with user on research and brainstorming.
+- `<repo-root>/raycast.js-master/src/` — raycasting / 3D rendering reference (DDA, texture mapping, skybox math). **Currently vendored inside the repo.**
+- `<repo-root>/raycast.js-master/` — top of the reference repo (has its own `package.json`; see `docs/CLI_TOOLS.md` § "Reference repo").
+- `<repo-root>/../EyesOnly/public/js/` — 2D game modules (production roguelike, ~155k lines). Source for door contracts, combat engine, card system, synergy engine, enemy AI.
+- `<repo-root>/../EyesOnly/public/data/gone-rogue/` — JSON data configs.
+
+**Availability note (2026-04-19):** EyesOnly is *not* present in the current working tree. If you need it as a reference, ask the user where it currently lives on disk — don't claim "not mounted" and don't search GitHub / the web for substitutes. Historically it lived as a sibling of this repo; that may no longer be true.
+
+When a problem has already been solved in EyesOnly or raycast.js-master, READ that code and extract/adapt it. Do not invent a new algorithm when a local reference exists.
+
+If you cannot find a reference file, use `find` / `ls` on the expected directory. If neither EyesOnly nor raycast.js-master has suitable material, regroup with the user on research and brainstorming.
 
 ## Direction convention
 
@@ -234,8 +251,9 @@ The recess block lives in `raycaster.js` between the `perpDist = Math.abs(perpDi
 
 ## Source codebases
 
-**Raycast, action & 3D** (at `raycast.js-master/`) The rendering routine is made up of vertical lines of texture-mapped walls at constant-Z, and perspective-correct texture-mapping for flat surfaces. An offscreen frame buffer is utilized to optimize per-pixel rendering. **This reference repo has its own code-review-graph** (`raycast.js-master/.code-review-graph/graph.db`) — 33 files, 201 functions, 541 call edges, 27 communities, 48 flows. Build it with `python -m code_review_graph build` from inside `raycast.js-master/`. When working in that subdirectory, the graph MCP server will serve its graph instead of the main Dungeon Gleaner graph.
-**EyesOnly** (at `EyesOnly/`) — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI.
+**Raycast, action & 3D** (at `<repo-root>/raycast.js-master/`) — vertical lines of texture-mapped walls at constant-Z, perspective-correct texture-mapping for flat surfaces. An offscreen frame buffer optimizes per-pixel rendering. **This reference repo has its own code-review-graph** (`<repo-root>/raycast.js-master/.code-review-graph/graph.db`) — 33 files, 201 functions, 541 call edges, 27 communities, 48 flows. Build it with `python -m code_review_graph build` from inside `<repo-root>/raycast.js-master/`. When working in that subdirectory, the graph MCP server serves its graph instead of the main Dungeon Gleaner graph.
+
+**EyesOnly** — Production roguelike, ~155k lines. Source for door contracts, combat engine, card system, synergy engine, enemy AI. Historical path `<repo-root>/../EyesOnly/`; **not present in the current working tree as of 2026-04-19** (see `## Environment` above). If you need it, ask the user where it lives now.
 
 ## Browser testing (Cowork sessions) ***ONLY TEST IN BROWSER IF ABSOLUTELY NECESSARY OR IF ASKED TO DO SO***
 
@@ -245,7 +263,7 @@ The game is a canvas-based HTML5 app. Testing in-browser requires specific setup
 2. **Brave is the default browser.** The extension name is still "Claude in Chrome" but it works in Brave.
 3. **Enable file:// access**: Brave → `brave://extensions` → Claude in Chrome → Details → toggle "Allow access to file URLs". Without this, `read_page` and `javascript_tool` return permission errors on `file://` URLs.
 4. **Navigating to file:// URLs**: The `navigate` tool prepends `https://` to bare paths. Instead, navigate to `example.com` first, then use `javascript_tool` with `window.location.href = 'file:///...'`. Or ask the user to paste the URL into the MCP tab group manually.
-5. **Game file URL**: `file:///C:/Users/hughe/.openclaw/workspace/LG%20Apps/Games/DCgamejam2026/index.html`
+5. **Game file URL**: `file:///<repo-root-url-encoded>/index.html`. Example on the maintainer's current setup: `file:///C:/Users/hughe/Dev/Dungeon%20Gleaner%20Main/index.html`. Prefer `http://localhost:8080/index.html` served by `node serve.js` — `file://` disables audio fetch and many JSON loads.
 6. **Canvas apps return empty from `read_page`** — use `javascript_tool` to query game state and `computer` action `screenshot` for visuals.
 7. **Console errors**: Call `read_console_messages` once to start tracking, then reload the page to capture load-time errors.
 8. **Tab group**: The game tab must be dragged into the Claude MCP tab group before tools can access it.

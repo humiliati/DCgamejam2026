@@ -2,6 +2,12 @@
 
 A first-person dungeon crawler built for [DC Jam 2026](https://itch.io/jam/dcjam2026) (March 27 -- April 5, 2026). Post-jam development targets LG webOS TV deployment via Magic Remote.
 
+## Environment
+
+All paths in this README use `<repo-root>` as a placeholder for your checkout of the game. On the maintainer's current machine, `<repo-root>` resolves to `C:\Users\hughe\Dev\Dungeon Gleaner Main\`. Older docs reference a previous checkout path (`C:\Users\hughe\.openclaw\workspace\LG Apps\Games\DCgamejam2026\`) — that path is stale; the repo content is what matters, not the literal directory.
+
+For the full command-line inventory (serve scripts, extractors, authoring CLIs, validators, deploy scripts, MCP graph builders), see `<repo-root>/docs/CLI_TOOLS.md`. Contributor conventions live in `<repo-root>/CLAUDE.md`; agent workflows in `<repo-root>/AGENTS.md`.
+
 This isn’t a dungeon crawler where you fight enemies. It’s a dungeon where movement is economy, and you weaponize flow. "Someone has to restock the chests."
 
 You are **Operative Gleaner** -- a licensed dungeon maintenance contractor dispatched to a small coastal boardwalk town. While the heroes kick down doors, slaughter everything that moves, and loot every crate in sight, somebody has to come in after and put it all back together. That somebody is you.
@@ -24,24 +30,30 @@ But the deeper you go, the stranger the evidence. The hero isn't just clearing m
 
 ### Running it
 
-open powershell, 
-type cd "C:\...\DCgamejam2026" hit enter
-type node tools/extract-floors.js hit enter
-type python -m http.server 8080 hit enter
-open browser, paste http://localhost:8080/index.html into field hit enter  
+From any shell, cd into `<repo-root>` and run the extractor once, then start a local server. Use any of the three serve options — pick whichever runtime is installed:
 
-cd <project-root>
-node tools/extract-floors.js         # rebuilds tools/*.json side-cars
-python -m http.server 8080           # serve locally (fetch needs HTTP)
+```sh
+cd <repo-root>
+node tools/extract-floors.js         # rebuilds tools/floor-data.json sidecar
+
+node serve.js                        # preferred: Node HTTP server on :8080
+# -- or --
+python3 serve.py                     # Python stdlib equivalent
+# -- or --
+python -m http.server 8080           # minimal fallback
 ```
-Open `http://localhost:8080/index.html`
-Open `http://localhost:8080/test-harness.html`.
 
-For development: run `python3 serve.py` or `node serve.js` from the game directory, then open `http://localhost:8080`.
+Then open in a browser:
 
-For quick testing: open `index.html` directly in a browser (audio will not work on `file://` due to CORS -- use the local server).
+- `http://localhost:8080/index.html` — the game
+- `http://localhost:8080/test-harness.html` — engine smoke harness
+- `http://localhost:8080/tools/blockout-visualizer.html` — tile editor
 
-On LG webOS: deploy via `ares-install` as usual. No CORS issues in production.
+**Why a server:** opening `index.html` directly as `file://` works for visuals but breaks audio fetch and several JSON loads due to browser CORS rules. Always serve over `http://` during development.
+
+**Authoring CLI:** `node tools/blockout-cli.js help` lists every floor-editing command. See `docs/CLI_TOOLS.md` for the full surface (extractors, validators, harnesses, deploy scripts).
+
+**webOS deploy:** `bash scripts/build-webos.sh` (or `pwsh scripts/build-webos.ps1`) assembles a whitelist-only `dist/`; then `ares-package dist/` → `ares-install` → `ares-launch` via LG's webOS TV SDK. No CORS constraints in production.
 
 ### Controls
 

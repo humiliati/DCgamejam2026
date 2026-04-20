@@ -4,6 +4,12 @@ How an AI agent (or a contributor following agent-style passes) creates new cont
 
 Read `CLAUDE.md` first — all contributor conventions apply to agents too.
 
+## Environment
+
+Paths in this document use `<repo-root>` as a placeholder for the game checkout (see `CLAUDE.md` § Environment for the concrete binding and for sibling-repo locations). The CLI surface agents invoke is cataloged in `<repo-root>/docs/CLI_TOOLS.md`; reach for that inventory before inventing a new tool call or assuming something exists.
+
+**Before `git push` on any branch playtesters might pull:** run `bash scripts/stamp-build.sh` (or `just stamp-build` / `dg-stamp-build`) to regenerate `engine/game-build-stamp.js` — this is the string playtesters cite when reporting bugs. See `docs/BUILD_VERSION_POLICY.md` (DOC-129).
+
 ---
 
 ## MCP Tools: code-review-graph
@@ -189,6 +195,8 @@ Place hazards, breakables, corpses (hero evidence), chests. Ensure STAIRS_UP con
 
 ## The quest system gap (the obvious blocker)
 
+> **Status note (2026-04-19):** This section was written before `QUEST_SYSTEM_ROADMAP.md` (DOC-107) landed. Phases 0 + 0b + 1 shipped on 2026-04-16 — `QuestRegistry` (Layer 1, loads `data/quests.json`, six anchor resolvers), `QuestChain` (Layer 3, per-quest step progress + current-marker derivation), and the six external event methods (`onItemAcquired`, `onFlagChanged`, `onReadinessChange`, `onFloorArrive`, `onNpcTalk`, `onCombatKill`) are all live. `QuestWaypoint` has been reduced to a ~60-line shim. See `CLAUDE.md` § QuestChain / QuestRegistry / QuestTypes for the current architecture. The "missing" items below should be re-read as **remaining phases** (reputation bar, quest-aware dialogue nodes, noticeboard/mailbox bindings) rather than greenfield work. Treat this section as a historical design brief; defer to `docs/QUEST_SYSTEM_ROADMAP.md` for what's actually outstanding.
+
 The game currently has no declarative quest system. Quest progression is driven by hardcoded logic scattered across multiple modules. This is the single biggest blocker for agent-driven sidequest creation.
 
 ### What exists today
@@ -312,12 +320,14 @@ Deferred smoke tests (C2 round-trip, C4 composability) are blocked by the bindfs
 
 ## Recommended reading order for new agents
 
-1. `CLAUDE.md` — contributor conventions, module architecture, hard rules
-2. `docs/Biome Plan.html` — world structure, biome palettes, enemy populations
-3. `docs/STREET_CHRONICLES_NARRATIVE_OUTLINE.md` — factions, conspiracy, NPC roster
-4. `tools/short-roadmap.md` — current track status, what's shipped, what's pending
-5. This file (`agents.md`) — agent workflow, tool gaps, quest system design
-6. `bo help` — full CLI command index
-7. `docs/DOC_GRAPH_BLOCKOUT_ARC.md` — document dependency graph for the blockout arc
+1. `CLAUDE.md` — contributor conventions, module architecture, hard rules, environment preamble
+2. `docs/CLI_TOOLS.md` — every CLI the project ships (serve, extract, authoring, validate, smoke, deploy, MCP graphs)
+3. `docs/Biome Plan.html` — world structure, biome palettes, enemy populations
+4. `docs/STREET_CHRONICLES_NARRATIVE_OUTLINE.md` — factions, conspiracy, NPC roster
+5. `tools/short-roadmap.md` — current track status, what's shipped, what's pending
+6. This file (`agents.md`) — agent workflow, tool gaps, quest system design
+7. `node <repo-root>/tools/blockout-cli.js help` — live command index from the authoring CLI itself
+8. `docs/DOC_GRAPH_BLOCKOUT_ARC.md` — document dependency graph for the blockout arc (use this to partition delegated work across parallel Cowork sessions)
+9. `docs/QUEST_SYSTEM_ROADMAP.md` — current quest-system phase status (supersedes the "quest system gap" section above)
 
 For code navigation, use the code-review-graph MCP tools before Grep/Glob/Read (see CLAUDE.md § MCP Tools).
