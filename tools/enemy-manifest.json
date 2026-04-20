@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-17T17:10:52.515Z",
+  "generated": "2026-04-20T20:40:50.963Z",
   "source": "data/enemies.json",
   "enemyCount": 27,
   "enemies": [
@@ -106,7 +106,7 @@
       "id": "ENM-011",
       "name": "Iron Golem",
       "emoji": "🤖",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 32,
       "biomes": [
         "foundry"
@@ -117,7 +117,7 @@
       "id": "ENM-012",
       "name": "Slag Hound",
       "emoji": "🐺",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 24,
       "biomes": [
         "foundry"
@@ -183,7 +183,7 @@
       "id": "ENM-020",
       "name": "Tide Stalker",
       "emoji": "🦈",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 30,
       "biomes": [
         "sealab"
@@ -194,7 +194,7 @@
       "id": "ENM-021",
       "name": "Shock Eel",
       "emoji": "🐍",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 26,
       "biomes": [
         "sealab"
@@ -205,7 +205,7 @@
       "id": "ENM-022",
       "name": "Lab Drone",
       "emoji": "🔬",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 28,
       "biomes": [
         "sealab"
@@ -216,7 +216,7 @@
       "id": "ENM-023",
       "name": "Deep Crawler",
       "emoji": "🦀",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 34,
       "biomes": [
         "sealab"
@@ -227,7 +227,7 @@
       "id": "ENM-024",
       "name": "Brine Wraith",
       "emoji": "👻",
-      "tier": "standard",
+      "tier": "elite",
       "hp": 30,
       "biomes": [
         "sealab"

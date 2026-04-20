@@ -1626,7 +1626,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,1,1,1,1,1,72,0,0,0,22,22,0,1,1,1,1,1,1,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 5  Bazaar east wall PORTHOLE(12,5) — Inn porthole removed (was 24,5)
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 6  Noticeboard pillars
     [21,21,21,22,0,22,0,1,0,0,0,0,1,0,0,0,22,22,0,1,0,0,0,0,1,0,0,0,22,0,0,0,0,22,0,21,0,0,71,0,0,21,0,0,22,0,0,35,35,35], // 7  ARCH_DOORWAY(38,7) — Phase 3 alpha-mask arch test
-    [21,21,21,22,0,22,0,1,1,77,2,77,1,0,0,0,22,22,0,1,1,77,2,77,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR(10,8) flanked by WINDOW_SHOP(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_SHOP(21,8)(23,8)
+    [21,21,21,22,0,22,0,1,1,77,74,77,1,0,0,0,22,22,0,1,1,77,2,77,1,0,0,0,22,0,0,0,0,22,0,0,0,10,0,10,0,0,0,0,22,0,0,35,35,35], // 8  Bazaar DOOR_FACADE(10,8) flanked by WINDOW_SHOP(9,8)(11,8) + Inn DOOR(22,8) flanked by WINDOW_SHOP(21,8)(23,8)
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], // 9
     [21,21,21,22,0,22,0,21,0,0,33,33,21,0,0,0,22,22,0,0,0,0,33,33,0,21,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //10  path stubs N
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //11  (bonfire removed — consolidated to road plaza)
@@ -1645,7 +1645,7 @@ var FloorManager = (function () {
     [21,21,21,22,0,22,0,21,0,0,33,33,0,0,21,0,22,22,0, 0,0,0,33,33,0,0,0,0,22,0,0,0,0,22,0,0,33,33,0,0,0,0,0,0,22,0,0,35,35,35], //24  (bonfire removed — consolidated to road plaza)
     [21,21,21,22,0,22,0,0,0,0,33,33,0,0,0,0,22,22,0,0,0,0,0,33,37,0,0,0,22,0,0,0,0,22,0,21,33,33,0,0,0,21,0,0,22,0,0,35,35,35], //25  MAILBOX(24,25) outside home — moved east from home door
     [21,21,21,22,0,22,0,0,0,0,0,0,21,0,0,0,22,22,0,0,0,86,86,86,0,87,87,87,22,0,38,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //26  STOOP(21-23,26) — 3-tile raised landing in front of Gleaner's Home DOOR_FACADE(22,27); DECK(25-27,26) test strip east of stoop for board/beam visual comparison; DUMP_TRUCK(30,26) parked in SE pod
-    [21,21,21,22,0,22,0,0,1,79,2,79,0,0,0,0,22,22,0,0,1,80,74,80,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_ALCOVE(21,27)(23,27) + SE well
+    [21,21,21,22,0,22,0,0,1,79,74,79,0,0,0,0,22,22,0,0,1,80,74,80,0,0,0,0,22,0,0,0,0,22,0,21,0,0,10,10,0,21,0,0,22,0,0,35,35,35], //27  Storm Shelter DOOR_FACADE(10,27) + WINDOW_SLIT(9,27)(11,27) + Home DOOR_FACADE(22,27) + WINDOW_ALCOVE(21,27)(23,27) + SE well
     [21,21,21,22,0,22,0,0,1,0,0,1,0,0,0,0,22,22,0,0,1,0,0,1,0,0,0,0,22,0,0,0,0,22,0,0,0,0,10,10,0,0,0,0,22,0,0,35,35,35], //28  building interiors + well pillars
     [21,21,21,22,0,22,0,0,1,1,1,1,0,0,0,0,22,22,0,0,1,1,1,1,0,0,0,0,22,0,0,0,0,22,0,21,0,0,0,0,0,21,0,0,22,0,0,35,35,35], //29
     [21,21,21,22,0,22,0,0,0,0,0,0,0,0,0,0,22,22,0,0,0,0,0,0,0,0,0,0,22,0,0,0,0,22,0,0,0,0,0,0,0,0,0,0,22,0,0,35,35,35], //30
@@ -1687,7 +1687,7 @@ var FloorManager = (function () {
         stairsUp: null,
         stairsDn: null,
         doorExit: { x: 2, y: 17 },   // DOOR_EXIT — back to The Approach (west gate)
-        doorEntry: { x: 10, y: 8 }   // DOOR — Coral Bazaar entrance (NW pod)
+        doorEntry: { x: 10, y: 8 }   // DOOR_FACADE — Coral Bazaar entrance (NW pod)
       },
       doorTargets: {
         '10,8':  '1.1',   // Coral Bazaar (NW pod)
@@ -1723,6 +1723,8 @@ var FloorManager = (function () {
       // which the auto-detect can't disambiguate (it picks the first
       // walkable cardinal neighbor in E→S→W→N order).
       doorFaces: {
+        '10,8':  1,  // Coral Bazaar → exterior faces SOUTH (promenade road)
+        '10,27': 3,  // Storm Shelter → exterior faces NORTH (promenade road)
         '22,27': 3   // Gleaner's Home → exterior faces NORTH (street)
       },
       // Window scene declarations — maps each WINDOW_TAVERN tile to

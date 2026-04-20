@@ -2,7 +2,7 @@
 // Sidecar wrapper so world-designer.html works under file:// (bypasses
 // Chromium CORS fetch block). Keep in sync with floor-data.json.
 window.FLOOR_DATA = {
-  "generated": "2026-04-17T17:10:52.500Z",
+  "generated": "2026-04-20T20:40:50.829Z",
   "floorCount": 24,
   "payloadCount": 0,
   "questPayloadCount": 1,
@@ -2427,7 +2427,7 @@ window.FLOOR_DATA = {
           1,
           1,
           77,
-          2,
+          74,
           77,
           1,
           0,
@@ -3415,7 +3415,7 @@ window.FLOOR_DATA = {
           0,
           1,
           79,
-          2,
+          74,
           79,
           0,
           0,
@@ -3956,6 +3956,8 @@ window.FLOOR_DATA = {
         "48,18": "2"
       },
       "doorFaces": {
+        "10,8": 1,
+        "10,27": 3,
         "22,27": 3
       },
       "procGenChildren": [],

@@ -12,3 +12,6 @@ docs/DOOR_ARCHITECTURE_ROADMAP.md
 # Scratch / probe files from coherence-check tooling
 /tmp-*
 **/_sync_probe_*
+
+# watch-mount logs (local diagnostic captures, never check in)
+/scripts/_watch-logs/

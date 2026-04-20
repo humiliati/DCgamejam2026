@@ -105,7 +105,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'wood_plank',      // driftwood timber frame
     mullionStyle:    'bronze',          // warm brass — upscale tavern
     doorTexture:     'door_driftwood',  // weathered timber door surround
-    doorPanel:       'door_panel_wood', // warm oak planks
+    doorPanel:       'door_panel_oiled', // dark oiled wood + gold knobs — value contrast vs pale driftwood (Phase B)
     archTexture:     'arch_driftwood',  // driftwood arch doorway
     windowType:      'shop',            // plate glass storefront + iron bars
     defaultHours:    { openAt: 6, closeAt: 24 },
@@ -143,7 +143,7 @@ var BuildingRegistry = (function () {
     wallTexture:     'wood_dark',       // worn plank residential
     mullionStyle:    'wood',            // plain dark oak — modest dwelling
     doorTexture:     'door_darkwood',   // dark oak door surround
-    doorPanel:       'door_panel_dark', // worn dark wood panel
+    doorPanel:       'door_panel_charcoal', // near-black charred wood + gold knob — max contrast vs dark wall (Phase B)
     archTexture:     'arch_darkwood',   // dark oak arch doorway
     windowType:      'bay',             // protruding bay window — cozy residential
     defaultHours:    { openAt: 20, closeAt: 8 },   // private = resident home at night
