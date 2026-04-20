@@ -255,7 +255,7 @@ var TorchPeek = (function () {
     // Reset action button
     if (_actionBtn) {
       _actionBtn.style.opacity = '0';
-      _actionBtn.textContent = isLit ? 'Extinguish' : 'Refuel';
+      _actionBtn.textContent = isLit ? 'Extinguish' : 'Restock';  // Refill-family unified per GOLF_DAY1_AUDIT.md.
     }
 
     if (_subLabel) {
@@ -616,7 +616,7 @@ var TorchPeek = (function () {
       if (_interacting) {
         _actionBtn.textContent = '\u2715 Close';
       } else {
-        _actionBtn.textContent = isLit ? 'Extinguish' : 'Refuel';
+        _actionBtn.textContent = isLit ? 'Extinguish' : 'Restock';  // Refill-family unified per GOLF_DAY1_AUDIT.md.
       }
     }
 

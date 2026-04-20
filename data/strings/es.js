@@ -115,12 +115,21 @@ i18n.register('es', {
   'interact.harvest':     'Cosechar',
   'interact.smash':       'Romper',
   'interact.read':        'Leer',
-  'interact.refuel':      'Reabastecer Antorcha',
-  'interact.extinguish':  'Apagar',
+  // Refill-family unified verb per GOLF_DAY1_AUDIT.md (Command-approved 2026-04-20).
   'interact.restock':     'Reabastecer',
+  'interact.extinguish':  'Apagar',
   'interact.drink':       'Beber',
   'interact.clean':       'Limpiar',
   'interact.rearm':       'Rearmar trampa',
+  // DEPRECATED (aliased to 'Reabastecer'; delete next sprint).
+  'interact.refuel':      'Reabastecer',
+  'interact.fill':        'Reabastecer',
+  'interact.grab_hose':   'Reabastecer',
+
+  // ── Restock surface titles ──
+  'restock.title.crate':  '📦 Reabastecer Caja',
+  'restock.title.torch':  '🔥 Reabastecer Antorcha',
+  'restock.title.corpse': '☠️ Reabastecer Cadáver',
 
   // ── Toast ──
   'toast.item_pickup':    'Recogido:',

@@ -397,9 +397,10 @@ var RestockSurface = (function () {
     var titleEl = document.getElementById('rs-title');
     if (!titleEl) return;
 
+    // Refill-family unified verb per GOLF_DAY1_AUDIT.md (Command-approved 2026-04-20). Mode icons retained here as surface context cue — player is already inside the mode-specific surface; the in-world interact prompt uses canonical 📦.
     var labels = {
       crate:  '\uD83D\uDCE6 Restock Crate',    // 📦
-      torch:  '\uD83D\uDD25 Refuel Torch',       // 🔥
+      torch:  '\uD83D\uDD25 Restock Torch',      // 🔥
       corpse: '\u2620\uFE0F Restock Corpse'       // ☠️
     };
     var t = typeof i18n !== 'undefined' && i18n.t

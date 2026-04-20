@@ -885,7 +885,7 @@ var CratePeek = (function () {
     }
 
     // Action button
-    var _cpBtn = isStorage ? 'Open' : (isSupply ? 'Fill Crate' : 'Smash');
+    var _cpBtn = isStorage ? 'Open' : (isSupply ? 'Restock' : 'Smash');  // 'Fill Crate' → 'Restock' per GOLF_DAY1_AUDIT.md.
     if (_actionBtn) {
       _actionBtn.textContent = _cpBtn;
       _actionBtn.style.opacity = '0';

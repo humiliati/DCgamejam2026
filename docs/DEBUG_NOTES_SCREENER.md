@@ -253,3 +253,44 @@ Running log maintained by **Command.QaAndIntegration** per DOC-130 sprint plan. 
 
 **DN-FOXTROT-01 resolved** (user granted "license where sensible" for inline-grid edits). **DN-FOXTROT-02 still open** (Phase D Wolfenstein recess extension for PORTHOLE tiles — lives in raycaster.js, Alpha/Charlie fence; Tue Phase D start still contingent on Command decision).
 
+**Landed Day 1 — Golf:**
+- Full audit posted as `docs/GOLF_DAY1_AUDIT.md` (~220 lines, ~22 edit-site inventory across 10 files).
+- Recommended canonical verb: `"Restock"`; canonical icon: `📦`. Rationale anchored on architecture name alignment (RestockSurface/RestockBridge/RestockWheel already use the word) + lore/dialogue already 100% on "Restock".
+- Same-day Day-2 rename landed in working tree (uncommitted): `engine/interact-prompt.js` ACTION_MAP (5 entries), `data/strings/en.js` + `es.js` (aliases for deprecated keys + 3 new `restock.title.*` keys), `engine/torch-peek.js` (2 sites), `engine/crate-peek.js` (1 site), `engine/restock-surface.js` (torch-title unified).
+- Verified `corpse-peek.js` and `chest-peek.js` were already on "Restock" pre-rename — no edit needed.
+- Defensive grep sweep post-edit: zero live `'Refuel' / 'Fill Crate' / 'Grab Hose'` literals in `engine/`. Only remaining occurrences are deprecated i18n aliases (defensive fallback) and one inline breadcrumb comment in `crate-peek.js:888`.
+- Scope fence clean: no touches to raycaster.js, door-sprites.js, tiles.js, building-registry.js, floor-manager.js, or tutorial interaction handlers.
+
+**Validator delta (post-Foxtrot + post-Golf working tree):**
+- `bo validate`: **39 issues** (21 warn + 18 err) — **exact baseline match, zero regression**.
+- `check-budgets.js`: exit=1 (unchanged), top 10 FAILs identical to baseline. Golf's edits add <1 KB to `data/strings/en.js` (within WARN band); Foxtrot's 3 tile-id flips are net-zero bytes.
+- `door-target-missing` ×4 unchanged (floors 3 x2, 1.9, 99.1). These are pre-existing and Foxtrot's §7 pass (Thu/Fri) should resolve them.
+
+### Command decisions — end of Day 1
+
+1. **DN-FOXTROT-02 (Phase D raycaster hunk) — SPLIT PHASE D.** Foxtrot owns the **data half** (place portholes as gates on Floor 0/1 per BLOCKOUT_REFRESH_PLAN §4.3). The **engine half** (extend the existing DOOR_FACADE Wolfenstein thin-wall recess at `raycaster.js:~1410` to also trigger on `PORTHOLE` tile id) is explicitly re-delegated to Foxtrot under a narrow license, same model as DN-FOXTROT-01's resolution. Alpha/Charlie remain paused; no conflict risk. Constraint: edit is scoped to the single recess-trigger branch — any deeper ray-geometry change stays out of scope and gets logged as a DN entry. If Foxtrot's landing regresses the ≤2% framerate budget on test-harness.html, revert and descope Phase D engine half.
+
+2. **Golf rename approved and accepted.** Golf report's four "questions for Command" (verb / icon / per-tile hints / one-sprint alias) were all addressed in-session (the audit preempted my Day-2 call). The one-sprint alias deprecation window ratifies Golf's defensive choice. No further Golf work queued until Hotel smoke-tests in Wed playthrough surface anything.
+
+3. **Commit hygiene:** Foxtrot's work is committed (`1842632`). Golf's rename is **uncommitted** in the working tree. Command recommends Golf commit land as a single logical commit on Tue morning with message referencing GOLF_DAY1_AUDIT.md, before Hotel dispatches. Also flagging for user: working tree has pre-existing dirty files unrelated to this sprint (`tools/verb-node-*` directory reorg, `tools/world-engine/`, `tools/world-designer.html`) — these should NOT be swept into Golf's commit. Suggested: `git add` explicit file list rather than `git add -A`.
+
+4. **Juliet (stretch).** Not yet gated; Foxtrot Phase C + Phase D Tuesday pace will decide. Status: **held**, evaluate EOD Wednesday.
+
+5. **Hotel dispatch.** Unblocked — Golf's unified prompts are present in the working tree; Hotel's Wed pressure-wash loop will see consistent `"Restock"` on crate/corpse/torch/truck. Dispatch brief drafting queued for Tue morning once Golf's commit lands. Hotel charter fences: polish only, not authoring — any systemic interaction bug discovered gets logged as a DN and handed back to an engineering section (Alpha/Charlie-descendant) post-patch, not fixed in-sprint.
+
+### Day 1 section status (EOD)
+
+- **Foxtrot** 🟢 Phase B ✓ + Phase C 2/3 ✓ (Driftwood Inn (22,8) converts Tue). On pace. Phase D engine-half authorized under narrow license.
+- **Golf** 🟢 Day-1 audit ✓ + Day-2 rename landed ✓ (uncommitted). No remaining charter work until Hotel playthrough.
+- **Hotel** ⚪ queued for Tue-morning dispatch (unblocked now that Golf has landed).
+- **India** ⚪ queued for Sat 04-25 ship gate.
+- **Juliet** ⚪ held (Wed evaluation).
+- **Command** 🟢 active — seam check ✓, validator deltas ✓, DN-FOXTROT-02 decision ✓.
+
+### Day 2 (Tue 2026-04-21) dispatch preview
+
+- **Foxtrot**: Driftwood Inn (22,8) DOOR_FACADE conversion; Phase D data-half (Floor 0/1 porthole gate placement); Phase D engine-half (raycaster.js recess trigger extension to PORTHOLE). Framerate smoke on test-harness.html before commit.
+- **Golf**: commit the Day-2 rename with inventory-style message. Manual smoke test in tutorial world (checklist already in `docs/GOLF_DAY1_AUDIT.md` §Smoke-test readiness, 12 steps). Tue evening: stand by for any Hotel feedback.
+- **Hotel**: dispatch brief authored EOD Tue; charter focused on pressure-wash loop end-to-end (truck → hose grab → drag → clean grid → roll-up auto-exit).
+- **Command**: validator dry-run after each section commit; Wed status report (green/yellow/red per section) with Juliet go/no-go.
+

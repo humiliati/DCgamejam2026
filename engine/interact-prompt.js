@@ -111,8 +111,10 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.DOOR]      = { action: 'interact.enter',  icon: '' };
     ACTION_MAP[TILES.DOOR_BACK] = { action: 'interact.enter',  icon: '' };
     ACTION_MAP[TILES.DOOR_EXIT] = { action: 'interact.exit',   icon: '' };
-    ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '', gleaner: 'interact.restock', gleanerIcon: '🧪' };
-    ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨', gleaner: 'interact.fill', gleanerIcon: '📦' };
+    // Refill-family verbs unified to 'interact.restock' + 📦 per GOLF_DAY1_AUDIT.md (Command-approved 2026-04-20).
+    // Non-Gleaner out-of-family verbs (smash / extinguish / harvest) preserved.
+    ACTION_MAP[TILES.CORPSE]    = { action: 'interact.harvest', icon: '', gleaner: 'interact.restock', gleanerIcon: '📦' };
+    ACTION_MAP[TILES.BREAKABLE] = { action: 'interact.smash',   icon: '🔨', gleaner: 'interact.restock', gleanerIcon: '📦' };
     ACTION_MAP[TILES.PUZZLE]    = { action: 'interact.reset',   icon: '🧩' };
     ACTION_MAP[TILES.BOOKSHELF] = { action: 'interact.read',    icon: '📖' };
     ACTION_MAP[TILES.BAR_COUNTER] = { action: 'interact.drink', icon: '🍺' };
@@ -120,12 +122,12 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.TABLE]       = { action: 'interact.inspect', icon: '🔍' };
     ACTION_MAP[TILES.HEARTH]      = { action: 'interact.rest',    icon: '🔥' };
     ACTION_MAP[TILES.CITY_BONFIRE] = { action: 'interact.rest',   icon: '🔥' };
-    ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.refuel', gleanerIcon: '🪵' };
-    ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.refuel', icon: '🪵' };
+    ACTION_MAP[TILES.TORCH_LIT]   = { action: 'interact.extinguish', icon: '🔥', gleaner: 'interact.restock', gleanerIcon: '📦' };
+    ACTION_MAP[TILES.TORCH_UNLIT] = { action: 'interact.restock', icon: '📦' };
     ACTION_MAP[TILES.MAILBOX]     = { action: 'interact.check_mail', icon: '📫' };
     ACTION_MAP[TILES.TERMINAL]    = { action: 'interact.access',     icon: '' };
     ACTION_MAP[TILES.DETRITUS]    = { action: 'interact.pick_up',    icon: '👝' };
-    ACTION_MAP[TILES.DUMP_TRUCK]  = { action: 'interact.grab_hose',   icon: '🧵' };
+    ACTION_MAP[TILES.DUMP_TRUCK]  = { action: 'interact.restock',     icon: '📦' };
 
     // ── Hint map (hover-only description, keyed by i18n action key) ──
     ACTION_MAP[TILES.CHEST].hint     = 'hint.inspect';
@@ -134,7 +136,7 @@ var InteractPrompt = (function () {
     ACTION_MAP[TILES.CORPSE].hint    = 'hint.harvest';
     ACTION_MAP[TILES.CORPSE].gleanerHint = 'hint.restock';
     ACTION_MAP[TILES.BREAKABLE].hint = 'hint.smash';
-    ACTION_MAP[TILES.BREAKABLE].gleanerHint = 'hint.fill';
+    ACTION_MAP[TILES.BREAKABLE].gleanerHint = 'hint.restock';  // 'hint.fill' was never defined; unified with crate/corpse copy per GOLF_DAY1_AUDIT.md.
     ACTION_MAP[TILES.PUZZLE].hint    = 'hint.inspect';
     ACTION_MAP[TILES.BOOKSHELF].hint = 'hint.read';
     ACTION_MAP[TILES.BAR_COUNTER].hint = 'hint.drink';

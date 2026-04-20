@@ -258,11 +258,20 @@ i18n.register('en', {
   'interact.smash':       'Smash',
   'interact.reset':       'Reset Puzzle',
   'interact.read':        'Read',
-  'interact.refuel':      'Refuel Torch',
-  'interact.extinguish':  'Extinguish',
+  // Refill-family unified verb per GOLF_DAY1_AUDIT.md (Command-approved 2026-04-20).
   'interact.restock':     'Restock',
+  'interact.extinguish':  'Extinguish',
   'interact.drink':       'Drink',
   'interact.clean':       'Scrub',
+  // DEPRECATED (aliased to 'Restock'; delete next sprint — kept as defensive fallback for any un-grepped callsite).
+  'interact.refuel':      'Restock',
+  'interact.fill':        'Restock',
+  // 'interact.grab_hose' alias lives next to the pressure-washing block (line ~330).
+
+  // ── Restock surface titles (unified verb; mode-specific icon retained as context cue) ──
+  'restock.title.crate':  '📦 Restock Crate',
+  'restock.title.torch':  '🔥 Restock Torch',
+  'restock.title.corpse': '☠️ Restock Corpse',
 
   // ── Interact hints (second line, shown on hover) ───────────────
   'hint.clean':           'Remove blood to raise readiness.',
@@ -327,7 +336,8 @@ i18n.register('en', {
   'hint.check_mail':     'Read hero run reports.',
 
   // ── Pressure-washing hose (PW-2) ──────────────────────────────
-  'interact.grab_hose':  'Grab Hose',
+  // DEPRECATED verb alias: truck prompt now shows 'Restock' per GOLF_DAY1_AUDIT.md. Hint copy preserved (per-tile context retained per Command approval).
+  'interact.grab_hose':  'Restock',
   'hint.grab_hose':      'Drag the pressure-wash hose into the dungeon.',
   'hose.grabbed':        'Hose attached — head for the dungeon',
   'hose.already_carrying': 'Already carrying the hose',
