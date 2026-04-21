@@ -1337,3 +1337,12 @@ Phase 3 schema extraction will:
 
 Three separate keys in `floor-data.json` (or split files) so the visualizer can load tiles-only
 for the basic editor and lazy-load cards + strings when entity/metadata panels open.
+
+---
+
+## Addendum 2026-04-21 — drift stress-test marker
+
+Aggressive-edit run used this file as one of five targets to surface mount
+drift against our live watchers. See `scripts/_watch-logs/DRIFT_NOTES.md`
+for the incident catalog. This line exists so the append shows up in the
+watcher CSVs with a known timestamp.

@@ -148,6 +148,7 @@ var FloorManager = (function () {
 
   /**
    * Deterministic integer hash from floor ID string (for RNG seeding).
+   * djb2-style: ((hash<<5) - hash) + c.  Stable across builds & floors.
    */
   function _hashId(id) {
     var hash = 0;
