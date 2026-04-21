@@ -294,3 +294,102 @@ Running log maintained by **Command.QaAndIntegration** per DOC-130 sprint plan. 
 - **Hotel**: dispatch brief authored EOD Tue; charter focused on pressure-wash loop end-to-end (truck → hose grab → drag → clean grid → roll-up auto-exit).
 - **Command**: validator dry-run after each section commit; Wed status report (green/yellow/red per section) with Juliet go/no-go.
 
+
+
+### Day 1 REDISPATCH — expanded license + multi-pass (2026-04-20 late-day)
+
+User feedback post-EOD: original briefs were scoped so tight that Foxtrot and
+Golf each checked their spec boxes inside a few hours and reported complete.
+That is not the goal. The player-encounter surface is not validated by
+checking off spec items; it is validated by multi-pass review that the full
+encounter works, looks consistent, and leaves no implied adjacent system
+half-finished.
+
+**User guidance, verbatim:**
+
+> "we want to draw out a series of passes that validates and checks and
+> refines each thing the player might encounter as part of the system with
+> the scope."
+
+> "it is not enough that we are just changing the door on the bazaar to be
+> like the gleaner home, we should make sure the gleaner home door, stoop,
+> deck, window architecture is ready to stamp and we take creative licence
+> within our lane to do so."
+
+**REDISPATCH doc:** `docs/SPRINT_DISPATCH_BRIEFS_DAY1_REDISPATCH.md` (authored
+this session). Supersedes the DoD portion of the original briefs; scope
+fences (hard-no file lists) remain.
+
+**New operating principles (all sections):**
+
+1. Close-proximity implication — when the spec names a system, sibling
+   systems the player encounters simultaneously are implied in scope. Doors
+   imply windows + stoops + decks. Traps imply cobwebs. Refill implies the
+   refill-popup surface itself. Same interaction frame or within 2 tiles =
+   in-lane.
+2. Stamp-ready architecture before propagation — before you use Building X
+   as a reference template for Buildings Y, Z, N, confirm that Building X
+   itself is coherent and documented enough to stamp cleanly.
+3. Creative license within lane — reconciliation edits that follow
+   documented stamp rules don't require per-edit Command approval.
+4. Multi-pass before turnover — minimum Pass 1 (author), Pass 2 (adjacent
+   consistency), Pass 3 (in-context render/smoke/playthrough). Sections
+   have section-specific additional passes (Foxtrot: Pass 4 close-proximity
+   envelope + Pass 5 render; Golf: Passes 2-5 covering torch flow, popup
+   uniformity, adjacency clobber, non-refill sibling check).
+5. Stampable rules become artifacts — derived architectural rules get
+   written into `docs/STAMP_RULES_BUILDINGS.md` (Foxtrot) or audit doc
+   addenda (Golf).
+
+**Expanded DoD — Foxtrot:**
+- Gleaner's Home stamp-ready (doorPanel, knob, arch, frame, stoop, deck,
+  adjacent window, wall continuity all coherent)
+- `docs/STAMP_RULES_BUILDINGS.md` authored with ≥3 named rules
+- Coral Bazaar + Storm Shelter close-proximity envelope reconciled
+  (windows/stoops/decks per rules or DN- justified exception)
+- Screenshots per touched building from player POV
+- Validator ≤39, budgets no new FAIL
+
+**Expanded DoD — Golf:**
+- Pass 2: torch extinguish → refill functional flow validated end-to-end
+- Pass 3: refill-family popup surface uniform (Y position, width, font,
+  icon size, timing — all within tolerance)
+- Pass 4: adjacent-tile clobber / priority rule documented + verified via
+  8-neighbor walk
+- Pass 5: non-refill interacts still render correctly through the same
+  surface
+- `node --check` on every edited .js file (mount-drift defense)
+- Commit staged with explicit file list, not `git add -A`
+
+**Why this came up now:** Foxtrot's Phase B+C landed in ~2 hours. Golf's
+rename landed same-day in the working tree (and has since been committed as
+`64d9829`). Both scope-fence clean, both validator-clean, but the user view
+is that the work didn't touch the adjacent systems that share the player's
+encounter window with the targets. This REDISPATCH converts the remaining
+Day 1 hours (and Tue buffer if needed) into depth rather than moving on to
+Tue's delivery lane.
+
+**Section status after REDISPATCH issued:** Foxtrot 🟡 redispatched (expanded
+envelope) · Golf 🟡 redispatched (committed rename + 4 additional passes
+required before charter closes) · Hotel ⚪ still queued for Tue (now
+receives Golf's multi-pass findings rather than bare rename) · India ⚪
+unchanged · Juliet ⚪ unchanged (still evaluated EOD Wed) · Command 🟢
+active.
+
+**Risk note:** Ship gate Sat 2026-04-25 does not move. Foxtrot has 3-4
+sprint days, Golf has 2-3 — enough buffer to absorb the expanded passes
+without touching the gate. If Foxtrot's expanded Day 1 finds that
+Gleaner's Home or the Bazaar/Storm Shelter envelopes need significantly
+more than Tue can absorb, Phase D (porthole) becomes the sacrifice
+candidate, not the stamp-readiness work. Architectural stamp-readiness
+ranks higher than adding a new feature type in this sprint because the
+voting-period audience will encounter every building; only some will
+encounter a porthole.
+
+**Mount-drift note during this REDISPATCH:** Working-tree copy of this file
+was observed clamped to 161 lines / 13056 bytes mid-session while HEAD held
+296 lines / 23807 bytes. Recovery: `git show HEAD:` → /tmp → Python rewrite
+over mount. Same family of symptoms as DN-FOXTROT-03 + DRIFT_NOTES.md §3.
+`.git/index.lock` remains stuck (non-removable from sandbox) — bash-side
+git writes still blocked; read operations (`git show`, `git log`) work
+fine. This confirms the recovery recipe for the rest of the sprint.
